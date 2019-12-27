@@ -28,7 +28,8 @@ module stompLogic(branchmiss, misssn, iq_sn, iq_stomp);
 input branchmiss;
 input [`SNBITS] misssn;
 input [`SNBITS] iq_sn [0:`IQ_ENTRIES-1];
-output [`IQ_ENTRIES-1:0] iq_stomp;
+output reg [`IQ_ENTRIES-1:0] iq_stomp;
+parameter TRUE = 1'b1;
 
 integer n;
 

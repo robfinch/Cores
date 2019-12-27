@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 `define VAL		1'b1
 `define INV		1'b0
 
@@ -31,12 +31,10 @@ module regfileValid(rst, clk, slotv, slot_rfw, tails,
 	commit0_id, commit1_id, commit2_id,
 	commit0_tgt, commit1_tgt, commit2_tgt,
 	commit0_rfw, commit1_rfw, commit2_rfw,
-	commit0_sr_tgts, commit1_sr_tgts, commit2_sr_tgts,
-	rf_source, sr_source, iq_source, queuedOn, iq_latest_sr_ID,
-	slot_sr_tgts, iq_sr_source,
+	rf_source, iq_source, queuedOn,
 	Rd, rf_v, regIsValid);
-parameter AREGS = 32;
-parameter RBIT = 4;
+parameter AREGS = 128;
+parameter RBIT = 5;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -59,20 +57,13 @@ input [`RBITS] commit2_id;
 input [RBIT+1:0] commit0_tgt;
 input [RBIT+1:0] commit1_tgt;
 input [RBIT+1:0] commit2_tgt;
-input [7:0] commit0_sr_tgts;
-input [7:0] commit1_sr_tgts;
-input [7:0] commit2_sr_tgts;
 input commit0_rfw;
 input commit1_rfw;
 input commit2_rfw;
 input [`QBITSP1] rf_source [0:AREGS-1];
-input [`QBITSP1] sr_source;
 input [IQ_ENTRIES-1:0] iq_source;
-input [IQ_ENTRIES-1:0] iq_sr_source;
 input [RBIT+1:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
-input [`QBITS] iq_latest_sr_ID;
-input [7:0] slot_sr_tgts [0:QSLOTS-1];
 output reg [AREGS:0] rf_v;
 output reg [AREGS:0] regIsValid;	// advanced signal
 
@@ -126,24 +117,14 @@ begin
 		if (commit2_v && n==commit2_tgt && !rf_v[n] && commit2_rfw)
 			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ])));
 	end
-	regIsValid[AREGS] <= rf_v[AREGS];
-	if (branchmiss)
-		if (iq_latest_sr_ID=={`QBIT{1'b1}})
-			regIsValid[AREGS] <= `VAL;
 	
-	if (commit0_v && !rf_v[AREGS] && commit0_sr_tgts != 8'h00)
-		regIsValid[AREGS] = ((sr_source[`RBITS] == commit0_id) || (branchmiss && (iq_sr_source[ rob_id[commit0_id] ])));
-	if (commit1_v && !rf_v[AREGS] && commit1_sr_tgts != 8'h00)
-		regIsValid[AREGS] = ((sr_source[`RBITS] == commit1_id) || (branchmiss && (iq_sr_source[ rob_id[commit1_id] ])));
-	if (commit2_v && !rf_v[AREGS] && commit2_sr_tgts != 8'h00)
-		regIsValid[AREGS] = ((sr_source[`RBITS] == commit2_id) || (branchmiss && (iq_sr_source[ rob_id[commit2_id] ])));
 	regIsValid[0] = `VAL;
 end
 
 
 always @(posedge clk)
 if (rst) begin
-  for (n = 0; n <= AREGS; n = n + 1)
+  for (n = 0; n < AREGS; n = n + 1)
     rf_v[n] <= `VAL;
 end
 else begin
@@ -153,8 +134,6 @@ else begin
 			if (~(livetarget[n])) begin
 				rf_v[n] <= `VAL;
 		end
-		if (iq_latest_sr_ID=={`QBIT{1'b1}})
-			rf_v[AREGS] <= `VAL;
 	end
 
   // The source for the register file data might have changed since it was
@@ -181,128 +160,35 @@ else begin
     end
   end
 
-	if (commit0_v && commit0_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit0_id) || (branchmiss && (iq_sr_source[ rob_id[commit0_id] ]));
-    end
-  end
-  if (commit1_v && commit1_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit1_id) || (branchmiss && (iq_sr_source[ rob_id[commit1_id] ]));
-    end
-  end
-  if (commit2_v && commit2_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit2_id) || (branchmiss && (iq_sr_source[ rob_id[commit2_id] ]));
-    end
-  end
-
 	$display("slot_rfw: %h", slot_rfw);
 	$display("quedon : %h", queuedOn);
 	$display("slotv: %h", slotv);
 	if (!branchmiss)
 		case(slotv)
-		3'b000:	;
-		3'b001:
+		2'b00:	;
+		2'b01:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
 					rf_v [Rd[0]] <= `INV;
 				end
-				if (slot_sr_tgts[0] != 8'h00)
-					rf_v[AREGS] <= `INV;
 			end
-		3'b010:
+		2'b10:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
 				end
-				if (slot_sr_tgts[1] != 8'h00)
-					rf_v[AREGS] <= `INV;
 			end
-		3'b011:
+		2'b11:
 			begin
 				if (queuedOn[0]) begin
 					if (slot_rfw[0]) begin
 						rf_v [Rd[0]] <= `INV;
 					end
-					if (slot_sr_tgts[0] != 8'h00)
-						rf_v[AREGS] <= `INV;
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
 						rf_v [Rd[1]] <= `INV;
 					end
-					if (slot_sr_tgts[1] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-			end
-		3'b100:
-			if (queuedOn[2]) begin
-				if (slot_rfw[2]) begin
-					rf_v [Rd[2]] <= `INV;
-				end
-				if (slot_sr_tgts[2] != 8'h00)
-					rf_v[AREGS] <= `INV;
-			end
-		3'b101:
-			begin
-				if (queuedOn[0]) begin
-					if (slot_rfw[0]) begin
-						rf_v [Rd[0]] <= `INV;
-					end
-					if (slot_sr_tgts[0] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-				if (queuedOn[2]) begin
-					if (slot_rfw[2]) begin
-						rf_v [Rd[2]] <= `INV;
-					end
-					if (slot_sr_tgts[2] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-			end
-		3'b110:
-			begin
-				if (queuedOn[1]) begin
-					if (slot_rfw[1]) begin
-						rf_v [Rd[1]] <= `INV;
-					end
-					if (slot_sr_tgts[1] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-				if (queuedOn[2]) begin
-					if (slot_rfw[2]) begin
-						rf_v [Rd[2]] <= `INV;
-					end
-					if (slot_sr_tgts[2] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-			end
-		3'b111:
-			begin
-				if (queuedOn[0]) begin
-					if (slot_rfw[0]) begin
-						$display("setting inv0:%h",Rd[0]);
-						rf_v [Rd[0]] <= `INV;
-					end
-					if (slot_sr_tgts[0] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-				if (queuedOn[1]) begin
-					if (slot_rfw[1]) begin
-						$display("setting inv1:%h",Rd[1]);
-						rf_v [Rd[1]] <= `INV;
-					end
-					if (slot_sr_tgts[1] != 8'h00)
-						rf_v[AREGS] <= `INV;
-				end
-				if (queuedOn[2]) begin
-					if (slot_rfw[2]) begin
-						$display("setting inv2:%h",Rd[2]);
-						rf_v [Rd[2]] <= `INV;
-					end
-					if (slot_sr_tgts[2] != 8'h00)
-						rf_v[AREGS] <= `INV;
 				end
 			end
 		endcase

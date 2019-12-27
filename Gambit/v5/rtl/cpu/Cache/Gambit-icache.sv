@@ -109,7 +109,7 @@ input wr;
 input [pLNMSB:0] lineno;
 input [pLNMSB:0] nxt_lineno;
 input [415:0] i;
-output reg [pLineWidth-1:0] o;
+output reg [pLineWidth*2-1:0] o;
 
 integer n;
 genvar g;
@@ -157,11 +157,11 @@ end
 
 generate begin : memupd
 for (g = 0; g < 32; g = g + 1) begin
-	ret[g] = IsRet(i[g*13+:9]);
-	br[g] = IsBranch(i[g*13+:9]);
-	jc[g] = IsJal(i[g*13+:9]);
-	brk[g] = IsBrk(i[g*13+:9])|IsRti(i[g*13+:9]);
-	wai[g] = IsWai(i[g*13+:9]);
+	assign ret[g] = IsRet(i[g*13+:9]);
+	assign br[g] = IsBranch(i[g*13+:9]);
+	assign jc[g] = IsJal(i[g*13+:9]);
+	assign brk[g] = IsBrk(i[g*13+:9])|IsRti(i[g*13+:9]);
+	assign wai[g] = IsWai(i[g*13+:9]);
 	
 always  @(posedge clk)
 	if (wr)
@@ -213,6 +213,9 @@ reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
 reg [pLines/4-1:0] mem2v;
 reg [pLines/4-1:0] mem3v;
+
+wire hit0, hit1, hit2, hit3;
+
 integer n;
 initial begin
   for (n = 0; n < pLines/4; n = n + 1)
@@ -278,10 +281,10 @@ else begin
 end
 
 
-wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
-wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
-wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
-wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
+assign hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
+assign hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
+assign hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
+assign hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
 wire hit0n = mem0[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem0v[nxt_adr[pMSB:5]];
 wire hit1n = mem1[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem1v[nxt_adr[pMSB:5]];
 wire hit2n = mem2[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem2v[nxt_adr[pMSB:5]];
@@ -343,6 +346,7 @@ input invall;
 input invline;
 output [AMSB:0] missadr;
 
+wire [511:0] pdi;
 wire [1026:0] ic;
 reg [418:0] i1, i2;
 wire [pLNMSB:0] lineno, nxt_lineno;

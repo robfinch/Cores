@@ -95,8 +95,8 @@
 // however the branch predictor won't be effective as it depends on this
 // configuration constant. Reducing the constant to one for instance will cause
 // the branch predictor to operate only on slot 0.
-`define QSLOTS		3
-`define RSLOTS		3
+`define QSLOTS		2
+`define RSLOTS		2
 
 // Bitfield for representing exception codes
 `define XBITS			7:0

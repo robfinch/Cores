@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,

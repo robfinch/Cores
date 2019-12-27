@@ -21,54 +21,47 @@
 //
 // ============================================================================
 // 18854
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 `define VAL		1'b1
 `define INV		1'b0
 
 module regfileSource(rst, clk, branchmiss, heads, slotv, slot_rfw,
-	slot_sr_tgts,
-	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, rob_tails,
-	iq_latestID, iq_tgt, iq_rid, iq_latest_sr_ID, rf_source, sr_source);
-parameter AREGS = 32;
+	queuedOn,	rqueuedOn, iq_state, iq_rfw, Rd, rob_tails,
+	iq_latestID, iq_tgt, iq_rid, rf_source);
+parameter AREGS = 128;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter RENTRIES = `RENTRIES;
 parameter QSLOTS = `QSLOTS;
-parameter RBIT = 4;
+parameter RBIT = 5;
 input rst;
 input clk;
 input branchmiss;
-input [`QBITS] heads [0:IQ_ENTRIES-1];
+input [`QBITSP1] heads [0:IQ_ENTRIES-1];
 input [QSLOTS-1:0] slotv;
 input [IQ_ENTRIES-1:0] slot_rfw;
-input [7:0] slot_sr_tgts [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
 input [2:0] iq_state [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_rfw;
-input [RBIT+1:0] iq_Rd [0:IQ_ENTRIES-1];
 input [RBIT+1:0] Rd [0:QSLOTS-1];
 input [`RBITS] rob_tails [0:QSLOTS-1];
 input [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
 input [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];
 input [`RBITS] iq_rid [0:IQ_ENTRIES-1];
-input [`QBITS] iq_latest_sr_ID;
 output reg [`QBITSP1] rf_source [0:AREGS-1];
-output reg [`QBITSP1] sr_source;
 
 integer n;
 
 initial begin
-for (n = 0; n <= AREGS; n = n + 1)
+for (n = 0; n < AREGS; n = n + 1)
 	rf_source[n] = 1'b0;
-sr_source = 1'b0;
 end
 
 always @(posedge clk)
 if (rst) begin
-  for (n = 0; n <= AREGS; n = n + 1) begin
+  for (n = 0; n < AREGS; n = n + 1) begin
     rf_source[n] <= {`QBIT{1'b1}};
   end
-  sr_source <= {`QBIT{1'b1}};
 end
 else begin
 	if (branchmiss) begin
@@ -78,92 +71,28 @@ else begin
 			if (iq_rid[n] >= IQ_ENTRIES)
 				$stop;
     end
-    if (iq_latest_sr_ID != {`QBIT{1'b1}})
-			sr_source <= iq_latest_sr_ID;
 	end
 	else begin
 		// Setting the rf valid and source
 		case(slotv)
-		3'b000:	;
-		3'b001:
+		2'b00:	;
+		2'b01:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[0]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
 			end
-		3'b010:
+		2'b10:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1])
 					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[1]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
 			end
-		3'b011:
+		2'b11:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[0]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
 				if (queuedOn[1]) begin
 					if (slot_rfw[1])
 						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
-					if (slot_sr_tgts[1]!=8'h00)
-						sr_source <= {{`QBIT{1'b0}},rob_tails[1]};
-				end
-			end
-		3'b100:
-			if (queuedOn[2]) begin
-				if (slot_rfw[2])
-					rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[2]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
-			end
-		3'b101:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[0]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (queuedOn[2]) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
-					if (slot_sr_tgts[2]!=8'h00)
-						sr_source <= {{`QBIT{1'b0}},rob_tails[1]};
-				end
-			end
-		3'b110:
-			if (queuedOn[1]) begin
-				if (slot_rfw[1])
-					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[1]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (queuedOn[2]) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
-					if (slot_sr_tgts[2]!=8'h00)
-						sr_source <= {{`QBIT{1'b0}},rob_tails[1]};
-				end
-			end
-		3'b111:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (slot_sr_tgts[0]!=8'h00)
-					sr_source <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (queuedOn[1]) begin
-					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
-					end
-					if (slot_sr_tgts[1]!=8'h00)
-						sr_source <= {{`QBIT{1'b0}},rob_tails[1]};
-					if (queuedOn[2]) begin
-						if (slot_rfw[2]) begin
-							rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[2]};
-						end
-						if (slot_sr_tgts[2]!=8'h00)
-							sr_source <= {{`QBIT{1'b0}},rob_tails[2]};
-					end
 				end
 			end
 		endcase

@@ -25,43 +25,64 @@
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
 
-module agenIssue(agen0_idle, agen1_idle, heads, could_issue, iq_mem, prior_sync, prior_valid, issue0, issue1);
-input agen0_idle;
-input agen1_idle;
+module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc, iq_br, iq_state, iq_sn, prior_sync, prior_valid, issue, nid);
 input [`QBITSP1] heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
-input [`IQ_ENTRIES-1:0] iq_mem;
+input branchmiss;
+input [`QBITS] fcu_id;
+input fcu_done;
+input [`IQ_ENTRIES-1:0] iq_fc;
+input [`IQ_ENTRIES-1:0] iq_br;
+input [2:0] iq_state [0:`IQ_ENTRIES-1];
+input [`SNBITS] iq_sn [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] prior_sync;
 input [`IQ_ENTRIES-1:0] prior_valid;
-output reg [`QBITS] issue0;
-output reg [`QBITS] issue1;
+output reg [`IQ_ENTRIES-1:0] issue;
+output reg [`QBITS] nid;
+parameter IQS_INVALID = 3'd0;
 
-integer n;
+integer j, n;
+reg [`IQ_ENTRIES-1:0] nextqd;
 
+
+reg [`QBITS] nids [0:`IQ_ENTRIES-1];
+always @*
+for (j = 0; j < `IQ_ENTRIES; j = j + 1) begin
+	// We can't both start and stop at j
+	for (n = j; n != (j+1)%`IQ_ENTRIES; n = (n + (`IQ_ENTRIES-1)) % `IQ_ENTRIES)
+		nids[j] = n;
+	// Do the last one
+	nids[j] = (j+1)%`IQ_ENTRIES;
+end
+
+// Search the queue for the next entry on the same thread.
 always @*
 begin
-	issue0 = {`IQ_ENTRIES{1'b0}};
-	issue1 = {`IQ_ENTRIES{1'b0}};
+	nid = fcu_id;
+	for (n = `IQ_ENTRIES-1; n > 0; n = n - 1)
+		nid = (fcu_id + n) % `IQ_ENTRIES;
+end
+
+always @*
+for (n = 0; n < `IQ_ENTRIES; n = n + 1)
+	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq_state[n]!=IQS_INVALID;
+
+//assign nextqd = 8'hFF;
+
+// Don't issue to the fcu until the following instruction is enqueued.
+// However, if the queue is full then issue anyway. A branch miss will likely occur.
+// Start search for instructions at head of queue (oldest instruction).
+always @*
+begin
+	issue = {`IQ_ENTRIES{1'b0}};
 	
-	if (agen0_idle) begin
+	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_mem[heads[n]] && issue0 == {`IQ_ENTRIES{1'b0}}
-			// If there are no valid queue entries prior it doesn't matter if there is
-			// a sync.
+			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]])
+			&& issue == {`IQ_ENTRIES{1'b0}}
 			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
 			)
-			  issue0[heads[n]] = `TRUE;
-		end
-	end
-
-	if (agen1_idle && `NUM_AGEN > 1) begin
-		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_mem[heads[n]]
-				&& !issue0[heads[n]]
-				&& issue1 == {`IQ_ENTRIES{1'b0}}
-				&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-			)
-			  issue1[heads[n]] = `TRUE;
+			  issue[heads[n]] = `TRUE;
 		end
 	end
 end

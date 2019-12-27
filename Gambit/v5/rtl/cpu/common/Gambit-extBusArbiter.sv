@@ -19,60 +19,59 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
+//
 // ============================================================================
 //
-`include "..\inc\Gambit-defines.sv"
+module extBusArbiter(rst, clk, cyc, ack_i, icyc, wb_has_bus, d0cyc, d1cyc, dcyc, mwhich, mstate);
+input rst;
+input clk;
+input cyc;
+input ack_i;
+input icyc;
+input wb_has_bus;
+input d0cyc;
+input d1cyc;
+input dcyc;
+output reg [2:0] mwhich;
+output reg [3:0] mstate;
 
-module instLength(opcode,len);
-input [5:0] opcode;
-output reg [2:0] len;
-
-always @*
-case(opcode)
-`ADD_3R:	len <= 3'd2;
-`ADD_RI22:	len <= 3'd3;
-`ADD_RI35:	len <= 3'd4;
-`JAL:			len <= 3'd4;
-`ASL_3R:	len <= 3'd2;
-`SUB_3R:	len <= 3'd2;
-`SUB_RI22:	len <= 3'd3;
-`SUB_RI35:	len <= 3'd4;
-`CMP_3R:	len <= 3'd2;
-`CMP_RI22:	len <= 3'd3;
-`CMP_RI35:	len <= 3'd4;
-`CMPU_3R:	len <= 3'd2;
-`CMPU_RI22:	len <= 3'd3;
-`CMPU_RI35:	len <= 3'd4;
-`JAL:			len <= 3'd4;
-`LSR_3R:	len <= 3'd2;
-`RETGRP:	len <= 3'd1;
-`ROL_3R:	len <= 3'd2;
-`AND_3R:	len <= 3'd2;
-`AND_RI22: len <= 3'd3;
-`AND_RI35: len <= 3'd4;
-`BRKGRP:	len <= 3'd1;
-`ROR_3R:	len <= 3'd2;
-`OR_3R:		len <= 3'd2;
-`OR_RI22:	len <= 3'd3;
-`OR_RI35:	len <= 3'd4;
-`EOR_3R:	len <= 3'd2;
-`EOR_RI22:	len <= 3'd3;
-`EOR_RI35: len <= 3'd4;
-`JAL_RN:	len <= 3'd1;
-`LD_D8:		len <= 3'd2;
-`LD_D22:	len <= 3'd3;
-`LD_D35:	len <= 3'd4;
-`LDB_D8:	len <= 3'd2;
-`LDB_D22:	len <= 3'd3;
-`LDB_D35:	len <= 3'd4;
-`ST_D8:		len <= 3'd2;
-`ST_D22:	len <= 3'd3;
-`ST_D35:	len <= 3'd4;
-`STB_D8:	len <= 3'd2;
-`STB_D22:	len <= 3'd3;
-`STB_D35:	len <= 3'd4;
-`BRANCH0:	len <= 3'd2;
-`BRANCH1:	len <= 3'd2;
-default:	len <= 3'd1;	// unimplemented instruction
+always @(posedge clk)
+if (rst) begin
+	mwhich <= 3'd5;
+	mstate <= 1'd0;
+end
+else begin
+	case(mstate)
+	4'd0:
+	if (~ack_i) begin
+		if (icyc) begin
+			mwhich <= 3'd0;
+			mstate <= 4'd1;
+		end
+		else if (wb_has_bus) begin
+			mwhich <= 3'd1;
+			mstate <= 4'd1;
+		end
+		else if (d0cyc) begin
+			mwhich <= 3'd2;
+			mstate <= 4'd1;
+		end
+		else if (d1cyc) begin
+			mwhich <= 3'd3;
+			mstate <= 4'd1;
+		end
+		else if (dcyc) begin
+			mwhich <= 3'd4;
+			mstate <= 4'd1;
+		end
+		else begin
+			mwhich <= 3'd5;
+		end
+	end
+4'd1:
+	if (~cyc)
+		mstate <= 4'd0;
 endcase
+end
+
 endmodule

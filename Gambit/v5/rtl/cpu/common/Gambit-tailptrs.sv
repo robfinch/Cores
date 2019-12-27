@@ -21,8 +21,8 @@
 //                                                                          
 // ============================================================================
 //
-`include "Gambit-config.sv"
-`include "Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
 
 module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, queuedCnt, iq_tails, 
 	rqueuedCnt, rob_tails, iq_rid);

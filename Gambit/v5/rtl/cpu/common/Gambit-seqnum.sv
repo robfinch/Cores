@@ -21,14 +21,14 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 module seqnum(rst, clk, heads, hi_amt, iq_v, iq_sn, overflow, maxsn, tosub);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 input rst;
 input clk;
-input [`QBITS] heads [0:IQ_ENTRIES-1];
+input [`QBITSP1] heads [0:IQ_ENTRIES-1];
 input [2:0] hi_amt;
 input [IQ_ENTRIES-1:0] iq_v;
 input overflow;

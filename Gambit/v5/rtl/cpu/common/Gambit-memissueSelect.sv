@@ -29,7 +29,7 @@
 `include "..\inc\Gambit-defines.sv"
 
 module memissueSelect(heads, iq_stomp, iq_memissue, iq_state, dram0, dram1, issue0, issue1);
-input [`QBITS] heads [0:`IQ_ENTRIES-1];
+input [`QBITSP1] heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] iq_stomp;
 input [`IQ_ENTRIES-1:0] iq_memissue;
 input [2:0] iq_state [0:`IQ_ENTRIES-1];
@@ -41,7 +41,6 @@ parameter IQS_AGEN = 3'd3;
 
 integer n;
 
-reg issue0, issue1;
 always @*
 begin
 	issue0 = `IQ_ENTRIES;

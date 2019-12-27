@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
-`include "Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
 
 module programCounter(rst, clk,
 	q1, q2, q1bx, insnx, freezepc, 

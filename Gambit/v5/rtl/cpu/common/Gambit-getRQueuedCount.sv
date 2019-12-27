@@ -30,7 +30,7 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 module getRQueuedCount(rst, rob_tails, heads, rob_v_i, rob_v_o, iq_state, iq_rid_i, iq_rid_o, rqueuedCnt, rqueuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -42,7 +42,7 @@ parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
 input [`RBITS] rob_tails [0:RSLOTS-1];
-input [`QBITS] heads [0:IQ_ENTRIES-1];
+input [`QBITSP1] heads [0:IQ_ENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;
 input [2:0] iq_state [0:IQ_ENTRIES-1];

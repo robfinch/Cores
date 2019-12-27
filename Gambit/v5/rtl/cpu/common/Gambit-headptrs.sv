@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 // Pointers to the head of the queue. The pointers increment every cycle by
 // the number of instructions that were committed during the cycle.
@@ -33,7 +33,7 @@ parameter RSLOTS = `RSLOTS;
 input rst;
 input clk;
 input [2:0] amt;
-output reg [`QBITS] heads [0:IQ_ENTRIES-1];
+output reg [`QBITSP1] heads [0:IQ_ENTRIES-1];
 input [2:0] ramt;
 output reg [`RBITS] rob_heads [0:RENTRIES-1];
 output reg [31:0] headcnt;

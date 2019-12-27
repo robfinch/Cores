@@ -30,8 +30,8 @@
 //
 // ============================================================================
 //
-`include "Gambit-config.sv"
-`include "Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
 
 module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedOnp);
@@ -59,17 +59,17 @@ begin
 	if (!branchmiss) begin
 		// Three available
 		case(slotvd)
-		3'b001:
+		2'b01:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
       end
-		3'b010:
+		2'b10:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[1] <= `TRUE;
       end
-		3'b011:
+		2'b11:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
@@ -84,56 +84,6 @@ begin
 	        end
 	      end
     	end
-		3'b100:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[2] <= `TRUE;
-      end
-    3'b101:		//; // Illegal
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-      end
-    3'b110:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[1] <= `TRUE;
-        if (!brk[1]) begin
-	        if (!(slot_jmp[1]|take_branch[1])) begin
-	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-	            if (`WAYS > 1) begin
-	            	queuedCnt <= 3'd2;
-	            	queuedOnp[2] <= `TRUE;
-	            end
-	          end
-	        end
-      	end
-    	end
-		3'b111:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-        if (!brk[0]) begin
-					if (!(slot_jmp[0]|take_branch[0])) begin
-	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-	            if (`WAYS > 1) begin
-	            	queuedCnt <= 3'd2;
-	            	queuedOnp[1] <= `TRUE;
-	            end
-	            if (!brk[1]) begin
-		          	if (!(slot_jmp[1]|take_branch[1])) begin
-			            if (iq_v[tails[2]]==`INV && rob_v[rob_tails[2]]==`INV) begin
-				            if (`WAYS > 2) begin
-				            	queuedCnt <= 3'd3;
-				            	queuedOnp[2] <= `TRUE;
-				            end
-			            end
-			          end
-		        	end
-		        end
-					end
-				end
-			end
 		default:	;
 		endcase
   end
