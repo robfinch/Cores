@@ -22,6 +22,7 @@
 // ============================================================================
 // 18854
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 `define VAL		1'b1
 `define INV		1'b0
 
@@ -36,21 +37,21 @@ parameter RBIT = 5;
 input rst;
 input clk;
 input branchmiss;
-input [`QBITSP1] heads [0:IQ_ENTRIES-1];
+input Qid heads [0:IQ_ENTRIES-1];
 input [QSLOTS-1:0] slotv;
 input [IQ_ENTRIES-1:0] slot_rfw;
 input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
-input [2:0] iq_state [0:IQ_ENTRIES-1];
+input QState iq_state [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_rfw;
 input [RBIT+1:0] Rd [0:QSLOTS-1];
-input [`RBITS] rob_tails [0:QSLOTS-1];
+input Rid rob_tails [0:QSLOTS-1];
 input [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
 input [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];
-input [`RBITS] iq_rid [0:IQ_ENTRIES-1];
-output reg [`QBITSP1] rf_source [0:AREGS-1];
+input Rid iq_rid [0:IQ_ENTRIES-1];
+output Rid rf_source [0:AREGS-1];
 
-integer n;
+Qid n;
 
 initial begin
 for (n = 0; n < AREGS; n = n + 1)
@@ -67,7 +68,7 @@ else begin
 	if (branchmiss) begin
 		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
     	if (|iq_latestID[n])
-    		rf_source[ {1'b0,iq_tgt[n]} ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
+    		rf_source[ iq_tgt[n] ] <= {{`QBIT{1'b0}},iq_rid[n]};
 			if (iq_rid[n] >= IQ_ENTRIES)
 				$stop;
     end

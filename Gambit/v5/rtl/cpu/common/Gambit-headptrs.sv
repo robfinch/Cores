@@ -22,6 +22,7 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 // Pointers to the head of the queue. The pointers increment every cycle by
 // the number of instructions that were committed during the cycle.
@@ -35,7 +36,7 @@ input clk;
 input [2:0] amt;
 output reg [`QBITSP1] heads [0:IQ_ENTRIES-1];
 input [2:0] ramt;
-output reg [`RBITS] rob_heads [0:RENTRIES-1];
+output reg Rid rob_heads [0:RENTRIES-1];
 output reg [31:0] headcnt;
 
 integer n;

@@ -29,6 +29,8 @@
 // Comment out for synthesis.
 `define SIM		1'b1
 
+`define AREGS		128
+
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_BBMS	1'b1
 //`define DEBUG_LOGIC 1'b1

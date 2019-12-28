@@ -32,6 +32,7 @@
 //
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedOnp);
@@ -42,8 +43,8 @@ parameter RSLOTS = `RSLOTS;
 input branchmiss;
 input [2:0] brk;
 input phitd;
-input [`QBITS] tails [0:QSLOTS-1];
-input [`RBITS] rob_tails [0:RSLOTS-1];
+input Qid tails [0:QSLOTS-1];
+input Rid rob_tails [0:RSLOTS-1];
 input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_jmp;
 input [QSLOTS-1:0] take_branch;

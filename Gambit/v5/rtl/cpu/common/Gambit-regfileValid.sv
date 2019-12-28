@@ -29,10 +29,10 @@
 
 module regfileValid(rst, clk, slotv, slot_rfw, tails,
 	livetarget, branchmiss, rob_id,
-	commit0_v, commit1_v, commit2_v,
-	commit0_id, commit1_id, commit2_id,
-	commit0_tgt, commit1_tgt, commit2_tgt,
-	commit0_rfw, commit1_rfw, commit2_rfw,
+	commit0_v, commit1_v,
+	commit0_id, commit1_id,
+	commit0_tgt, commit1_tgt,
+	commit0_rfw, commit1_rfw,
 	rf_source, iq_source, queuedOn,
 	Rd, rf_v, regIsValid);
 parameter AREGS = 128;
@@ -46,25 +46,21 @@ input rst;
 input clk;
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
-input [`QBITS] tails [0:QSLOTS-1];
+input Rid tails [0:QSLOTS-1];
 input [AREGS-1:0] livetarget;
 input branchmiss;
-input [`QBITS] rob_id [0:RENTRIES-1];
+input Qid rob_id [0:RENTRIES-1];
 input commit0_v;
 input commit1_v;
-input commit2_v;
-input [`RBITS] commit0_id;
-input [`RBITS] commit1_id;
-input [`RBITS] commit2_id;
-input [RBIT+1:0] commit0_tgt;
-input [RBIT+1:0] commit1_tgt;
-input [RBIT+1:0] commit2_tgt;
+input Rid commit0_id;
+input Rid commit1_id;
+input RegTag commit0_tgt;
+input RegTag commit1_tgt;
 input commit0_rfw;
 input commit1_rfw;
-input commit2_rfw;
-input [`QBITSP1] rf_source [0:AREGS-1];
+input Qid rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
-input [RBIT+1:0] Rd [0:QSLOTS-1];
+input RegTag Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 output reg [AREGS:0] rf_v;
 output reg [AREGS:0] regIsValid;	// advanced signal
@@ -91,9 +87,9 @@ begin
 		id0 = rob_id[commit0_id];
 		id1 = rob_id[commit1_id];
 		if (commit0_v && n==commit0_tgt && !rf_v[n] && commit0_rfw)
-			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
+			regIsValid[n] = ((rf_source[ n ] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
 		if (commit1_v && n==commit1_tgt && !rf_v[n] && commit1_rfw)
-			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
+			regIsValid[n] = ((rf_source[ n ] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
 	end
 	
 	regIsValid[0] = `VAL;
@@ -120,15 +116,15 @@ else begin
 	if (commit0_v && commit0_rfw) begin
 		$display("!rfv=%d %d",!rf_v[ commit0_tgt ], rf_v[ commit0_tgt ] );
     if (!rf_v[ commit0_tgt ]) begin
-      rf_v[ commit0_tgt ] <= (rf_source[ commit0_tgt ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]));
-      $display("rfv 0: %d %d %d", rf_source[ commit0_tgt][`RBITS], commit0_id, rf_source[ commit0_tgt ][`QBIT]);
+      rf_v[ commit0_tgt ] <= (rf_source[ commit0_tgt ] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]));
+      $display("rfv 0: %d %d", rf_source[ commit0_tgt], commit0_id);
     end
   end
   if (commit1_v && commit1_rfw) begin
 		$display("!rfv=%d %d",!rf_v[ commit1_tgt ], rf_v[ commit1_tgt] );
     if (!rf_v[ commit1_tgt ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit1_tgt ] <= (rf_source[ commit1_tgt ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]));
-      $display("rfv 1: %d %d %d", rf_source[ commit0_tgt ][`RBITS], commit0_id, rf_source[ commit0_tgt ][`QBIT]);
+      rf_v[ commit1_tgt ] <= (rf_source[ commit1_tgt ] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]));
+      $display("rfv 1: %d %d", rf_source[ commit0_tgt ][`RBITS], commit0_id);
     end
   end
 

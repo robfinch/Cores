@@ -39,7 +39,39 @@ logic [3:0] cnst;
 typedef logic [7:0] MicroOpPtr;
 
 typedef logic [`ABITS] Address;
-typedef logic [`QBITS] Qid;
+typedef logic [51:0] Data;
+typedef logic [`QBITS] Qid;			// Issue queue id
+typedef logic [`RBITS] Rid;			// Reorder buffer id
+typedef logic [6:0] RegTag;			// Register tag
+typedef logic [7:0] ExcCode;		// Exception code
+typedef logic [`SNBITS] Seqnum;	// Sequence number
+typedef logic [`AREGS-1:0] RegTagBitmap;
+
+typedef bit[2:0] enum {
+	IQS_INVALID,
+	IQS_QUEUED,
+	IQS_OUT,
+	IQS_AGEN,
+	IQS_MEM,
+	IQS_DONE,
+	IQS_CMT
+} QState;
+
+typedef bit[1:0] enum {
+	RS_INVALID,
+	RS_ASSIGNED,
+	RS_DONE,
+	RS_CMT
+} RobQState;
+
+typedef bit[2:0] enum {
+	BC_NULL,
+	BC_ICACHE,
+	BC_WRITEBUF,
+	BC_DCACHE0,
+	BC_DCACHE1,
+	BC_UNCDATA
+} BusChannel;
 
 // Different Instruction Formats
 
@@ -210,14 +242,14 @@ typedef union packed
 // Re-order buffer entry
 typedef struct packed
 {
-	Qid id;
-	logic [1:0] state;
+	Qid id;			// Link to issue queue
+	RobQState state;
 	Address pc;
 	Instruction instr;
-	logic [7:0] exc;
+	ExcCode exc;
 	Address ma;
-	logic [51:0] res;
-	logic [`RBIT:0] tgt;
+	Data res;
+	RegTag tgt;
 	logic rfw;
 } RobEntry;
 
@@ -227,9 +259,9 @@ class Rob;
 
 	function [`RENTRIES-1:0] GetV;
 		for (n = 0; n < `RENTRIES; n = n + 1)
-			GetV[n] = robEntries[n].state != 2'b0;	// INVALID
+			GetV[n] = robEntries[n].state != RS_INVALID;
 	endfunction
-	function logic[1:0] [0:`RENTRIES-1] GetState;
+	function RobQState [0:`RENTRIES-1] GetState;
 		for (n = 0; n < `RENTRIES; n = n + 1)
 			GetState[n] = robEntries[n].state;
 	endfunction
@@ -245,9 +277,9 @@ class Rob;
 		 (i[`RBITS]==tail)?"Q":".",
 		  i[`RBITS],
 		  robEntries[i].id,
-		  robEntries[i].state==2'd0 ? "-" :
-		  robEntries[i].state==2'd1 ? "A"  :
-		  robEntries[i].state==2'd2 ? "C"  : "D",
+		  robEntries[i].state==RS_INVALID ? "-" :
+		  robEntries[i].state==RS_ASSIGNED ? "A"  :
+		  robEntries[i].state==RS_CMT ? "C"  : "D",
 		  robEntries[i].exc,
 		  robEntries[i].tgt,
 		  robEntries[i].res

@@ -23,6 +23,7 @@
 //
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, queuedCnt, iq_tails, 
 	rqueuedCnt, rob_tails, iq_rid);
@@ -35,10 +36,10 @@ input clk_i;
 input branchmiss;
 input [IQ_ENTRIES-1:0] iq_stomp;
 input [2:0] queuedCnt;
-output reg [`QBITS] iq_tails [0:QSLOTS-1];
+output Qid iq_tails [0:QSLOTS-1];
 input [2:0] rqueuedCnt;
-output reg [`RBITS] rob_tails [0:RSLOTS-1];
-input [`RBITS] iq_rid [0:IQ_ENTRIES-1];
+output Rid rob_tails [0:RSLOTS-1];
+input Rid iq_rid [0:IQ_ENTRIES-1];
 
 integer n, j;
 
