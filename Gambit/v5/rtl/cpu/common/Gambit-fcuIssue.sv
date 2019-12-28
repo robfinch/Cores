@@ -45,27 +45,27 @@ integer j, n;
 reg [`IQ_ENTRIES-1:0] nextqd;
 
 
-reg [`QBITS] nids [0:`IQ_ENTRIES-1];
-always @*
-for (j = 0; j < `IQ_ENTRIES; j = j + 1) begin
-	// We can't both start and stop at j
-	for (n = j; n != (j+1)%`IQ_ENTRIES; n = (n + (`IQ_ENTRIES-1)) % `IQ_ENTRIES)
-		nids[j] = n;
-	// Do the last one
-	nids[j] = (j+1)%`IQ_ENTRIES;
-end
+//reg [`QBITS] nids [0:`IQ_ENTRIES-1];
+//always @*
+//for (j = 0; j < `IQ_ENTRIES; j = j + 1) begin
+//	// We can't both start and stop at j
+//	for (n = j; n != (j+1)%`IQ_ENTRIES; n = (n + (`IQ_ENTRIES-1)) % `IQ_ENTRIES)
+//		nids[j] = n;
+//	// Do the last one
+//	nids[j] = (j+1)%`IQ_ENTRIES;
+//end
 
 // Search the queue for the next entry on the same thread.
 always @*
 begin
-	nid = fcu_id;
-	for (n = `IQ_ENTRIES-1; n > 0; n = n - 1)
-		nid = (fcu_id + n) % `IQ_ENTRIES;
+	nid = (fcu_id + 2'd1) % `IQ_ENTRIES;
+//	for (n = `IQ_ENTRIES-1; n > 0; n = n - 1)
+//		nid = (fcu_id + n) % `IQ_ENTRIES;
 end
 
 always @*
 for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq_state[n]!=IQS_INVALID;
+	nextqd[n] <= iq_sn[(n+1)%`IQ_ENTRIES] > iq_sn[n] && iq_state[(n+1)%`IQ_ENTRIES]!=IQS_INVALID;
 
 //assign nextqd = 8'hFF;
 

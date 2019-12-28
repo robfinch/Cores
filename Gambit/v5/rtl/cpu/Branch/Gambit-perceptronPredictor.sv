@@ -21,7 +21,7 @@
 //                                                                          
 // ============================================================================
 
-`include "..\Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 module perceptronPredictor(rst, clk, clk2x, clk4x, id_i, id_o, xbr, xadr, prediction_i, outcome, adr, prediction_o);
 parameter AMSB = `AMSB;

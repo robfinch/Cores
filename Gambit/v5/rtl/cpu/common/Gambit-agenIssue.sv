@@ -33,8 +33,8 @@ input [`IQ_ENTRIES-1:0] could_issue;
 input [`IQ_ENTRIES-1:0] iq_mem;
 input [`IQ_ENTRIES-1:0] prior_sync;
 input [`IQ_ENTRIES-1:0] prior_valid;
-output reg [`QBITS] issue0;
-output reg [`QBITS] issue1;
+output reg [`IQ_ENTRIES-1:0] issue0;
+output reg [`IQ_ENTRIES-1:0] issue1;
 
 integer n;
 

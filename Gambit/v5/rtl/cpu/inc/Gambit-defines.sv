@@ -102,6 +102,8 @@
 `define STB_D8		7'h59
 `define STB_D22		7'h69
 `define STB_D35		7'h79
+`define REX				7'h6A
+`define CACHE			7'h7A
 `define SEQ_3R		7'h4C
 `define BNE_3R		7'h5C
 `define SLT_3R		7'h4D
@@ -110,6 +112,8 @@
 `define SLEU_3R		7'h7D
 `define MTx				7'h4A
 `define MFx				7'h5A
+
+`define NOP_INSN	52'hC3
 
 `define UO_ADD		6'd0
 `define UO_ADDu		6'd1

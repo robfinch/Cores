@@ -23,7 +23,7 @@
 //
 //=============================================================================
 //
-`include "..\Gambit-config.sv"
+`include "..\inc\Gambit-config.sv"
 
 module gsharePredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
 parameter AMSB=51;

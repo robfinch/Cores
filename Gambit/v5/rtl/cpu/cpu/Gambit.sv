@@ -21,6 +21,7 @@
 //                                                                          
 // ============================================================================
 // 38961 62338
+// 44403 71043
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-types.sv"
 `include "..\inc\Gambit-defines.sv"
@@ -172,13 +173,31 @@ wire exv;
 
 reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
-reg dce;
 
 reg [143:0] ic1_out;
 reg [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
 reg [127:0] message [0:15];	// indexed by panic
+
+reg [51:0] cr0;
+wire dce = cr0[30];
+
+// status register
+reg [14:0] im_stack;
+reg [14:0] ol_stack;
+reg [14:0] dl_stack;
+reg [103:0] pl_stack;
+
+reg [AMSB:0] ipc [0:4];
+reg [12:0] cause [0:7];
+reg [AMSB:0] badaddr [0:7];
+reg [51:0] bad_instr [0:7];
+
+reg [51:0] sema;	
+
+reg excmiss;
+reg [AMSB:0] excmisspc;
 
 wire int_commit;
 
@@ -272,9 +291,7 @@ reg [51:0] rob_instr[0:RENTRIES-1];	// instruction opcode
 reg [7:0] rob_exc [0:RENTRIES-1];
 reg [`ABITS] rob_ma [0:RENTRIES-1];
 reg [WID-1:0] rob_res [0:RENTRIES-1];
-reg [7:0] rob_sr_res [0:RENTRIES-1];		// status register result
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
-reg [7:0] rob_sr_tgts [0:RENTRIES-1];
 reg [RENTRIES-1:0] rob_rfw;
 
 // debugging
@@ -1036,8 +1053,8 @@ programCounter upc1
 (
 	.rst(rst_i),
 	.clk(clk),
-	.q1(1'b0),
-	.q2(nextb),
+	.q1(queuedCnt==2'd1),
+	.q2(queuedCnt==2'd2),
 	.q1bx(1'b0),
 	.insnx(insnx),
 	.phit(phit),
@@ -1770,29 +1787,12 @@ begin
 			7'b1111010:	mspx = commit1_bus;
 			endcase
 	end
-	if (commit2_v && commit2_rfw) begin
-		if (commit2_tgt==7'b0011111)
-			case(ol)
-			2'b00:	mspx = commit2_bus;
-			2'b01:	hspx = commit2_bus;
-			2'b10:	sspx = commit2_bus;
-			default:	;
-			endcase
-		else
-			case(commit2_tgt)
-			7'b1111000:	sspx = commit2_bus;
-			7'b1111001:	hspx = commit2_bus;
-			7'b1111010:	mspx = commit2_bus;
-			endcase
-	end
 end
 
 generate begin : regupd
 for (g = 0; g < 32; g = g + 1)
 always @*
-	if (commit2_v && commit2_tgt==g && commit2_rfw)
-		regsx[g] = commit2_bus;
-	else if (commit1_v && commit1_tgt==g && commit1_rfw)
+	if (commit1_v && commit1_tgt==g && commit1_rfw)
 		regsx[g] = commit1_bus;
 	else if (commit0_v && commit0_tgt==g && commit0_rfw)
 		regsx[g] = commit0_bus;
@@ -1804,9 +1804,7 @@ endgenerate
 generate begin : lkregupd
 for (g = 96; g < 101; g = g + 1)
 always @*
-	if (commit2_v && commit2_tgt==g && commit2_rfw)
-		lkregsx[g[2:0]] = commit2_bus;
-	else if (commit1_v && commit1_tgt==g && commit1_rfw)
+	if (commit1_v && commit1_tgt==g && commit1_rfw)
 		lkregsx[g[2:0]] = commit1_bus;
 	else if (commit0_v && commit0_tgt==g && commit0_rfw)
 		lkregsx[g[2:0]] = commit0_bus;
@@ -1831,12 +1829,6 @@ begin
 			crregsx = commit1_bus[15:0];
 		else if (commit1_tgt==g+104 && commit1_rfw)
 			crregsx[g*2+:2] = commit1_bus[1:0];
-	end
-	if (commit2_v) begin
-		if (commit2_tgt==103 && commit2_rfw)
-			crregsx = commit2_bus[15:0];
-		else if (commit2_tgt==g+104 && commit2_rfw)
-			crregsx[g*2+:2] = commit2_bus[1:0];
 	end
 end
 end
@@ -1977,6 +1969,7 @@ input [51:0] ins;
 case(ins[6:0])
 `ADD_3R,`ADD_RI22,`ADD_RI35:	fnMnemonic = "ADD ";
 `SUB_3R,`SUB_RI22,`SUB_RI35:	fnMnemonic = "SUB ";
+`CMP_3R,`CMP_RI22,`CMP_RI35:	fnMnemonic = "CMP ";
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
 `LD_D8,`LD_D22,`LD_D35:	
 			fnMnemonic = "LD  ";
@@ -2021,11 +2014,8 @@ begin
 		hi_amt <= 3'd1;
 		if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
 			hi_amt <= 3'd2;
-			if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+			if (!iq_v[heads[2]] && heads[2] != tails[0])
 				hi_amt <= 3'd3;
-				if (!iq_v[heads[3]] && heads[3] != tails[0])
-					hi_amt <= 3'd4;
-			end
 		end
 	end
 	else if (!iq_v[heads[0]]) begin
@@ -2033,19 +2023,13 @@ begin
 			hi_amt <= 3'd1;
 			if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
 				hi_amt <= 3'd2;
-				if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+				if (!iq_v[heads[2]] && heads[2] != tails[0])
 					hi_amt <= 3'd3;
-					if (!iq_v[heads[3]] && heads[3] != tails[0])
-						hi_amt <= 3'd4;
-				end
 			end
 			else if (!iq_v[heads[1]]) begin
 				if (heads[1] != tails[0]) begin
 					hi_amt <= 3'd2;
-					if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
-						hi_amt <= 3'd3;
-					end
-					else if (!iq_v[heads[2]]) begin
+					if (!iq_v[heads[2]]) begin
 						if (heads[2] != tails[0]) begin
 							hi_amt <= 3'd3;
 						end
@@ -2397,6 +2381,7 @@ wire will_clear_branchmiss = branchmiss && (pc==misspc);
 
 always @*
 case(fcu_instr[6:0])
+`BRKGRP:	fcu_misspc = RSTIP;
 `RETGRP:	fcu_misspc = fcu_argA;
 `JAL:			fcu_misspc = {fcu_pc[`AMSB:43],fcu_argI[42:0]};
 `JAL_RN:	fcu_misspc = fcu_argA;
@@ -2423,7 +2408,7 @@ if (fcu_v) begin
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
 	if (fcu_branch && (fcu_takb ^ fcu_pt))
     fcu_branchmiss = TRUE;
-	else if (fcu_instr[6:0]==`JAL || fcu_instr[6:0]==`RETGRP) begin
+	else if (fcu_instr[6:0]==`JAL || fcu_instr[6:0]==`RETGRP || fcu_instr[`OPCODE]==`BRKGRP) begin
 		if (fcu_followed)
 			fcu_branchmiss = iq_pc[nid]!=fcu_misspc;
 		else
@@ -2487,10 +2472,9 @@ begin
   commit2_rid <= heads[2][`RBITS];
 end
 
-assign int_commit = (commit0_v && iq_instr[heads[0]]==`UO_JSI)
-									 || (hi_amt > 3'd1 && commit1_v && iq_instr[heads[1]]==`UO_JSI)
-									 || (hi_amt > 3'd2 && commit2_v && iq_instr[heads[2]]==`UO_JSI);
-
+assign int_commit = (commit0_v && iq_instr[heads[0]]==`BRKGRP && iq_instr[heads[0]][8:7] > 2'd0)
+									 || (hi_amt > 3'd1 && commit1_v && iq_instr[heads[1]]==`BRKGRP && iq_instr[heads[0]][8:7] > 2'd0)
+										;
 
 //wire [143:0] id_bus[0], id_bus[1], id_bus[2];
 
@@ -2921,7 +2905,7 @@ if (rst_i) begin
 		msp <= 52'h01FFC;
 		ol <= 2'b00;
 		dl <= 2'b00;
-		dce = 1'b1;
+		cr0[30] = 1'b1;
 end
 else begin
 
@@ -2951,13 +2935,13 @@ else begin
 	// be a cache miss at the same time meaning the switch to the new pc
 	// does not take place immediately.
 	if (!branchmiss) begin
-//		if (excmiss) begin
-//			branchmiss <= `TRUE;
-//			misspc <= excmisspc;
-//			missid <= (|iq_exc[heads[0]] ? heads[0] : heads[1]);
-//			misssn <= (|iq_exc[heads[0]] ? iq_sn[heads[0]] : iq_sn[heads[1]]);
-//		end
-//		else
+		if (excmiss) begin
+			branchmiss <= `TRUE;
+			misspc <= excmisspc;
+			missid <= (|iq_exc[heads[0]] ? heads[0] : heads[1]);
+			misssn <= (|iq_exc[heads[0]] ? iq_sn[heads[0]] : iq_sn[heads[1]]);
+		end
+		else
 		if (fcu_branchmiss) begin
 			branchmiss <= `TRUE;
 			misspc <= fcu_misspc;
@@ -3149,7 +3133,6 @@ else begin
 	begin
 		setargs(n,{1'b0,commit0_id},commit0_v & commit0_rfw,commit0_bus);
 		setargs(n,{1'b0,commit1_id},commit1_v & commit1_rfw,commit1_bus);
-		setargs(n,{1'b0,commit2_id},commit2_v & commit2_rfw,commit2_bus);
 
 		setargs(n,{1'b0,alu0_rid},alu0_v,ralu0_bus);
 		if (`NUM_ALU > 1)
@@ -3408,6 +3391,9 @@ else begin
 //
 	head_inc(hi_amt);
 	rob_head_inc(r_amt);
+
+oddball_commit(commit0_v, heads[0], 2'd0);
+oddball_commit(commit1_v, heads[1], 2'd1);
 
 // A store will never be stomped on because they aren't issued until it's
 // guarenteed there will be no change of flow.
@@ -3735,7 +3721,7 @@ endcase
 		);
 	$display ("------------- Reorder Buffer ------------");
 	for (i = 0; i < RENTRIES; i = i + 1)
-	$display("%c%c %d(%d): %c %h %d %h %h %h#",
+	$display("%c%c %d(%d): %c %h %d %h #",
 		 (i[`RBITS]==heads[0])?"C":".",
 		 (i[`RBITS]==tails[0])?"Q":".",
 		  i[`RBITS],
@@ -3745,9 +3731,7 @@ endcase
 		  rob_state[i]==RS_CMT ? "C"  : "D",
 		  rob_exc[i],
 		  rob_tgt[i],
-		  rob_res[i],
-		  rob_sr_res[i],
-		  rob_sr_tgts[i]
+		  rob_res[i]
 		);
     $display("DRAM");
 	$display("%d %h %h %c%h %o #",
@@ -3819,6 +3803,156 @@ end	// end of clock domain
 // Start of Tasks
 // ============================================================================
 // ============================================================================
+
+// This task takes care of commits for things other than the register file.
+task oddball_commit;
+input v;
+input [`RBITS] head;
+input [1:0] which;
+reg thread;
+begin
+  if (v) begin
+//    if (|rob_exc[head]) begin
+//    	exc(head,thread,iq_exc[head]);
+//    end
+//		else
+			case(rob_instr[head][`OPCODE])
+			`BRKGRP:
+          begin
+            excmiss <= TRUE;
+            im_stack <= {im_stack[11:0],3'h7};
+            ol_stack <= {ol_stack[11:0],3'b00};
+            dl_stack <= {dl_stack[11:0],3'b00};
+        		excmisspc <= 52'hFFFFFFFFE0000;
+            ipc[0] <= rob_pc[head] + 2'd1;
+            for (n = 1; n < 5; n = n + 1)
+            	ipc[n] <= ipc[n-1];
+            pl_stack <= {pl_stack[90:0],13'h000};
+            case(rob_instr[head][8:7])
+            `BRK:	cause[3'd0] <= {9'h4,rob_instr[head][12:9]};	// 40h to 4Fh
+            `RST:	cause[3'd0] <= 13'h70;
+            `NMI:	
+            	begin
+            		if (rob_instr[head][8:7]==2'd1)	// SNR
+            			cause[3'd0] <= 13'h61;
+            		else
+            			cause[3'd0] <= 13'h60;
+            	end
+            `IRQ: cause[3'd0] <= {9'h5,rob_instr[head][12:9]};
+          	endcase
+           	sema[0] <= 1'b0;
+`ifdef SUPPORT_DBG                    
+            dbg_ctrl[62:55] <= {dbg_ctrl[61:55],dbg_ctrl[63]}; 
+            dbg_ctrl[63] <= FALSE;
+`endif                    
+          end
+        `REX:
+          if (ol < rob_instr[head][28:26]) begin
+            ol_stack[2:0] <= rob_instr[head][28:26];
+            badaddr[{1'b0,rob_instr[head][28:26]}] <= badaddr[{1'b0,ol}];
+            bad_instr[{1'b0,rob_instr[head][28:26]}] <= bad_instr[{1'b0,ol}];
+            cause[{1'b0,rob_instr[head][28:26]}] <= cause[{1'b0,ol}];
+            pl_stack[12:0] <= rob_instr[head][25:13] | iq_argA[head][12:0];
+          end
+        `CACHE:
+        		begin
+	            case(rob_instr[head][13:12])
+	            2'h1:	begin invicl <= TRUE; invlineAddr <= rob_res[head]; end
+	            2'h2:  	invic <= TRUE;
+	            default:	;
+	          	endcase
+	            case(rob_instr[head][16:14])
+	            3'h1:  cr0[30] <= TRUE;
+	            3'h2:  cr0[30] <= FALSE;
+	            3'h3:		invdcl <= TRUE;
+	            3'h4:		invdc <= TRUE;
+	            default:    ;
+	            endcase
+		        end
+        `CSR:
+        		begin
+//        		write_csr(rob_instr[head][38:36],{rob_instr[head][35:34],rob_instr[head][28:17]},rob_argA[head],thread);
+        		end
+ /*
+        `FLT1:
+					case(rob_instr[head][`FFUNCT5])
+					`FRM: begin  
+								fp_rm <= rob_res[head][6:4];
+								end
+          `FCX:
+              begin
+                  fp_sx <= fp_sx & ~rob_res[head][9];
+                  fp_inex <= fp_inex & ~rob_res[head][8];
+                  fp_dbzx <= fp_dbzx & ~(rob_res[head][7]|rob_res[head][4]);
+                  fp_underx <= fp_underx & ~rob_res[head][6];
+                  fp_overx <= fp_overx & ~rob_res[head][5];
+                  fp_giopx <= fp_giopx & ~rob_res[head][4];
+                  fp_infdivx <= fp_infdivx & ~rob_res[head][4];
+                  fp_zerozerox <= fp_zerozerox & ~rob_res[head][4];
+                  fp_subinfx   <= fp_subinfx   & ~rob_res[head][4];
+                  fp_infzerox  <= fp_infzerox  & ~rob_res[head][4];
+                  fp_NaNCmpx   <= fp_NaNCmpx   & ~rob_res[head][4];
+                  fp_swtx <= 1'b0;
+              end
+          `FDX:
+              begin
+                  fp_inexe <= fp_inexe     & ~rob_res[head][8];
+                  fp_dbzxe <= fp_dbzxe     & ~rob_res[head][7];
+                  fp_underxe <= fp_underxe & ~rob_res[head][6];
+                  fp_overxe <= fp_overxe   & ~rob_res[head][5];
+                  fp_invopxe <= fp_invopxe & ~rob_res[head][4];
+              end
+          `FEX:
+              begin
+                  fp_inexe <= fp_inexe     | rob_res[head][8];
+                  fp_dbzxe <= fp_dbzxe     | rob_res[head][7];
+                  fp_underxe <= fp_underxe | rob_res[head][6];
+                  fp_overxe <= fp_overxe   | rob_res[head][5];
+                  fp_invopxe <= fp_invopxe | rob_res[head][4];
+              end
+            default:	;
+            endcase
+          default:
+            begin
+                // 31 to 29 is rounding mode
+                // 28 to 24 are exception enables
+                // 23 is nsfp
+                // 22 is a fractie
+                fp_fractie <= rob_status[head][22];
+                fp_raz <= rob_status[head][21];
+                // 20 is a 0
+                fp_neg <= rob_status[head][19];
+                fp_pos <= rob_status[head][18];
+                fp_zero <= rob_status[head][17];
+                fp_inf <= rob_status[head][16];
+                // 15 swtx
+                // 14 
+                fp_inex <= fp_inex | (fp_inexe & rob_status[head][14]);
+                fp_dbzx <= fp_dbzx | (fp_dbzxe & rob_status[head][13]);
+                fp_underx <= fp_underx | (fp_underxe & rob_status[head][12]);
+                fp_overx <= fp_overx | (fp_overxe & rob_status[head][11]);
+                //fp_giopx <= fp_giopx | (fp_giopxe & iq_res2[head][10]);
+                //fp_invopx <= fp_invopx | (fp_invopxe & iq_res2[head][24]);
+                //
+                fp_cvtx <= fp_cvtx |  (fp_giopxe & rob_status[head][7]);
+                fp_sqrtx <= fp_sqrtx |  (fp_giopxe & rob_status[head][6]);
+                fp_NaNCmpx <= fp_NaNCmpx |  (fp_giopxe & rob_status[head][5]);
+                fp_infzerox <= fp_infzerox |  (fp_giopxe & rob_status[head][4]);
+                fp_zerozerox <= fp_zerozerox |  (fp_giopxe & rob_status[head][3]);
+                fp_infdivx <= fp_infdivx | (fp_giopxe & rob_status[head][2]);
+                fp_subinfx <= fp_subinfx | (fp_giopxe & rob_status[head][1]);
+                fp_snanx <= fp_snanx | (fp_giopxe & rob_status[head][0]);
+
+            end
+          endcase
+ */
+        endcase
+        // Once the flow control instruction commits, NOP it out to allow
+        // pending stores to be issued.
+        rob_instr[head] <= `NOP_INSN;
+    end
+end
+endtask
 
 // Note the use of blocking(=) assigments here. For some reason in sim <= 
 // assignments didn't work.
