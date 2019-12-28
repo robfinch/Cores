@@ -47,7 +47,7 @@ typedef logic [7:0] ExcCode;		// Exception code
 typedef logic [`SNBITS] Seqnum;	// Sequence number
 typedef logic [`AREGS-1:0] RegTagBitmap;
 
-typedef bit[2:0] enum {
+typedef enum bit[2:0] {
 	IQS_INVALID,
 	IQS_QUEUED,
 	IQS_OUT,
@@ -57,14 +57,14 @@ typedef bit[2:0] enum {
 	IQS_CMT
 } QState;
 
-typedef bit[1:0] enum {
+typedef enum bit[1:0] {
 	RS_INVALID,
 	RS_ASSIGNED,
 	RS_DONE,
 	RS_CMT
 } RobQState;
 
-typedef bit[2:0] enum {
+typedef enum bit[2:0] {
 	BC_NULL,
 	BC_ICACHE,
 	BC_WRITEBUF,

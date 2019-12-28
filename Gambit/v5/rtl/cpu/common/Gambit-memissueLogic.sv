@@ -22,6 +22,7 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module memissueLogic (heads, iq_v, iq_memready, iq_out, iq_done, iq_mem, iq_agen, 
 	iq_load, iq_store, iq_sel, iq_fc, iq_aq, iq_rl, iq_ma, iq_memsb, iq_memdb, iq_stomp, iq_canex, 
@@ -32,7 +33,7 @@ parameter FALSE = 1'b0;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter AMSB = `AMSB;
 localparam QCHKS = `IQ_ENTRIES > 9 ? 10 : `IQ_ENTRIES;
-input [`QBITSP1] heads [0:IQ_ENTRIES-1];
+input Qid heads [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_v;
 input [IQ_ENTRIES-1:0] iq_memready;
 input [IQ_ENTRIES-1:0] iq_out;

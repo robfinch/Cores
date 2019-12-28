@@ -34,7 +34,7 @@ parameter RSLOTS = `RSLOTS;
 input rst;
 input clk;
 input [2:0] amt;
-output reg [`QBITSP1] heads [0:IQ_ENTRIES-1];
+output reg Qid heads [0:IQ_ENTRIES-1];
 input [2:0] ramt;
 output reg Rid rob_heads [0:RENTRIES-1];
 output reg [31:0] headcnt;

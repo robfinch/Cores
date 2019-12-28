@@ -42,13 +42,13 @@ parameter FALSE = 1'b0;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
-input [`RBITS] rob_tails [0:RSLOTS-1];
-input [`QBITSP1] heads [0:IQ_ENTRIES-1];
+input Rid rob_tails [0:RSLOTS-1];
+input Qid heads [0:IQ_ENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;
 input QState iq_state [0:IQ_ENTRIES-1];
-input [`RBITS] iq_rid_i [0:IQ_ENTRIES-1];
-output reg [`RBITS] iq_rid_o [0:IQ_ENTRIES-1];
+input Rid iq_rid_i [0:IQ_ENTRIES-1];
+output Rid iq_rid_o [0:IQ_ENTRIES-1];
 output reg [2:0] rqueuedCnt;
 output reg [IQ_ENTRIES-1:0] rqueuedOn;
 

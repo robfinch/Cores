@@ -27,19 +27,19 @@
 `include "..\inc\Gambit-types.sv"
 
 module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc, iq_br, iq_state, iq_sn, prior_sync, prior_valid, issue, nid);
-input [`QBITSP1] heads [0:`IQ_ENTRIES-1];
+input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
-input [`QBITS] fcu_id;
+input Qid fcu_id;
 input fcu_done;
 input [`IQ_ENTRIES-1:0] iq_fc;
 input [`IQ_ENTRIES-1:0] iq_br;
 input QState iq_state [0:`IQ_ENTRIES-1];
-input [`SNBITS] iq_sn [0:`IQ_ENTRIES-1];
+input Seqnum iq_sn [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] prior_sync;
 input [`IQ_ENTRIES-1:0] prior_valid;
 output reg [`IQ_ENTRIES-1:0] issue;
-output reg [`QBITS] nid;
+output reg Qid nid;
 
 integer j, n;
 reg [`IQ_ENTRIES-1:0] nextqd;

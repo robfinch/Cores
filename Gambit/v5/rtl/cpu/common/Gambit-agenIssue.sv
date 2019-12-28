@@ -24,11 +24,12 @@
 //
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module agenIssue(agen0_idle, agen1_idle, heads, could_issue, iq_mem, prior_sync, prior_valid, issue0, issue1);
 input agen0_idle;
 input agen1_idle;
-input [`QBITSP1] heads [0:`IQ_ENTRIES-1];
+input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input [`IQ_ENTRIES-1:0] iq_mem;
 input [`IQ_ENTRIES-1:0] prior_sync;
@@ -36,7 +37,9 @@ input [`IQ_ENTRIES-1:0] prior_valid;
 output reg [`IQ_ENTRIES-1:0] issue0;
 output reg [`IQ_ENTRIES-1:0] issue1;
 
+
 integer n;
+Qid hd;
 
 always @*
 begin
@@ -45,23 +48,25 @@ begin
 	
 	if (agen0_idle) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_mem[heads[n]] && issue0 == {`IQ_ENTRIES{1'b0}}
+			hd = heads[n];
+			if (could_issue[hd] && iq_mem[hd] && issue0 == {`IQ_ENTRIES{1'b0}}
 			// If there are no valid queue entries prior it doesn't matter if there is
 			// a sync.
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			&& (!prior_sync[hd] || !prior_valid[hd])
 			)
-			  issue0[heads[n]] = `TRUE;
+			  issue0[hd] = `TRUE;
 		end
 	end
 
 	if (agen1_idle && `NUM_AGEN > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_mem[heads[n]]
-				&& !issue0[heads[n]]
+			hd = heads[n];
+			if (could_issue[hd] && iq_mem[hd]
+				&& !issue0[hd]
 				&& issue1 == {`IQ_ENTRIES{1'b0}}
-				&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+				&& (!prior_sync[hd] || !prior_valid[hd])
 			)
-			  issue1[heads[n]] = `TRUE;
+			  issue1[hd] = `TRUE;
 		end
 	end
 end

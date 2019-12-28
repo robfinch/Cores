@@ -22,24 +22,25 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module seqnum(rst, clk, heads, hi_amt, iq_v, iq_sn, overflow, maxsn, tosub);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 input rst;
 input clk;
-input [`QBITSP1] heads [0:IQ_ENTRIES-1];
+input Qid heads [0:IQ_ENTRIES-1];
 input [2:0] hi_amt;
 input [IQ_ENTRIES-1:0] iq_v;
 input overflow;
-input [`SNBITS] iq_sn [0:IQ_ENTRIES-1];
-output reg [`SNBITS] maxsn;
-output [`SNBITS] tosub;
+input Seqnum iq_sn [0:IQ_ENTRIES-1];
+output Seqnum maxsn;
+output Seqnum tosub;
 
 integer n, j;
 
 // Amount subtracted from sequence numbers
-function [`SNBITS] sn_dec;
+function Seqnum sn_dec;
 input [2:0] amt;
 begin
 	sn_dec = 1'd0;

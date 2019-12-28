@@ -51,7 +51,7 @@ input [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
 output Rid rf_source [0:AREGS-1];
 
-Qid n;
+integer n;
 
 initial begin
 for (n = 0; n < AREGS; n = n + 1)
