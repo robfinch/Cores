@@ -22,6 +22,9 @@
 //
 // ============================================================================
 //
+`ifndef CONFIG_H
+`define CONFIG_H	1
+
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
 `define SIM		1'b1
@@ -161,3 +164,5 @@
 // Inline decoding should not be registered.
 //`define REGISTER_DECODE		1'b1
 `define INLINE_DECODE		1'b1
+`endif
+

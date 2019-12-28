@@ -22,6 +22,8 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
+
 `define VAL		1'b1
 `define INV		1'b0
 
@@ -67,32 +69,8 @@ input [QSLOTS-1:0] queuedOn;
 output reg [AREGS:0] rf_v;
 output reg [AREGS:0] regIsValid;	// advanced signal
 
-// The following two functions used to figure out which slot to process.
-// However, the functions when used things seemed not to work.
-// Find first one
-function [2:0] ffo;
-input [2:0] i;
-casez(i)
-3'b1??:  ffo <= 3'd0;
-3'b01?:  ffo <= 3'd1;
-3'b001:  ffo <= 3'd2;
-default:    ffo <= 3'd0;
-endcase
-endfunction
-
-// Find second one bit
-function [2:0] fso;
-input [2:0] i;
-casez(i)
-3'b11?:  fso <= 3'd1;
-3'b011:  fso <= 3'd2;
-3'b001:  fso <= 3'd0;
-3'b101:	 fso <= 3'd2;
-default:    fso <= 3'd0;
-endcase
-endfunction
-
 integer n;
+Qid id0, id1;
 
 // Detect if a given register will become valid during the current cycle.
 // We want a signal that is active during the current clock cycle for the read
@@ -110,12 +88,12 @@ begin
      			regIsValid[n] = `VAL;
     end
 
+		id0 = rob_id[commit0_id];
+		id1 = rob_id[commit1_id];
 		if (commit0_v && n==commit0_tgt && !rf_v[n] && commit0_rfw)
-			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ])));
+			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
 		if (commit1_v && n==commit1_tgt && !rf_v[n] && commit1_rfw)
-			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ])));
-		if (commit2_v && n==commit2_tgt && !rf_v[n] && commit2_rfw)
-			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ])));
+			regIsValid[n] = ((rf_source[ n ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
 	end
 	
 	regIsValid[0] = `VAL;
@@ -151,12 +129,6 @@ else begin
     if (!rf_v[ commit1_tgt ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
       rf_v[ commit1_tgt ] <= (rf_source[ commit1_tgt ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]));
       $display("rfv 1: %d %d %d", rf_source[ commit0_tgt ][`RBITS], commit0_id, rf_source[ commit0_tgt ][`QBIT]);
-    end
-  end
-  if (commit2_v && commit2_rfw) begin
-		$display("!rfv=%d %d",!rf_v[ commit2_tgt ], rf_v[ commit2_tgt ] );
-    if (!rf_v[ commit2_tgt ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit2_tgt ] <= (rf_source[ commit2_tgt ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ]));
     end
   end
 
