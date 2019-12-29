@@ -118,6 +118,12 @@ input [51:0] isn;
 case(isn[6:0])
 `JAL,`JAL_RN,`BRANCH0,`BRANCH1:
 	IsFlowCtrl = TRUE;
+`BRKGRP:
+	IsFlowCtrl = TRUE;
+`RETGRP:
+	IsFlowCtrl = TRUE;
+`STPGRP:
+	IsFlowCtrl = TRUE;
 default:	IsFlowCtrl = FALSE;
 endcase
 endfunction

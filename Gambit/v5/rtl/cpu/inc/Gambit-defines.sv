@@ -76,11 +76,11 @@
 `define BIT_3R		7'h55
 `define BIT_RI22	7'h65
 `define BIT_RI35	7'h75
-`define BRKGRP		7'o34
-`define RST					3'd0
-`define NMI					3'd1
-`define IRQ					3'd2
-`define BRK					3'd3
+`define BRKGRP		7'h00
+`define RST					3'd3
+`define NMI					3'd2
+`define IRQ					3'd1
+`define BRK					3'd0
 `define ROR_3R		7'h1D
 `define OR_3R			7'h09
 `define OR_RI22		7'h19

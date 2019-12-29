@@ -29,6 +29,17 @@
 // Comment out for synthesis.
 `define SIM		1'b1
 
+// The following bit select determines how long the reset counter is active.
+// For sim to aid debugging it's good idea to set it to a low number >3
+// otherwise there will be a lot of clock cycles before reset is finished.
+// For synthesis and using the core a value of 28 (five seconds at 100MHz)
+// may be used.
+`ifdef SIM
+`define RSTC_BIT	4
+`else
+`define RSTC_BIT	26
+`endif
+
 `define AREGS		128
 
 //`define SUPPORT_VECTOR	1'b1

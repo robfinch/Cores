@@ -292,7 +292,7 @@ wire hit1n = mem1[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem1v[nxt_adr[pMSB:5]];
 wire hit2n = mem2[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem2v[nxt_adr[pMSB:5]];
 wire hit3n = mem3[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem3v[nxt_adr[pMSB:5]];
 always @*
-if (adr[5:0] > 6'd43) begin
+if (adr[4:0] > 5'd27) begin
   if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
   else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
   else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
@@ -317,7 +317,7 @@ else begin
 end
 
 always @*
-if (adr[5:0] > 6'd43)
+if (adr[4:0] > 5'd27)
 	missadr = (hit0|hit1|hit2|hit3) ? nxt_adr : adr;
 else
 	missadr = adr;

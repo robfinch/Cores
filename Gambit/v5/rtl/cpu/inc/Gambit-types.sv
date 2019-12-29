@@ -256,6 +256,12 @@ typedef struct packed
 	Data argA;
 } RobEntry;
 
+typedef struct packed
+{
+	RobEntry [`RENTRIES-1:0] robEntries;
+} Rob;
+
+/*
 class Rob;
 	integer n, i;
 	RobEntry robEntries [0:`RENTRIES-1];
@@ -281,6 +287,7 @@ class Rob;
 		for (n = 0; n < `RENTRIES; n = n + 1)
 			GetState[n] = robEntries[n].state;
 	endfunction
+
 
 	task displayEntry;
 	input integer i;
@@ -313,5 +320,5 @@ class Rob;
 	endtask
 
 endclass
-
+*/
 `endif

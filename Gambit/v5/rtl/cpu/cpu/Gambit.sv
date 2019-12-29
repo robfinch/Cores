@@ -25,8 +25,8 @@
 // 46190 73904
 // 48453 77525
 `include "..\inc\Gambit-config.sv"
-`include "..\inc\Gambit-types.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, hartid_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
@@ -39,7 +39,7 @@ input clk4x_i;
 input [51:0] hartid_i;
 input tm_clk_i;
 input nmi_i;
-input irq_i;
+input [2:0] irq_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 input bok_i;
@@ -88,7 +88,7 @@ parameter uwyde = 4'd6;
 parameter utbyt = 4'd7;
 parameter utetra = 4'd8;
 
-`include "..\Micro-op_Engine\Gambit-micro-program-parameters.sv"
+//`include "..\Micro-op_Engine\Gambit-micro-program-parameters.sv"
 `include "..\inc\Gambit-busStates.sv"
 
 wire clk;
@@ -114,7 +114,6 @@ integer j, k;
 integer row, col;
 genvar g, h;
 
-reg [1:0] ol, dl;
 Data regs [0:31];
 Data regsx [0:31];
 Address lkregs [0:4];
@@ -169,8 +168,12 @@ reg [51:0] ic2_out;
 reg  [3:0] panic;		// indexes the message structure
 reg [127:0] message [0:15];	// indexed by panic
 
+// - - - - - - - - - - - - - - - - - - - - - - -
+// CSRs
+// - - - - - - - - - - - - - - - - - - - - - - -
 reg [51:0] cr0;
 wire dce = cr0[30];
+wire sple = cr0[35];
 
 // status register
 reg [51:0] status;
@@ -178,6 +181,11 @@ reg [14:0] im_stack;
 reg [14:0] ol_stack;
 reg [14:0] dl_stack;
 reg [103:0] pl_stack;
+wire [2:0] ol, dl;
+wire [12:0] pl;
+assign ol = ol_stack[2:0];
+assign dl = dl_stack[2:0];
+assign pl = pl_stack[12:0];
 
 Address ipc [0:4];
 reg [12:0] cause [0:7];
@@ -189,6 +197,9 @@ reg [39:0] wc_time_secs;
 reg [39:0] wc_time_frac;
 
 reg [51:0] sema;	
+
+// - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - -
 
 reg excmiss;
 Address excmisspc;
@@ -213,7 +224,6 @@ wire [2:0] rqueuedCnt;
 reg queuedNop;
 reg [3:0] hi_amt;
 reg [3:0] r_amt, r_amt2;
-wire [`SNBITS] tosub;
 
 wire [2:0] iclen1;
 reg [2:0] len1, len2, len1d, len2d;
@@ -274,8 +284,9 @@ reg [IQ_ENTRIES-1:0] iq_argB_v;
 Rid iq_rid [0:IQ_ENTRIES-1];	// index of rob entry
 
 // Re-order buffer
-Rob rob = new();
+Rob rob;// = new();
 Qid robIds [0:RENTRIES-1];
+
 initial begin
 	for (n = 0; n < RENTRIES; n = n + 1)
 		robIds[n] = 1'd0;
@@ -283,6 +294,17 @@ end
 always @*
 	for (n = 0; n < RENTRIES; n = n + 1)
 		robIds[n] = rob.robEntries[n].id;
+
+function [`RENTRIES-1:0] GetV;
+input dummy1;
+	for (n = 0; n < `RENTRIES; n = n + 1)
+		GetV[n] = rob.robEntries[n].state != RS_INVALID;
+endfunction
+function RobQState [0:`RENTRIES-1] GetState;
+input dummy1;
+	for (n = 0; n < `RENTRIES; n = n + 1)
+		GetState[n] = rob.robEntries[n].state;
+endfunction
 
 // debugging
 initial begin
@@ -326,24 +348,18 @@ wire [FSLOTS-1:0] take_branchd;
 reg [FSLOTS-1:0] take_branchq;
 reg [`QBITS] active_tag;
 
-reg         id1_v;
-reg   [`QBITS] id1_id;
+reg id1_v;
+Qid id1_id;
 Instruction id1_instr;
-reg         id1_pt;
+reg id1_pt;
 RegTag id1_Rt;
 wire [`IBTOP:0] id_bus [0:QSLOTS-1];
 
-reg         id2_v;
-reg   [`QBITS] id2_id;
+reg id2_v;
+Qid id2_id;
 Instruction id2_instr;
-reg         id2_pt;
+reg id2_pt;
 RegTag id2_Rt;
-
-reg         id3_v;
-reg   [`QBITS] id3_id;
-Instruction id3_instr;
-reg         id3_pt;
-RegTag id3_Rt;
 
 Seqnum alu0_sn;
 reg 				alu0_cmt;
@@ -368,10 +384,9 @@ RegTag alu0_tgt;
 Address alu0_pc;
 Data alu0_bus;
 Data alu0_out;
-wire [7:0] alu0_sro;
-reg [7:0] alu0_sr_tgts;
 Qid alu0_id;
-(* mark_debug="true" *)
+
+//(* mark_debug="true" *)
 ExcCode alu0_exc;
 wire        alu0_v = alu0_dataready;
 Qid alu0_id1;
@@ -398,13 +413,10 @@ Data alu1_argT;
 Data alu1_argB;
 Data alu1_argA;
 Data alu1_argI;	// only used by BEQ
-reg [7:0] alu1_argS;
 RegTag alu1_tgt;
 Address alu1_pc;
 Data alu1_bus;
 Data alu1_out;
-wire [7:0] alu1_sro;
-reg [7:0] alu1_sr_tgts;
 Qid alu1_id;
 ExcCode alu1_exc;
 wire        alu1_v = alu1_dataready;
@@ -470,7 +482,6 @@ Instruction fcu_prevInstr;
 reg  [2:0] fcu_insln;
 reg        fcu_pt = 1'b0;			// predict taken
 reg        fcu_branch;
-reg [6:0] fcu_argS;
 Data fcu_argT;
 Data fcu_argA;
 Data fcu_argB;
@@ -484,10 +495,10 @@ Data fcu_out;
 Data fcu_bus;
 Qid fcu_id;
 ExcCode fcu_exc;
-wire        fcu_v = fcu_dataready;
-reg        fcu_branchmiss;
+wire fcu_v = fcu_dataready;
+reg fcu_branchmiss;
 reg fcu_branchhit;
-reg  fcu_clearbm;
+reg fcu_clearbm;
 Address fcu_misspc;
 Address misspc;
 reg fcu_wait;
@@ -647,41 +658,51 @@ end
 end
 endgenerate
 
-assign freezepc = ((rst_ctr < 32'd16) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
+
+assign freezepc = ((~rst_ctr[`RSTC_BIT]) || nmi_i || (irq_i > ol_stack[2:0])) && !int_commit;
+
+// Multiplex exceptional conditions into the instruction stream.
+function [51:0] opcmux;
+input [51:0] ico;
+casez({branchmiss,freezepc})
+2'b1?:	opcmux = 52'hC3;	// NOP
+2'b01:
+	casez({~rst_ctr[`RSTC_BIT],nmi_i,tick_roi,|irq_i})
+	4'b1???:	opcmux = {39'h0,4'h0,`RST,`BRKGRP};
+	4'b01??:	opcmux = {39'h0,4'h0,`NMI,`BRKGRP};
+	4'b001?:	opcmux = {39'h0,4'h1,`NMI,`BRKGRP};
+	4'b0001:	opcmux = {39'h0,1'b0,irq_i,`IRQ,`BRKGRP};
+	// The following shouldn't happen (pc frozen without interrupt present).
+	// It's a hardware error. Just do reset.
+	default:	opcmux = {39'h0,4'h0,`RST,`BRKGRP};
+	endcase
+default:	opcmux = ico;
+endcase
+endfunction
 
 // Since the micro-program doesn't support conditional logic or branches a 
 // conditional load for the PFI instruction is accomplished here.
-wire [8:0] opcode1a = branchmiss ? 1'd0 : freezepc ? {(rst_ctr < 32'd16) ? {4'h0,`RST}
-	: nmi_i ? {4'h0,`NMI}
-	: tick_roi ? {4'h1,`NMI}
-	: |irq_i ? {1'b0,irq_i,`IRQ}
-	: {4'h8,`IRQ},`BRKGRP}
-	: ic1_out[8:0];
-wire [8:0] opcode2a = branchmiss ? 1'd0 : freezepc ? {(rst_ctr < 32'd16) ? {4'h0,`RST}
-	: nmi_i ? {4'h0,`NMI}
-	: tick_roi ? {4'h1,`NMI}
-	: |irq_i ? {1'b0,irq_i,`IRQ}
-	: {4'h8,`IRQ},`BRKGRP}
-	: ic2_out[8:0];
+wire [8:0] opcode1a = opcmux(ic1_out[51:0]);
+wire [8:0] opcode2a = opcmux(ic2_out[51:0]);
 always @*
-	if ((opcode1a==`PFI || opcode1a==`WAI) && irq_i && !srx[4])
+	if ((opcode1a==`PFI || opcode1a==`WAI) && |irq_i && !srx[4])
 		opcode1 <= opcode1a|9'b1;
 	else
 		opcode1 <= opcode1a;
 always @*
-	if ((opcode2a==`PFI || opcode2a==`WAI) && irq_i && !srx[4])
+	if ((opcode2a==`PFI || opcode2a==`WAI) && |irq_i && !srx[4])
 		opcode2 <= opcode2a|9'b1;
 	else
 		opcode2 <= opcode2a;
 
 always @*
-	insnx[0] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
+	insnx[0] = opcmux(ic1_out[51:0]);
 always @*
-	insnx[1] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
+	insnx[1] = opcmux(ic2_out[51:0]);
 
-wire IsRst = (freezepc && rst_ctr < 32'd16);
-wire IsNmi = (freezepc & nmi_i);
-wire IsIrq = (freezepc & irq_i & ~sr[3]);
+wire IsRst = (freezepc && ~rst_ctr[`RSTC_BIT]);
+wire IsNmi = (freezepc & (nmi_i|tick_roi));
+wire IsIrq = (freezepc & |irq_i & ~sr[3]);
 
 Address btgt [0:FSLOTS-1];
 Instruction insnxp [0:QSLOTS-1];
@@ -731,8 +752,8 @@ wire dhit0, dhit1;
 wire dhit0a, dhit1a;
 wire dhit00, dhit10;
 wire dhit01, dhit11;
-reg [`ABITS] dcadr;
-reg [WID-1:0] dcdat;
+Address dcadr;
+Data dcdat;
 reg dcwr;
 reg [7:0] dcsel;
 wire update_iq;
@@ -746,7 +767,7 @@ wire icyc;
 wire istb;
 wire iwe = 1'b0;
 wire [15:0] isel;
-wire [AMSB:0] iadr;
+Address iadr;
 reg iack_i;
 reg iexv_i;
 reg ierr_i;
@@ -758,7 +779,7 @@ wire d0cyc;
 wire d0stb;
 wire d0we = 1'b0;
 wire [15:0] d0sel;
-wire [AMSB:0] d0adr;
+Address d0adr;
 reg d0ack_i;
 reg d0rdv_i;
 reg d0wrv_i;
@@ -771,7 +792,7 @@ wire d1cyc;
 wire d1stb;
 wire d1we = 1'b0;
 wire [15:0] d1sel;
-wire [AMSB:0] d1adr;
+Address d1adr;
 reg d1ack_i;
 reg d1rdv_i;
 reg d1wrv_i;
@@ -782,8 +803,8 @@ wire wcyc;
 wire wstb;
 wire wwe;
 wire [15:0] wsel;
-wire [AMSB:0] wadr;
-wire [127:0] wdat;
+Address wadr;
+wire [103:0] wdat;
 wire wcr;
 reg wack_i;
 reg werr_i;
@@ -800,7 +821,7 @@ reg dack_i;
 reg derr_i;
 reg dwe;
 reg [7:0] dsel;
-reg [AMSB:0] dadr;
+Address dadr;
 reg [127:0] ddat;
 wire [15:0] dselx = dsel << dadr[2:0];
 reg dwrap;
@@ -810,20 +831,20 @@ input Instruction insn;
 IsBranch = insn.br.opcode==`BRANCH0 || insn.br.opcode==`BRANCH1;
 endfunction
 function IsBrk;
-input [51:0] insn;
-IsBrk = insn[`OPCODE]==`BRKGRP;
+input Instruction insn;
+IsBrk = insn.gen.opcode==`BRKGRP;
 endfunction
 function IsRti;
-input [51:0] insn;
-IsRti = insn[`OPCODE]==`RETGRP && insn[8:7]==`RTI;
+input Instruction insn;
+IsRti = insn.gen.opcode==`RETGRP && insn.wai.exop==`RTI;
 endfunction
 function IsRet;
 input Instruction insn;
 IsRet = insn.ret.opcode==`RETGRP && insn.ret.exop==`RET;
 endfunction
 function IsWai;
-input [51:0] insn;
-IsWai = insn[8:0]==`WAI;
+input Instruction insn;
+IsWai = insn.gen.opcode==`WAI;
 endfunction
 function IsJal;
 input Instruction insn;
@@ -985,7 +1006,7 @@ getQueuedCount ugqc1
 	.slot_jmp(slot_jmp),
 	.take_branch(take_branch),
 	.iq_v(iq_v),
-	.rob_v(rob.GetV()),
+	.rob_v(GetV(1)),
 	.queuedCnt(queuedCnt),
 	.queuedOnp(queuedOnp)
 );
@@ -994,7 +1015,7 @@ getRQueuedCount ugrqct1
 (
 	.rst(rst_i),
 	.rob_tails(tails),
-	.rob_v_i(rob.GetV()),
+	.rob_v_i(GetV(1)),
 	.rob_v_o(next_rob_v),
 	.heads(heads),
 	.iq_state(iq_state),
@@ -1009,7 +1030,7 @@ calc_ramt ucra1
 	.hi_amt(hi_amt),
 	.rob_heads(rob_heads),
 	.rob_tails(rob_tails),
-	.rob_state(rob.GetState()),
+	.rob_state(GetState(1)),
 	.r_amt(r_amt)
 );
 
@@ -1548,7 +1569,7 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.cdat_o(dcdat)
 );
 
-wire rob_empty = rob.GetV() == {RENTRIES{`INV}};
+wire rob_empty = GetV(1) == {RENTRIES{`INV}};
 
 headptrs uhp1
 (
@@ -1883,6 +1904,12 @@ input Instruction isn;
 case(isn.gen.opcode)
 `JAL,`JAL_RN,`BRANCH0,`BRANCH1:
 	IsFlowCtrl = TRUE;
+`BRKGRP:
+	IsFlowCtrl = TRUE;
+`RETGRP:
+	IsFlowCtrl = TRUE;
+`STPGRP:
+	IsFlowCtrl = TRUE;
 default:	IsFlowCtrl = FALSE;
 endcase
 endfunction
@@ -1944,7 +1971,13 @@ case(ins.gen.opcode)
 			fnMnemonic = "JAL ";
 `BRANCH0,`BRANCH1:
 			fnMnemonic = "BR  ";
-`NOP:	fnMnemonic = "NOP ";
+`STPGRP:
+	case(ins.stp.exop)
+	`STP:	fnMnemonic = "STP ";
+	`NOP:	fnMnemonic = "NOP ";
+	`MRK:	fnMnemonic = "MRK ";
+	default:	;
+	endcase
 default:	fnMnemonic = "????";
 endcase
 endfunction
@@ -2282,7 +2315,7 @@ memissueLogic umi1
 	.wb_v(wb_v),
 	.inwb0(inwb0),
 	.inwb1(inwb1),
-	.sple(1'b1),
+	.sple(sple),
 	.memissue(memissue),
 	.issue_count(issue_count)
 );
@@ -2691,8 +2724,8 @@ always @(posedge clk)
 if (rst_i)
 	rst_ctr <= 32'd0;
 else begin
-	if (rst_ctr < 32'd16)
-		rst_ctr <= rst_ctr + 24'd1;
+	if (~rst_ctr[`RSTC_BIT])
+		rst_ctr <= rst_ctr + 2'd1;
 end
 
 slotValid usv1
@@ -2715,21 +2748,6 @@ slotValid usv1
 	.debug_on(debug_on)
 );
 
-Seqnum maxsn;
-
-seqnum usqn1
-(
-	.rst(rst_i),
-	.clk(clk),
-	.heads(heads),
-	.hi_amt(hi_amt),
-	.iq_v(iq_v),
-	.iq_sn(iq_sn),
-	.overflow(sn_overflow(1)),
-	.maxsn(maxsn),
-	.tosub(tosub)
-);
-
 always @(posedge clk_i)
 if (rst_i) begin
 	ins_stomped = 0;
@@ -2739,22 +2757,11 @@ else begin
 		ins_stomped = ins_stomped + iq_stomp[n];
 end
 
-wire [2:0] fl3 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit1_id]==2'b01) && commit1_v) +
-								((iq_fl[commit0_id]==2'b11) && commit0_v) + ((iq_fl[commit1_id]==2'b11) && commit1_v);
-wire [2:0] fl2 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit1_id]==2'b01) && commit1_v) + 
-								((iq_fl[commit0_id]==2'b11) && commit0_v) + ((iq_fl[commit1_id]==2'b11) && commit1_v);
-wire [2:0] fl1 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit0_id]==2'b11) && commit0_v);
-
 always @(posedge clk_i)
 if (rst_i)
 	ins_committed <= 0;
 else begin
-	if (hi_amt==3'd3)
-		ins_committed <= ins_committed + fl3;
-	else if (hi_amt==3'd2)
-		ins_committed <= ins_committed + fl2;
-	else if (hi_amt==3'd1)
-		ins_committed <= ins_committed + fl1;
+	ins_committed <= ins_committed + commit0_v + commit1_v;
 end
 
 
@@ -2828,7 +2835,7 @@ if (rst_i) begin
 		iq_fl[n] <= 2'b00;
 		iq_rid[n] <= 3'd0;
   end
-  	 rob.reset();
+  	 //rob.reset();
      bwhich <= 2'b00;
      dram0 <= `DRAMSLOT_AVAIL;
      dram1 <= `DRAMSLOT_AVAIL;
@@ -2869,7 +2876,6 @@ if (rst_i) begin
 		alu1_argT <= 16'h0;
 		alu1_argA <= 1'h0;
 		alu1_argB <= 1'h0;
-		alu1_argS <= 8'h0;
 		alu1_argI <= 16'h0;
 		alu1_mem <= 1'b0;
 		alu1_shft <= 1'b0;
@@ -2909,8 +2915,9 @@ if (rst_i) begin
 		ddat <= 128'h0;
 		regs[31] <= 52'h01FFC;
 		msp <= 52'h01FFC;
-		ol <= 2'b00;
-		dl <= 2'b00;
+		ol_stack <= 2'b00;
+		dl_stack <= 2'b00;
+		pl_stack <= 2'd0;
 		cr0[30] = 1'b1;
 end
 else begin
@@ -2975,8 +2982,7 @@ else begin
 	if (L1_invline)
 		invicl <= FALSE;
 	invdcl <= FALSE;
-	if (rst_ctr >= 32'd16)
-		tick <= tick + 4'd1;
+	tick <= tick + 4'd1;
 	alu0_ld <= FALSE;
 	alu1_ld <= FALSE;
 	fcu_ld <= FALSE;
@@ -2994,25 +3000,16 @@ else begin
 
 	if (!branchmiss) begin
 		queuedOn <= queuedOnp;
-		case(slotvd)
-		2'b01:
-			if (queuedOnp[0]) begin
-				queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
-			end
-		2'b10:
+		if (queuedOnp[0]) begin
+			queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
 			if (queuedOnp[1]) begin
-				queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
+				queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
+				arg_vs(2'b11);
 			end
-		2'b11:
-			if (queuedOnp[0]) begin
-				queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
-				if (queuedOnp[1]) begin
-					queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
-					arg_vs(2'b11);
-				end
-			end
-		default:	;
-		endcase
+		end
+		else if (queuedOnp[1]) begin
+			queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
+		end
 	end
 
 	if (alu0_v) begin
@@ -3725,7 +3722,7 @@ endcase
 		iq_pc[i],
 		iq_sn[i]
 		);
-		rob.display(heads[0],tails[0]);
+		rob_display(heads[0],tails[0]);
     $display("DRAM");
 	$display("%d %h %h %c%h %o #",
 	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_instr) ? 98 : (IsMem(dram0_instr)) ? 109 : 97), 
@@ -3792,6 +3789,37 @@ end	// end of clock domain
 // Start of Tasks
 // ============================================================================
 // ============================================================================
+
+task rob_displayEntry;
+input integer i;
+input Rid head;
+input Rid tail;
+begin
+	$display("%c%c %d(%d): %c %h %d %h #",
+	 (i[`RBITS]==head)?"C":".",
+	 (i[`RBITS]==tail)?"Q":".",
+	  i[`RBITS],
+	  rob.robEntries[i].id,
+	  rob.robEntries[i].state==RS_INVALID ? "-" :
+	  rob.robEntries[i].state==RS_ASSIGNED ? "A"  :
+	  rob.robEntries[i].state==RS_CMT ? "C"  : "D",
+	  rob.robEntries[i].exc,
+	  rob.robEntries[i].tgt,
+	  rob.robEntries[i].res
+	);
+end
+endtask
+
+task rob_display;
+input Rid head;
+input Rid tail;
+begin
+	$display ("------------- Reorder Buffer ------------");
+	for (i = 0; i < `RENTRIES; i = i + 1)
+		rob_displayEntry(i, head, tail);
+end
+endtask
+
 
 // This task takes care of commits for things other than the register file.
 task oddball_commit;
@@ -4079,18 +4107,6 @@ begin
   endcase
 end
 endtask
-
-// Detect overflow of a sequence number, done by testing the high order bit for
-// each queue entry. Amounts to a wide or gate.
-function sn_overflow;
-input dummy;
-begin
-	sn_overflow = FALSE;
-	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		if (iq_sn[n][`SNBIT])
-			sn_overflow = TRUE;
-end
-endfunction
 
 // Increment the head pointers
 // Also increments the instruction counter
