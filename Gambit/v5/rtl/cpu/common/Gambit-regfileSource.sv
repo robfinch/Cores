@@ -44,10 +44,10 @@ input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
 input QState iq_state [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_rfw;
-input [RBIT+1:0] Rd [0:QSLOTS-1];
+input RegTag Rd [0:QSLOTS-1];
 input Rid rob_tails [0:QSLOTS-1];
-input [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
-input [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];
+input RegTagBitmap iq_latestID [0:IQ_ENTRIES-1];
+input RegTag iq_tgt [0:IQ_ENTRIES-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
 output Rid rf_source [0:AREGS-1];
 
@@ -74,6 +74,19 @@ else begin
     end
 	end
 	else begin
+		if (queuedOn[0]) begin
+			if (slot_rfw[0])
+				rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
+				if (queuedOn[1]) begin
+					if (slot_rfw[1])
+						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
+				end
+		end
+		else if (queuedOn[1]) begin
+			if (slot_rfw[1])
+				rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
+		end
+		/*
 		// Setting the rf valid and source
 		case(slotv)
 		2'b00:	;
@@ -97,6 +110,7 @@ else begin
 				end
 			end
 		endcase
+		*/
 		for (n = 0; n < QSLOTS; n = n + 1)
 			if (rob_tails[n] >= IQ_ENTRIES)
 				$stop;

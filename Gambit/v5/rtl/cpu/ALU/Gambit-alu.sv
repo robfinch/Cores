@@ -22,77 +22,60 @@
 // ============================================================================
 
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
-module alu(op, a, imm, b, o, s_i, s_o, idle);
+module alu(op, a, imm, b, o, csr_i, idle);
 parameter WID=52;
-input [5:0] op;
-input [WID-1:0] a;
-input [WID-1:0] imm;
-input [WID-1:0] b;
-output reg [WID-1:0] o;
-input [15:0] s_i;
-output reg [15:0] s_o;
+input Instruction op;
+input Data a;
+input Data imm;
+input Data b;
+output Data o;
+input Data csr_i;
 output idle;
 
 assign idle = 1'b1;
 reg [WID:0] os;
 
-always @*
-case(op)
-`UO_ADD:	o = a + imm + b;
-`UO_ADDu:
-	begin
-		os = a + imm + b;
-		o = os[WID-1:0];
-	end
-`UO_SUB:	o = a - imm - b;
-`UO_SUBu:
-	begin
-		os = a - imm - b;
-		o = os[WID-1:0];
-	end
-`UO_ANDu:	o = a & imm & b;
-`UO_ORu:	o = a | imm | b;
-`UO_EORu:	o = a ^ imm ^ b;
-`UO_ASLu:	o = a << b[5:0];
-`UO_LSRu:	o = a >> b[5:0];
-`UO_ROLu:	o = a << b[5:0];
-`UO_RORu:	o = a >> b[5:0];
-default:	o = {4{16'hDEAE}};
-endcase
+function [51:0] shl;
+input [51:0] a;
+input [51:0] b;
+shl = a << b[5:0];
+endfunction
+
+function [51:0] shr;
+input [51:0] a;
+input [51:0] b;
+shr = a >> b[5:0];
+endfunction
 
 always @*
-begin
-s_o = s_i;
-case(op)
-`UO_ADDu:
-	begin
-		s_o[0] = o[51:0]==52'h00;
-		s_o[3] = os[WID];
-		s_o[6] = o[51];
-	end
-`UO_ANDu,`UO_ORu,`UO_EORu:
-	begin
-		s_o[0] = o[51:0]==52'h00;
-		s_o[6] = o[51];
-	end
-`UO_SUBu:
-	begin
-		s_o[0] = o[51:0]==52'h00;
-		s_o[3] = os[WID];
-		s_o[6] = o[51];
-	end
-`UO_ASLu,`UO_LSRu,`UO_ROLu,`UO_RORu:
-	begin
-		s_o[3] = o[8];
-		s_o[0] = o[51:0]==52'h00;
-		s_o[6] = o[51];
-	end
-`UO_REP:	s_o[6:0] = s_i[6:0] & ~imm[6:0];
-`UO_SEP:	s_o[6:0] = s_i[6:0] | imm[6:0];
-default:
-	s_o = 8'h00;
+case(op.rr.opcode)
+`ADD_3R:	o = op.rr.zero ? a + imm : a + b;
+`SUB_3R:	o = op.rr.zero ? a - imm : a - b;
+`AND_3R:	o = op.rr.zero ? a & imm : a & b;
+`OR_3R:		o = op.rr.zero ? a | imm : a | b;
+`EOR_3R:	o = op.rr.zero ? a ^ imm : a ^ b;
+`CMP_3R:	o = op.rr.zero ? ($signed(a) < $signed(imm) ? 2'b11 : a == imm ? 2'b00 : 2'b01)
+								: ($signed(a) < $signed(b) ? 2'b11 : a == b ? 2'b00 : 2'b01);
+`CMPU_3R:	o = op.rr.zero ? (a < imm ? 2'b11 : a == imm ? 2'b00 : 2'b01)
+		: (a < b ? 2'b11 : a == b ? 2'b00 : 2'b01);
+`ADD_RI22,`ADD_RI35:	o = a + imm;
+`SUB_RI22,`SUB_RI35:	o = a + imm;
+`CMP_RI22,`CMP_RI35: o = $signed(a) < $signed(imm) ? 2'b11 : a == imm ? 2'b00 : 2'b01;
+`CMPU_RI22,`CMPU_RI35: o = a < imm ? 2'b11 : a == imm ? 2'b00 : 2'b01;
+`AND_RI22,`AND_RI35:	o = a & imm;
+`OR_RI22,`OR_RI35:	o = a | imm;
+`EOR_RI22,`EOR_RI35:	o = a ^ imm;
+`ASL_3R:	o = op.rr.zero ? shl(a,imm[5:0]) : shl(a,b);
+`ASR_3R:	o = op.rr.zero ? (a[51] ? ~(52'hFFFFFFFFFFFFF >> imm[5:0]) | shr(a,imm[5:0]) : shr(a,imm[5:0]))
+							: (a[51] ? ~(52'hFFFFFFFFFFFFF >> b[5:0]) | shr(a,b) : shr(a,b));
+`LSR_3R:	o = op.rr.zero ? shr(a,imm[5:0]) : shr(a,b);
+`ROL_3R:	o = op.rr.zero ? shl(a,imm[5:0]) | shr(a,52-imm[5:0]) : shl(a,b) | shr(a,52-b);
+`ROR_3R:	o = op.rr.zero ? shr(a,imm[5:0]) | shl(a,52-imm[5:0]) : shr(a,b) | shl(a,52-b);
+`CSR:			o = csr_i;
+default:	o = {3{16'hDEAE}};
 endcase
-end
 
 endmodule

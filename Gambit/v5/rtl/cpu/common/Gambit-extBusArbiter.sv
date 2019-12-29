@@ -22,6 +22,10 @@
 //
 // ============================================================================
 //
+`include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
+
 module extBusArbiter(rst, clk, cyc, ack_i, icyc, wb_has_bus, d0cyc, d1cyc, dcyc, mwhich, mstate);
 input rst;
 input clk;
@@ -32,12 +36,12 @@ input wb_has_bus;
 input d0cyc;
 input d1cyc;
 input dcyc;
-output reg [2:0] mwhich;
+output BusChannel mwhich;
 output reg [3:0] mstate;
 
 always @(posedge clk)
 if (rst) begin
-	mwhich <= 3'd5;
+	mwhich <= BC_NULL;
 	mstate <= 1'd0;
 end
 else begin
@@ -45,27 +49,27 @@ else begin
 	4'd0:
 	if (~ack_i) begin
 		if (icyc) begin
-			mwhich <= 3'd0;
+			mwhich <= BC_ICACHE;
 			mstate <= 4'd1;
 		end
 		else if (wb_has_bus) begin
-			mwhich <= 3'd1;
+			mwhich <= BC_WRITEBUF;
 			mstate <= 4'd1;
 		end
 		else if (d0cyc) begin
-			mwhich <= 3'd2;
+			mwhich <= BC_DCACHE0;
 			mstate <= 4'd1;
 		end
 		else if (d1cyc) begin
-			mwhich <= 3'd3;
+			mwhich <= BC_DCACHE1;
 			mstate <= 4'd1;
 		end
 		else if (dcyc) begin
-			mwhich <= 3'd4;
+			mwhich <= BC_UNCDATA;
 			mstate <= 4'd1;
 		end
 		else begin
-			mwhich <= 3'd5;
+			mwhich <= BC_NULL;
 		end
 	end
 4'd1:

@@ -62,8 +62,8 @@ input Qid rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
 input RegTag Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
-output reg [AREGS:0] rf_v;
-output reg [AREGS:0] regIsValid;	// advanced signal
+output reg [`AREGS-1:0] rf_v;
+output reg [`AREGS-1:0] regIsValid;	// advanced signal
 
 integer n;
 Qid id0, id1;
@@ -131,7 +131,19 @@ else begin
 	$display("slot_rfw: %h", slot_rfw);
 	$display("quedon : %h", queuedOn);
 	$display("slotv: %h", slotv);
-	if (!branchmiss)
+	if (!branchmiss) begin
+		if (queuedOn[0]) begin
+			if (slot_rfw[0]) begin
+				rf_v [Rd[0]] <= `INV;
+			end
+		end
+		if (queuedOn[1]) begin
+			if (slot_rfw[1]) begin
+				rf_v [Rd[1]] <= `INV;
+			end
+		end
+	end
+/*
 		case(slotv)
 		2'b00:	;
 		2'b01:
@@ -160,6 +172,7 @@ else begin
 				end
 			end
 		endcase
+*/
 	rf_v[0] <= `VAL;
 end
 

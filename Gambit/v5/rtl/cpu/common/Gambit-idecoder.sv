@@ -25,7 +25,7 @@
 `include "..\inc\Gambit-defines.sv"
 
 module idecoder(instr,predict_taken,bus);
-input [51:0] instr;
+input Instruction instr;
 input predict_taken;
 output reg [`IBTOP:0] bus;
 
@@ -53,6 +53,14 @@ case(isn[6:0])
 `CMPU_3R,`CMPU_RI22,`CMPU_RI35:
 	IsAlu = TRUE;
 default:	IsAlu = FALSE;
+endcase
+endfunction
+
+function IsAlu0;
+input Instruction isn;
+case (isn.gen.opcode)
+`CSR:	IsAlu0 = TRUE;
+default: IsAlu0 = FALSE;
 endcase
 endfunction
 
@@ -183,6 +191,7 @@ begin
 	bus <= 167'h0;
 	bus[`IB_CMP] <= IsCmp(instr);
 	bus[`IB_CONST] <= 
+		IsBranch(instr) ? {{40{instr.br.disp[11]}},instr.br.disp} :
 		HasConst8(instr) ? {{44{instr[24]}},instr[24:17]} :
 		HasConst22(instr) ? {{30{instr[38]}},instr[38:17]} :
 		{{17{instr[51]}},instr[51:17]}
@@ -197,6 +206,7 @@ begin
 	// target is present.
 	bus[`IB_BT]		 <= 1'b0;
 	bus[`IB_ALU]   <= IsAlu(instr);
+	bus[`IB_ALU0]  <= IsAlu0(instr);
 	bus[`IB_FC]		 <= IsFlowCtrl(instr);
 //	bus[`IB_CANEX] <= fnCanException(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);

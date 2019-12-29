@@ -45,6 +45,8 @@ typedef logic [`RBITS] Rid;			// Reorder buffer id
 typedef logic [6:0] RegTag;			// Register tag
 typedef logic [7:0] ExcCode;		// Exception code
 typedef logic [`SNBITS] Seqnum;	// Sequence number
+// Rather than having a number represent a register like the RegTag type, this
+// type represents a register with a bit position in a vector.
 typedef logic [`AREGS-1:0] RegTagBitmap;
 
 typedef enum bit[2:0] {
@@ -77,141 +79,141 @@ typedef enum bit[2:0] {
 
 typedef struct packed
 {
-	logic [6:0] opcode;
 	logic [44:0] payload;
+	logic [6:0] opcode;
 } Gen_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [7:0] imm8;
-	logic one;
 	logic [25:0] pad;
+	logic one;
+	logic [7:0] imm8;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } RI8_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [4:0] Rb;
-	logic [2:0] padr;
-	logic zero;
 	logic [25:0] pad;
+	logic zero;
+	logic [2:0] padr;
+	logic [4:0] Rb;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } RR_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [21:0] imm22;
 	logic [12:0] pad13;
+	logic [21:0] imm22;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } RI22_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
 	logic [34:0] imm35;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } RI35_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [29:0] imm30;
 	logic [4:0] pad5;
+	logic [29:0] imm30;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } RIS_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] exop;
-	logic [1:0] pred;
-	logic [2:0] cr;
-	logic [11:0] disp;
 	logic [25:0] pad25;
+	logic [11:0] disp;
+	logic [2:0] cr;
+	logic [1:0] pred;
+	logic [1:0] exop;
+	logic [6:0] opcode;
 } Branch_Instruction;
 
 typedef struct packed
 { 
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [11:0] regno;
-	logic [3:0] pad4;
-	logic [2:0] ol;
-	logic [2:0] op;
 	logic [12:0] pad13;
+	logic [2:0] op;
+	logic [2:0] ol;
+	logic [3:0] pad4;
+	logic [11:0] regno;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } CSR_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] lk;
 	logic [42:0] addr;
+	logic [1:0] lk;
+	logic [6:0] opcode;
 } Jal_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] lk;
-	logic [3:0] Ra;
 	logic [38:0] pad39;
+	logic [3:0] Ra;
+	logic [1:0] lk;
+	logic [6:0] opcode;
 } Jalrn_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] exop;
-	logic [1:0] lk;
-	logic [1:0] pad2;
 	logic [38:0] pad39;
+	logic [1:0] pad2;
+	logic [1:0] lk;
+	logic [1:0] exop;
+	logic [6:0] opcode;
 } Ret_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] exop;
-	logic [3:0] sigmsk;
 	logic [38:0] pad39;
+	logic [3:0] sigmsk;
+	logic [1:0] exop;
+	logic [6:0] opcode;
 } Wai_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [1:0] exop;
-	logic [3:0] cnst;
 	logic [38:0] pad39;
+	logic [3:0] cnst;
+	logic [1:0] exop;
+	logic [6:0] opcode;
 } Stp_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Ra;
-	logic pad1;
-	logic [12:0] pl;
-	logic [2:0] tgt;
-	logic [3:0] imask;
-	logic [5:0] pad6;
 	logic [12:0] pad13;
+	logic [5:0] pad6;
+	logic [3:0] imask;
+	logic [2:0] tgt;
+	logic [12:0] pl;
+	logic pad1;
+	logic [4:0] Ra;
+	logic [6:0] opcode;
 } Rex_Instruction;
 
 typedef struct packed
 {
-	logic [6:0] opcode;
-	logic [4:0] Rt;
-	logic [4:0] Ra;
-	logic [1:0] icmd;
-	logic [2:0] dcmd;
-	logic [2:0] pad3;
-	logic zero;
 	logic [25:0] pad26;
+	logic zero;
+	logic [2:0] pad3;
+	logic [2:0] dcmd;
+	logic [1:0] icmd;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
 } Cache_Instruction;
 
 typedef struct packed
@@ -251,11 +253,25 @@ typedef struct packed
 	Data res;
 	RegTag tgt;
 	logic rfw;
+	Data argA;
 } RobEntry;
 
 class Rob;
 	integer n, i;
 	RobEntry robEntries [0:`RENTRIES-1];
+
+	task reset;
+	begin
+    for (n = 0; n < `RENTRIES; n = n + 1) begin
+    	robEntries[n].state <= RS_INVALID;
+    	robEntries[n].pc <= 1'd0;
+//    	rob_instr[n] <= `UO_NOP;
+    	robEntries[n].ma <= 1'd0;
+    	robEntries[n].res <= 1'd0;
+    	robEntries[n].tgt <= 1'd0;
+    end
+  end
+ 	endtask
 
 	function [`RENTRIES-1:0] GetV;
 		for (n = 0; n < `RENTRIES; n = n + 1)
@@ -266,13 +282,12 @@ class Rob;
 			GetState[n] = robEntries[n].state;
 	endfunction
 
-	task display;
-	input [`RBITS] head;
-	input [`RBITS] tail;
+	task displayEntry;
+	input integer i;
+	input Rid head;
+	input Rid tail;
 	begin
-	$display ("------------- Reorder Buffer ------------");
-	for (i = 0; i < `RENTRIES; i = i + 1)
-	$display("%c%c %d(%d): %c %h %d %h #",
+		$display("%c%c %d(%d): %c %h %d %h #",
 		 (i[`RBITS]==head)?"C":".",
 		 (i[`RBITS]==tail)?"Q":".",
 		  i[`RBITS],
@@ -284,6 +299,16 @@ class Rob;
 		  robEntries[i].tgt,
 		  robEntries[i].res
 		);
+	end
+	endtask
+
+	task display;
+	input Rid head;
+	input Rid tail;
+	begin
+		$display ("------------- Reorder Buffer ------------");
+		for (i = 0; i < `RENTRIES; i = i + 1)
+			displayEntry(i, head, tail);
 	end
 	endtask
 

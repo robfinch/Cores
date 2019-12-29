@@ -131,12 +131,13 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 end
 
 
-generate begin : gMemIssue
+//generate begin : gMemIssue
 always @*
 begin
 	issue_count = 0;
 	store_count = 0;
-	 memissue[ heads[0] ] =	iq_memready[ heads[0] ] && !(iq_load[heads[0]] && inwb0);		// first in line ... go as soon as ready
+	memissue = 1'd0;
+	 memissue[ heads[0] ] =	iq_memready[ heads[0] ];// && !(iq_load[heads[0]] && inwb0);		// first in line ... go as soon as ready
 	 if (memissue[heads[0]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[0]])
@@ -507,8 +508,8 @@ if (IQ_ENTRIES > 6) begin
 	 	store_count = store_count + 1;
 	end
 end
-end
-endgenerate
+//end
+//endgenerate
 `endif
 
 endmodule

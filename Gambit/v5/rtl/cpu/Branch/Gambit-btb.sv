@@ -21,6 +21,8 @@
 //
 // ============================================================================
 //
+`include "..\inc\Gambit-config.sv"
+
 module BTB(rst, clk, clk2x, clk4x,
 		wr0, wadr0, wdat0, valid0,
 		wr1, wadr1, wdat1, valid1,
@@ -29,8 +31,8 @@ module BTB(rst, clk, clk2x, clk4x,
 		pcC, btgtC,
 		hitA, hitB, hitC, 
     npcA, npcB, npcC );
-parameter AMSB = 15;
-parameter RSTIP = 16'hFFFC;
+parameter AMSB = `AMSB;
+parameter RSTIP = 52'hFFFFFFFFE0000;
 input rst;
 input clk;
 input clk2x;
@@ -74,7 +76,7 @@ reg [(AMSB+1)*2+1:0] mem [0:2047];
 reg [10:0] radrA, radrB, radrC, radrD, radrE, radrF;
 initial begin
   for (n = 0; n < 2048; n = n + 1)
-    mem[n] <= 16'hE000;
+    mem[n] <= RSTIP;
 end
 reg wr;
 reg [AMSB:0] wadr;

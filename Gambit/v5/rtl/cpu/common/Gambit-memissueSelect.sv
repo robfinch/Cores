@@ -45,14 +45,14 @@ always @*
 begin
 	issue0 = `IQ_ENTRIES;
 	issue1 = `IQ_ENTRIES;
-	for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]] && iq_state[n]==IQS_AGEN) begin
+	for (n = `IQ_ENTRIES - 1; n >= 0; n = n - 1)
+    if (!iq_stomp[heads[n]] && iq_memissue[heads[n]] && iq_state[heads[n]]==IQS_AGEN) begin
       if (dram0 == `DRAMSLOT_AVAIL) begin
-       issue0 = heads[n];
+       	issue0 = heads[n];
       end
     end
-	for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]] && iq_state[n]==IQS_AGEN) begin
+	for (n = `IQ_ENTRIES - 1; n >= 0; n = n - 1)
+    if (!iq_stomp[heads[n]] && iq_memissue[heads[n]] && iq_state[heads[n]]==IQS_AGEN) begin
     	if (heads[n] != issue0 && `NUM_MEM > 1) begin
         if (dram1 == `DRAMSLOT_AVAIL) begin
 					issue1 = heads[n];

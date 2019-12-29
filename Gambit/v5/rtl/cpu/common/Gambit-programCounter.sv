@@ -23,6 +23,7 @@
 //
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module programCounter(rst, clk,
 	q1, q2, q1bx, insnx, freezepc, 
@@ -41,11 +42,11 @@ input clk;
 input q2;
 input q1;
 input q1bx;
-input [51:0] insnx [0:FSLOTS-1];
+input Instruction insnx [0:FSLOTS-1];
 input freezepc;
 input phit;
 input branchmiss;
-input [AMSB:0] misspc;
+input Address misspc;
 input [2:0] len1;
 input [2:0] len2;
 input [2:0] len3;
@@ -55,12 +56,12 @@ input [FSLOTS-1:0] rts;
 input [FSLOTS-1:0] br;
 input [FSLOTS-1:0] wai;
 input [FSLOTS-1:0] take_branch;
-input [AMSB:0] btgt [0:FSLOTS-1];
-output reg [AMSB:0] pc = RSTPC;
-output reg [AMSB:0] pcd = RSTPC;
+input Address btgt [0:FSLOTS-1];
+output Address pc = RSTPC;
+output Address pcd = RSTPC;
 output pc_chg;
-output reg [AMSB:0] branch_pc;
-input [AMSB:0] ra;
+output Address branch_pc;
+input Address ra;
 output pc_override;
 input debug_on;
 
@@ -68,9 +69,9 @@ assign pc_override = pc != branch_pc;
 assign pc_chg = pc != pcd;
 
 reg phitd;
-reg [AMSB:0] next_pc;
-reg [AMSB:0] branch_pcd1, branch_pcd2;
-reg [AMSB:0] pcd1, pcd2;
+Address next_pc;
+Address branch_pcd1, branch_pcd2;
+Address pcd1, pcd2;
 
 always @(posedge clk)
 	branch_pcd1 <= branch_pc;
@@ -162,10 +163,10 @@ else begin
 			branch_pc = ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc = pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
+			branch_pc = pc + {{40{insnx[0].br.disp[11]}},insnx[0].br.disp} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[45:0] = insnx[0][51:6];
+			branch_pc[42:0] = insnx[0].jal.addr;
 	end
 	else if (q2) begin
 		if (wai[0])
@@ -174,20 +175,20 @@ else begin
 			branch_pc = ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc = pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
+			branch_pc = pc + {{40{insnx[0].br.disp[11]}},insnx[0].br.disp} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[45:0] = insnx[0][51:6];
+			branch_pc[42:0] = insnx[0].jal.addr;
 		else if (rts[1])
 			branch_pc = ra;
 		else if (wai[1])
 			branch_pc = pc - 52'd1 + len1;
 		else if (take_branch[1]) begin
 			$display("take branch 1");
-			branch_pc = pc + {{35{insnx[1][25]}},insnx[1][25:9]} + 4'd2 + len1;
+			branch_pc = pc + {{40{insnx[1].br.disp[11]}},insnx[1].br.disp} + 4'd2 + len1;
 		end
 		else if (jc[1])
-			branch_pc[45:0] = insnx[1][51:6];
+			branch_pc[42:0] = insnx[1].jal.addr;
 	end
 end
 

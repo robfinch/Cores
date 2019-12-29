@@ -23,11 +23,12 @@
 // 38961 62338
 // 44403 71043
 // 46190 73904
+// 48453 77525
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-types.sv"
 `include "..\inc\Gambit-defines.sv"
 
-module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, nmi_i, irq_i,
+module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, hartid_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     icl_o, exc_o);
 parameter WID = 52;
@@ -35,6 +36,7 @@ input rst_i;
 input clk_i;
 input clk2x_i;
 input clk4x_i;
+input [51:0] hartid_i;
 input tm_clk_i;
 input nmi_i;
 input irq_i;
@@ -171,20 +173,25 @@ reg [51:0] cr0;
 wire dce = cr0[30];
 
 // status register
+reg [51:0] status;
 reg [14:0] im_stack;
 reg [14:0] ol_stack;
 reg [14:0] dl_stack;
 reg [103:0] pl_stack;
 
-reg [AMSB:0] ipc [0:4];
+Address ipc [0:4];
 reg [12:0] cause [0:7];
-reg [AMSB:0] badaddr [0:7];
-reg [51:0] bad_instr [0:7];
+Address badaddr [0:7];
+Instruction bad_instr [0:7];
+reg [5:0] ld_time;
+reg [79:0] wc_time;
+reg [39:0] wc_time_secs;
+reg [39:0] wc_time_frac;
 
 reg [51:0] sema;	
 
 reg excmiss;
-reg [AMSB:0] excmisspc;
+Address excmisspc;
 
 wire int_commit;
 
@@ -223,10 +230,10 @@ reg [7:0] mip1, mip2;
 wire nextBundle;
 
 // Issue queue
-reg [IQ_ENTRIES-1:0] iq_v;						// valid indicator (set from iq_state)
-reg [IQ_ENTRIES-1:0] iq_done;
-reg [IQ_ENTRIES-1:0] iq_out;
-reg [IQ_ENTRIES-1:0] iq_agen;
+reg [IQ_ENTRIES-1:0] iq_v = 1'd0;						// valid indicator (set from iq_state)
+reg [IQ_ENTRIES-1:0] iq_done = 1'd0;
+reg [IQ_ENTRIES-1:0] iq_out = 1'd0;
+reg [IQ_ENTRIES-1:0] iq_agen = 1'd0;
 QState iq_state [0:IQ_ENTRIES-1];
 Seqnum iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 Address iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
@@ -238,6 +245,8 @@ reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
 reg [WID-1:0] iq_const [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_hs;						// hardware (1) or software (0) interrupt
 reg [IQ_ENTRIES-1:0] iq_alu = 1'h0;  	// alu type instruction
+reg [IQ_ENTRIES-1:0] iq_alu0 = 1'h0;  	// alu0 type instruction
+reg [IQ_ENTRIES-1:0] iq_sync = 1'd0;
 reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_wrap;
@@ -265,8 +274,12 @@ reg [IQ_ENTRIES-1:0] iq_argB_v;
 Rid iq_rid [0:IQ_ENTRIES-1];	// index of rob entry
 
 // Re-order buffer
-Rob rob;
+Rob rob = new();
 Qid robIds [0:RENTRIES-1];
+initial begin
+	for (n = 0; n < RENTRIES; n = n + 1)
+		robIds[n] = 1'd0;
+end
 always @*
 	for (n = 0; n < RENTRIES; n = n + 1)
 		robIds[n] = rob.robEntries[n].id;
@@ -905,8 +918,8 @@ wire [`RENTRIES-1:0] next_rob_v;
 
 
 
-wire [AREGS:0] rf_v;								// register is valid
-wire [AREGS:0] regIsValid;					// register is valid (in this cycle)
+RegTagBitmap rf_v;								// register is valid
+RegTagBitmap regIsValid;					// register is valid (in this cycle)
 Rid rf_source[0:AREGS-1];
 
 regfileValid urfv1
@@ -1563,7 +1576,7 @@ tailptrs utp1
 	.iq_rid(iq_rid)
 );
 
-function fnRt;
+function RegTag fnRt;
 input Instruction ins;
 case(ins.gen.opcode)
 `ADDIS,`ANDIS,`ORIS,
@@ -1591,7 +1604,7 @@ default:
 endcase
 endfunction
 
-function fnRa;
+function RegTag fnRa;
 input Instruction ins;
 case(ins.gen.opcode)
 `ADDIS,`ANDIS,`ORIS,
@@ -1627,7 +1640,7 @@ default:
 endcase
 endfunction
 
-function fnRb;
+function RegTag fnRb;
 input Instruction ins;
 case(ins.gen.opcode)
 `ADDIS,`ANDIS,`ORIS,
@@ -2084,16 +2097,24 @@ end
 endgenerate
 
 // Detect if there are any valid queue entries prior to the given queue entry.
+initial begin
+	j = 0;
+end
 reg [IQ_ENTRIES-1:0] prior_valid;
 //generate begin : gPriorValid
 always @*
+begin
+prior_valid = 1'd0;
 for (j = 0; j < IQ_ENTRIES; j = j + 1)
 begin
 	prior_valid[heads[j]] = 1'b0;
 	if (j > 0)
 		for (n = j-1; n >= 0; n = n - 1)
-			prior_valid[heads[j]] = prior_valid[heads[j]]|iq_v[heads[n]];
+			if (iq_sn[heads[n]] < iq_sn[heads[j]])
+				prior_valid[heads[j]] = prior_valid[heads[j]]|iq_v[heads[n]];
 end
+end
+
 //end
 //endgenerate
 
@@ -2105,46 +2126,29 @@ always @*
 for (j = 0; j < IQ_ENTRIES; j = j + 1)
 begin
 	prior_sync[heads[j]] = 1'b0;
-//	if (j > 0)
-//		for (n = j-1; n >= 0; n = n - 1)
-//			prior_sync[heads[j]] = prior_sync[heads[j]]|(iq_v[heads[n]] & iq_sync[heads[n]]);
+	if (j > 0)
+		for (n = j-1; n >= 0; n = n - 1)
+			if (iq_sn[heads[n]] < iq_sn[heads[j]])
+				prior_sync[heads[j]] = prior_sync[heads[j]]|(iq_v[heads[n]] & iq_sync[heads[n]]);
 end
 //end
 //endgenerate
 
 //end
 //endgenerate
-// Start search for instructions to process at head of queue (oldest instruction).
-always @*
-begin
-	iq_alu0_issue = {IQ_ENTRIES{1'b0}};
-	iq_alu1_issue = {IQ_ENTRIES{1'b0}};
-	
-	if (alu0_idle) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_alu[heads[n]]
-			&& iq_alu0_issue == {IQ_ENTRIES{1'b0}}
-			// If there are no valid queue entries prior it doesn't matter if there is
-			// a sync.
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-			)
-			  iq_alu0_issue[heads[n]] = `TRUE;
-		end
-	end
-
-	if (alu1_idle && `NUM_ALU > 1) begin
-//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {IQ_ENTRIES{1'b0}}) begin
-			for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-				if (could_issue[heads[n]] && iq_alu[heads[n]]
-					&& !iq_alu0_issue[heads[n]]
-					&& iq_alu1_issue == {IQ_ENTRIES{1'b0}}
-					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-				)
-				  iq_alu1_issue[heads[n]] = `TRUE;
-			end
-//		end
-	end
-end
+aluIssue ualui1
+(
+	.heads(heads),
+	.could_issue(could_issue),
+	.alu0_idle(alu0_idle),
+	.alu1_idle(alu1_idle),
+	.iq_alu(iq_alu),
+	.iq_alu0(iq_alu0),
+	.prior_sync(prior_sync),
+	.prior_valid(prior_valid),
+	.issue0(iq_alu0_issue),
+	.issue1(iq_alu1_issue)
+);
 
 always @*
 begin
@@ -2209,7 +2213,10 @@ Qid nid;
 fcuIssue ufcui1
 (
 	.heads(heads),
+	.branchmiss(branchmiss),
 	.could_issue(could_issue),
+	.fcu_id(fcu_id),
+	.fcu_done(fcu_done),
 	.iq_fc(iq_fc),
 	.iq_br(iq_br),
 	.iq_state(iq_state),
@@ -2429,6 +2436,62 @@ end
 end
 endgenerate
 
+reg [51:0] csr_r;
+wire [11:0] csrno = alu0_instr.csr.regno;
+always @*
+begin
+    if (alu0_instr.csr.ol >= ol)
+    casez(csrno[11:0])
+    `CSR_CR0:       csr_r <= cr0;
+    `CSR_HARTID:    csr_r <= hartid_i;
+    `CSR_TICK:      csr_r <= tick;
+//    `CSR_WBRCD:		csr_r <= wbrcd;
+    `CSR_SEMA:      csr_r <= sema;
+`ifdef SUPPORT_DBG    
+    `CSR_DBAD0:     csr_r <= dbg_adr0;
+    `CSR_DBAD1:     csr_r <= dbg_adr1;
+    `CSR_DBAD2:     csr_r <= dbg_adr2;
+    `CSR_DBAD3:     csr_r <= dbg_adr3;
+    `CSR_DBCTRL:    csr_r <= dbg_ctrl;
+    `CSR_DBSTAT:    csr_r <= dbg_stat;
+`endif   
+    `CSR_BADADR:    csr_r <= badaddr[alu0_instr.csr.ol];
+    `CSR_BADINST:		csr_r <= bad_instr[alu0_instr.csr.ol];
+    `CSR_CAUSE:     csr_r <= {38'd0,cause[alu0_instr.csr.ol]};
+   	`CSR_DOI_STACK:	csr_r <= {7'd0,dl_stack,ol_stack,im_stack};
+    `CSR_PL_STACKL:	csr_r <= pl_stack[51:0];
+    `CSR_PL_STACKH:	csr_r <= pl_stack[103:52];
+    `CSR_STATUS:    csr_r <= status;
+    `CSR_IPC0:      csr_r <= ipc[0];
+    `CSR_IPC1:      csr_r <= ipc[1];
+    `CSR_IPC2:      csr_r <= ipc[2];
+    `CSR_IPC3:      csr_r <= ipc[3];
+    `CSR_IPC4:      csr_r <= ipc[4];
+    `CSR_TIME_FRAC:		csr_r <= wc_time_frac;
+    `CSR_TIME_SECS:		csr_r <= wc_time_secs;
+    `CSR_INFO:
+                    case(csrno[3:0])
+                    4'd0:   csr_r <= "Finitr";  // manufacturer
+                    4'd1:   csr_r <= "on    ";
+                    4'd2:   csr_r <= "52 bit";  // CPU class
+                    4'd3:   csr_r <= "      ";
+                    4'd4:   csr_r <= "Gambit";  // Name
+                    4'd5:   csr_r <= "      ";
+                    4'd6:   csr_r <= 52'd1;       // model #
+                    4'd7:   csr_r <= 52'd1;       // serial number
+                    4'd8:   csr_r <= {26'd16384,26'd16384};   // cache sizes instruction,csr_ra
+                    4'd9:   csr_r <= 52'd0;
+                    default:    csr_r <= 52'd0;
+                    endcase
+    default:    begin    
+    			$display("Unsupported CSR:%h",csrno);
+    			csr_r <= 52'hEEEEEEEEEEEEEEEE;
+    			end
+    endcase
+    else
+        csr_r <= 52'h0;
+end
+
 alu ualu1
 (
 	.op(alu0_instr),
@@ -2436,8 +2499,7 @@ alu ualu1
 	.imm(alu0_argI),
 	.b(alu0_argB),
 	.o(alu0_bus),
-	.s_i(alu0_argS),
-	.s_o(alu0_sro),
+	.csr_i(csr_r),
 	.idle(alu0_idle)
 );
 
@@ -2448,8 +2510,7 @@ alu ualu2
 	.imm(alu1_argI),
 	.b(alu1_argB),
 	.o(alu1_bus),
-	.s_i(alu1_argS),
-	.s_o(alu1_sro),
+	.csr_i(52'h0),
 	.idle(alu1_idle)
 );
 
@@ -2709,6 +2770,20 @@ else
 	br_total <= br_total + (fcu_branch & fcu_v);
 
 
+always @(posedge tm_clk_i)
+begin
+	if (|ld_time)
+		wc_time <= {wc_time_secs,wc_time_frac};
+	else begin
+		wc_time[39:0] <= wc_time[39:0] + 32'd1;
+		if (wc_time[39:0] >= TM_CLKFREQ-1) begin
+			wc_time[39:0] <= 32'd0;
+			wc_time[79:40] <= wc_time[79:40] + 32'd1;
+		end
+	end
+end
+
+
 //wire pe_branchmiss;
 //edge_det ubmed1 (.rst(rst_i), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pe_branchmiss), .ne(), .ee());
 
@@ -2753,14 +2828,7 @@ if (rst_i) begin
 		iq_fl[n] <= 2'b00;
 		iq_rid[n] <= 3'd0;
   end
-    for (n = 0; n < RENTRIES; n = n + 1) begin
-    	rob.robEntries[n].state <= RS_INVALID;
-    	rob.robEntries[n].pc <= 1'd0;
-//    	rob_instr[n] <= `UO_NOP;
-    	rob.robEntries[n].ma <= 1'd0;
-    	rob.robEntries[n].res <= 1'd0;
-    	rob.robEntries[n].tgt <= 1'd0;
-    end
+  	 rob.reset();
      bwhich <= 2'b00;
      dram0 <= `DRAMSLOT_AVAIL;
      dram1 <= `DRAMSLOT_AVAIL;
@@ -2816,6 +2884,7 @@ if (rst_i) begin
 		agen1_argA <= 1'd0;
 		agen1_dataready <= FALSE;
 		fcu_branch <= 1'd0;
+		fcu_id <= 1'd0;
 `endif
      fcu_dataready <= 0;
 //     fcu_instr <= `UO_NOP;
@@ -2899,7 +2968,7 @@ else begin
 	// inadvertently used to update the queue at a later point.
 	dramA_v <= `INV;
 	dramB_v <= `INV;
-//	ld_time <= {ld_time[4:0],1'b0};
+	ld_time <= {ld_time[4:0],1'b0};
 //	wc_times <= wc_time;
 
 	invic <= FALSE;
@@ -2947,24 +3016,24 @@ else begin
 	end
 
 	if (alu0_v) begin
-		rob.robEntries[ alu0_rid ].res <= ralu0_bus;
-		rob.robEntries[ alu0_rid ].exc <= 4'h0;
+		rob.robEntries[ alu0_rid % RENTRIES ].res <= ralu0_bus;
+		rob.robEntries[ alu0_rid % RENTRIES ].exc <= 4'h0;
 	//	if (alu0_done) begin
-			if (iq_state[alu0_id]==IQS_OUT) begin
-				iq_state[alu0_id] <= IQS_CMT;
-				rob.robEntries[alu0_rid].state <= RS_CMT;
+			if (iq_state[alu0_rid % RENTRIES]==IQS_OUT) begin
+				iq_state[alu0_id % IQ_ENTRIES] <= IQS_CMT;
+				rob.robEntries[alu0_rid % RENTRIES].state <= RS_CMT;
 			end
 	//	end
 		alu0_dataready <= FALSE;
 	end
 
 	if (alu1_v && `NUM_ALU > 1) begin
-		rob.robEntries[ alu1_rid ].res <= ralu1_bus;
-		rob.robEntries[ alu1_rid ].exc <= alu1_exc;
+		rob.robEntries[ alu1_rid % RENTRIES ].res <= ralu1_bus;
+		rob.robEntries[ alu1_rid % RENTRIES ].exc <= alu1_exc;
 	//	if (alu1_done) begin
-			if (iq_state[alu1_id]==IQS_OUT) begin
-				iq_state[alu1_id] <= IQS_CMT;
-				rob.robEntries[alu1_rid].state <= RS_CMT;
+			if (iq_state[ alu1_rid % RENTRIES ]==IQS_OUT) begin
+				iq_state[alu1_id % IQ_ENTRIES] <= IQS_CMT;
+				rob.robEntries[ alu1_rid % RENTRIES ].state <= RS_CMT;
 			end
 	//	end
 		alu1_dataready <= FALSE;
@@ -3008,6 +3077,7 @@ else begin
 		// takb is looked at only for branches to update the predictor. Here it is
 		// unconditionally set, the value will be ignored if it's not a branch.
 		iq_takb[ fcu_id ] <= fcu_takb;
+		iq_ma [ fcu_id ] <= fcu_misspc;
 		//br_ctr <= br_ctr + fcu_branch;
 		fcu_dataready <= `INV;
 	end
@@ -3743,21 +3813,37 @@ begin
             ol_stack <= {ol_stack[11:0],3'b00};
             dl_stack <= {dl_stack[11:0],3'b00};
         		excmisspc <= 52'hFFFFFFFFE0000;
-            ipc[0] <= rob.robEntries[head].pc + 2'd1;
             for (n = 1; n < 5; n = n + 1)
             	ipc[n] <= ipc[n-1];
             pl_stack <= {pl_stack[90:0],13'h000};
             case(rob.robEntries[head].instr.wai.exop)
-            `BRK:	cause[3'd0] <= {9'h4,rob.robEntries[head].instr.wai.sigmsk};	// 40h to 4Fh
-            `RST:	cause[3'd0] <= 13'h70;
+            `BRK:	
+            	begin
+            		cause[3'd0] <= {9'h4,rob.robEntries[head].instr.wai.sigmsk};	// 40h to 4Fh
+		            ipc[0] <= rob.robEntries[head].pc + 2'd1;
+		            lkregs[4] <= rob.robEntries[head].pc + 2'd1;
+            	end
+            `RST:	
+            	begin
+            		cause[3'd0] <= 13'h70;
+		            ipc[0] <= rob.robEntries[head].pc;
+		            lkregs[4] <= rob.robEntries[head].pc;
+            	end
             `NMI:	
             	begin
             		if (rob.robEntries[head].instr.wai.exop==2'd1)	// SNR
             			cause[3'd0] <= 13'h61;
             		else
             			cause[3'd0] <= 13'h60;
+		            ipc[0] <= rob.robEntries[head].pc;
+		            lkregs[4] <= rob.robEntries[head].pc;
             	end
-            `IRQ: cause[3'd0] <= {9'h5,rob.robEntries[head].instr.wai.sigmsk};
+            `IRQ: 
+            	begin
+            		cause[3'd0] <= {9'h5,rob.robEntries[head].instr.wai.sigmsk};
+		            ipc[0] <= rob.robEntries[head].pc;
+		            lkregs[4] <= rob.robEntries[head].pc;
+            	end
           	endcase
            	sema[0] <= 1'b0;
 `ifdef SUPPORT_DBG                    
@@ -3790,7 +3876,20 @@ begin
 		        end
         `CSR:
         		begin
-//        		write_csr(rob_instr[head][38:36],{rob_instr[head][35:34],rob_instr[head][28:17]},rob_argA[head],thread);
+        			if (rob.robEntries[head].instr.csr.op[2])
+        				write_csr(
+        					rob.robEntries[head].instr.csr.op,
+        					rob.robEntries[head].instr.csr.ol,
+        					rob.robEntries[head].instr.csr.regno,
+        					{rob.robEntries[head].instr.raw[32:29],rob.robEntries[head].instr.raw[16:12]}
+        				);
+        			else
+        				write_csr(
+        					rob.robEntries[head].instr.csr.op,
+        					rob.robEntries[head].instr.csr.ol,
+        					rob.robEntries[head].instr.csr.regno,
+        					rob.robEntries[head].argA
+        				);
         		end
  /*
         `FLT1:
@@ -3870,6 +3969,79 @@ begin
         // pending stores to be issued.
         rob.robEntries[head].instr.raw <= `NOP_INSN;
     end
+end
+endtask
+
+task write_csr;
+input [2:0] csrop;
+input [2:0] csrol;
+input [13:0] csrno;
+input [127:0] dat;
+begin
+    if (csrol >= ol)
+    case(csrop)
+    3'd1,3'd5:   // CSRRW, CSRRWI
+        casez(csrno[11:0])
+        `CSR_CR0:       cr0 <= dat;
+        `CSR_SEMA:      sema <= dat;
+//        `CSR_KEYS:	keys <= dat;
+//        `CSR_FSTAT:		fpu_csr[37:32] <= dat[37:32];
+        `CSR_BADADR:    badaddr[csrol] <= dat;
+        `CSR_BADINST:		bad_instr[csrol] <= dat;
+        `CSR_CAUSE:     cause[csrol] <= dat[12:0];
+        `CSR_DOI_STACK:	
+        	begin
+        		im_stack <= dat[14:0];
+        		ol_stack <= dat[29:15];
+        		dl_stack <= dat[44:30];
+        	end
+`ifdef SUPPORT_DBG        
+        `CSR_DBAD0:     dbg_adr0 <= dat[AMSB:0];
+        `CSR_DBAD1:     dbg_adr1 <= dat[AMSB:0];
+        `CSR_DBAD2:     dbg_adr2 <= dat[AMSB:0];
+        `CSR_DBAD3:     dbg_adr3 <= dat[AMSB:0];
+        `CSR_DBCTRL:    dbg_ctrl <= dat;
+`endif        
+//        `CSR_CAS:       cas <= dat;
+        `CSR_PL_STACKL:	pl_stack[51:0] <= dat;
+        `CSR_PL_STACKH:	pl_stack[103:52] <= dat;
+        `CSR_STATUS:    status <= dat;
+        `CSR_IPC0:      ipc[0] <= dat;
+        `CSR_IPC1:      ipc[1] <= dat;
+        `CSR_IPC2:      ipc[2] <= dat;
+        `CSR_IPC3:      ipc[3] <= dat;
+        `CSR_IPC4:      ipc[4] <= dat;
+        `CSR_TIME_FRAC:	wc_time_frac <= dat[39:0];
+				`CSR_TIME_SECS:	begin
+						wc_time_secs <= dat[39:0];
+						ld_time <= 6'h3f;
+						end
+        default:    ;
+        endcase
+    3'd2,3'd6:   // CSRRS,CSRRSI
+        case(csrno[11:0])
+        `CSR_CR0:       cr0 <= cr0 | dat;
+//        `CSR_WBRCD:		wbrcd <= wbrcd | dat;
+`ifdef SUPPORT_DBG        
+        `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl | dat;
+`endif        
+        `CSR_SEMA:      sema <= sema | dat;
+        `CSR_STATUS:    status <= status | dat;
+        default:    ;
+        endcase
+    3'd3,3'd7:   // CSRRC,CSRRCI
+        case(csrno[11:0])
+        `CSR_CR0:       cr0 <= cr0 & ~dat;
+//        `CSR_WBRCD:		wbrcd <= wbrcd & ~dat;
+`ifdef SUPPORT_DBG        
+        `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl & ~dat;
+`endif        
+        `CSR_SEMA:      sema <= sema & ~dat;
+        `CSR_STATUS:    status <= status & ~dat;
+        default:    ;
+        endcase
+    default:    ;
+    endcase
 end
 endtask
 
@@ -4073,6 +4245,7 @@ begin
 	iq_cmp	 [nn]  <= bus[`IB_CMP];
 	iq_bt   [nn]  <= bus[`IB_BT];
 	iq_alu  [nn]  <= bus[`IB_ALU];
+	iq_alu0 [nn]  <= bus[`IB_ALU0];
 	iq_fc   [nn]  <= bus[`IB_FC];
 	iq_load [nn]  <= bus[`IB_LOAD];
 	iq_store[nn]  <= bus[`IB_STORE];
