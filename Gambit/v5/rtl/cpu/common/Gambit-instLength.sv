@@ -43,6 +43,9 @@ case(opcode)
 `CMPU_3R:	len <= 3'd2;
 `CMPU_RI22:	len <= 3'd3;
 `CMPU_RI35:	len <= 3'd4;
+`MUL_3R:	len <= 3'd2;
+`MUL_RI22:	len <= 3'd3;
+`MUL_RI35:	len <= 3'd4;
 `JAL:			len <= 3'd4;
 `LSR_3R:	len <= 3'd2;
 `RETGRP:	len <= 3'd1;

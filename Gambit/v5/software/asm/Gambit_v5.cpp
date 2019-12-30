@@ -46,6 +46,8 @@
 #define I_CMPU_RR		0x07
 #define I_CMPU_RI22	0x17
 #define I_CMPU_RI35	0x27
+#define I_MUL_RR		0x0E
+#define I_MUL_RI22	0x1E
 #define I_AND_RR		0x08
 #define I_AND_RI22	0x18
 #define I_AND_RI35	0x28
@@ -56,17 +58,17 @@
 #define I_XOR_RI22	0x1A
 #define I_XOR_RI36	0x2A
 
-#define I_SHL		0x32
-#define I_SHLI	0x38
-#define I_ASL		006
-#define I_SHR		0x34
-#define I_SHRI	0x3A
-#define I_ASR		0x35
-#define I_ASRI	0x3B
-#define I_ROL		0x36
-#define I_ROLI	0x3C
-#define I_ROR		0x37
-#define I_RORI	0x3D
+#define I_SHL		0x0C
+#define I_SHLI	0x0C
+#define I_ASL		0x0C
+#define I_SHR		0x0D
+#define I_SHRI	0x0D
+#define I_ASR		0x2D
+#define I_ASRI	0x2D
+#define I_ROL		0x1C
+#define I_ROLI	0x1C
+#define I_ROR		0x1D
+#define I_RORI	0x1D
 
 #define I_SEQ		0x14
 #define I_SEQI	0xC8
@@ -180,6 +182,7 @@ static int regCnst;
 #define RT(x)		((x) << 7LL)
 #define RA(x)		((x) << 12LL)
 #define RB(x)		((x) << 17LL)
+#define SC(x)		(((x) & 0x3LL) << 22LL)
 #define IMM8(x) (((x) & 0xffLL) << 17LL)
 #define IMM22(x) (((x) & 0x7fffffLL) << 17LL)
 #define IMM35(x)	(((x) & 0xfffffffffLL) << 17LL)
@@ -192,8 +195,9 @@ static int regCnst;
 #define AM(x)		(((x) & 1LL << 38LL))
 #define RETIMM(x)	(((x) & 0x1ffff0LL) << 18LL)
 #define COND(x)		(((x) & 0x3LL) << 7LL)
-#define P2(x)			(((x) & 3LL) << 12LL)
+#define P2(x)			(((x) & 3LL) << 9LL)
 #define BRDISP12(x)	(((x) & 0xfffLL) << 14LL)
+#define CA(x)		(((x) & 0x7LL) << 11LL)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -508,18 +512,18 @@ static int getRegisterX()
 		case 'c': case 'C':
 			if (inptr[1] == 'R' || inptr[1] == 'r') {
 				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
-					reg = inptr[2] - '0' + 112;
+					reg = inptr[2] - '0' + 104;
 					inptr += 3;
 					NextToken();
 					return (reg);
 				}
 			}
 			break;
-			// xlr
+			// xl
     case 'x': case 'X':
-        if ((inptr[1]=='L' || inptr[1]=='l') && (inptr[2]=='R' || inptr[2]=='r') && 
-			!isIdentChar(inptr[3])) {
-            inptr += 3;
+        if ((inptr[1]=='L' || inptr[1]=='l') && 
+			!isIdentChar(inptr[2])) {
+            inptr += 2;
             NextToken();
             return (regXL);
         }
@@ -1371,20 +1375,14 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			case I_SNE:
 				insnStats.sets++;
 				break;
-			case I_SHL:
-			case I_SHLI:
 			case I_ASL:
 				insnStats.shls++;
 				insnStats.shifts++;
 				break;
 			case I_SHR:
-			case I_SHRI:
 			case I_ASR:
-			case I_ASRI:
 			case I_ROL:
-			case I_ROLI:
 			case I_ROR:
-			case I_RORI:
 				insnStats.shifts++;
 				break;
 			case I_PTRDIF:
@@ -1797,7 +1795,7 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 	if (*p == '.')
 		getSz(&sz);
 	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 119)
+	if (Cr < 104 || Cr > 111)
 		error("Need condition register for compare");
 	Cr &= 7;
 	need(',');
@@ -1805,13 +1803,40 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 	need(',');
 	NextToken();
 	val = expr();
-	li = CheckPrefix(val);
+	if (IsNBit(val, 8)) {
+		emit_insn(
+			0x200000 |
+			IMM8(val) |
+			RA(Ra) |
+			RT((1<<3)|Cr) |
+			func6,!expand_flag,2
+		);
+		return;
+	}
+	if (IsNBit(val, 22)) {
+		emit_insn(
+			IMM22(val) |
+			RA(Ra) |
+			RT((1 << 3) | Cr) |
+			opcode6, !expand_flag, 3
+		);
+		return;
+	}
+	if (IsNBit(val, 35)) {
+		emit_insn(
+			IMM35(val) |
+			RA(Ra) |
+			RT((1 << 3) | Cr) |
+			opcode6+0x10, !expand_flag, 4
+		);
+		return;
+	}
+	LoadConstant(val, 23);
 	emit_insn(
-		(li ? 0x8000000000 : 0) |
-		IMM(val) |
-		RT((2 << 3)|Cr) |
+		RT((1 << 3)|Cr) |
 		RA(Ra) |
-		opcode6, !expand_flag, 5);
+		RB(23) |
+		func6, !expand_flag, 2);
 xit:
 	ScanToEOL();
 }
@@ -1990,7 +2015,7 @@ static void process_cmp()
 	if (*p == '.')
 		getSz(&sz);
 	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 119)
+	if (Cr < 104 || Cr > 111)
 		error("Need condition register for compare");
 	Cr &= 7;
 	need(',');
@@ -2016,7 +2041,7 @@ static void process_cmp()
 	Ra = Ra & 0x1f;
 	Rb = Rb & 0x1f;
 	Rt = Rt & 0x1f;
-	emit_insn(instr | FUNC6(funct6) | RB(Rb) | RT((2 << 3) | Cr) | RA(Ra) | 0x8C, !expand_flag, 5);
+	emit_insn(RB(Rb) | RT((1LL << 3LL) | Cr) | RA(Ra) | funct6, !expand_flag, 2);
 xit:
 	prevToken();
 	ScanToEOL();
@@ -2592,6 +2617,11 @@ static void process_bcc()
 	int64_t opcode4 = parm2[token];
 	int64_t op4 = parm3[token];
 
+	Cr = getRegisterX();
+	if (Cr < 104 || Cr > 111)
+		error("Branch needs condition register.");
+	Cr &= 7;
+	need(',');
 	NextToken();
 	val = expr();
 	disp = (val - code_address - 2);
@@ -2601,6 +2631,7 @@ static void process_bcc()
 	}
 	emit_insn(
 		BRDISP12(disp) |
+		CA(Cr) |
 		COND(opcode4) |
 		opcode6, !expand_flag, 2
 	);
@@ -2918,12 +2949,8 @@ static void process_ret()
 	val &= 0xFFFFFFFFFFFFFFF0LL;
 	li = CheckPrefix(val);
 	emit_insn(
-		(li ? 0x8000000000LL : 0LL) |
-		RETIMM(val) |
-		RB(lk) |
-		RT(regSP) |
-		RA(regSP) |
-		I_RTS,!expand_flag, 5
+		(lk << 9LL) |
+		I_RET,!expand_flag,1
 	);
 }
 
@@ -3068,19 +3095,19 @@ static void process_brk()
 
 static void GetIndexScale(int *sc)
 {
-      int64_t val;
+	int64_t val;
 
-      NextToken();
-      val = expr();
-      prevToken();
-      switch(val) {
-      case 0: *sc = 0; break;
-      case 1: *sc = 0; break;
-      case 2: *sc = 1; break;
-      case 4: *sc = 2; break;
-      case 8: *sc = 3; break;
-      default: printf("Illegal scaling factor.\r\n");
-      }
+	NextToken();
+	val = expr();
+	prevToken();
+	switch(val) {
+	case 0: *sc = 0; break;
+	case 1: *sc = 0; break;
+	case 2: *sc = 1; break;
+	case 4: *sc = 2; break;
+	case 8: *sc = 3; break;
+	default: printf("Illegal scaling factor.\r\n");
+	}
 }
 
 
@@ -3249,6 +3276,7 @@ static void process_store()
 			return;
 		}
 		emit_insn(
+			SC(Sc) |
 			RB(Rs) |
 			RA(Ra) |
 			RB(Rb) |
@@ -3521,10 +3549,11 @@ static void process_load()
 		// Trap LEA, convert to LEAX opcode
 		emit_insn(
 //			((int64_t)seg << 45LL) |
+			SC(Sc) |
 			RT(Rt) |
 			RB(Rb) |
 			RA(Ra) |
-			opcode6, !expand_flag, 4);// seg != -1 ? 6 : 4);
+			opcode6, !expand_flag, 2);// seg != -1 ? 6 : 4);
 		return;
 	}
 	if (Ra < 0) Ra = 0;
@@ -4003,12 +4032,10 @@ static void process_mov(int64_t oc, int64_t fn)
 	 rgs &= 0x31;
 	 if (d3 == 7) {
 		 emit_insn(
-			 (0 << 12) |
-			 (3 << 6) |
-			 ((Rt >> 1) << 8) |
-			 ((Rt & 1) << 5) |
-			 (Ra),
-		 0,2);
+			 RA(Ra) |
+			 RT(Rt) |
+			 I_OR_RR, !expand_flag, 2
+		 );
 		 prevToken();
 		 return;
 	 }
@@ -4116,13 +4143,13 @@ static void process_shifti(int64_t op4)
 	need(',');
 	NextToken();
 	val = expr();
-	val &= 127;
+	val &= 63;
 	emit_insn(
-		FUNC6(op4) |
-		SHI7(val) |
+		0x2000000 |
+		IMM8(val) |
 		RT(Rt) |
 		RA(Ra) |
-		I_R2,!expand_flag,5);
+		op4,!expand_flag,2);
 }
 
 // ----------------------------------------------------------------------------
@@ -4231,7 +4258,7 @@ static void process_shift(int64_t op4)
 	else {
 		prevToken();
 		Rb = getRegisterX();
-		emit_insn(FUNC6(op4) | RT(Rt)| RB(Rb) | RA(Ra) | I_R2,!expand_flag,5);
+		emit_insn(RT(Rt)| RB(Rb) | RA(Ra) | op4,!expand_flag,2);
 	 }
 }
 
@@ -4847,7 +4874,7 @@ static void process_default()
 	case tk_bfinsi: process_bitfield(4); break;
 	case tk_bfset: process_bitfield(0); break;
 	//case tk_bnei: process_beqi(0x12, 1); break;
-	case tk_bra: process_bra(0xD4,0x0C); break;
+	case tk_bra: process_bra(0x741,0x00); break;
 	case tk_brk: process_brk(); break;
 		//case tk_bsr: process_bra(0x56); break;
 	case tk_bss:
@@ -4949,7 +4976,7 @@ static void process_default()
 		//case tk_mulh: process_rrop(0x26, 0x3A); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 	case tk_neg: process_neg(); break;
-	case tk_nop: emit_insn(0x0080, !expand_flag, 2); break;
+	case tk_nop: emit_insn(0xC3, !expand_flag, 1); break;
 	case tk_not: process_rop(0x05); break;
 		//        case tk_not: process_rop(0x07); break;
 	case tk_ori: process_riop(0x09,0x09,0); break;
@@ -5122,14 +5149,8 @@ void Gambit_v5_processMaster()
 		parm2[tk_modu] = 0x3CLL;
 		parm3[tk_modu] = 0x01LL;
 		jumptbl[tk_mul] = &process_rrop;
-		parm1[tk_mul] = 0x3ALL;
-		parm2[tk_mul] = 0x3ALL;
-		jumptbl[tk_mulf] = &process_rrop;
-		parm1[tk_mulf] = 0x2ALL;
-		parm2[tk_mulf] = 0x2ALL;
-		jumptbl[tk_mulu] = &process_rrop;
-		parm1[tk_mulu] = 0x38LL;
-		parm2[tk_mulu] = 0x38LL;
+		parm1[tk_mul] = I_MUL_RR;
+		parm2[tk_mul] = I_MUL_RI22;
 		jumptbl[tk_ptrdif] = &process_ptrdif;
 		parm1[tk_ptrdif] = 0x1ELL;
 		parm2[tk_ptrdif] = -1LL;
@@ -5156,6 +5177,14 @@ void Gambit_v5_processMaster()
 		parm1[tk_bgt] = 0x40;
 		parm2[tk_bgt] = 0x02;
 		parm3[tk_bgt] = 0x00;
+		jumptbl[tk_bge] = &process_bcc;
+		parm1[tk_bge] = 0x41;
+		parm2[tk_bge] = 0x00;
+		parm3[tk_bge] = 0x00;
+		jumptbl[tk_ble] = &process_bcc;
+		parm1[tk_ble] = 0x41;
+		parm2[tk_ble] = 0x01;
+		parm3[tk_ble] = 0x00;
 
 		jumptbl[tk_ldi] = &process_ldi;
 		parm1[tk_ldi] = 0;

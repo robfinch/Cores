@@ -229,6 +229,7 @@ reg [3:0] r_amt, r_amt2;
 wire [2:0] iclen1;
 reg [2:0] len1, len2, len1d, len2d;
 Instruction insnx [0:1];
+Instruction insnxp [0:1];
 
 Qid tails [0:QSLOTS-1];
 Qid heads [0:IQ_ENTRIES-1];
@@ -693,6 +694,8 @@ endfunction
 // conditional load for the PFI instruction is accomplished here.
 wire [8:0] opcode1a = opcmux(ic1_out[51:0]);
 wire [8:0] opcode2a = opcmux(ic2_out[51:0]);
+assign insnxp[0] = branchmiss ? `NOP_INSN : ic1_out[51:0];
+assign insnxp[1] = branchmiss ? `NOP_INSN : ic2_out[51:0];
 always @*
 	if ((opcode1a==`PFI || opcode1a==`WAI) && |irq_i && !srx[4])
 		opcode1 <= opcode1a|9'b1;
@@ -711,11 +714,15 @@ if (rst_i)
 	insnx[0] = `NOP_INSN;
 else if (pipe_advance && !branchmiss)
 	insnx[0] = opcmux(ic1_out[51:0]);
+else if (branchmiss)
+	insnx[0] = `NOP_INSN;
 always @(posedge clk)
 if (rst_i)
 	insnx[1] = `NOP_INSN;
 else if (pipe_advance && !branchmiss)
 	insnx[1] = opcmux(ic2_out[51:0]);
+else if (branchmiss)
+	insnx[1] = `NOP_INSN;
 
 wire IsRst = (freezepc && ~rst_ctr[`RSTC_BIT]);
 wire IsNmi = (freezepc & (nmi_i|tick_roi));
@@ -1060,7 +1067,7 @@ programCounter upc1
 	.q1(queuedCnt==2'd1),
 	.q2(queuedCnt==2'd2),
 	.q1bx(1'b0),
-	.insnx(insnx),
+	.insnx(insnxp),
 	.phit(pipe_advance),
 	.freezepc(freezepc),
 	.branchmiss(branchmiss),
@@ -2044,11 +2051,16 @@ case(ins.gen.opcode)
 `ADD_3R,`ADD_RI22,`ADD_RI35:	fnMnemonic = "ADD ";
 `SUB_3R,`SUB_RI22,`SUB_RI35:	fnMnemonic = "SUB ";
 `CMP_3R,`CMP_RI22,`CMP_RI35:	fnMnemonic = "CMP ";
+`MUL_3R,`MUL_RI22,`MUL_RI35:	fnMnemonic = "MUL ";
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
 `LD_D8,`LD_D22,`LD_D35:	
 			fnMnemonic = "LD  ";
+`LDB_D8,`LDB_D22,`LDB_D35:	
+			fnMnemonic = "LDB ";
 `ST_D8,`ST_D22,`ST_D35:		
 			fnMnemonic = "ST  ";
+`STB_D8,`STB_D22,`STB_D35:		
+			fnMnemonic = "STB ";
 `JAL,`JAL_RN:	
 			fnMnemonic = "JAL ";
 `BRANCH0,`BRANCH1:

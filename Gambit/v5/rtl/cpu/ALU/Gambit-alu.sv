@@ -52,6 +52,7 @@ endfunction
 
 always @*
 case(op.rr.opcode)
+`MUL_3R:	o = op.rr.zero ? $signed(a) * $signed(imm) : $signed(a) * $signed(b);
 `ADD_3R:	o = op.rr.zero ? a + imm : a + b;
 `SUB_3R:	o = op.rr.zero ? a - imm : a - b;
 `AND_3R:	o = op.rr.zero ? a & imm : a & b;
@@ -61,6 +62,7 @@ case(op.rr.opcode)
 								: ($signed(a) < $signed(b) ? 2'b11 : a == b ? 2'b00 : 2'b01);
 `CMPU_3R:	o = op.rr.zero ? (a < imm ? 2'b11 : a == imm ? 2'b00 : 2'b01)
 		: (a < b ? 2'b11 : a == b ? 2'b00 : 2'b01);
+`MUL_RI22,`MUL_RI35:	o = $signed(a) * $signed(imm);
 `ADD_RI22,`ADD_RI35:	o = a + imm;
 `SUB_RI22,`SUB_RI35:	o = a + imm;
 `CMP_RI22,`CMP_RI35: o = $signed(a) < $signed(imm) ? 2'b11 : a == imm ? 2'b00 : 2'b01;
