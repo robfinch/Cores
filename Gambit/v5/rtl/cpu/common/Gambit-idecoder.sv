@@ -113,6 +113,18 @@ default:	IsMem = FALSE;
 endcase
 endfunction
 
+function IsMemndx;
+input Instruction isn;
+case(isn.gen.opcode)
+`LD_D8,
+`LDB_D8,
+`ST_D8,
+`STB_D8:
+	IsMemndx = ~isn.ri8.one;
+default:	IsMemndx = FALSE;
+endcase
+endfunction
+
 function IsFlowCtrl;
 input [51:0] isn;
 case(isn[6:0])
@@ -219,6 +231,7 @@ begin
 	bus[`IB_STORE]	<= IsStore(instr);
 	bus[`IB_MEMSZ]  <= MemSize(instr);
 	bus[`IB_MEM]		<= IsMem(instr);
+	bus[`IB_MEMNDX]	<= IsMemndx(instr);
 	bus[`IB_JAL]		<= IsJal(instr);
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_RFW]		<= IsRFW(instr);

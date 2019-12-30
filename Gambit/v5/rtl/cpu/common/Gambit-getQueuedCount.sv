@@ -34,7 +34,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
+module getQueuedCount(branchmiss, brk, phit, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedOnp);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
@@ -42,7 +42,7 @@ parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
 input branchmiss;
 input [2:0] brk;
-input phitd;
+input phit;
 input Qid tails [0:QSLOTS-1];
 input Rid rob_tails [0:RSLOTS-1];
 input [QSLOTS-1:0] slotvd;
@@ -57,7 +57,7 @@ always @*
 begin
 	queuedCnt <= 3'd0;
 	queuedOnp <= 1'd0;
-	if (!branchmiss) begin
+	if (!branchmiss && phit) begin
 		// Three available
 		case(slotvd)
 		2'b01:
@@ -71,17 +71,16 @@ begin
         queuedOnp[1] <= `TRUE;
       end
 		2'b11:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
+      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV
+	     && iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
         if (!brk[0]) begin
 	        if (!(slot_jmp[0]|take_branch[0])) begin
-	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-	            if (`WAYS > 1) begin
-	            	queuedCnt <= 3'd2;
-				        queuedOnp[1] <= `TRUE;
-				      end
-	          end
+            if (`WAYS > 1) begin
+            	queuedCnt <= 3'd2;
+			        queuedOnp[1] <= `TRUE;
+			      end
 	        end
 	      end
     	end

@@ -150,13 +150,13 @@ IDLE:
 IC2:
 	begin
 		iccnt <= iccnt + 3'd1;
-		if (isROM && iccnt==ROM_ReadLatency) begin
+		if (isROM && iccnt>=ROM_ReadLatency) begin
 			L1_wr <= TRUE;
 			L1_dat <= ROM_dat;
 			iccnt <= 3'd0;
 			state <= IC5;
 		end
-		else if (!isROM && iccnt==L2_ReadLatency) begin
+		else if (!isROM && iccnt>=L2_ReadLatency) begin
 			iccnt <= 3'd0;
 	    state <= IC_WaitL2;
 	  end
@@ -195,7 +195,7 @@ IC_WaitL2:
 IC5: 	
 	begin
 		iccnt <= iccnt + 3'd1;
-		if (iccnt==L1_WriteLatency) begin
+		if (iccnt>=L1_WriteLatency) begin
 			selpc1 <= TRUE;
 			icnxt <= TRUE;
 			L2_nxt <= TRUE;	// Dont really need to advance if L2 hit.

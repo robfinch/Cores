@@ -233,7 +233,7 @@ initial begin
   end
 end
 
-wire [AMSB:0] nxt_adr = adr + 8'd64;
+wire [AMSB:0] nxt_adr = {adr[AMSB:5] + 2'd1,5'h0};
 
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
@@ -302,10 +302,7 @@ if (adr[4:0] > 5'd27) begin
   else if (hit1n)  nxt_lineno = {2'b01,nxt_adr[pMSB:5]};
   else if (hit2n)  nxt_lineno = {2'b10,nxt_adr[pMSB:5]};
   else  nxt_lineno = {2'b11,nxt_adr[pMSB:5]};
-	hit = (hit0 & hit0n) |
-				(hit1 & hit1n) | 
-				(hit2 & hit2n) |
-				(hit3 & hit3n);
+  hit = (hit0|hit1|hit2|hit3) & (hit0n|hit1n|hit2n|hit3n);
 end
 else begin
   if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
@@ -318,9 +315,9 @@ end
 
 always @*
 if (adr[4:0] > 5'd27)
-	missadr = (hit0|hit1|hit2|hit3) ? nxt_adr : adr;
+	missadr = (hit0|hit1|hit2|hit3) ? {nxt_adr[AMSB:5],5'h0} : {adr[AMSB:5],5'h0};
 else
-	missadr = adr;
+	missadr = {adr[AMSB:5],5'h0};
 
 endmodule
 

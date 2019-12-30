@@ -23,22 +23,24 @@
 //
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
-module agen(wrap, src1, src2, ma, idle);
+module agen(inst, IsIndexed, src1, src2, ma, idle);
 parameter AMSB = `AMSB;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
-input wrap;
-input [AMSB:0] src1;
-input [AMSB:0] src2;
-output reg [AMSB:0] ma;
+input Instruction inst;
+input IsIndexed;
+input Address src1;
+input Address src2;
+output Address ma;
 output idle;
 
 assign idle = 1'b1;
 
 always @*
-	if (wrap)
-		ma <= {src1[AMSB:8],src1[7:0] + src2[7:0]};
+	if (IsIndexed)
+		ma <= src1 + (src2 << inst.rr.padr[1:0]);
 	else
 		ma <= src1 + src2;
 
