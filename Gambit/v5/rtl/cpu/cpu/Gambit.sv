@@ -25,6 +25,7 @@
 // 46190 73904
 // 48453 77525
 // 85342
+// 86959
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
@@ -232,6 +233,7 @@ reg [31:0] br_total;
 reg [31:0] br_missed;
 
 wire [2:0] queuedCnt, queuedCntd;
+wire [2:0] pc_queuedCnt;
 wire [2:0] rqueuedCnt;
 reg queuedNop;
 
@@ -368,7 +370,6 @@ RegTagBitmap iq_out2 [0:IQ_ENTRIES-1];
 RegTagBitmap iq_out2a [0:IQ_ENTRIES-1];
 
 reg [FSLOTS-1:0] take_branch;
-wire [FSLOTS-1:0] take_branchd;
 reg [FSLOTS-1:0] take_branchq;
 reg [`QBITS] active_tag;
 
@@ -637,6 +638,7 @@ wire [`FSLOTS-1:0] slot_br;
 wire [`FSLOTS-1:0] slot_jc;
 wire [`FSLOTS-1:0] slot_jcl;
 wire [`FSLOTS-1:0] slot_brk;
+reg [`FSLOTS-1:0] slot_brkd;
 wire [3:0] slot_pf [0:FSLOTS-1];
 reg [7:0] slot_rtsx;
 reg [7:0] slot_brx;
@@ -925,6 +927,14 @@ assign slot_pf[1] = slot_pfx[iclen1];
 assign slot_wai[0] = slot_waix[0];
 assign slot_wai[1] = slot_waix[iclen1];
 
+always @(posedge clk)
+if (rst_i)
+	slot_brkd <= 1'd0;
+else begin
+	if (pipe_advance)
+		slot_brkd <= slot_brk;
+end
+
 initial begin
 	take_branch = 2'b00;
 end
@@ -934,13 +944,24 @@ begin
 	take_branch[1] = (slot_br[1] && predict_taken[1]) || slot_brk[1];
 end
 
+always @(posedge clk)
+if (rst_i)
+	take_branchq <= 1'd0;
+else begin
+	if (pipe_advance)
+		take_branchq <= take_branch;
+end
+
 // Branching for purposes of the branch shadow.
 reg [IQ_ENTRIES-1:0] is_qbranch;
 reg [QSLOTS-1:0] slot_jmp;
-reg [QSLOTS-1:0] uoq_take_branch;
+reg [QSLOTS-1:0] slot_jmpp;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_jmp[n] = IsJal(insnxp[n]);
+	slot_jmpp[n] = IsJal(insnxp[n]);
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	slot_jmp[n] = IsJal(insnx[n]);
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(insnxp[n]);
@@ -1039,27 +1060,52 @@ regfileSource urfs1
 // Check how many instructions can be queued. An instruction can queue only if
 // there are entries available in both the dispatch and re-order buffer. This
 // quarentees the re-order buffer id is available during queue. The instruction
-// can't execute until there is a place to put the result.
-// The break bit in the instruction template must also be clear in order for an
-// instruction to queue.
+// can't execute until there is a place to put the result. This count is for 
+// the output of the decode buffer which is one clock later than the pc
+// increment.
 getQueuedCount ugqc1
 (
 	.rst(rst_i),
 	.clk(clk),
 	.branchmiss(branchmiss),
-	.brk(3'b0),
+	.brk(slot_brkd),
 	.phit(phit),
 	.pipe_advance(pipe_advance),
 	.tails(tails),
 	.rob_tails(tails),
 	.slotvd(2'b11),
 	.slot_jmp(slot_jmp),
-	.take_branch(take_branch),
+	.take_branch(take_branchq),
 	.iq_v(iq_v),
 	.rob_v(GetV(1)),
 	.queuedCnt(queuedCnt),
 	.queuedCntd(queuedCntd),
 	.queuedOnp(queuedOnp)
+);
+
+// The program counter needs to know how much to increment by and this info is
+// needed in the fetch stage. Normally the increment will be 2 unless there is
+// a predicted taken branch in the first slot, in which case the increment
+// will be 1. This is almost the same logic required to determine the number
+// of instructions queued except that it's needed one cycle sooner.
+getQueuedCount ugqc2
+(
+	.rst(rst_i),
+	.clk(clk),
+	.branchmiss(branchmiss),
+	.brk(slot_brk),
+	.phit(phit),
+	.pipe_advance(pipe_advance),
+	.tails(tails),
+	.rob_tails(tails),
+	.slotvd(2'b11),
+	.slot_jmp(slot_jmpp),
+	.take_branch(take_branch),
+	.iq_v(iq_v),
+	.rob_v(GetV(1)),
+	.queuedCnt(pc_queuedCnt),
+	.queuedCntd(),
+	.queuedOnp()
 );
 
 getRQueuedCount ugrqct1
@@ -1091,8 +1137,8 @@ programCounter upc1
 (
 	.rst(rst_i),
 	.clk(clk),
-	.q1(queuedCntd==2'd1),
-	.q2(queuedCntd==2'd2),
+	.q1(pc_queuedCnt==2'd1),
+	.q2(pc_queuedCnt==2'd2),
 	.q1bx(1'b0),
 	.insnx(insnxp),
 	.phit(phit),
@@ -1235,8 +1281,8 @@ wire [511:0] ROM_d;
 (* ram_style="block" *)
 reg [511:0] rommem [0:511];
 initial begin
-//`include "d:/cores5/Gambit/v5/software/boot/fibonacci.ve0"
-`include "d:/cores5/Gambit/v5/software/samples/SieveOfE.ve0"
+`include "d:/cores5/Gambit/v5/software/boot/fibonacci.ve0"
+//`include "d:/cores5/Gambit/v5/software/samples/SieveOfE.ve0"
 //`include "d:/cores5/Gambit/v5/software/samples/Test1.ve0"
 end
 always @(posedge clk)
@@ -4487,15 +4533,15 @@ begin
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
-						if (Ra[row]==Rt[col] && slot_rfw2[col] && Ra[row] != 6'd0) begin
+						if (Ra[row]==Rt[col] && slot_rfw2[col] && Ra[row] != 7'd0) begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(insnx[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (Rb[row]==Rt[col] && slot_rfw2[col] && Rb[row] != 6'd0) begin
+						if (Rb[row]==Rt[col] && slot_rfw2[col] && Rb[row] != 7'd0) begin
 							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(insnx[row]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (Rt[row]==Rt[col] && slot_rfw2[col] && Rt[row] != 6'd0) begin
+						if (Rt[row]==Rt[col] && slot_rfw2[col] && Rt[row] != 7'd0) begin
 							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(insnx[row]);
 							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
@@ -4542,31 +4588,52 @@ begin
 	iq_state[ndx] <= IQS_QUEUED;
 	//iq_br_tag[ndx] <= btag;
 	iq_pc[ndx] <= pcsd[slot];
-	if ((pcsd[slot]==iq_pc[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES]
-		&& insnx[slot] == iq_instr[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] && insnx[slot] != `NOP_INSN)
+	set_insn(ndx,id_bus);
+	// A kludge for now.
+	// Override the instruction being queued if it's a duplicate.
+	// Note that the sequence number is checked because the code could be in a loop resulting
+	// in the appearance of duplicated entries when they're really not duplicates.
+	if (FALSE && (pcsd[slot]==iq_pc[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES]
+		&& insnx[slot] == iq_instr[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] && insnx[slot] != `NOP_INSN
+		&& seqnum > iq_sn[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES]
+		&& seqnum < iq_sn[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] + 32'd2)
 		|| (slot==3'd1 && pcsd[0]==pcsd[1] && insnx[0]==insnx[1] && insnx[0] != `NOP_INSN)
 		)
+	// An instruction is needed that copies the target register to the target register so that
+	// dependency checking logic will still work.
 	begin
-		iq_state[ndx] <= IQS_INVALID;
+		iq_instr[ndx].rr.opcode = `OR_3R;
+		iq_instr[ndx].rr.Ra = insnx[slot].rr.Rt;
+		iq_instr[ndx].rr.Rb = 5'd0;
+		iq_instr[ndx].rr.Rt = insnx[slot].rr.Rt;
+		iq_argA_v[ndx] = regIsValid[Rt[slot]] || SourceAValid({35'd0,insnx[slot].rr.Rt,insnx[slot].rr.Rt,`OR_3R});
+		iq_argB_v[ndx] = TRUE;
+		iq_argA_s[ndx] = rf_source[Rt[slot]];
+		iq_argB_s[ndx] = {`QBIT{1'b1}};
+		iq_alu = TRUE;
+		iq_mem = FALSE;
+		iq_fc = FALSE;
+		iq_rfw = TRUE;
+	end
+	else begin
+		iq_instr[ndx] <= insnx[slot];
+		iq_argA[ndx] <= argA[slot];
+		iq_argB[ndx] <= argB[slot];
+		iq_argA_v[ndx] <= regIsValid[Ra[slot]] || SourceAValid(insnx[slot]);
+		iq_argB_v[ndx] <= regIsValid[Rb[slot]] || SourceBValid(insnx[slot]);
+		iq_argA_s[ndx] <= rf_source[Ra[slot]];
+		iq_argB_s[ndx] <= rf_source[Rb[slot]];
 	end
 	iq_len[ndx] <= slot ? len2d : len1d;
-	iq_instr[ndx] <= insnx[slot];
-	iq_argA[ndx] <= argA[slot];
-	iq_argB[ndx] <= argB[slot];
 	iq_argT[ndx] <= argT[slot];
-	iq_argA_v[ndx] <= regIsValid[Ra[slot]] || SourceAValid(insnx[slot]);
-	iq_argB_v[ndx] <= regIsValid[Rb[slot]] || SourceBValid(insnx[slot]);
 	iq_argT_v[ndx] <= regIsValid[Rt[slot]] || SourceTValid(insnx[slot]);
-	iq_argA_s[ndx] <= rf_source[Ra[slot]];
-	iq_argB_s[ndx] <= rf_source[Rb[slot]];
 	iq_argT_s[ndx] <= rf_source[Rt[slot]];
 `ifdef SIM
 	iq_Ra[ndx] <= Ra[slot];
 	iq_Rb[ndx] <= Rb[slot];
 `endif
-	iq_pt[ndx] <= take_branch[slot];
+	iq_pt[ndx] <= take_branchq[slot];
 	iq_tgt[ndx] <= Rt[slot];
-	set_insn(ndx,id_bus);
 	rob.robEntries[rid].pc <= pcs[slot];
 	rob.robEntries[rid].tgt <= Rt[slot];
 	rob.robEntries[rid].rfw <= id_bus[`IB_RFW];//IsRFW(insnx[slot]);
