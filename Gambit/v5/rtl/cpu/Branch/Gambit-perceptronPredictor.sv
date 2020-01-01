@@ -22,6 +22,7 @@
 // ============================================================================
 
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module perceptronPredictor(rst, clk, clk2x, clk4x, id_i, id_o, xbr, xadr, prediction_i, outcome, adr, prediction_o);
 parameter AMSB = `AMSB;
@@ -35,7 +36,7 @@ input [3:0] xbr;
 input [AMSB:0] xadr [3:0];
 input [3:0] prediction_i;
 input [3:0] outcome;
-input [AMSB:0] adr;
+input Address adr;
 output reg prediction_o;
 
 integer n;
@@ -143,7 +144,8 @@ reg [12:0] sum1 [0:4];
 reg [7:0] id1;
 
 // Form dot product of input and weights.
-always @(posedge clk)
+//always @(posedge clk)
+always @*
 begin
 	sum1[0] = 0;
 	sum1[1] = 0;
@@ -172,7 +174,7 @@ end
 
 // < 0 means don't take branch, >= 0 means take branch => the take branch
 // bit is inverted.
-always @(posedge clk)
+always @*	//(posedge clk)
 begin
 	prediction_o <= ~sum[12];
 	id_o <= id1;

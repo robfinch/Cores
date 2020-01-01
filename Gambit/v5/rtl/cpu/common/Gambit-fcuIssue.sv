@@ -26,7 +26,9 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc, iq_br, iq_state, iq_sn, prior_sync, prior_valid, issue, nid);
+module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
+	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iq_state, iq_sn,
+	prior_sync, prior_valid, issue, nid);
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
@@ -34,6 +36,9 @@ input Qid fcu_id;
 input fcu_done;
 input [`IQ_ENTRIES-1:0] iq_fc;
 input [`IQ_ENTRIES-1:0] iq_br;
+input [`IQ_ENTRIES-1:0] iq_brkgrp;
+input [`IQ_ENTRIES-1:0] iq_retgrp;
+input [`IQ_ENTRIES-1:0] iq_jal;
 input QState iq_state [0:`IQ_ENTRIES-1];
 input Seqnum iq_sn [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] prior_sync;
@@ -78,7 +83,7 @@ begin
 	
 	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]])
+			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]] || !(iq_brkgrp[heads[n]] || iq_retgrp[heads[n]] || iq_jal[heads[n]]))
 			&& issue == {`IQ_ENTRIES{1'b0}}
 			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
 			)

@@ -24,6 +24,7 @@
 // 44403 71043
 // 46190 73904
 // 48453 77525
+// 85342
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
@@ -133,7 +134,7 @@ initial begin
 		lkregsx[n] = 1'd0;
 		lkregs[n] = 1'd0;
 	end
-	for (n = 0; n < 8; n = n + 1) begin
+	for (n = 0; n < 16; n = n + 1) begin
 		crregsx[n] = 1'd0;
 		crregs[n] = 1'd0;
 	end
@@ -281,9 +282,11 @@ reg [22:0] iq_sel [0:IQ_ENTRIES-1];		// select lines, for memory overlap detect
 reg [IQ_ENTRIES-1:0] iq_bt;						// branch taken
 reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
 reg [IQ_ENTRIES-1:0] iq_fc;						// flow control instruction
-reg [IQ_ENTRIES-1:0] iq_jmp;					// changes control flow: 1 if BEQ/JALR
+reg [IQ_ENTRIES-1:0] iq_jal;					// changes control flow: 1 if BEQ/JALR
 reg [IQ_ENTRIES-1:0] iq_cmp;
 reg [IQ_ENTRIES-1:0] iq_br;						// branch instruction
+reg [IQ_ENTRIES-1:0] iq_brkgrp;
+reg [IQ_ENTRIES-1:0] iq_retgrp;
 reg [IQ_ENTRIES-1:0] iq_takb;
 reg [IQ_ENTRIES-1:0] iq_rfw;	// writes to register file
 reg [IQ_ENTRIES-1:0] iq_sei;
@@ -1360,6 +1363,7 @@ else if (pipe_advance)
 wire [3:0] xisBr;
 Address xpc [0:3];
 wire [3:0] xtkb;
+wire [3:0] xpt;
 
 assign xisBr[0] = iq_br[heads[0]] & commit0_v;// & ~\[heads[0]][5];
 assign xisBr[1] = iq_br[heads[1]] & commit1_v;// & ~iq_instr[heads[1]][5];
@@ -1373,10 +1377,14 @@ assign xtkb[0] = commit0_v & iq_takb[heads[0]];
 assign xtkb[1] = commit1_v & iq_takb[heads[1]];
 assign xtkb[2] = 1'b0;
 assign xtkb[3] = 1'b0;
+assign xpt[0] = iq_pt[heads[0]];
+assign xpt[1] = iq_pt[heads[1]];
+assign xpt[2] = 1'd0;
+assign xpt[3] = 1'd0;
 
 wire [FSLOTS-1:0] predict_takenx;
 
-`ifdef FCU_BP
+`ifdef BP_GSELECT
 gselectPredictor ubp1
 (
   .rst(rst_i),
@@ -1391,9 +1399,58 @@ gselectPredictor ubp1
   .predict_taken(predict_takenx)
 );
 `else
-assign predict_takenx[0] = insnx[0][15];
-assign predict_takenx[1] = insnx[1][15];
+`ifdef BP_GSHARE
+gsharePredictor ubp1
+(
+  .rst(rst_i),
+  .clk(clk_i),
+  .clk2x(clk2x_i),
+  .clk4x(clk4x_i),
+  .en(1'b1),
+  .xisBranch(xisBr),
+  .xip(xpc),
+  .takb(xtkb),
+  .ip(pcs),
+  .predict_taken(predict_takenx)
+);
+`else
+assign predict_takenx[0] = insnxp[0][24];
+assign predict_takenx[1] = insnxp[1][24];
 `endif
+`endif
+
+/*
+perceptronPredictor uppp1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.id_i(1'd0),
+	.id_o(),
+	.xbr(xisBr),
+	.xadr(xpc),
+	.prediction_i(xpt),
+	.outcome(xtkb),
+	.adr(pcs[0]),
+	.prediction_o(predict_takenx[0])
+);
+perceptronPredictor uppp2
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.id_i(1'd0),
+	.id_o(),
+	.xbr(xisBr),
+	.xadr(xpc),
+	.prediction_i(xpt),
+	.outcome(xtkb),
+	.adr(pcs[1]),
+	.prediction_o(predict_takenx[1])
+);
+*/
 
 assign predict_taken[0] = predict_takenx[0];
 assign predict_taken[1] = predict_takenx[1];
@@ -1817,16 +1874,16 @@ generate begin : crregupd
 for (g = 0; g < 8; g = g + 1)
 always @*
 begin
-	crregsx = crregs;
+	crregsx[g*2+:2] = crregs[g*2+:2];
 	if (commit0_v) begin
 		if (commit0_tgt==103 && commit0_rfw)
-			crregsx = commit0_bus[15:0];
+			crregsx[g*2+:2] = commit0_bus[g*2+:2];
 		else if (commit0_tgt==g+104 && commit0_rfw)
 			crregsx[g*2+:2] = commit0_bus[1:0];
 	end
 	if (commit1_v) begin
 	 	if (commit1_tgt==103 && commit1_rfw)
-			crregsx = commit1_bus[15:0];
+			crregsx[g*2+:2] = commit1_bus[g*2+:2];
 		else if (commit1_tgt==g+104 && commit1_rfw)
 			crregsx[g*2+:2] = commit1_bus[1:0];
 	end
@@ -2393,6 +2450,9 @@ fcuIssue ufcui1
 	.fcu_done(fcu_done),
 	.iq_fc(iq_fc),
 	.iq_br(iq_br),
+	.iq_brkgrp(iq_brkgrp),
+	.iq_retgrp(iq_retgrp),
+	.iq_jal(iq_jal),
 	.iq_state(iq_state),
 	.iq_sn(iq_sn),
 	.prior_sync(prior_sync),
@@ -2956,7 +3016,7 @@ if (rst_i) begin
 		iq_alu[n] <= FALSE;
 		iq_fc[n] <= FALSE;
 		iq_takb[n] <= FALSE;
-		iq_jmp[n] <= FALSE;
+		iq_jal[n] <= FALSE;
 		iq_load[n] <= FALSE;
 		iq_rfw[n] <= FALSE;
 		iq_pc[n] <= 52'h00E000;
@@ -3837,10 +3897,10 @@ endcase
 	$display("Compare Results Regs:");
 	for (i = 0; i < 8; i = i + 4)
 		$display("%d: %h %d %d   %d: %h %d %d  %d: %h %d %d  %d: %h %d %d",
-		i[4:0],crregsx[i],regIsValid[i+104], rf_source[i+104],
-		i[4:0]+2'd1,crregsx[i+1],regIsValid[i+105], rf_source[i+105],
-		i[4:0]+2'd2,crregsx[i+2],regIsValid[i+106], rf_source[i+106],
-		i[4:0]+2'd3,crregsx[i+3],regIsValid[i+107], rf_source[i+107]
+		i[4:0],crregsx[i*2+:2],regIsValid[i+104], rf_source[i+104],
+		i[4:0]+2'd1,crregsx[(i+1)*2+:2],regIsValid[i+105], rf_source[i+105],
+		i[4:0]+2'd2,crregsx[(i+2)*2+:2],regIsValid[i+106], rf_source[i+106],
+		i[4:0]+2'd3,crregsx[(i+3)*2+:2],regIsValid[i+107], rf_source[i+107]
 		);
 	$display("Link Regs:");
 	for (i = 0; i < 4; i = i + 4)
@@ -4462,8 +4522,10 @@ begin
 	iq_memsz[nn]  <= bus[`IB_MEMSZ];
 	iq_mem  [nn]  <= bus[`IB_MEM];
 	iq_memndx[nn] <= bus[`IB_MEMNDX];
-	iq_jmp  [nn]  <= bus[`IB_JAL];
+	iq_jal  [nn]  <= bus[`IB_JAL];
 	iq_br   [nn]  <= bus[`IB_BR];
+	iq_brkgrp[nn] <= bus[`IB_BRKGRP];
+	iq_retgrp[nn] <= bus[`IB_RETGRP];
 	iq_rfw  [nn]  <= bus[`IB_RFW];
 end
 endtask

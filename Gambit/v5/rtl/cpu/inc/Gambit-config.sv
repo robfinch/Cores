@@ -139,7 +139,9 @@
 `define NUM_FPU		2				// number of floating-point units (0-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 //`define FCU_RSB		1				// return stack buffer
-`define FCU_BP		1				// Branch predictor
+// Enable at most one branch predictor
+`define BP_GSELECT	1
+//`define BP_GSHARE		1
 `define FCU_BTB		1				// Branch target buffer
 
 `define FCU_RA		pc			// return address if no RSB
@@ -149,7 +151,9 @@
 // adds significantly to the size of the core (20%).
 //`define QBYPASSING		1
 
-// Comment out the following to remove bypassing logic on the functional units
+// Comment out the following to remove bypassing logic on the functional units.
+// Disabling the bypass will reduce core performance by about 15%-33% while also
+// reducing the size of the core.
 `define FU_BYPASS	1
 
 `define SUPPORT_TLB		1

@@ -170,6 +170,8 @@
 
 `define IB_CMP		0
 `define IB_MEMNDX	1
+`define IB_BRKGRP	2
+`define IB_RETGRP	3
 `define IB_ALU0		12
 `define IB_BT			13
 `define IB_ALU		14

@@ -24,24 +24,25 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
 module EvalBranch(instr, a, takb);
-input [51:0] instr;
+input Instruction instr;
 input [1:0] a;
 output reg takb;
 
 //Evaluate branch condition
 always @*
-case(instr[6:0])
+case(instr.gen.opcode)
 `BRANCH0:
-	case(instr[8:7])
+	case(instr.br.exop)
 	`BEQ:		takb = a==2'b00;
 	`BNE:		takb = a!=2'b00;
 	`BGT:		takb = a==2'b01;
 	`BLT:		takb = a==2'b11;
 	endcase
 `BRANCH1:
-	case(instr[8:7])
+	case(instr.br.exop)
 	`BGE:		takb = ~a[1];
 	`BLE:		takb = $signed(a) <= 2'b00;
 	`BRA:		takb = 1'b1;

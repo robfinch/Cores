@@ -182,7 +182,7 @@ endfunction
 
 function IsJal;
 input Instruction isn;
-IsJal = isn.gen.opcode==`JAL;
+IsJal = isn.gen.opcode==`JAL || isn.jalrn.opcode==`JAL_RN;
 endfunction
 
 // Really IsPredictableBranch
@@ -234,6 +234,8 @@ begin
 	bus[`IB_MEMNDX]	<= IsMemndx(instr);
 	bus[`IB_JAL]		<= IsJal(instr);
 	bus[`IB_BR]			<= IsBranch(instr);
+	bus[`IB_BRKGRP] <= instr.gen.opcode==`BRKGRP;
+	bus[`IB_RETGRP]	<= instr.gen.opcode==`RETGRP;
 	bus[`IB_RFW]		<= IsRFW(instr);
 end
 

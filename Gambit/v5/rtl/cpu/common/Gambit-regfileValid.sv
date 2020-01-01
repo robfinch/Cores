@@ -135,15 +135,11 @@ else begin
 		if (queuedOn[0]) begin
 			if (slot_rfw[0]) begin
 				rf_v [Rd[0]] <= `INV;
-				if (Rd[0]==7'd30)
-					$stop;
 			end
 		end
 		if (queuedOn[1]) begin
 			if (slot_rfw[1]) begin
 				rf_v [Rd[1]] <= `INV;
-				if (Rd[1]==7'd30)
-					$stop;
 			end
 		end
 	end
