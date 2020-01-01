@@ -34,15 +34,18 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getQueuedCount(branchmiss, brk, phit, tails, rob_tails, slotvd,
-	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedOnp);
+module getQueuedCount(rst, clk, branchmiss, brk, phit, pipe_advance, tails, rob_tails, slotvd,
+	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedCntd, queuedOnp);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
+input rst;
+input clk;
 input branchmiss;
 input [2:0] brk;
 input phit;
+input pipe_advance;
 input Qid tails [0:QSLOTS-1];
 input Rid rob_tails [0:RSLOTS-1];
 input [QSLOTS-1:0] slotvd;
@@ -51,42 +54,34 @@ input [QSLOTS-1:0] take_branch;
 input [IQ_ENTRIES-1:0] iq_v;
 input [RENTRIES-1:0] rob_v;
 output reg [2:0] queuedCnt;
+output reg [2:0] queuedCntd;
 output reg [QSLOTS-1:0] queuedOnp;
 
 always @*
 begin
 	queuedCnt <= 3'd0;
 	queuedOnp <= 1'd0;
-	if (!branchmiss && phit) begin
-		// Three available
-		case(slotvd)
-		2'b01:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
+	if (!branchmiss) begin
+    if (iq_v[tails[0]]==`INV && iq_v[tails[1]]==`INV) begin
+      queuedCnt <= 3'd1;
+      queuedOnp[0] <= `TRUE;
+      if (!brk[0]) begin
+        if (!(slot_jmp[0]|take_branch[0])) begin
+          if (`WAYS > 1) begin
+          	queuedCnt <= 3'd2;
+		        queuedOnp[1] <= `TRUE;
+		      end
+        end
       end
-		2'b10:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[1] <= `TRUE;
-      end
-		2'b11:
-      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV
-	     && iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-        if (!brk[0]) begin
-	        if (!(slot_jmp[0]|take_branch[0])) begin
-            if (`WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-			        queuedOnp[1] <= `TRUE;
-			      end
-	        end
-	      end
-    	end
-		default:	;
-		endcase
+  	end
   end
+end
+
+always @(posedge clk)
+if (rst)
+	queuedCntd <= 3'd0;
+else if (!branchmiss) begin
+	queuedCntd <= queuedCnt;
 end
 
 endmodule

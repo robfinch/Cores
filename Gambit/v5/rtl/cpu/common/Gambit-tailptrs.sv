@@ -25,8 +25,8 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, queuedCnt, iq_tails, 
-	rqueuedCnt, rob_tails, iq_rid);
+module tailptrs(rst_i, clk_i, branchmiss, pipe_advance, iq_v, iq_sn, iq_stomp, queuedCnt, iq_tails, 
+	iq_tailsp, rqueuedCnt, rob_tails, iq_rid);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -34,24 +34,47 @@ parameter RSLOTS = `RSLOTS;
 input rst_i;
 input clk_i;
 input branchmiss;
+input pipe_advance;
+input [IQ_ENTRIES-1:0] iq_v;
+input Seqnum iq_sn [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_stomp;
 input [2:0] queuedCnt;
 output Qid iq_tails [0:QSLOTS-1];
+output Qid iq_tailsp [0:QSLOTS-1];
 input [2:0] rqueuedCnt;
 output Rid rob_tails [0:RSLOTS-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
 
 integer n, j;
+Qid nq;					// next queue position
+Qid mrq;				// most recent queued
+Seqnum mrq_sn;
 
-always @(posedge clk_i)
+// Find the most recently (newest) queued instruction.
+// Set the tail pointer to the next slot.
+always @*
+begin
+	mrq = 0;
+	mrq_sn = 0;
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		if (iq_sn[n] > mrq_sn && iq_v[n]) begin
+			mrq = n;
+			mrq_sn = iq_sn[n];
+		end
+	nq = (mrq + 1) % IQ_ENTRIES;
+end
+
+always @*
 if (rst_i) begin
 	for (n = 0; n < QSLOTS; n = n + 1)
-		iq_tails[n] <= n;
+		iq_tailsp[n] = n;
 end
 else begin
+	for (n = 0; n < QSLOTS; n = n + 1)
+		iq_tailsp[n] = iq_tails[n];
 	if (!branchmiss) begin
 		for (n = 0; n < QSLOTS; n = n + 1)
-   		iq_tails[n] <= (iq_tails[n]+queuedCnt) % IQ_ENTRIES;
+ 			iq_tailsp[n] = (iq_tails[n] + queuedCnt) % IQ_ENTRIES;
 	end
 	else begin	// if branchmiss
 		for (n = IQ_ENTRIES-1; n >= 0; n = n - 1)
@@ -59,10 +82,14 @@ else begin
 			// a positive number.
 			if (iq_stomp[n] & ~iq_stomp[(n+(IQ_ENTRIES-1))%IQ_ENTRIES]) begin
 				for (j = 0; j < QSLOTS; j = j + 1)
-					iq_tails[j] <= (n + j) % IQ_ENTRIES;
+					iq_tailsp[j] = (n + j) % IQ_ENTRIES;
 			end
 	end
 end
+
+always @(posedge clk_i)
+	for (n = 0; n < QSLOTS; n = n + 1)
+		iq_tails[n] <= iq_tailsp[n];
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -72,7 +99,7 @@ end
 else begin
 	if (!branchmiss) begin
 		for (n = 0; n < RSLOTS; n = n + 1)
-			rob_tails[n] <= (rob_tails[n] + rqueuedCnt) % RENTRIES;	
+			rob_tails[n] <= (rob_tails[n] + queuedCnt) % RENTRIES;
 	end
 	else begin
 		for (n = IQ_ENTRIES-1; n >= 0; n = n - 1)

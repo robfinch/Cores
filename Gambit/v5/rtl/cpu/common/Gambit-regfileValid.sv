@@ -58,7 +58,7 @@ input RegTag commit0_tgt;
 input RegTag commit1_tgt;
 input commit0_rfw;
 input commit1_rfw;
-input Qid rf_source [0:AREGS-1];
+input Rid rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
 input RegTag Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
@@ -135,11 +135,15 @@ else begin
 		if (queuedOn[0]) begin
 			if (slot_rfw[0]) begin
 				rf_v [Rd[0]] <= `INV;
+				if (Rd[0]==7'd30)
+					$stop;
 			end
 		end
 		if (queuedOn[1]) begin
 			if (slot_rfw[1]) begin
 				rf_v [Rd[1]] <= `INV;
+				if (Rd[1]==7'd30)
+					$stop;
 			end
 		end
 	end

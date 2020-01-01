@@ -23,6 +23,7 @@
 // ============================================================================
 // 3668
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 `define HIGH	1'b1
 `define LOW		1'b0
 
@@ -38,12 +39,12 @@ parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
 input rst_i;
 input clk_i;
-input [AMSB:0] dadr;
+input Address dadr;
 input rd;
 input wr;
 input [7:0] wsel;
-input [AMSB:0] wadr;
-input [51:0] wdat;
+input Address wadr;
+input Data wdat;
 input [4:0] bstate;
 (* mark_debug="true" *)
 output reg [3:0] state;
@@ -63,7 +64,7 @@ output reg dL2_nxt;
 
 input dL1_hit;
 output dL1_selpc;
-output reg [AMSB:0] dL1_adr;
+output Address dL1_adr;
 output reg [467:0] dL1_dat = 468'd0;	// NOP
 output reg dL1_wr;
 output reg [58:0] dL1_sel;

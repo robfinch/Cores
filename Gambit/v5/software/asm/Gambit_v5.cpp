@@ -538,17 +538,33 @@ static int getRegisterX()
 				return (reg);
 			}
 		}
-		// v0 to v31
+		// return value registers
+		// v0 to v3
 		if (isdigit(inptr[1])) {
-             reg = inptr[1]-'0' + 64;
-             if (isIdentChar(inptr[2]))
-                 return -1;
-             else {
-                 inptr += 2;
-                 NextToken();
-                 return (reg);
-             }
-         }
+      reg = inptr[1]-'0' + 1;
+      if (isIdentChar(inptr[2]))
+        return -1;
+      else {
+        inptr += 2;
+        NextToken();
+        return (reg);
+      }
+    }
+		break;
+
+		 // Vectors
+		 // v0 to v31
+		 if ((inptr[1]=='c' || inptr[1]=='C')
+		 && isdigit(inptr[2])) {
+			 reg = inptr[2] - '0' + 64;
+			 if (isIdentChar(inptr[3]))
+				 return -1;
+			 else {
+				 inptr += 2;
+				 NextToken();
+				 return (reg);
+			 }
+		 }
 		 break;
 	default:
         return -1;
@@ -2744,7 +2760,7 @@ static void process_bra(int oc, int cond)
 
   NextToken();
   val = expr();
-  disp = (val - code_address);
+  disp = (val - code_address - 2);
 	if (!IsNBit(disp, 12LL)) {
 		if (pass > 4)
 			error("Bra target too far away");
@@ -3277,7 +3293,7 @@ static void process_store()
 		}
 		emit_insn(
 			SC(Sc) |
-			RB(Rs) |
+			RT(Rs) |
 			RA(Ra) |
 			RB(Rb) |
 			opcode6, !expand_flag, 2);

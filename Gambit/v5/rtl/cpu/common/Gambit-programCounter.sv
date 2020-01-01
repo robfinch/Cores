@@ -125,23 +125,21 @@ else begin
 		$display("==============================");
 		pc <= misspc;
 	end
-	else begin
-		if (phit) begin
-			if (!freezepc) begin
-				begin
-					if (q2)
-						pc <= pc + len1 + len2;
-					else if (q1)
-						pc <= pc + len1;
+	else if (phit) begin
+		if (!freezepc) begin
+			begin
+				if (q2)
+					pc <= pc + len1 + len2;
+				else if (q1)
+					pc <= pc + len1;
 //				if (((q1 & ~q1bx)|q2) & br[0])
 //					pc <= btgt[0];
 //				else if (q2 & br[1])
 //					pc <= btgt[1];
-				end
 			end
-			if (pc_override)
-				pc <= branch_pc;
 		end
+		if (pc_override)
+			pc <= branch_pc;
 	end
 //	if (commit2_v && commit2_tgt==`UO_PC)
 //		pc <= commit2_bus;

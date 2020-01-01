@@ -36,8 +36,8 @@ parameter byt = 3'd0;
 parameter word = 3'd1;
 
 function IsAlu;
-input [51:0] isn;
-case(isn[6:0])
+input Instruction isn;
+case(isn.gen.opcode)
 `MTx,`MFx,
 `ADDIS,`ANDIS,`ORIS,
 `PERM_3R,`CSR,
@@ -181,22 +181,22 @@ endcase
 endfunction
 
 function IsJal;
-input [51:0] isn;
-IsJal = isn[21:0]==`UO_JMP;
+input Instruction isn;
+IsJal = isn.gen.opcode==`JAL;
 endfunction
 
 // Really IsPredictableBranch
 // Does not include BccR's
 function IsBranch;
-input [51:0] insn;
-reg [6:0] opcode = insn[`OPCODE];
+input Instruction insn;
+reg [6:0] opcode = insn.gen.opcode;
 IsBranch = opcode==`BRANCH0 || opcode==`BRANCH1;
 endfunction
 
 function IsRFW;
-input [51:0] isn;
-case(isn[6:0])
-`NOP:	IsRFW = FALSE;
+input Instruction isn;
+case(isn.gen.opcode)
+`STPGRP:	IsRFW = FALSE;
 `BRANCH0,`BRANCH1:	IsRFW = FALSE;
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:	IsRFW = FALSE;

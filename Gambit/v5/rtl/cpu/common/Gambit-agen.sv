@@ -25,7 +25,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module agen(inst, IsIndexed, src1, src2, ma, idle);
+module agen(inst, IsIndexed, src1, src2, src3, ma, idle);
 parameter AMSB = `AMSB;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -33,6 +33,7 @@ input Instruction inst;
 input IsIndexed;
 input Address src1;
 input Address src2;
+input Address src3;
 output Address ma;
 output idle;
 
@@ -40,7 +41,7 @@ assign idle = 1'b1;
 
 always @*
 	if (IsIndexed)
-		ma <= src1 + (src2 << inst.rr.padr[1:0]);
+		ma <= src2 + (src3 << inst.rr.padr[1:0]);
 	else
 		ma <= src1 + src2;
 

@@ -131,8 +131,8 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			4				// number of ways parallel (1-3)
-`define NUM_IDU		4				// number of instruction decode units (4 only)
+`define WAYS			2				// number of ways parallel (1-3)
+`define NUM_IDU		2				// number of instruction decode units (4 only)
 `define NUM_ALU		2				// number of ALU's (1-2)
 `define NUM_AGEN	2				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-2)
