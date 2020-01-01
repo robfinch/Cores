@@ -25,8 +25,12 @@
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-types.sv"
 
-module alu(op, a, imm, b, o, csr_i, idle);
+module alu(big, rst, clk, ld, op, a, imm, b, o, csr_i, idle, done, exc);
 parameter WID=52;
+input big;
+input rst;
+input clk;
+input ld;
 input Instruction op;
 input Data a;
 input Data imm;
@@ -34,9 +38,15 @@ input Data b;
 output Data o;
 input Data csr_i;
 output idle;
+output done;
+output reg [7:0] exc;
 
-assign idle = 1'b1;
+wire dbz;
+wire div_idle, div_done;
+assign idle = op.rr.opcode==`DIV_3R ? div_idle : 1'b1;
+assign done = op.rr.opcode==`DIV_3R ? div_done : 1'b1;
 reg [WID:0] os;
+wire [WID-1:0] divq;
 
 function [51:0] shl;
 input [51:0] a;
@@ -50,8 +60,26 @@ input [51:0] b;
 shr = a >> b[5:0];
 endfunction
 
+divider udvdr1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld),
+	.abort(),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a(a),
+	.b(op.rr.zero ? imm : b),
+	.qo(divq),
+	.ro(),
+	.dvByZr(dbz),
+	.done(div_done),
+	.idle(div_idle)
+);
+
 always @*
 case(op.rr.opcode)
+`DIV_3R:	if (big) o = divq; else o = {3{16'hDEAE}};
 `MUL_3R:	o = op.rr.zero ? $signed(a) * $signed(imm) : $signed(a) * $signed(b);
 `ADD_3R:	o = op.rr.zero ? a + imm : a + b;
 `SUB_3R:	o = op.rr.zero ? a - imm : a - b;
@@ -79,5 +107,11 @@ case(op.rr.opcode)
 `CSR:			o = csr_i;
 default:	o = {3{16'hDEAE}};
 endcase
+
+always @*
+if (op.rr.opcode==`DIV_3R && dbz)
+	exc <= `FLT_DBZ;
+else
+	exc <= `FLT_NONE;
 
 endmodule

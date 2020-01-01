@@ -872,6 +872,14 @@ reg [127:0] ddat;
 wire [15:0] dselx = dsel << dadr[2:0];
 reg dwrap;
 
+function IsImplementedInstr;
+input Instruction ins;
+IsImplementedInstr = TRUE;
+endfunction
+function IsMultiCycle;
+input Instruction ins;
+IsMultiCycle = ins.rr.opcode==`DIV_3R;
+endfunction
 function IsBranch;
 input Instruction insn;
 IsBranch = insn.br.opcode==`BRANCH0 || insn.br.opcode==`BRANCH1;
@@ -2774,24 +2782,36 @@ end
 
 alu ualu1
 (
+	.big(TRUE),
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu0_ld),
 	.op(alu0_instr),
 	.a(alu0_argA),
 	.imm(alu0_argI),
 	.b(alu0_argB),
 	.o(alu0_bus),
 	.csr_i(csr_r),
-	.idle(alu0_idle)
+	.idle(alu0_idle),
+	.done(alu0_done),
+	.exc(alu0_exc)
 );
 
 alu ualu2
 (
+	.big(FALSE),
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu1_ld),
 	.op(alu1_instr),
 	.a(alu1_argA),
 	.imm(alu1_argI),
 	.b(alu1_argB),
 	.o(alu1_bus),
 	.csr_i(52'h0),
-	.idle(alu1_idle)
+	.idle(alu1_idle),
+	.done(alu1_done),
+	.exc(alu1_exc)
 );
 
 agen uagn1
@@ -3043,6 +3063,8 @@ begin
 	end
 end
 
+wire alu0_done_pe;
+edge_det uedalu0d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(alu0_done), .pe(alu0_done_pe), .ne(), .ee());
 
 //wire pe_branchmiss;
 //edge_det ubmed1 (.rst(rst_i), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pe_branchmiss), .ne(), .ee());
@@ -3066,7 +3088,7 @@ if (rst_i) begin
 		iq_load[n] <= FALSE;
 		iq_rfw[n] <= FALSE;
 		iq_pc[n] <= 52'h00E000;
-		iq_instr[n] <= 52'h00;	// `UO_NOP
+		iq_instr[n] <= `NOP_INSN;
 		iq_mem[n] <= FALSE;
 		iq_memndx[n] <= FALSE;
 		iq_memissue[n] <= FALSE;
@@ -3266,9 +3288,15 @@ else begin
 		end
 	end
 
+	if (IsMultiCycle(alu0_instr)) begin
+		if (alu0_done_pe) begin
+			alu0_dataready <= TRUE;
+		end
+	end
+
 	if (alu0_v) begin
 		rob.robEntries[ alu0_rid % RENTRIES ].res <= ralu0_bus;
-		rob.robEntries[ alu0_rid % RENTRIES ].exc <= 4'h0;
+		rob.robEntries[ alu0_rid % RENTRIES ].exc <= alu0_exc;
 	//	if (alu0_done) begin
 			if (iq_state[alu0_rid % RENTRIES]==IQS_OUT) begin
 				iq_state[alu0_id % IQ_ENTRIES] <= IQS_CMT;
@@ -3294,7 +3322,7 @@ else begin
 		if (iq_state[agen0_id]==IQS_OUT)
 			iq_state[agen0_id] <= IQS_AGEN;
 		rob.robEntries[agen0_rid].res <= 1'h0;//agen1_ma;		// LEA needs this result
-		rob.robEntries[agen0_rid].exc <= 4'h0;
+		rob.robEntries[agen0_rid].exc <= alu1_exc;
 		if (iq_state[agen0_id]==IQS_OUT) begin
 			iq_ma[agen0_id] <= agen0_ma;
 			iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[3:0];
@@ -3438,7 +3466,7 @@ else begin
 			argBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],alu0_argA);
 			argBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],alu0_argB);
 			alu0_tgt    <= iq_tgt[n];
-			alu0_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
+			alu0_dataready <= !IsMultiCycle(iq_instr[n]);
 			alu0_ld <= TRUE;
 			iq_state[n] <= IQS_OUT;
     end
@@ -4107,6 +4135,31 @@ begin
 end
 endtask
 
+task exc;
+input Qid head;
+input [12:0] causecd;
+begin
+  excmiss <= TRUE;
+ 	excmisspc <= RSTIP;
+  badaddr[3'd0] <= iq_ma[head];
+  bad_instr[3'd0] <= iq_instr[head];
+  im_stack <= {im_stack[11:0],3'h7};
+  ol_stack <= {ol_stack[11:0],3'b00};
+  dl_stack <= {dl_stack[11:0],3'b00};
+  for (n = 1; n < 5; n = n + 1)
+  	ipc[n] <= ipc[n-1];
+	pl_stack <= {pl_stack[90:0],13'h000};
+  cause[3'd0] <= causecd;
+	wb_en <= `TRUE;
+  sema[0] <= 1'b0;
+`ifdef SUPPORT_DBG            
+  dbg_ctrl[62:55] <= {dbg_ctrl[61:55],dbg_ctrl[63]}; 
+  dbg_ctrl[63] <= FALSE;
+`endif            
+end
+endtask
+
+
 // This task takes care of commits for things other than the register file.
 task oddball_commit;
 input v;
@@ -4115,10 +4168,10 @@ input [1:0] which;
 reg thread;
 begin
   if (v) begin
-//    if (|rob_exc[head]) begin
-//    	exc(head,thread,iq_exc[head]);
-//    end
-//		else
+    if (|rob.robEntries[head].exc) begin
+    	exc(head,iq_exc[head]);
+    end
+		else
 			case(rob.robEntries[head].instr.gen.opcode)
 			`BRKGRP:
           begin
@@ -4133,28 +4186,28 @@ begin
             case(rob.robEntries[head].instr.wai.exop)
             `BRK:	
             	begin
-            		cause[3'd0] <= {9'h4,rob.robEntries[head].instr.wai.sigmsk};	// 40h to 4Fh
+            		cause[3'd0] <= {9'h14,rob.robEntries[head].instr.wai.sigmsk};	// 40h to 4Fh
 		            ipc[0] <= rob.robEntries[head].pc + 2'd1;
 		            lkregs[4] <= rob.robEntries[head].pc + 2'd1;
             	end
             `RST:	
             	begin
-            		cause[3'd0] <= 13'h70;
+            		cause[3'd0] <= 13'h170;
 		            ipc[0] <= rob.robEntries[head].pc;
 		            lkregs[4] <= rob.robEntries[head].pc;
             	end
             `NMI:	
             	begin
             		if (rob.robEntries[head].instr.wai.exop==2'd1)	// SNR
-            			cause[3'd0] <= 13'h61;
+            			cause[3'd0] <= 13'h161;
             		else
-            			cause[3'd0] <= 13'h60;
+            			cause[3'd0] <= 13'h160;
 		            ipc[0] <= rob.robEntries[head].pc;
 		            lkregs[4] <= rob.robEntries[head].pc;
             	end
             `IRQ: 
             	begin
-            		cause[3'd0] <= {9'h5,rob.robEntries[head].instr.wai.sigmsk};
+            		cause[3'd0] <= {9'h15,rob.robEntries[head].instr.wai.sigmsk};
 		            ipc[0] <= rob.robEntries[head].pc;
 		            lkregs[4] <= rob.robEntries[head].pc;
             	end

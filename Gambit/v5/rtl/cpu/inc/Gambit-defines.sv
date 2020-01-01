@@ -28,6 +28,7 @@
 `define LOW				1'b0
 
 `define CSR				7'h01
+`define DIV_3R		7'h03
 `define ADD_3R		7'h04
 `define ADD_RI22	7'h14
 `define ADD_RI35	7'h24
@@ -247,3 +248,36 @@
 `define CSR_TIME_FRAC		12'hFE0
 `define CSR_TIME_SECS		12'hFE1
 `define CSR_INFO    12'hFF?
+
+`define OL_USER         2'd3
+`define OL_SUPERVISOR   2'd2
+`define OL_HYPERVISOR   2'd1
+`define OL_MACHINE      2'd0
+
+`define FLT_NONE    8'd00
+`define FLT_IBE     8'd01
+`define FLT_EXF     8'd02
+`define FLT_TLB			8'd04
+`define FLT_SSM     8'd32
+`define FLT_DBG     8'd33
+`define FLT_TGT     8'd34
+`define FLT_IADR    8'd36
+`define FLT_UNIMP		8'd37
+`define FLT_FLT     8'd38
+`define FLT_CHK     8'd39
+`define FLT_DBZ     8'd40
+`define FLT_OFL     8'd41
+`define FLT_SEG			8'd47
+`define FLT_ALN			8'd48
+`define FLT_DWF     8'd50
+`define FLT_DRF     8'd51
+`define FLT_SGB			8'd52
+`define FLT_PRIV    8'd53
+`define FLT_CMT			8'd54
+`define FLT_BD			8'd55
+`define FLT_STK     8'd56
+`define FLT_DBE     8'd60
+`define FLT_STP			8'd232		// segment type
+`define FLT_STZ			8'd233		// stack segment zero
+`define FLT_SNP			8'd234		// segment not present
+

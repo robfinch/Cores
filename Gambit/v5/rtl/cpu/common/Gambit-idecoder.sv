@@ -41,6 +41,7 @@ case(isn.gen.opcode)
 `MTx,`MFx,
 `ADDIS,`ANDIS,`ORIS,
 `PERM_3R,`CSR,
+`DIV_3R,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
 `SUB_3R,`SUB_RI22,`SUB_RI35,
 `MUL_3R,`MUL_RI22,`MUL_RI35,
@@ -59,7 +60,7 @@ endfunction
 function IsAlu0;
 input Instruction isn;
 case (isn.gen.opcode)
-`CSR:	IsAlu0 = TRUE;
+`DIV_3R,`CSR:	IsAlu0 = TRUE;
 default: IsAlu0 = FALSE;
 endcase
 endfunction
