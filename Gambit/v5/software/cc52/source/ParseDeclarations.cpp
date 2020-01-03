@@ -165,7 +165,7 @@ void Declaration::ParseVoid()
 
 void Declaration::ParseShort()
 {
-	bit_max = 32;
+	bit_max = 52;
 	NextToken();
 	switch(lastst) {
 	case kw_int:
@@ -201,11 +201,11 @@ void Declaration::ParseLong()
 {
 	NextToken();
 	if (lastst==kw_int) {
-		bit_max = 80;
+		bit_max = 52;
 		NextToken();
 	}
 	else if (lastst==kw_float) {
-		head = (TYP *)TYP::Make(bt_double,10);
+		head = (TYP *)TYP::Make(bt_double,4);
 		tail = head;
 		bit_max = head->precision;
 		NextToken();
@@ -219,12 +219,12 @@ void Declaration::ParseLong()
 	}
 	else {
 		if (isUnsigned) {
-			head =(TYP *)TYP::Make(bt_ulong,10);
+			head =(TYP *)TYP::Make(bt_ulong,4);
 			tail = head;
 			bit_max = head->precision;
 		}
 		else {
-			head = (TYP *)TYP::Make(bt_long,10);
+			head = (TYP *)TYP::Make(bt_long,4);
 			tail = head;
 			bit_max = head->precision;
 		}
@@ -233,17 +233,17 @@ void Declaration::ParseLong()
 	if (lastst==kw_task) {
 		isTask = TRUE;
 		NextToken();
-		bit_max = 80;
+		bit_max = 52;
 	}
 	if (lastst==kw_oscall) {
 		isOscall = TRUE;
 		NextToken();
-		bit_max = 80;
+		bit_max = 52;
 	}
 	else if (lastst==kw_nocall || lastst==kw_naked) {
 		isNocall = TRUE;
 		NextToken();
-		bit_max = 80;
+		bit_max = 52;
 	}
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
@@ -275,13 +275,10 @@ void Declaration::ParseInt()
 		if (lastst == iconst) {
 			head->precision = ival;// (__int16)GetIntegerExpression(nullptr);
 			NextToken();
-			if (head->precision != 8
-				&& head->precision != 16
-				&& head->precision != 32
-				&& head->precision != 40
-				&& head->precision != 64
-				&& head->precision != 80
-				&& head->precision != 128) {
+			if (head->precision != 13
+				&& head->precision != 26
+				&& head->precision != 52
+				&& head->precision != 104) {
 				error(ERR_PRECISION);
 				head->precision = 52;
 			}
@@ -289,7 +286,7 @@ void Declaration::ParseInt()
 		else
 			error(ERR_INT_CONST);
 	}
-	head->size = head->precision >> 3;
+	head->size = head->precision / bitsPerByte;
 	bit_max = head->precision;
 	if (lastst==kw_vector) {
 		int btp = head->GetIndex();
@@ -331,7 +328,7 @@ void Declaration::ParseFloat()
 				|| head->precision < 16
 				|| head->precision > 128) {
 				error(ERR_PRECISION);
-				head->precision = sizeOfWord * 8;
+				head->precision = sizeOfWord * 4;
 			}
 		}
 		else
@@ -350,7 +347,7 @@ void Declaration::ParseFloat()
 
 void Declaration::ParseDouble()
 {
-	head = (TYP *)TYP::Make(bt_double,8);
+	head = (TYP *)TYP::Make(bt_double,4);
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
@@ -369,7 +366,7 @@ void Declaration::ParseDouble()
 
 void Declaration::ParseTriple()
 {
-	head = (TYP *)TYP::Make(bt_triple, 12);
+	head = (TYP *)TYP::Make(bt_triple, 6);
 	head->precision = 96;
 	tail = head;
 	head->isVolatile = isVolatile;
@@ -448,7 +445,7 @@ void Declaration::ParseInt32()
 		head = (TYP *)TYP::Make(bt_short,4);
 		tail = head;
 	}
-	bit_max = 32;
+	bit_max = 52;
 	NextToken();
 	if( lastst == kw_int )
 		NextToken();
@@ -462,14 +459,14 @@ void Declaration::ParseInt32()
 void Declaration::ParseInt64()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_ulong,8);
+		head = (TYP *)TYP::Make(bt_ulong,4);
 		tail = head;
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_long,8);
+		head = (TYP *)TYP::Make(bt_long,4);
 		tail = head;
 	}
-	bit_max = 64;
+	bit_max = 52;
 	NextToken();
 	if( lastst == kw_int )
 		NextToken();
@@ -500,8 +497,8 @@ void Declaration::ParseChar()
 		if (lastst == iconst) {
 			head->precision = ival;
 			NextToken();
-			if ((head->precision & 7) != 0
-				|| head->precision > 32) {
+			if ((head->precision & 15) != 0
+				|| head->precision > 52) {
 				error(ERR_PRECISION);
 				head->precision = 13;
 			}
@@ -583,7 +580,7 @@ SYM *Declaration::ParseId()
 //					head = tail = maketype(bt_long,4);
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_long,8);
+		head = (TYP *)TYP::Make(bt_long,sizeOfWord);
 		tail = head;
 		bit_max = head->precision;
 	}

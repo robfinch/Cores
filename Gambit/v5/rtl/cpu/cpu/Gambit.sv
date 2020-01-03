@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,6 +26,9 @@
 // 48453 77525
 // 85342
 // 86959
+// 95779 153246
+// 56566 ( 1 - alu, 1 - agen, 7 entry queue)
+// 53608 85773 ( area optimized)
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
@@ -276,6 +279,8 @@ reg [IQ_ENTRIES-1:0] iq_alu0 = 1'h0;  	// alu0 type instruction
 reg [IQ_ENTRIES-1:0] iq_sync = 1'd0;
 reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [IQ_ENTRIES-1:0] iq_memndx;	// touches memory: 1 if LW/SW indexed
+reg [IQ_ENTRIES-1:0] iq_memsb;
+reg [IQ_ENTRIES-1:0] iq_memdb;
 reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_wrap;
 reg [IQ_ENTRIES-1:0] iq_load;	// is a memory load instruction
@@ -1287,9 +1292,10 @@ reg [8:0] rd0L1_adr;
 reg [8:0] rd1L1_adr;
 wire [511:0] ROM_d;
 (* ram_style="block" *)
-reg [511:0] rommem [0:511];
+reg [511:0] rommem [0:4095];
 initial begin
-`include "d:/cores5/Gambit/v5/software/boot/fibonacci.ve0"
+`include "d:/cores5/Gambit/v5/software/boot/boottc.ve0"
+//`include "d:/cores5/Gambit/v5/software/boot/fibonacci.ve0"
 //`include "d:/cores5/Gambit/v5/software/samples/SieveOfE.ve0"
 //`include "d:/cores5/Gambit/v5/software/samples/Test1.ve0"
 end
@@ -1725,7 +1731,6 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.fault(wb_fault),
 	.p0_id_i(dram0_id),
 	.p0_rid_i(dram0_rid),
-	.p0_wrap_i(dram0_wrap),
 	.p0_wr_i(wb_p0_wr),
 	.p0_ack_o(wb_q0_done),
 	.p0_sel_i(fnSelect(dram0_instr)),
@@ -1734,7 +1739,6 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.p0_hit(wb_hit0),
 	.p1_id_i(dram1_id),
 	.p1_rid_i(dram1_rid),
-	.p1_wrap_i(dram1_wrap),
 	.p1_wr_i(wb_p1_wr),
 	.p1_ack_o(wb_q1_done),
 	.p1_sel_i(fnSelect(dram1_instr)),
@@ -1781,7 +1785,7 @@ tailptrs utp1
 	.iq_sn(iq_sn),
 	.iq_stomp(iq_stomp),
 //	.iq_br_tag(iq_br_tag),
-	.queuedCnt(queuedCntd),
+	.queuedCnt(queuedCnt),
 	.iq_tails(tails),
 	.iq_tailsp(tailsp),
 	.rqueuedCnt(queuedCntd),
@@ -2563,8 +2567,8 @@ memissueLogic umi1
 	.iq_aq({IQ_ENTRIES{1'b0}}),
 	.iq_rl({IQ_ENTRIES{1'b0}}),
 	.iq_ma(iq_ma),
-	.iq_memsb({IQ_ENTRIES{1'b0}}),
-	.iq_memdb({IQ_ENTRIES{1'b0}}),
+	.iq_memsb(iq_memsb),
+	.iq_memdb(iq_memdb),
 	.iq_stomp(iq_stomp),
 	.iq_canex({IQ_ENTRIES{1'b0}}), 
 	.wb_v(wb_v),
@@ -3090,6 +3094,8 @@ if (rst_i) begin
 		iq_pc[n] <= 52'h00E000;
 		iq_instr[n] <= `NOP_INSN;
 		iq_mem[n] <= FALSE;
+		iq_memsb[n] <= FALSE;
+		iq_memdb[n] <= FALSE;
 		iq_memndx[n] <= FALSE;
 		iq_memissue[n] <= FALSE;
 		iq_mem_islot[n] <= 3'd0;
@@ -3799,7 +3805,6 @@ BIDLE:
                dstb <= `HIGH;
                dsel <= fnSelect(dram0_instr);
                dadr <= dram0_addr;
-               dwrap <= dram0_wrap;
                dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
@@ -3823,7 +3828,6 @@ BIDLE:
                dstb <= `HIGH;
                dsel <= fnSelect(dram1_instr);
                dadr <= dram1_addr;
-               dwrap <= dram1_wrap;
                dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
@@ -4621,6 +4625,8 @@ begin
 	iq_memsz[nn]  <= bus[`IB_MEMSZ];
 	iq_mem  [nn]  <= bus[`IB_MEM];
 	iq_memndx[nn] <= bus[`IB_MEMNDX];
+	iq_memsb[nn]	<= bus[`IB_MEMSB];
+	iq_memdb[nn]	<= bus[`IB_MEMDB];
 	iq_jal  [nn]  <= bus[`IB_JAL];
 	iq_br   [nn]  <= bus[`IB_BR];
 	iq_brkgrp[nn] <= bus[`IB_BRKGRP];

@@ -28,7 +28,7 @@
 `define SOC_FULL
 `define TEXT_CONTROLLER	1'b1
 `define BMP_CONTROLLER 1'b1		// needed for sync generation
-//`define SPRITE_CONTROLLER	1'b1
+`define SPRITE_CONTROLLER	1'b1
 //`define SDC_CONTROLLER 1'b1
 //`define GPU_GRID	1'b1
 //`define RANDOM_GEN	1'b1

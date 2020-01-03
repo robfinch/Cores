@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -69,6 +69,9 @@
 `define STP					2'd0
 `define NOP					2'd1
 `define MRK					2'd2
+`define SYNCGRP			2'd3
+`define MEMSB					4'h0
+`define MEMDB					4'h1
 `define ROL_3R		7'h1C
 `define AND_3R		7'h08
 `define AND_RI22	7'h18
@@ -173,6 +176,8 @@
 `define IB_MEMNDX	1
 `define IB_BRKGRP	2
 `define IB_RETGRP	3
+`define IB_MEMSB	4
+`define IB_MEMDB	5
 `define IB_ALU0		12
 `define IB_BT			13
 `define IB_ALU		14

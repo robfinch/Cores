@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -210,6 +210,7 @@ begin
 	bus <= 167'h0;
 	bus[`IB_CMP] <= IsCmp(instr);
 	bus[`IB_CONST] <= 
+		IsJal(instr) ? {9'd0,instr.jal.addr} :
 		IsBranch(instr) ? {{40{instr.br.disp[11]}},instr.br.disp} :
 		HasConst8(instr) ? {{44{instr[24]}},instr[24:17]} :
 		HasConst22(instr) ? {{30{instr[38]}},instr[38:17]} :
@@ -237,6 +238,8 @@ begin
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_BRKGRP] <= instr.gen.opcode==`BRKGRP;
 	bus[`IB_RETGRP]	<= instr.gen.opcode==`RETGRP;
+	bus[`IB_MEMSB]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`MEMSB;
+	bus[`IB_MEMDB]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`MEMDB;
 	bus[`IB_RFW]		<= IsRFW(instr);
 end
 

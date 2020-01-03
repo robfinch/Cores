@@ -104,9 +104,9 @@ void Operand::GenZeroExtend(int isize, int osize)
 	MakeLegal(am_reg, isize);
 	switch (osize)
 	{
-	case 1:	GenerateDiadic(op_zxb, 0, this, this); break;
-	case 2:	GenerateDiadic(op_zxc, 0, this, this); break;
-	case 4:	GenerateDiadic(op_zxh, 0, this, this); break;
+	case 1:	GenerateDiadic(op_movzx, 'b', this, this); break;
+	case 2:	GenerateDiadic(op_movzx, 'w', this, this); break;
+	case 4:	GenerateDiadic(op_movzx, 0, this, this); break;
 	}
 }
 
@@ -125,10 +125,9 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		ReleaseTempRegister(ap);
 		switch (isize)
 		{
-		case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
-		case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
+		case 1:	GenerateDiadic(op_movsx, 'b', ap1, ap1); break;
+		case 2:	GenerateDiadic(op_movsx, 'w', ap1, ap1); break;
 		case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
-		case 5:	GenerateDiadic(op_sxp, 0, ap1, ap1); break;
 		case 8:	GenerateDiadic(op_sxo, 0, ap1, ap1); break;
 		}
 		//GenStore(ap1, ap, osize);
@@ -144,10 +143,9 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 	else {
 		switch (isize)
 		{
-		case 1:	GenerateDiadic(op_sxb, 0, ap, ap); break;
-		case 2:	GenerateDiadic(op_sxw, 0, ap, ap); break;
+		case 1:	GenerateDiadic(op_movsx, 'b', ap, ap); break;
+		case 2:	GenerateDiadic(op_movsx, 'w', ap, ap); break;
 		case 4:	GenerateDiadic(op_sxt, 0, ap, ap); break;
-		case 5:	GenerateDiadic(op_sxp, 0, ap, ap); break;
 		case 8:	GenerateDiadic(op_sxo, 0, ap, ap); break;
 		}
 	}

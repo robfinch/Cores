@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -22,11 +22,12 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
-	p0_id_i, p0_rid_i, p0_wr_i, p0_wrap_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
-	p1_id_i, p1_rid_i, p1_wr_i, p1_wrap_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
+	p0_id_i, p0_rid_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
+	p1_id_i, p1_rid_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -48,26 +49,24 @@ output reg [7:0] fault;
 output reg [IQ_ENTRIES-1:0] uid;
 output reg [RENTRIES-1:0] ruid;
 output reg [WB_DEPTH-1:0] wb_v;
-output reg [AMSB:0] wb_addr [0:WB_DEPTH-1];
+output Address wb_addr [0:WB_DEPTH-1];
 input wb_en_i;
 
-input [`QBITS] p0_id_i;
-input [`RBITS] p0_rid_i;
+input Qid p0_id_i;
+input Rid p0_rid_i;
 input p0_wr_i;
-input p0_wrap_i;
-input [15:0] p0_sel_i;
-input [AMSB:0] p0_adr_i;
-input [51:0] p0_dat_i;
+input [3:0] p0_sel_i;
+input Address p0_adr_i;
+input Data p0_dat_i;
 output reg p0_ack_o;
 output reg p0_hit;
 
-input [`QBITS] p1_id_i;
-input [`RBITS] p1_rid_i;
+input Qid p1_id_i;
+input Rid p1_rid_i;
 input p1_wr_i;
-input p1_wrap_i;
-input [15:0] p1_sel_i;
-input [AMSB:0] p1_adr_i;
-input [51:0] p1_dat_i;
+input [3:0] p1_sel_i;
+input Address p1_adr_i;
+input Data p1_dat_i;
 output reg p1_ack_o;
 output reg p1_hit;
 
@@ -79,25 +78,23 @@ input tlbmiss_i;
 input wrv_i;
 output reg we_o;
 output reg [7:0] sel_o;
-output reg [AMSB:0] adr_o;
+output Address adr_o;
 output reg [103:0] dat_o;
 output reg cr_o;
 output reg cwr_o;
 output reg [3:0] csel_o;
-output reg [AMSB:0] cadr_o;
-output reg [51:0] cdat_o;
+output Address cadr_o;
+output Data cdat_o;
 
 integer n, j;
 reg wb_en;
 reg [3:0] wb_ptr;
 reg [10:0] wb_sel  [0:WB_DEPTH-1];
-reg [51:0] wb_data [0:WB_DEPTH-1];
+Data wb_data [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wbo_id;
 reg [RENTRIES-1:0] wbo_rid;
-reg [WB_DEPTH-1:0] wb_wrap;
-reg wrap_cycle;
 
 wire writing_wb = /*(p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) ||*/
 									   (p0_wr_i && wb_ptr < WB_DEPTH-1)
@@ -124,7 +121,7 @@ begin
 end
 
 reg [10:0] sel_shift;
-reg [141:0] dat_shift;
+reg [142:0] dat_shift;
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -137,7 +134,7 @@ IDLE:
 		state <= StoreAck1;
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
-		if (sel_shift[10:8]==3'h0 && !wrap_cycle)
+		if (sel_shift[10:8]==3'h0)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -165,11 +162,9 @@ if (rst_i) begin
 	wb_en <= TRUE;
 	wbo_id <= 1'd0;
 	wbo_rid <= 1'd0;
-	wb_wrap <= 1'd0;
 	uid <= 1'd0;
 	ruid <= 1'd0;
 	update_iq <= FALSE;
-	wrap_cycle <= FALSE;
 	sel_shift <= 11'h0;
 end
 else begin
@@ -214,7 +209,6 @@ else begin
 	if (p0_wr_i & ~p0_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
 			wb_v[wb_ptr] <= 1'b1;
-			wb_wrap[wb_ptr] <= p0_wrap_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
@@ -227,7 +221,6 @@ else begin
 	else if (p1_wr_i & ~p1_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
 			wb_v[wb_ptr] <= 1'b1;
-			wb_wrap[wb_ptr] <= p1_wrap_i;
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
 			wb_data[wb_ptr] <= p1_dat_i;
@@ -245,17 +238,12 @@ IDLE:
 			cyc_o <= HIGH;
 			stb_o <= HIGH;
 			we_o <= HIGH;
-			if (wb_wrap[0] && wb_addr[0][7:0]==8'hFF) begin
-				sel_o <= 16'b01 << wb_addr[0][3:0];
-				wrap_cycle <= TRUE;
-			end
-			else
-				sel_o <= wb_sel[0] << wb_addr[0][2:0];
-			adr_o <= {wb_addr[0][AMSB:4],4'h0};
+			sel_o <= wb_sel[0] << wb_addr[0][2:0];
+			adr_o <= {wb_addr[0][AMSB:3],3'h0};
 			dat_o <= wb_data[0] << wb_addr[0][2:0] * 13;
 			wbo_id <= wb_id[0];
 			wbo_rid <= wb_rid[0];
-			sel_shift <= {22'd0,wb_sel[0]} << wb_addr[0][2:0];
+			sel_shift <= {11'd0,wb_sel[0]} << wb_addr[0][2:0];
 			dat_shift <= {120'd0,wb_data[0]} << wb_addr[0][2:0] * 13;
 			wb_has_bus <= 1'b1;
 		end
@@ -264,7 +252,6 @@ IDLE:
 		   	wb_v[j-1] <= wb_v[j];
 		   	wb_id[j-1] <= wb_id[j];
 		   	wb_rid[j-1] <= wb_rid[j];
-		   	wb_wrap[j-1] <= wb_wrap[j];
 		   	wb_sel[j-1] <= wb_sel[j];
 		   	wb_addr[j-1] <= wb_addr[j];
 		   	wb_data[j-1] <= wb_data[j];
@@ -280,7 +267,7 @@ IDLE:
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		stb_o <= LOW;
-		if (sel_shift[10:8]==3'h0 && !wrap_cycle) begin
+		if (sel_shift[10:8]==3'h0) begin
 			cyc_o <= LOW;
 			we_o <= LOW;
 			sel_o <= 8'h00;
@@ -310,7 +297,7 @@ StoreAck1:
 		end
 		else begin
     	cwr_o <= HIGH;
-			csel_o <= wrap_cycle ? 2'b01 : wb_sel[0];
+			csel_o <= wb_sel[0];
 			cadr_o <= wb_addr[0];
 			cdat_o <= wb_data[0];
 		end
@@ -318,13 +305,10 @@ StoreAck1:
 Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
-		sel_o <= {7'h0,1'b1};
-		if (wrap_cycle)
-			adr_o[AMSB:3] <= adr_o[AMSB:3] & 12'hFF0;
-		else
-			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
-		adr_o[3:0] <= 4'b0;
-		dat_o <= {120'd0,dat_shift[135:128]};
+		sel_o <= {5'h0,sel_shift[10:8]};
+		adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
+		adr_o[2:0] <= 3'b0;
+		dat_o <= {120'd0,dat_shift[142:104]};
 	end
 StoreAck2:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
@@ -344,16 +328,9 @@ StoreAck2:
 //			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
     end
   	cwr_o <= HIGH;
-  	if (wrap_cycle) begin
-			csel_o <= 2'b01;
-			cadr_o <= (wb_addr[0] + 16'd1) & 16'hFF00;
-			cdat_o <= {wb_data[0][26:13],wb_data[0][26:13]};
-  	end
-  	else begin
-			csel_o <= wb_sel[0];
-			cadr_o <= wb_addr[0];
-			cdat_o <= wb_data[0];
-  	end
+		csel_o <= wb_sel[0];
+		cadr_o <= wb_addr[0];
+		cdat_o <= wb_data[0];
     wb_has_bus <= FALSE;
 	end
 endcase

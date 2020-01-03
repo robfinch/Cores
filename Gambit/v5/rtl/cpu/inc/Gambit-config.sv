@@ -27,7 +27,7 @@
 
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-`define SIM		1'b1
+//`define SIM		1'b1
 
 // The following bit select determines how long the reset counter is active.
 // For sim to aid debugging it's good idea to set it to a low number >3
@@ -78,7 +78,7 @@
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define IQ_ENTRIES	12		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	7		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time.
@@ -131,10 +131,10 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			2				// number of ways parallel (1-3)
-`define NUM_IDU		2				// number of instruction decode units (4 only)
-`define NUM_ALU		2				// number of ALU's (1-2)
-`define NUM_AGEN	2				// number of address generators (1-2)
+`define WAYS			2				// number of ways parallel (1-2) (use only 2)
+`define NUM_IDU		2				// number of instruction decode units (2 only)
+`define NUM_ALU		1				// number of ALU's (1-2)
+`define NUM_AGEN	1				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-2)
 `define NUM_FPU		2				// number of floating-point units (0-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)

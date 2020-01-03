@@ -157,10 +157,23 @@ void CodeGenerator::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 		}
 		else {
 			switch (size) {
-			case 1:	GenerateDiadic(op_ldbu, 0, ap3, ap1); break;
-			case 2:	GenerateDiadic(op_ldwu, 0, ap3, ap1); break;
-			case 4:	GenerateDiadic(op_ldtu, 0, ap3, ap1); break;
-			case 5:	GenerateDiadic(op_ldpu, 0, ap3, ap1); break;
+			case 1:	
+			{
+				GenerateDiadic(op_ldb, 0, ap3, ap1);
+				GenerateDiadic(op_movzx, 'b', ap3, ap3);
+				break;
+			}
+			case 2: {
+				GenerateDiadic(op_ldwu, 0, ap3, ap1);
+				GenerateDiadic(op_movzx, 'w', ap3, ap3);
+				break;
+			}
+			case 4:
+			{
+				GenerateDiadic(op_ld, 0, ap3, ap1);
+				break;
+			}
+
 			case 8: GenerateDiadic(op_ldou, 0, ap3, ap1); break;
 			case 16: GenerateDiadic(op_ldh, 0, ap3, ap1); break;
 			}
@@ -1094,7 +1107,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 				GenLoad(ap3, MakeIndirect(ap2->preg), ssize, node->p[1]->GetReferenceSize());
 				GenerateDiadic(op_mov, 0, ap1, ap3);
 				ReleaseTempRegister(ap3);
-				GenerateZeradic(op_setwb);
+				//GenerateZeradic(op_setwb);
 				ap1->isPtr = TRUE;
 			}
 			else if (node->p[0]->IsRefType()) {
@@ -1715,64 +1728,65 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_sxb:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 1);
-		GenerateDiadic(op_sxb, 0, ap1, ap2);
+		GenerateDiadic(op_movsx, 'b', ap1, ap2);
 		ReleaseTempReg(ap2);
-		ap1->MakeLegal( flags, 8);
+		ap1->MakeLegal( flags, 4);
 		goto retpt;
 	case en_sxc:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 2);
-		GenerateDiadic(op_sxc, 0, ap1, ap2);
+		GenerateDiadic(op_movsx, 'b', ap1, ap2);
 		ReleaseTempReg(ap2);
-		ap1->MakeLegal(flags, 8);
+		ap1->MakeLegal(flags, 4);
 		goto retpt;
 	case en_sxh:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 4);
-		GenerateDiadic(op_sxh, 0, ap1, ap2);
+		GenerateDiadic(op_movsx, 'w', ap1, ap2);
 		ReleaseTempReg(ap2);
-		ap1->MakeLegal(flags, 8);
+		ap1->MakeLegal(flags, 4);
 		goto retpt;
+
 	case en_cubw:
 	case en_cubu:
 	case en_cbu:
 			ap1 = GenerateExpression(node->p[0],am_reg,1);
-			GenerateTriadic(op_and,0,ap1,ap1,MakeImmediate(0xff));
+			GenerateDiadic(op_movzx, 'b', ap1, ap1);
 			goto retpt;
 	case en_cucw:
 	case en_cucu:
 	case en_ccu:
 			ap1 = GenerateExpression(node->p[0],am_reg,2);
-			GenerateDiadic(op_zxc,0,ap1,ap1);
+			GenerateDiadic(op_movzx, 'b', ap1, ap1);
 			goto retpt;
 	case en_ccwp:
 		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
-		GenerateDiadic(op_sxc, 0, ap1, ap1);
+		GenerateDiadic(op_movsx, 'b', ap1, ap1);
 		goto retpt;
 	case en_cucwp:
 		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
-		GenerateDiadic(op_zxc, 0, ap1, ap1);
+		GenerateDiadic(op_movzx, 'b', ap1, ap1);
 		goto retpt;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
 			ap1 = GenerateExpression(node->p[0],am_reg,4);
-			GenerateDiadic(op_zxh,0,ap1,ap1);
+			GenerateDiadic(op_movzx,'w',ap1,ap1);
 			goto retpt;
 	case en_cbw:
 			ap1 = GenerateExpression(node->p[0],am_reg,1);
 			//GenerateDiadic(op_sxb,0,ap1,ap1);
-			GenerateDiadic(op_sxb,0,ap1,ap1);
+			GenerateDiadic(op_movsx,'b',ap1,ap1);
 			goto retpt;
 	case en_ccw:
 			ap1 = GenerateExpression(node->p[0],am_reg,2);
-			GenerateDiadic(op_sxc,0,ap1,ap1);
+			GenerateDiadic(op_movsx,'b',ap1,ap1);
 			goto retpt;
 	case en_chw:
 			ap1 = GenerateExpression(node->p[0],am_reg,4);
-			GenerateDiadic(op_sxh,0,ap1,ap1);
+			GenerateDiadic(op_movsx,'b',ap1,ap1);
 			goto retpt;
 	case en_list:
 		ap1 = GetTempRegister();

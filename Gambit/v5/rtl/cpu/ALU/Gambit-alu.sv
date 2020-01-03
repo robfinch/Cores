@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,8 +45,8 @@ wire dbz;
 wire div_idle, div_done;
 assign idle = op.rr.opcode==`DIV_3R ? div_idle : 1'b1;
 assign done = op.rr.opcode==`DIV_3R ? div_done : 1'b1;
-reg [WID:0] os;
-wire [WID-1:0] divq;
+Data os;
+Data divq;
 
 function [51:0] shl;
 input [51:0] a;
@@ -84,7 +84,17 @@ case(op.rr.opcode)
 `ADD_3R:	o = op.rr.zero ? a + imm : a + b;
 `SUB_3R:	o = op.rr.zero ? a - imm : a - b;
 `AND_3R:	o = op.rr.zero ? a & imm : a & b;
-`OR_3R:		o = op.rr.zero ? a | imm : a | b;
+`OR_3R:		
+	begin
+		os = op.rr.zero ? a | imm : a | b;
+		case(op.rr.padr)
+		3'd1:	o = {39'd0,os[12:0]};
+		3'd2:	o = {26'd0,os[25:0]};
+		3'd5:	o = {{39{os[12]}},os[12:0]};
+		3'd6:	o = {{26{os[25]}},os[25:0]};
+		default:	o = os;
+		endcase
+	end
 `EOR_3R:	o = op.rr.zero ? a ^ imm : a ^ b;
 `CMP_3R:	o = op.rr.zero ? ($signed(a) < $signed(imm) ? 2'b11 : a == imm ? 2'b00 : 2'b01)
 								: ($signed(a) < $signed(b) ? 2'b11 : a == b ? 2'b00 : 2'b01);

@@ -136,6 +136,7 @@ enum e_op {
 	op_bmi, op_subu, op_lddr, op_stdc, op_loop, op_iret,
 	op_sext32, op_sext16, op_sext8, op_sxb, op_sxc, op_sxh, op_sxw, op_sxt, op_sxp, op_sxo,
 	op_zxb, op_zxc, op_zxh,
+	op_movzx, op_movsx,
 	op_dw, op_cache,
 	op_subui, op_addui, op_sei,
 	op_st, op_std, op_sth, op_sto, op_stp, op_stt, op_stw, op_stb, op_outb, op_inb, op_inbu,
