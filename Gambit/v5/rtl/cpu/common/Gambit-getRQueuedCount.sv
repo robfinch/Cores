@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,7 +33,7 @@
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getRQueuedCount(rst, rob_tails, heads, rob_v_i, rob_v_o, iq_state, iq_rid_i, iq_rid_o, rqueuedCnt, rqueuedOn);
+module getRQueuedCount(rst, rob_tails, heads, rob_v_i, rob_v_o, iqs_queued, iq_rid_i, iq_rid_o, rqueuedCnt, rqueuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
@@ -46,7 +46,7 @@ input Rid rob_tails [0:RSLOTS-1];
 input Qid heads [0:IQ_ENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;
-input QState iq_state [0:IQ_ENTRIES-1];
+input [IQ_ENTRIES-1:0] iqs_queued;
 input Rid iq_rid_i [0:IQ_ENTRIES-1];
 output Rid iq_rid_o [0:IQ_ENTRIES-1];
 output reg [2:0] rqueuedCnt;
@@ -71,7 +71,7 @@ else begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
 		iq_rid_o[heads[n]] = iq_rid_i[heads[n]];
 		rqueuedOn[heads[n]] = FALSE;
-		if (iq_state[heads[n]]==IQS_QUEUED && !rob_v_i[j] && k < RSLOTS) begin
+		if (iqs_queued[heads[n]] && !rob_v_i[j] && k < RSLOTS) begin
 			rob_v_o[heads[n]] = VAL;
 			rqueuedCnt = rqueuedCnt + 1;
 			rqueuedOn[heads[n]] = TRUE;

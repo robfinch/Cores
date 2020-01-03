@@ -46,7 +46,7 @@ wire div_idle, div_done;
 assign idle = op.rr.opcode==`DIV_3R ? div_idle : 1'b1;
 assign done = op.rr.opcode==`DIV_3R ? div_done : 1'b1;
 Data os;
-Data divq;
+Data divq, remq;
 
 function [51:0] shl;
 input [51:0] a;
@@ -71,7 +71,7 @@ divider udvdr1
 	.a(a),
 	.b(op.rr.zero ? imm : b),
 	.qo(divq),
-	.ro(),
+	.ro(remq),
 	.dvByZr(dbz),
 	.done(div_done),
 	.idle(div_idle)
@@ -79,7 +79,7 @@ divider udvdr1
 
 always @*
 case(op.rr.opcode)
-`DIV_3R:	if (big) o = divq; else o = {3{16'hDEAE}};
+`DIV_3R:	if (big) o = op.raw[25:24]==2'b01 ? remq : divq; else o = {3{16'hDEAE}};
 `MUL_3R:	o = op.rr.zero ? $signed(a) * $signed(imm) : $signed(a) * $signed(b);
 `ADD_3R:	o = op.rr.zero ? a + imm : a + b;
 `SUB_3R:	o = op.rr.zero ? a - imm : a - b;

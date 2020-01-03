@@ -260,11 +260,11 @@ reg [7:0] mip1, mip2;
 wire nextBundle;
 
 // Issue queue
-reg [IQ_ENTRIES-1:0] iq_v = 1'd0;						// valid indicator (set from iq_state)
-reg [IQ_ENTRIES-1:0] iq_done = 1'd0;
-reg [IQ_ENTRIES-1:0] iq_out = 1'd0;
-reg [IQ_ENTRIES-1:0] iq_agen = 1'd0;
-QState iq_state [0:IQ_ENTRIES-1];
+// States
+IQ iq;
+
+reg [IQ_ENTRIES-1:0] iq_prior_sync = 1'd0;
+Qid iq_prior_sync_qid [0:IQ_ENTRIES-1];
 Seqnum iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 Address iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
 reg [2:0] iq_len [0:IQ_ENTRIES-1];
@@ -324,17 +324,6 @@ end
 always @*
 	for (n = 0; n < RENTRIES; n = n + 1)
 		robIds[n] = rob.robEntries[n].id;
-
-function [`RENTRIES-1:0] GetV;
-input dummy1;
-	for (n = 0; n < `RENTRIES; n = n + 1)
-		GetV[n] = rob.robEntries[n].state != RS_INVALID;
-endfunction
-function RobQState [0:`RENTRIES-1] GetState;
-input dummy1;
-	for (n = 0; n < `RENTRIES; n = n + 1)
-		GetState[n] = rob.robEntries[n].state;
-endfunction
 
 // debugging
 initial begin
@@ -1060,7 +1049,6 @@ regfileSource urfs1
 	.slot_rfw(slot_rfw2),
 	.queuedOn(queuedOnp),
 	.rqueuedOn(rqueuedOn),
-	.iq_state(iq_state),
 	.iq_rfw(iq_rfw),
 	.Rd(Rt),
 	.rob_tails(tails),
@@ -1089,8 +1077,8 @@ getQueuedCount ugqc1
 	.slotvd(2'b11),
 	.slot_jmp(slot_jmp),
 	.take_branch(take_branchq),
-	.iq_v(iq_v),
-	.rob_v(GetV(1)),
+	.iqs_v(iq.iqs.v),
+	.rob_v(rob.rs.v),
 	.queuedCnt(queuedCnt),
 	.queuedCntd(queuedCntd),
 	.queuedOnp(queuedOnp)
@@ -1114,8 +1102,8 @@ getQueuedCount ugqc2
 	.slotvd(2'b11),
 	.slot_jmp(slot_jmpp),
 	.take_branch(take_branch),
-	.iq_v(iq_v),
-	.rob_v(GetV(1)),
+	.iqs_v(iq.iqs.v),
+	.rob_v(rob.rs.v),
 	.queuedCnt(pc_queuedCnt),
 	.queuedCntd(),
 	.queuedOnp()
@@ -1125,10 +1113,10 @@ getRQueuedCount ugrqct1
 (
 	.rst(rst_i),
 	.rob_tails(tails),
-	.rob_v_i(GetV(1)),
+	.rob_v_i(rob.rs.v),
 	.rob_v_o(next_rob_v),
 	.heads(heads),
-	.iq_state(iq_state),
+	.iqs_queued(iq.iqs.queued),
 	.iq_rid_i(iq_rid),
 	.iq_rid_o(next_iq_rid),
 	.rqueuedCnt(rqueuedCnt),
@@ -1140,7 +1128,7 @@ calc_ramt ucra1
 	.hi_amt(hi_amt),
 	.rob_heads(rob_heads),
 	.rob_tails(rob_tails),
-	.rob_state(GetState(1)),
+	.rob_v(rob.rs.v),
 	.r_amt(r_amt)
 );
 
@@ -1341,9 +1329,9 @@ wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire btbwr0 = iq_state[heads[0]]==IQS_CMT && iq_fc[heads[0]];
-wire btbwr1 = iq_state[heads[1]]==IQS_CMT && iq_fc[heads[1]];
-wire btbwr2 = iq_state[heads[2]]==IQS_CMT && iq_fc[heads[2]];
+wire btbwr0 = iq.iqs.cmt[heads[0]] && iq_fc[heads[0]];
+wire btbwr1 = iq.iqs.cmt[heads[1]] && iq_fc[heads[1]];
+wire btbwr2 = iq.iqs.cmt[heads[2]] && iq_fc[heads[2]];
 
 wire fcu_clk;
 `ifdef FCU_ENH
@@ -1366,15 +1354,15 @@ BTB #(.AMSB(AMSB)) ubtb1
   .wr0(btbwr0),  
   .wadr0(iq_pc[heads[0]]),
   .wdat0(iq_ma[heads[0]]),
-  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq_v[heads[0]]),
+  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq.iqs.v[heads[0]]),
   .wr1(btbwr1),  
   .wadr1(iq_pc[heads[1]]),
   .wdat1(iq_ma[heads[1]]),
-  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq_v[heads[1]]),
+  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq.iqs.v[heads[1]]),
   .wr2(btbwr2),  
   .wadr2(iq_pc[heads[2]]),
   .wdat2(iq_ma[heads[2]]),
-  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq_v[heads[2]]),
+  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq.iqs.v[heads[2]]),
   .rclk(~clk),
   .pcA(pc),
   .btgtA(btgt[0]),
@@ -1762,7 +1750,7 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.cdat_o(dcdat)
 );
 
-wire rob_empty = GetV(1) == {RENTRIES{`INV}};
+wire rob_empty = rob.rs.v == {RENTRIES{`INV}};
 
 headptrs uhp1
 (
@@ -1781,8 +1769,6 @@ tailptrs utp1
 	.clk_i(clk_i),
 	.branchmiss(branchmiss),
 	.pipe_advance(pipe_advance),
-	.iq_v(iq_v),
-	.iq_sn(iq_sn),
 	.iq_stomp(iq_stomp),
 //	.iq_br_tag(iq_br_tag),
 	.queuedCnt(queuedCnt),
@@ -2219,11 +2205,14 @@ endfunction
 function [31:0] fnMnemonic;
 input Instruction ins;
 case(ins.gen.opcode)
+`BRKGRP:	fnMnemonic = "BRKG";
 `ADD_3R,`ADD_RI22,`ADD_RI35:	fnMnemonic = "ADD ";
 `SUB_3R,`SUB_RI22,`SUB_RI35:	fnMnemonic = "SUB ";
 `CMP_3R,`CMP_RI22,`CMP_RI35:	fnMnemonic = "CMP ";
 `MUL_3R,`MUL_RI22,`MUL_RI35:	fnMnemonic = "MUL ";
+`AND_3R,`AND_RI22,`AND_RI35:  fnMnemonic = "AND ";
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
+`ASL_3R:	fnMnemonic = "ASL ";
 `LD_D8,`LD_D22,`LD_D35:	
 			fnMnemonic = "LD  ";
 `LDB_D8,`LDB_D22,`LDB_D35:	
@@ -2273,19 +2262,19 @@ end
 always @*
 begin
 	hi_amt <= 3'd0;
-	if (iq_v[heads[0]] && iq_state[heads[0]]==IQS_CMT) begin
+	if (iq.iqs.cmt[heads[0]]) begin
 		hi_amt <= 3'd1;
-		if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+		if (iq.iqs.cmt[heads[1]]) begin
 			hi_amt <= 3'd2;
 		end
 	end
-	else if (!iq_v[heads[0]]) begin
+	else if (!iq.iqs.v[heads[0]]) begin
 		if (heads[0] != tails[0]) begin
 			hi_amt <= 3'd1;
-			if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+			if (iq.iqs.cmt[heads[1]]) begin
 				hi_amt <= 3'd2;
 			end
-			else if (!iq_v[heads[1]]) begin
+			else if (!iq.iqs.v[heads[1]]) begin
 				if (heads[1] != tails[0]) begin
 					hi_amt <= 3'd2;
 				end
@@ -2303,7 +2292,7 @@ end
 
 always @*
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+		iq_livetarget[n] = {AREGS {iq.iqs.v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
 
 always @*
 for (j = 0; j < AREGS; j = j + 1) begin
@@ -2377,38 +2366,20 @@ assign args_valid[g] =
         )
     ;
 
-assign could_issue[g] = iq_state[g]==IQS_QUEUED	&& args_valid[g];
+assign could_issue[g] = iq.iqs.queued[g]	&& args_valid[g];
                         //&& (iq_mem[g] ? !iq_agen[g] : 1'b1);
 
-assign could_issueid[g] = (iq_state[g]!=IQS_INVALID);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
+assign could_issueid[g] = (iq.iqs.v[g]);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
 end                                 
 end
 endgenerate
-
-// Detect if there are any valid queue entries prior to the given queue entry.
-initial begin
-	j = 0;
-end
-reg [IQ_ENTRIES-1:0] prior_valid;
-//generate begin : gPriorValid
-always @*
-begin
-prior_valid = 1'd0;
-for (j = 0; j < IQ_ENTRIES; j = j + 1)
-begin
-	prior_valid[heads[j]] = 1'b0;
-	if (j > 0)
-		for (n = j-1; n >= 0; n = n - 1)
-			if (iq_sn[heads[n]] < iq_sn[heads[j]])
-				prior_valid[heads[j]] = prior_valid[heads[j]]|iq_v[heads[n]];
-end
-end
 
 //end
 //endgenerate
 
 // Detect if there are any valid sync instructions prior to the given queue 
 // entry.
+/*
 reg [IQ_ENTRIES-1:0] prior_sync;
 //generate begin : gPriorSync
 always @*
@@ -2417,11 +2388,13 @@ begin
 	prior_sync[heads[j]] = 1'b0;
 	if (j > 0)
 		for (n = j-1; n >= 0; n = n - 1)
-			if (iq_sn[heads[n]] < iq_sn[heads[j]])
-				prior_sync[heads[j]] = prior_sync[heads[j]]|(iq_v[heads[n]] & iq_sync[heads[n]]);
+			if (iqs_v[heads[n]] & iq_sync[heads[n]])
+				if (iq_sn[heads[n]] < iq_sn[heads[j]])
+					prior_sync[heads[j]] = TRUE;
 end
 //end
 //endgenerate
+*/
 
 //end
 //endgenerate
@@ -2433,8 +2406,7 @@ aluIssue ualui1
 	.alu1_idle(alu1_idle),
 	.iq_alu(iq_alu),
 	.iq_alu0(iq_alu0),
-	.prior_sync(prior_sync),
-	.prior_valid(prior_valid),
+	.iq_prior_sync(iq_prior_sync),
 	.issue0(iq_alu0_issue),
 	.issue1(iq_alu1_issue)
 );
@@ -2443,7 +2415,7 @@ always @*
 begin
 issuing_on_alu0 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+	if (iq_alu0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu0_done))
 		issuing_on_alu0 = TRUE;
 end
@@ -2452,7 +2424,7 @@ always @*
 begin
 issuing_on_alu1 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+	if (iq_alu1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu1_done))
 		issuing_on_alu1 = TRUE;
 end
@@ -2462,7 +2434,7 @@ always @*
 begin
 issuing_on_agen0 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n]))
+	if (iq_agen0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]))
 		issuing_on_agen0 = TRUE;
 end
 
@@ -2471,7 +2443,7 @@ always @*
 begin
 issuing_on_agen1 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n]))
+	if (iq_agen1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]))
 		issuing_on_agen1 = TRUE;
 end
 
@@ -2480,7 +2452,7 @@ always @*
 begin
 issuing_on_fcu = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n]) && fcu_done)
+	if (iq_fcu_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]) && fcu_done)
 		issuing_on_fcu = TRUE;
 end
 
@@ -2491,8 +2463,7 @@ agenIssue uqgi1
 	.heads(heads),
 	.could_issue(could_issue),
 	.iq_mem(iq_mem),
-	.prior_sync(prior_sync), 
-	.prior_valid(prior_valid),
+	.iq_prior_sync(iq_prior_sync), 
 	.issue0(iq_agen0_issue),
 	.issue1(iq_agen1_issue)
 );
@@ -2511,10 +2482,9 @@ fcuIssue ufcui1
 	.iq_brkgrp(iq_brkgrp),
 	.iq_retgrp(iq_retgrp),
 	.iq_jal(iq_jal),
-	.iq_state(iq_state),
+	.iqs_v(iq.iqs.v),
 	.iq_sn(iq_sn),
-	.prior_sync(prior_sync),
-	.prior_valid(prior_valid),
+	.iq_prior_sync(iq_prior_sync),
 	.issue(iq_fcu_issue),
 	.nid(nid)
 );
@@ -2542,10 +2512,7 @@ end
 always @*
 begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-		iq_v[n] = iq_state[n] != IQS_INVALID;
-		iq_done[n] = iq_state[n]==IQS_DONE || iq_state[n]==IQS_CMT;
-		iq_out[n] = iq_state[n]==IQS_OUT;
-		iq_agen[n] = iq_state[n]==IQS_AGEN;
+		iq.iqs.done[n] = iq.iqs.done[n] | iq.iqs.cmt[n];
 	end
 end
 
@@ -2554,12 +2521,12 @@ end
 memissueLogic umi1
 (
 	.heads(heads),
-	.iq_v(iq_v),
+	.iqs_v(iq.iqs.v),
+	.iqs_out(iq.iqs.out),
+	.iqs_done(iq.iqs.done),
+	.iqs_mem(iq.iqs.mem),
+	.iqs_agen(iq.iqs.agen), 
 	.iq_memready(iq_memready),
-	.iq_out(iq_out),
-	.iq_done(iq_done),
-	.iq_mem(iq_mem),
-	.iq_agen(iq_agen), 
 	.iq_load(iq_load),
 	.iq_store(iq_store),
 	.iq_sel(iq_sel),
@@ -2584,7 +2551,7 @@ memissueSelect umis1
 	.heads(heads),
 	.iq_stomp(iq_stomp),
 	.iq_memissue(iq_memissue),
-	.iq_state(iq_state),
+	.iqs_agen(iq.iqs.agen),
 	.dram0(dram0),
 	.dram1(dram1),
 	.issue0(last_issue0),
@@ -2593,6 +2560,8 @@ memissueSelect umis1
 
 stompLogic usl1
 (
+	.rst(rst_i),
+	.clk(clk),
 	.branchmiss(branchmiss),
 	.misssn(misssn),
 	.iq_sn(iq_sn),
@@ -2675,11 +2644,11 @@ assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argT_v[n] : 1'b1) && iq_state[n]==IQS_AGEN);
+	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argT_v[n] : 1'b1) && iq.iqs.agen[n]);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memready[n] <= (iq_v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
+	iq_memready[n] <= (iq.iqs.v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store);
@@ -2691,7 +2660,7 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 always @*
 begin
 	// The first commit bus is always tied to the same place
-  commit0_v <= (iq_state[heads[0]] == IQS_CMT && ~|panic);
+  commit0_v <= (iq.iqs.cmt[heads[0]] && ~|panic);
   commit0_id <= heads[0];	// if a memory op, it has a DRAM-bus id
   commit0_tgt <= rob.robEntries[heads[0]].tgt;
   commit0_rfw <= rob.robEntries[heads[0]].rfw;
@@ -2699,7 +2668,7 @@ begin
   commit0_rid <= heads[0];
 
   commit1_v <= (hi_amt > 3'd1
-             && iq_state[heads[1]] == IQS_CMT
+             && iq.iqs.cmt[heads[1]]
              && ~|panic);
 	commit1_id <= heads[1];
   commit1_tgt <= rob.robEntries[heads[1]].tgt;
@@ -3080,7 +3049,14 @@ if (rst_i) begin
 	ins_queued <= 0;
 	q1b <= FALSE;
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-  	iq_state[n] <= IQS_INVALID;
+  	iq.iqs.v[n] <= `INV;
+  	iq.iqs.queued[n] <= FALSE;
+  	iq.iqs.agen[n] <= FALSE;
+  	iq.iqs.mem[n] <= FALSE;
+  	iq.iqs.out[n] <= FALSE;
+  	iq.iqs.cmt[n] <= FALSE;
+  	iq.iqs.done[n] <= FALSE;
+  	iq_prior_sync[n] <= FALSE;
 		iq_sn[n] <= n;
 		iq_pt[n] <= FALSE;
 		iq_bt[n] <= FALSE;
@@ -3304,9 +3280,10 @@ else begin
 		rob.robEntries[ alu0_rid % RENTRIES ].res <= ralu0_bus;
 		rob.robEntries[ alu0_rid % RENTRIES ].exc <= alu0_exc;
 	//	if (alu0_done) begin
-			if (iq_state[alu0_rid % RENTRIES]==IQS_OUT) begin
-				iq_state[alu0_id % IQ_ENTRIES] <= IQS_CMT;
-				rob.robEntries[alu0_rid % RENTRIES].state <= RS_CMT;
+			if (iq.iqs.out[alu0_id % IQ_ENTRIES]) begin
+				iq.iqs.out[alu0_rid % RENTRIES] <= FALSE;
+				iq.iqs.cmt[alu0_id % IQ_ENTRIES] <= TRUE;
+				rob.rs.cmt[alu0_rid % RENTRIES] <= TRUE;
 			end
 	//	end
 		alu0_dataready <= FALSE;
@@ -3316,20 +3293,22 @@ else begin
 		rob.robEntries[ alu1_rid % RENTRIES ].res <= ralu1_bus;
 		rob.robEntries[ alu1_rid % RENTRIES ].exc <= alu1_exc;
 	//	if (alu1_done) begin
-			if (iq_state[ alu1_rid % RENTRIES ]==IQS_OUT) begin
-				iq_state[alu1_id % IQ_ENTRIES] <= IQS_CMT;
-				rob.robEntries[ alu1_rid % RENTRIES ].state <= RS_CMT;
+			if (iq.iqs.out[ alu1_id % IQ_ENTRIES ]) begin
+				iq.iqs.out[alu1_id % IQ_ENTRIES] <= FALSE;
+				iq.iqs.cmt[alu1_id % IQ_ENTRIES] <= TRUE;
+				rob.rs.cmt[alu1_rid % RENTRIES] <= TRUE;
 			end
 	//	end
 		alu1_dataready <= FALSE;
 	end
 
 	if (agen0_v) begin
-		if (iq_state[agen0_id]==IQS_OUT)
-			iq_state[agen0_id] <= IQS_AGEN;
-		rob.robEntries[agen0_rid].res <= 1'h0;//agen1_ma;		// LEA needs this result
-		rob.robEntries[agen0_rid].exc <= alu1_exc;
-		if (iq_state[agen0_id]==IQS_OUT) begin
+		if (iq.iqs.out[agen0_id])
+			iq.iqs.agen[agen0_id] <= TRUE;
+		rob.robEntries[agen0_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
+		rob.robEntries[agen0_rid % RENTRIES].exc <= alu1_exc;
+		if (iq.iqs.out[agen0_id]) begin
+			iq.iqs.out[agen0_id] <= FALSE;
 			iq_ma[agen0_id] <= agen0_ma;
 			iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[3:0];
 		end
@@ -3337,11 +3316,12 @@ else begin
 	end
 
 	if (agen1_v && `NUM_AGEN > 1) begin
-		if (iq_state[agen1_id]==IQS_OUT)
-			iq_state[agen1_id] <= IQS_AGEN;
-		rob.robEntries[agen1_rid].res <= 1'h0;//agen1_ma;		// LEA needs this result
-		rob.robEntries[agen1_rid].exc <= 4'h0;
-		if (iq_state[agen1_id]==IQS_OUT) begin
+		if (iq.iqs.out[agen1_id])
+			iq.iqs.agen[agen1_id] <= TRUE;
+		rob.robEntries[agen1_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
+		rob.robEntries[agen1_rid % RENTRIES].exc <= 4'h0;
+		if (iq.iqs.out[agen1_id]) begin
+			iq.iqs.out[agen1_id] <= FALSE;
 			iq_ma[agen1_id] <= agen1_ma;
 			iq_sel[agen1_id] <= fnSelect(agen1_instr) << agen1_ma[3:0];
 		end
@@ -3353,11 +3333,12 @@ else begin
 		//fcu_sr_bus <= fcu_argS;
 		//rob_sr_res[fcu_id] <= fcu_argS;
 		//iq_ma  [ fcu_id ] <= fcu_misspc;
-	  rob.robEntries[ fcu_rid ].res <= rfcu_bus;
-	  rob.robEntries[ fcu_rid ].exc <= fcu_exc;
-		if (iq_state[fcu_id]==IQS_OUT) begin
-			iq_state[fcu_id ] <= IQS_CMT;
-			rob.robEntries[fcu_rid ].state <= RS_CMT;
+	  rob.robEntries[ fcu_rid % RENTRIES ].res <= rfcu_bus;
+	  rob.robEntries[ fcu_rid % RENTRIES ].exc <= fcu_exc;
+		if (iq.iqs.out[fcu_id]) begin
+			iq.iqs.cmt[fcu_id ] <= TRUE;
+			iq.iqs.out[fcu_id] <= FALSE;
+			rob.rs.cmt[fcu_rid % RENTRIES] <= TRUE;
 		end
 		// takb is looked at only for branches to update the predictor. Here it is
 		// unconditionally set, the value will be ignored if it's not a branch.
@@ -3368,38 +3349,44 @@ else begin
 	end
 
 	// dramX_v only set on a load
-	if (dramA_v && iq_v[ dramA_id ]) begin
-		rob.robEntries[ dramA_rid ].res <= rdramA_bus;
-		rob.robEntries[ dramA_rid ].state <= RS_CMT;
-		iq_state[dramA_id ] <= IQS_CMT;
+	if (dramA_v && iq.iqs.v[ dramA_id ]) begin
+		rob.robEntries[ dramA_rid % RENTRIES ].res <= rdramA_bus;
+		rob.rs.cmt[dramA_rid % RENTRIES] <= TRUE;
+		iq.iqs.out[dramA_id] <= FALSE;
+		iq.iqs.cmt[dramA_id ] <= TRUE;
+		iq.iqs.mem[dramA_id ] <= FALSE;
 	end
-	if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id ]) begin
-		rob.robEntries[ dramB_rid ].res <= rdramB_bus;
-		rob.robEntries[ dramB_rid ].state <= RS_CMT;
-		iq_state[dramB_id ] <= IQS_CMT;
+	if (`NUM_MEM > 1 && dramB_v && iq.iqs.v[ dramB_id ]) begin
+		rob.robEntries[ dramB_rid % RENTRIES ].res <= rdramB_bus;
+		rob.rs.cmt[dramB_rid % RENTRIES] <= TRUE;
+		iq.iqs.out[dramB_id] <= FALSE;
+		iq.iqs.cmt[dramB_id ] <= TRUE;
+		iq.iqs.mem[dramB_id ] <= FALSE;
 	end
 
 	if (wb_q0_done) begin
 		dram0 <= `DRAMREQ_READY;
-		iq_state[ dram0_id ] <= IQS_DONE;
+		iq.iqs.done[ dram0_id ] <= TRUE;
+		iq.iqs.mem [ dram0_id ] <= FALSE;
 	end
 	if (wb_q1_done) begin
 		dram1 <= `DRAMREQ_READY;
-		iq_state[ dram1_id ] <= IQS_DONE;
+		iq.iqs.done[ dram1_id ] <= TRUE;
+		iq.iqs.mem [ dram1_id ] <= FALSE;
 	end
 
 	if (update_iq) begin
 		for (n = 0; n < RENTRIES; n = n + 1) begin
 			if (ruid[n]) begin
 	      rob.robEntries[n].exc <= wb_fault;
-	     	rob.robEntries[n].state <= RS_CMT;
+				rob.rs.cmt[n] <= TRUE;
 			end
 		end
 	end
 	if (update_iq) begin
 		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
 			if (uid[n]) begin
-				iq_state[n] <= IQS_CMT;
+				iq.iqs.cmt[n] <= TRUE;
 			end
 		end
 	end
@@ -3446,7 +3433,7 @@ else begin
 // Argument loading for functional units.
 // X's on unused busses cause problems in SIM.
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+    if (iq_alu0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 										&& (alu0_done)) begin
 			iq_fuid[n] <= 3'd0;
 			alu0_sourceid	<= n[`QBITS];
@@ -3474,12 +3461,13 @@ else begin
 			alu0_tgt    <= iq_tgt[n];
 			alu0_dataready <= !IsMultiCycle(iq_instr[n]);
 			alu0_ld <= TRUE;
-			iq_state[n] <= IQS_OUT;
+			iq.iqs.out[n] <= TRUE;
+			iq.iqs.queued[n] <= FALSE;
     end
 
 	if (`NUM_ALU > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if ((iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+      if ((iq_alu1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu1_done))) begin
 				iq_fuid[n] <= 3'd1;
 				alu1_sourceid	<= n[`QBITS];
@@ -3505,12 +3493,13 @@ else begin
 				alu1_tgt    <= iq_tgt[n];
 				alu1_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
 				alu1_ld <= TRUE;
-				iq_state[n] <= IQS_OUT;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
       end
   end
 
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+    if (iq_agen0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
       if (~agen0_v) begin
 				iq_fuid[n] <= 3'd2;
 				agen0_sourceid	<= n[`QBITS];
@@ -3530,13 +3519,14 @@ else begin
 				argBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],agen0_argA);
 				argBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],agen0_argB);
 				agen0_dataready <= 1'b1;
-				iq_state[n] <= IQS_OUT;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
       end
     end
 
 	if (`NUM_AGEN > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+      if (iq_agen1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
         if (~agen1_v) begin
 					iq_fuid[n] <= 3'd3;
 					agen1_sourceid	<= n[`QBITS];
@@ -3557,13 +3547,14 @@ else begin
 					argBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],agen1_argA);
 					argBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],agen1_argB);
 					agen1_dataready <= 1'b1;
-					iq_state[n] <= IQS_OUT;
+					iq.iqs.out[n] <= TRUE;
+					iq.iqs.queued[n] <= FALSE;
         end
       end
   end
 
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+    if (iq_fcu_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
       if (fcu_done) begin
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
@@ -3591,7 +3582,8 @@ else begin
 				fcu_dataready <= 1'b1;
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
-				iq_state[n] <= IQS_OUT;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
 				fcu_done <= `FALSE;
       end
     end
@@ -3646,12 +3638,12 @@ else begin
 	missue_count <= issue_count;
 
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		if (iq_v[n] && iq_stomp[n]) begin
+		if (iq.iqs.v[n] && iq_stomp[n]) begin
 			iq_mem[n] <= `INV;
 			iq_load[n] <= `INV;
 			iq_store[n] <= `INV;
-			iq_state[n] <= IQS_INVALID;
-			rob.robEntries[iq_rid[n]].state <= RS_INVALID;
+			iq.iqs.v[n] <= `INV;
+			rob.rs.v[iq_rid[n]] <= `INV;
 			
 	//		if (alu0_id==n)
 	//			alu0_dataready <= FALSE;
@@ -3702,7 +3694,7 @@ if (dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id]) begin
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id]) begin
 		if (dhit0 & !dram0_unc) begin
 //			dramA_v <= !iq_stomp[dram0_id];
 //			dramA_id <= dram0_id;
@@ -3722,7 +3714,7 @@ case(dram0)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_REQBUS:	
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id])
 		;
 	else begin
 		dram0 <= `DRAMREQ_READY;
@@ -3730,7 +3722,7 @@ case(dram0)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id])
 		;
 	else begin
 		dram0 <= `DRAMREQ_READY;
@@ -3744,7 +3736,7 @@ if (dram1_load)
 case(dram1)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id]) begin
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id]) begin
 		if (dhit1 && !dram1_unc) begin
 //			dramB_v <= !iq_stomp[dram1_id];
 //			dramB_id <= dram1_id;
@@ -3763,7 +3755,7 @@ case(dram1)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_REQBUS:	
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id])
 		;
 	else begin
 		dram1 <= `DRAMREQ_READY;
@@ -3771,7 +3763,7 @@ case(dram1)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id])
 		;
 	else begin
 		dram1 <= `DRAMREQ_READY;
@@ -4006,23 +3998,21 @@ endcase
 	$display("Opcode: %h %h", opcode1, opcode2);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %s %d, %h %h %d %d %h %d %d %h %d #",
+	    $display("%c%c %d: %c%c %d %d %c%c %c %c%h %s %d, %h %h %d %d %h %d %d %h %d #",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
-		  iq_state[i]==IQS_INVALID ? "-" :
-		  iq_state[i]==IQS_QUEUED ? "Q" :
-		  iq_state[i]==IQS_OUT ? "O"  :
-		  iq_state[i]==IQS_AGEN ? "A"  :
-		  iq_state[i]==IQS_MEM ? "M"  :
-		  iq_state[i]==IQS_DONE ? "D"  :
-		  iq_state[i]==IQS_CMT ? "C"  : "?",
-//		 iq_v[i] ? "v" : "-",
-		 iq_done[i]?"d":"-",
-		 iq_out[i]?"o":"-",
+		  iq.iqs.v[i] ? "v" : "-",
+		  iq.iqs.cmt[i] ? "C" :
+		  iq.iqs.done[i] ? "D"  :
+		  iq.iqs.mem[i] ? "M"  :
+		  iq.iqs.agen[i] ? "A"  :
+		  iq.iqs.out[i] ? "O"  :
+		  iq.iqs.queued[i] ? "Q" : "?",
+//		 iqs_v[i] ? "v" : "-",
 		 iq_bt[i],
 		 iq_memissue[i],
-		 iq_agen[i] ? "a": "-",
+		 iq.iqs.agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
 		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "A" : "O", 
@@ -4111,9 +4101,8 @@ begin
 	 (i[`RBITS]==tail)?"Q":".",
 	  i[`RBITS],
 	  rob.robEntries[i].id,
-	  rob.robEntries[i].state==RS_INVALID ? "-" :
-	  rob.robEntries[i].state==RS_ASSIGNED ? "A"  :
-	  rob.robEntries[i].state==RS_CMT ? "C"  : "D",
+	  rob.rs.cmt ? "C" :
+	  rob.rs.v ? "v" : "-",
 	  rob.robEntries[i].exc,
 	  rob.robEntries[i].tgt,
 	  rob.robEntries[i].res
@@ -4177,6 +4166,15 @@ begin
     end
 		else
 			case(rob.robEntries[head].instr.gen.opcode)
+			// When a sync instruction commits unblock all the dependent following instructions.
+			`STPGRP:
+				if (rob.robEntries[head].instr.stp.exop==2'd3 && rob.robEntries[head].instr.stp.cnst==4'd2)	 begin // SYNC
+					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+						if (iq.iqs.v[n] & iq_prior_sync[n])
+							if (iq_prior_sync_qid[n]==rob.robEntries[head].id)
+								iq_prior_sync[n] <= FALSE;
+					end
+				end
 			`BRKGRP:
           begin
             excmiss <= TRUE;
@@ -4466,8 +4464,8 @@ begin
 			|| (heads[n]==tails[2] && queuedCnt==3'd3)
 			|| (heads[n]==tails[3] && queuedCnt==3'd4)
 			)) begin
-				iq_state[heads[n]] <= IQS_INVALID;
-				rob.robEntries[heads[n]].state <= RS_INVALID;
+				iq.iqs.v[heads[n]] <= `INV;
+				rob.rs.v[heads[n]] <= `INV;
 				iq_mem[heads[n]] <= `FALSE;
 				iq_alu[heads[n]] <= `FALSE;
 				iq_fc[heads[n]] <= `FALSE;
@@ -4481,7 +4479,7 @@ begin
 		end
 	end
 			
-//		if (iq_v[n])
+//		if (iqs_v[n])
 //			iq_sn[n] <= /*(tosub > iq_sn[n]) ? 1'd0 : */iq_sn[n] - tosub;
 end
 endtask
@@ -4516,15 +4514,15 @@ input Rid id;
 input v;
 input [51:0] bus;
 begin
-  if (iq_argB_v[nn] == `INV && iq_argB_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
 		iq_argB[nn] <= bus;
 		iq_argB_v[nn] <= `VAL;
   end
-  if (iq_argA_v[nn] == `INV && iq_argA_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
 		iq_argA_v[nn] <= `VAL;
   end
-  if (iq_argT_v[nn] == `INV && iq_argT_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argT_v[nn] == `INV && iq_argT_s[nn] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
 		iq_argT[nn] <= bus;
 		iq_argT_v[nn] <= `VAL;
   end
@@ -4535,15 +4533,15 @@ task setargs2;
 begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
 		for (j = 0; j < IQ_ENTRIES; j = j + 1) begin
-			if (iq_state[j]==IQS_CMT && iq_rid[j]==iq_argT_s[n] && iq_argT_v[n]==`INV) begin
+			if (iq.iqs.cmt[j] && iq_rid[j]==iq_argT_s[n] && iq_argT_v[n]==`INV) begin
 				iq_argT[n] <= rob.robEntries[iq_rid[j]].res;
 				iq_argT_v[n] <= `VAL;
 			end
-			if (iq_state[j]==IQS_CMT && iq_rid[j]==iq_argB_s[n] && iq_argB_v[n]==`INV) begin
+			if (iq.iqs.cmt[j] && iq_rid[j]==iq_argB_s[n] && iq_argB_v[n]==`INV) begin
 				iq_argB[n] <= rob.robEntries[iq_rid[j]].res;
 				iq_argB_v[n] <= `VAL;
 			end
-			if (iq_state[j]==IQS_CMT && iq_rid[j]==iq_argA_s[n] && iq_argA_v[n]==`INV) begin
+			if (iq.iqs.cmt[j] && iq_rid[j]==iq_argA_s[n] && iq_argA_v[n]==`INV) begin
 				iq_argA[n] <= rob.robEntries[iq_rid[j]].res;
 				iq_argA_v[n] <= `VAL;
 			end
@@ -4644,7 +4642,15 @@ input Rid rid;
 begin
 	iq_rid[ndx] <= rid;
 	iq_sn[ndx] <= seqnum;
-	iq_state[ndx] <= IQS_QUEUED;
+
+	iq.iqs.v[ndx] <= `VAL;
+	iq.iqs.queued[ndx] <= TRUE;
+	iq.iqs.out[ndx] <= FALSE;
+	iq.iqs.agen[ndx] <= FALSE;
+	iq.iqs.mem[ndx] <= FALSE;
+	iq.iqs.done[ndx] <= FALSE;
+	iq.iqs.cmt[ndx] <= FALSE;
+
 	//iq_br_tag[ndx] <= btag;
 	iq_pc[ndx] <= pcsd[slot];
 	set_insn(ndx,id_bus);
@@ -4691,13 +4697,22 @@ begin
 	iq_Ra[ndx] <= Ra[slot];
 	iq_Rb[ndx] <= Rb[slot];
 `endif
+	// Determine the most recent prior sync instruction.
+	iq_prior_sync_qid[n] <= {`QBIT{1'b1}};
+	iq_prior_sync[n] <= FALSE;
+	for (n = (ndx + 1)%IQ_ENTRIES; n[`QBITS] != ndx; n = n + 1) begin
+		if (iq.iqs.v[n] & iq_sync[n]) begin
+			iq_prior_sync_qid[n] <= n;
+			iq_prior_sync[n] <= TRUE;
+		end
+	end
 	iq_pt[ndx] <= take_branchq[slot];
 	iq_tgt[ndx] <= Rt[slot];
 	rob.robEntries[rid].pc <= pcs[slot];
 	rob.robEntries[rid].tgt <= Rt[slot];
 	rob.robEntries[rid].rfw <= id_bus[`IB_RFW];//IsRFW(insnx[slot]);
 	rob.robEntries[rid].res <= 1'd0;
-	rob.robEntries[rid].state <= RS_ASSIGNED;
+	rob.rs.v <= `VAL;
 	rob.robEntries[rid].id <= ndx;
 end
 endtask
@@ -4705,7 +4720,7 @@ endtask
 task tDram0Issue;
 input [`QBITS] n;
 begin
-	if (iq_state[n]==IQS_AGEN) begin
+	if (iq.iqs.agen[n]) begin
 //	dramA_v <= `INV;
 		dram0 		<= `DRAMSLOT_BUSY;
 		dram0_id 	<= n[`QBITS];
@@ -4719,7 +4734,8 @@ begin
 		dram0_load <= iq_load[n];
 		dram0_store <= iq_store[n];
 		dram0_preload <= iq_load[n] & iq_tgt[n]==6'd0;
-		iq_state[n] <= IQS_MEM;
+		iq.iqs.mem[n] <= TRUE;
+		iq.iqs.agen[n] <= FALSE;
 		iq_memissue[n] <= `INV;
 	end
 end
@@ -4728,7 +4744,7 @@ endtask
 task tDram1Issue;
 input [`QBITS] n;
 begin
-	if (iq_state[n]==IQS_AGEN) begin
+	if (iq.iqs.agen[n]) begin
 //	dramB_v <= `INV;
 	dram1 		<= `DRAMSLOT_BUSY;
 	dram1_id 	<= n[`QBITS];
@@ -4742,7 +4758,8 @@ begin
 	dram1_load <= iq_load[n];
 	dram1_store <= iq_store[n];
 	dram1_preload <= iq_load[n] & iq_tgt[n]==6'd0;
-	iq_state[n] <= IQS_MEM;
+	iq.iqs.mem[n] <= TRUE;
+	iq.iqs.agen[n] <= FALSE;
 	iq_memissue[n] <= `INV;
 	end
 end

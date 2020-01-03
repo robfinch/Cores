@@ -50,23 +50,6 @@ typedef logic [`SNBITS] Seqnum;	// Sequence number
 typedef logic [`AREGS-1:0] RegTagBitmap;
 
 typedef enum bit[2:0] {
-	IQS_INVALID,
-	IQS_QUEUED,
-	IQS_OUT,
-	IQS_AGEN,
-	IQS_MEM,
-	IQS_DONE,
-	IQS_CMT
-} QState;
-
-typedef enum bit[1:0] {
-	RS_INVALID,
-	RS_ASSIGNED,
-	RS_DONE,
-	RS_CMT
-} RobQState;
-
-typedef enum bit[2:0] {
 	BC_NULL,
 	BC_ICACHE,
 	BC_WRITEBUF,
@@ -241,11 +224,26 @@ typedef union packed
 	Cache_Instruction cache;
 } Instruction;
 
+typedef struct packed
+{
+	logic [`IQ_ENTRIES-1:0] v;
+	logic [`IQ_ENTRIES-1:0] queued;
+	logic [`IQ_ENTRIES-1:0] out;
+	logic [`IQ_ENTRIES-1:0] agen;
+	logic [`IQ_ENTRIES-1:0] mem;
+	logic [`IQ_ENTRIES-1:0] done;
+	logic [`IQ_ENTRIES-1:0] cmt;
+} IQState;
+
+typedef struct packed
+{
+	IQState iqs;
+} IQ;
+
 // Re-order buffer entry
 typedef struct packed
 {
 	Qid id;			// Link to issue queue
-	RobQState state;
 	Address pc;
 	Instruction instr;
 	ExcCode exc;
@@ -258,7 +256,14 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [`RENTRIES-1:0] v;
+	logic [`RENTRIES-1:0] cmt;
+} RobState;
+
+typedef struct packed
+{
 	RobEntry [`RENTRIES-1:0] robEntries;
+	RobState rs;
 } Rob;
 
 /*

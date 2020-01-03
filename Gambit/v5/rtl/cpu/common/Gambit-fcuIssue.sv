@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,8 +27,8 @@
 `include "..\inc\Gambit-types.sv"
 
 module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
-	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iq_state, iq_sn,
-	prior_sync, prior_valid, issue, nid);
+	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iqs_v, iq_sn,
+	iq_prior_sync, issue, nid);
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
@@ -39,10 +39,9 @@ input [`IQ_ENTRIES-1:0] iq_br;
 input [`IQ_ENTRIES-1:0] iq_brkgrp;
 input [`IQ_ENTRIES-1:0] iq_retgrp;
 input [`IQ_ENTRIES-1:0] iq_jal;
-input QState iq_state [0:`IQ_ENTRIES-1];
+input [`IQ_ENTRIES-1:0] iqs_v;
 input Seqnum iq_sn [0:`IQ_ENTRIES-1];
-input [`IQ_ENTRIES-1:0] prior_sync;
-input [`IQ_ENTRIES-1:0] prior_valid;
+input [`IQ_ENTRIES-1:0] iq_prior_sync;
 output reg [`IQ_ENTRIES-1:0] issue;
 output Qid nid;
 
@@ -68,9 +67,13 @@ begin
 //		nid = (fcu_id + n) % `IQ_ENTRIES;
 end
 
+//always @*
+//for (n = 0; n < `IQ_ENTRIES; n = n + 1)
+//	nextqd[n] <= iq_sn[(n+1)%`IQ_ENTRIES] > iq_sn[n] && iq_state[(n+1)%`IQ_ENTRIES]!=IQS_INVALID;
+
 always @*
 for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-	nextqd[n] <= iq_sn[(n+1)%`IQ_ENTRIES] > iq_sn[n] && iq_state[(n+1)%`IQ_ENTRIES]!=IQS_INVALID;
+	nextqd[n] <= iq_sn[(n+1)%`IQ_ENTRIES] > iq_sn[n] && iqs_v[(n+1)%`IQ_ENTRIES];
 
 //assign nextqd = 8'hFF;
 
@@ -85,7 +88,7 @@ begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]] || !(iq_brkgrp[heads[n]] || iq_retgrp[heads[n]] || iq_jal[heads[n]]))
 			&& issue == {`IQ_ENTRIES{1'b0}}
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			&& (!iq_prior_sync[heads[n]])
 			)
 			  issue[heads[n]] = `TRUE;
 		end

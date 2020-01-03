@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,7 +24,7 @@
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-types.sv"
 
-module memissueLogic (heads, iq_v, iq_memready, iq_out, iq_done, iq_mem, iq_agen, 
+module memissueLogic (heads, iqs_v, iq_memready, iqs_out, iqs_done, iqs_mem, iqs_agen, 
 	iq_load, iq_store, iq_sel, iq_fc, iq_aq, iq_rl, iq_ma, iq_memsb, iq_memdb, iq_stomp, iq_canex, 
 	wb_v, inwb0, inwb1, sple,
 	memissue, issue_count);
@@ -34,12 +34,12 @@ parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter AMSB = `AMSB;
 localparam QCHKS = `IQ_ENTRIES > 9 ? 10 : `IQ_ENTRIES;
 input Qid heads [0:IQ_ENTRIES-1];
-input [IQ_ENTRIES-1:0] iq_v;
+input [IQ_ENTRIES-1:0] iqs_v;
 input [IQ_ENTRIES-1:0] iq_memready;
-input [IQ_ENTRIES-1:0] iq_out;
-input [IQ_ENTRIES-1:0] iq_done;
-input [IQ_ENTRIES-1:0] iq_mem;
-input [IQ_ENTRIES-1:0] iq_agen;
+input [IQ_ENTRIES-1:0] iqs_out;
+input [IQ_ENTRIES-1:0] iqs_done;
+input [IQ_ENTRIES-1:0] iqs_mem;
+input [IQ_ENTRIES-1:0] iqs_agen;
 input [IQ_ENTRIES-1:0] iq_load;
 input [IQ_ENTRIES-1:0] iq_store;
 input [22:0] iq_sel [0:IQ_ENTRIES-1];
@@ -75,8 +75,8 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 			adr_ok[n][m] = 
 						// Select lines don't overlap
 						((iq_sel[heads[n]] & iq_sel[heads[m]]) == 18'd0)
-						&& ((!iq_mem[heads[m]] /*|| (iq_agen[heads[m]] & iq_out[heads[m]]) */ || iq_done[heads[m]]
-							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][22:16] || |iq_sel[heads[m]][22:16])) || iq_out[heads[m]] || iq_done[heads[m]]))
+						&& ((!iqs_mem[heads[m]] /*|| (iqs_agen[heads[m]] & iqs_out[heads[m]]) */ || iqs_done[heads[m]]
+							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][22:16] || |iq_sel[heads[m]][22:16])) || iqs_out[heads[m]] || iqs_done[heads[m]]))
 							// If we have two loads to overlapping addresses we don't care.
 							|| (iq_load[heads[n]] && iq_load[heads[m]])
 						)
@@ -99,7 +99,7 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 	for (m = 0; m < QCHKS; m = m + 1) begin
 		memsb_ok[n][m] = FALSE;
 		if (m < n)
-			memsb_ok[n][m] = iq_done[heads[m]] || !iq_v[heads[m]];
+			memsb_ok[n][m] = iqs_done[heads[m]] || !iqs_v[heads[m]];
 	end
 end
 
@@ -117,7 +117,7 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 	for (m = 0; m < QCHKS; m = m + 1) begin
 		memdb_ok[n][m] = FALSE;
 		if (m < n)
-			memdb_ok[n][m] = !iq_mem[heads[m]] || iq_done[heads[m]] || !iq_v[heads[m]];
+			memdb_ok[n][m] = !iqs_mem[heads[m]] || iqs_done[heads[m]] || !iqs_v[heads[m]];
 	end
 end
 
@@ -150,9 +150,9 @@ begin
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[1]]
 					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[1]] ? iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]] : 1'b1)
+					&& (iq_rl[heads[1]] ? iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]] : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
 					// ... and there's nothing in the write buffer during a load
 					&& (!(iq_load[heads[1]] && inwb1) || store_count > 8'd0)
 					// ... and, if it is a store, there is no chance of it being undone
@@ -171,12 +171,12 @@ begin
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[2]]
 					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[2]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
+					&& (iq_rl[heads[2]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[2]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -200,14 +200,14 @@ begin
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[3]]
 					// ... if a release, any prior memory ops must be done before this one
-//					&& (iq_rl[heads[3]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-//										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-//										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
+//					&& (iq_rl[heads[3]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+//										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+//										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
 //											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-//					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-//					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-//					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
+//					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+//					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+//					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[3]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -235,16 +235,16 @@ begin
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[4]]
 					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[4]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
+					&& (iq_rl[heads[4]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[4]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -274,18 +274,18 @@ begin
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[5]]
 					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[5]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
+					&& (iq_rl[heads[5]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
+										 && (iqs_done[heads[4]] || !iqs_v[heads[4]] || !iqs_mem[heads[4]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
+					&& !(iq_aq[heads[4]] && iqs_v[heads[4]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[5]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -317,20 +317,20 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[5]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[6]]
-					&& (iq_rl[heads[6]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
+					&& (iq_rl[heads[6]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
+										 && (iqs_done[heads[4]] || !iqs_v[heads[4]] || !iqs_mem[heads[4]])
+										 && (iqs_done[heads[5]] || !iqs_v[heads[5]] || !iqs_mem[heads[5]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
+					&& !(iq_aq[heads[4]] && iqs_v[heads[4]])
+					&& !(iq_aq[heads[5]] && iqs_v[heads[5]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[6]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -363,22 +363,22 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[7]]
-					&& (iq_rl[heads[7]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
+					&& (iq_rl[heads[7]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
+										 && (iqs_done[heads[4]] || !iqs_v[heads[4]] || !iqs_mem[heads[4]])
+										 && (iqs_done[heads[5]] || !iqs_v[heads[5]] || !iqs_mem[heads[5]])
+										 && (iqs_done[heads[6]] || !iqs_v[heads[6]] || !iqs_mem[heads[6]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
+					&& !(iq_aq[heads[4]] && iqs_v[heads[4]])
+					&& !(iq_aq[heads[5]] && iqs_v[heads[5]])
+					&& !(iq_aq[heads[6]] && iqs_v[heads[6]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[7]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -412,24 +412,24 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[8]]
-					&& (iq_rl[heads[8]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
-										 && (iq_done[heads[7]] || !iq_v[heads[7]] || !iq_mem[heads[7]])
+					&& (iq_rl[heads[8]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
+										 && (iqs_done[heads[4]] || !iqs_v[heads[4]] || !iqs_mem[heads[4]])
+										 && (iqs_done[heads[5]] || !iqs_v[heads[5]] || !iqs_mem[heads[5]])
+										 && (iqs_done[heads[6]] || !iqs_v[heads[6]] || !iqs_mem[heads[6]])
+										 && (iqs_done[heads[7]] || !iqs_v[heads[7]] || !iqs_mem[heads[7]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
-					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
+					&& !(iq_aq[heads[4]] && iqs_v[heads[4]])
+					&& !(iq_aq[heads[5]] && iqs_v[heads[5]])
+					&& !(iq_aq[heads[6]] && iqs_v[heads[6]])
+					&& !(iq_aq[heads[7]] && iqs_v[heads[7]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[8]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
@@ -465,26 +465,26 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& adr_pass[heads[9]]
-					&& (iq_rl[heads[9]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
-										 && (iq_done[heads[7]] || !iq_v[heads[7]] || !iq_mem[heads[7]])
-										 && (iq_done[heads[8]] || !iq_v[heads[8]] || !iq_mem[heads[8]])
+					&& (iq_rl[heads[9]] ? (iqs_done[heads[0]] || !iqs_v[heads[0]] || !iqs_mem[heads[0]])
+										 && (iqs_done[heads[1]] || !iqs_v[heads[1]] || !iqs_mem[heads[1]])
+										 && (iqs_done[heads[2]] || !iqs_v[heads[2]] || !iqs_mem[heads[2]])
+										 && (iqs_done[heads[3]] || !iqs_v[heads[3]] || !iqs_mem[heads[3]])
+										 && (iqs_done[heads[4]] || !iqs_v[heads[4]] || !iqs_mem[heads[4]])
+										 && (iqs_done[heads[5]] || !iqs_v[heads[5]] || !iqs_mem[heads[5]])
+										 && (iqs_done[heads[6]] || !iqs_v[heads[6]] || !iqs_mem[heads[6]])
+										 && (iqs_done[heads[7]] || !iqs_v[heads[7]] || !iqs_mem[heads[7]])
+										 && (iqs_done[heads[8]] || !iqs_v[heads[8]] || !iqs_mem[heads[8]])
 											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
-					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
-					&& !(iq_aq[heads[8]] && iq_v[heads[8]])
+					&& !(iq_aq[heads[0]] && iqs_v[heads[0]])
+					&& !(iq_aq[heads[1]] && iqs_v[heads[1]])
+					&& !(iq_aq[heads[2]] && iqs_v[heads[2]])
+					&& !(iq_aq[heads[3]] && iqs_v[heads[3]])
+					&& !(iq_aq[heads[4]] && iqs_v[heads[4]])
+					&& !(iq_aq[heads[5]] && iqs_v[heads[5]])
+					&& !(iq_aq[heads[6]] && iqs_v[heads[6]])
+					&& !(iq_aq[heads[7]] && iqs_v[heads[7]])
+					&& !(iq_aq[heads[8]] && iqs_v[heads[8]])
 					// ... and there's nothing in the write buffer during a load
 					&& !(iq_load[heads[9]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid

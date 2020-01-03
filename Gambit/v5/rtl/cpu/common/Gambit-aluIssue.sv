@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,15 +26,14 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module aluIssue(heads, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, prior_sync, prior_valid, issue0, issue1);
+module aluIssue(heads, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input alu0_idle;
 input alu1_idle;
 input [`IQ_ENTRIES-1:0] iq_alu;
 input [`IQ_ENTRIES-1:0] iq_alu0;
-input [`IQ_ENTRIES-1:0] prior_sync;
-input [`IQ_ENTRIES-1:0] prior_valid;
+input [`IQ_ENTRIES-1:0] iq_prior_sync;
 output reg [`IQ_ENTRIES-1:0] issue0;
 output reg [`IQ_ENTRIES-1:0] issue1;
 
@@ -52,7 +51,7 @@ begin
 			&& issue0 == {`IQ_ENTRIES{1'b0}}
 			// If there are no valid queue entries prior it doesn't matter if there is
 			// a sync.
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			&& (!iq_prior_sync[heads[n]])
 			)
 			  issue0[heads[n]] = `TRUE;
 		end
@@ -63,7 +62,7 @@ begin
 			if (could_issue[heads[n]] && iq_alu[heads[n]] && !iq_alu0[heads[n]]
 				&& !issue0[heads[n]]
 				&& issue1 == {`IQ_ENTRIES{1'b0}}
-				&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+				&& (!iq_prior_sync[heads[n]])
 			)
 			  issue1[heads[n]] = `TRUE;
 		end

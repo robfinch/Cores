@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,7 +25,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module tailptrs(rst_i, clk_i, branchmiss, pipe_advance, iq_v, iq_sn, iq_stomp, queuedCnt, iq_tails, 
+module tailptrs(rst_i, clk_i, branchmiss, pipe_advance, iq_stomp, queuedCnt, iq_tails, 
 	iq_tailsp, rqueuedCnt, rob_tails, iq_rid);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
@@ -35,8 +35,6 @@ input rst_i;
 input clk_i;
 input branchmiss;
 input pipe_advance;
-input [IQ_ENTRIES-1:0] iq_v;
-input Seqnum iq_sn [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_stomp;
 input [2:0] queuedCnt;
 output Qid iq_tails [0:QSLOTS-1];
@@ -46,23 +44,6 @@ output Rid rob_tails [0:RSLOTS-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
 
 integer n, j;
-Qid nq;					// next queue position
-Qid mrq;				// most recent queued
-Seqnum mrq_sn;
-
-// Find the most recently (newest) queued instruction.
-// Set the tail pointer to the next slot.
-always @*
-begin
-	mrq = 0;
-	mrq_sn = 0;
-	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		if (iq_sn[n] > mrq_sn && iq_v[n]) begin
-			mrq = n;
-			mrq_sn = iq_sn[n];
-		end
-	nq = (mrq + 1) % IQ_ENTRIES;
-end
 
 always @*
 if (rst_i) begin

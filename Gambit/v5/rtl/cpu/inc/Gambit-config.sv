@@ -102,7 +102,7 @@
 // sequence number must be reset periodically so it needs enough bits to
 // run until an interrupt routine may reset it. It alos needs to be small
 // enough not to cause timing issues.
-`define SNBIT			25
+`define SNBIT			19
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will

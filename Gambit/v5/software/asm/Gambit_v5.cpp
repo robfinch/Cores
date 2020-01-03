@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -48,6 +48,7 @@
 #define I_CMPU_RI35	0x27
 #define I_MUL_RR		0x0E
 #define I_MUL_RI22	0x1E
+#define I_DIV_RR		0x03
 #define I_AND_RR		0x08
 #define I_AND_RI22	0x18
 #define I_AND_RI35	0x28
@@ -2015,7 +2016,7 @@ static void process_rrop()
 	Ra = Ra & 0x1f;
 	Rb = Rb & 0x1f;
 	Rt = Rt & 0x1f;
-    emit_insn(RB(Rb)|RT(Rt)|RA(Ra)|funct6,!expand_flag,2);
+  emit_insn((bit23 << 24LL)|RB(Rb)|RT(Rt)|RA(Ra)|funct6,!expand_flag,2);
 	xit:
 		prevToken();
 		ScanToEOL();
@@ -3564,7 +3565,7 @@ static void process_ldi()
 		IMM8(35LL) |
 		RA(Rt) |
 		RT(Rt) |
-		I_ASL,!expand_flag,3
+		I_ASL,!expand_flag,2
 	);
 	// Or in the low order 36 bits
 	emit_insn(
@@ -5278,13 +5279,9 @@ void Gambit_v5_processMaster()
 		parm1[tk_eor] = I_XOR_RR;
 		parm2[tk_eor] = I_XOR_RI22;
 		jumptbl[tk_div] = &process_rrop;
-		parm1[tk_div] = 0x3ELL;
-		parm2[tk_div] = 0x3ELL;
-		parm3[tk_div] = 0x00;
-		jumptbl[tk_divu] = &process_rrop;
-		parm1[tk_divu] = 0x3CLL;
-		parm2[tk_divu] = 0x3CLL;
-		parm3[tk_divu] = 0x00;
+		parm1[tk_div] = I_DIV_RR;
+		parm2[tk_div] = -1LL;
+		parm3[tk_div] = 0x00LL;
 		jumptbl[tk_max] = &process_rrop;
 		parm1[tk_max] = 0x2DLL;
 		parm2[tk_max] = -1LL;
@@ -5292,13 +5289,9 @@ void Gambit_v5_processMaster()
 		parm1[tk_min] = 0x2CLL;
 		parm2[tk_min] = -1LL;
 		jumptbl[tk_mod] = &process_rrop;
-		parm1[tk_mod] = 0x16LL;
-		parm2[tk_mod] = 0x3ELL;
+		parm1[tk_mod] = I_DIV_RR;
+		parm2[tk_mod] = -1LL;
 		parm3[tk_mod] = 0x01LL;
-		jumptbl[tk_modu] = &process_rrop;
-		parm1[tk_modu] = 0x14LL;
-		parm2[tk_modu] = 0x3CLL;
-		parm3[tk_modu] = 0x01LL;
 		jumptbl[tk_mul] = &process_rrop;
 		parm1[tk_mul] = I_MUL_RR;
 		parm2[tk_mul] = I_MUL_RI22;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,14 +24,14 @@
 //
 `include "..\inc\Gambit-config.sv"
 
-module calc_ramt(hi_amt, rob_heads, rob_tails, rob_state, r_amt);
+module calc_ramt(hi_amt, rob_heads, rob_tails, rob_v, r_amt);
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
 parameter RS_INVALID = 2'd0;
 input [3:0] hi_amt;
 input [`RBITS] rob_tails [0:RSLOTS-1];
 input [`RBITS] rob_heads [0:RENTRIES-1];
-input [1:0][0:RENTRIES-1] rob_state ;
+input [RENTRIES-1:0] rob_v;
 output reg [3:0] r_amt;
 
 reg [3:0] nxtrb;
@@ -42,16 +42,16 @@ begin
 
 	// Now search ahead for invalid entries that can be skipped over.
 	nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
-	if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+	if (rob_v[nxtrb[`RBITS]]==`INV && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 		r_amt = r_amt + 4'd1;
 		nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
-		if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+		if (rob_v[nxtrb[`RBITS]]==`INV && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 			r_amt = r_amt + 4'd1;
 			nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
-			if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+			if (rob_v[nxtrb[`RBITS]]==`INV && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 				r_amt = r_amt + 4'd1;
 				nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
-				if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+				if (rob_v[nxtrb[`RBITS]]==`INV && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 					r_amt = r_amt + 4'd1;
 					nxtrb = rob_heads[0] + r_amt;
 				end
