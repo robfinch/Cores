@@ -83,14 +83,14 @@ begin
        if (~(livetarget[n]))
      			regIsValid[n] = `VAL;
     end
-
-		id0 = rob_id[commit0_id];
-		id1 = rob_id[commit1_id];
-		if (commit0_v && n==commit0_tgt && !rf_v[n] && commit0_rfw)
-			regIsValid[n] = ((rf_source[ n ] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
-		if (commit1_v && n==commit1_tgt && !rf_v[n] && commit1_rfw)
-			regIsValid[n] = ((rf_source[ n ] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
 	end
+
+	id0 = rob_id[commit0_id];
+	id1 = rob_id[commit1_id];
+	if (commit0_v && !rf_v[commit0_tgt] && commit0_rfw)
+		regIsValid[commit0_tgt] = ((rf_source[ commit0_tgt ] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
+	if (commit1_v && !rf_v[commit1_tgt] && commit1_rfw)
+		regIsValid[commit1_tgt] = ((rf_source[ commit1_tgt ] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
 	
 	regIsValid[0] = `VAL;
 end
@@ -102,14 +102,19 @@ if (rst) begin
     rf_v[n] <= `VAL;
 end
 else begin
-
+/*
 	if (branchmiss) begin
 		for (n = 1; n < AREGS; n = n + 1)
 			if (~(livetarget[n])) begin
 				rf_v[n] <= `VAL;
 		end
 	end
-
+*/
+	for (n = 1; n < AREGS; n = n + 1)
+		rf_v[n] <= regIsValid[n];
+//	if (commit0_tgt==7'h61 || commit1_tgt==7'h61)
+//		$stop;
+/*
   // The source for the register file data might have changed since it was
   // placed on the commit bus. So it's needed to check that the source is
   // still as expected to validate the register.
@@ -127,7 +132,7 @@ else begin
       $display("rfv 1: %d %d", rf_source[ commit0_tgt ][`RBITS], commit0_id);
     end
   end
-
+*/
 	$display("slot_rfw: %h", slot_rfw);
 	$display("quedon : %h", queuedOn);
 	$display("slotv: %h", slotv);
@@ -136,45 +141,19 @@ else begin
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
 					rf_v [Rd[0]] <= `INV;
+					if (Rd[0]==7'h61)
+						$stop;
 				end
 			end
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
+					if (Rd[1]==7'h61)
+						$stop;
 				end
 			end
 		end
 	end
-/*
-		case(slotv)
-		2'b00:	;
-		2'b01:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0]) begin
-					rf_v [Rd[0]] <= `INV;
-				end
-			end
-		2'b10:
-			if (queuedOn[1]) begin
-				if (slot_rfw[1]) begin
-					rf_v [Rd[1]] <= `INV;
-				end
-			end
-		2'b11:
-			begin
-				if (queuedOn[0]) begin
-					if (slot_rfw[0]) begin
-						rf_v [Rd[0]] <= `INV;
-					end
-				end
-				if (queuedOn[1]) begin
-					if (slot_rfw[1]) begin
-						rf_v [Rd[1]] <= `INV;
-					end
-				end
-			end
-		endcase
-*/
 	rf_v[0] <= `VAL;
 end
 

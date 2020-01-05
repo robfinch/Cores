@@ -171,6 +171,7 @@ wire [6:0] Rt2 [0:QSLOTS-1];
 reg [6:0] Rtp [0:QSLOTS-1];
 reg [6:0] Rb [0:QSLOTS-1];
 reg [6:0] Ra [0:QSLOTS-1];
+reg [6:0] Rav [0:QSLOTS-1];
 
 
 wire tlb_miss;
@@ -627,7 +628,7 @@ wire [FSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 reg [QSLOTS-1:0] slot_rfw;
-wire [QSLOTS-1:0] slot_rfw1;
+reg [QSLOTS-1:0] slot_rfw1;
 wire [QSLOTS-1:0] slot_rfw2;
 
 reg [8:0] opcode1, opcode2;
@@ -968,7 +969,9 @@ delay1 #(QSLOTS) udl1 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jmp), 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(fetchBuffer[n]);
-delay1 #(QSLOTS) udl8 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw ), .o(slot_rfw1));
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	slot_rfw1[n] = IsRFW(decodeBuffer[n]);
 delay1 #(QSLOTS) udl3 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw1), .o(slot_rfw2));
 
 always @*
@@ -1019,7 +1022,7 @@ regfileValid urfv1
 	.clk(clk),
 	.ce(pipe_advance),
 	.slotv(slotv),
-	.slot_rfw(slot_rfw2),
+	.slot_rfw(slot_rfw1),
 	.livetarget(livetarget),
 	.branchmiss(branchmiss),
 	.rob_id(robIds),
@@ -1033,9 +1036,9 @@ regfileValid urfv1
 	.commit1_rfw(commit1_rfw),
 	.rf_source(rf_source),
 	.iq_source(iq_source),
-	.Rd(Rt2),
+	.Rd(Rt),
 //	.queuedOn(queuedOnp),
-	.queuedOn(queuedOn2),
+	.queuedOn(queuedOn),
 	.rf_v(rf_v),
 	.regIsValid(regIsValid)
 );
@@ -1336,9 +1339,18 @@ wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire btbwr0 = iq.iqs.cmt[heads[0]] && iq_fc[heads[0]];
-wire btbwr1 = iq.iqs.cmt[heads[1]] && iq_fc[heads[1]];
-wire btbwr2 = iq.iqs.cmt[heads[2]] && iq_fc[heads[2]];
+// Organize BTB inputs
+reg [QSLOTS-1:0] btbwr;
+reg [QSLOTS-1:0] btb_v;
+Address [QSLOTS-1:0] btb_pc;
+Address [QSLOTS-1:0] btb_ma;
+always @*
+	for (n = 0; n < QSLOTS; n = n + 1) begin
+		btbwr[n] = iq.iqs.cmt[heads[n]] & iq_fc[heads[n]];
+		btb_v[n] = (iq_br[heads[n]] ? iq_takb[heads[n]] : iq_bt[heads[n]]) & iq.iqs.v[heads[n]];
+		btb_pc[n] = iq_pc[heads[n]];
+		btb_ma[n] = iq_ma[heads[n]];
+	end
 
 wire fcu_clk;
 `ifdef FCU_ENH
@@ -1358,28 +1370,25 @@ BTB #(.AMSB(AMSB)) ubtb1
   .clk(clk_i),
   .clk2x(clk2x_i),
   .clk4x(clk4x_i),
-  .wr0(btbwr0),  
-  .wadr0(iq_pc[heads[0]]),
-  .wdat0(iq_ma[heads[0]]),
-  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq.iqs.v[heads[0]]),
-  .wr1(btbwr1),  
-  .wadr1(iq_pc[heads[1]]),
-  .wdat1(iq_ma[heads[1]]),
-  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq.iqs.v[heads[1]]),
-  .wr2(btbwr2),  
-  .wadr2(iq_pc[heads[2]]),
-  .wdat2(iq_ma[heads[2]]),
-  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq.iqs.v[heads[2]]),
-  .rclk(~clk),
+  .wr0(btbwr[0]),  
+  .wadr0(btb_pc[0]),
+  .wdat0(btb_ma[0]),
+  .valid0(btb_v[0]),
+  .wr1(btbwr[1]),  
+  .wadr1(btb_pc[1]),
+  .wdat1(btb_ma[1]),
+  .valid1(btb_v[1]),
+  .wr2(1'b0),  
+  .wadr2({AMSB+1{1'b0}}),
+  .wdat2({AMSB+1{1'b0}}),
+  .valid2(1'b0),
+  .rclk(clk),
   .pcA(pc),
   .btgtA(btgt[0]),
   .pcB(pc + len1),
   .btgtB(btgt[1]),
-  .pcC(pc + len1 + len2),
-  .btgtC(),
   .npcA(pc + len1),
-  .npcB(pc + len1 + len2),
-  .npcC()
+  .npcB(pc + len1 + len2)
 );
 `else
 assign btgt[0] = pc + len1;
@@ -4152,6 +4161,8 @@ endcase
 	if (|panic && ~outstanding_stores) begin
 	    $finish;
 	end
+	Rav[0] <= regIsValid[Ra[0]];
+	Rav[1] <= regIsValid[Ra[1]];
 end	// end of clock domain
 
 // ============================================================================
