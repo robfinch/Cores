@@ -89,7 +89,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 reg selpc1;
 assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
-assign isROM = L1_adr[51:18]=={34{1'b1}};
+assign isROM = L1_adr[AMSB:18]=={ABW-18{1'b1}};
 wire clk = clk_i;
 reg [2:0] iccnt;
 assign L2_cnt = iccnt;

@@ -40,7 +40,7 @@ input ce;
 input branchmiss;
 input Qid heads [0:IQ_ENTRIES-1];
 input [QSLOTS-1:0] slotv;
-input [IQ_ENTRIES-1:0] slot_rfw;
+input [QSLOTS-1:0] slot_rfw;
 input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
 input [IQ_ENTRIES-1:0] iq_rfw;

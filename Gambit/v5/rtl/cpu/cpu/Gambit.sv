@@ -73,7 +73,7 @@ parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
-parameter RSTIP = 52'hFFFFFFFFE0000;
+parameter RSTPC = 52'hFFFFFFFFE0000;
 parameter BRKIP = 52'hFFFFFFFFE0000;
 parameter DEBUG = 1'b0;
 parameter DBW = 16;
@@ -179,7 +179,7 @@ wire exv;
 reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
 
-reg [143:0] ic1_out;
+reg [142:0] ic1_out;
 reg [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
@@ -247,7 +247,7 @@ reg [3:0] r_amt, r_amt2;
 wire [2:0] iclen1;
 reg [2:0] len1, len2, len1d, len2d;
 Instruction decodeBuffer [0:1];
-Instruction insnxp [0:QSLOTS-1];
+Instruction fetchBuffer [0:QSLOTS-1];
 
 Qid tails [0:QSLOTS*2-1];
 Qid tailsp [0:QSLOTS*2-1];				// tails ahead of the clock
@@ -638,14 +638,12 @@ wire [FSLOTS-1:0] slotv;
 wire [`FSLOTS-1:0] slot_rts;
 wire [`FSLOTS-1:0] slot_br;
 wire [`FSLOTS-1:0] slot_jc;
-wire [`FSLOTS-1:0] slot_jcl;
 wire [`FSLOTS-1:0] slot_brk;
 reg [`FSLOTS-1:0] slot_brkd;
 wire [3:0] slot_pf [0:FSLOTS-1];
 reg [7:0] slot_rtsx;
 reg [7:0] slot_brx;
 reg [7:0] slot_jcx;
-reg [7:0] slot_jclx;
 reg [7:0] slot_brkx;
 reg [3:0] slot_pfx [0:7];
 
@@ -693,30 +691,34 @@ endgenerate
 assign freezepc = ((~rst_ctr[`RSTC_BIT]) || nmi_i || (irq_i > ol_stack[2:0])) && !int_commit;
 
 // Multiplex exceptional conditions into the instruction stream.
-function [51:0] opcmux;
-input [51:0] ico;
-casez({1'b0,freezepc})
-2'b1?:	opcmux = `NOP_INSN;	// NOP
-2'b01:
-	casez({~rst_ctr[`RSTC_BIT],nmi_i,tick_roi,|irq_i})
-	4'b1???:	opcmux = {39'h0,4'h0,`RST,`BRKGRP};
-	4'b01??:	opcmux = {39'h0,4'h0,`NMI,`BRKGRP};
-	4'b001?:	opcmux = {39'h0,4'h1,`NMI,`BRKGRP};
-	4'b0001:	opcmux = {39'h0,1'b0,irq_i,`IRQ,`BRKGRP};
-	// The following shouldn't happen (pc frozen without interrupt present).
-	// It's a hardware error. Just do reset.
-	default:	opcmux = {39'h0,4'h0,`RST,`BRKGRP};
-	endcase
-default:	opcmux = ico;
-endcase
-endfunction
+
+opcmux uopcm1
+(
+	.rst(~rst_ctr[`RSTC_BIT]),
+	.nmi(nmi_i),
+	.irq(irq_i),
+	.roi(tick_roi),
+	.freeze(freezepc),
+	.ico(ic1_out[51:0]),
+	.o(fetchBuffer[0])
+);
+
+opcmux uopcm2
+(
+	.rst(~rst_ctr[`RSTC_BIT]),
+	.nmi(nmi_i),
+	.irq(irq_i),
+	.roi(tick_roi),
+	.freeze(freezepc),
+	.ico(ic2_out[51:0]),
+	.o(fetchBuffer[1])
+);
+
+wire [8:0] opcode1a = fetchBuffer[0][8:0];
+wire [8:0] opcode2a = fetchBuffer[1][8:0];
 
 // Since the micro-program doesn't support conditional logic or branches a 
 // conditional load for the PFI instruction is accomplished here.
-wire [8:0] opcode1a = opcmux(ic1_out[51:0]);
-wire [8:0] opcode2a = opcmux(ic2_out[51:0]);
-assign insnxp[0] = opcmux(ic1_out[51:0]);//(!branchmiss) ? ic1_out[51:0] : `NOP_INSN;
-assign insnxp[1] = opcmux(ic2_out[51:0]);//(!branchmiss) ? ic2_out[51:0] : `NOP_INSN;
 always @*
 	if ((opcode1a==`PFI || opcode1a==`WAI) && |irq_i && !srx[4])
 		opcode1 <= opcode1a|9'b1;
@@ -738,7 +740,7 @@ else begin
 		decodeBuffer[0] = `NOP_INSN;
 	else
 	if (pipe_advance)
-		decodeBuffer[0] = insnxp[0];
+		decodeBuffer[0] = fetchBuffer[0];
 end
 always @(posedge clk)
 if (rst_i)
@@ -748,7 +750,7 @@ else begin
 		decodeBuffer[1] = `NOP_INSN;
 	else
 	if (pipe_advance)
-		decodeBuffer[1] = insnxp[1];
+		decodeBuffer[1] = fetchBuffer[1];
 end
 
 wire IsRst = (freezepc && ~rst_ctr[`RSTC_BIT]);
@@ -924,20 +926,18 @@ end
 end
 endgenerate
 
-assign slot_rts[0] = slot_rtsx[0];
-assign slot_rts[1] = slot_rtsx[iclen1];
-assign slot_br[0] = slot_brx[0];
-assign slot_br[1] = slot_brx[iclen1];
-assign slot_jc[0] = slot_jcx[0];
-assign slot_jc[1] = slot_jcx[iclen1];
-assign slot_jcl[0] = slot_jclx[0];
-assign slot_jcl[1] = slot_jclx[iclen1];
-assign slot_brk[0] = slot_brkx[0];
-assign slot_brk[1] = slot_brkx[iclen1];
-assign slot_pf[0] = slot_pfx[0];
-assign slot_pf[1] = slot_pfx[iclen1];
-assign slot_wai[0] = slot_waix[0];
-assign slot_wai[1] = slot_waix[iclen1];
+assign slot_rts[0] = freezepc ? 1'b0 : slot_rtsx[0];
+assign slot_rts[1] = freezepc ? 1'b0 : slot_rtsx[iclen1];
+assign slot_br[0] = freezepc ? 1'b0 : slot_brx[0];
+assign slot_br[1] = freezepc ? 1'b0 : slot_brx[iclen1];
+assign slot_jc[0] = freezepc ? 1'b0 : slot_jcx[0];
+assign slot_jc[1] = freezepc ? 1'b0 : slot_jcx[iclen1];
+assign slot_brk[0] = freezepc ? 1'b0 : slot_brkx[0];
+assign slot_brk[1] = freezepc ? 1'b0 : slot_brkx[iclen1];
+assign slot_pf[0] = freezepc ? 1'b0 : slot_pfx[0];
+assign slot_pf[1] = freezepc ? 1'b0 : slot_pfx[iclen1];
+assign slot_wai[0] = freezepc ? 1'b0 : slot_waix[0];
+assign slot_wai[1] = freezepc ? 1'b0 : slot_waix[iclen1];
 
 delay1 #(QSLOTS) udly6 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_brk), .o(slot_brkd));
 delay1 #(QSLOTS) udly7 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(pc_queuedOn), .o(queuedOn));
@@ -960,14 +960,14 @@ wire [QSLOTS-1:0] slot_jmpd2, slot_jmpd;
 reg [QSLOTS-1:0] slot_jmpp;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_jmpp[n] = IsJal(insnxp[n]);
+	slot_jmpp[n] = IsJal(fetchBuffer[n]);
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_jmp[n] = IsJal(decodeBuffer[n]);
 delay1 #(QSLOTS) udl1 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jmp), .o(slot_jmpd)); 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_rfw[n] = IsRFW(insnxp[n]);
+	slot_rfw[n] = IsRFW(fetchBuffer[n]);
 delay1 #(QSLOTS) udl8 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw ), .o(slot_rfw1));
 delay1 #(QSLOTS) udl3 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw1), .o(slot_rfw2));
 
@@ -1017,6 +1017,7 @@ regfileValid urfv1
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(pipe_advance),
 	.slotv(slotv),
 	.slot_rfw(slot_rfw2),
 	.livetarget(livetarget),
@@ -1148,7 +1149,7 @@ programCounter upc1
 	.q1(pc_queuedCnt==2'd1),
 	.q2(pc_queuedCnt==2'd2),
 	.q1bx(1'b0),
-	.insnx(insnxp),
+	.insnx(fetchBuffer),
 	.phit(phit),
 	.freezepc(freezepc),
 	.branchmiss(branchmiss),
@@ -1157,7 +1158,6 @@ programCounter upc1
 	.len2(len2),
 	.len3(1'd0),
 	.jc(slot_jc),
-	.jcl(slot_jcl),
 	.rts(slot_rts),
 	.br(slot_br),
 	.wai(slot_wai),
@@ -1402,8 +1402,8 @@ assign pcs[1] = pc + len1;
 reg [2:0] len1d, len2d;
 always @(posedge clk)
 if (rst_i) begin
-	pcsd[0] <= RSTIP;
-	pcsd[1] <= RSTIP;
+	pcsd[0] <= RSTPC;
+	pcsd[1] <= RSTPC;
 end
 else begin
 	if (pipe_advance)
@@ -1411,8 +1411,8 @@ else begin
 end
 always @(posedge clk)
 if (rst_i) begin
-	pcsd2[0] <= RSTIP;
-	pcsd2[1] <= RSTIP;
+	pcsd2[0] <= RSTPC;
+	pcsd2[1] <= RSTPC;
 end
 else begin
 	if (pipe_advance)
@@ -1483,8 +1483,8 @@ gsharePredictor ubp1
   .predict_taken(predict_takenx)
 );
 `else
-assign predict_takenx[0] = insnxp[0][24];
-assign predict_takenx[1] = insnxp[1][24];
+assign predict_takenx[0] = fetchBuffer[0][24];
+assign predict_takenx[1] = fetchBuffer[1][24];
 `endif
 `endif
 
@@ -1901,7 +1901,7 @@ endfunction
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rtp[n] = fnRt(insnxp[n]);
+	Rtp[n] = fnRt(fetchBuffer[n]);
 delay1 #(7) udl4a (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rtp[0]), .o(Rt[0]));
 delay1 #(7) udl4b (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rtp[1]), .o(Rt[1]));
 delay1 #(7) udl5a (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rt[0]), .o(Rt2[0]));
@@ -2240,6 +2240,7 @@ case(ins.gen.opcode)
 `AND_3R,`AND_RI22,`AND_RI35:  fnMnemonic = "AND ";
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
 `ASL_3R:	fnMnemonic = "ASL ";
+`LSR_3R:	fnMnemonic = "LSR ";
 `LD_D8,`LD_D22,`LD_D35:	
 			fnMnemonic = "LD  ";
 `LDB_D8,`LDB_D22,`LDB_D35:	
@@ -2649,7 +2650,7 @@ wire will_clear_branchmiss = branchmiss && (pc==misspc);
 
 always @*
 case(fcu_instr.gen.opcode)
-`BRKGRP:	fcu_misspc = RSTIP;
+`BRKGRP:	fcu_misspc = RSTPC;
 `RETGRP:	fcu_misspc = fcu_argA;
 `JAL:			fcu_misspc = {fcu_pc[`AMSB:43],fcu_argI[42:0]};
 `JAL_RN:	fcu_misspc = fcu_argA;
@@ -3165,7 +3166,7 @@ if (rst_i) begin
      alu1_sourceid <= 5'd0;
 `define SIM_
 `ifdef SIM_
-		alu0_pc <= RSTIP;
+		alu0_pc <= RSTPC;
 //		alu0_instr <= `UO_NOP;
 		alu0_argT <= 16'h0;
 		alu0_argA <= 1'h0;
@@ -3175,7 +3176,7 @@ if (rst_i) begin
 		alu0_shft <= 1'b0;
 		alu0_tgt <= 3'h0;
 		alu0_rid <= {RBIT{1'b1}};
-		alu1_pc <= RSTIP;
+		alu1_pc <= RSTPC;
 //		alu1_instr <= `UO_NOP;
 		alu1_argT <= 16'h0;
 		alu1_argA <= 1'h0;
@@ -3215,7 +3216,7 @@ if (rst_i) begin
 		dstb <= `LOW;
 		dwe <= `LOW;
 		dsel <= 8'h00;
-		dadr <= RSTIP;
+		dadr <= RSTPC;
 		ddat <= 128'h0;
 		regs[31] <= 52'h01FFC;
 		msp <= 52'h01FFC;
@@ -3304,14 +3305,14 @@ else begin
 
 	if (!branchmiss & pipe_advance) begin
 		//queuedOn <= queuedOnp;
-		if (queuedOn[0]) begin
+		if (pc_queuedOn[0]) begin
 			queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
-			if (queuedOn[1]) begin
+			if (pc_queuedOn[1]) begin
 				queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
 				arg_vs(2'b11);
 			end
 		end
-		else if (queuedOn[1]) begin
+		else if (pc_queuedOn[1]) begin
 			queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
 		end
 	end
@@ -4061,7 +4062,7 @@ endcase
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Opcode: %h %h", opcode1, opcode2);
 	$display ("---------------------------------- Fetch Stage ----------------------------------------");
-	$display ("%h: %h    %h:%h #",pcs[0],insnxp[0],pcs[1],insnxp[1]);
+	$display ("%h: %h    %h:%h #",pcs[0],fetchBuffer[0],pcs[1],fetchBuffer[1]);
 	$display ("--------------------------------- Decode Buffer ---------------------------------------");
 	$display ("%h: %h    %h:%h #",pcsd[0],decodeBuffer[0],pcsd[1],decodeBuffer[1]);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
@@ -4201,7 +4202,7 @@ input Qid head;
 input [12:0] causecd;
 begin
   excmiss <= TRUE;
- 	excmisspc <= RSTIP;
+ 	excmisspc <= RSTPC;
   badaddr[3'd0] <= iq_ma[head];
   bad_instr[3'd0] <= iq_instr[head];
   im_stack <= {im_stack[11:0],3'h7};

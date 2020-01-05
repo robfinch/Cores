@@ -8,7 +8,7 @@
 -  8 compare results registers
 -  4 link registers
 - two way superscalar out-of-order operation
-- two-way instruction fetch
+- two-way instruction fetch, five issue paths, two-way commit
 
 ## Motivation:
 	Made for a friend / associate. Specially requested at 52 bits width. A 52 bit
@@ -36,5 +36,16 @@
 	There is room in the instruction set for some basic floating point operations
 	(FADD,FSUB,FMUL,FDIV).
 	Load / store instructions allow only for full 52-bit word, or 13-bit byte sizes.
+	The only unsigned operation supported is for address comparisons using the CMPU
+	instruction.
 
+## Operating Levels
+	The core has six operating levels allowing software to be developed in a layered
+	fashion. The highest operating level (level 0) is the machine operating level.
+
+## Exception Processing
+	The core has a very simple exception handling mechanism. It simply vectors to
+	address $FFFFFFFFE0000 for any exception including reset. The operating level
+	is set to machine operating level. The exception type may be determined by
+	looking at the cause register.
 

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -72,7 +72,7 @@ reg takb;
 reg wrhist;
 
 (* ram_style="block" *)
-reg [(AMSB+1)*2+1:0] mem [0:2047];
+reg [(AMSB+1)*2:0] mem [0:2047];
 reg [10:0] radrA, radrB, radrC, radrD, radrE, radrF;
 initial begin
   for (n = 0; n < 2048; n = n + 1)
@@ -143,8 +143,8 @@ end
 always @(posedge clk)
 begin
     if (wrhist) #1 mem[pc[10:0]][AMSB:0] <= wdatx;
-    if (wrhist) #1 mem[pc[10:0]][(AMSB+1)*2:AMSB+1] <= pc;
-    if (wrhist) #1 mem[pc[10:0]][(AMSB+1)*2+1] <= takb;
+    if (wrhist) #1 mem[pc[10:0]][(AMSB+1)*2-1:AMSB+1] <= pc;
+    if (wrhist) #1 mem[pc[10:0]][(AMSB+1)*2] <= takb;
 end
 
 always @(posedge rclk)
@@ -153,9 +153,9 @@ always @(posedge rclk)
     #1 radrB <= pcB[10:0];
 always @(posedge rclk)
     #1 radrC <= pcC[10:0];
-assign hitA = mem[radrA][(AMSB+1)*2:AMSB+1]==pcA && mem[radrA][(AMSB+1)*2+1];
-assign hitB = mem[radrB][(AMSB+1)*2:AMSB+1]==pcB && mem[radrB][(AMSB+1)*2+1];
-assign hitC = mem[radrC][(AMSB+1)*2:AMSB+1]==pcC && mem[radrC][(AMSB+1)*2+1];
+assign hitA = mem[radrA][(AMSB+1)*2-1:AMSB+1]==pcA && mem[radrA][(AMSB+1)*2];
+assign hitB = mem[radrB][(AMSB+1)*2-1:AMSB+1]==pcB && mem[radrB][(AMSB+1)*2];
+assign hitC = mem[radrC][(AMSB+1)*2-1:AMSB+1]==pcC && mem[radrC][(AMSB+1)*2];
 assign btgtA = hitA ? mem[radrA][AMSB:0] : npcA;
 assign btgtB = hitB ? mem[radrB][AMSB:0] : npcB;
 assign btgtC = hitC ? mem[radrC][AMSB:0] : npcC;
