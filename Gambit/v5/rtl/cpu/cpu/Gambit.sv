@@ -617,13 +617,17 @@ reg commit1_rfw;
 Data commit1_bus;
 Rid commit1_rid;
 
-reg [QSLOTS-1:0] queuedOn;
+wire [QSLOTS-1:0] pc_queuedOn;
+wire [QSLOTS-1:0] queuedOn, queuedOn2;
+delay1 #(QSLOTS) udly9 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(queuedOn), .o(queuedOn2));
+
 reg [IQ_ENTRIES-1:0] rqueuedOn;
 wire [QSLOTS-1:0] queuedOnp;
 wire [FSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 reg [QSLOTS-1:0] slot_rfw;
+wire [QSLOTS-1:0] slot_rfw1;
 wire [QSLOTS-1:0] slot_rfw2;
 
 reg [8:0] opcode1, opcode2;
@@ -691,8 +695,8 @@ assign freezepc = ((~rst_ctr[`RSTC_BIT]) || nmi_i || (irq_i > ol_stack[2:0])) &&
 // Multiplex exceptional conditions into the instruction stream.
 function [51:0] opcmux;
 input [51:0] ico;
-casez({branchmiss,freezepc})
-2'b1?:	opcmux = 52'hC3;	// NOP
+casez({1'b0,freezepc})
+2'b1?:	opcmux = `NOP_INSN;	// NOP
 2'b01:
 	casez({~rst_ctr[`RSTC_BIT],nmi_i,tick_roi,|irq_i})
 	4'b1???:	opcmux = {39'h0,4'h0,`RST,`BRKGRP};
@@ -711,8 +715,8 @@ endfunction
 // conditional load for the PFI instruction is accomplished here.
 wire [8:0] opcode1a = opcmux(ic1_out[51:0]);
 wire [8:0] opcode2a = opcmux(ic2_out[51:0]);
-assign insnxp[0] = (!branchmiss) ? ic1_out[51:0] : `NOP_INSN;
-assign insnxp[1] = (!branchmiss) ? ic2_out[51:0] : `NOP_INSN;
+assign insnxp[0] = opcmux(ic1_out[51:0]);//(!branchmiss) ? ic1_out[51:0] : `NOP_INSN;
+assign insnxp[1] = opcmux(ic2_out[51:0]);//(!branchmiss) ? ic2_out[51:0] : `NOP_INSN;
 always @*
 	if ((opcode1a==`PFI || opcode1a==`WAI) && |irq_i && !srx[4])
 		opcode1 <= opcode1a|9'b1;
@@ -730,19 +734,21 @@ always @(posedge clk)
 if (rst_i)
 	decodeBuffer[0] = `NOP_INSN;
 else begin
-	if (branchmiss)
+	if (|iq_stomp)
 		decodeBuffer[0] = `NOP_INSN;
-	else if (pipe_advance)
-		decodeBuffer[0] = opcmux(ic1_out[51:0]);
+	else
+	if (pipe_advance)
+		decodeBuffer[0] = insnxp[0];
 end
 always @(posedge clk)
 if (rst_i)
 	decodeBuffer[1] = `NOP_INSN;
 else begin
-	if (branchmiss)
+	if (|iq_stomp)
 		decodeBuffer[1] = `NOP_INSN;
-	else if (pipe_advance)
-		decodeBuffer[1] = opcmux(ic2_out[51:0]);
+	else
+	if (pipe_advance)
+		decodeBuffer[1] = insnxp[1];
 end
 
 wire IsRst = (freezepc && ~rst_ctr[`RSTC_BIT]);
@@ -933,13 +939,8 @@ assign slot_pf[1] = slot_pfx[iclen1];
 assign slot_wai[0] = slot_waix[0];
 assign slot_wai[1] = slot_waix[iclen1];
 
-always @(posedge clk)
-if (rst_i)
-	slot_brkd <= 1'd0;
-else begin
-	if (pipe_advance)
-		slot_brkd <= slot_brk;
-end
+delay1 #(QSLOTS) udly6 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_brk), .o(slot_brkd));
+delay1 #(QSLOTS) udly7 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(pc_queuedOn), .o(queuedOn));
 
 initial begin
 	take_branch = 2'b00;
@@ -950,12 +951,12 @@ begin
 	take_branch[1] = (slot_br[1] && predict_taken[1]) || slot_brk[1];
 end
 
-delay2 #(QSLOTS) udl2 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(take_branch), .o(take_branchq));
+delay1 #(QSLOTS) udl2 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(take_branch), .o(take_branchq));
 
 // Branching for purposes of the branch shadow.
 reg [IQ_ENTRIES-1:0] is_qbranch;
-reg [QSLOTS-1:0] slot_jmp, slot_jmpd;
-wire [QSLOTS-1:0] slot_jmpd2;
+reg [QSLOTS-1:0] slot_jmp;
+wire [QSLOTS-1:0] slot_jmpd2, slot_jmpd;
 reg [QSLOTS-1:0] slot_jmpp;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
@@ -963,11 +964,12 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_jmp[n] = IsJal(decodeBuffer[n]);
-delay2 #(QSLOTS) udl1 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jmp), .o(slot_jmpd2)); 
+delay1 #(QSLOTS) udl1 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jmp), .o(slot_jmpd)); 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(insnxp[n]);
-delay2 #(QSLOTS) udl3 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw), .o(slot_rfw2));
+delay1 #(QSLOTS) udl8 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw ), .o(slot_rfw1));
+delay1 #(QSLOTS) udl3 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw1), .o(slot_rfw2));
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
@@ -1032,7 +1034,7 @@ regfileValid urfv1
 	.iq_source(iq_source),
 	.Rd(Rt2),
 //	.queuedOn(queuedOnp),
-	.queuedOn(queuedOn),
+	.queuedOn(queuedOn2),
 	.rf_v(rf_v),
 	.regIsValid(regIsValid)
 );
@@ -1041,10 +1043,11 @@ regfileSource urfs1
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(pipe_advance),
 	.branchmiss(branchmiss),
 	.heads(heads),
 	.slotv(slotv),
-	.slot_rfw(slot_rfw2),
+	.slot_rfw(slot_rfw1),
 //	.queuedOn(queuedOnp),
 	.queuedOn(queuedOn),
 	.rqueuedOn(rqueuedOn),
@@ -1109,7 +1112,7 @@ getQueuedCount ugqc2
 	.queuedCntd1(),
 	.queuedCntd2(),
 	.queuedOnp(),
-	.queuedOn()
+	.queuedOn(pc_queuedOn)
 );
 
 getRQueuedCount ugrqct1
@@ -1141,6 +1144,7 @@ programCounter upc1
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(pipe_advance),
 	.q1(pc_queuedCnt==2'd1),
 	.q2(pc_queuedCnt==2'd2),
 	.q1bx(1'b0),
@@ -1411,7 +1415,7 @@ if (rst_i) begin
 	pcsd2[1] <= RSTIP;
 end
 else begin
-	if (pipe_advance2)
+	if (pipe_advance)
 		pcsd2 <= pcsd;
 end
 always @(posedge clk)
@@ -1784,7 +1788,7 @@ tailptrs utp1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.ce(pipe_advance2),
+	.ce(pipe_advance),
 	.branchmiss(branchmiss),
 	.iq_stomp(iq_stomp),
 //	.iq_br_tag(iq_br_tag),
@@ -3286,7 +3290,7 @@ else begin
 	alu0_ld <= FALSE;
 	alu1_ld <= FALSE;
 	fcu_ld <= FALSE;
-	queuedOn <= 1'b0;
+//	queuedOn <= 1'b0;
 	ins_queued <= ins_queued + queuedCnt;
 
   if (waitctr != 48'd0)
@@ -3298,8 +3302,8 @@ else begin
 			$stop;
 		end
 
-	if (!branchmiss & pipe_advance2) begin
-		queuedOn <= queuedOnp;
+	if (!branchmiss & pipe_advance) begin
+		//queuedOn <= queuedOnp;
 		if (queuedOn[0]) begin
 			queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
 			if (queuedOn[1]) begin
@@ -4664,15 +4668,15 @@ begin
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
-						if (Ra[row]==Rt[col] && slot_rfw2[col] && Ra[row] != 7'd0) begin
+						if (Ra[row]==Rt[col] && slot_rfw1[col] && Ra[row] != 7'd0) begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(decodeBuffer[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (Rb[row]==Rt[col] && slot_rfw2[col] && Rb[row] != 7'd0) begin
+						if (Rb[row]==Rt[col] && slot_rfw1[col] && Rb[row] != 7'd0) begin
 							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(decodeBuffer[row]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (Rt[row]==Rt[col] && slot_rfw2[col] && Rt[row] != 7'd0) begin
+						if (Rt[row]==Rt[col] && slot_rfw1[col] && Rt[row] != 7'd0) begin
 							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(decodeBuffer[row]);
 							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end

@@ -26,7 +26,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileSource(rst, clk, branchmiss, heads, slotv, slot_rfw,
+module regfileSource(rst, clk, ce, branchmiss, heads, slotv, slot_rfw,
 	queuedOn,	rqueuedOn, iq_rfw, Rd, rob_tails,
 	iq_latestID, iq_tgt, iq_rid, rf_source);
 parameter AREGS = 128;
@@ -36,6 +36,7 @@ parameter QSLOTS = `QSLOTS;
 parameter RBIT = 5;
 input rst;
 input clk;
+input ce;
 input branchmiss;
 input Qid heads [0:IQ_ENTRIES-1];
 input [QSLOTS-1:0] slotv;
@@ -72,7 +73,7 @@ else begin
 				$stop;
     end
 	end
-	else begin
+	else if (ce) begin
 		if (queuedOn[0]) begin
 			if (slot_rfw[0])
 				rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};

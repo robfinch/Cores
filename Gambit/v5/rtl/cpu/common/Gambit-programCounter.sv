@@ -25,7 +25,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module programCounter(rst, clk,
+module programCounter(rst, clk, ce,
 	q1, q2, q1bx, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
 	jc, jcl, rts, br, wai, take_branch,
@@ -39,6 +39,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
 input clk;
+input ce;
 input q2;
 input q1;
 input q1bx;
@@ -125,7 +126,7 @@ else begin
 		$display("==============================");
 		pc <= misspc;
 	end
-	else if (phit) begin
+	else if (ce) begin
 		if (!freezepc) begin
 			begin
 				if (q2)

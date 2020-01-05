@@ -59,14 +59,15 @@ output reg [2:0] queuedCntd2;
 output reg [QSLOTS-1:0] queuedOnp;
 output reg [QSLOTS-1:0] queuedOn;
 
+wire fourEmpty = iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV
+ 						    && iqs_v[tails[2]]==`INV && iqs_v[tails[3]]==`INV
+     						;
 always @*
 begin
 	queuedCnt <= 3'd0;
 	queuedOnp <= 1'd0;
 	if (!branchmiss) begin
-    if (iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV
-     && iqs_v[tails[2]]==`INV && iqs_v[tails[3]]==`INV
-    ) begin
+    if (fourEmpty) begin
       queuedCnt <= 3'd1;
       queuedOnp[0] <= `TRUE;
       if (!brk[0]) begin
@@ -90,7 +91,7 @@ end
 else begin
 	queuedCntd1 <= queuedCnt;
 	queuedCntd2 <= queuedCntd1;
-	if (1) begin
+	if (ce) begin
 		queuedOn <= queuedOnp;
 	end
 end

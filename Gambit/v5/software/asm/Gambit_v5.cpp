@@ -5009,8 +5009,8 @@ static void process_default()
 	case tk_addi: process_riop(0x04,0x04,0); break;
 	case tk_align: process_align(); break;
 	case tk_andi:  process_riop(0x08,0x08,0); break;
-	case tk_asl: process_shift(0x2); break;
-	case tk_asr: process_shift(0x3); break;
+	case tk_asl: process_shift(0x0C); break;
+	case tk_asr: process_shift(0x2D); break;
 	//case tk_bbc: process_bbc(0x26, 1); break;
 	//case tk_bbs: process_bbc(0x26, 0); break;
 	case tk_begin_expand: expandedBlock = 1; break;
@@ -5117,6 +5117,7 @@ static void process_default()
 	case tk_jsr:  process_call(014, 054); break;
 	case tk_ld:	process_ld(); break;
 		//case tk_lui: process_lui(0x27); break;
+	case tk_lsr: process_shift(0x0D); break;
 	case tk_lv:  process_lv(0x36); break;
 	case tk_macro:	process_macro(); break;
 	case tk_memdb: emit_insn(0x01C3, !expand_flag, 1); break;
@@ -5151,10 +5152,8 @@ static void process_default()
 	//case tk_redor: process_rop(0x06); break;
 	case tk_ret: process_ret(); break;
 	case tk_rex: process_rex(); break;
-	case tk_rol: process_shift(0x4); break;
-	case tk_roli: process_shifti(0x4); break;
-	case tk_ror: process_shift(0x5); break;
-	case tk_rori: process_shifti(0x5); break;
+	case tk_rol: process_shift(0x1C); break;
+	case tk_ror: process_shift(0x1D); break;
 	case tk_rti: process_iret(0xC8000002); break;
 	case tk_sei: process_sei(); break;
 	case tk_seq:	process_setop(I_SEQ, I_SEQ, 0x00); break;
