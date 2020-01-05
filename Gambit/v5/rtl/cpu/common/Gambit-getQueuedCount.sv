@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,35 +34,39 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getQueuedCount(rst, clk, branchmiss, brk, phit, pipe_advance, tails, rob_tails, slotvd,
-	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntd, queuedOnp);
+module getQueuedCount(rst, clk, ce, branchmiss, brk, phit, tails, rob_tails, slotvd,
+	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntd1, queuedCntd2, queuedOnp, queuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
 input rst;
 input clk;
+input ce;
 input branchmiss;
-input [2:0] brk;
+input [QSLOTS-1:0] brk;
 input phit;
-input pipe_advance;
-input Qid tails [0:QSLOTS-1];
-input Rid rob_tails [0:RSLOTS-1];
+input Qid tails [0:QSLOTS*2-1];
+input Rid rob_tails [0:RSLOTS*2-1];
 input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_jmp;
 input [QSLOTS-1:0] take_branch;
 input [IQ_ENTRIES-1:0] iqs_v;
 input [RENTRIES-1:0] rob_v;
 output reg [2:0] queuedCnt;
-output reg [2:0] queuedCntd;
+output reg [2:0] queuedCntd1;
+output reg [2:0] queuedCntd2;
 output reg [QSLOTS-1:0] queuedOnp;
+output reg [QSLOTS-1:0] queuedOn;
 
 always @*
 begin
 	queuedCnt <= 3'd0;
 	queuedOnp <= 1'd0;
 	if (!branchmiss) begin
-    if (iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV) begin
+    if (iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV
+     && iqs_v[tails[2]]==`INV && iqs_v[tails[3]]==`INV
+    ) begin
       queuedCnt <= 3'd1;
       queuedOnp[0] <= `TRUE;
       if (!brk[0]) begin
@@ -78,10 +82,17 @@ begin
 end
 
 always @(posedge clk)
-if (rst)
-	queuedCntd <= 3'd0;
-else if (!branchmiss) begin
-	queuedCntd <= queuedCnt;
+if (rst) begin
+	queuedCntd1 <= 3'd0;
+	queuedCntd2 <= 3'd0;
+	queuedOn <= 2'b00;
+end
+else begin
+	queuedCntd1 <= queuedCnt;
+	queuedCntd2 <= queuedCntd1;
+	if (1) begin
+		queuedOn <= queuedOnp;
+	end
 end
 
 endmodule

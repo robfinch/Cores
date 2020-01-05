@@ -127,8 +127,8 @@ endcase
 endfunction
 
 function IsFlowCtrl;
-input [51:0] isn;
-case(isn[6:0])
+input Instruction isn;
+case(isn.gen.opcode)
 `JAL,`JAL_RN,`BRANCH0,`BRANCH1:
 	IsFlowCtrl = TRUE;
 `BRKGRP:
@@ -197,6 +197,7 @@ endfunction
 function IsRFW;
 input Instruction isn;
 case(isn.gen.opcode)
+`BRKGRP:	IsRFW = FALSE;
 `STPGRP:	IsRFW = FALSE;
 `BRANCH0,`BRANCH1:	IsRFW = FALSE;
 `ST_D8,`ST_D22,`ST_D35,

@@ -166,7 +166,8 @@ reg [WID-1:0] rfot [0:QSLOTS-1];
 reg [ 7:0] rfos [0:QSLOTS-1];
 
 // Register read ports
-reg [6:0] Rt [0:QSLOTS-1];
+wire [6:0] Rt [0:QSLOTS-1];
+wire [6:0] Rt2 [0:QSLOTS-1];
 reg [6:0] Rtp [0:QSLOTS-1];
 reg [6:0] Rb [0:QSLOTS-1];
 reg [6:0] Ra [0:QSLOTS-1];
@@ -235,7 +236,7 @@ reg [31:0] br_override;
 reg [31:0] br_total;
 reg [31:0] br_missed;
 
-wire [2:0] queuedCnt, queuedCntd;
+wire [2:0] queuedCnt, queuedCntd, queuedCntd2;
 wire [2:0] pc_queuedCnt;
 wire [2:0] rqueuedCnt;
 reg queuedNop;
@@ -245,11 +246,11 @@ reg [3:0] r_amt, r_amt2;
 
 wire [2:0] iclen1;
 reg [2:0] len1, len2, len1d, len2d;
-Instruction insnx [0:1];
+Instruction decodeBuffer [0:1];
 Instruction insnxp [0:QSLOTS-1];
 
-Qid tails [0:QSLOTS-1];
-Qid tailsp [0:QSLOTS-1];				// tails ahead of the clock
+Qid tails [0:QSLOTS*2-1];
+Qid tailsp [0:QSLOTS*2-1];				// tails ahead of the clock
 Qid heads [0:IQ_ENTRIES-1];
 Rid rob_tails [0:RSLOTS-1];
 Rid rob_heads [0:RENTRIES-1];
@@ -364,7 +365,7 @@ RegTagBitmap iq_out2 [0:IQ_ENTRIES-1];
 RegTagBitmap iq_out2a [0:IQ_ENTRIES-1];
 
 reg [FSLOTS-1:0] take_branch;
-reg [FSLOTS-1:0] take_branchq;
+wire [FSLOTS-1:0] take_branchq;
 reg [`QBITS] active_tag;
 
 reg id1_v;
@@ -543,7 +544,10 @@ wire wb_hit0, wb_hit1;
 wire freezepc;
 reg phit;
 reg phitd;
-wire pipe_advance = phit && |queuedCnt;
+wire pipe_advance = phit & |pc_queuedCnt;
+reg pipe_advance2;
+always @(posedge clk)
+	pipe_advance2 <= pipe_advance;
 
 reg branchmiss = 1'b0;
 wire branchmissd2;
@@ -620,7 +624,7 @@ wire [FSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 reg [QSLOTS-1:0] slot_rfw;
-reg [QSLOTS-1:0] slot_rfw2;
+wire [QSLOTS-1:0] slot_rfw2;
 
 reg [8:0] opcode1, opcode2;
 
@@ -724,21 +728,21 @@ always @*
 // during one clock cycle. Instruction decode is next.
 always @(posedge clk)
 if (rst_i)
-	insnx[0] = `NOP_INSN;
+	decodeBuffer[0] = `NOP_INSN;
 else begin
 	if (branchmiss)
-		insnx[0] = `NOP_INSN;
+		decodeBuffer[0] = `NOP_INSN;
 	else if (pipe_advance)
-		insnx[0] = opcmux(ic1_out[51:0]);
+		decodeBuffer[0] = opcmux(ic1_out[51:0]);
 end
 always @(posedge clk)
 if (rst_i)
-	insnx[1] = `NOP_INSN;
+	decodeBuffer[1] = `NOP_INSN;
 else begin
 	if (branchmiss)
-		insnx[1] = `NOP_INSN;
+		decodeBuffer[1] = `NOP_INSN;
 	else if (pipe_advance)
-		insnx[1] = opcmux(ic2_out[51:0]);
+		decodeBuffer[1] = opcmux(ic2_out[51:0]);
 end
 
 wire IsRst = (freezepc && ~rst_ctr[`RSTC_BIT]);
@@ -946,30 +950,24 @@ begin
 	take_branch[1] = (slot_br[1] && predict_taken[1]) || slot_brk[1];
 end
 
-always @(posedge clk)
-if (rst_i)
-	take_branchq <= 1'd0;
-else begin
-	if (pipe_advance)
-		take_branchq <= take_branch;
-end
+delay2 #(QSLOTS) udl2 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(take_branch), .o(take_branchq));
 
 // Branching for purposes of the branch shadow.
 reg [IQ_ENTRIES-1:0] is_qbranch;
-reg [QSLOTS-1:0] slot_jmp;
+reg [QSLOTS-1:0] slot_jmp, slot_jmpd;
+wire [QSLOTS-1:0] slot_jmpd2;
 reg [QSLOTS-1:0] slot_jmpp;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_jmpp[n] = IsJal(insnxp[n]);
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_jmp[n] = IsJal(insnx[n]);
+	slot_jmp[n] = IsJal(decodeBuffer[n]);
+delay2 #(QSLOTS) udl1 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jmp), .o(slot_jmpd2)); 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(insnxp[n]);
-always @*
-	for (n = 0; n < QSLOTS; n = n + 1)
-		slot_rfw2[n] <= IsRFW(insnx[n]);
+delay2 #(QSLOTS) udl3 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rfw), .o(slot_rfw2));
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
@@ -1019,7 +1017,6 @@ regfileValid urfv1
 	.clk(clk),
 	.slotv(slotv),
 	.slot_rfw(slot_rfw2),
-	.tails(tails),
 	.livetarget(livetarget),
 	.branchmiss(branchmiss),
 	.rob_id(robIds),
@@ -1033,8 +1030,9 @@ regfileValid urfv1
 	.commit1_rfw(commit1_rfw),
 	.rf_source(rf_source),
 	.iq_source(iq_source),
-	.Rd(Rt),
-	.queuedOn(queuedOnp),
+	.Rd(Rt2),
+//	.queuedOn(queuedOnp),
+	.queuedOn(queuedOn),
 	.rf_v(rf_v),
 	.regIsValid(regIsValid)
 );
@@ -1047,7 +1045,8 @@ regfileSource urfs1
 	.heads(heads),
 	.slotv(slotv),
 	.slot_rfw(slot_rfw2),
-	.queuedOn(queuedOnp),
+//	.queuedOn(queuedOnp),
+	.queuedOn(queuedOn),
 	.rqueuedOn(rqueuedOn),
 	.iq_rfw(iq_rfw),
 	.Rd(Rt),
@@ -1068,20 +1067,22 @@ getQueuedCount ugqc1
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(pipe_advance),
 	.branchmiss(branchmiss),
 	.brk(slot_brkd),
 	.phit(phit),
-	.pipe_advance(pipe_advance),
 	.tails(tails),
 	.rob_tails(tails),
 	.slotvd(2'b11),
-	.slot_jmp(slot_jmp),
+	.slot_jmp(slot_jmpd2),
 	.take_branch(take_branchq),
 	.iqs_v(iq.iqs.v),
 	.rob_v(rob.rs.v),
 	.queuedCnt(queuedCnt),
-	.queuedCntd(queuedCntd),
-	.queuedOnp(queuedOnp)
+	.queuedCntd1(queuedCntd),
+	.queuedCntd2(queuedCntd2),
+	.queuedOnp(),
+	.queuedOn(queuedOnp)
 );
 
 // The program counter needs to know how much to increment by and this info is
@@ -1093,10 +1094,10 @@ getQueuedCount ugqc2
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(pipe_advance),
 	.branchmiss(branchmiss),
 	.brk(slot_brk),
 	.phit(phit),
-	.pipe_advance(pipe_advance),
 	.tails(tails),
 	.rob_tails(tails),
 	.slotvd(2'b11),
@@ -1105,8 +1106,10 @@ getQueuedCount ugqc2
 	.iqs_v(iq.iqs.v),
 	.rob_v(rob.rs.v),
 	.queuedCnt(pc_queuedCnt),
-	.queuedCntd(),
-	.queuedOnp()
+	.queuedCntd1(),
+	.queuedCntd2(),
+	.queuedOnp(),
+	.queuedOn()
 );
 
 getRQueuedCount ugrqct1
@@ -1378,9 +1381,18 @@ BTB #(.AMSB(AMSB)) ubtb1
 assign btgt[0] = pc + len1;
 assign btgt[1] = pc + len1 + len2;
 `endif
+Address btgt_d1 [0:FSLOTS-1];
+Address btgt_d2 [0:FSLOTS-1];
+always @(posedge clk)
+	if (pipe_advance)
+		btgt_d1 <= btgt;
+always @(posedge clk)
+	if (pipe_advance)
+		btgt_d2 <= btgt_d1;
 
 Address pcs [0:FSLOTS-1];
 Address pcsd [0:FSLOTS-1];
+Address pcsd2 [0:FSLOTS-1];
 assign pcs[0] = pc;
 assign pcs[1] = pc + len1;
 reg [2:0] len1d, len2d;
@@ -1390,12 +1402,17 @@ if (rst_i) begin
 	pcsd[1] <= RSTIP;
 end
 else begin
-	if (branchmiss) begin
-		pcsd[0] <= RSTIP;
-		pcsd[1] <= RSTIP;
-	end
-	else if (pipe_advance)
+	if (pipe_advance)
 		pcsd <= pcs;
+end
+always @(posedge clk)
+if (rst_i) begin
+	pcsd2[0] <= RSTIP;
+	pcsd2[1] <= RSTIP;
+end
+else begin
+	if (pipe_advance2)
+		pcsd2 <= pcsd;
 end
 always @(posedge clk)
 if (rst_i)
@@ -1767,11 +1784,13 @@ tailptrs utp1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
+	.ce(pipe_advance2),
 	.branchmiss(branchmiss),
-	.pipe_advance(pipe_advance),
 	.iq_stomp(iq_stomp),
 //	.iq_br_tag(iq_br_tag),
-	.queuedCnt(queuedCnt),
+//	.queuedCnt(queuedCnt),
+	.queuedOn(queuedOn),
+	.queuedCnt(queuedCntd2),
 	.iq_tails(tails),
 	.iq_tailsp(tailsp),
 	.rqueuedCnt(queuedCntd),
@@ -1878,16 +1897,18 @@ endfunction
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rt[n] = fnRt(insnx[n]);
-always @*
-for (n = 0; n < QSLOTS; n = n + 1)
 	Rtp[n] = fnRt(insnxp[n]);
+delay1 #(7) udl4a (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rtp[0]), .o(Rt[0]));
+delay1 #(7) udl4b (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rtp[1]), .o(Rt[1]));
+delay1 #(7) udl5a (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rt[0]), .o(Rt2[0]));
+delay1 #(7) udl5b (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(Rt[1]), .o(Rt2[1]));
+
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rb[n] = fnRb(insnx[n]);
+	Rb[n] = fnRb(decodeBuffer[n]);
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Ra[n] = fnRa(insnx[n]);
+	Ra[n] = fnRa(decodeBuffer[n]);
 
 
 generate begin : regupd
@@ -2163,6 +2184,7 @@ endfunction
 function IsRFW;
 input Instruction isn;
 case(isn.gen.opcode)
+`BRKGRP:	IsRFW = FALSE;
 `STPGRP:	IsRFW = FALSE;
 `BRANCH0,`BRANCH1:	IsRFW = FALSE;
 `ST_D8,`ST_D22,`ST_D35,
@@ -2206,6 +2228,7 @@ function [31:0] fnMnemonic;
 input Instruction ins;
 case(ins.gen.opcode)
 `BRKGRP:	fnMnemonic = "BRKG";
+`RETGRP:	fnMnemonic = "RETG";
 `ADD_3R,`ADD_RI22,`ADD_RI35:	fnMnemonic = "ADD ";
 `SUB_3R,`SUB_RI22,`SUB_RI35:	fnMnemonic = "SUB ";
 `CMP_3R,`CMP_RI22,`CMP_RI35:	fnMnemonic = "CMP ";
@@ -2258,25 +2281,35 @@ initial begin: Init
 
 end
 */
+wire do_hi = !((heads[n]==tails[0] && queuedCntd2==3'd1)
+			|| (((heads[n]==tails[1])|| (heads[n]==tails[0])) && queuedCntd2==3'd2)
+			);
+
 // Determine the head increment amount, this must match code later on.
 always @*
 begin
 	hi_amt <= 3'd0;
-	if (iq.iqs.cmt[heads[0]]) begin
-		hi_amt <= 3'd1;
-		if (iq.iqs.cmt[heads[1]]) begin
-			hi_amt <= 3'd2;
-		end
-	end
-	else if (!iq.iqs.v[heads[0]]) begin
-		if (heads[0] != tails[0]) begin
+	if (do_hi) begin
+		if (iq.iqs.cmt[heads[0]]) begin
 			hi_amt <= 3'd1;
 			if (iq.iqs.cmt[heads[1]]) begin
 				hi_amt <= 3'd2;
 			end
-			else if (!iq.iqs.v[heads[1]]) begin
-				if (heads[1] != tails[0]) begin
+		end
+		else if (!iq.iqs.v[heads[0]]) begin
+			// Won't queue to tail unless two queue entries are available.
+			// So it's safe to advance the head by one if only a single
+			// entry is available. Must advance the head by one or the
+			// core could hang.
+			if (heads[0] != tails[0] || iq.iqs.v[tails[1]]) begin
+				hi_amt <= 3'd1;
+				if (iq.iqs.cmt[heads[1]]) begin
 					hi_amt <= 3'd2;
+				end
+				else if (!iq.iqs.v[heads[1]]) begin
+					if (heads[1] != tails[0]) begin
+						hi_amt <= 3'd2;
+					end
 				end
 			end
 		end
@@ -2366,7 +2399,7 @@ assign args_valid[g] =
         )
     ;
 
-assign could_issue[g] = iq.iqs.queued[g]	&& args_valid[g];
+assign could_issue[g] = iq.iqs.queued[g] & args_valid[g];
                         //&& (iq_mem[g] ? !iq_agen[g] : 1'b1);
 
 assign could_issueid[g] = (iq.iqs.v[g]);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
@@ -2400,6 +2433,9 @@ end
 //endgenerate
 aluIssue ualui1
 (
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
 	.heads(heads),
 	.could_issue(could_issue),
 	.alu0_idle(alu0_idle),
@@ -2458,6 +2494,9 @@ end
 
 agenIssue uqgi1
 (
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
 	.agen0_idle(agen0_idle),
 	.agen1_idle(agen1_idle),
 	.heads(heads),
@@ -2472,6 +2511,9 @@ Qid nid;
 
 fcuIssue ufcui1
 (
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
 	.heads(heads),
 	.branchmiss(branchmiss),
 	.could_issue(could_issue),
@@ -2509,13 +2551,6 @@ begin
 			inwb1 = TRUE;
 end
 
-always @*
-begin
-	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-		iq.iqs.done[n] = iq.iqs.done[n] | iq.iqs.cmt[n];
-	end
-end
-
 // determine if the instructions ready to issue can, in fact, issue.
 // "ready" means that the instruction has valid operands but has not gone yet
 memissueLogic umi1
@@ -2548,6 +2583,9 @@ memissueLogic umi1
 
 memissueSelect umis1
 (	
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
 	.heads(heads),
 	.iq_stomp(iq_stomp),
 	.iq_memissue(iq_memissue),
@@ -2562,6 +2600,7 @@ stompLogic usl1
 (
 	.rst(rst_i),
 	.clk(clk),
+	.ce(1'b1),
 	.branchmiss(branchmiss),
 	.misssn(misssn),
 	.iq_sn(iq_sn),
@@ -2583,6 +2622,17 @@ EvalBranch ube1
 	.takb(fcu_takb)
 );
 
+
+fcuCalc ufcuc1
+(
+	.ol(ol),
+	.instr(fcu_instr),
+	.a(fcu_argA),
+	.nextpc(fcu_nextpc),
+	.im(3'd0),
+	.waitctr(1'd0),
+	.bus(fcu_bus)
+);
 
 /*
 wire will_clear_branchmiss = branchmiss && (
@@ -2622,12 +2672,8 @@ if (fcu_v) begin
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
 	if (fcu_branch && (fcu_takb ^ fcu_pt))
     fcu_branchmiss = TRUE;
-	else if (fcu_instr.jal.opcode==`JAL || fcu_instr.ret.opcode==`RETGRP || fcu_instr.wai.opcode==`BRKGRP) begin
-		if (fcu_followed)
-			fcu_branchmiss = iq_pc[nid]!=fcu_misspc;
-		else
-			fcu_branchmiss = TRUE;
-	end
+	else if (fcu_instr.jal.opcode==`JAL || fcu_instr.ret.opcode==`RETGRP || fcu_instr.wai.opcode==`BRKGRP)
+		fcu_branchmiss = iq.predicted_pc[fcu_id]!=fcu_misspc;
 	else
     fcu_branchmiss = FALSE;
 end
@@ -2648,7 +2694,7 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memready[n] <= (iq.iqs.v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
+	iq_memready[n] <= (iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store);
@@ -2660,7 +2706,7 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 always @*
 begin
 	// The first commit bus is always tied to the same place
-  commit0_v <= (iq.iqs.cmt[heads[0]] && ~|panic);
+  commit0_v <= (iq.iqs.cmt[heads[0]] && !iq_stomp[heads[0]] && ~|panic);
   commit0_id <= heads[0];	// if a memory op, it has a DRAM-bus id
   commit0_tgt <= rob.robEntries[heads[0]].tgt;
   commit0_rfw <= rob.robEntries[heads[0]].rfw;
@@ -2669,6 +2715,7 @@ begin
 
   commit1_v <= (hi_amt > 3'd1
              && iq.iqs.cmt[heads[1]]
+             && !iq_stomp[heads[1]]
              && ~|panic);
 	commit1_id <= heads[1];
   commit1_tgt <= rob.robEntries[heads[1]].tgt;
@@ -2689,7 +2736,7 @@ for (g = 0; g < QSLOTS; g = g + 1)
 begin
 idecoder uid1
 (
-	.instr(insnx[g]),
+	.instr(decodeBuffer[g]),
 	.predict_taken(predict_taken2[g]),
 	.bus(id_bus[g])
 );
@@ -3050,12 +3097,7 @@ if (rst_i) begin
 	q1b <= FALSE;
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
   	iq.iqs.v[n] <= `INV;
-  	iq.iqs.queued[n] <= FALSE;
-  	iq.iqs.agen[n] <= FALSE;
-  	iq.iqs.mem[n] <= FALSE;
-  	iq.iqs.out[n] <= FALSE;
-  	iq.iqs.cmt[n] <= FALSE;
-  	iq.iqs.done[n] <= FALSE;
+  	clear_iqs(n);
   	iq_prior_sync[n] <= FALSE;
 		iq_sn[n] <= n;
 		iq_pt[n] <= FALSE;
@@ -3256,16 +3298,16 @@ else begin
 			$stop;
 		end
 
-	if (!branchmiss) begin
+	if (!branchmiss & pipe_advance2) begin
 		queuedOn <= queuedOnp;
-		if (queuedOnp[0]) begin
+		if (queuedOn[0]) begin
 			queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
-			if (queuedOnp[1]) begin
+			if (queuedOn[1]) begin
 				queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
 				arg_vs(2'b11);
 			end
 		end
-		else if (queuedOnp[1]) begin
+		else if (queuedOn[1]) begin
 			queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
 		end
 	end
@@ -3277,37 +3319,42 @@ else begin
 	end
 
 	if (alu0_v) begin
-		rob.robEntries[ alu0_rid % RENTRIES ].res <= ralu0_bus;
-		rob.robEntries[ alu0_rid % RENTRIES ].exc <= alu0_exc;
+		if (!iq_stomp[alu0_id % IQ_ENTRIES]) begin
+			rob.robEntries[ alu0_rid % RENTRIES ].res <= ralu0_bus;
+			rob.robEntries[ alu0_rid % RENTRIES ].exc <= alu0_exc;
 	//	if (alu0_done) begin
-			if (iq.iqs.out[alu0_id % IQ_ENTRIES]) begin
+			if (!iq_stomp[alu0_id % IQ_ENTRIES]) begin
 				iq.iqs.out[alu0_rid % RENTRIES] <= FALSE;
 				iq.iqs.cmt[alu0_id % IQ_ENTRIES] <= TRUE;
+				iq.iqs.done[alu0_id % IQ_ENTRIES] <= TRUE;
 				rob.rs.cmt[alu0_rid % RENTRIES] <= TRUE;
 			end
 	//	end
+		end
 		alu0_dataready <= FALSE;
 	end
 
 	if (alu1_v && `NUM_ALU > 1) begin
-		rob.robEntries[ alu1_rid % RENTRIES ].res <= ralu1_bus;
-		rob.robEntries[ alu1_rid % RENTRIES ].exc <= alu1_exc;
+		if (!iq_stomp[alu1_id % IQ_ENTRIES]) begin
+			rob.robEntries[ alu1_rid % RENTRIES ].res <= ralu1_bus;
+			rob.robEntries[ alu1_rid % RENTRIES ].exc <= alu1_exc;
 	//	if (alu1_done) begin
-			if (iq.iqs.out[ alu1_id % IQ_ENTRIES ]) begin
+			if (!iq_stomp[alu1_id % IQ_ENTRIES]) begin
 				iq.iqs.out[alu1_id % IQ_ENTRIES] <= FALSE;
 				iq.iqs.cmt[alu1_id % IQ_ENTRIES] <= TRUE;
+				iq.iqs.done[alu1_id % IQ_ENTRIES] <= TRUE;
 				rob.rs.cmt[alu1_rid % RENTRIES] <= TRUE;
 			end
 	//	end
+		end
 		alu1_dataready <= FALSE;
 	end
 
 	if (agen0_v) begin
-		if (iq.iqs.out[agen0_id])
+		if (!iq_stomp[agen0_id]) begin
 			iq.iqs.agen[agen0_id] <= TRUE;
-		rob.robEntries[agen0_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
-		rob.robEntries[agen0_rid % RENTRIES].exc <= alu1_exc;
-		if (iq.iqs.out[agen0_id]) begin
+			rob.robEntries[agen0_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
+			rob.robEntries[agen0_rid % RENTRIES].exc <= alu1_exc;
 			iq.iqs.out[agen0_id] <= FALSE;
 			iq_ma[agen0_id] <= agen0_ma;
 			iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[3:0];
@@ -3316,11 +3363,10 @@ else begin
 	end
 
 	if (agen1_v && `NUM_AGEN > 1) begin
-		if (iq.iqs.out[agen1_id])
+		if (!iq_stomp[agen1_id % IQ_ENTRIES]) begin
 			iq.iqs.agen[agen1_id] <= TRUE;
-		rob.robEntries[agen1_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
-		rob.robEntries[agen1_rid % RENTRIES].exc <= 4'h0;
-		if (iq.iqs.out[agen1_id]) begin
+			rob.robEntries[agen1_rid % RENTRIES].res <= 1'h0;//agen1_ma;		// LEA needs this result
+			rob.robEntries[agen1_rid % RENTRIES].exc <= 4'h0;
 			iq.iqs.out[agen1_id] <= FALSE;
 			iq_ma[agen1_id] <= agen1_ma;
 			iq_sel[agen1_id] <= fnSelect(agen1_instr) << agen1_ma[3:0];
@@ -3333,34 +3379,37 @@ else begin
 		//fcu_sr_bus <= fcu_argS;
 		//rob_sr_res[fcu_id] <= fcu_argS;
 		//iq_ma  [ fcu_id ] <= fcu_misspc;
-	  rob.robEntries[ fcu_rid % RENTRIES ].res <= rfcu_bus;
-	  rob.robEntries[ fcu_rid % RENTRIES ].exc <= fcu_exc;
-		if (iq.iqs.out[fcu_id]) begin
-			iq.iqs.cmt[fcu_id ] <= TRUE;
-			iq.iqs.out[fcu_id] <= FALSE;
+		if (!iq_stomp[fcu_id % IQ_ENTRIES]) begin
+		  rob.robEntries[ fcu_rid % RENTRIES ].res <= rfcu_bus;
+		  rob.robEntries[ fcu_rid % RENTRIES ].exc <= fcu_exc;
+			iq.iqs.cmt[fcu_id % IQ_ENTRIES ] <= TRUE;
+			iq.iqs.done[fcu_id % IQ_ENTRIES] <= TRUE;
+			iq.iqs.out[fcu_id % IQ_ENTRIES] <= FALSE;
 			rob.rs.cmt[fcu_rid % RENTRIES] <= TRUE;
+			// takb is looked at only for branches to update the predictor. Here it is
+			// unconditionally set, the value will be ignored if it's not a branch.
+			iq_takb[ fcu_id % IQ_ENTRIES ] <= fcu_takb;
+			iq_ma [ fcu_id % IQ_ENTRIES ] <= fcu_misspc;
+			//br_ctr <= br_ctr + fcu_branch;
 		end
-		// takb is looked at only for branches to update the predictor. Here it is
-		// unconditionally set, the value will be ignored if it's not a branch.
-		iq_takb[ fcu_id ] <= fcu_takb;
-		iq_ma [ fcu_id ] <= fcu_misspc;
-		//br_ctr <= br_ctr + fcu_branch;
 		fcu_dataready <= `INV;
 	end
 
 	// dramX_v only set on a load
-	if (dramA_v && iq.iqs.v[ dramA_id ]) begin
+	if (dramA_v && iq.iqs.v[ dramA_id ] && !iq_stomp[dramA_id]) begin
 		rob.robEntries[ dramA_rid % RENTRIES ].res <= rdramA_bus;
 		rob.rs.cmt[dramA_rid % RENTRIES] <= TRUE;
 		iq.iqs.out[dramA_id] <= FALSE;
 		iq.iqs.cmt[dramA_id ] <= TRUE;
+		iq.iqs.done[dramA_id ] <= TRUE;
 		iq.iqs.mem[dramA_id ] <= FALSE;
 	end
-	if (`NUM_MEM > 1 && dramB_v && iq.iqs.v[ dramB_id ]) begin
+	if (`NUM_MEM > 1 && dramB_v && iq.iqs.v[ dramB_id ] && !iq_stomp[dramB_id]) begin
 		rob.robEntries[ dramB_rid % RENTRIES ].res <= rdramB_bus;
 		rob.rs.cmt[dramB_rid % RENTRIES] <= TRUE;
 		iq.iqs.out[dramB_id] <= FALSE;
 		iq.iqs.cmt[dramB_id ] <= TRUE;
+		iq.iqs.done[dramB_id ] <= TRUE;
 		iq.iqs.mem[dramB_id ] <= FALSE;
 	end
 
@@ -3387,6 +3436,7 @@ else begin
 		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
 			if (uid[n]) begin
 				iq.iqs.cmt[n] <= TRUE;
+				iq.iqs.done[n] <= TRUE;
 			end
 		end
 	end
@@ -3433,7 +3483,7 @@ else begin
 // Argument loading for functional units.
 // X's on unused busses cause problems in SIM.
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_alu0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
+    if (iq_alu0_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])
 										&& (alu0_done)) begin
 			iq_fuid[n] <= 3'd0;
 			alu0_sourceid	<= n[`QBITS];
@@ -3467,7 +3517,7 @@ else begin
 
 	if (`NUM_ALU > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if ((iq_alu1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
+      if ((iq_alu1_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu1_done))) begin
 				iq_fuid[n] <= 3'd1;
 				alu1_sourceid	<= n[`QBITS];
@@ -3499,7 +3549,7 @@ else begin
   end
 
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_agen0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
+    if (iq_agen0_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
       if (~agen0_v) begin
 				iq_fuid[n] <= 3'd2;
 				agen0_sourceid	<= n[`QBITS];
@@ -3526,7 +3576,7 @@ else begin
 
 	if (`NUM_AGEN > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if (iq_agen1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
+      if (iq_agen1_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
         if (~agen1_v) begin
 					iq_fuid[n] <= 3'd3;
 					agen1_sourceid	<= n[`QBITS];
@@ -3554,7 +3604,7 @@ else begin
   end
 
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_fcu_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
+    if (iq_fcu_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
       if (fcu_done) begin
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
@@ -3642,13 +3692,9 @@ else begin
 			iq_mem[n] <= `INV;
 			iq_load[n] <= `INV;
 			iq_store[n] <= `INV;
-			iq.iqs.v[n] <= `INV;
-			rob.rs.v[iq_rid[n]] <= `INV;
-			
-	//		if (alu0_id==n)
-	//			alu0_dataready <= FALSE;
-	//		if (alu1_id==n)
-	//			alu1_dataready <= FALSE;
+			clear_iqs(n);
+			rob.rs.v[n] <= `INV;
+			rob.rs.cmt[n] <= FALSE;
 			$display("stomp: IQS_INVALID[%d]",n);
 		end
 
@@ -3948,13 +3994,27 @@ B_LSNAck:
 default:     bstate <= BIDLE;
 endcase
 
+/*
+	// Record history of queue states.
+	// Restore qstate from history is corrupt.
+	for (n = 1; n < 4; n = n + 1)
+		iq.iqsh[n] <= iq.iqsh[n-1];
+	iq.iqsh[0] <= iq.iqs;
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		if (iq.iqs.v[n] && !(iq.iqs.queued[n] | iq.iqs.out[n] | iq.iqs.agen[n] | iq.iqs.mem[n] | iq.iqs.done[n] | iq.iqs.cmt[n])) begin
+			iq.iqs.queued[n] <= iq.iqsh[0].queued[n];
+			iq.iqs.out[n] <= iq.iqsh[0].out[n];
+			iq.iqs.agen[n] <= iq.iqsh[0].agen[n];
+			iq.iqs.mem[n] <= iq.iqsh[0].mem[n];
+			iq.iqs.done[n] <= iq.iqsh[0].done[n];
+			iq.iqs.cmt[n] <= iq.iqsh[0].cmt[n];
+		end
+*/
 `ifdef SIM
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("%h %d: %h #", pc, len1, ic_out[51:0]);
 	$display("%h %d: %h #", pc + len1, len2, ic2_out[51:0]);
-	$display("%h %d: %h #", pcsd[0], len1d, insnx[0]);
-	$display("%h %d: %h #", pcsd[1], len2d, insnx[1]);
   $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
 	$display("General Purpose Regs:");
   for (i = 0; i < 32; i = i + 4)
@@ -3996,6 +4056,10 @@ endcase
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Opcode: %h %h", opcode1, opcode2);
+	$display ("---------------------------------- Fetch Stage ----------------------------------------");
+	$display ("%h: %h    %h:%h #",pcs[0],insnxp[0],pcs[1],insnxp[1]);
+	$display ("--------------------------------- Decode Buffer ---------------------------------------");
+	$display ("%h: %h    %h:%h #",pcsd[0],decodeBuffer[0],pcsd[1],decodeBuffer[1]);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
 	    $display("%c%c %d: %c%c %d %d %c%c %c %c%h %s %d, %h %h %d %d %h %d %d %h %d #",
@@ -4101,8 +4165,8 @@ begin
 	 (i[`RBITS]==tail)?"Q":".",
 	  i[`RBITS],
 	  rob.robEntries[i].id,
-	  rob.rs.cmt ? "C" :
-	  rob.rs.v ? "v" : "-",
+	  rob.rs.cmt[i] ? "C" :
+	  rob.rs.v[i] ? "v" : "-",
 	  rob.robEntries[i].exc,
 	  rob.robEntries[i].tgt,
 	  rob.robEntries[i].res
@@ -4449,26 +4513,38 @@ begin
 end
 endtask
 
+task clear_iqs;
+input Qid ndx;
+begin
+	iq.iqs.v[ndx] <= `INV;
+	iq.iqs.queued[ndx] <= FALSE;
+	iq.iqs.out[ndx] <= FALSE;
+	iq.iqs.agen[ndx] <= FALSE;
+	iq.iqs.mem[ndx] <= FALSE;
+	iq.iqs.done[ndx] <= FALSE;
+	iq.iqs.cmt[ndx] <= FALSE;
+end
+endtask
+
 // Increment the head pointers
 // Also increments the instruction counter
 // Used when instructions are committed.
 // Also clear any outstanding state bits that foul things up.
 //
 task head_inc;
-input [`QBITS] amt;
+input Qid amt;
 begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		if (n < amt) begin
-			if (!((heads[n]==tails[0] && queuedCnt==3'd1)
-			|| (heads[n]==tails[1] && queuedCnt==3'd2)
-			|| (heads[n]==tails[2] && queuedCnt==3'd3)
-			|| (heads[n]==tails[3] && queuedCnt==3'd4)
-			)) begin
-				iq.iqs.v[heads[n]] <= `INV;
-				rob.rs.v[heads[n]] <= `INV;
-				iq_mem[heads[n]] <= `FALSE;
-				iq_alu[heads[n]] <= `FALSE;
-				iq_fc[heads[n]] <= `FALSE;
+			if (do_hi) begin
+				if (iq.iqs.v[heads[n]]) begin
+					clear_iqs(heads[n]);	
+					rob.rs.v[heads[n]] <= `INV;
+					rob.rs.cmt[heads[n]] <= `FALSE;
+					iq_mem[heads[n]] <= `FALSE;
+					iq_alu[heads[n]] <= `FALSE;
+					iq_fc[heads[n]] <= `FALSE;
+				end
 //				if (alu0_id==heads[n] && iq_state[alu0_id]==IQS_CMT
 //					&& !issuing_on_alu0)
 //					alu0_dataready <= `FALSE;
@@ -4578,26 +4654,26 @@ input [QSLOTS-1:0] pat;
 begin
 	for (row = 0; row < QSLOTS; row = row + 1) begin
 		if (pat[row]) begin
-			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[Ra[row]] | SourceAValid(insnx[row]);
+			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[Ra[row]] | SourceAValid(decodeBuffer[row]);
 			iq_argA_s [tails[tails_rc(pat,row)]] <= rf_source[Ra[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rb[row]] || Rb[row]==6'd0 || SourceBValid(insnx[row]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rb[row]] || Rb[row]==6'd0 || SourceBValid(decodeBuffer[row]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[Rb[row]];
-			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rt[row]] || Rt[row]==6'd0 || SourceTValid(insnx[row]);
+			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rt[row]] || Rt[row]==6'd0 || SourceTValid(decodeBuffer[row]);
 			iq_argT_s [tails[tails_rc(pat,row)]] <= rf_source[Rt[row]];
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
 						if (Ra[row]==Rt[col] && slot_rfw2[col] && Ra[row] != 7'd0) begin
-							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(insnx[row]);
+							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(decodeBuffer[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (Rb[row]==Rt[col] && slot_rfw2[col] && Rb[row] != 7'd0) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(insnx[row]);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(decodeBuffer[row]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (Rt[row]==Rt[col] && slot_rfw2[col] && Rt[row] != 7'd0) begin
-							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(insnx[row]);
+							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(decodeBuffer[row]);
 							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 					end
@@ -4653,25 +4729,26 @@ begin
 
 	//iq_br_tag[ndx] <= btag;
 	iq_pc[ndx] <= pcsd[slot];
+	iq.predicted_pc <= btgt_d2[slot];
 	set_insn(ndx,id_bus);
 	// A kludge for now.
 	// Override the instruction being queued if it's a duplicate.
 	// Note that the sequence number is checked because the code could be in a loop resulting
 	// in the appearance of duplicated entries when they're really not duplicates.
 	if (FALSE && (pcsd[slot]==iq_pc[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES]
-		&& insnx[slot] == iq_instr[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] && insnx[slot] != `NOP_INSN
+		&& decodeBuffer[slot] == iq_instr[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] && decodeBuffer[slot] != `NOP_INSN
 		&& seqnum > iq_sn[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES]
 		&& seqnum < iq_sn[(ndx + (IQ_ENTRIES-1)) % IQ_ENTRIES] + 32'd2)
-		|| (slot==3'd1 && pcsd[0]==pcsd[1] && insnx[0]==insnx[1] && insnx[0] != `NOP_INSN)
+		|| (slot==3'd1 && pcsd[0]==pcsd[1] && decodeBuffer[0]==decodeBuffer[1] && decodeBuffer[0] != `NOP_INSN)
 		)
 	// An instruction is needed that copies the target register to the target register so that
 	// dependency checking logic will still work.
 	begin
 		iq_instr[ndx].rr.opcode = `OR_3R;
-		iq_instr[ndx].rr.Ra = insnx[slot].rr.Rt;
+		iq_instr[ndx].rr.Ra = decodeBuffer[slot].rr.Rt;
 		iq_instr[ndx].rr.Rb = 5'd0;
-		iq_instr[ndx].rr.Rt = insnx[slot].rr.Rt;
-		iq_argA_v[ndx] = regIsValid[Rt[slot]] || SourceAValid({35'd0,insnx[slot].rr.Rt,insnx[slot].rr.Rt,`OR_3R});
+		iq_instr[ndx].rr.Rt = decodeBuffer[slot].rr.Rt;
+		iq_argA_v[ndx] = regIsValid[Rt[slot]] || SourceAValid({35'd0,decodeBuffer[slot].rr.Rt,decodeBuffer[slot].rr.Rt,`OR_3R});
 		iq_argB_v[ndx] = TRUE;
 		iq_argA_s[ndx] = rf_source[Rt[slot]];
 		iq_argB_s[ndx] = {`QBIT{1'b1}};
@@ -4681,17 +4758,17 @@ begin
 		iq_rfw = TRUE;
 	end
 	else begin
-		iq_instr[ndx] <= insnx[slot];
+		iq_instr[ndx] <= decodeBuffer[slot];
 		iq_argA[ndx] <= argA[slot];
 		iq_argB[ndx] <= argB[slot];
-		iq_argA_v[ndx] <= regIsValid[Ra[slot]] || SourceAValid(insnx[slot]);
-		iq_argB_v[ndx] <= regIsValid[Rb[slot]] || SourceBValid(insnx[slot]);
+		iq_argA_v[ndx] <= regIsValid[Ra[slot]] || SourceAValid(decodeBuffer[slot]);
+		iq_argB_v[ndx] <= regIsValid[Rb[slot]] || SourceBValid(decodeBuffer[slot]);
 		iq_argA_s[ndx] <= rf_source[Ra[slot]];
 		iq_argB_s[ndx] <= rf_source[Rb[slot]];
 	end
 	iq_len[ndx] <= slot ? len2d : len1d;
 	iq_argT[ndx] <= argT[slot];
-	iq_argT_v[ndx] <= regIsValid[Rt[slot]] || SourceTValid(insnx[slot]);
+	iq_argT_v[ndx] <= regIsValid[Rt[slot]] || SourceTValid(decodeBuffer[slot]);
 	iq_argT_s[ndx] <= rf_source[Rt[slot]];
 `ifdef SIM
 	iq_Ra[ndx] <= Ra[slot];
@@ -4700,17 +4777,17 @@ begin
 	// Determine the most recent prior sync instruction.
 	iq_prior_sync_qid[n] <= {`QBIT{1'b1}};
 	iq_prior_sync[n] <= FALSE;
-	for (n = (ndx + 1)%IQ_ENTRIES; n[`QBITS] != ndx; n = n + 1) begin
-		if (iq.iqs.v[n] & iq_sync[n]) begin
-			iq_prior_sync_qid[n] <= n;
-			iq_prior_sync[n] <= TRUE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq_sync[(n+ndx)%IQ_ENTRIES]) begin
+			iq_prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq_prior_sync[ndx] <= TRUE;
 		end
 	end
 	iq_pt[ndx] <= take_branchq[slot];
 	iq_tgt[ndx] <= Rt[slot];
 	rob.robEntries[rid].pc <= pcs[slot];
 	rob.robEntries[rid].tgt <= Rt[slot];
-	rob.robEntries[rid].rfw <= id_bus[`IB_RFW];//IsRFW(insnx[slot]);
+	rob.robEntries[rid].rfw <= id_bus[`IB_RFW];//IsRFW(decodeBuffer[slot]);
 	rob.robEntries[rid].res <= 1'd0;
 	rob.rs.v <= `VAL;
 	rob.robEntries[rid].id <= ndx;
@@ -4720,7 +4797,7 @@ endtask
 task tDram0Issue;
 input [`QBITS] n;
 begin
-	if (iq.iqs.agen[n]) begin
+	if (iq.iqs.agen[n] & !iq_stomp[n]) begin
 //	dramA_v <= `INV;
 		dram0 		<= `DRAMSLOT_BUSY;
 		dram0_id 	<= n[`QBITS];
@@ -4744,7 +4821,7 @@ endtask
 task tDram1Issue;
 input [`QBITS] n;
 begin
-	if (iq.iqs.agen[n]) begin
+	if (iq.iqs.agen[n] & !iq_stomp[n]) begin
 //	dramB_v <= `INV;
 	dram1 		<= `DRAMSLOT_BUSY;
 	dram1_id 	<= n[`QBITS];

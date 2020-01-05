@@ -26,7 +26,10 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module aluIssue(heads, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
+module aluIssue(rst, clk, ce, heads, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
+input rst;
+input clk;
+input ce;
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input alu0_idle;
@@ -38,36 +41,44 @@ output reg [`IQ_ENTRIES-1:0] issue0;
 output reg [`IQ_ENTRIES-1:0] issue1;
 
 integer n;
+reg [`IQ_ENTRIES-1:0] issue0p;
+reg [`IQ_ENTRIES-1:0] issue1p;
 
 // Start search for instructions to process at head of queue (oldest instruction).
 always @*
 begin
-	issue0 = {`IQ_ENTRIES{1'b0}};
-	issue1 = {`IQ_ENTRIES{1'b0}};
+	issue0p = {`IQ_ENTRIES{1'b0}};
+	issue1p = {`IQ_ENTRIES{1'b0}};
 	
 	if (alu0_idle) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[heads[n]] && iq_alu[heads[n]]
-			&& issue0 == {`IQ_ENTRIES{1'b0}}
+			&& issue0p == {`IQ_ENTRIES{1'b0}}
 			// If there are no valid queue entries prior it doesn't matter if there is
 			// a sync.
 			&& (!iq_prior_sync[heads[n]])
 			)
-			  issue0[heads[n]] = `TRUE;
+			  issue0p[heads[n]] = `TRUE;
 		end
 	end
 
 	if (alu1_idle && `NUM_ALU > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[heads[n]] && iq_alu[heads[n]] && !iq_alu0[heads[n]]
-				&& !issue0[heads[n]]
-				&& issue1 == {`IQ_ENTRIES{1'b0}}
+				&& !issue0p[heads[n]]
+				&& issue1p == {`IQ_ENTRIES{1'b0}}
 				&& (!iq_prior_sync[heads[n]])
 			)
-			  issue1[heads[n]] = `TRUE;
+			  issue1p[heads[n]] = `TRUE;
 		end
 	end
 end
 
+always @(posedge clk)
+if (ce)
+	issue0 <= issue0p;
+always @(posedge clk)
+if (ce)
+	issue1 <= issue1p;
 
 endmodule

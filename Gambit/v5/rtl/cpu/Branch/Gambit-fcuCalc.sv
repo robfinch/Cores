@@ -1,10 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+// - flow control calcs
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -18,39 +19,33 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
 //
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 
-module stompLogic(rst, clk, ce, branchmiss, misssn, iq_sn, iq_stomp);
-input rst;
-input clk;
-input ce;
-input branchmiss;
-input [`SNBITS] misssn;
-input [`SNBITS] iq_sn [0:`IQ_ENTRIES-1];
-output reg [`IQ_ENTRIES-1:0] iq_stomp;
-parameter TRUE = 1'b1;
+module fcuCalc(ol, instr, a, nextpc, im, waitctr, bus);
+parameter WID = 52;
+parameter AMSB = 51;
+input [2:0] ol;
+input Instruction instr;
+input [WID-1:0] a;
+input Address nextpc;
+input [3:0] im;
+input [WID-1:0] waitctr;
+output reg [WID-1:0] bus;
 
-integer n;
-reg branchmiss2;
-
-always @(posedge clk)
-if (rst)
-	iq_stomp <= 1'b0;
-else begin
-	if (ce) begin
-		iq_stomp <= 1'b0;
-		branchmiss2 <= branchmiss;
-		if (branchmiss & ~branchmiss2) begin
-			for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-				if (iq_sn[n] > misssn)
-					iq_stomp[n] <= TRUE;
-			end
-		end
-	end
+always @*
+begin
+  case(instr.gen.opcode)
+  `RETGRP:	bus <= a;
+  `BRKGRP:	;
+  `JAL,`JAL_RN:		bus <= nextpc;
+  default:    bus <= {13{4'hC}};
+  endcase
 end
 
 endmodule
+

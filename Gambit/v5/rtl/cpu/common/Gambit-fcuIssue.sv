@@ -26,9 +26,12 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fcuIssue(heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
+module fcuIssue(rst, clk, ce, heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
 	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iqs_v, iq_sn,
 	iq_prior_sync, issue, nid);
+input rst;
+input clk;
+input ce;
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
@@ -47,6 +50,7 @@ output Qid nid;
 
 integer j, n;
 reg [`IQ_ENTRIES-1:0] nextqd;
+reg [`IQ_ENTRIES-1:0] issuep;
 
 
 //reg [`QBITS] nids [0:`IQ_ENTRIES-1];
@@ -81,18 +85,24 @@ for (n = 0; n < `IQ_ENTRIES; n = n + 1)
 // However, if the queue is full then issue anyway. A branch miss will likely occur.
 // Start search for instructions at head of queue (oldest instruction).
 always @*
-begin
-	issue = {`IQ_ENTRIES{1'b0}};
+if (rst)
+	issuep = {`IQ_ENTRIES{1'b0}};
+else begin
+	issuep = {`IQ_ENTRIES{1'b0}};
 	
 	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]] || !(iq_brkgrp[heads[n]] || iq_retgrp[heads[n]] || iq_jal[heads[n]]))
-			&& issue == {`IQ_ENTRIES{1'b0}}
+			if (could_issue[heads[n]] && iq_fc[heads[n]] //&& (nextqd[heads[n]] || iq_br[heads[n]] || !(iq_brkgrp[heads[n]] || iq_retgrp[heads[n]] || iq_jal[heads[n]]))
+			&& issuep == {`IQ_ENTRIES{1'b0}}
 			&& (!iq_prior_sync[heads[n]])
 			)
-			  issue[heads[n]] = `TRUE;
+			  issuep[heads[n]] = `TRUE;
 		end
 	end
 end
+
+always @(posedge clk)
+if (ce)
+	issue <= issuep;
 
 endmodule

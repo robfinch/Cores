@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,7 +27,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileValid(rst, clk, slotv, slot_rfw, tails,
+module regfileValid(rst, clk, slotv, slot_rfw,
 	livetarget, branchmiss, rob_id,
 	commit0_v, commit1_v,
 	commit0_id, commit1_id,
@@ -46,7 +46,6 @@ input rst;
 input clk;
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
-input Rid tails [0:QSLOTS-1];
 input [AREGS-1:0] livetarget;
 input branchmiss;
 input Qid rob_id [0:RENTRIES-1];

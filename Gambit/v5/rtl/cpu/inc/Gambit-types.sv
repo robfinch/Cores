@@ -238,6 +238,7 @@ typedef struct packed
 typedef struct packed
 {
 	IQState iqs;
+	Address [`IQ_ENTRIES-1:0 ] predicted_pc;
 } IQ;
 
 // Re-order buffer entry

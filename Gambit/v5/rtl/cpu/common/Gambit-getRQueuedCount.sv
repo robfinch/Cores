@@ -42,7 +42,7 @@ parameter FALSE = 1'b0;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
-input Rid rob_tails [0:RSLOTS-1];
+input Rid rob_tails [0:RSLOTS*2-1];
 input Qid heads [0:IQ_ENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;

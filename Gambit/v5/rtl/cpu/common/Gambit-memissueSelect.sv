@@ -29,7 +29,10 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module memissueSelect(heads, iq_stomp, iq_memissue, iqs_agen, dram0, dram1, issue0, issue1);
+module memissueSelect(rst, clk, ce, heads, iq_stomp, iq_memissue, iqs_agen, dram0, dram1, issue0, issue1);
+input rst;
+input clk;
+input ce;
 input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] iq_stomp;
 input [`IQ_ENTRIES-1:0] iq_memissue;
@@ -40,25 +43,38 @@ output reg [`QBITS] issue0;
 output reg [`QBITS] issue1;
 
 integer n;
+reg [`QBITS] issue0p;
+reg [`QBITS] issue1p;
 
 always @*
-begin
-	issue0 = `IQ_ENTRIES;
-	issue1 = `IQ_ENTRIES;
+if (rst) begin
+	issue0p = `IQ_ENTRIES;
+	issue1p = `IQ_ENTRIES;
+end
+else begin
+	issue0p = `IQ_ENTRIES;
+	issue1p = `IQ_ENTRIES;
 	for (n = `IQ_ENTRIES - 1; n >= 0; n = n - 1)
-    if (!iq_stomp[heads[n]] && iq_memissue[heads[n]] && iqs_agen[heads[n]]) begin
+    if (iq_memissue[heads[n]] && iqs_agen[heads[n]]) begin
       if (dram0 == `DRAMSLOT_AVAIL) begin
-       	issue0 = heads[n];
+       	issue0p = heads[n];
       end
     end
 	for (n = `IQ_ENTRIES - 1; n >= 0; n = n - 1)
-    if (!iq_stomp[heads[n]] && iq_memissue[heads[n]] && iqs_agen[heads[n]]) begin
-    	if (heads[n] != issue0 && `NUM_MEM > 1) begin
+    if (iq_memissue[heads[n]] && iqs_agen[heads[n]]) begin
+    	if (heads[n] != issue0p && `NUM_MEM > 1) begin
         if (dram1 == `DRAMSLOT_AVAIL) begin
-					issue1 = heads[n];
+					issue1p = heads[n];
         end
     	end
     end
 end
+
+always @(posedge clk)
+if (ce)
+	issue0 <= issue0p;
+always @(posedge clk)
+if (ce)
+	issue1 <= issue1p;
 
 endmodule

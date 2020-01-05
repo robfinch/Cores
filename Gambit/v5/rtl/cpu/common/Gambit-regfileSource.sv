@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
 input [IQ_ENTRIES-1:0] iq_rfw;
 input RegTag Rd [0:QSLOTS-1];
-input Rid rob_tails [0:QSLOTS-1];
+input Rid rob_tails [0:QSLOTS*2-1];
 input RegTagBitmap iq_latestID [0:IQ_ENTRIES-1];
 input RegTag iq_tgt [0:IQ_ENTRIES-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
@@ -110,12 +110,6 @@ else begin
 			end
 		endcase
 		*/
-		for (n = 0; n < QSLOTS; n = n + 1)
-			if (rob_tails[n] >= IQ_ENTRIES)
-				$stop;
-		for (n = 0; n < IQ_ENTRIES; n = n + 1)
-			if (iq_rid[n] >= IQ_ENTRIES)
-				$stop;
 	end
 end
 
