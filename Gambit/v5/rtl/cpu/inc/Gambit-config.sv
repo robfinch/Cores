@@ -27,7 +27,7 @@
 
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-`define SIM		1'b1
+//`define SIM		1'b1
 
 // The following bit select determines how long the reset counter is active.
 // For sim to aid debugging it's good idea to set it to a low number >3

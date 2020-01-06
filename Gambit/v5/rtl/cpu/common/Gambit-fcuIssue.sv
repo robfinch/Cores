@@ -26,13 +26,12 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fcuIssue(rst, clk, ce, heads, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
+module fcuIssue(rst, clk, ce, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
 	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iqs_v, iq_sn,
 	iq_prior_sync, issue, nid);
 input rst;
 input clk;
 input ce;
-input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
 input Qid fcu_id;
@@ -81,8 +80,6 @@ for (n = 0; n < `IQ_ENTRIES; n = n + 1)
 
 //assign nextqd = 8'hFF;
 
-// Don't issue to the fcu until the following instruction is enqueued.
-// However, if the queue is full then issue anyway. A branch miss will likely occur.
 // Start search for instructions at head of queue (oldest instruction).
 always @*
 if (rst)
@@ -92,11 +89,11 @@ else begin
 	
 	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_fc[heads[n]] //&& (nextqd[heads[n]] || iq_br[heads[n]] || !(iq_brkgrp[heads[n]] || iq_retgrp[heads[n]] || iq_jal[heads[n]]))
+			if (could_issue[n] && iq_fc[n]
 			&& issuep == {`IQ_ENTRIES{1'b0}}
-			&& (!iq_prior_sync[heads[n]])
+			&& (!iq_prior_sync[n])
 			)
-			  issuep[heads[n]] = `TRUE;
+			  issuep[n] = `TRUE;
 		end
 	end
 end

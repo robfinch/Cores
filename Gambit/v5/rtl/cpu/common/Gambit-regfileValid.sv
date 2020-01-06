@@ -67,6 +67,13 @@ output reg [`AREGS-1:0] regIsValid;	// advanced signal
 
 integer n;
 Qid id0, id1;
+reg branchmiss2, branchmiss3, branchmiss4;
+always @(posedge clk)
+	branchmiss2 <= branchmiss;
+always @(posedge clk)
+	branchmiss3 <= branchmiss2;
+always @(posedge clk)
+	branchmiss4 <= branchmiss3;
 
 // Detect if a given register will become valid during the current cycle.
 // We want a signal that is active during the current clock cycle for the read
@@ -79,7 +86,7 @@ begin
 	for (n = 1; n < AREGS; n = n + 1)
 	begin
 		regIsValid[n] = rf_v[n];
-		if (branchmiss) begin
+		if (branchmiss3 & ~branchmiss4) begin
        if (~(livetarget[n]))
      			regIsValid[n] = `VAL;
     end
@@ -88,10 +95,15 @@ begin
 	id0 = rob_id[commit0_id];
 	id1 = rob_id[commit1_id];
 	if (commit0_v && !rf_v[commit0_tgt] && commit0_rfw)
-		regIsValid[commit0_tgt] = ((rf_source[ commit0_tgt ] == commit0_id) || (branchmiss && (iq_source[ id0 ])));
+		regIsValid[commit0_tgt] = rf_source[ commit0_tgt ] == commit0_id;
 	if (commit1_v && !rf_v[commit1_tgt] && commit1_rfw)
-		regIsValid[commit1_tgt] = ((rf_source[ commit1_tgt ] == commit1_id) || (branchmiss && (iq_source[ id1 ])));
-	
+		regIsValid[commit1_tgt] = rf_source[ commit1_tgt ] == commit1_id;
+	if (branchmiss3 & ~branchmiss4) begin
+		if (commit0_v && !rf_v[commit0_tgt] && commit0_rfw)
+			regIsValid[commit0_tgt] = regIsValid[commit0_tgt] || iq_source[ id0 ];
+		if (commit1_v && !rf_v[commit1_tgt] && commit1_rfw)
+			regIsValid[commit1_tgt] = regIsValid[commit1_tgt] || iq_source[ id1 ];
+	end
 	regIsValid[0] = `VAL;
 end
 
@@ -141,15 +153,11 @@ else begin
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
 					rf_v [Rd[0]] <= `INV;
-					if (Rd[0]==7'h61)
-						$stop;
 				end
 			end
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
-					if (Rd[1]==7'h61)
-						$stop;
 				end
 			end
 		end

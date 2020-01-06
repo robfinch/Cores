@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -39,6 +39,7 @@ logic [3:0] cnst;
 typedef logic [7:0] MicroOpPtr;
 
 typedef logic [`ABITS] Address;
+typedef logic [7:0] ASID;
 typedef logic [51:0] Data;
 typedef logic [`QBITS] Qid;			// Issue queue id
 typedef logic [`RBITS] Rid;			// Reorder buffer id
@@ -48,6 +49,12 @@ typedef logic [`SNBITS] Seqnum;	// Sequence number
 // Rather than having a number represent a register like the RegTag type, this
 // type represents a register with a bit position in a vector.
 typedef logic [`AREGS-1:0] RegTagBitmap;
+
+typedef struct packed
+{
+	ASID asid;
+	Address adr;
+} AddressWithASID;
 
 typedef enum bit[2:0] {
 	BC_NULL,

@@ -337,6 +337,7 @@ end
 
 reg [IQ_ENTRIES-1:0] iq_sr_source = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_source = {IQ_ENTRIES{1'b0}};
+reg [IQ_ENTRIES-1:0] iq_source_r = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_source2 = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_imm;
 reg [IQ_ENTRIES-1:0] iq_memready;
@@ -359,8 +360,11 @@ reg [1:0] iq_mem_islot [0:IQ_ENTRIES-1];
 wire [IQ_ENTRIES-1:0] iq_fcu_issue;
 
 RegTagBitmap livetarget;
+RegTagBitmap livetarget_r;
 RegTagBitmap iq_livetarget [0:IQ_ENTRIES-1];
+RegTagBitmap iq_livetarget_r [0:IQ_ENTRIES-1];
 RegTagBitmap iq_latestID [0:IQ_ENTRIES-1];
+RegTagBitmap iq_latestID_r [0:IQ_ENTRIES-1];
 RegTagBitmap iq_cumulative [0:IQ_ENTRIES-1];
 RegTagBitmap iq_out2 [0:IQ_ENTRIES-1];
 RegTagBitmap iq_out2a [0:IQ_ENTRIES-1];
@@ -1023,7 +1027,7 @@ regfileValid urfv1
 	.ce(pipe_advance),
 	.slotv(slotv),
 	.slot_rfw(slot_rfw1),
-	.livetarget(livetarget),
+	.livetarget(livetarget_r),
 	.branchmiss(branchmiss),
 	.rob_id(robIds),
 	.commit0_v(commit0_v),
@@ -1035,7 +1039,7 @@ regfileValid urfv1
 	.commit0_rfw(commit0_rfw),
 	.commit1_rfw(commit1_rfw),
 	.rf_source(rf_source),
-	.iq_source(iq_source),
+	.iq_source(iq_source_r),
 	.Rd(Rt),
 //	.queuedOn(queuedOnp),
 	.queuedOn(queuedOn),
@@ -1049,7 +1053,6 @@ regfileSource urfs1
 	.clk(clk),
 	.ce(pipe_advance),
 	.branchmiss(branchmiss),
-	.heads(heads),
 	.slotv(slotv),
 	.slot_rfw(slot_rfw1),
 //	.queuedOn(queuedOnp),
@@ -1058,7 +1061,7 @@ regfileSource urfs1
 	.iq_rfw(iq_rfw),
 	.Rd(Rt),
 	.rob_tails(tails),
-	.iq_latestID(iq_latestID),
+	.iq_latestID(iq_latestID_r),
 	.iq_tgt(iq_tgt),
 	.iq_rid(iq_rid),
 	.rf_source(rf_source)
@@ -2348,6 +2351,11 @@ for (j = 0; j < AREGS; j = j + 1) begin
 		livetarget[j] = livetarget[j] | iq_livetarget[n][j];
 end
 
+always @(posedge clk)
+	livetarget_r <= livetarget;
+always @(posedge clk)
+	iq_livetarget_r <= iq_livetarget;
+
 //
 // BRANCH-MISS LOGIC: latestID
 //
@@ -2360,19 +2368,24 @@ always @*
 		for (j = n; j < n + IQ_ENTRIES; j = j + 1) begin
 			if (missid==(j % IQ_ENTRIES))
 				for (k = n; k <= j; k = k + 1)
-					iq_cumulative[n] = iq_cumulative[n] | iq_livetarget[k % IQ_ENTRIES];
+					iq_cumulative[n] = iq_cumulative[n] | iq_livetarget_r[k % IQ_ENTRIES];
 		end
 	end
 
 always @*
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    iq_latestID[n] = (missid == n || ((iq_livetarget[n] & iq_cumulative[(n+1)%IQ_ENTRIES]) == {AREGS{1'b0}}))
-				    ? iq_livetarget[n]
+    iq_latestID[n] = (missid == n || ((iq_livetarget_r[n] & iq_cumulative[(n+1)%IQ_ENTRIES]) == {AREGS{1'b0}}))
+				    ? iq_livetarget_r[n]
 				    : {AREGS{1'b0}};
 
 always @*
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	  iq_source[n] = | iq_latestID[n];
+
+always @(posedge clk)
+	iq_source_r <= iq_source;
+always @(posedge clk)
+	iq_latestID_r <= iq_latestID;
 
 //
 // additional logic for ISSUE
@@ -2450,7 +2463,6 @@ aluIssue ualui1
 	.rst(rst_i),
 	.clk(clk),
 	.ce(1'b1),
-	.heads(heads),
 	.could_issue(could_issue),
 	.alu0_idle(alu0_idle),
 	.alu1_idle(alu1_idle),
@@ -2513,7 +2525,6 @@ agenIssue uqgi1
 	.ce(1'b1),
 	.agen0_idle(agen0_idle),
 	.agen1_idle(agen1_idle),
-	.heads(heads),
 	.could_issue(could_issue),
 	.iq_mem(iq_mem),
 	.iq_prior_sync(iq_prior_sync), 
@@ -2528,7 +2539,6 @@ fcuIssue ufcui1
 	.rst(rst_i),
 	.clk(clk),
 	.ce(1'b1),
-	.heads(heads),
 	.branchmiss(branchmiss),
 	.could_issue(could_issue),
 	.fcu_id(fcu_id),
@@ -2600,7 +2610,6 @@ memissueSelect umis1
 	.rst(rst_i),
 	.clk(clk),
 	.ce(1'b1),
-	.heads(heads),
 	.iq_stomp(iq_stomp),
 	.iq_memissue(iq_memissue),
 	.iqs_agen(iq.iqs.agen),
@@ -2631,7 +2640,7 @@ end
 
 EvalBranch ube1
 (
-	.instr(fcu_instr.raw),
+	.instr(fcu_instr),
 	.a(fcu_argA),
 	.takb(fcu_takb)
 );
@@ -2654,8 +2663,14 @@ wire will_clear_branchmiss = branchmiss && (
 															|| (uoq_slotv[1] && uoq_pc[(uoq_head + 2'd1) % UOQ_ENTRIES]==misspc)
 															|| (uoq_slotv[2] && uoq_pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
 															);
-*/													
-wire will_clear_branchmiss = branchmiss && (pc==misspc);
+*/											
+reg branchmiss2, branchmiss3;
+always @(posedge clk)
+begin
+	branchmiss2 <= branchmiss;
+	branchmiss3 <= branchmiss2;
+end
+wire will_clear_branchmiss = branchmiss3 && (pc==misspc);
 
 always @*
 case(fcu_instr.gen.opcode)
@@ -3099,6 +3114,22 @@ end
 
 wire alu0_done_pe;
 edge_det uedalu0d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(alu0_done), .pe(alu0_done_pe), .ne(), .ee());
+Qid alu0_rid_r, alu1_rid_r, agen0_rid_r, agen1_rid_r, fcu_rid_r;
+Data alu0_bus_r, alu1_bus_r, agen0_bus_r, agen1_bus_r, fcu_bus_r;
+reg alu0_v_r, alu1_v_r, agen0_v_r, agen1_v_r, fcu_v_r;
+
+always @(posedge clk)
+begin
+	alu0_rid_r <= alu0_rid;
+	alu0_bus_r <= ralu0_bus;
+	alu0_v_r <= alu0_v;
+	alu1_rid_r <= alu1_rid;
+	alu1_bus_r <= ralu1_bus;
+	alu1_v_r <= alu1_v;
+	fcu_rid_r <= fcu_rid;
+	fcu_bus_r <= rfcu_bus;
+	fcu_v_r <= fcu_v;
+end
 
 //wire pe_branchmiss;
 //edge_det ubmed1 (.rst(rst_i), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pe_branchmiss), .ne(), .ee());
@@ -3474,19 +3505,23 @@ else begin
 
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	begin
-		setargs(n,{1'b0,commit0_id},commit0_v & commit0_rfw,commit0_bus);
-		setargs(n,{1'b0,commit1_id},commit1_v & commit1_rfw,commit1_bus);
+		setargs(n,commit0_id,commit0_v & commit0_rfw,commit0_bus);
+		setargs(n,commit1_id,commit1_v & commit1_rfw,commit1_bus);
 
-		setargs(n,{1'b0,alu0_rid},alu0_v,ralu0_bus);
+//		setargs(n,{1'b0,alu0_rid},alu0_v,ralu0_bus);
+//		if (`NUM_ALU > 1)
+//			setargs(n,{1'b0,alu1_rid},alu1_v,ralu1_bus);
+		setargs(n,alu0_rid_r,alu0_v_r,alu0_bus_r);
 		if (`NUM_ALU > 1)
-			setargs(n,{1'b0,alu1_rid},alu1_v,ralu1_bus);
+			setargs(n,alu1_rid_r,alu1_v_r,alu1_bus_r);
 
 //		setargs(n,{1'b1,agen0_rid},agen0_v & agen0_mem2,agen0_res);
 //		if (`NUM_AGEN > 1) begin
 //			setargs(n,{1'b1,agen1_rid},agen1_v & agen1_mem2,agen1_res);
 //		end
 
-		setargs(n,{1'b0,fcu_rid},fcu_v,rfcu_bus);
+//		setargs(n,{1'b0,fcu_rid},fcu_v,rfcu_bus);
+		setargs(n,fcu_rid_r,fcu_v_r,fcu_bus_r);
 
 		setargs(n,{1'b0,dramA_rid},dramA_v,rdramA_bus);
 		if (`NUM_MEM > 1)

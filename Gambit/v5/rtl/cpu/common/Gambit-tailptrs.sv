@@ -46,6 +46,13 @@ input Rid iq_rid [0:IQ_ENTRIES-1];
 
 integer n, j;
 reg [2:0] qcnt;
+reg branchmiss2, branchmiss3, branchmiss4;
+always @(posedge clk_i)
+	branchmiss2 <= branchmiss;
+always @(posedge clk_i)
+	branchmiss3 <= branchmiss2;
+always @(posedge clk_i)
+	branchmiss4 <= branchmiss3;
 
 always @*
 	if (queuedOn[0] & queuedOn[1])
@@ -67,7 +74,7 @@ else begin
 		for (n = 0; n < QSLOTS*2; n = n + 1)
  			iq_tailsp[n] = (iq_tails[n] + qcnt) % IQ_ENTRIES;
 	end
-	else begin	// if branchmiss
+	else if (branchmiss3 & ~branchmiss4) begin	// if branchmiss
 		for (n = IQ_ENTRIES-1; n >= 0; n = n - 1)
 			// (IQ_ENTRIES-1) is needed to ensure that n increments forwards so that the modulus is
 			// a positive number.
@@ -92,7 +99,7 @@ else begin
 		for (n = 0; n < RSLOTS; n = n + 1)
 			rob_tails[n] <= (rob_tails[n] + qcnt) % RENTRIES;
 	end
-	else begin
+	else if (branchmiss3 & ~branchmiss4) begin
 		for (n = IQ_ENTRIES-1; n >= 0; n = n - 1)
 			// (IQ_ENTRIES-1) is needed to ensure that n increments forwards so that the modulus is
 			// a positive number.

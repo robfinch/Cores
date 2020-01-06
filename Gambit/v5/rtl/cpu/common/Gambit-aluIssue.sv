@@ -26,11 +26,10 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module aluIssue(rst, clk, ce, heads, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
+module aluIssue(rst, clk, ce, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
 input rst;
 input clk;
 input ce;
-input Qid heads [0:`IQ_ENTRIES-1];
 input [`IQ_ENTRIES-1:0] could_issue;
 input alu0_idle;
 input alu1_idle;
@@ -52,24 +51,24 @@ begin
 	
 	if (alu0_idle) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_alu[heads[n]]
+			if (could_issue[n] && iq_alu[n]
 			&& issue0p == {`IQ_ENTRIES{1'b0}}
 			// If there are no valid queue entries prior it doesn't matter if there is
 			// a sync.
-			&& (!iq_prior_sync[heads[n]])
+			&& (!iq_prior_sync[n])
 			)
-			  issue0p[heads[n]] = `TRUE;
+			  issue0p[n] = `TRUE;
 		end
 	end
 
 	if (alu1_idle && `NUM_ALU > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_alu[heads[n]] && !iq_alu0[heads[n]]
-				&& !issue0p[heads[n]]
+			if (could_issue[n] && iq_alu[n] && !iq_alu0[n]
+				&& !issue0p[n]
 				&& issue1p == {`IQ_ENTRIES{1'b0}}
-				&& (!iq_prior_sync[heads[n]])
+				&& (!iq_prior_sync[n])
 			)
-			  issue1p[heads[n]] = `TRUE;
+			  issue1p[n] = `TRUE;
 		end
 	end
 end

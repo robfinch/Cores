@@ -26,7 +26,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileSource(rst, clk, ce, branchmiss, heads, slotv, slot_rfw,
+module regfileSource(rst, clk, ce, branchmiss, slotv, slot_rfw,
 	queuedOn,	rqueuedOn, iq_rfw, Rd, rob_tails,
 	iq_latestID, iq_tgt, iq_rid, rf_source);
 parameter AREGS = 128;
@@ -38,7 +38,6 @@ input rst;
 input clk;
 input ce;
 input branchmiss;
-input Qid heads [0:IQ_ENTRIES-1];
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
 input [QSLOTS-1:0] queuedOn;
@@ -52,6 +51,13 @@ input Rid iq_rid [0:IQ_ENTRIES-1];
 output Rid rf_source [0:AREGS-1];
 
 integer n;
+reg branchmiss2, branchmiss3, branchmiss4;
+always @(posedge clk)
+	branchmiss2 <= branchmiss;
+always @(posedge clk)
+	branchmiss3 <= branchmiss2;
+always @(posedge clk)
+	branchmiss4 <= branchmiss3;
 
 initial begin
 for (n = 0; n < AREGS; n = n + 1)
@@ -65,7 +71,7 @@ if (rst) begin
   end
 end
 else begin
-	if (branchmiss) begin
+	if (branchmiss3 & ~branchmiss4) begin
 		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
     	if (|iq_latestID[n])
     		rf_source[ iq_tgt[n] ] <= {{`QBIT{1'b0}},iq_rid[n]};
@@ -86,31 +92,6 @@ else begin
 			if (slot_rfw[1])
 				rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
 		end
-		/*
-		// Setting the rf valid and source
-		case(slotv)
-		2'b00:	;
-		2'b01:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-			end
-		2'b10:
-			if (queuedOn[1]) begin
-				if (slot_rfw[1])
-					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
-			end
-		2'b11:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (queuedOn[1]) begin
-					if (slot_rfw[1])
-						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
-				end
-			end
-		endcase
-		*/
 	end
 end
 
