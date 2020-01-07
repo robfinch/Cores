@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -76,31 +76,6 @@ input [7:0] slot_sr_tgts [0:QSLOTS-1];
 output reg [AREGS:0] rf_v;
 output reg [AREGS:0] regIsValid;	// advanced signal
 
-// The following two functions used to figure out which slot to process.
-// However, the functions when used things seemed not to work.
-// Find first one
-function [2:0] ffo;
-input [2:0] i;
-casez(i)
-3'b1??:  ffo <= 3'd0;
-3'b01?:  ffo <= 3'd1;
-3'b001:  ffo <= 3'd2;
-default:    ffo <= 3'd0;
-endcase
-endfunction
-
-// Find second one bit
-function [2:0] fso;
-input [2:0] i;
-casez(i)
-3'b11?:  fso <= 3'd1;
-3'b011:  fso <= 3'd2;
-3'b001:  fso <= 3'd0;
-3'b101:	 fso <= 3'd2;
-default:    fso <= 3'd0;
-endcase
-endfunction
-
 integer n;
 
 // Detect if a given register will become valid during the current cycle.
@@ -147,54 +122,7 @@ if (rst) begin
 end
 else begin
 
-	if (branchmiss) begin
-		for (n = 0; n < AREGS; n = n + 1)
-			if (~(livetarget[n])) begin
-				rf_v[n] <= `VAL;
-		end
-		if (iq_latest_sr_ID=={`QBIT{1'b1}})
-			rf_v[AREGS] <= `VAL;
-	end
-
-  // The source for the register file data might have changed since it was
-  // placed on the commit bus. So it's needed to check that the source is
-  // still as expected to validate the register.
-	if (commit0_v && commit0_rfw) begin
-		$display("!rfv=%d %d",!rf_v[ commit0_tgt ], rf_v[ commit0_tgt ] );
-    if (!rf_v[ commit0_tgt ]) begin
-      rf_v[ commit0_tgt ] <= (rf_source[ commit0_tgt ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]));
-      $display("rfv 0: %d %d %d", rf_source[ commit0_tgt][`RBITS], commit0_id, rf_source[ commit0_tgt ][`QBIT]);
-    end
-  end
-  if (commit1_v && commit1_rfw) begin
-		$display("!rfv=%d %d",!rf_v[ commit1_tgt ], rf_v[ commit1_tgt] );
-    if (!rf_v[ commit1_tgt ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit1_tgt ] <= (rf_source[ commit1_tgt ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]));
-      $display("rfv 1: %d %d %d", rf_source[ commit0_tgt ][`RBITS], commit0_id, rf_source[ commit0_tgt ][`QBIT]);
-    end
-  end
-  if (commit2_v && commit2_rfw) begin
-		$display("!rfv=%d %d",!rf_v[ commit2_tgt ], rf_v[ commit2_tgt ] );
-    if (!rf_v[ commit2_tgt ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit2_tgt ] <= (rf_source[ commit2_tgt ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ]));
-    end
-  end
-
-	if (commit0_v && commit0_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit0_id) || (branchmiss && (iq_sr_source[ rob_id[commit0_id] ]));
-    end
-  end
-  if (commit1_v && commit1_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit1_id) || (branchmiss && (iq_sr_source[ rob_id[commit1_id] ]));
-    end
-  end
-  if (commit2_v && commit2_sr_tgts != 8'h00) begin
-    if (!rf_v[ AREGS ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ AREGS ] <= (sr_source[`RBITS] == commit2_id) || (branchmiss && (iq_sr_source[ rob_id[commit2_id] ]));
-    end
-  end
+	rf_v <= regIsValid;
 
 	$display("slot_rfw: %h", slot_rfw);
 	$display("quedon : %h", queuedOn);

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Stratford
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -23,8 +23,8 @@
 //                                                                          
 // ============================================================================
 //
-`ifndef WDC65000_DEFINES
-`define WDC65000_DEFINES	1'b1
+`ifndef RTF65000_DEFINES
+`define RTF65000_DEFINES	1'b1
 
 `define TRUE		1'b1
 `define FALSE		1'b0

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,6 +33,7 @@
 // 76202 121923
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
+`include "rtf65004-types.sv"
 
 module rtf65004(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
@@ -92,15 +93,6 @@ parameter ubyt = 4'd5;
 parameter uwyde = 4'd6;
 parameter utbyt = 4'd7;
 parameter utetra = 4'd8;
-
-// IQ states
-parameter IQS_INVALID = 3'd0;
-parameter IQS_QUEUED = 3'd1;
-parameter IQS_OUT = 3'd2;
-parameter IQS_AGEN = 3'd3;
-parameter IQS_MEM = 3'd4;
-parameter IQS_DONE = 3'd5;
-parameter IQS_CMT = 3'd6;
 
 parameter RS_INVALID = 2'd0;
 parameter RS_ASSIGNED = 2'd1;
@@ -212,20 +204,17 @@ reg [2:0] r_amt, r_amt2;
 wire [`SNBITS] tosub;
 
 wire [3:0] len1, len2, len3, iclen1;
-reg [47:0] insnx [0:1];
+reg [47:0] fetchBuffer [0:1];
 
-wire [`QBITS] tails [0:QSLOTS-1];
-wire [`QBITS] heads [0:IQ_ENTRIES-1];
+Qid tails [0:QSLOTS-1];
+Qid heads [0:IQ_ENTRIES-1];
 wire [`RBITS] rob_tails [0:RSLOTS-1];
 wire [`RBITS] rob_heads [0:RENTRIES-1];
 wire [FSLOTS-1:0] slotvd, pc_maskd, pc_mask;
 
 // Micro-op queue
-reg [UOQ_ENTRIES-1:0] uoq_v;
-reg [WID-1:0] uoq_pc [0:UOQ_ENTRIES-1];
-reg [2:0] uoq_ilen [0:UOQ_ENTRIES-1];
-MicroOp uoq_uop [0:UOQ_ENTRIES-1];
-reg [47:0] uoq_inst [0:UOQ_ENTRIES-1];
+uOPQ uoq;
+
 reg [3:0] uoq_size [0:UOQ_ENTRIES-1];
 reg [31:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl [0:UOQ_ENTRIES-1];		// first or last micro-op
@@ -239,11 +228,8 @@ reg [UOQ_ENTRIES-1:0] uoq_jc;
 reg [UOQ_ENTRIES-1:0] uoq_takb;
 
 // Issue queue
-reg [IQ_ENTRIES-1:0] iq_v;						// valid indicator (set from iq_state)
-reg [IQ_ENTRIES-1:0] iq_done;
-reg [IQ_ENTRIES-1:0] iq_out;
-reg [IQ_ENTRIES-1:0] iq_agen;
-reg [2:0] iq_state [0:IQ_ENTRIES-1];
+IQ iq;
+
 reg [`SNBITS] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 reg [WID-1:0] iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
 reg [2:0] iq_len [0:IQ_ENTRIES-1];
@@ -766,31 +752,31 @@ uopl[`BIT_ZPX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO
 uopl[`BIT_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 uopl[`BIT_ABSX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 
-uopl[`LDX_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ZP]		= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ZPY]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ABS]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ABSY]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ZP]	  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ZPY]  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ABS]	= {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPX_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPX_ZP]		= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDX_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDX_ZP]		= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDX_ZPY]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_XR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDX_ABS]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDX_ABSY]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_XR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STX_ZP]	  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STX_ZPY]  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_XR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STX_ABS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPX_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_CMPB,`UO_R8,`UO_XR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPX_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 //uopl[`CPX_ZPY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{2{`UO_NOP_MOP}}};
-uopl[`CPX_ABS]	= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPX_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 
 uopl[`LDY_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ZP]		= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ZPX]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ABS]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ABSX]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ZP]	  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ZPX]  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ABS]	= {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPY_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPY_ZP]		= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDY_ZP]		= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDY_ZPX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_YR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDY_ABS]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`LDY_ABSX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_YR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STY_ZP]	  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STY_ZPX]  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_YR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`STY_ABS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPY_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPY_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 //uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
-uopl[`CPY_ABS]	= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
+uopl[`CPY_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 
 uopl[`STZ_ZP]	  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
 uopl[`STZ_ZPX]  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ZR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
@@ -947,16 +933,16 @@ begin
 //	// If head and tail are the same, then either the queue is full or it's empty
 //	// Detection of the queue full is done by checking a single entry for valid.
 //	else if (uoq_head - uoq_tail[0] == 1'd0)
-//		uoq_room = uoq_v[0] ? 5'd0 : UOQ_ENTRIES;
+//		uoq_room = uoq.v[0] ? 5'd0 : UOQ_ENTRIES;
 //	else
 //		uoq_room = uoq_head - uoq_tail[0];
 //end
 	uoq_hitv = FALSE;
 	uoq_room = 5'd0;
 	for (n = 0; n < 8; n = n + 1)
-		if (uoq_v[uoq_tail[n]] == `INV)
+		if (uoq.v[uoq_tail[n]] == `INV)
 			uoq_room = uoq_room + 5'd1;
-//		if (uoq_v[uoq_tail[n]] == `INV && !uoq_hitv)
+//		if (uoq.v[uoq_tail[n]] == `INV && !uoq_hitv)
 //			uoq_room = uoq_room + 5'd1;
 //		else
 //			uoq_hitv = TRUE;
@@ -1028,25 +1014,25 @@ end
 always @*
 begin
 	if (uoq_head==uoq_tail[0]) begin
-		if (&uoq_v)							// Is the queue full ?
+		if (&uoq.v)							// Is the queue full ?
 			uoq_slotv <= 3'b111;	// If so all slots from the head are valid
-		else if (~|uoq_v)				// Is the queue empty ?
+		else if (~|uoq.v)				// Is the queue empty ?
 			uoq_slotv <= 3'b000;
 		else begin
 			uoq_slotv[0] <= `VAL;
-			uoq_slotv[1] <= ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[0] && uoq_v[(uoq_head + 2'd1) % UOQ_ENTRIES];
-			uoq_slotv[2] <= ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[0] && uoq_v[(uoq_head + 2'd2) % UOQ_ENTRIES];
+			uoq_slotv[1] <= ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[0] && uoq.v[(uoq_head + 2'd1) % UOQ_ENTRIES];
+			uoq_slotv[2] <= ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[0] && uoq.v[(uoq_head + 2'd2) % UOQ_ENTRIES];
 		end
 	end
 	else begin
 		uoq_slotv[0] <= `VAL;
-		uoq_slotv[1] <= ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[0] && uoq_v[(uoq_head + 2'd1) % UOQ_ENTRIES];
-		uoq_slotv[2] <= ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[0] && uoq_v[(uoq_head + 2'd2) % UOQ_ENTRIES];
+		uoq_slotv[1] <= ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[0] && uoq.v[(uoq_head + 2'd1) % UOQ_ENTRIES];
+		uoq_slotv[2] <= ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[0] && uoq.v[(uoq_head + 2'd2) % UOQ_ENTRIES];
 	end
 end
-//assign uoq_slotv[0] = uoq_v[uoq_head]==`VAL;	//uoq_head != uoq_tail[0] || ~|uoq_v || &uoq_v;
-//assign uoq_slotv[1] = uoq_slotv[0] && uoq_v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq_v || &uoq_v;
-//assign uoq_slotv[2] = uoq_slotv[1] && uoq_v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq_v || &uoq_v;
+//assign uoq_slotv[0] = uoq.v[uoq_head]==`VAL;	//uoq_head != uoq_tail[0] || ~|uoq.v || &uoq.v;
+//assign uoq_slotv[1] = uoq_slotv[0] && uoq.v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq.v || &uoq.v;
+//assign uoq_slotv[2] = uoq_slotv[1] && uoq.v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq.v || &uoq.v;
 
 assign ic1_out = ic_out[95:0];
 assign ic2_out = ic1_out >> {iclen1,3'b0};
@@ -1054,8 +1040,8 @@ assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[3])) && !int_comm
 
 assign opcode1 = freezepc ? {nat,`BRK} : {nat,ic1_out[7:0]};
 assign opcode2 = freezepc ? {nat,`BRK} : {nat,ic2_out[7:0]};
-assign insnx[0] = freezepc ? `BRK : ic1_out[47:0];
-assign insnx[1] = freezepc ? `BRK : ic2_out[47:0];
+assign fetchBuffer[0] = freezepc ? `BRK : ic1_out[47:0];
+assign fetchBuffer[1] = freezepc ? `BRK : ic2_out[47:0];
 wire IsRst = (freezepc && rst_ctr < 4'd10);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
@@ -1259,11 +1245,11 @@ reg [QSLOTS-1:0] slot_jmp;
 reg [QSLOTS-1:0] uoq_take_branch;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_jmp[n] = uoq_uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JMP ||
-								uoq_uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JSI;
+	slot_jmp[n] = uoq.uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JMP ||
+								uoq.uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JSI;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_rfw[n] = IsRFW(uoq_uop[(uoq_head + n) % UOQ_ENTRIES]);
+	slot_rfw[n] = IsRFW(uoq.uop[(uoq_head + n) % UOQ_ENTRIES]);
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_sr_tgts[n] = uoq_flagsupd[(uoq_head + n) % UOQ_ENTRIES];
@@ -1364,7 +1350,6 @@ regfileSource urfs1
 	.slot_sr_tgts(slot_sr_tgts),
 	.queuedOn(queuedOnp),
 	.rqueuedOn(rqueuedOn),
-	.iq_state(iq_state),
 	.iq_rfw(iq_rfw),
 	.iq_Rd(iq_tgt),
 	.Rd(RdReal),
@@ -1393,7 +1378,7 @@ getQueuedCount ugqc1
 	.slotvd(uoq_slotv),
 	.slot_jmp(slot_jmp),
 	.take_branch(uoq_take_branch),
-	.iq_v(iq_v),
+	.iq_v(iq.iqs.v),
 	.rob_v(rob_v),
 	.queuedCnt(queuedCnt),
 	.queuedOnp(queuedOnp)
@@ -1406,7 +1391,7 @@ getRQueuedCount ugrqct1
 	.rob_v_i(rob_v),
 	.rob_v_o(next_rob_v),
 	.heads(heads),
-	.iq_state(iq_state),
+	.iq_queued(iq.iqs.queued),
 	.iq_rid_i(iq_rid),
 	.iq_rid_o(next_iq_rid),
 	.rqueuedCnt(rqueuedCnt),
@@ -1461,7 +1446,7 @@ programCounter upc1
 	.q1(q1),
 	.q2(q2),
 	.q1bx(q1bx),
-	.insnx(insnx),
+	.fetchBuffer(fetchBuffer),
 	.phit(phit),
 	.freezepc(freezepc),
 	.branchmiss(branchmiss),
@@ -1623,9 +1608,9 @@ wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire btbwr0 = iq_state[heads[0]]==IQS_CMT && iq_fc[heads[0]];
-wire btbwr1 = iq_state[heads[1]]==IQS_CMT && iq_fc[heads[1]];
-wire btbwr2 = iq_state[heads[2]]==IQS_CMT && iq_fc[heads[2]];
+wire btbwr0 = iq.iqs.cmt[heads[0]] && iq_fc[heads[0]];
+wire btbwr1 = iq.iqs.cmt[heads[1]] && iq_fc[heads[1]];
+wire btbwr2 = iq.iqs.cmt[heads[2]] && iq_fc[heads[2]];
 
 wire fcu_clk;
 `ifdef FCU_ENH
@@ -1648,15 +1633,15 @@ BTB #(.AMSB(AMSB)) ubtb1
   .wr0(btbwr0),  
   .wadr0(iq_pc[heads[0]]),
   .wdat0(iq_ma[heads[0]]),
-  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq_v[heads[0]]),
+  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq.iqs.v[heads[0]]),
   .wr1(btbwr1),  
   .wadr1(iq_pc[heads[1]]),
   .wdat1(iq_ma[heads[1]]),
-  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq_v[heads[1]]),
+  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq.iqs.v[heads[1]]),
   .wr2(btbwr2),  
   .wadr2(iq_pc[heads[2]]),
   .wdat2(iq_ma[heads[2]]),
-  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq_v[heads[2]]),
+  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq.iqs.v[heads[2]]),
   .rclk(~clk),
   .pcA(pc),
   .btgtA(btgt[0]),
@@ -1683,21 +1668,21 @@ wire [3:0] xtkb;
 
 assign xisBr[0] = iq_br[heads[0]] & commit0_v;// & ~iq_instr[heads[0]][5];
 assign xisBr[1] = iq_br[heads[1]] & commit1_v;// & ~iq_instr[heads[1]][5];
-assign xisBr[2] = iq_br[heads[2]] & commit2_v;// & ~iq_instr[heads[2]][5];
+assign xisBr[2] = 1'b0;	// & ~iq_instr[heads[2]][5];
 assign xisBr[3] = 1'b0;
 assign xpc[0] = iq_pc[heads[0]];
 assign xpc[1] = iq_pc[heads[1]];
-assign xpc[2] = iq_pc[heads[2]];
+assign xpc[2] = 1'd0;
 assign xpc[3] = 1'd0;
 assign xtkb[0] = commit0_v & iq_takb[heads[0]];
 assign xtkb[1] = commit1_v & iq_takb[heads[1]];
-assign xtkb[2] = commit2_v & iq_takb[heads[2]];
+assign xtkb[2] = 1'b0;
 assign xtkb[3] = 1'b0;
 
 wire [FSLOTS-1:0] predict_takenx;
 
 `ifdef FCU_BP
-BranchPredictor ubp1
+gshareBranchPredictor ubp1
 (
   .rst(rst_i),
   .clk(clk_i),
@@ -1711,8 +1696,8 @@ BranchPredictor ubp1
   .predict_taken(predict_takenx)
 );
 `else
-assign predict_takenx[0] = insnx[0][15];
-assign predict_takenx[1] = insnx[1][15];
+assign predict_takenx[0] = fetchBuffer[0][15];
+assign predict_takenx[1] = fetchBuffer[1][15];
 `endif
 
 assign predict_taken[0] = predict_takenx[0];
@@ -1995,14 +1980,14 @@ tailptrs utp1
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rd[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rt;
+	Rd[n] = uoq.uop[(uoq_head+n)%UOQ_ENTRIES].Rt;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rb;
+	Rn[n] = uoq.uop[(uoq_head+n)%UOQ_ENTRIES].Rb;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Ra[n] = em ? uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rt :
-							 uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Ra ;
+	Ra[n] = em ? uoq.uop[(uoq_head+n)%UOQ_ENTRIES].Rt :
+							 uoq.uop[(uoq_head+n)%UOQ_ENTRIES].Ra ;
 
 // In emulation mode, rfot and rfoa are the same
 always @*
@@ -2015,11 +2000,11 @@ always @*
 		`UO_XR:		rfoa[n] <= regsx[2];
 		`UO_YR:		rfoa[n] <= regsx[3];
 		`UO_SP:		rfoa[n] <= regsx[31];
-		`UO_PC:		rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
+		`UO_PC:		rfoa[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES];
 		`UO_TMP: 	rfoa[n] <= regsx[4];
 		`UO_SR:		rfoa[n] <= {16'h00,srx};
-		`UO_PC2:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
-		`UO_PC3:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
+		`UO_PC2:	rfoa[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
+		`UO_PC3:	rfoa[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
 		default:	rfoa[n] <= 64'h0;
 		endcase
 		case(Rd[n])
@@ -2030,11 +2015,11 @@ always @*
 		`UO_XR:		rfot[n] <= regsx[2];
 		`UO_YR:		rfot[n] <= regsx[3];
 		`UO_SP:		rfot[n] <= regsx[31];
-		`UO_PC:		rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
+		`UO_PC:		rfot[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES];
 		`UO_TMP: 	rfot[n] <= regsx[4];
 		`UO_SR:		rfot[n] <= {16'h00,srx};
-		`UO_PC2:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
-		`UO_PC3:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
+		`UO_PC2:	rfot[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
+		`UO_PC3:	rfot[n] <= uoq.pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
 		default:	rfot[n] <= 64'h0;
 		endcase
 	end
@@ -2058,8 +2043,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rd[n])
-	`UO_RT:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
-	`UO_RA:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
+	`UO_RT:		RdReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+	`UO_RA:		RdReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
 	`UO_ACC:	RdReal[n] <= 6'd1;
 	`UO_XR:		RdReal[n] <= 6'd2;
 	`UO_YR:		RdReal[n] <= 6'd3;
@@ -2071,9 +2056,9 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
-	`UO_RT:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+	`UO_RT:		RnReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
 //	`UO_RA:		RnReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
-	`UO_RB:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
+	`UO_RB:		RnReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
 	`UO_ACC:	RnReal[n] <= 6'd1;
 	`UO_XR:		RnReal[n] <= 6'd2;
 	`UO_YR:		RnReal[n] <= 6'd3;
@@ -2085,8 +2070,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Ra[n])
-	`UO_RT:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
-	`UO_RA:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
+	`UO_RT:		RaReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+	`UO_RA:		RaReal[n] <= uoq.inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
 	`UO_ACC:	RaReal[n] <= 6'd1;
 	`UO_XR:		RaReal[n] <= 6'd2;
 	`UO_YR:		RaReal[n] <= 6'd3;
@@ -2393,6 +2378,7 @@ case(ins)
 `UO_EORB:	fnMnemonic = "EORB";
 `UO_JMP:	fnMnemonic = "JMP ";
 `UO_JSI:	fnMnemonic = "JSI ";
+`UO_SEB:	fnMnemonic = "SEB ";
 `UO_SEC:	fnMnemonic = "SEC ";
 `UO_CLB:	fnMnemonic = "CLB ";
 `UO_CLC:	fnMnemonic = "CLC ";
@@ -2443,35 +2429,35 @@ end
 always @*
 begin
 	hi_amt <= 3'd0;
-	if (iq_v[heads[0]] && iq_state[heads[0]]==IQS_CMT) begin
+	if (iq.iqs.v[heads[0]] && iq.iqs.cmt[heads[0]]) begin
 		hi_amt <= 3'd1;
-		if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+		if (iq.iqs.v[heads[1]] && iq.iqs.cmt[heads[1]]) begin
 			hi_amt <= 3'd2;
-			if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+			if (iq.iqs.v[heads[2]] && iq.iqs.cmt[heads[2]]) begin
 				hi_amt <= 3'd3;
-				if (!iq_v[heads[3]] && heads[3] != tails[0])
+				if (!iq.iqs.v[heads[3]] && heads[3] != tails[0])
 					hi_amt <= 3'd4;
 			end
 		end
 	end
-	else if (!iq_v[heads[0]]) begin
+	else if (!iq.iqs.v[heads[0]]) begin
 		if (heads[0] != tails[0]) begin
 			hi_amt <= 3'd1;
-			if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+			if (iq.iqs.v[heads[1]] && iq.iqs.cmt[heads[1]]) begin
 				hi_amt <= 3'd2;
-				if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+				if (iq.iqs.v[heads[2]] && iq.iqs.cmt[heads[2]]) begin
 					hi_amt <= 3'd3;
-					if (!iq_v[heads[3]] && heads[3] != tails[0])
+					if (!iq.iqs.v[heads[3]] && heads[3] != tails[0])
 						hi_amt <= 3'd4;
 				end
 			end
-			else if (!iq_v[heads[1]]) begin
+			else if (!iq.iqs.v[heads[1]]) begin
 				if (heads[1] != tails[0]) begin
 					hi_amt <= 3'd2;
-					if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+					if (iq.iqs.v[heads[2]] && iq.iqs.cmt[heads[2]]) begin
 						hi_amt <= 3'd3;
 					end
-					else if (!iq_v[heads[2]]) begin
+					else if (!iq.iqs.v[heads[2]]) begin
 						if (heads[2] != tails[0]) begin
 							hi_amt <= 3'd3;
 						end
@@ -2491,7 +2477,7 @@ end
 
 always @*
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+		iq_livetarget[n] = {AREGS {iq.iqs.v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
 
 always @*
 begin
@@ -2501,7 +2487,7 @@ begin
 		for (j = n; j < n + IQ_ENTRIES; j = j + 1) begin
 			if (missid==(j % IQ_ENTRIES))
 				for (k = n; k <= j; k = k + 1) begin
-					if (iq_v[k % IQ_ENTRIES]
+					if (iq.iqs.v[k % IQ_ENTRIES]
 						&& ~iq_stomp[k % IQ_ENTRIES]					// not stomped on
 						&& iq_sr_tgts[k % IQ_ENTRIES]!=8'h00	// and updates the sr
 						&& iq_latest_sr_ID == {`QBIT{1'b1}})	begin // and not found yet
@@ -2558,7 +2544,7 @@ always @*
 // their results into the IQ entry directly, at which point it becomes issue-able
 //
 
-// note that, for all intents & purposes, iq_done == iq_agen ... no need to duplicate
+// note that, for all intents & purposes, iq.iqs.done == iq.iqs.agen ... no need to duplicate
 
 wire [IQ_ENTRIES-1:0] args_valid;
 wire [IQ_ENTRIES-1:0] could_issue;
@@ -2587,7 +2573,7 @@ assign args_valid[g] =
 `endif
         )
     && (iq_argS_v[g] || !iq_need_sr[g]
-//        || (iq_mem[g] & ~iq_agen[g])
+//        || (iq_mem[g] & ~iq.iqs.agen[g])
 `ifdef FU_BYPASS
         || (iq_argS_s[g] == alu0_rid)
         || ((iq_argS_s[g] == alu1_rid) && (`NUM_ALU > 1))
@@ -2595,10 +2581,10 @@ assign args_valid[g] =
         )
     ;
 
-assign could_issue[g] = iq_v[g] && iq_state[g]==IQS_QUEUED	&& args_valid[g];
-                        //&& (iq_mem[g] ? !iq_agen[g] : 1'b1);
+assign could_issue[g] = iq.iqs.v[g] && iq.iqs.queued[g]	&& args_valid[g];
+                        //&& (iq_mem[g] ? !iq.iqs.agen[g] : 1'b1);
 
-assign could_issueid[g] = (iq_v[g]);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
+assign could_issueid[g] = (iq.iqs.v[g]);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
 end                                 
 end
 endgenerate
@@ -2612,7 +2598,7 @@ begin
 	prior_valid[heads[j]] = 1'b0;
 	if (j > 0)
 		for (n = j-1; n >= 0; n = n - 1)
-			prior_valid[heads[j]] = prior_valid[heads[j]]|iq_v[heads[n]];
+			prior_valid[heads[j]] = prior_valid[heads[j]]|iq.iqs.v[heads[n]];
 end
 //end
 //endgenerate
@@ -2627,7 +2613,7 @@ begin
 	prior_sync[heads[j]] = 1'b0;
 //	if (j > 0)
 //		for (n = j-1; n >= 0; n = n - 1)
-//			prior_sync[heads[j]] = prior_sync[heads[j]]|(iq_v[heads[n]] & iq_sync[heads[n]]);
+//			prior_sync[heads[j]] = prior_sync[heads[j]]|(iq.iqs.v[heads[n]] & iq_sync[heads[n]]);
 end
 //end
 //endgenerate
@@ -2670,7 +2656,7 @@ always @*
 begin
 issuing_on_alu0 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+	if (iq_alu0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu0_done))
 		issuing_on_alu0 = TRUE;
 end
@@ -2679,7 +2665,7 @@ always @*
 begin
 issuing_on_alu1 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+	if (iq_alu1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu1_done))
 		issuing_on_alu1 = TRUE;
 end
@@ -2689,7 +2675,7 @@ always @*
 begin
 issuing_on_agen0 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n]))
+	if (iq_agen0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]))
 		issuing_on_agen0 = TRUE;
 end
 
@@ -2698,7 +2684,7 @@ always @*
 begin
 issuing_on_agen1 = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n]))
+	if (iq_agen1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]))
 		issuing_on_agen1 = TRUE;
 end
 
@@ -2707,7 +2693,7 @@ always @*
 begin
 issuing_on_fcu = FALSE;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n]) && fcu_done)
+	if (iq_fcu_issue[n] && !(iq.iqs.v[n] && iq_stomp[n]) && fcu_done)
 		issuing_on_fcu = TRUE;
 end
 
@@ -2765,7 +2751,7 @@ end
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq_v[n];
+	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq.iqs.v[n];
 
 //assign nextqd = 8'hFF;
 
@@ -2809,16 +2795,6 @@ end
 
 always @*
 begin
-	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-		iq_v[n] = iq_state[n] != IQS_INVALID;
-		iq_done[n] = iq_state[n]==IQS_DONE || iq_state[n]==IQS_CMT;
-		iq_out[n] = iq_state[n]==IQS_OUT;
-		iq_agen[n] = iq_state[n]==IQS_AGEN;
-	end
-end
-
-always @*
-begin
 	for (n = 0; n < RENTRIES; n = n + 1)
 		rob_v[n] = rob_state[n] != RS_INVALID;
 end
@@ -2828,12 +2804,12 @@ end
 memissueLogic umi1
 (
 	.heads(heads),
-	.iq_v(iq_v),
+	.iq_v(iq.iqs.v),
 	.iq_memready(iq_memready),
-	.iq_out(iq_out),
-	.iq_done(iq_done),
+	.iq_out(iq.iqs.out),
+	.iq_done(iq.iqs.done),
 	.iq_mem(iq_mem),
-	.iq_agen(iq_agen), 
+	.iq_agen(iq.iqs.agen), 
 	.iq_load(iq_load),
 	.iq_store(iq_store),
 	.iq_sel(iq_sel),
@@ -2861,7 +2837,7 @@ begin
 	last_issue0 = IQ_ENTRIES;
 	last_issue1 = IQ_ENTRIES;
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]] && !iq_done[heads[n]] && iq_v[heads[n]]) begin
+    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]] && !iq.iqs.done[heads[n]] && iq.iqs.v[heads[n]]) begin
       if (dram0 == `DRAMSLOT_AVAIL) begin
        last_issue0 = heads[n];
       end
@@ -2905,9 +2881,9 @@ EvalBranch ube1
 
 /*
 wire will_clear_branchmiss = branchmiss && (
-															(uoq_slotv[0] && uoq_pc[uoq_head]==misspc)
-															|| (uoq_slotv[1] && uoq_pc[(uoq_head + 2'd1) % UOQ_ENTRIES]==misspc)
-															|| (uoq_slotv[2] && uoq_pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
+															(uoq_slotv[0] && uoq.pc[uoq_head]==misspc)
+															|| (uoq_slotv[1] && uoq.pc[(uoq_head + 2'd1) % UOQ_ENTRIES]==misspc)
+															|| (uoq_slotv[2] && uoq.pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
 															);
 */													
 wire will_clear_branchmiss = branchmiss && (pc==misspc);
@@ -2964,11 +2940,11 @@ assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argA_v[n] : 1'b1) && iq_state[n]==IQS_AGEN);
+	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argA_v[n] : 1'b1) && iq.iqs.agen[n]);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memready[n] <= (iq_v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
+	iq_memready[n] <= (iq.iqs.v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store);
@@ -2980,7 +2956,7 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 always @*
 begin
 	// The first commit bus is always tied to the same place
-  commit0_v <= (iq_state[heads[0][`RBITS]] == IQS_CMT && ~|panic);
+  commit0_v <= (iq.iqs.cmt[heads[0][`RBITS]] && ~|panic);
   commit0_id <= heads[0][`RBITS];	// if a memory op, it has a DRAM-bus id
   commit0_tgt <= rob_tgt[heads[0][`RBITS]];
   commit0_rfw <= rob_rfw[heads[0]];
@@ -2989,8 +2965,8 @@ begin
   commit0_sr_bus <= rob_sr_res[heads[0][`RBITS]];
   commit0_rid <= heads[0][`RBITS];
 
-  commit1_v <= (iq_state[heads[0][`RBITS]] == IQS_CMT
-             && iq_state[heads[1][`RBITS]] == IQS_CMT
+  commit1_v <= (hi_amt > 3'd1
+             && iq.iqs.cmt[heads[1][`RBITS]]
              && ~|panic);
 	commit1_id <= heads[1][`RBITS];
 	commit1_tgt <= rob_tgt[heads[1][`RBITS]];
@@ -3000,9 +2976,8 @@ begin
   commit1_sr_bus <= rob_sr_res[heads[1][`RBITS]];
   commit1_rid <= heads[1][`RBITS];
 
-  commit2_v <= (iq_state[heads[0][`RBITS]] == IQS_CMT
-             && iq_state[heads[1][`RBITS]] == IQS_CMT
-             && iq_state[heads[2][`RBITS]] == IQS_CMT
+  commit2_v <= (hi_amt > 3'd2
+             && iq.iqs.cmt[heads[2][`RBITS]]
              && ~|panic);
   commit2_id <= heads[2][`RBITS];
   commit2_tgt <= rob_tgt[heads[2][`RBITS]];  
@@ -3025,7 +3000,7 @@ for (g = 0; g < QSLOTS; g = g + 1)
 begin
 idecoder uid1
 (
-	.instr(uoq_uop[(uoq_head+g) % UOQ_ENTRIES]),
+	.instr(uoq.uop[(uoq_head+g) % UOQ_ENTRIES]),
 	.predict_taken(predict_taken[g]),
 	.bus(id_bus[g])
 );
@@ -3291,7 +3266,7 @@ seqnum usqn1
 	.clk(clk),
 	.heads(heads),
 	.hi_amt(hi_amt),
-	.iq_v(iq_v),
+	.iq_v(iq.iqs.v),
 	.iq_sn(iq_sn),
 	.maxsn(maxsn),
 	.tosub(tosub)
@@ -3306,21 +3281,21 @@ else begin
 		ins_stomped = ins_stomped + iq_stomp[n];
 end
 
-wire [2:0] fl3 = (iq_fl[commit0_id]==2'b01) + (iq_fl[commit1_id]==2'b01) + (iq_fl[commit2_id]==2'b01) +
-								(iq_fl[commit0_id]==2'b11) + (iq_fl[commit1_id]==2'b11) + (iq_fl[commit2_id]==2'b11);
-wire [2:0] fl2 = (iq_fl[commit0_id]==2'b01) + (iq_fl[commit1_id]==2'b01) + 
-								(iq_fl[commit0_id]==2'b11) + (iq_fl[commit1_id]==2'b11);
-wire [2:0] fl1 = (iq_fl[commit0_id]==2'b01) + (iq_fl[commit0_id]==2'b11);
+wire [2:0] fl3 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit1_id]==2'b01) && commit1_v) + ((iq_fl[commit2_id]==2'b01) && commit2_v) +
+								((iq_fl[commit0_id]==2'b11) && commit0_v) + ((iq_fl[commit1_id]==2'b11) && commit1_v) + ((iq_fl[commit2_id]==2'b11) && commit2_v);
+wire [2:0] fl2 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit1_id]==2'b01) && commit1_v) + 
+								((iq_fl[commit0_id]==2'b11) && commit0_v) + ((iq_fl[commit1_id]==2'b11) && commit1_v);
+wire [2:0] fl1 = ((iq_fl[commit0_id]==2'b01) && commit0_v) + ((iq_fl[commit0_id]==2'b11) && commit0_v);
 
 always @(posedge clk_i)
 if (rst_i)
 	ins_committed <= 0;
 else begin
-	if (commit0_v & commit1_v & commit2_v)
+	if (hi_amt==3'd3)
 		ins_committed <= ins_committed + fl3;
-	else if (commit0_v & commit1_v)
+	else if (hi_amt==3'd2)
 		ins_committed <= ins_committed + fl2;
-	else if (commit0_v)
+	else if (hi_amt==3'd1)
 		ins_committed <= ins_committed + fl1;
 end
 
@@ -3348,18 +3323,19 @@ if (rst_i) begin
 	for (n = 0; n < 8; n = n + 1)
 		uoq_tail[n] <= n;
 	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
-		uoq_v[n] <= `INV;
-		uoq_uop[n] <= 24'd0;
+		uoq.v[n] <= `INV;
+		uoq.uop[n] <= 24'd0;
 		uoq_const[n] <= 64'h0000;
 		uoq_flagsupd[n] <= 8'h00;
 		uoq_fl[n] <= 2'b11;
-		uoq_pc[n] <= 64'h00FFFC;
+		uoq.pc[n] <= 64'h00FFFC;
 		uoq_hs[n] <= 1'd0;
 		uoq_takb[n] <= FALSE;
 	end
 	q1b <= FALSE;
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-  	iq_state[n] <= IQS_INVALID;
+  	iq.iqs.v[n] <= `INV;
+  	clear_iqs();
 		iq_sn[n] <= n;
 		iq_pt[n] <= FALSE;
 		iq_bt[n] <= FALSE;
@@ -3572,8 +3548,8 @@ else begin
 	// assuming a bit error in sim for now. The issue is that it blocks
 	// further queuing. So for now if this situation occurs the slot at the
 	// tail is set to invalid.
-//	if (uoq_v[uoq_tail[0]] && uoq_tail[0] != uoq_head)
-//		uoq_v[uoq_tail[0]] <= `INV;
+//	if (uoq.v[uoq_tail[0]] && uoq_tail[0] != uoq_head)
+//		uoq.v[uoq_tail[0]] <= `INV;
 
 	// BRK is queued specially because it's the only instruction requiring six 
 	// micro-ops. Also the brk vector must be modified for the appropriate type.
@@ -3583,18 +3559,18 @@ else begin
 		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd5 ? 2'b11: 2'b01,8'h00,1'b0,slot_pf[0]);
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 //		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
+		tskLd4(uo_insn1[0][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[0]]);
 		if (uo_len1 > 3'd5) begin
 			queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd6 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
+			tskLd4(uo_insn1[1][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[1]]);
 		end
 		if (uo_len1 > 3'd6) begin
 			queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd7 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
+			tskLd4(uo_insn1[2][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[2]]);
 		end
 		if (uo_len1 > 3'd7) begin
 			queue_uop(uoq_tail[3],pc,uo_insn1[3],2'b10,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
+			tskLd4(uo_insn1[3][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[3]]);
 		end
 		uop_queued <= uop_queued + uo_len1;
 		ins_queued <= ins_queued + 4'd1;
@@ -3605,7 +3581,7 @@ else begin
 	end
 	else if (qb) begin
 		queue_uop(uoq_tail[0],pc,{`UO_ADDB,em ? `UO_M3 : `UO_M4,`UO_SP,`UO_SP,`UO_ZR},2'b01,8'h00,1'b0,4'h0);
-		uoq_inst[uoq_tail[0]] <= 48'h0;
+		uoq.inst[uoq_tail[0]] <= 48'h0;
 		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[0]]);
 
 		queue_uop(uoq_tail[1],pc,{IsRst|IsNmi|IsIrq ? `UO_CLB : `UO_SEB,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},2'b00,`UOF_B,1'b0,4'h0);
@@ -3642,20 +3618,20 @@ else begin
 	else if (q2) begin
 		if (slot_pf[0]!=4'h0) begin
 			queue_uop(uoq_tail[0],pc,uo_insn2[0],uo_len2==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,slot_pf[0]);
-			uoq_inst[uoq_tail[0]] <= insnx[1];
+			uoq.inst[uoq_tail[0]] <= fetchBuffer[1];
 			uoq_takb[uoq_tail[0]] <= take_branch[1];
-			tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[0]]);
+			tskLd4(uo_insn2[0][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[0]]);
 			if (uo_len2 > 3'd1) begin
 				queue_uop(uoq_tail[1],pc,uo_insn2[1],uo_len2==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[1]]);
+				tskLd4(uo_insn2[1][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[1]]);
 			end
 			if (uo_len2 > 3'd2) begin
 				queue_uop(uoq_tail[2],pc,uo_insn2[2],uo_len2==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[2]]);
+				tskLd4(uo_insn2[2][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[2]]);
 			end
 			if (uo_len2 > 3'd3) begin
 				queue_uop(uoq_tail[3],pc,uo_insn2[3],2'b10,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[3]]);
+				tskLd4(uo_insn2[3][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[3]]);
 			end
 			if (uo_whflg2 <= 3'd4)
 				uoq_flagsupd[uoq_tail[uo_whflg2]] <= uo_flags2;
@@ -3673,37 +3649,37 @@ else begin
 		end
 		else begin
 			queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-			uoq_inst[uoq_tail[0]] <= insnx[0];
+			uoq.inst[uoq_tail[0]] <= fetchBuffer[0];
 			uoq_takb[uoq_tail[0]] <= take_branch[0];
-			tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
+			tskLd4(uo_insn1[0][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[0]]);
 			if (uo_len1 > 3'd1) begin
 				queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
+				tskLd4(uo_insn1[1][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[1]]);
 			end
 			if (uo_len1 > 3'd2) begin
 				queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
+				tskLd4(uo_insn1[2][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[2]]);
 			end
 			if (uo_len1 > 3'd3) begin
 				queue_uop(uoq_tail[3],pc,uo_insn1[3],2'b10,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
+				tskLd4(uo_insn1[3][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[3]]);
 			end
 			queue_uop(uoq_tail[uo_len1],pc+len1,uo_insn2[0],uo_len2==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-			uoq_inst[uoq_tail[uo_len1]] <= insnx[1];
+			uoq.inst[uoq_tail[uo_len1]] <= fetchBuffer[1];
 			uoq_takb[uoq_tail[uo_len1]] <= take_branch[1];
 			//uoq_tail[0] <= (uoq_tail[0] + uo_len1 + 8'd1) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1]]);
+			tskLd4(uo_insn2[0][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[uo_len1]]);
 			if (uo_len2 > 3'd1) begin
 				queue_uop(uoq_tail[uo_len1 + 1],pc+len1,uo_insn2[1],uo_len2==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 1]]);
+				tskLd4(uo_insn2[1][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[uo_len1 + 1]]);
 			end
 			if (uo_len2 > 3'd2) begin
 				queue_uop(uoq_tail[uo_len1 + 2],pc+len1,uo_insn2[2],uo_len2==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 2]]);
+				tskLd4(uo_insn2[2][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[uo_len1 + 2]]);
 			end
 			if (uo_len2 > 3'd3) begin
 				queue_uop(uoq_tail[uo_len1 + 3],pc+len1,uo_insn2[3],2'b10,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 3]]);
+				tskLd4(uo_insn2[3][`UO_LD4],fetchBuffer[1],uoq_const[uoq_tail[uo_len1 + 3]]);
 			end
 			uoq_flagsupd[uoq_tail[3'd0 + uo_whflg1]] <= uo_flags1;
 			uoq_flagsupd[uoq_tail[uo_len1+uo_whflg2]] <= uo_flags2;
@@ -3715,21 +3691,21 @@ else begin
 	end
 	else if (q1) begin
 		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-		uoq_inst[uoq_tail[0]] <= insnx[0];
+		uoq.inst[uoq_tail[0]] <= fetchBuffer[0];
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 //		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
+		tskLd4(uo_insn1[0][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[0]]);
 		if (uo_len1 > 3'd1) begin
 			queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
+			tskLd4(uo_insn1[1][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[1]]);
 		end
 		if (uo_len1 > 3'd2) begin
 			queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
+			tskLd4(uo_insn1[2][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[2]]);
 		end
 		if (uo_len1 > 3'd3) begin
 			queue_uop(uoq_tail[3],pc,uo_insn1[3],uo_len1==3'd4 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
+			tskLd4(uo_insn1[3][`UO_LD4],fetchBuffer[0],uoq_const[uoq_tail[3]]);
 		end
 		if (uo_len1 > 3'd4)
 			q1b <= TRUE;
@@ -3749,10 +3725,10 @@ else begin
 		// entries may be in the process of queuing new instructions from the 
 		// target address.
 		for (n = 0; n < UOQ_ENTRIES; n = n + 1)
-			if (uoq_v[n])
-				uoq_v[n] <= 1'd0;
+			if (uoq.v[n])
+				uoq.v[n] <= 1'd0;
 		for (n = 0; n < UOQ_ENTRIES; n = n + 1)
-			uop_stomped <= uop_stomped + uoq_v[n];
+			uop_stomped <= uop_stomped + uoq.v[n];
 		//for (n = 0; n < 8; n = n + 1)
 		//	uoq_tail[n] = n;
 		//uoq_head <= 2'd0;
@@ -3764,26 +3740,26 @@ else begin
 		3'b001:
 			if (queuedOnp[0]) begin
 				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b010:
 			if (queuedOnp[1]) begin
 				queue_slot(1,tails[0],maxsn+2'd1,id_bus[1],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b011:
 			if (queuedOnp[0]) begin
 				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 				if (queuedOnp[1]) begin
 					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1],tails[1]);
-					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq.v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b011);
@@ -3792,26 +3768,26 @@ else begin
 		3'b100:
 			if (queuedOnp[2]) begin
 				queue_slot(2,tails[0],maxsn+2'd1,id_bus[2],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b101:	//;	// illegal
 			if (queuedOnp[0]) begin
 				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b110:
 			if (queuedOnp[1]) begin
 				queue_slot(1,tails[0],maxsn+2'd1,id_bus[1],tails[0]);
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 				if (queuedOnp[2]) begin
 					queue_slot(2,tails[1],maxsn+2'd2,id_bus[2],tails[1]);
-					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq.v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b110);
@@ -3820,18 +3796,18 @@ else begin
 		3'b111:
 			if (queuedOnp[0]) begin
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
-				uoq_v[uoq_head] <= `INV;
+				uoq.v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0],tails[0]);
 				if (queuedOnp[1]) begin
 					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1],tails[1]);
-					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq.v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b011);
 					if (queuedOnp[2]) begin
 						queue_slot(2,tails[2],maxsn+2'd3,id_bus[2],tails[2]);
-						uoq_v[(uoq_head + 2) % UOQ_ENTRIES] <= `INV;
+						uoq.v[(uoq_head + 2) % UOQ_ENTRIES] <= `INV;
 						uoq_takb[(uoq_head + 2) % UOQ_ENTRIES] <= FALSE;
 						uoq_head <= (uoq_head + 3'd3) % UOQ_ENTRIES;
 						arg_vs(3'b111);
@@ -3847,8 +3823,9 @@ else begin
 		rob_sr_res [ alu0_rid] <= alu0_sro;
 		rob_exc	[ alu0_rid ] <= 4'h0;
 	//	if (alu0_done) begin
-			if (iq_state[alu0_id]==IQS_OUT) begin
-				iq_state[alu0_id] <= IQS_CMT;
+			if (iq.iqs.out[alu0_id]) begin
+				iq.iqs.out[alu0_id] <= FALSE;
+				iq.iqs.cmt[alu0_id] <= TRUE;
 				rob_state[alu0_rid] <= RS_CMT;
 			end
 	//	end
@@ -3860,8 +3837,9 @@ else begin
 		rob_sr_res [ alu1_rid] <= alu1_sro;
 		rob_exc	[ alu1_rid ] <= alu1_exc;
 	//	if (alu1_done) begin
-			if (iq_state[alu1_id]==IQS_OUT) begin
-				iq_state[alu1_id] <= IQS_CMT;
+			if (iq.iqs.out[alu1_id]) begin
+				iq.iqs.out[alu1_id] <= FALSE;
+				iq.iqs.cmt[alu1_id] <= TRUE;
 				rob_state[alu1_rid] <= RS_CMT;
 			end
 	//	end
@@ -3869,11 +3847,13 @@ else begin
 	end
 
 	if (agen0_v) begin
-		if (iq_state[agen0_id]==IQS_OUT)
-			iq_state[agen0_id] <= IQS_AGEN;
+		if (iq.iqs.out[agen0_id]) begin
+			iq.iqs.out[agen0_id] <= FALSE;
+			iq.iqs.agen[agen0_id] <= TRUE;
+		end
 		rob_res[agen0_rid] <= 16'h0;//agen0_ma;
 		rob_exc[agen0_rid] <= 4'h0;
-		if (iq_state[agen0_id]==IQS_OUT) begin
+		if (iq.iqs.out[agen0_id]) begin
 			iq_ma[agen0_id] <= agen0_ma;
 			iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[3:0];
 		end
@@ -3881,11 +3861,13 @@ else begin
 	end
 
 	if (agen1_v && `NUM_AGEN > 1) begin
-		if (iq_state[agen1_id]==IQS_OUT)
-			iq_state[agen1_id] <= IQS_AGEN;
+		if (iq.iqs.out[agen1_id]) begin
+			iq.iqs.out[agen1_id] <= FALSE;
+			iq.iqs.agen[agen1_id] <= TRUE;
+		end
 		rob_res[agen1_rid] <= 16'h0;//agen1_ma;		// LEA needs this result
 		rob_exc[agen1_rid] <= 4'h0;
-		if (iq_state[agen1_id]==IQS_OUT) begin
+		if (iq.iqs.out[agen1_id]) begin
 			iq_ma[agen1_id] <= agen1_ma;
 			iq_sel[agen1_id] <= fnSelect(agen1_instr) << agen1_ma[3:0];
 		end
@@ -3899,8 +3881,9 @@ else begin
 		//iq_ma  [ fcu_id ] <= fcu_misspc;
 	  rob_res [ fcu_rid ] <= rfcu_bus;
 	  rob_exc [ fcu_rid ] <= fcu_exc;
-		if (iq_state[fcu_id]==IQS_OUT) begin
-			iq_state[fcu_id ] <= IQS_CMT;
+		if (iq.iqs.out[fcu_id]) begin
+			iq.iqs.out[fcu_id] <= FALSE;
+			iq.iqs.cmt[fcu_id] <= TRUE;
 			rob_state[fcu_rid ] <= RS_CMT;
 		end
 		// takb is looked at only for branches to update the predictor. Here it is
@@ -3911,26 +3894,30 @@ else begin
 	end
 
 	// dramX_v only set on a load
-	if (dramA_v && iq_v[ dramA_id ]) begin
+	if (dramA_v && iq.iqs.v[ dramA_id ]) begin
 		rob_res	[ dramA_rid ] <= rdramA_bus;
 		rob_sr_res [dramA_rid] <= dramA_sr_bus;
 		rob_state[dramA_rid ] <= RS_CMT;
-		iq_state[dramA_id ] <= IQS_CMT;
+		iq.iqs.cmt[dramA_id] <= TRUE;
+		iq.iqs.out[dramA_id] <= FALSE;
 	end
-	if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id ]) begin
+	if (`NUM_MEM > 1 && dramB_v && iq.iqs.v[ dramB_id ]) begin
 		rob_res	[ dramB_id ] <= rdramB_bus;
 		rob_sr_res [dramB_rid] <= dramB_sr_bus;
 		rob_state[dramB_rid ] <= RS_CMT;
-		iq_state[dramB_id ] <= IQS_CMT;
+		iq.iqs.cmt[dramB_id] <= TRUE;
+		iq.iqs.out[dramB_id] <= FALSE;
 	end
 
 	if (wb_q0_done) begin
 		dram0 <= `DRAMREQ_READY;
-		iq_state[ dram0_id ] <= IQS_DONE;
+		iq.iqs.done[dram0_id] <= TRUE;
+		iq.iqs.out[dram0_id] <= FALSE;
 	end
 	if (wb_q1_done) begin
 		dram1 <= `DRAMREQ_READY;
-		iq_state[ dram1_id ] <= IQS_DONE;
+		iq.iqs.done[dram1_id] <= TRUE;
+		iq.iqs.out[dram1_id] <= FALSE;
 	end
 
 	if (update_iq) begin
@@ -3944,7 +3931,8 @@ else begin
 	if (update_iq) begin
 		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
 			if (uid[n]) begin
-				iq_state[n] <= IQS_CMT;
+				iq.iqs.done[n] <= FALSE;
+				iq.iqs.cmt[n] <= TRUE;
 			end
 		end
 	end
@@ -3959,6 +3947,9 @@ else begin
 //  - commit0_bus
 //  - commit1_bus
 //
+`ifdef QBYPASSING
+	setargs2();
+`endif
 
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	begin
@@ -4000,23 +3991,12 @@ else begin
 // Argument loading for functional units.
 // X's on unused busses cause problems in SIM.
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+    if (iq_alu0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 										&& (alu0_done)) begin
 			iq_fuid[n] <= 3'd0;
 			alu0_sn <= iq_sn[n];
 			alu0_sourceid	<= n[`QBITS];
-			if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-				alu1_rid <= {`QBIT{1'b1}};
-			if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-				agen0_rid <= {`QBIT{1'b1}};
-			if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-				agen1_rid <= {`QBIT{1'b1}};
-			if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-				fcu_rid <= {`QBIT{1'b1}};
-					// The following line is a hack. The alu is done (tested above) so it
-					// should be setting the state to CMT.
-//					if (iq_state[alu0_id]==IQS_OUT)
-//						iq_state[alu0_id] <= IQS_CMT;
+			check_issue(n[`QBITS],7'b1111110);
 			alu0_id <= n[`QBITS];
 			alu0_rid <= iq_rid[n];
 			alu0_instr	<= iq_instr[n];
@@ -4031,28 +4011,18 @@ else begin
 			alu0_sr_tgts <= iq_sr_tgts[n];
 			alu0_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
 			alu0_ld <= TRUE;
-			iq_state[n] <= IQS_OUT;
+			iq.iqs.out[n] <= TRUE;
+			iq.iqs.queued[n] <= FALSE;
     end
 
 	if (`NUM_ALU > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if ((iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+      if ((iq_alu1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])
 												&& (alu1_done))) begin
 				iq_fuid[n] <= 3'd1;
 				alu1_sn <= iq_sn[n];
 				alu1_sourceid	<= n[`QBITS];
-				if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-					alu0_rid <= {`QBIT{1'b1}};
-				if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-					agen0_rid <= {`QBIT{1'b1}};
-				if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-					agen1_rid <= {`QBIT{1'b1}};
-				if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-					fcu_rid <= {`QBIT{1'b1}};
-								// The following line is a hack. The alu is done (tested above) so it
-								// should be setting the state to CMT.
-	//							if (iq_state[alu1_id]==IQS_OUT)
-	//								iq_state[alu1_id] <= IQS_CMT;
+				check_issue(n[`QBITS],7'b1111101);
 				alu1_id <= n[`QBITS];
 				alu1_rid <= iq_rid[n];
 				alu1_instr	<= iq_instr[n];
@@ -4065,49 +4035,37 @@ else begin
 				alu1_sr_tgts <= iq_sr_tgts[n];
 				alu1_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
 				alu1_ld <= TRUE;
-				iq_state[n] <= IQS_OUT;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
       end
   end
 
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+      if (iq_agen0_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
         if (~agen0_v) begin
 					iq_fuid[n] <= 3'd2;
 					agen0_sn <= iq_sn[n];
 					agen0_sourceid	<= n[`QBITS];
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+					check_issue(n[`QBITS],7'b1111011);
 					agen0_id <= n[`QBITS];
 					agen0_rid <= iq_rid[n];
 					agen0_instr	<= iq_instr[n];
 					agen0_argI <= iq_const[n];
 					argBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],agen0_argB);
 					agen0_dataready <= 1'b1;
-					iq_state[n] <= IQS_OUT;
+					iq.iqs.out[n] <= TRUE;
+					iq.iqs.queued[n] <= FALSE;
         end
       end
 
 	if (`NUM_AGEN > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
-      if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+      if (iq_agen1_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
         if (~agen1_v) begin
 					iq_fuid[n] <= 3'd3;
 					agen1_sn <= iq_sn[n];
 					agen1_sourceid	<= n[`QBITS];
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-					fcu_rid <= {`QBIT{1'b1}};
+					check_issue(n[`QBITS],7'b1110111);
 					agen1_id <= n[`QBITS];
 					agen1_rid <= iq_rid[n];
 					agen1_instr	<= iq_instr[n];
@@ -4115,26 +4073,19 @@ else begin
 					agen1_argI <= iq_const[n];
 					argBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],agen1_argB);
 					agen1_dataready <= 1'b1;
-					iq_state[n] <= IQS_OUT;
+					iq.iqs.out[n] <= TRUE;
+					iq.iqs.queued[n] <= FALSE;
         end
       end
   end
 
   for (n = 0; n < IQ_ENTRIES; n = n + 1)
-    if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+    if (iq_fcu_issue[n] && !(iq.iqs.v[n] && iq_stomp[n])) begin
       if (fcu_done) begin
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
-				check_done(n[`QBITS]);
+				check_issue(n[`QBITS],7'b0111111);
         fcu_rid <= iq_rid[n];
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
 				fcu_id <= n[`QBITS];
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
@@ -4152,7 +4103,8 @@ else begin
 				fcu_dataready <= 1'b1;
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
-				iq_state[n] <= IQS_OUT;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
 				fcu_done <= `FALSE;
       end
     end
@@ -4215,11 +4167,11 @@ else begin
 	missue_count <= issue_count;
 
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		if (iq_v[n] && iq_stomp[n]) begin
+		if (iq.iqs.v[n] && iq_stomp[n]) begin
 			iq_mem[n] <= `INV;
 			iq_load[n] <= `INV;
 			iq_store[n] <= `INV;
-			iq_state[n] <= IQS_INVALID;
+			clear_iqs();
 			rob_state[iq_rid[n]] <= RS_INVALID;
 	//		if (alu0_id==n)
 	//			alu0_dataready <= FALSE;
@@ -4267,7 +4219,7 @@ if (dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id]) begin
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id]) begin
 		if (dhit0 & !dram0_unc) begin
 //			dramA_v <= !iq_stomp[dram0_id];
 //			dramA_id <= dram0_id;
@@ -4287,7 +4239,7 @@ case(dram0)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_REQBUS:	
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id])
 		;
 	else begin
 		dram0 <= `DRAMREQ_READY;
@@ -4295,7 +4247,7 @@ case(dram0)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
-	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+	if (iq.iqs.v[dram0_id] && !iq_stomp[dram0_id])
 		;
 	else begin
 		dram0 <= `DRAMREQ_READY;
@@ -4309,7 +4261,7 @@ if (dram1_load)
 case(dram1)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id]) begin
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id]) begin
 		if (dhit1 && !dram1_unc) begin
 //			dramB_v <= !iq_stomp[dram1_id];
 //			dramB_id <= dram1_id;
@@ -4328,7 +4280,7 @@ case(dram1)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_REQBUS:	
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id])
 		;
 	else begin
 		dram1 <= `DRAMREQ_READY;
@@ -4336,7 +4288,7 @@ case(dram1)
 		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
-	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+	if (iq.iqs.v[dram1_id] && !iq_stomp[dram1_id])
 		;
 	else begin
 		dram1 <= `DRAMREQ_READY;
@@ -4548,40 +4500,40 @@ endcase
 //    for (n = 0; n < 16; n = n + 1)
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
-	$display("Insn%d: %h %h %h %h", 0, insnx[0], insnx[1], opcode1, opcode2);
+	$display("Insn%d: %h %h %h %h", 0, fetchBuffer[0], fetchBuffer[1], opcode1, opcode2);
 	$display ("------------------------------------------------------------------------ Micro-op Buffer -----------------------------------------------------------------------");
 	for (i = 0; i < UOQ_ENTRIES; i = i + 1)
 		$display("%c%c %d: %c%c %h %h %h %h ins=%h#",
 			i[`UOQ_BITS]==uoq_head ? "H":".",
 			i[`UOQ_BITS]==uoq_tail[0] ? "T":".",
 			i[`UOQ_BITS],
-			uoq_v[i] ? "v" : "-",
+			uoq.v[i] ? "v" : "-",
 			uoq_fl[i]==2'b01 ? "F" : uoq_fl[i]==2'b10 ? "L" : uoq_fl[i]==2'b11 ? "B" : "-",
-			uoq_pc[i],
-			uoq_uop[i],
+			uoq.pc[i],
+			uoq.uop[i],
 			uoq_const[i],
 			uoq_flagsupd[i],
-			uoq_inst[i]
+			uoq.inst[i]
 			);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %s %d,%s %h %h %d %d %d %h %d %d %d %h %d %d %d %h %d #",
+	    $display("%c%c %d: %c%c%c%c%c%c%c%c%c %d %d %c%c %c %c%h %s %d,%s %h %h %d %d %d %h %d %d %d %h %d %d %d %h %d #",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
-		  iq_state[i]==IQS_INVALID ? "-" :
-		  iq_state[i]==IQS_QUEUED ? "Q" :
-		  iq_state[i]==IQS_OUT ? "O"  :
-		  iq_state[i]==IQS_AGEN ? "A"  :
-		  iq_state[i]==IQS_MEM ? "M"  :
-		  iq_state[i]==IQS_DONE ? "D"  :
-		  iq_state[i]==IQS_CMT ? "C"  : "?",
-//		 iq_v[i] ? "v" : "-",
-		 iq_done[i]?"d":"-",
-		 iq_out[i]?"o":"-",
+		  iq.iqs.v[i] ? "v" : "-",
+		  iq.iqs.queued[i] ? "Q" : "-",
+		  iq.iqs.out[i] ? "O" : "-",
+		  iq.iqs.agen[i] ? "A" : "-",
+		  iq.iqs.mem[i] ? "M" : "-",
+		  iq.iqs.done[i] ? "D" : "-",
+		  iq.iqs.cmt[i] ? "C" : "-",
+//		 iq.iqs.v[i] ? "v" : "-",
+		 iq.iqs.done[i]?"d":"-",
+		 iq.iqs.out[i]?"o":"-",
 		 iq_bt[i],
 		 iq_memissue[i],
-		 iq_agen[i] ? "a": "-",
+		 iq.iqs.agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
 		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "A" : "O", 
@@ -4639,7 +4591,6 @@ endcase
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt);
-	$display("2: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt);
     $display("micro-ops committed: %d  ticks: %d ", uop_committed, tick);
     $display("micro-ops queued: %d", uop_queued);
     $display("micro-ops stomped by branches: %d ", ins_stomped);
@@ -4679,6 +4630,18 @@ end	// end of clock domain
 // Start of Tasks
 // ============================================================================
 // ============================================================================
+
+task clear_iqs;
+begin
+	iq.iqs.v <= `INV;
+	iq.iqs.queued <= FALSE;
+	iq.iqs.out <= FALSE;
+	iq.iqs.agen <= FALSE;
+	iq.iqs.mem <= FALSE;
+	iq.iqs.done <= FALSE;
+	iq.iqs.cmt <= FALSE;
+end
+endtask
 
 // Note the use of blocking(=) assigments here. For some reason in sim <= 
 // assignments didn't work.
@@ -4736,6 +4699,30 @@ begin
 end
 endtask
 
+// Check if the core is no longer issuing to a functional unit and set it's
+// rid to the non-issue value. This is checked for every instance of an
+// issue.
+task check_issue;
+input Qid nn;
+input [6:0] pat;
+begin
+	if (alu0_rid==nn && !issuing_on_alu0 && pat[0])
+		alu0_rid <= {`QBIT{1'b1}};
+	if (alu1_rid==nn && !issuing_on_alu1 && pat[1])
+		alu1_rid <= {`QBIT{1'b1}};
+//	if (fpu0_rid==n[`QBITS] && !issuing_on_fpu0 && pat[2])
+//		fpu0_rid <= {`QBIT{1'b1}};
+//	if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1 && pat[3])
+//		fpu1_rid <= {`QBIT{1'b1}};
+	if (agen0_rid==nn && !issuing_on_agen0 && pat[4])
+		agen0_rid <= {`QBIT{1'b1}};
+	if (agen1_rid==nn && !issuing_on_agen1 && pat[5])
+		agen1_rid <= {`QBIT{1'b1}};
+	if (fcu_rid==nn && !issuing_on_fcu && pat[6])
+		fcu_rid <= {`QBIT{1'b1}};
+end
+endtask
+
 task check_done;
 input [`QBITS] id;
 begin
@@ -4785,7 +4772,7 @@ begin
 			|| (heads[n]==tails[2] && queuedCnt==3'd3)
 			|| (heads[n]==tails[3] && queuedCnt==3'd4)
 			)) begin
-				iq_state[heads[n]] <= IQS_INVALID;
+				clear_iqs();
 				rob_state[heads[n]] <= RS_INVALID;
 				iq_mem[heads[n]] <= `FALSE;
 				iq_alu[heads[n]] <= `FALSE;
@@ -4804,7 +4791,7 @@ begin
 			iq_sn[n] <= iq_sn[n] - {2'b01,{`SNBIT-2{1'b0}}};
 	end
 			
-//		if (iq_v[n])
+//		if (iq.iqs.v[n])
 //			iq_sn[n] <= /*(tosub > iq_sn[n]) ? 1'd0 : */iq_sn[n] - tosub;
 end
 endtask
@@ -4839,14 +4826,31 @@ input [`RBITS] id;
 input v;
 input [63:0] bus;
 begin
-  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`RBITS] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`RBITS] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
 		iq_argB[nn] <= bus;
 		iq_argB_v[nn] <= `VAL;
   end
-  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITS] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITS] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
 		iq_argA_v[nn] <= `VAL;
   end
+end
+endtask
+
+task setargs2;
+begin
+	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+		for (j = 0; j < IQ_ENTRIES; j = j + 1) begin
+			if (iq.iqs.cmt[j] && iq_rid[j]==iq_argB_s[n] && iq_argB_v[n]==`INV) begin
+				iq_argB[n] <= rob_res[iq_rid[j]];
+				iq_argB_v[n] <= `VAL;
+			end
+			if (iq.iqs.cmt[j] && iq_rid[j]==iq_argA_s[n] && iq_argA_v[n]==`INV) begin
+				iq_argA[n] <= rob_res[iq_rid[j]];
+				iq_argA_v[n] <= `VAL;
+			end
+		end
+	end
 end
 endtask
 
@@ -4857,7 +4861,7 @@ input v;
 input [7:0] bus;
 input [7:0] mask;
 begin
-  if (iq_argS_v[nn] == `INV && iq_argS_s[nn][`RBITS] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argS_v[nn] == `INV && iq_argS_s[nn][`RBITS] == id && iq.iqs.v[nn] == `VAL && v == `VAL) begin
   	if (mask[0]) iq_argS[nn][0] <= bus[0];
   	if (mask[1]) iq_argS[nn][1] <= bus[1];
   	if (mask[2]) iq_argS[nn][2] <= bus[2];
@@ -4900,28 +4904,28 @@ input [QSLOTS-1:0] pat;
 begin
 	for (row = 0; row < QSLOTS; row = row + 1) begin
 		if (pat[row]) begin
-			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[RaReal[row]] | SourceAValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[RaReal[row]] | SourceAValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argA_s [tails[tails_rc(pat,row)]] <= RaReal[row]==6'd32 ? sr_source : rf_source[RaReal[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || SourceBValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[RnReal[row]];
-			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[AREGS] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[AREGS] | SourceSValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= sr_source;
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
 						if (RaReal[row]==RdReal[col] && slot_rfw[col] && RaReal[row] != 6'd0) begin
-							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+							iq_argA_v [tails[tails_rc(pat,row)]] <= SourceAValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (RnReal[row]==RdReal[col] && slot_rfw[col] && RnReal[row] != 6'd0) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 //						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
-						if (fnNeedSr(uoq_uop[(uoq_head+row) % UOQ_ENTRIES])) begin
+						if (fnNeedSr(uoq.uop[(uoq_head+row) % UOQ_ENTRIES])) begin
 							if (slot_sr_tgts[col]!=8'h00) begin
-								iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+								iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq.uop[(uoq_head+row) % UOQ_ENTRIES]);
 								iq_argS_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 							end
 						end
@@ -4969,9 +4973,9 @@ input [7:0] flagmask;
 input hs;
 input [3:0] size;
 begin
-	uoq_v[ndx] <= `VAL;
-	uoq_pc[ndx] <= pc;
-	uoq_uop[ndx] <= op;
+	uoq.v[ndx] <= `VAL;
+	uoq.pc[ndx] <= pc;
+	uoq.uop[ndx] <= op;
 	uoq_fl[ndx] <= fl;
 	uoq_flagsupd[ndx] <= flagmask;
 	uoq_hs[ndx] <= hs;
@@ -4988,11 +4992,13 @@ input [`RBITS] rid;
 begin
 	iq_rid[ndx] <= rid;
 	iq_sn[ndx] <= seqnum;
-	iq_state[ndx] <= IQS_QUEUED;
+	clear_iqs();
+	iq.iqs.v <= `VAL;
+	iq.iqs.queued <= TRUE;
 	//iq_br_tag[ndx] <= btag;
-	iq_pc[ndx] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
-	iq_len[ndx] <= uoq_ilen[(uoq_head+slot) % UOQ_ENTRIES];
-	iq_instr[ndx][5:0] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode;
+	iq_pc[ndx] <= uoq.pc[(uoq_head+slot) % UOQ_ENTRIES];
+	iq_len[ndx] <= uoq.ilen[(uoq_head+slot) % UOQ_ENTRIES];
+	iq_instr[ndx][5:0] <= uoq.uop[(uoq_head+slot) % UOQ_ENTRIES].opcode;
 	iq_const[ndx] <= uoq_const[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_hs[ndx] <= uoq_hs[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_fl[ndx] <= uoq_fl[(uoq_head+slot) % UOQ_ENTRIES];
@@ -5000,18 +5006,18 @@ begin
 	iq_argA[ndx] <= argA[slot % FSLOTS];
 	iq_argB[ndx] <= argB[slot % FSLOTS];
 	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
-	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
-	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || SourceBValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
-	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq.uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || SourceBValid(uoq.uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq.uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argA_s[ndx] <= RaReal[slot % FSLOTS]==6'd32 ? sr_source : rf_source[RaReal[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
 	iq_argS_s[ndx] <= sr_source;
 	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
 	set_insn(ndx,id_bus);
-	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
+	rob_pc[rid] <= uoq.pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_tgt[rid] <= RdReal[slot % FSLOTS];
-	rob_rfw[rid] <= IsRFW(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	rob_rfw[rid] <= IsRFW(uoq.uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	rob_res[rid] <= 1'd0;
 	rob_sr_tgts[rid] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_sr_res[rid] <= 1'd0;
@@ -5023,7 +5029,7 @@ endtask
 task tDram0Issue;
 input [`QBITS] n;
 begin
-	if (iq_state[n]==IQS_AGEN) begin
+	if (iq.iqs.agen[n]) begin
 //	dramA_v <= `INV;
 		dram0 		<= `DRAMSLOT_BUSY;
 		dram0_id 	<= n[`QBITS];
@@ -5042,7 +5048,8 @@ begin
 	// This is used for the load and compare instructions.
 	// must reset the a1 source too.
 	//iq_a1_v[n] <= `INV;
-		iq_state[n] <= IQS_MEM;
+		iq.iqs.agen[n] <= FALSE;
+		iq.iqs.mem[n] <= TRUE;
 		iq_memissue[n] <= `INV;
 	end
 end
@@ -5051,26 +5058,27 @@ endtask
 task tDram1Issue;
 input [`QBITS] n;
 begin
-	if (iq_state[n]==IQS_AGEN) begin
+	if (iq.iqs.agen[n]) begin
 //	dramB_v <= `INV;
-	dram1 		<= `DRAMSLOT_BUSY;
-	dram1_id 	<= n[`QBITS];
-	dram1_rid <= iq_rid[n];
-	dram1_instr <= iq_instr[n];
-	dram1_tgt 	<= iq_tgt[n];
-	dram1_data <= iq_argA[n][WID-1:0];
-	dram1_addr	<= iq_ma[n];
-	dram1_wrap  <= iq_wrap[n] && ((iq_ma[n] & 8'hFF) == 8'hFF);
-	//	             if (ol[iq_thrd[n]]==`OL_USER)
-	//	             	dram1_seg   <= (iq_rs1[n]==5'd30 || iq_rs1[n]==5'd31) ? {ss[iq_thrd[n]],13'd0} : {ds[iq_thrd[n]],13'd0};
-	//	             else
-	dram1_unc   <= 1'b0;//iq_ma[n][31:20]==12'hFFD || !dce;
-	dram1_memsize <= iq_memsz[n];
-	dram1_load <= iq_load[n];
-	dram1_store <= iq_store[n];
-	//iq_a1_v[n] <= `INV;
-	iq_state[n] <= IQS_MEM;
-	iq_memissue[n] <= `INV;
+		dram1 		<= `DRAMSLOT_BUSY;
+		dram1_id 	<= n[`QBITS];
+		dram1_rid <= iq_rid[n];
+		dram1_instr <= iq_instr[n];
+		dram1_tgt 	<= iq_tgt[n];
+		dram1_data <= iq_argA[n][WID-1:0];
+		dram1_addr	<= iq_ma[n];
+		dram1_wrap  <= iq_wrap[n] && ((iq_ma[n] & 8'hFF) == 8'hFF);
+		//	             if (ol[iq_thrd[n]]==`OL_USER)
+		//	             	dram1_seg   <= (iq_rs1[n]==5'd30 || iq_rs1[n]==5'd31) ? {ss[iq_thrd[n]],13'd0} : {ds[iq_thrd[n]],13'd0};
+		//	             else
+		dram1_unc   <= 1'b0;//iq_ma[n][31:20]==12'hFFD || !dce;
+		dram1_memsize <= iq_memsz[n];
+		dram1_load <= iq_load[n];
+		dram1_store <= iq_store[n];
+		//iq_a1_v[n] <= `INV;
+		iq.iqs.agen[n] <= FALSE;
+		iq.iqs.mem[n] <= TRUE;
+		iq_memissue[n] <= `INV;
 	end
 end
 endtask

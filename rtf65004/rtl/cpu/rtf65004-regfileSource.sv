@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,7 +27,7 @@
 
 module regfileSource(rst, clk, branchmiss, heads, slotv, slot_rfw,
 	slot_sr_tgts,
-	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, rob_tails,
+	queuedOn,	rqueuedOn, iq_rfw, iq_Rd, Rd, rob_tails,
 	iq_latestID, iq_tgt, iq_rid, iq_latest_sr_ID, rf_source, sr_source);
 parameter AREGS = 32;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -43,7 +43,6 @@ input [IQ_ENTRIES-1:0] slot_rfw;
 input [7:0] slot_sr_tgts [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 input [IQ_ENTRIES-1:0] rqueuedOn;
-input [2:0] iq_state [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_rfw;
 input [RBIT+1:0] iq_Rd [0:IQ_ENTRIES-1];
 input [RBIT+1:0] Rd [0:QSLOTS-1];

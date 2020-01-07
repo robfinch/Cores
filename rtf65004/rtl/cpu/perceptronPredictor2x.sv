@@ -21,14 +21,12 @@
 //                                                                          
 // ============================================================================
 
-module perceptronPredictor2x(rst, clk, clk2x, clk4x, id_i, id_o, xbr, xadr, prediction_i, outcome, adr, prediction_o);
+module perceptronPredictor2x(rst, clk, clk2x, clk4x, xbr, xadr, prediction_i, outcome, adr, prediction_o);
 parameter AMSB = 63;
 input rst;
 input clk;
 input clk2x;
 input clk4x;
-input [7:0] id_i [1:0];
-output reg [7:0] id_o [1:0];
 input [3:0] xbr;
 input [AMSB:0] xadr [3:0];
 input [3:0] prediction_i;
@@ -163,7 +161,6 @@ reg [12:0] sum;
 reg [12:0] sum1 [0:4];
 reg [12:0] sum2;
 reg [12:0] sum2a [0:4];
-reg [7:0] id1 [1:0];
 
 // Form dot product of input and weights.
 always @*
@@ -183,7 +180,6 @@ begin
 		sum1[3] = global_history[n] ? sum1[3] + {{6{wghts[n][7]}},wghts[n]} : sum1[3] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 20; n < 22; n = n + 1)
 		sum1[4] = global_history[n] ? sum1[4] + {{6{wghts[n][7]}},wghts[n]} : sum1[4] - {{6{wghts[n][7]}},wghts[n]};
-	id1[0] <= id_i[0];
 end
 
 always @*
@@ -211,7 +207,6 @@ begin
 		sum2a[3] = global_history[n] ? sum2a[3] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[3] - {{6{wghts2[n][7]}},wghts2[n]};
 	for (n = 20; n < 22; n = n + 1)
 		sum2a[4] = global_history[n] ? sum2a[4] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[4] - {{6{wghts2[n][7]}},wghts2[n]};
-	id1[1] <= id_i[1];
 end
 
 always @*
@@ -227,8 +222,6 @@ always @(posedge clk)
 begin
 	prediction_o[0] <= ~sum[12];
 	prediction_o[1] <= ~sum2[12];
-	id_o[0] <= id1[0];
-	id_o[1] <= id1[1];
 end
 
 generate begin : train

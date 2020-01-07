@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -122,6 +122,11 @@
 `define FCU_BTB		1				// Branch target buffer
 
 `define FCU_RA		pc			// return address if no RSB
+
+// The following definition includes a queue bypass network which increases
+// perfornace and core size.
+`define QBYPASSING	1
+
 // Comment out the following to remove bypassing logic on the functional units
 `define FU_BYPASS	1
 
