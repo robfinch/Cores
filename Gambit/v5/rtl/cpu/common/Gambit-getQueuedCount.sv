@@ -34,7 +34,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getQueuedCount(rst, clk, ce, branchmiss, brk, phit, tails, rob_tails, slotvd,
+module getQueuedCount(rst, clk, ce, branchmiss, brk, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntd1, queuedCntd2, queuedOnp, queuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
@@ -45,7 +45,6 @@ input clk;
 input ce;
 input branchmiss;
 input [QSLOTS-1:0] brk;
-input phit;
 input Qid tails [0:QSLOTS*2-1];
 input Rid rob_tails [0:RSLOTS*2-1];
 input [QSLOTS-1:0] slotvd;

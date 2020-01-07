@@ -248,20 +248,6 @@ typedef struct packed
 	Address [`IQ_ENTRIES-1:0 ] predicted_pc;
 } IQ;
 
-// Re-order buffer entry
-typedef struct packed
-{
-	Qid id;			// Link to issue queue
-	Address pc;
-	Instruction instr;
-	ExcCode exc;
-	Address ma;
-	Data res;
-	RegTag tgt;
-	logic rfw;
-	Data argA;
-} RobEntry;
-
 typedef struct packed
 {
 	logic [`RENTRIES-1:0] v;
@@ -270,7 +256,14 @@ typedef struct packed
 
 typedef struct packed
 {
-	RobEntry [`RENTRIES-1:0] robEntries;
+	Qid [`RENTRIES-1:0] id;			// Link to issue queue
+	Address [`RENTRIES-1:0] pc;
+	Instruction [`RENTRIES-1:0] instr;
+	Data [`RENTRIES-1:0] res;
+	RegTag [`RENTRIES-1:0] tgt;
+	logic [`RENTRIES-1:0] rfw;
+	Data [`RENTRIES-1:0] argA;
+	ExcCode [`RENTRIES-1:0] exc;
 	RobState rs;
 } Rob;
 

@@ -27,7 +27,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileValid(rst, clk, ce, slotv, slot_rfw,
+module regfileValid(rst, clk, ce, slot_rfw,
 	livetarget, branchmiss, rob_id,
 	commit0_v, commit1_v,
 	commit0_id, commit1_id,
@@ -45,11 +45,10 @@ parameter INV = 1'b0;
 input rst;
 input clk;
 input ce;
-input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
 input [AREGS-1:0] livetarget;
 input branchmiss;
-input Qid rob_id [0:RENTRIES-1];
+input Qid [RENTRIES-1:0] rob_id;
 input commit0_v;
 input commit1_v;
 input Rid commit0_id;
@@ -147,7 +146,6 @@ else begin
 */
 	$display("slot_rfw: %h", slot_rfw);
 	$display("quedon : %h", queuedOn);
-	$display("slotv: %h", slotv);
 	if (!branchmiss) begin
 		if (ce) begin
 			if (queuedOn[0]) begin

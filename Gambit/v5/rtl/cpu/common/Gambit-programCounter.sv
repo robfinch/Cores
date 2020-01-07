@@ -27,7 +27,7 @@
 
 module programCounter(rst, clk, ce,
 	q1, q2, q1bx, insnx, freezepc, 
-	phit, branchmiss, misspc, len1, len2, len3,
+	branchmiss, misspc, len1, len2, len3,
 	jc, jcl, rts, br, wai, take_branch,
 	btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
@@ -45,7 +45,6 @@ input q1;
 input q1bx;
 input Instruction insnx [0:FSLOTS-1];
 input freezepc;
-input phit;
 input branchmiss;
 input Address misspc;
 input [2:0] len1;
@@ -111,12 +110,10 @@ if (rst) begin
 	pc <= RSTPC;
 	pcd <= RSTPC;
 	//pc_maskd <= 2'b11;
-	phitd <= 1'b1;
 end
 else begin
 	begin
 		pcd <= pc;
-		phitd <= phit;
 	end
 	if (branchmiss) begin
 		$display("==============================");

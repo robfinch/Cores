@@ -1,4 +1,5 @@
 // ============================================================================
+// DEAD CODE from an earlier core version.
 //        __
 //   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.

@@ -78,10 +78,11 @@
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define IQ_ENTRIES	7		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	9		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
-// empty all the time.
+// empty all the time. For now it must be the same size as the dispatch
+// queue.
 `define RENTRIES	`IQ_ENTRIES		// number of entries in re-order buffer
 
 // bitfield representing a queue entry index. The field must be large
@@ -118,13 +119,6 @@
 
 //`define SUPPORT_DBG		1'b1
 
-// Issue logic is not really required for every possible distance from
-// the head of the queue. Later queue entries tend to depend on prior
-// ones and hence may not be ready to be issued. Also note that 
-// instruction decode takes a cycle making the last entry or two in the
-// queue not ready to be issued. Commenting out this line will limit
-// much of the issue logic to the first six queue slots relative to the
-// head of the queue.
 `define FULL_ISSUE_LOGIC	1'b1
 
 // The WAYS config define affects things like the number of ports on the
@@ -133,8 +127,8 @@
 // affects how many instructions are queued.
 `define WAYS			2				// number of ways parallel (1-2) (use only 2)
 `define NUM_IDU		2				// number of instruction decode units (2 only)
-`define NUM_ALU		1				// number of ALU's (1-2)
-`define NUM_AGEN	1				// number of address generators (1-2)
+`define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_AGEN	2				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-2)
 `define NUM_FPU		2				// number of floating-point units (0-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)

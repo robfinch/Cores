@@ -33,6 +33,8 @@ module BTB(rst, clk, clk2x, clk4x,
     npcA, npcB );
 parameter AMSB = `AMSB;
 parameter RSTIP = 52'hFFFFFFFFE0000;
+parameter BTBSZ = 512;
+localparam BTBAB = $clog2(BTBSZ);
 input rst;
 input clk;
 input clk2x;
@@ -68,10 +70,10 @@ reg takb;
 reg wrhist;
 
 (* ram_style="distributed" *)
-reg [(AMSB+1)*2:0] mem [0:1023];
-reg [9:0] radrA, radrB, radrC;
+reg [(AMSB+1)*2:0] mem [0:BTBSZ-1];
+reg [BTBAB:0] radrA, radrB, radrC;
 initial begin
-  for (n = 0; n < 1024; n = n + 1)
+  for (n = 0; n < BTBSZ; n = n + 1)
     mem[n] <= RSTIP;
 end
 reg wr;
@@ -160,15 +162,15 @@ end
 
 always @(posedge clk)
 begin
-    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdatx;
-    if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2-1:AMSB+1] <= pc;
-    if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2] <= takb;
+    if (wrhist) #1 mem[pc[BTBAB:0]][AMSB:0] <= wdatx;
+    if (wrhist) #1 mem[pc[BTBAB:0]][(AMSB+1)*2-1:AMSB+1] <= pc;
+    if (wrhist) #1 mem[pc[BTBAB:0]][(AMSB+1)*2] <= takb;
 end
 
 always @*
-    #1 radrA <= pcA[9:0];
+    #1 radrA <= pcA[BTBAB:0];
 always @*
-    #1 radrB <= pcB[9:0];
+    #1 radrB <= pcB[BTBAB:0];
 assign hitA = mem[radrA][(AMSB+1)*2-1:AMSB+1]==pcA && mem[radrA][(AMSB+1)*2];
 assign hitB = mem[radrB][(AMSB+1)*2-1:AMSB+1]==pcB && mem[radrB][(AMSB+1)*2];
 assign btgtA = hitA ? mem[radrA][AMSB:0] : npcA;

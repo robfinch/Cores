@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rtf65004-ICController.v
+//	-ICController.v
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,10 +23,12 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-types.sv"
 `define HIGH	1'b1
 `define LOW		1'b0
 
-module ICController(rst_i, clk_i, missadr, hit, bstate, state,
+module ICController(rst_i, clk_i, missadr, hit, bstate, idle,
 	invline, invlineAddr, icl_ctr,
 	thread_en, ihitL2, L2_ld, L2_cnt, L2_adr, L2_dat, L2_nxt,
 	L1_selpc, L1_adr, L1_dat, L1_wr, L1_invline, icnxt, icwhich,
@@ -40,23 +42,23 @@ parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
 input rst_i;
 input clk_i;
-input [AMSB:0] missadr;
+input Address missadr;
 input hit;
 input [4:0] bstate;
 (* mark_debug="true" *)
-output reg [3:0] state;
+output reg idle;
 input invline;
-input [AMSB:0] invlineAddr;
+input Address invlineAddr;
 output reg [39:0] icl_ctr;
 input thread_en;
 input ihitL2;
 output reg L2_ld;
 output [2:0] L2_cnt;
-output reg [AMSB:0] L2_adr = RSTPC;
+output Address L2_adr = RSTPC;
 input [418:0] L2_dat;
 output reg L2_nxt;
-output L1_selpc;
-output reg [AMSB:0] L1_adr = RSTPC;
+output reg L1_selpc;
+output Address L1_adr = RSTPC;
 output reg [418:0] L1_dat = {416'h0};
 output reg L1_wr;
 output reg L1_invline;
@@ -75,20 +77,19 @@ input err_i;
 input tlbmiss_i;
 input exv_i;
 output reg [7:0] sel_o;
-output reg [AMSB:0] adr_o;
+output Address adr_o;
 input [103:0] dat_i;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
+reg [3:0] state;
 reg [3:0] picstate;
 `include "..\inc\Gambit-busStates.sv"
 reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
-reg selpc1;
-assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
 assign isROM = L1_adr[AMSB:18]=={ABW-18{1'b1}};
 wire clk = clk_i;
 reg [2:0] iccnt;
@@ -107,6 +108,8 @@ if (rst_i) begin
 	sel_o <= 16'h00;
 	adr_o <= {missadr[AMSB:5],5'h0};
 	state <= IDLE;
+	idle <= TRUE;
+	L1_selpc <= TRUE;
 	L2_ld <= FALSE;
 end
 else begin
@@ -114,10 +117,10 @@ L1_wr <= FALSE;
 L1_invline <= FALSE;
 icnxt <= FALSE;
 L2_nxt <= FALSE;
-selpc1 <= FALSE;
 if (invline) begin
 	invline_r <= 1'b1;
 	invlineAddr_r <= invlineAddr;
+	L1_selpc <= FALSE;
 end
 
 // Instruction cache state machine.
@@ -136,6 +139,7 @@ IDLE:
 			L1_adr <= {invlineAddr_r[AMSB:4],4'd0};
 			L1_invline <= TRUE;
 			invline_r <= 1'b0;
+			L1_selpc <= TRUE;
 		end
 		// If the bus unit is busy doing an update involving L1_adr or L2_adr
 		// we have to wait.
@@ -144,6 +148,8 @@ IDLE:
 				L1_adr <= {missadr[AMSB:5],5'h0};
 				icwhich <= 2'b00;
 				state <= IC2;
+				idle <= FALSE;
+				L1_selpc <= FALSE;
 			end
 		end
 	end
@@ -155,10 +161,12 @@ IC2:
 			L1_dat <= ROM_dat;
 			iccnt <= 3'd0;
 			state <= IC5;
+			idle <= FALSE;
 		end
 		else if (!isROM && iccnt>=L2_ReadLatency) begin
 			iccnt <= 3'd0;
 	    state <= IC_WaitL2;
+			idle <= FALSE;
 	  end
 	end
 // If data was in the L2 cache already there's no need to wait on the
@@ -173,6 +181,8 @@ IC_WaitL2:
 		L1_dat <= L2_dat;
 		iccnt <= 3'd0;
 		state <= IC5;
+		idle <= FALSE;
+		L1_selpc <= FALSE;
 	end
 	else begin
 		if (bstate == B_WaitIC) begin
@@ -187,6 +197,8 @@ IC_WaitL2:
 			L2_adr <= L1_adr;
 			L2_ld <= TRUE;
 			state <= IC_Ack;
+			idle <= FALSE;
+			L1_selpc <= FALSE;
 		end
 	end
 // Wait for the L1 write latency to expire before continuing. Writes to the L1
@@ -196,10 +208,11 @@ IC5:
 	begin
 		iccnt <= iccnt + 3'd1;
 		if (iccnt>=L1_WriteLatency) begin
-			selpc1 <= TRUE;
 			icnxt <= TRUE;
 			L2_nxt <= TRUE;	// Dont really need to advance if L2 hit.
 			state <= IDLE;
+			idle <= TRUE;
+			L1_selpc <= TRUE;
 		end
 	end
 IC_Ack:
@@ -208,6 +221,8 @@ IC_Ack:
   		stb_o <= `LOW;
 			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
   		state <= IC_Nack2;
+			idle <= FALSE;
+			L1_selpc <= FALSE;
   	end
 		if (tlbmiss_i) begin
 			L1_dat[418:416] <= 2'd1;
@@ -243,6 +258,8 @@ IC_Nack2:
 	if (~ack_i) begin
 		stb_o <= `HIGH;
 		state <= IC_Ack;
+		idle <= FALSE;
+		L1_selpc <= FALSE;
 	end
 // The cycle after data loading is complete, pulse the L1 write to update the
 // cache.
@@ -253,10 +270,14 @@ IC_Nack:
 		L1_wr <= TRUE;
 		icl_ctr <= icl_ctr + 40'd1;
 		state <= IC5;	// Wait for write latency to expire
+		idle <= FALSE;
+		L1_selpc <= FALSE;
 	end
 default:
 	begin
    	state <= IDLE;
+		idle <= TRUE;
+		L1_selpc <= TRUE;
   end
 endcase
 end
@@ -268,6 +289,8 @@ begin
 	cyc_o <= `LOW;
 	stb_o <= `LOW;
 	state <= IC_Nack;
+	idle <= FALSE;
+	L1_selpc <= FALSE;
 end
 endtask
 
