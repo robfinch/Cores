@@ -27,7 +27,7 @@
 `define INV		1'b0
 
 module regfileSource(rst, clk, ce, branchmiss, slot_rfw,
-	queuedOn,	rqueuedOn, iq_rfw, Rd, rob_tails,
+	queuedOn,	rqueuedOn, iq_rfw, Rd, rob_tails, brk, slot_jmp, take_branch,
 	iq_latestID, iq_tgt, iq_rid, rf_source);
 parameter AREGS = 128;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -44,6 +44,9 @@ input [IQ_ENTRIES-1:0] rqueuedOn;
 input [IQ_ENTRIES-1:0] iq_rfw;
 input RegTag Rd [0:QSLOTS-1];
 input Rid rob_tails [0:QSLOTS*2-1];
+input [QSLOTS-1:0] brk;
+input [QSLOTS-1:0] slot_jmp;
+input [QSLOTS-1:0] take_branch;
 input RegTagBitmap iq_latestID [0:IQ_ENTRIES-1];
 input RegTag iq_tgt [0:IQ_ENTRIES-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
@@ -82,9 +85,13 @@ else begin
 		if (queuedOn[0]) begin
 			if (slot_rfw[0])
 				rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
-				if (queuedOn[1]) begin
-					if (slot_rfw[1])
-						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
+	      if (!brk[0]) begin
+	        if (!(slot_jmp[0]|take_branch[0])) begin
+						if (queuedOn[1]) begin
+							if (slot_rfw[1])
+								rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
+						end
+					end
 				end
 		end
 		else if (queuedOn[1]) begin

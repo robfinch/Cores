@@ -204,7 +204,6 @@
 `define CSR_WBRCD	12'h00A
 `define CSR_BADINST	12'h00B
 `define CSR_SEMA    12'h00C
-`define CSR_KEYS		12'h00E
 `define CSR_TCB			12'h010
 `define CSR_FSTAT   12'h014
 `define CSR_DBAD0   12'h018
@@ -213,6 +212,10 @@
 `define CSR_DBAD3   12'h01B
 `define CSR_DBCTRL  12'h01C
 `define CSR_DBSTAT  12'h01D
+`define CSR_KEYS0		12'h020
+`define CSR_KEYS1		12'h021
+`define CSR_KEYS2		12'h022
+`define CSR_KEYS3		12'h023
 `define CSR_CAS     12'h02C
 `define CSR_TVEC    12'b0000000110???
 `define CSR_IM_STACK	12'h040

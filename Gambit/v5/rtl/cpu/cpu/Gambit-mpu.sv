@@ -25,7 +25,7 @@
 // ============================================================================
 //
 //`define CARD_MEMORY	1'b1
-//`define IPT		1'b1
+`define IPT		1'b1
 
 module Gambit_mpu(hartid_i,rst_i, clk4x_i, clk2x_i, clk_i, tm_clk_i,
 	pit_clk2, pit_gate2, pit_out2,
@@ -110,14 +110,14 @@ wire [51:0] crd_dato;
 reg ack;
 wire [51:0] ipt_dato;
 wire ipt_ack;
-wire [1:0] ol;
+wire [2:0] ol;
 wire [51:0] pcr;
 wire [51:0] pcr2;
 wire icl;           // instruction cache load
 wire exv,rdv,wrv;
 wire pulse60;
 wire sptr_o;
-wire [103:0] pkeys;
+wire [159:0] keys;
 
 //always @(posedge clk_i)
 //	cyc_o <= cyc;
@@ -248,7 +248,7 @@ Gambit_ipt uipt1
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.pkeys_i(pkeys),
+	.keys_i(keys),
 	.ol_i(ol),
 	.bte_i(bte),
 	.cti_i(cti),
@@ -323,13 +323,14 @@ Gambit ucpu1
   .sel_o(sel),
   .adr_o(adr),
   .dat_o(dato),
-  .dat_i(dati)
- /*
+  .dat_i(dati),
+
+  .icl_o(icl),
   .ol_o(ol),
+  .keys_o(keys)
+ /*
   .pcr_o(pcr),
   .pcr2_o(pcr2),
-  .pkeys_o(pkeys),
-  .icl_o(icl),
   .sr_o(sr_o),
   .cr_o(cr_o),
   .rbi_i(rb_i)

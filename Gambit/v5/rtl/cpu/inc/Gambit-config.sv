@@ -35,7 +35,7 @@
 // For synthesis and using the core a value of 28 (five seconds at 100MHz)
 // may be used.
 `ifdef SIM
-`define RSTC_BIT	4
+`define RSTC_BIT	6
 `else
 `define RSTC_BIT	26
 `endif

@@ -35,7 +35,8 @@
 `include "..\inc\Gambit-types.sv"
 
 module getQueuedCount(rst, clk, ce, branchmiss, brk, tails, rob_tails, slotvd,
-	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntd1, queuedCntd2, queuedOnp, queuedOn);
+	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntNzp, queuedCntd1,
+	queuedCntd2, queuedOnp, queuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -53,6 +54,7 @@ input [QSLOTS-1:0] take_branch;
 input [IQ_ENTRIES-1:0] iqs_v;
 input [RENTRIES-1:0] rob_v;
 output reg [2:0] queuedCnt;
+output reg queuedCntNzp;							// queued count is non-zero
 output reg [2:0] queuedCntd1;
 output reg [2:0] queuedCntd2;
 output reg [QSLOTS-1:0] queuedOnp;
@@ -65,10 +67,12 @@ always @*
 begin
 	queuedCnt <= 3'd0;
 	queuedOnp <= 1'd0;
+	queuedCntNzp <= 1'b0;
 	if (!branchmiss) begin
     if (fourEmpty) begin
       queuedCnt <= 3'd1;
       queuedOnp[0] <= `TRUE;
+      queuedCntNzp <= 1'b1;
       if (!brk[0]) begin
         if (!(slot_jmp[0]|take_branch[0])) begin
           if (`WAYS > 1) begin

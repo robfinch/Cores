@@ -26,7 +26,7 @@
 `include "..\inc\Gambit-types.sv"
 
 module tailptrs(rst_i, clk_i, ce, queuedOn, branchmiss, iq_stomp, queuedCnt, iq_tails, 
-	iq_tailsp, rqueuedCnt, rob_tails, iq_rid);
+	iq_tailsp, iq_tailsd, rqueuedCnt, rob_tails, iq_rid);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -40,6 +40,7 @@ input [IQ_ENTRIES-1:0] iq_stomp;
 input [2:0] queuedCnt;
 output Qid iq_tails [0:QSLOTS*2-1];
 output Qid iq_tailsp [0:QSLOTS*2-1];
+output Qid iq_tailsd [0:QSLOTS*2-1];
 input [2:0] rqueuedCnt;
 output Rid rob_tails [0:RSLOTS-1];
 input Rid iq_rid [0:IQ_ENTRIES-1];
@@ -70,7 +71,7 @@ end
 else begin
 	for (n = 0; n < QSLOTS*2; n = n + 1)
 		iq_tailsp[n] = iq_tails[n];
-	if (!branchmiss & ce) begin
+	if (!branchmiss) begin
 		for (n = 0; n < QSLOTS*2; n = n + 1)
  			iq_tailsp[n] = (iq_tails[n] + qcnt) % IQ_ENTRIES;
 	end
@@ -86,8 +87,26 @@ else begin
 end
 
 always @(posedge clk_i)
+if (rst_i) begin
 	for (n = 0; n < QSLOTS*2; n = n + 1)
-		iq_tails[n] <= iq_tailsp[n];
+		iq_tails[n] <= n;
+end
+else begin
+	if (ce)
+		for (n = 0; n < QSLOTS*2; n = n + 1)
+			iq_tails[n] <= iq_tailsp[n];
+end
+always @(posedge clk_i)
+if (rst_i) begin
+	for (n = 0; n < QSLOTS*2; n = n + 1)
+		iq_tailsd[n] <= n;
+end
+else begin
+	for (n = 0; n < QSLOTS*2; n = n + 1)
+		if (ce)
+			iq_tailsd[n] <= iq_tails[n];
+end
+
 
 always @(posedge clk_i)
 if (rst_i) begin

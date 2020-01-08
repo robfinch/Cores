@@ -35,7 +35,7 @@
 
 module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, hartid_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
-    icl_o, exc_o);
+    icl_o, exc_o, ol_o, keys_o);
 parameter WID = 52;
 input rst_i;
 input clk_i;
@@ -48,17 +48,23 @@ input [2:0] irq_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 input bok_i;
+(* mark_debug="TRUE" *)
 output cyc_o;
 output reg stb_o;
 input ack_i;
 input err_i;
+(* mark_debug="TRUE" *)
 output we_o;
 output reg [7:0] sel_o;
+(* mark_debug="TRUE" *)
 output Address adr_o;
+(* mark_debug="TRUE" *)
 output reg [103:0] dat_o;
 input [103:0] dat_i;
 output icl_o;
 output [7:0] exc_o;
+output [2:0] ol_o;
+output [159:0] keys_o;
 parameter TM_CLKFREQ = 20000000;
 parameter UOQ_ENTRIES = `UOQ_ENTRIES;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -192,6 +198,8 @@ reg [127:0] message [0:15];	// indexed by panic
 reg [51:0] cr0;
 wire dce = cr0[30];
 wire sple = cr0[35];
+reg [159:0] keys;
+assign keys_o = keys;
 
 // status register
 reg [51:0] status;
@@ -202,6 +210,7 @@ reg [103:0] pl_stack;
 wire [2:0] ol, dl;
 wire [12:0] pl;
 assign ol = ol_stack[2:0];
+assign ol_o = ol_stack[2:0];
 assign dl = dl_stack[2:0];
 assign pl = pl_stack[12:0];
 
@@ -239,6 +248,7 @@ reg [31:0] br_missed;
 
 wire [2:0] queuedCnt, queuedCntd, queuedCntd2;
 wire [2:0] pc_queuedCnt;
+wire pc_queuedCntNz;
 wire [2:0] rqueuedCnt;
 reg queuedNop;
 
@@ -250,8 +260,9 @@ reg [2:0] len1, len2, len1d, len2d;
 Instruction decodeBuffer [0:1];
 Instruction fetchBuffer [0:QSLOTS-1];
 
-Qid tails [0:QSLOTS*2-1];
 Qid tailsp [0:QSLOTS*2-1];				// tails ahead of the clock
+Qid tails [0:QSLOTS*2-1];
+Qid tailsd [0:QSLOTS*2-1];				// tails delayed 1 pipeline cycle
 Qid heads [0:IQ_ENTRIES-1];
 Rid rob_tails [0:RSLOTS-1];
 Rid rob_heads [0:RENTRIES-1];
@@ -538,8 +549,10 @@ reg wb_en;
 wire wb_hit0, wb_hit1;
 
 wire freezepc;
+(* mark_debug="TRUE" *)
 wire pipe_advance;
 
+(* mark_debug="TRUE" *)
 reg branchmiss = 1'b0;
 wire branchmissd2;
 reg branchhit = 1'b0;
@@ -981,7 +994,7 @@ reg [1:0] bwhich;
 // it'll match L1, but L1 hasn't switched back to ip yet, and it's a hit
 // on the ip address we're looking for. => make sure the cache controller
 // is IDLE.
-assign pipe_advance = ihit & ~invicl & ic_idle & |pc_queuedCnt;
+assign pipe_advance = ihit & ~invicl & ic_idle & pc_queuedCntNz;
 
 function IsNop;
 input Instruction ins;
@@ -1003,6 +1016,9 @@ regfileValid urfv1
 	.clk(clk),
 	.ce(pipe_advance),
 	.slot_rfw(slot_rfw1),
+	.brk(slot_brkd),
+	.slot_jmp(slot_jmp),
+	.take_branch(take_branchq),
 	.livetarget(livetarget_r),
 	.branchmiss(branchmiss),
 	.rob_id(rob.id),
@@ -1030,6 +1046,9 @@ regfileSource urfs1
 	.ce(pipe_advance),
 	.branchmiss(branchmiss),
 	.slot_rfw(slot_rfw1),
+	.brk(slot_brkd),
+	.slot_jmp(slot_jmp),
+	.take_branch(take_branchq),
 //	.queuedOn(queuedOnp),
 	.queuedOn(queuedOn),
 	.rqueuedOn(rqueuedOn),
@@ -1089,6 +1108,7 @@ getQueuedCount ugqc2
 	.iqs_v(iq.iqs.v),
 	.rob_v(rob.rs.v),
 	.queuedCnt(pc_queuedCnt),
+	.queuedCntNzp(pc_queuedCntNz),
 	.queuedCntd1(),
 	.queuedCntd2(),
 	.queuedOnp(),
@@ -1773,6 +1793,7 @@ tailptrs utp1
 	.queuedCnt(queuedCntd2),
 	.iq_tails(tails),
 	.iq_tailsp(tailsp),
+	.iq_tailsd(tailsd),
 	.rqueuedCnt(queuedCntd),
 	.rob_tails(rob_tails),
 //	.active_tag(miss_tag),
@@ -2748,6 +2769,26 @@ begin
     `CSR_TICK:      csr_r <= tick;
 //    `CSR_WBRCD:		csr_r <= wbrcd;
     `CSR_SEMA:      csr_r <= sema;
+    `CSR_KEYS0:
+    	begin
+    		csr_r[25:0] <= {6'd0,keys[19:0]};
+    		csr_r[51:26] <= {6'd0,keys[39:20]};
+    	end
+    `CSR_KEYS1:
+    	begin
+    		csr_r[25:0] <= {6'd0,keys[59:40]};
+    		csr_r[51:26] <= {6'd0,keys[79:60]};
+    	end
+    `CSR_KEYS2:
+    	begin
+    		csr_r[25:0] <= {6'd0,keys[99:80]};
+    		csr_r[51:26] <= {6'd0,keys[119:100]};
+    	end
+    `CSR_KEYS3:
+    	begin
+    		csr_r[25:0] <= {6'd0,keys[139:120]};
+    		csr_r[51:26] <= {6'd0,keys[159:140]};
+    	end
 `ifdef SUPPORT_DBG    
     `CSR_DBAD0:     csr_r <= dbg_adr0;
     `CSR_DBAD1:     csr_r <= dbg_adr1;
@@ -3084,6 +3125,7 @@ if (rst_i) begin
 	uop_queued <= 0;
 	ins_queued <= 0;
 	q1b <= FALSE;
+	branchmiss <= FALSE;
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
   	iq.iqs.v[n] <= `INV;
   	clear_iqs(n);
@@ -3281,23 +3323,25 @@ else begin
   if (waitctr != 48'd0)
 		waitctr <= waitctr - 4'd1;
 
-	for (n = 0; n < QSLOTS; n = n + 1)
-		if (tails[(n+1)%IQ_ENTRIES] != (tails[n] + 1) % IQ_ENTRIES) begin
-			$display("Tails out of sync");
-			$stop;
-		end
+//	for (n = 0; n < QSLOTS; n = n + 1)
+//		if (tails[(n+1)%IQ_ENTRIES] != (tails[n] + 1) % IQ_ENTRIES) begin
+//			$display("Tails out of sync");
+//			$stop;
+//		end
 
-	if (!branchmiss & pipe_advance) begin
-		//queuedOn <= queuedOnp;
-		if (pc_queuedOn[0]) begin
-			queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
-			if (pc_queuedOn[1]) begin
-				queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
-				arg_vs(2'b11);
+	if (pipe_advance) begin
+		if (!branchmiss) begin
+			//queuedOn <= queuedOnp;
+			if (pc_queuedOn[0]) begin
+				queue_slot(0,tails[0],{tick[`SNBITS],1'b0},id_bus[0],tails[0]);
+				if (pc_queuedOn[1]) begin
+					queue_slot(1,tails[1],{tick[`SNBITS],1'b1},id_bus[1],tails[1]);
+					arg_vs(2'b11);
+				end
 			end
-		end
-		else if (pc_queuedOn[1]) begin
-			queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
+			else if (pc_queuedOn[1]) begin
+				queue_slot(1,tails[0],{tick[`SNBITS],1'b0},id_bus[1],tails[0]);
+			end
 		end
 	end
 
@@ -4388,6 +4432,26 @@ begin
         		im_stack <= dat[14:0];
         		ol_stack <= dat[29:15];
         		dl_stack <= dat[44:30];
+        	end
+        `CSR_KEYS0:
+        	begin
+        		keys[19:0] <= dat[19:0];
+        		keys[39:20] <= dat[45:26];
+        	end
+        `CSR_KEYS1:
+        	begin
+        		keys[59:40] <= dat[19:0];
+        		keys[79:60] <= dat[45:26];
+        	end
+        `CSR_KEYS2:
+        	begin
+        		keys[99:80] <= dat[19:0];
+        		keys[119:100] <= dat[45:26];
+        	end
+        `CSR_KEYS3:
+        	begin
+        		keys[139:120] <= dat[19:0];
+        		keys[159:140] <= dat[45:26];
         	end
 `ifdef SUPPORT_DBG        
         `CSR_DBAD0:     dbg_adr0 <= dat[AMSB:0];

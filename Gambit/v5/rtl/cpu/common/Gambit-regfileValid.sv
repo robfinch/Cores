@@ -28,6 +28,7 @@
 `define INV		1'b0
 
 module regfileValid(rst, clk, ce, slot_rfw,
+	brk, slot_jmp, take_branch,
 	livetarget, branchmiss, rob_id,
 	commit0_v, commit1_v,
 	commit0_id, commit1_id,
@@ -46,6 +47,9 @@ input rst;
 input clk;
 input ce;
 input [QSLOTS-1:0] slot_rfw;
+input [QSLOTS-1:0] brk;
+input [QSLOTS-1:0] slot_jmp;
+input [QSLOTS-1:0] take_branch;
 input [AREGS-1:0] livetarget;
 input branchmiss;
 input Qid [RENTRIES-1:0] rob_id;
@@ -152,8 +156,17 @@ else begin
 				if (slot_rfw[0]) begin
 					rf_v [Rd[0]] <= `INV;
 				end
+	      if (!brk[0]) begin
+	        if (!(slot_jmp[0]|take_branch[0])) begin
+						if (queuedOn[1]) begin
+							if (slot_rfw[1]) begin
+								rf_v [Rd[1]] <= `INV;
+							end
+						end
+					end
+				end
 			end
-			if (queuedOn[1]) begin
+			else if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
 				end
