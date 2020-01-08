@@ -55,6 +55,10 @@ typedef struct packed
 typedef struct packed
 {
 	IQState iqs;
+	Address predicted_pc;
+	logic [`IQ_ENTRIES-1:0] sync;
+	logic [`IQ_ENTRIES-1:0] prior_sync;
+	Qid [`IQ_ENTRIES-1:0] prior_sync_qid;
 } IQ;
 
 `endif

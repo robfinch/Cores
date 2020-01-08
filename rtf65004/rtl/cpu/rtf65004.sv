@@ -2589,68 +2589,20 @@ end
 end
 endgenerate
 
-// Detect if there are any valid queue entries prior to the given queue entry.
-reg [IQ_ENTRIES-1:0] prior_valid;
-//generate begin : gPriorValid
-always @*
-for (j = 0; j < IQ_ENTRIES; j = j + 1)
-begin
-	prior_valid[heads[j]] = 1'b0;
-	if (j > 0)
-		for (n = j-1; n >= 0; n = n - 1)
-			prior_valid[heads[j]] = prior_valid[heads[j]]|iq.iqs.v[heads[n]];
-end
-//end
-//endgenerate
-
-// Detect if there are any valid sync instructions prior to the given queue 
-// entry.
-reg [IQ_ENTRIES-1:0] prior_sync;
-//generate begin : gPriorSync
-always @*
-for (j = 0; j < IQ_ENTRIES; j = j + 1)
-begin
-	prior_sync[heads[j]] = 1'b0;
-//	if (j > 0)
-//		for (n = j-1; n >= 0; n = n - 1)
-//			prior_sync[heads[j]] = prior_sync[heads[j]]|(iq.iqs.v[heads[n]] & iq_sync[heads[n]]);
-end
-//end
-//endgenerate
-
-//end
-//endgenerate
-// Start search for instructions to process at head of queue (oldest instruction).
-always @*
-begin
-	iq_alu0_issue = {IQ_ENTRIES{1'b0}};
-	iq_alu1_issue = {IQ_ENTRIES{1'b0}};
-	
-	if (alu0_idle) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_alu[heads[n]]
-			&& iq_alu0_issue == {IQ_ENTRIES{1'b0}}
-			// If there are no valid queue entries prior it doesn't matter if there is
-			// a sync.
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-			)
-			  iq_alu0_issue[heads[n]] = `TRUE;
-		end
-	end
-
-	if (alu1_idle && `NUM_ALU > 1) begin
-//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {IQ_ENTRIES{1'b0}}) begin
-			for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-				if (could_issue[heads[n]] && iq_alu[heads[n]]
-					&& !iq_alu0_issue[heads[n]]
-					&& iq_alu1_issue == {IQ_ENTRIES{1'b0}}
-					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-				)
-				  iq_alu1_issue[heads[n]] = `TRUE;
-			end
-//		end
-	end
-end
+aluIssue ualui1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
+	.could_issue(could_issue),
+	.alu0_idle(alu0_idle),
+	.alu1_idle(alu1_idle),
+	.iq_alu(iq_alu),
+	.iq_alu0(iq_alu0),
+	.iq_prior_sync(iq.prior_sync),
+	.issue0(iq_alu0_issue),
+	.issue1(iq_alu1_issue)
+);
 
 always @*
 begin
@@ -2697,81 +2649,47 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		issuing_on_fcu = TRUE;
 end
 
-always @*
-begin
-	iq_agen0_issue = {IQ_ENTRIES{1'b0}};
-	iq_agen1_issue = {IQ_ENTRIES{1'b0}};
-	
-	if (agen0_idle) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_mem[heads[n]]
-			&& iq_agen0_issue == {IQ_ENTRIES{1'b0}}
-			// If there are no valid queue entries prior it doesn't matter if there is
-			// a sync.
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-			)
-			  iq_agen0_issue[heads[n]] = `TRUE;
-		end
-	end
-
-	if (agen1_idle && `NUM_AGEN > 1) begin
-//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {IQ_ENTRIES{1'b0}}) begin
-			for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-				if (could_issue[heads[n]] && iq_mem[heads[n]]
-					&& !iq_agen0_issue[heads[n]]
-					&& iq_agen1_issue == {IQ_ENTRIES{1'b0}}
-					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-				)
-				  iq_agen1_issue[heads[n]] = `TRUE;
-			end
-//		end
-	end
-end
-
-reg [`QBITS] nids [0:IQ_ENTRIES-1];
-always @*
-for (j = 0; j < IQ_ENTRIES; j = j + 1) begin
-	// We can't both start and stop at j
-	for (n = j; n != (j+1)%IQ_ENTRIES; n = (n + (IQ_ENTRIES-1)) % IQ_ENTRIES)
-		nids[j] = n;
-	// Do the last one
-	nids[j] = (j+1)%IQ_ENTRIES;
-end
-
-reg [IQ_ENTRIES-1:0] nextqd;
-
-// Search the queue for the next entry on the same thread.
-reg [`QBITS] nid;
-always @*
-begin
-	nid = fcu_id;
-	for (n = IQ_ENTRIES-1; n > 0; n = n - 1)
-		nid = (fcu_id + n) % IQ_ENTRIES;
-end
-
-always @*
-for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq.iqs.v[n];
+agenIssue uqgi1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
+	.agen0_idle(agen0_idle),
+	.agen1_idle(agen1_idle),
+	.could_issue(could_issue),
+	.iq_mem(iq_mem),
+	.iq_prior_sync(iq.prior_sync), 
+	.issue0(iq_agen0_issue),
+	.issue1(iq_agen1_issue)
+);
 
 //assign nextqd = 8'hFF;
 
 // Don't issue to the fcu until the following instruction is enqueued.
 // However, if the queue is full then issue anyway. A branch miss will likely occur.
 // Start search for instructions at head of queue (oldest instruction).
-always @*
-begin
-	iq_fcu_issue = {IQ_ENTRIES{1'b0}};
-	
-	if (fcu_done & ~branchmiss) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]])
-			&& iq_fcu_issue == {IQ_ENTRIES{1'b0}}
-			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
-			)
-			  iq_fcu_issue[heads[n]] = `TRUE;
-		end
-	end
-end
+Qid nid;
+
+fcuIssue ufcui1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
+	.branchmiss(branchmiss),
+	.could_issue(could_issue),
+	.fcu_id(fcu_id),
+	.fcu_done(fcu_done),
+	.iq_fc(iq_fc),
+	.iq_br(iq_br),
+	.iq_brkgrp(1'b0),
+	.iq_retgrp(1'b0),
+	.iq_jal(iq_jal),
+	.iqs_v(iq.iqs.v),
+	.iq_sn(iq_sn),
+	.iq_prior_sync(iq.prior_sync),
+	.issue(iq_fcu_issue),
+	.nid(nid)
+);
 
 // Test if a given address is in the write buffer. This is done only for the
 // first two queue slots to save logic on comparators.
@@ -2898,15 +2816,6 @@ default:
 	fcu_misspc = {fcu_pc[63:16],fcu_pt ? (fcu_pc[15:0] + 2'd2) : (fcu_pc[15:0] + fcu_brdisp[15:0] + 2'd2)};
 endcase
 
-// To avoid false branch mispredicts the branch isn't evaluated until the
-// following instruction queues. The address of the next instruction is
-// looked at to see if the BTB predicted correctly.
-
-`ifdef FCU_ENH
-wire fcu_followed = iq_sn[nid] > iq_sn[fcu_id];
-`else
-wire fcu_followed = `TRUE;
-`endif
 always @*
 if (fcu_v) begin
 	// Break and RTI switch register sets, and so are always treated as a branch miss in order to
@@ -2918,12 +2827,8 @@ if (fcu_v) begin
     fcu_branchmiss = TRUE;
 	else if (fcu_instr==`UO_JSI)
 		fcu_branchmiss = TRUE;
-	else if (fcu_instr==`UO_JMP) begin
-		if (fcu_followed)
-			fcu_branchmiss = iq_pc[nid]!=fcu_misspc;
-		else
-			fcu_branchmiss = TRUE;
-	end
+	else if (fcu_instr==`UO_JMP)
+		fcu_branchmiss = TRUE;//iq.predicted_pc[fcu_id]!=fcu_misspc;
 	else
     fcu_branchmiss = FALSE;
 end
@@ -2953,7 +2858,7 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 // additional COMMIT logic
 //
 
-always @*
+always @(posedge clk)
 begin
 	// The first commit bus is always tied to the same place
   commit0_v <= (iq.iqs.cmt[heads[0][`RBITS]] && ~|panic);
@@ -5015,6 +4920,16 @@ begin
 	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
 	set_insn(ndx,id_bus);
+	// Determine the most recent prior sync instruction.
+	iq.sync[ndx] <= FALSE;
+	iq.prior_sync_qid[ndx] <= {`QBIT{1'b1}};
+	iq.prior_sync[ndx] <= FALSE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.sync[(n+ndx)%IQ_ENTRIES]) begin
+			iq.prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_sync[ndx] <= TRUE;
+		end
+	end
 	rob_pc[rid] <= uoq.pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_tgt[rid] <= RdReal[slot % FSLOTS];
 	rob_rfw[rid] <= IsRFW(uoq.uop[(uoq_head+slot) % UOQ_ENTRIES]);
