@@ -32,8 +32,8 @@ module Gambit_mpu(hartid_i,rst_i, clk4x_i, clk2x_i, clk_i, tm_clk_i,
 	irq_o,
     i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,
-	cti_o,bte_o,bok_i,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i
-//	sr_o, cr_o, rb_i
+	cti_o,bte_o,bok_i,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i,
+	sr_o, cr_o, rb_i
 );
 input [51:0] hartid_i;
 input rst_i;
@@ -85,11 +85,10 @@ output [7:0] sel_o;
 output [51:0] adr_o;
 output reg [103:0] dat_o;
 input [103:0] dat_i;
-/*
 output sr_o;
 output cr_o;
 input rb_i;
-*/
+
 wire [2:0] cti;
 wire [1:0] bte;
 wire cyc,stb,we;
@@ -327,14 +326,14 @@ Gambit ucpu1
 
   .icl_o(icl),
   .ol_o(ol),
-  .keys_o(keys)
+  .keys_o(keys),
  /*
   .pcr_o(pcr),
   .pcr2_o(pcr2),
+ */
   .sr_o(sr_o),
   .cr_o(cr_o),
-  .rbi_i(rb_i)
-*/
+  .rb_i(rb_i)
 );
 
 endmodule

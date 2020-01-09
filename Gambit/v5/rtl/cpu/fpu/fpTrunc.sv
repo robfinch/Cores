@@ -1,12 +1,16 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	vtdl - variable tap delay line
-//		(dynamic shift register)
+//	fpTrunc.v
+//		- convert floating point to integer (chop off fractional bits)
+//		- single cycle latency floating point unit
+//		- parameterized FPWIDth
+//		- IEEE 754 representation
+//
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -20,39 +24,52 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//
+//                                                                          
 // ============================================================================
-//
-//    Notes:
-//
-//	This module acts like a clocked delay line with a variable tap.
-//	Miscellaneous usage in rate control circuitry such as fifo's.
-//	Capable of delaying a signal bus.
-//	Signal bus width is specified with the WID parameter.
-//
-//   	Verilog 1995
-// =============================================================================
-//
-module vtdl(clk, ce, a, d, q);
-parameter WID = 8;
-parameter DEP = 16;
-localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
+
+`include "fpConfig.sv"
+
+module fpTrunc(clk, ce, i, o, overflow);
+parameter FPWID = 32;
+`include "fpSize.sv"
 input clk;
 input ce;
-input [AMSB:0] a;
-input [WID-1:0] d;
-output [WID-1:0] q;
+input [MSB:0] i;
+output reg [MSB:0] o;
+output overflow;
 
-reg [WID-1:0] m [DEP-1:0];
+
 integer n;
+wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value
+wire [EMSB:0] zeroXp = {EMSB{1'b1}};	// simple constant - value of exp for zero
+
+// Decompose fp value
+reg sgn;									// sign
+reg [EMSB:0] exp;
+reg [FMSB:0] man;
+reg [FMSB:0] mask;
+
+wire [7:0] shamt = FMSB - (exp - zeroXp);
+always @*
+for (n = 0; n <= FMSB; n = n +1)
+	mask[n] = (n > shamt);
+
+always @*	
+	sgn = i[MSB];
+always @*
+	exp = i[MSB-1:FMSB+1];
+always @*
+	if (exp > zeroXp + FMSB)
+		man = i[FMSB:0];
+	else
+		man = i[FMSB:0] & mask;
 
 always @(posedge clk)
 	if (ce) begin
-		for (n = 1; n < DEP; n = n + 1)
-			m[n] <= m[n-1];
-		m[0] <= d;
+		if (exp < zeroXp)
+			o <= 1'd0;
+		else
+			o <= {sgn,exp,man};
 	end
-
-assign q = m[a];
 
 endmodule

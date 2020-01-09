@@ -1,12 +1,13 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	vtdl - variable tap delay line
-//		(dynamic shift register)
+//	sigmoid_tb.v
+//		- test sigmoid
+//
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -21,38 +22,53 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
+//
+// This module returns the sigmoid of a number using a lookup table.
+// -1.0 or +1.0 is returned for entries outside of the range -8.0 to +8.0
+//                                                                          
+//
 // ============================================================================
-//
-//    Notes:
-//
-//	This module acts like a clocked delay line with a variable tap.
-//	Miscellaneous usage in rate control circuitry such as fifo's.
-//	Capable of delaying a signal bus.
-//	Signal bus width is specified with the WID parameter.
-//
-//   	Verilog 1995
-// =============================================================================
-//
-module vtdl(clk, ce, a, d, q);
-parameter WID = 8;
-parameter DEP = 16;
-localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
-input clk;
-input ce;
-input [AMSB:0] a;
-input [WID-1:0] d;
-output [WID-1:0] q;
 
-reg [WID-1:0] m [DEP-1:0];
-integer n;
+module sigmoid_tb();
+reg clk, rst;
+reg [12:0] ndx;
+wire [31:0] o;
+
+initial begin
+  #0 rst = 1'b0;
+  #0 clk = 1'b0;
+  #10 rst = 1'b1;
+  #40 rst = 1'b0;
+end
+
+always #5 clk = ~clk;
+
+reg [31:0] RngLUT [0:8191];
+initial begin
+`include "D:\Cores6\nvio\v1\rtl\fpUnit\RangeTbl.ver"
+end
+
+fpSigmoid #(32) u1 (clk, 1'b1, RngLUT[ndx], o);
 
 always @(posedge clk)
-	if (ce) begin
-		for (n = 1; n < DEP; n = n + 1)
-			m[n] <= m[n-1];
-		m[0] <= d;
-	end
+if (rst)
+  ndx = 0;
+else begin
+  ndx = ndx + 13'd1;
+end
 
-assign q = m[a];
+wire [31:0] o1, o2;
+// Multiply number by 4096 (it is in range -1 to 1) then convert to integer
+assign o1[22:0] = o[22:0];
+assign o1[30:23] = o[30:23] + 8'd12; // we know this won't overflow
+assign o1[31] = o[31];
+
+f2i #(32) u2
+(
+  .clk(clk),
+  .ce(1'b1),
+  .i(o1),
+  .o(o2)
+);
 
 endmodule

@@ -97,12 +97,14 @@
 `define LD_D8			7'h50
 `define LD_D22		7'h60
 `define LD_D35		7'h70
+`define LDR_D8		7'h54
 `define LDB_D8		7'h51
 `define LDB_D22		7'h61
 `define LDB_D35		7'h71
 `define ST_D8			7'h58
 `define ST_D22		7'h68
 `define ST_D35		7'h78
+`define STC_D8		7'h64
 `define STB_D8		7'h59
 `define STB_D22		7'h69
 `define STB_D35		7'h79
@@ -116,6 +118,39 @@
 `define SLEU_3R		7'h7D
 `define MTx				7'h4A
 `define MFx				7'h5A
+
+`define FLT1		7'h6E
+`define FMOV    5'h00
+`define FTOI    5'h02
+`define ITOF    5'h03
+`define FNEG    5'h04
+`define FABS    5'h05
+`define FSIGN   5'h06
+`define FMAN    5'h07
+`define FNABS   5'h08
+
+`define FSTAT   5'h0C
+`define FSQRT		5'h0D
+`define FTX     5'h10
+`define FCX     5'h11
+`define FEX     5'h12
+`define FDX     5'h13
+`define FRM     5'h14
+`define TRUNC		5'h15
+`define ISNAN		5'h0E
+`define FINITE	5'h0F
+`define FCLASS	5'h1E
+`define UNORD		5'h1F
+
+`define FADD    7'h4F
+`define FSUB    7'h5F
+`define FCMP    7'h7E
+`define FMUL    7'h6F
+`define FDIV    7'h7F
+`define FSLT		7'h4E
+`define FSLE		7'h5E
+`define FSEQ		7'h6C
+`define FSNE		7'h7C
 
 `define NOP_INSN	52'hC3
 
@@ -178,6 +213,8 @@
 `define IB_RETGRP	3
 `define IB_MEMSB	4
 `define IB_MEMDB	5
+`define IB_STORE_CR	6
+`define IB_FPU		7
 `define IB_ALU0		12
 `define IB_BT			13
 `define IB_ALU		14

@@ -35,7 +35,7 @@
 
 module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, hartid_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
-    icl_o, exc_o, ol_o, keys_o);
+    icl_o, exc_o, ol_o, keys_o, rb_i, sr_o, cr_o);
 parameter WID = 52;
 input rst_i;
 input clk_i;
@@ -65,6 +65,9 @@ output icl_o;
 output [7:0] exc_o;
 output [2:0] ol_o;
 output [159:0] keys_o;
+input rb_i;
+output reg sr_o;
+output reg cr_o;
 parameter TM_CLKFREQ = 20000000;
 parameter UOQ_ENTRIES = `UOQ_ENTRIES;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -298,6 +301,7 @@ reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_wrap;
 reg [IQ_ENTRIES-1:0] iq_load;	// is a memory load instruction
 reg [IQ_ENTRIES-1:0] iq_store;	// is a memory store instruction
+reg [IQ_ENTRIES-1:0] iq_store_cr;			// is a memory store and clear reservation instruction
 reg [22:0] iq_sel [0:IQ_ENTRIES-1];		// select lines, for memory overlap detect
 reg [IQ_ENTRIES-1:0] iq_bt;						// branch taken
 reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
@@ -360,6 +364,8 @@ reg  [IQ_ENTRIES-1:0] iq_id2issue;
 reg  [IQ_ENTRIES-1:0] iq_id3issue;
 reg [1:0] iq_mem_islot [0:IQ_ENTRIES-1];
 wire [IQ_ENTRIES-1:0] iq_fcu_issue;
+reg  [IQ_ENTRIES-1:0] fpu0_issue;
+reg  [IQ_ENTRIES-1:0] fpu1_issue;
 
 RegTagBitmap livetarget;
 RegTagBitmap livetarget_r;
@@ -535,6 +541,38 @@ reg fcu_hs;	// hardware / software interrupt indicator
 reg fcu_dne = TRUE;
 wire fcu_takb;
 
+Instruction fpu0_instr;
+reg fpu0_ld;
+Data fpu0_argA;
+Data fpu0_argB;
+Data fpu0_status;
+reg [5:0] fpu0_argI;
+Data fpu0_bus;
+ExcCode fpu0_exc;
+wire fpu0_done;
+reg issuing_on_fpu0;
+reg fpu0_dataready;
+wire fpu0_v = fpu0_dataready;
+Qid fpu0_id;
+Rid fpu0_rid;
+Rid fpu0_sourceid;
+
+Instruction fpu1_instr;
+reg fpu1_ld;
+Data fpu1_argA;
+Data fpu1_argB;
+Data fpu1_status;
+reg [5:0] fpu1_argI;
+Data fpu1_bus;
+ExcCode fpu1_exc;
+wire fpu1_done;
+reg issuing_on_fpu1;
+reg fpu1_dataready;
+wire fpu1_v = fpu1_dataready;
+Qid fpu1_id;
+Rid fpu1_rid;
+Rid fpu1_sourceid;
+
 // write buffer
 wire [2:0] wb_ptr;
 Data wb_data;
@@ -580,6 +618,7 @@ reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
 reg        dram0_store;
 reg  [1:0] dram0_ol;
+reg dram0_cr;
 Data dram1_argI, dram1_argB;
 Data dram1_data;
 Address dram1_addr;
@@ -594,6 +633,7 @@ reg [2:0]  dram1_memsize;
 reg        dram1_load;
 reg        dram1_store;
 reg  [1:0] dram1_ol;
+reg dram1_cr;
 
 reg dramA_v;
 Qid dramA_id;
@@ -889,6 +929,20 @@ endfunction
 function IsMultiCycle;
 input Instruction ins;
 IsMultiCycle = ins.rr.opcode==`DIV_3R;
+endfunction
+function IsSingleCycleFp;
+input Instruction ins;
+case(ins.gen.opcode)
+`FSLT,`FSLE,`FSEQ,`FSNE,
+`FCMP:	IsSingleCycleFp = TRUE;
+`FLT1:
+	case(ins.flt1.func5)
+	`FMOV,`FNEG,`FABS,`FSIGN,`FMAN,`FNABS,`ISNAN,`FINITE,`FCLASS,`UNORD:
+		IsSingleCycleFp = TRUE;
+	default:	IsSingleCycleFp = FALSE;
+	endcase
+default:	IsSingleCycleFp = FALSE;
+endcase
 endfunction
 function IsBranch;
 input Instruction insn;
@@ -1742,6 +1796,7 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.p0_adr_i(dram0_addr),
 	.p0_dat_i(dram0_data),
 	.p0_hit(wb_hit0),
+	.p0_cr(dram0_cr),
 	.p1_id_i(dram1_id),
 	.p1_rid_i(dram1_rid),
 	.p1_wr_i(wb_p1_wr),
@@ -1750,6 +1805,7 @@ writeBuffer #(.IQ_ENTRIES(IQ_ENTRIES)) uwb1
 	.p1_adr_i(dram1_addr),
 	.p1_dat_i(dram1_data),
 	.p1_hit(wb_hit1),
+	.p1_cr(dram1_cr),
 	.cyc_o(wcyc),
 	.stb_o(wstb),
 	.ack_i(wack_i),
@@ -2135,7 +2191,7 @@ endfunction
 function SourceTValid;
 input Instruction ins;
 case(ins.gen.opcode)
-`ST_D8,`STB_D8:
+`STC_D8,`ST_D8,`STB_D8:
 	SourceTValid = ins.rr.Rt==5'd0;
 `ST_D22,`ST_D35,
 `STB_D22,`STB_D35:
@@ -2148,8 +2204,10 @@ endfunction
 function IsMem;
 input Instruction isn;
 case(isn.gen.opcode)
+`LDR_D8,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35,
+`STC_D8,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsMem = TRUE;
@@ -2157,9 +2215,18 @@ default:	IsMem = FALSE;
 endcase
 endfunction
 
+function IsLDR;
+input Instruction isn;
+case(isn.gen.opcode)
+`LDR_D8:	IsLDR = TRUE;
+default:	IsLDR = FALSE;
+endcase
+endfunction
+
 function IsStore;
 input Instruction isn;
 case(isn.gen.opcode)
+`STC_D8,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsStore = TRUE;
@@ -2540,6 +2607,20 @@ fcuIssue ufcui1
 	.nid(nid)
 );
 
+fpuIssue ufpui1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
+	.could_issue(could_issue),
+	.fpu0_idle(fpu0_done),
+	.fpu1_idle(fpu1_done),
+	.iq_fpu(iq.fpu),
+	.iq_prior_sync(iq_prior_sync),
+	.issue0(fpu0_issue),
+	.issue1(fpu1_issue)
+);
+
 // Test if a given address is in the write buffer. This is done only for the
 // first two queue slots to save logic on comparators.
 reg inwb0;
@@ -2890,6 +2971,46 @@ agen uagn2
 	.idle(agen1_idle)
 );
 
+fpUnit ufpu0
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.ce(1'b1),
+	.ir(fpu0_instr),
+	.ld(fpu0_ld),
+	.a(fpu0_argA),
+	.b(fpu0_argB),
+	.imm(fpu0_imm),
+	.o(fpu0_bus),
+	.csr_i(),
+	.status(fpu0_status),
+	.exception(fpu0_exc),
+	.done(fpu0_done),
+	.rm(3'd0)
+);
+
+fpUnit ufpu1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.ce(1'b1),
+	.ir(fpu1_instr),
+	.ld(fpu1_ld),
+	.a(fpu1_argA),
+	.b(fpu1_argB),
+	.imm(fpu1_imm),
+	.o(fpu1_bus),
+	.csr_i(),
+	.status(fpu1_status),
+	.exception(fpu1_exc),
+	.done(fpu1_done),
+	.rm(3'd0)
+);
+
 wire [WID-1:0] ralu0_bus = alu0_bus;
 wire [WID-1:0] ralu1_bus = alu1_bus;
 wire [WID-1:0] rfcu_bus  = fcu_bus;
@@ -2925,6 +3046,7 @@ BC_ICACHE:
 		stb <= istb;
 		we <= 1'b0;
 		sel_o <= isel;
+		cr_o <= `LOW;
 		vadr <= iadr;
 	end
 BC_WRITEBUF:
@@ -2936,6 +3058,7 @@ BC_WRITEBUF:
 		we <= wwe;
 		sel_o <= wsel;
 		vadr <= wadr;
+		cr_o <= wcr;
 		dat_o <= wdat;
 	end
 BC_DCACHE0:
@@ -2946,6 +3069,7 @@ BC_DCACHE0:
 		stb <= d0stb;
 		we <= `LOW;
 		sel_o <= d0sel;
+		cr_o <= `LOW;
 		vadr <= d0adr;
 	end
 BC_DCACHE1:
@@ -2956,6 +3080,7 @@ BC_DCACHE1:
 		stb <= d1stb;
 		we <= `LOW;
 		sel_o <= d1sel;
+		cr_o <= `LOW;
 		vadr <= d1adr;
 	end
 BC_UNCDATA:
@@ -2966,6 +3091,7 @@ BC_UNCDATA:
 		stb <= dstb;
 		we <= dwe;
 		sel_o <= dsel;
+		cr_o <= `LOW;
 		vadr <= {dadr[AMSB:4],4'h0};
 		dat_o <= ddat;
 	end
@@ -2977,6 +3103,7 @@ BC_NULL:
 		stb <= 1'b0;
 		we <= 1'b0;
 		sel_o <= 16'h0;
+		cr_o <= `LOW;
 		vadr <= 1'h0;
 		dat_o <= 1'h0;
 	end
@@ -3097,8 +3224,10 @@ begin
 	end
 end
 
-wire alu0_done_pe;
+wire alu0_done_pe, fpu0_done_pe, fpu1_done_pe;
 edge_det uedalu0d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(alu0_done), .pe(alu0_done_pe), .ne(), .ee());
+edge_det uedfpu0d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(fpu0_done), .pe(fpu0_done_pe), .ne(), .ee());
+edge_det uedfpu1d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(fpu1_done), .pe(fpu1_done_pe), .ne(), .ee());
 Qid alu0_rid_r, alu1_rid_r, agen0_rid_r, agen1_rid_r, fcu_rid_r;
 Data alu0_bus_r, alu1_bus_r, agen0_bus_r, agen1_bus_r, fcu_bus_r;
 reg alu0_v_r, alu1_v_r, agen0_v_r, agen1_v_r, fcu_v_r;
@@ -3135,6 +3264,7 @@ if (rst_i) begin
 		iq_bt[n] <= FALSE;
 		iq_br[n] <= FALSE;
 		iq_alu[n] <= FALSE;
+		iq.fpu[n] <= FALSE;
 		iq_fc[n] <= FALSE;
 		iq_takb[n] <= FALSE;
 		iq_jal[n] <= FALSE;
@@ -3184,6 +3314,8 @@ if (rst_i) begin
      dram1_unc <= 1'b0;
      dram0_store <= 1'b0;
      dram1_store <= 1'b0;
+     dram0_cr <= 1'b0;
+     dram1_cr <= 1'b0;
      invic <= FALSE;
      invicl <= FALSE;
      alu0_dataready <= 1'b1;
@@ -3244,6 +3376,8 @@ if (rst_i) begin
 		dsel <= 8'h00;
 		dadr <= RSTPC;
 		ddat <= 128'h0;
+		sr_o <= `LOW;
+		cr_o <= `LOW;
 		regs[31] <= 52'h01FFC;
 		msp <= 52'h01FFC;
 		ol_stack <= 2'b00;
@@ -3357,7 +3491,7 @@ else begin
 			rob.exc[ alu0_rid % RENTRIES ] <= alu0_exc;
 	//	if (alu0_done) begin
 			if (!iq_stomp[alu0_id % IQ_ENTRIES]) begin
-				iq.iqs.out[alu0_rid % RENTRIES] <= FALSE;
+				iq.iqs.out[alu0_id % IQ_ENTRIES] <= FALSE;
 				iq.iqs.cmt[alu0_id % IQ_ENTRIES] <= TRUE;
 				iq.iqs.done[alu0_id % IQ_ENTRIES] <= TRUE;
 				rob.rs.cmt[alu0_rid % RENTRIES] <= TRUE;
@@ -3427,6 +3561,48 @@ else begin
 			//br_ctr <= br_ctr + fcu_branch;
 		end
 		fcu_dataready <= `INV;
+	end
+
+	if (`NUM_FPU > 2'd0) begin
+		if (!IsSingleCycleFp(fpu0_instr)) begin
+			if (fpu0_done_pe) begin
+				fpu0_dataready <= TRUE;
+			end
+		end
+
+		if (fpu0_v) begin
+			if (!iq_stomp[fpu0_id % IQ_ENTRIES]) begin
+				rob.res[ fpu0_rid % RENTRIES ] <= fpu0_bus;
+				rob.exc[ fpu0_rid % RENTRIES ] <= fpu0_exc;
+				iq.iqs.out[fpu0_id % IQ_ENTRIES] <= FALSE;
+				iq.iqs.cmt[fpu0_id % IQ_ENTRIES] <= TRUE;
+				iq.iqs.done[fpu0_id % IQ_ENTRIES] <= TRUE;
+				rob.rs.cmt[fpu0_rid % RENTRIES] <= TRUE;
+				rob.argA[fpu0_rid % RENTRIES] <= fpu0_status;	// For CSR update
+			end
+			fpu0_dataready <= FALSE;
+		end
+	end
+
+	if (`NUM_FPU > 2'd1) begin
+		if (!IsSingleCycleFp(fpu1_instr)) begin
+			if (fpu1_done_pe) begin
+				fpu1_dataready <= TRUE;
+			end
+		end
+
+		if (fpu1_v) begin
+			if (!iq_stomp[fpu1_id % IQ_ENTRIES]) begin
+				rob.res[ fpu1_rid % RENTRIES ] <= fpu1_bus;
+				rob.exc[ fpu1_rid % RENTRIES ] <= fpu1_exc;
+				iq.iqs.out[fpu1_id % IQ_ENTRIES] <= FALSE;
+				iq.iqs.cmt[fpu1_id % IQ_ENTRIES] <= TRUE;
+				iq.iqs.done[fpu1_id % IQ_ENTRIES] <= TRUE;
+				rob.rs.cmt[fpu1_rid % RENTRIES] <= TRUE;
+				rob.argA[fpu1_rid % RENTRIES] <= fpu1_status;	// For CSR update
+			end
+			fpu1_dataready <= FALSE;
+		end
 	end
 
 	// dramX_v only set on a load
@@ -3628,6 +3804,46 @@ else begin
       end
     end
     
+	if (`NUM_FPU > 0) begin
+	  for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	    if (fpu0_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])
+											&& (fpu0_done)) begin
+				iq_fuid[n] <= 3'd0;
+				fpu0_sourceid	<= n[`QBITS];
+				check_issue(n[`QBITS],7'b1111011);
+				fpu0_id <= n[`QBITS];
+				fpu0_rid <= iq_rid[n];
+				fpu0_instr	<= iq_instr[n];
+	      fpu0_argI <= iq_const[n][5:0];
+				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu0_argA);
+				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu0_argB);
+				fpu0_dataready <= IsSingleCycleFp(iq_instr[n]);
+				fpu0_ld <= TRUE;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
+	    end
+  end
+
+	if (`NUM_FPU > 1) begin
+    for (n = 0; n < IQ_ENTRIES; n = n + 1)
+      if ((fpu1_issue[n] && iq.iqs.v[n] && !(iq.iqs.v[n] && iq_stomp[n])
+												&& (fpu1_done))) begin
+				iq_fuid[n] <= 3'd1;
+				fpu1_sourceid	<= n[`QBITS];
+				check_issue(n[`QBITS],7'b1110111);
+				fpu1_id <= n[`QBITS];
+				fpu1_rid <= iq_rid[n];
+				fpu1_instr	<= iq_instr[n];
+				fpu1_argI <= iq_const[n][5:0];
+				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu1_argA);
+				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu1_argB);
+				fpu1_dataready <= IsSingleCycleFp(iq_instr[n]);
+				fpu1_ld <= TRUE;
+				iq.iqs.out[n] <= TRUE;
+				iq.iqs.queued[n] <= FALSE;
+      end
+  end
+
 //
 // MEMORY
 //
@@ -3822,6 +4038,7 @@ BIDLE:
                dstb <= `HIGH;
                dsel <= fnSelect(dram0_instr);
                dadr <= dram0_addr;
+               sr_o <= IsLDR(dram0_instr);
                dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
@@ -3845,6 +4062,7 @@ BIDLE:
                dstb <= `HIGH;
                dsel <= fnSelect(dram1_instr);
                dadr <= dram1_addr;
+               sr_o <= IsLDR(dram1_instr);
                dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
@@ -3894,6 +4112,7 @@ B_WaitIC:
 // Regular load
 B_DLoadAck:
   if (dack_i|derr_i|tlb_miss|rdv_i) begin
+  	sr_o <= `LOW;
   	if (dselx > 16'h00FF && dccnt==2'd0) begin
   		dsel <= dselx[15:8];
   		dstb <= `LOW;
@@ -4184,10 +4403,10 @@ begin
 		alu0_rid <= {`QBIT{1'b1}};
 	if (alu1_rid==nn && !issuing_on_alu1 && pat[1])
 		alu1_rid <= {`QBIT{1'b1}};
-//	if (fpu0_rid==n[`QBITS] && !issuing_on_fpu0 && pat[2])
-//		fpu0_rid <= {`QBIT{1'b1}};
-//	if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1 && pat[3])
-//		fpu1_rid <= {`QBIT{1'b1}};
+	if (fpu0_rid==n[`QBITS] && !issuing_on_fpu0 && pat[2])
+		fpu0_rid <= {`QBIT{1'b1}};
+	if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1 && pat[3])
+		fpu1_rid <= {`QBIT{1'b1}};
 	if (agen0_rid==nn && !issuing_on_agen0 && pat[4])
 		agen0_rid <= {`QBIT{1'b1}};
 	if (agen1_rid==nn && !issuing_on_agen1 && pat[5])
@@ -4528,6 +4747,29 @@ begin
 end
 endtask
 
+task argFpBypass;
+input v;
+input Rid src;
+input Data iq_arg;
+output Data arg;
+begin
+`ifdef FU_BYPASS
+	if (v)
+		arg = iq_arg;
+	else
+		case(src)
+		fpu0_rid:	arg = fpu0_bus;
+		fpu1_rid:	arg = fpu1_bus;
+		dramA_rid:	arg = dramA_bus;
+		dramB_rid:	arg = dramB_bus;
+		default:	arg = {3{16'hDEAD}};
+		endcase
+`else
+	arg = iq_arg;
+`endif           
+end
+endtask
+
 task check_abort_load;
 begin
   case(bwhich)
@@ -4718,9 +4960,11 @@ begin
 	iq_bt   [nn]  <= bus[`IB_BT];
 	iq_alu  [nn]  <= bus[`IB_ALU];
 	iq_alu0 [nn]  <= bus[`IB_ALU0];
+	iq.fpu	[nn]  <= bus[`IB_FPU];
 	iq_fc   [nn]  <= bus[`IB_FC];
 	iq_load [nn]  <= bus[`IB_LOAD];
 	iq_store[nn]  <= bus[`IB_STORE];
+	iq_store_cr[nn] <= bus[`IB_STORE_CR];
 	iq_memsz[nn]  <= bus[`IB_MEMSZ];
 	iq_mem  [nn]  <= bus[`IB_MEM];
 	iq_memndx[nn] <= bus[`IB_MEMNDX];
@@ -4809,6 +5053,7 @@ begin
 		dram0_load <= iq_load[n];
 		dram0_store <= iq_store[n];
 		dram0_preload <= iq_load[n] & iq_tgt[n]==6'd0;
+		dram0_cr <= iq_store_cr[n];
 		iq.iqs.mem[n] <= TRUE;
 		iq.iqs.agen[n] <= FALSE;
 		iq_memissue[n] <= `INV;
@@ -4834,6 +5079,7 @@ begin
 		dram1_load <= iq_load[n];
 		dram1_store <= iq_store[n];
 		dram1_preload <= iq_load[n] & iq_tgt[n]==6'd0;
+		dram1_cr <= iq_store_cr[n];
 		iq.iqs.mem[n] <= TRUE;
 		iq.iqs.agen[n] <= FALSE;
 		iq_memissue[n] <= `INV;

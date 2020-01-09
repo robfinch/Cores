@@ -65,6 +65,16 @@ default: IsAlu0 = FALSE;
 endcase
 endfunction
 
+function IsFpu;
+input Instruction isn;
+case(isn.gen.opcode)
+`FADD,`FSUB,`FCMP,`FMUL,`FDIV,
+`FSEQ,`FSNE,`FSLT,`FSLE,
+`FLT1:	IsFpu = TRUE;
+default:	IsFpu = FALSE;
+endcase
+endfunction
+
 function HasConst8;
 input [51:0] isn;
 case(isn[6:0])
@@ -105,8 +115,10 @@ endfunction
 function IsMem;
 input [51:0] isn;
 case(isn[6:0])
+`LDR_D8,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35,
+`STC_D8,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsMem = TRUE;
@@ -154,6 +166,7 @@ endfunction
 function IsLoad;
 input [51:0] isn;
 case(isn[6:0])
+`LDR_D8,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35:
 	IsLoad = TRUE;
@@ -165,6 +178,7 @@ endfunction
 function IsStore;
 input [51:0] isn;
 case(isn[6:0])
+`STC_D8,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsStore = TRUE;
@@ -200,7 +214,7 @@ case(isn.gen.opcode)
 `BRKGRP:	IsRFW = FALSE;
 `STPGRP:	IsRFW = FALSE;
 `BRANCH0,`BRANCH1:	IsRFW = FALSE;
-`ST_D8,`ST_D22,`ST_D35,
+`ST_D8,`ST_D22,`ST_D35,`STC_D8,
 `STB_D8,`STB_D22,`STB_D35:	IsRFW = FALSE;
 default:	IsRFW = TRUE;
 endcase
@@ -211,6 +225,7 @@ begin
 	bus <= 167'h0;
 	bus[`IB_CMP] <= IsCmp(instr);
 	bus[`IB_CONST] <= 
+		IsFpu(instr) ? {46'd0,instr.raw[22],instr.flt2.Rt} :
 		IsJal(instr) ? {9'd0,instr.jal.addr} :
 		IsBranch(instr) ? {{40{instr.br.disp[11]}},instr.br.disp} :
 		HasConst8(instr) ? {{44{instr[24]}},instr[24:17]} :
@@ -228,10 +243,12 @@ begin
 	bus[`IB_BT]		 <= 1'b0;
 	bus[`IB_ALU]   <= IsAlu(instr);
 	bus[`IB_ALU0]  <= IsAlu0(instr);
+	bus[`IB_FPU]	 <= IsFpu(instr);
 	bus[`IB_FC]		 <= IsFlowCtrl(instr);
 //	bus[`IB_CANEX] <= fnCanException(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_STORE]	<= IsStore(instr);
+	bus[`IB_STORE_CR] <= instr.gen.opcode==`STC_D8;
 	bus[`IB_MEMSZ]  <= MemSize(instr);
 	bus[`IB_MEM]		<= IsMem(instr);
 	bus[`IB_MEMNDX]	<= IsMemndx(instr);

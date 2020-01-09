@@ -1,12 +1,13 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	vtdl - variable tap delay line
-//		(dynamic shift register)
+//	fpRes_tb.v
+//		- floating point reciprocal estimate test bench
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -20,39 +21,50 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//
+//                                                                          
 // ============================================================================
-//
-//    Notes:
-//
-//	This module acts like a clocked delay line with a variable tap.
-//	Miscellaneous usage in rate control circuitry such as fifo's.
-//	Capable of delaying a signal bus.
-//	Signal bus width is specified with the WID parameter.
-//
-//   	Verilog 1995
-// =============================================================================
-//
-module vtdl(clk, ce, a, d, q);
-parameter WID = 8;
-parameter DEP = 16;
-localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
-input clk;
-input ce;
-input [AMSB:0] a;
-input [WID-1:0] d;
-output [WID-1:0] q;
 
-reg [WID-1:0] m [DEP-1:0];
-integer n;
+module fpRes_tb();
+reg rst;
+reg clk;
+reg [12:0] adr;
+reg [127:0] mem [0:8191];
+reg [191:0] memo [0:9000];
+reg [63:0] a,a6,o1;
+wire [63:0] a5;
+wire [63:0] o,o5;
+
+initial begin
+	rst = 1'b0;
+	clk = 1'b0;
+	adr = 0;
+	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/fpRes_tv.txt", mem);
+	#20 rst = 1;
+	#50 rst = 0;
+end
+
+always #5
+	clk = ~clk;
+
+delay3 #(64) u2 (clk, 1'b1, a, a5);
+delay3 #(64) u3 (clk, 1'b1, o1, o5);
 
 always @(posedge clk)
-	if (ce) begin
-		for (n = 1; n < DEP; n = n + 1)
-			m[n] <= m[n-1];
-		m[0] <= d;
+if (rst)
+	adr = 0;
+else
+begin
+	adr <= adr + 1;
+	a <= mem[adr][63: 0];
+	o1 <= mem[adr][127:64];
+	a6 <= a5;
+	memo[adr] <= {o5,o,a5};
+	if (adr==8191) begin
+		$writememh("d:/cores6/nvio/v1/rtl/fpUnit/fpRes_tvo.txt", memo);
+		$finish;
 	end
+end
 
-assign q = m[a];
+fpRes #(64) u1 (clk, 1'b1, a, o);
 
 endmodule

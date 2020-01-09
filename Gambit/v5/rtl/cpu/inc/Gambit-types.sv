@@ -208,6 +208,28 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [25:0] pad;
+	logic zero;
+	logic [2:0] rm;
+	logic [4:0] func5;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
+} FLT1_Instruction;
+
+typedef struct packed
+{
+	logic [25:0] pad;
+	logic zero;
+	logic [2:0] rm;
+	logic [4:0] Rb;
+	logic [4:0] Ra;
+	logic [4:0] Rt;
+	logic [6:0] opcode;
+} FLT2_Instruction;
+
+typedef struct packed
+{
 	logic [51:0] bits;
 } RAW_Instruction;
 
@@ -228,6 +250,8 @@ typedef union packed
 	Stp_Instruction stp;
 	Rex_Instruction rex;
 	CSR_Instruction csr;
+	FLT1_Instruction flt1;
+	FLT2_Instruction flt2;
 	Cache_Instruction cache;
 } Instruction;
 
@@ -245,7 +269,8 @@ typedef struct packed
 typedef struct packed
 {
 	IQState iqs;
-	Address [`IQ_ENTRIES-1:0 ] predicted_pc;
+	Address [`IQ_ENTRIES-1:0] predicted_pc;
+	logic [`IQ_ENTRIES-1:0] fpu;
 } IQ;
 
 typedef struct packed

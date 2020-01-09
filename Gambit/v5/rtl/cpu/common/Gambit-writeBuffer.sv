@@ -26,8 +26,8 @@
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
-	p0_id_i, p0_rid_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
-	p1_id_i, p1_rid_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
+	p0_id_i, p0_rid_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit, p0_cr,
+	p1_id_i, p1_rid_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit, p1_cr,
 	cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -60,6 +60,7 @@ input Address p0_adr_i;
 input Data p0_dat_i;
 output reg p0_ack_o;
 output reg p0_hit;
+input p0_cr;
 
 input Qid p1_id_i;
 input Rid p1_rid_i;
@@ -69,6 +70,7 @@ input Address p1_adr_i;
 input Data p1_dat_i;
 output reg p1_ack_o;
 output reg p1_hit;
+input p1_cr;
 
 output reg cyc_o;
 output reg stb_o;
@@ -95,6 +97,7 @@ reg [IQ_ENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wbo_id;
 reg [RENTRIES-1:0] wbo_rid;
+reg [WB_DEPTH-1:0] wb_cr;
 
 wire writing_wb = /*(p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) ||*/
 									   (p0_wr_i && wb_ptr < WB_DEPTH-1)
@@ -214,6 +217,7 @@ else begin
 			wb_data[wb_ptr] <= p0_dat_i;
 			wb_id[wb_ptr] <= 16'd1 << p0_id_i;
 			wb_rid[wb_ptr] <= 16'd1 << p0_rid_i;
+			wb_cr[wb_ptr] <= p0_cr;
 			wb_ptr <= wb_ptr + 3'd1;
 			p0_ack_o <= TRUE;
 		end
@@ -226,6 +230,7 @@ else begin
 			wb_data[wb_ptr] <= p1_dat_i;
 			wb_id[wb_ptr] <= 16'd1 << p1_id_i;
 			wb_rid[wb_ptr] <= 16'd1 << p1_rid_i;
+			wb_cr[wb_ptr] <= p1_cr;
 			wb_ptr <= wb_ptr + 3'd1;
 			p1_ack_o <= TRUE;
 		end
@@ -241,6 +246,7 @@ IDLE:
 			sel_o <= wb_sel[0] << wb_addr[0][2:0];
 			adr_o <= {wb_addr[0][AMSB:3],3'h0};
 			dat_o <= wb_data[0] << wb_addr[0][2:0] * 13;
+			cr_o <= wb_cr[0];
 			wbo_id <= wb_id[0];
 			wbo_rid <= wb_rid[0];
 			sel_shift <= {11'd0,wb_sel[0]} << wb_addr[0][2:0];
@@ -255,6 +261,7 @@ IDLE:
 		   	wb_sel[j-1] <= wb_sel[j];
 		   	wb_addr[j-1] <= wb_addr[j];
 		   	wb_data[j-1] <= wb_data[j];
+		   	wb_cr[j-1] <= wb_cr[j];
 		   	if (wb_ptr > 1'd0)
 		   		wb_ptr <= wb_ptr - 2'd1;
 			end
@@ -271,7 +278,7 @@ StoreAck1:
 			cyc_o <= LOW;
 			we_o <= LOW;
 			sel_o <= 8'h00;
-			cr_o <= 1'b0;
+			cr_o <= LOW;
     // This isn't a good way of doing things; the state should be propagated
     // to the commit stage, however since this is a store we know there will
     // be no change of program flow. So the reservation status bit is set
@@ -316,6 +323,7 @@ StoreAck2:
 		stb_o <= LOW;
 		we_o <= LOW;
 		sel_o <= 8'h00;
+		cr_o <= LOW;
 //    if (cr_o)
 //			sema[0] <= rbi_i;
 		wb_v[0] <= 1'b0;
