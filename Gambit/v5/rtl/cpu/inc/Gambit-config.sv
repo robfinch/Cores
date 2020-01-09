@@ -27,7 +27,7 @@
 
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-//`define SIM		1'b1
+`define SIM		1'b1
 
 // The following bit select determines how long the reset counter is active.
 // For sim to aid debugging it's good idea to set it to a low number >3
@@ -35,7 +35,7 @@
 // For synthesis and using the core a value of 28 (five seconds at 100MHz)
 // may be used.
 `ifdef SIM
-`define RSTC_BIT	6
+`define RSTC_BIT	5
 `else
 `define RSTC_BIT	26
 `endif
@@ -131,8 +131,8 @@
 `define NUM_AGEN	2				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-2)
 `define NUM_FPU		2				// number of floating-point units (0-2)
-// Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
-//`define FCU_RSB		1				// return stack buffer
+
+`define FCU_RSB		1				// return stack buffer
 // Enable at most one branch predictor
 `define BP_GSELECT	1
 //`define BP_GSHARE		1

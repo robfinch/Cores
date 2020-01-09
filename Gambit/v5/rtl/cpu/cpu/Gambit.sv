@@ -130,6 +130,8 @@ genvar g, h;
 
 Data regs [0:31];
 Data regsx [0:31];
+Data fregs [0:31];
+Data fregsx [0:31];
 Address lkregs [0:4];
 Address lkregsx [0:4];
 reg [15:0] crregs;
@@ -142,6 +144,8 @@ initial begin
 	for (n = 0; n < 32; n = n + 1) begin
 		regsx[n] = 1'd0;
 		regs[n] = 1'd0;
+		fregsx[n] = 1'd0;
+		fregs[n] = 1'd0;
 	end
 	for (n = 0; n < 5; n = n + 1) begin
 		lkregsx[n] = 1'd0;
@@ -164,8 +168,10 @@ reg sre;
 reg [15:0] srx;
 reg srex;
 
-wire [AMSB:0] pc;
-wire [AMSB:0] pcd;
+Address pc;
+Address pcd;
+Address ra;
+
 reg [31:0] tick;
 wire tick_roi = tick[`SNBITS] > 26'h3FFFFE0;
 
@@ -179,6 +185,7 @@ wire [6:0] Rt [0:QSLOTS-1];
 wire [6:0] Rt2 [0:QSLOTS-1];
 reg [6:0] Rtp [0:QSLOTS-1];
 reg [6:0] Rb [0:QSLOTS-1];
+reg [6:0] Rbp [0:QSLOTS-1];
 reg [6:0] Ra [0:QSLOTS-1];
 reg [6:0] Rav [0:QSLOTS-1];
 
@@ -227,6 +234,78 @@ reg [39:0] wc_time_secs;
 reg [39:0] wc_time_frac;
 
 reg [51:0] sema;	
+
+reg [2:0] fp_rm;
+reg fp_inexe;
+reg fp_dbzxe;
+reg fp_underxe;
+reg fp_overxe;
+reg fp_invopxe;
+reg fp_giopxe;
+reg fp_nsfp = 1'b0;
+reg fp_fractie;
+reg fp_raz;
+
+reg fp_neg;
+reg fp_pos;
+reg fp_zero;
+reg fp_inf;
+
+reg fp_inex;		// inexact exception
+reg fp_dbzx;		// divide by zero exception
+reg fp_underx;		// underflow exception
+reg fp_overx;		// overflow exception
+reg fp_giopx;		// global invalid operation exception
+reg fp_sx;			// summary exception
+reg fp_swtx;        // software triggered exception
+reg fp_gx;
+reg fp_invopx;
+
+reg fp_infzerox;
+reg fp_zerozerox;
+reg fp_subinfx;
+reg fp_infdivx;
+reg fp_NaNCmpx;
+reg fp_cvtx;
+reg fp_sqrtx;
+reg fp_snanx;
+
+wire [51:0] fp_status = {
+	5'd0,
+	fp_rm,
+	fp_inexe,
+	fp_dbzxe,
+	fp_underxe,
+	fp_overxe,
+	fp_invopxe,
+	fp_nsfp,
+	6'd0,
+	fp_fractie,
+	fp_raz,
+	1'd0,
+	fp_neg,
+	fp_pos,
+	fp_zero,
+	fp_inf,
+	5'd0,
+	fp_swtx,
+	fp_inex,
+	fp_dbzx,
+	fp_underx,
+	fp_overx,
+	fp_giopx,
+	fp_gx,
+	fp_sx,
+	5'd0,
+	fp_cvtx,
+	fp_sqrtx,
+	fp_NaNCmpx,
+	fp_infzerox,
+	fp_zerozerox,
+	fp_infdivx,
+	fp_subinfx,
+	fp_snanx
+};
 
 // - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - -
@@ -292,7 +371,6 @@ reg [WID-1:0] iq_const [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_hs;						// hardware (1) or software (0) interrupt
 reg [IQ_ENTRIES-1:0] iq_alu = 1'h0;  	// alu type instruction
 reg [IQ_ENTRIES-1:0] iq_alu0 = 1'h0;  	// alu0 type instruction
-reg [IQ_ENTRIES-1:0] iq_sync = 1'd0;
 reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [IQ_ENTRIES-1:0] iq_memndx;	// touches memory: 1 if LW/SW indexed
 reg [IQ_ENTRIES-1:0] iq_memsb;
@@ -380,6 +458,8 @@ RegTagBitmap iq_out2a [0:IQ_ENTRIES-1];
 reg [FSLOTS-1:0] take_branch;
 wire [FSLOTS-1:0] take_branchq;
 reg [`QBITS] active_tag;
+reg fetchValid;
+reg decodeValid;
 
 reg id1_v;
 Qid id1_id;
@@ -1219,7 +1299,7 @@ programCounter upc1
 	.pcd(pcd),
 	.pc_chg(),
 	.branch_pc(next_pc),
-	.ra(52'd0),	//(ra),
+	.ra(ra),
 	.pc_override(pc_override),
 	.debug_on(debug_on)
 );
@@ -1231,20 +1311,19 @@ RSB ursb1
 	.clk(clk),
 	.clk2x(clk2x_i),
 	.clk4x(clk4x_i),
-	.regLR(6'd61),
-	.queuedOn(queuedOn),
-	.jal(slot_jal),
-	.Ra(Rb),
-	.Rd(Rt),
-	.call(slot_jsr),
+	.queuedOn(pc_queuedOn),
+	.jal(slot_jc),
+	.Rd(Rtp),
 	.ret(slot_rts),
-	.pc(pcd),
+	.pc(pc),
+	.len1(len1),
+	.len2(len2),
 	.ra(ra),
 	.stompedRets(),
 	.stompedRet()
 );
 `else
-assign ra = `FCU_RA;
+assign ra = lkregs[1];
 `endif
 
 ICController uicc1
@@ -1456,8 +1535,10 @@ if (rst_i) begin
 	pcsd[1] <= RSTPC;
 end
 else begin
-	if (pipe_advance)
-		pcsd <= pcs;
+	if (pipe_advance) begin
+		pcsd[0] <= pcs[0];
+		pcsd[1] <= pcs[1];
+	end
 end
 always @(posedge clk)
 if (rst_i) begin
@@ -1874,6 +1955,7 @@ case(ins.gen.opcode)
 	fnRt = {2'b00,ins.rr.Rt};
 `ASL_3R,`ASR_3R,`ROL_3R,`ROR_3R,`LSR_3R:
 	fnRt = {2'b00,ins.rr.Rt};
+`FCMP,`FSEQ,`FSNE,`FSLT,`FSLE,
 `BIT_3R,`BIT_RI22,`BIT_RI35,
 `CMP_3R,`CMP_RI22,`CMP_RI35:
 	fnRt = {2'b11,ins.rr.Rt};
@@ -1888,6 +1970,27 @@ case(ins.gen.opcode)
 `LD_D22,`LD_D35,`LDB_D22,`LDB_D35,
 `ST_D22,`ST_D35,`STB_D22,`STB_D35:
 	fnRt = {2'b00,ins.ri22.Rt};
+`FLT1:
+	case(ins.flt1.func5)
+	`FABS:		fnRt = {2'b01,ins.flt1.Rt};
+	`FNABS:		fnRt = {2'b01,ins.flt1.Rt};
+	`FNEG:		fnRt = {2'b01,ins.flt1.Rt};
+	`FMOV:		fnRt = ins.raw[25] ? {2'b01,ins.flt1.Rt} : {2'b00,ins.flt1.Rt};
+	`FMOV2:		fnRt = {2'b01,ins.flt1.Rt};
+	`FSIGN:		fnRt = ins.raw[25] ? {2'b11,ins.flt1.Rt} : {2'b01,ins.flt1.Rt};
+	`FSQRT:		fnRt = {2'b01,ins.flt1.Rt};
+	`FMAN:		fnRt = {2'b01,ins.flt1.Rt};
+	`TRUNC:		fnRt = {2'b01,ins.flt1.Rt};
+	`FTOI:		fnRt = ins.raw[25] ? {2'b01,ins.flt1.Rt} : {2'b00,ins.flt1.Rt};
+	`ITOF:		fnRt = {2'b01,ins.flt1.Rt};
+	`ISNAN:		fnRt = {2'b11,ins.flt1.Rt};
+	`FINITE:	fnRt = {2'b11,ins.flt1.Rt};
+	`UNORD:		fnRt = {2'b11,ins.flt1.Rt};
+	`FCLASS:	fnRt = {2'b00,ins.flt1.Rt};
+	default:	fnRt = 7'd0;
+	endcase
+`FADD,`FSUB,`FMUL,`FDIV:
+	fnRt = {2'b01,ins.flt2.Rt};
 default:
 	fnRt = 7'd0;
 endcase
@@ -1924,6 +2027,28 @@ case(ins.gen.opcode)
 	endcase
 `BRANCH0,`BRANCH1:
 	fnRa = {4'b1101,ins.br.cr};
+`FLT1:
+	case(ins.flt1.func5)
+	`FABS:		fnRa = {2'b01,ins.flt1.Ra};
+	`FNABS:		fnRa = {2'b01,ins.flt1.Ra};
+	`FNEG:		fnRa = {2'b01,ins.flt1.Ra};
+	`FMOV:		fnRa = {2'b01,ins.flt1.Rt};
+	`FMOV2:		fnRa = ins.raw[25] ? {2'b01,ins.flt1.Ra} : {2'b00,ins.flt1.Ra};
+	`FSIGN:		fnRa = {2'b01,ins.flt1.Ra};
+	`FSQRT:		fnRa = {2'b01,ins.flt1.Ra};
+	`FMAN:		fnRa = {2'b01,ins.flt1.Ra};
+	`TRUNC:		fnRa = {2'b01,ins.flt1.Ra};
+	`FTOI:		fnRa = {2'b01,ins.flt1.Ra};
+	`ITOF:		fnRa = ins.raw[25] ? {2'b01,ins.flt1.Ra} : {2'b00,ins.flt1.Ra};
+	`ISNAN:		fnRa = {2'b01,ins.flt1.Ra};
+	`FINITE:	fnRa = {2'b01,ins.flt1.Ra};
+	`UNORD:		fnRa = {2'b01,ins.flt1.Ra};
+	`FCLASS:	fnRa = {2'b01,ins.flt1.Ra};
+	default:	fnRa = 7'd0;
+	endcase
+`FCMP,`FSEQ,`FSNE,`FSLT,`FSLE,
+`FADD,`FSUB,`FMUL,`FDIV:
+	fnRa = {2'b01,ins.flt2.Ra};
 // Loads and stores
 default:
 	fnRa = {2'b00,ins.rr.Ra};
@@ -1947,6 +2072,10 @@ case(ins.gen.opcode)
 `BIT_3R,`BIT_RI22,`BIT_RI35,
 `CMP_3R,`CMP_RI22,`CMP_RI35:
 	fnRb = {2'b00,ins.rr.Rb};
+`FLT1:	fnRb = {2'b00,5'd0};
+`FCMP,`FSEQ,`FSNE,`FSLT,`FSLE,
+`FADD,`FSUB,`FMUL,`FDIV:
+	fnRb = {2'b01,ins.flt2.Rb};
 default:
 	fnRb = {2'b00,ins.rr.Rb};
 endcase
@@ -1977,6 +2106,18 @@ always @*
 		regsx[g] = commit0_bus;
 	else
 		regsx[g] = regs[g];
+end
+endgenerate
+
+generate begin : fregupd
+for (g = 0; g < 32; g = g + 1)
+always @*
+	if (commit1_v && commit1_tgt==g+32 && commit1_rfw)
+		fregsx[g] = commit1_bus;
+	else if (commit0_v && commit0_tgt==g+32 && commit0_rfw)
+		fregsx[g] = commit0_bus;
+	else
+		fregsx[g] = fregs[g];
 end
 endgenerate
 
@@ -2026,6 +2167,7 @@ always @*
 				endcase
 			else
 				rfoa[n] = regsx[Ra[n][4:0]];
+		7'b01?????:	rfoa[n] = fregsx[Ra[n][4:0]];
 		7'b11000??:	rfoa[n] = lkregsx[Ra[n][1:0]];
 		7'b1100100:	rfoa[n] = lkregsx[4];
 		7'b1101???:	rfoa[n] = crregsx[Ra[n][2:0]];
@@ -2049,6 +2191,7 @@ always @*
 				endcase
 			else
 				rfob[n] <= regsx[Rb[n][4:0]];
+		7'b01?????:	rfob[n] <= fregsx[Rb[n][4:0]];
 		7'b11000??:	rfob[n] <= lkregsx[Rb[n][1:0]];
 		7'b1100100:	rfob[n] <= lkregsx[4];
 		7'b1101???:	rfob[n] <= crregsx[Rb[n][2:0]];
@@ -2072,6 +2215,7 @@ always @*
 				endcase
 			else
 				rfot[n] <= regsx[Rt[n][4:0]];
+		7'b01?????:	rfot[n] <= fregsx[Rt[n][4:0]];
 		7'b11000??:	rfot[n] <= lkregsx[Rt[n][1:0]];
 		7'b1100100:	rfot[n] <= lkregsx[4];
 		7'b1101???:	rfot[n] <= crregsx[Rt[n][2:0]];
@@ -2617,6 +2761,7 @@ fpuIssue ufpui1
 	.fpu1_idle(fpu1_done),
 	.iq_fpu(iq.fpu),
 	.iq_prior_sync(iq_prior_sync),
+	.iq_prior_fsync(iq.prior_fsync),
 	.issue0(fpu0_issue),
 	.issue1(fpu1_issue)
 );
@@ -2742,7 +2887,7 @@ always @*
 case(fcu_instr.gen.opcode)
 `BRKGRP:	fcu_misspc = RSTPC;
 `RETGRP:	fcu_misspc = fcu_argA;
-`JAL:			fcu_misspc = {fcu_pc[`AMSB:43],fcu_argI[42:0]};
+//`JAL:			fcu_misspc = {fcu_pc[`AMSB:43],fcu_argI[42:0]};
 `JAL_RN:	fcu_misspc = fcu_argA;
 default:
 	// The length of the branch instruction is hardcoded here.
@@ -2767,7 +2912,7 @@ if (fcu_v) begin
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
 	if (fcu_branch && (fcu_takb ^ fcu_pt))
     fcu_branchmiss = TRUE;
-	else if (fcu_instr.jal.opcode==`JAL || fcu_instr.ret.opcode==`RETGRP || fcu_instr.wai.opcode==`BRKGRP)
+	else if (fcu_instr.jal.opcode==`JAL_RN || fcu_instr.ret.opcode==`RETGRP || fcu_instr.wai.opcode==`BRKGRP)
 		fcu_branchmiss = iq.predicted_pc[fcu_id]!=fcu_misspc;
 	else
     fcu_branchmiss = FALSE;
@@ -3391,6 +3536,9 @@ else begin
 	for (n = 1; n < 32; n = n + 1)
 		regs[n] <= regsx[n];
 		
+	for (n = 0; n < 32; n = n + 1)
+		fregs[n] <= fregsx[n];
+
 	for (n = 0; n < 5; n = n + 1)
 		lkregs[n] <= lkregsx[n];
 
@@ -4456,11 +4604,20 @@ begin
 			case(rob.instr[head].gen.opcode)
 			// When a sync instruction commits unblock all the dependent following instructions.
 			`STPGRP:
-				if (rob.instr[head].stp.exop==2'd3 && rob.instr[head].stp.cnst==4'd2)	 begin // SYNC
-					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-						if (iq.iqs.v[n] & iq_prior_sync[n])
-							if (iq_prior_sync_qid[n]==rob.id[head])
-								iq_prior_sync[n] <= FALSE;
+				if (rob.instr[head].stp.exop==2'd3) begin
+					if (rob.instr[head].stp.cnst==`SYNC)	 begin // SYNC
+						for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+							if (iq.iqs.v[n] & iq_prior_sync[n])
+								if (iq_prior_sync_qid[n]==rob.id[head])
+									iq_prior_sync[n] <= FALSE;
+						end
+					end
+					else if (rob.instr[head].stp.cnst==`FSYNC)	 begin // SYNC
+						for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+							if (iq.iqs.v[n] & iq.prior_fsync[n])
+								if (iq.prior_fsync_qid[n]==rob.id[head])
+									iq.prior_fsync[n] <= FALSE;
+						end
 					end
 				end
 			`BRKGRP:
@@ -4548,46 +4705,68 @@ begin
         					rob.argA[head]
         				);
         		end
- /*
+
         `FLT1:
-					case(rob_instr[head][`FFUNCT5])
-					`FRM: begin  
-								fp_rm <= rob_res[head][6:4];
+					case(rob.instr[head].flt1.func5)
+					`FRM: begin
+								fp_rm <= rob.res[head][2:0];
 								end
           `FCX:
               begin
-                  fp_sx <= fp_sx & ~rob_res[head][9];
-                  fp_inex <= fp_inex & ~rob_res[head][8];
-                  fp_dbzx <= fp_dbzx & ~(rob_res[head][7]|rob_res[head][4]);
-                  fp_underx <= fp_underx & ~rob_res[head][6];
-                  fp_overx <= fp_overx & ~rob_res[head][5];
-                  fp_giopx <= fp_giopx & ~rob_res[head][4];
-                  fp_infdivx <= fp_infdivx & ~rob_res[head][4];
-                  fp_zerozerox <= fp_zerozerox & ~rob_res[head][4];
-                  fp_subinfx   <= fp_subinfx   & ~rob_res[head][4];
-                  fp_infzerox  <= fp_infzerox  & ~rob_res[head][4];
-                  fp_NaNCmpx   <= fp_NaNCmpx   & ~rob_res[head][4];
+                  fp_sx <= fp_sx & ~rob.res[head][5];
+                  fp_inex <= fp_inex & ~rob.res[head][4];
+                  fp_dbzx <= fp_dbzx & ~(rob.res[head][3]|rob.res[head][0]);
+                  fp_underx <= fp_underx & ~rob.res[head][2];
+                  fp_overx <= fp_overx & ~rob.res[head][1];
+                  fp_giopx <= fp_giopx & ~rob.res[head][0];
+                  fp_infdivx <= fp_infdivx & ~rob.res[head][0];
+                  fp_zerozerox <= fp_zerozerox & ~rob.res[head][0];
+                  fp_subinfx   <= fp_subinfx   & ~rob.res[head][0];
+                  fp_infzerox  <= fp_infzerox  & ~rob.res[head][0];
+                  fp_NaNCmpx   <= fp_NaNCmpx   & ~rob.res[head][0];
                   fp_swtx <= 1'b0;
               end
           `FDX:
               begin
-                  fp_inexe <= fp_inexe     & ~rob_res[head][8];
-                  fp_dbzxe <= fp_dbzxe     & ~rob_res[head][7];
-                  fp_underxe <= fp_underxe & ~rob_res[head][6];
-                  fp_overxe <= fp_overxe   & ~rob_res[head][5];
-                  fp_invopxe <= fp_invopxe & ~rob_res[head][4];
+                  fp_inexe <= fp_inexe     & ~rob.res[head][4];
+                  fp_dbzxe <= fp_dbzxe     & ~rob.res[head][3];
+                  fp_underxe <= fp_underxe & ~rob.res[head][2];
+                  fp_overxe <= fp_overxe   & ~rob.res[head][1];
+                  fp_invopxe <= fp_invopxe & ~rob.res[head][0];
               end
           `FEX:
               begin
-                  fp_inexe <= fp_inexe     | rob_res[head][8];
-                  fp_dbzxe <= fp_dbzxe     | rob_res[head][7];
-                  fp_underxe <= fp_underxe | rob_res[head][6];
-                  fp_overxe <= fp_overxe   | rob_res[head][5];
-                  fp_invopxe <= fp_invopxe | rob_res[head][4];
+                  fp_inexe <= fp_inexe     | rob.res[head][4];
+                  fp_dbzxe <= fp_dbzxe     | rob.res[head][3];
+                  fp_underxe <= fp_underxe | rob.res[head][2];
+                  fp_overxe <= fp_overxe   | rob.res[head][1];
+                  fp_invopxe <= fp_invopxe | rob.res[head][0];
               end
-            default:	;
-            endcase
           default:
+	        	begin
+	            fp_fractie <= rob.argA[head][32];
+	            fp_raz <= rob.argA[head][31];
+
+	            fp_neg <= rob.argA[head][29];
+	            fp_pos <= rob.argA[head][28];
+	            fp_zero <= rob.argA[head][27];
+	            fp_inf <= rob.argA[head][26];
+
+	            fp_inex <= fp_inex | (fp_inexe & rob.argA[head][19]);
+	            fp_dbzx <= fp_dbzx | (fp_dbzxe & rob.argA[head][18]);
+	            fp_underx <= fp_underx | (fp_underxe & rob.argA[head][17]);
+	            fp_overx <= fp_overx | (fp_overxe & rob.argA[head][16]);
+
+	            fp_cvtx <= fp_cvtx |  (fp_giopxe & rob.argA[head][7]);
+	            fp_sqrtx <= fp_sqrtx |  (fp_giopxe & rob.argA[head][6]);
+	            fp_NaNCmpx <= fp_NaNCmpx |  (fp_giopxe & rob.argA[head][5]);
+	            fp_infzerox <= fp_infzerox |  (fp_giopxe & rob.argA[head][4]);
+	            fp_zerozerox <= fp_zerozerox |  (fp_giopxe & rob.argA[head][3]);
+	            fp_infdivx <= fp_infdivx | (fp_giopxe & rob.argA[head][2]);
+	            fp_subinfx <= fp_subinfx | (fp_giopxe & rob.argA[head][1]);
+	            fp_snanx <= fp_snanx | (fp_giopxe & rob.argA[head][0]);
+	        	end
+          /*
             begin
                 // 31 to 29 is rounding mode
                 // 28 to 24 are exception enables
@@ -4619,8 +4798,32 @@ begin
                 fp_snanx <= fp_snanx | (fp_giopxe & rob_status[head][0]);
 
             end
+           */
           endcase
- */
+        `FADD,`FSUB,`FMUL,`FDIV:
+        	begin
+            fp_fractie <= rob.argA[head][32];
+            fp_raz <= rob.argA[head][31];
+
+            fp_neg <= rob.argA[head][29];
+            fp_pos <= rob.argA[head][28];
+            fp_zero <= rob.argA[head][27];
+            fp_inf <= rob.argA[head][26];
+
+            fp_inex <= fp_inex | (fp_inexe & rob.argA[head][19]);
+            fp_dbzx <= fp_dbzx | (fp_dbzxe & rob.argA[head][18]);
+            fp_underx <= fp_underx | (fp_underxe & rob.argA[head][17]);
+            fp_overx <= fp_overx | (fp_overxe & rob.argA[head][16]);
+
+            fp_cvtx <= fp_cvtx |  (fp_giopxe & rob.argA[head][7]);
+            fp_sqrtx <= fp_sqrtx |  (fp_giopxe & rob.argA[head][6]);
+            fp_NaNCmpx <= fp_NaNCmpx |  (fp_giopxe & rob.argA[head][5]);
+            fp_infzerox <= fp_infzerox |  (fp_giopxe & rob.argA[head][4]);
+            fp_zerozerox <= fp_zerozerox |  (fp_giopxe & rob.argA[head][3]);
+            fp_infdivx <= fp_infdivx | (fp_giopxe & rob.argA[head][2]);
+            fp_subinfx <= fp_subinfx | (fp_giopxe & rob.argA[head][1]);
+            fp_snanx <= fp_snanx | (fp_giopxe & rob.argA[head][0]);
+        	end
         endcase
         // Once the flow control instruction commits, NOP it out to allow
         // pending stores to be issued.
@@ -4970,6 +5173,8 @@ begin
 	iq_memndx[nn] <= bus[`IB_MEMNDX];
 	iq_memsb[nn]	<= bus[`IB_MEMSB];
 	iq_memdb[nn]	<= bus[`IB_MEMDB];
+	iq.sync	[nn]	<= bus[`IB_SYNC];
+	iq.fsync[nn]	<= bus[`IB_FSYNC];
 	iq_jal  [nn]  <= bus[`IB_JAL];
 	iq_br   [nn]  <= bus[`IB_BR];
 	iq_brkgrp[nn] <= bus[`IB_BRKGRP];
@@ -5019,9 +5224,17 @@ begin
 	iq_prior_sync_qid[n] <= {`QBIT{1'b1}};
 	iq_prior_sync[n] <= FALSE;
 	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq_sync[(n+ndx)%IQ_ENTRIES]) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.sync[(n+ndx)%IQ_ENTRIES]) begin
 			iq_prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
 			iq_prior_sync[ndx] <= TRUE;
+		end
+	end
+	iq.prior_fsync_qid[n] <= {`QBIT{1'b1}};
+	iq.prior_fsync[n] <= FALSE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.fsync[(n+ndx)%IQ_ENTRIES]) begin
+			iq.prior_fsync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_fsync[ndx] <= TRUE;
 		end
 	end
 	iq_pt[ndx] <= take_branchq[slot];

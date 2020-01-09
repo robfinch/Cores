@@ -72,6 +72,8 @@
 `define SYNCGRP			2'd3
 `define MEMSB					4'h0
 `define MEMDB					4'h1
+`define SYNC					4'h2
+`define FSYNC					4'h3
 `define ROL_3R		7'h1C
 `define AND_3R		7'h08
 `define AND_RI22	7'h18
@@ -121,6 +123,7 @@
 
 `define FLT1		7'h6E
 `define FMOV    5'h00
+`define FMOV2		5'h01
 `define FTOI    5'h02
 `define ITOF    5'h03
 `define FNEG    5'h04
@@ -215,6 +218,8 @@
 `define IB_MEMDB	5
 `define IB_STORE_CR	6
 `define IB_FPU		7
+`define IB_SYNC		8
+`define IB_FSYNC	9
 `define IB_ALU0		12
 `define IB_BT			13
 `define IB_ALU		14

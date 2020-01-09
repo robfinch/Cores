@@ -258,6 +258,8 @@ begin
 	bus[`IB_RETGRP]	<= instr.gen.opcode==`RETGRP;
 	bus[`IB_MEMSB]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`MEMSB;
 	bus[`IB_MEMDB]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`MEMDB;
+	bus[`IB_SYNC]		<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`SYNC;
+	bus[`IB_FSYNC]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`FSYNC;
 	bus[`IB_RFW]		<= IsRFW(instr);
 end
 

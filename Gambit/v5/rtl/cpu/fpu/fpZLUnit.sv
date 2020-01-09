@@ -36,29 +36,10 @@
 //
 // ============================================================================
 
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 `include "fpConfig.sv"
-
-`define FLT1		7'h6E
-
-// FLT1`define FMOV    5'h00
-`define FNEG    5'h04
-`define FABS    5'h05
-`define FSIGN   5'h06
-`define FMAN    5'h07
-`define FNABS   5'h08
-`define ISNAN		5'h0E
-`define FINITE	5'h0F	// FLT1
-`define FCLASS	5'h1E
-`define UNORD		5'h1F
-
-// FLT2
-`define FSLT		7'h4E
-`define FSLE		7'h5E
-`define FSEQ		7'h6C
-`define FSNE		7'h7C
-`define FCMP		7'h7E
-
 
 module fpZLUnit
 #(parameter FPWID=52)

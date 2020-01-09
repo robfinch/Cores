@@ -1,14 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-//	fpLOOUnit.v
-//		- single cycle latency floating point unit
-//		- parameterized FPWIDth
-//		- IEEE 754 representation
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -24,54 +19,65 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//	i2f - convert integer to floating point
-//  f2i - convert floating point to integer
 //
 // ============================================================================
-
-`include "fpConfig.sv"
+//
 `include "..\inc\Gambit-config.sv"
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fpLOOUnit
-#(parameter FPWID=52)
-(
-	input clk,
-	input ce,
-	input Instruction ir,
-	input [2:0] rm,
-	input [FPWID-1:0] a,
-	input [FPWID-1:0] b,
-	output reg [FPWID-1:0] o,
-	output done
-);
-`include "fpSize.sv"
+module aluIssue(rst, clk, ce, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
+input rst;
+input clk;
+input ce;
+input [`IQ_ENTRIES-1:0] could_issue;
+input alu0_idle;
+input alu1_idle;
+input [`IQ_ENTRIES-1:0] iq_alu;
+input [`IQ_ENTRIES-1:0] iq_alu0;
+input [`IQ_ENTRIES-1:0] iq_prior_sync;
+output reg [`IQ_ENTRIES-1:0] issue0;
+output reg [`IQ_ENTRIES-1:0] issue1;
 
-wire [FPWID-1:0] i2f_o;
-wire [MSB:0] f2i_o;
-wire [MSB:0] trunc_o;
-wire [FPWID-1:0] nxtaft_o;
+integer n;
+reg [`IQ_ENTRIES-1:0] issue0p;
+reg [`IQ_ENTRIES-1:0] issue1p;
 
-delay1 u1 (
-    .clk(clk),
-    .ce(ce),
-    .i((ir.gen.opcode==`FLT1 && (ir.flt1.func5==`ITOF||ir.flt1.func5==`FTOI||ir.flt1.func5==`TRUNC))),
-    .o(done) );
-i2f #(FPWID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[FPWID-1:0]), .o(i2f_o) );
-f2i #(FPWID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
-fpTrunc #(FPWID) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
-
+// Start search for instructions to process at head of queue (oldest instruction).
 always @*
-case (ir.gen.opcode)
-`FLT1:
-	case(ir.flt1.func5)
-	`ITOF:   o <= {i2f_o};
-	`FTOI:   o <= {f2i_o[MSB:0]};
-	`TRUNC:	 o <= trunc_o;
-	default: o <= 0;
-	endcase
-default:   o <= 0;
-endcase
+begin
+	issue0p = {`IQ_ENTRIES{1'b0}};
+	issue1p = {`IQ_ENTRIES{1'b0}};
+	
+	if (alu0_idle) begin
+		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
+			if (could_issue[n] && iq_alu[n]
+			&& issue0p == {`IQ_ENTRIES{1'b0}}
+			// If there are no valid queue entries prior it doesn't matter if there is
+			// a sync.
+			&& (!iq_prior_sync[n])
+			)
+			  issue0p[n] = `TRUE;
+		end
+	end
+
+	if (alu1_idle && `NUM_ALU > 1) begin
+		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
+			if (could_issue[n] && iq_alu[n] && !iq_alu0[n]
+				&& !issue0p[n]
+				&& issue1p == {`IQ_ENTRIES{1'b0}}
+				&& (!iq_prior_sync[n])
+			)
+			  issue1p[n] = `TRUE;
+		end
+	end
+end
+
+always @(posedge clk)
+if (ce)
+	issue0 <= issue0p;
+always @(posedge clk)
+if (ce)
+	issue1 <= issue1p;
 
 endmodule

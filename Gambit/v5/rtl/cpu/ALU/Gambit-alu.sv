@@ -114,6 +114,33 @@ case(op.rr.opcode)
 `LSR_3R:	o = op.rr.zero ? shr(a,imm[5:0]) : shr(a,b);
 `ROL_3R:	o = op.rr.zero ? shl(a,imm[5:0]) | shr(a,52-imm[5:0]) : shl(a,b) | shr(a,52-b);
 `ROR_3R:	o = op.rr.zero ? shr(a,imm[5:0]) | shl(a,52-imm[5:0]) : shr(a,b) | shl(a,52-b);
+`PERM_3R:
+	begin
+		case(b[1:0])
+		2'd0:	o[12:0] = a[12:0];
+		2'd1:	o[12:0] = a[25:13];
+		2'd2:	o[12:0] = a[38:26];
+		2'd3:	o[12:0] = a[51:29];
+		endcase
+		case(b[3:2])
+		2'd0:	o[25:13] = a[12:0];
+		2'd1:	o[25:13] = a[25:13];
+		2'd2:	o[25:13] = a[38:26];
+		2'd3:	o[25:13] = a[51:29];
+		endcase
+		case(b[5:4])
+		2'd0:	o[38:26] = a[12:0];
+		2'd1:	o[38:26] = a[25:13];
+		2'd2:	o[38:26] = a[38:26];
+		2'd3:	o[38:26] = a[51:29];
+		endcase
+		case(b[7:6])
+		2'd0:	o[51:39] = a[12:0];
+		2'd1:	o[51:39] = a[25:13];
+		2'd2:	o[51:39] = a[38:26];
+		2'd3:	o[51:39] = a[51:29];
+		endcase
+	end
 `CSR:			o = csr_i;
 default:	o = {3{16'hDEAE}};
 endcase

@@ -100,8 +100,8 @@ reg [RENTRIES-1:0] wbo_rid;
 reg [WB_DEPTH-1:0] wb_cr;
 
 wire writing_wb = /*(p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) ||*/
-									   (p0_wr_i && wb_ptr < WB_DEPTH-1)
-									|| (p1_wr_i && wb_ptr < WB_DEPTH-1)
+									   (p0_wr_i && wb_ptr < WB_DEPTH-1 && !p0_ack_o)
+									|| (p1_wr_i && wb_ptr < WB_DEPTH-1 && !p1_ack_o)
 									;
 
 parameter IDLE = 3'd0;
