@@ -272,9 +272,22 @@ typedef struct packed
 	Address [`IQ_ENTRIES-1:0] predicted_pc;
 	logic [`IQ_ENTRIES-1:0] prior_fsync;
 	Qid [`IQ_ENTRIES-1:0] prior_fsync_qid;
-	logic [`IQ_ENTRIES-1:0] fpu;
-	logic [`IQ_ENTRIES-1:0] sync;
+	Qid [`IQ_ENTRIES-1:0] prior_sync_qid;
+	logic [`IQ_ENTRIES-1:0] prior_sync;
+	Qid [`IQ_ENTRIES-1:0] prior_memdb_qid;
+	Qid [`IQ_ENTRIES-1:0] prior_memsb_qid;
+	logic [`IQ_ENTRIES-1:0] prior_memdb;
+	logic [`IQ_ENTRIES-1:0] prior_memsb;
+	Qid [`IQ_ENTRIES-1:0] prior_pathchg_qid;
+	logic [`IQ_ENTRIES-1:0] prior_pathchg;
 	logic [`IQ_ENTRIES-1:0] fsync;
+	logic [`IQ_ENTRIES-1:0] fpu;
+	logic [`IQ_ENTRIES-1:0] memdb;
+	logic [`IQ_ENTRIES-1:0] memsb;
+	logic [`IQ_ENTRIES-1:0] sync;
+	logic [`IQ_ENTRIES-1:0] fc;
+	logic [`IQ_ENTRIES-1:0] canex;
+	logic [`IQ_ENTRIES-1:0] fpu0;
 } IQ;
 
 typedef struct packed

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,8 +25,10 @@
 //
 // ============================================================================
 
+`include "..\inc\Gambit-config.sv"
 `include "fpConfig.sv"
-`include "fp_defines.v"
+`include "fpDefines.v"
+`include "fpTypes.sv"
 
 `define POINT5			32'h3F000000
 `define ONEPOINT5		32'h3FC00000
@@ -36,15 +38,20 @@
 `define RSQRT_TBL		1'b1
 
 module fpRsqrte(clk, ce, ld, a, o);
-parameter FPWID = 80;
+parameter FPWID = 52;
 `include "fpSize.sv"
 input clk;
 input ce;
 input ld;
-input [MSB:0] a;
-output reg [MSB:0] o;
+input Float a;
+output reg Float o;
 
+Float32 a1;
+Float32 o1;
+Float o2;
 // An implementation of the approximation used in the Quake game.
+always @*
+	o <= o2;
 
 wire [31:0] x2, x2yy, x2yy1p5;
 wire [31:0] y, yy;
@@ -53,6 +60,27 @@ wire [31:0] y, yy;
 
 reg [15:0] RsqrteLUT2 [0:67];
 reg [15:0] RsqrteLUT [0:8191];
+reg s1, s2;
+
+generate begin : fmtchg
+if (`FPWID==80) begin
+F80ToF32 u1 (a, a1);
+F32ToF80 u2 (o1, o2);
+end
+else if (`FPWID==64) begin
+F64ToF32 u1 (a, a1);
+F32ToF64 u2 (o1, o2);
+end
+else if (`FPWID==52) begin
+F52ToF32 u1 (a, a1);
+F32ToF52 u2 (o1, o2);
+end
+else if (`FPWID==32) begin
+assign a1 = a;
+assign o2 = o1;
+end
+end
+endgenerate
 
 initial begin
 // This table stores the top 17 bits of the reciprocal square root estimate.
@@ -8329,13 +8357,6 @@ RsqrteLUT[8190] = 16'h7cd9;
 RsqrteLUT[8191] = 16'h7cd6;
 end
 
-wire [31:0] a1;
-reg [31:0] o1;
-reg s1, s2;
-wire [MSB:`EXTRA_BITS] o2;
-F80ToF32 u1 (a[MSB:`EXTRA_BITS], a1);
-F32ToF80 u2 (o1, o2);
-assign o = {o2,{`EXTRA_BITS{1'b0}}};
 
 wire [13:0] index = a1[30:17];
 reg [13:0] indexr;
@@ -8357,8 +8378,8 @@ if (ce) begin
 		luto <= RsqrteLUT[indexr[12:0]];
 end
 
-wire [7:0] exp = luto[16:9];
-wire [22:0] man = {luto[8:0],14'd0};
+wire Exponent32 exp = luto[16:9];
+wire Mantissa32 man = {luto[8:0],14'd0};
 always @*
 	if (s2)
 		o1 <= {1'b0,`QSQRTNEG};
@@ -8369,7 +8390,7 @@ always @*
 `ifdef RSQRT_SM
 // Reciprocal square root estimate using a state machine.
 
-wire [31:0] a1;
+wire Float32 a1;
 reg [31:0] x2, x2yy;
 reg [31:0] y, yy;
 wire [31:0] y1 = `FRSQRTE_MAGIC - a1[31:1];

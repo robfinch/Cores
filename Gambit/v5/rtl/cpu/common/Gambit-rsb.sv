@@ -63,15 +63,15 @@ assign ra = ras[rasp];
 wire slot0_mod = queuedOn[0] && (jal[0] && Rd[0]!=7'd96) || (ret[0]);
 wire slot1_mod = queuedOn[1] && (jal[1] && Rd[1]!=7'd96) || (ret[1]);
 
-always @(posedge clk4x)
+always @(posedge clk2x)
 if (rst) begin
   for (n = 0; n < DEPTH; n = n + 1)
     ras[n] <= RSTPC;
   rasp <= 4'd0;
 end
 else begin
-	case({clk,clk2x})
-	2'b00:	
+	case(clk)
+	1'b0:	
 		if (queuedOn[0]) begin
 			if (jal[0] && Rd[0]!=7'd96) begin
         ras[((rasp-2'd1)&(DEPTH-1))] <= pc + len1;
@@ -81,7 +81,7 @@ else begin
         rasp <= rasp + 4'd1;
       end
 		end
-	2'b01:
+	1'b1:
 		if (queuedOn[1] && !slot0_mod) begin
 			if (jal[1] && Rd[1]!=7'd96) begin
         ras[((rasp-2'd1)&(DEPTH-1))] <= pc + len1 + len2;
@@ -91,8 +91,6 @@ else begin
         rasp <= rasp + 4'd1;
       end
 		end
-	2'b10:	;
-	default:	;
 	endcase
 /*        
     if (stompedRets > 4'd0) begin

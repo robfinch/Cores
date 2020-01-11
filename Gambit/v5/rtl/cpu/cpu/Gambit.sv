@@ -128,10 +128,8 @@ integer j, k;
 integer row, col;
 genvar g, h;
 
-Data regs [0:31];
-Data regsx [0:31];
-Data fregs [0:31];
-Data fregsx [0:31];
+Data regs [0:63];
+Data regsx [0:63];
 Address lkregs [0:4];
 Address lkregsx [0:4];
 reg [15:0] crregs;
@@ -141,11 +139,9 @@ Data mspx, hspx, sspx;
 
 `ifdef SIM
 initial begin
-	for (n = 0; n < 32; n = n + 1) begin
+	for (n = 0; n < 64; n = n + 1) begin
 		regsx[n] = 1'd0;
 		regs[n] = 1'd0;
-		fregsx[n] = 1'd0;
-		fregs[n] = 1'd0;
 	end
 	for (n = 0; n < 5; n = n + 1) begin
 		lkregsx[n] = 1'd0;
@@ -358,12 +354,9 @@ wire nextBundle;
 // States
 IQ iq;
 
-reg [IQ_ENTRIES-1:0] iq_prior_sync = 1'd0;
-Qid iq_prior_sync_qid [0:IQ_ENTRIES-1];
 Seqnum iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 Address iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
 reg [2:0] iq_len [0:IQ_ENTRIES-1];
-reg [IQ_ENTRIES-1:0] iq_canex;
 Address iq_ma [0:IQ_ENTRIES-1];		// memory address
 Instruction iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
 reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
@@ -373,8 +366,6 @@ reg [IQ_ENTRIES-1:0] iq_alu = 1'h0;  	// alu type instruction
 reg [IQ_ENTRIES-1:0] iq_alu0 = 1'h0;  	// alu0 type instruction
 reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [IQ_ENTRIES-1:0] iq_memndx;	// touches memory: 1 if LW/SW indexed
-reg [IQ_ENTRIES-1:0] iq_memsb;
-reg [IQ_ENTRIES-1:0] iq_memdb;
 reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_wrap;
 reg [IQ_ENTRIES-1:0] iq_load;	// is a memory load instruction
@@ -383,7 +374,6 @@ reg [IQ_ENTRIES-1:0] iq_store_cr;			// is a memory store and clear reservation i
 reg [22:0] iq_sel [0:IQ_ENTRIES-1];		// select lines, for memory overlap detect
 reg [IQ_ENTRIES-1:0] iq_bt;						// branch taken
 reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
-reg [IQ_ENTRIES-1:0] iq_fc;						// flow control instruction
 reg [IQ_ENTRIES-1:0] iq_jal;					// changes control flow: 1 if BEQ/JALR
 reg [IQ_ENTRIES-1:0] iq_cmp;
 reg [IQ_ENTRIES-1:0] iq_br;						// branch instruction
@@ -605,7 +595,7 @@ Data fcu_argI;
 RegTag fcu_tgt;
 Address fcu_pc;
 Address fcu_nextpc;
-Address fcu_brdisp;
+reg [11:0] fcu_brdisp;
 Data fcu_out;
 Data fcu_bus;
 Qid fcu_id;
@@ -860,7 +850,7 @@ always @(posedge clk)
 if (rst_i)
 	decodeBuffer[0] = `NOP_INSN;
 else begin
-	if (|iq_stomp)
+	if (branchmiss)
 		decodeBuffer[0] = `NOP_INSN;
 	else
 	if (pipe_advance)
@@ -870,7 +860,7 @@ always @(posedge clk)
 if (rst_i)
 	decodeBuffer[1] = `NOP_INSN;
 else begin
-	if (|iq_stomp)
+	if (branchmiss)
 		decodeBuffer[1] = `NOP_INSN;
 	else
 	if (pipe_advance)
@@ -1466,7 +1456,7 @@ Address [QSLOTS-1:0] btb_pc;
 Address [QSLOTS-1:0] btb_ma;
 always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
-		btbwr[n] = iq.iqs.cmt[heads[n]] & iq_fc[heads[n]];
+		btbwr[n] = iq.iqs.cmt[heads[n]] & iq.fc[heads[n]];
 		btb_v[n] = (iq_br[heads[n]] ? iq_takb[heads[n]] : iq_bt[heads[n]]) & iq.iqs.v[heads[n]];
 		btb_pc[n] = iq_pc[heads[n]];
 		btb_ma[n] = iq_ma[heads[n]];
@@ -1944,7 +1934,7 @@ always @*
 function RegTag fnRt;
 input Instruction ins;
 case(ins.gen.opcode)
-`ADDIS,`ANDIS,`ORIS,
+`ISOP,
 `PERM_3R,`CSR,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
 `SUB_3R,`SUB_RI22,`SUB_RI35,
@@ -1970,6 +1960,11 @@ case(ins.gen.opcode)
 `LD_D22,`LD_D35,`LDB_D22,`LDB_D35,
 `ST_D22,`ST_D35,`STB_D22,`STB_D35:
 	fnRt = {2'b00,ins.ri22.Rt};
+`LDF_D8,`STF_D8:
+	fnRt = {2'b01,ins.ri8.Rt};
+`LDF_D22,`LDF_D35,
+`STF_D22,`STF_D35:
+	fnRt = {2'b01,ins.ri22.Rt};
 `FLT1:
 	case(ins.flt1.func5)
 	`FABS:		fnRt = {2'b01,ins.flt1.Rt};
@@ -1999,7 +1994,7 @@ endfunction
 function RegTag fnRa;
 input Instruction ins;
 case(ins.gen.opcode)
-`ADDIS,`ANDIS,`ORIS,
+`ISOP,
 `PERM_3R,`CSR,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
 `SUB_3R,`SUB_RI22,`SUB_RI35,
@@ -2058,7 +2053,7 @@ endfunction
 function RegTag fnRb;
 input Instruction ins;
 case(ins.gen.opcode)
-`ADDIS,`ANDIS,`ORIS,
+`ISOP,
 `PERM_3R,`CSR,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
 `SUB_3R,`SUB_RI22,`SUB_RI35,
@@ -2098,7 +2093,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 
 
 generate begin : regupd
-for (g = 0; g < 32; g = g + 1)
+for (g = 0; g < 64; g = g + 1)
 always @*
 	if (commit1_v && commit1_tgt==g && commit1_rfw)
 		regsx[g] = commit1_bus;
@@ -2106,18 +2101,6 @@ always @*
 		regsx[g] = commit0_bus;
 	else
 		regsx[g] = regs[g];
-end
-endgenerate
-
-generate begin : fregupd
-for (g = 0; g < 32; g = g + 1)
-always @*
-	if (commit1_v && commit1_tgt==g+32 && commit1_rfw)
-		fregsx[g] = commit1_bus;
-	else if (commit0_v && commit0_tgt==g+32 && commit0_rfw)
-		fregsx[g] = commit0_bus;
-	else
-		fregsx[g] = fregs[g];
 end
 endgenerate
 
@@ -2157,17 +2140,16 @@ endgenerate
 always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
 		casez(Ra[n])
-		7'b00?????:	
-			if (Ra[n][4:0]==5'd31)
+		7'b0??????:	
+			if (Ra[n][5:0]==6'd31)
 				case(ol)
 				2'b00:	rfoa[n] = msp;
 				2'b01:	rfoa[n] = hsp;
 				2'b10:	rfoa[n] = ssp;
-				2'b11:	rfoa[n] = regsx[Ra[n][4:0]];
+				2'b11:	rfoa[n] = regsx[Ra[n][5:0]];
 				endcase
 			else
-				rfoa[n] = regsx[Ra[n][4:0]];
-		7'b01?????:	rfoa[n] = fregsx[Ra[n][4:0]];
+				rfoa[n] = regsx[Ra[n][5:0]];
 		7'b11000??:	rfoa[n] = lkregsx[Ra[n][1:0]];
 		7'b1100100:	rfoa[n] = lkregsx[4];
 		7'b1101???:	rfoa[n] = crregsx[Ra[n][2:0]];
@@ -2181,17 +2163,16 @@ always @*
 always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
 		casez(Rb[n])
-		7'b00?????:
-			if (Rb[n][4:0]==5'd31)
+		7'b0??????:
+			if (Rb[n][5:0]==6'd31)
 				case(ol)
 				2'b00:	rfob[n] <= msp;
 				2'b01:	rfob[n] <= hsp;
 				2'b10:	rfob[n] <= ssp;
-				2'b11:	rfob[n] <= regsx[Rb[n][4:0]];
+				2'b11:	rfob[n] <= regsx[Rb[n][5:0]];
 				endcase
 			else
-				rfob[n] <= regsx[Rb[n][4:0]];
-		7'b01?????:	rfob[n] <= fregsx[Rb[n][4:0]];
+				rfob[n] <= regsx[Rb[n][5:0]];
 		7'b11000??:	rfob[n] <= lkregsx[Rb[n][1:0]];
 		7'b1100100:	rfob[n] <= lkregsx[4];
 		7'b1101???:	rfob[n] <= crregsx[Rb[n][2:0]];
@@ -2205,17 +2186,16 @@ always @*
 always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
 		casez(Rt[n])
-		7'b00?????:
-			if (Rt[n][4:0]==5'd31)
+		7'b0??????:
+			if (Rt[n][5:0]==6'd31)
 				case(ol)
 				2'b00:	rfot[n] <= msp;
 				2'b01:	rfot[n] <= hsp;
 				2'b10:	rfot[n] <= ssp;
-				2'b11:	rfot[n] <= regsx[Rt[n][4:0]];
+				2'b11:	rfot[n] <= regsx[Rt[n][5:0]];
 				endcase
 			else
-				rfot[n] <= regsx[Rt[n][4:0]];
-		7'b01?????:	rfot[n] <= fregsx[Rt[n][4:0]];
+				rfot[n] <= regsx[Rt[n][5:0]];
 		7'b11000??:	rfot[n] <= lkregsx[Rt[n][1:0]];
 		7'b1100100:	rfot[n] <= lkregsx[4];
 		7'b1101???:	rfot[n] <= crregsx[Rt[n][2:0]];
@@ -2294,7 +2274,7 @@ function SourceAValid;
 input Instruction ins;
 case(ins.gen.opcode)
 `JAL_RN:	SourceAValid = ins.jalrn.Ra==4'h0;
-`ADDIS,`ANDIS,`ORIS,
+`ISOP,
 `PERM_3R,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
 `SUB_3R,`SUB_RI22,`SUB_RI35,
@@ -2349,6 +2329,8 @@ function IsMem;
 input Instruction isn;
 case(isn.gen.opcode)
 `LDR_D8,
+`LDF_D8,`LDF_D22,`LDF_D35,
+`STF_D8,`STF_D22,`STF_D35,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35,
 `STC_D8,
@@ -2371,6 +2353,7 @@ function IsStore;
 input Instruction isn;
 case(isn.gen.opcode)
 `STC_D8,
+`STF_D8,`STF_D22,`STF_D35,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsStore = TRUE;
@@ -2408,8 +2391,10 @@ endfunction
 function [3:0] fnSelect;
 input Instruction isn;
 case(isn.gen.opcode)
+`LDF_D8,`LDF_D22,`LDF_D35,
 `LD_D8,`LD_D22,`LD_D35:			fnSelect = 4'b1111;
 `LDB_D8,`LDB_D22,`LDB_D35:	fnSelect = 4'b0001;
+`STF_D8,`STF_D22,`STF_D35,
 `ST_D8,`ST_D22,`ST_D35:			fnSelect = 4'b1111;
 `STB_D8,`STB_D22,`STB_D35:	fnSelect = 4'b0001;
 default:	fnSelect = 4'b000;
@@ -2449,10 +2434,14 @@ case(ins.gen.opcode)
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
 `ASL_3R:	fnMnemonic = "ASL ";
 `LSR_3R:	fnMnemonic = "LSR ";
+`LDF_D8,`LDF_D22,`LDF_D35:
+			fnMnemonic = "LDF ";
 `LD_D8,`LD_D22,`LD_D35:	
 			fnMnemonic = "LD  ";
 `LDB_D8,`LDB_D22,`LDB_D35:	
 			fnMnemonic = "LDB ";
+`STF_D8,`STF_D22,`STF_D35:
+			fnMnemonic = "STF ";
 `ST_D8,`ST_D22,`ST_D35:		
 			fnMnemonic = "ST  ";
 `STB_D8,`STB_D22,`STB_D35:		
@@ -2466,6 +2455,14 @@ case(ins.gen.opcode)
 	`STP:	fnMnemonic = "STP ";
 	`NOP:	fnMnemonic = "NOP ";
 	`MRK:	fnMnemonic = "MRK ";
+	`SYNCGRP:
+		case(ins.stp.cnst)
+		`MEMDB:	fnMnemonic = "MEMD";
+		`MEMSB:	fnMnemonic = "MEMS";
+		`SYNC:	fnMnemonic = "SYNC";
+		`FSYNC:	fnMnemonic = "FSYN";
+		default:	fnMnemonic = "????";
+		endcase
 	default:	;
 	endcase
 default:	fnMnemonic = "????";
@@ -2664,7 +2661,7 @@ aluIssue ualui1
 	.alu1_idle(alu1_idle),
 	.iq_alu(iq_alu),
 	.iq_alu0(iq_alu0),
-	.iq_prior_sync(iq_prior_sync),
+	.iq_prior_sync(iq.prior_sync),
 	.issue0(iq_alu0_issue),
 	.issue1(iq_alu1_issue)
 );
@@ -2723,7 +2720,7 @@ agenIssue uqgi1
 	.agen1_idle(agen1_idle),
 	.could_issue(could_issue),
 	.iq_mem(iq_mem),
-	.iq_prior_sync(iq_prior_sync), 
+	.iq_prior_sync(iq.prior_sync), 
 	.issue0(iq_agen0_issue),
 	.issue1(iq_agen1_issue)
 );
@@ -2739,14 +2736,14 @@ fcuIssue ufcui1
 	.could_issue(could_issue),
 	.fcu_id(fcu_id),
 	.fcu_done(fcu_done),
-	.iq_fc(iq_fc),
+	.iq_fc(iq.fc),
 	.iq_br(iq_br),
 	.iq_brkgrp(iq_brkgrp),
 	.iq_retgrp(iq_retgrp),
 	.iq_jal(iq_jal),
 	.iqs_v(iq.iqs.v),
 	.iq_sn(iq_sn),
-	.iq_prior_sync(iq_prior_sync),
+	.iq_prior_sync(iq.prior_sync),
 	.issue(iq_fcu_issue),
 	.nid(nid)
 );
@@ -2760,7 +2757,8 @@ fpuIssue ufpui1
 	.fpu0_idle(fpu0_done),
 	.fpu1_idle(fpu1_done),
 	.iq_fpu(iq.fpu),
-	.iq_prior_sync(iq_prior_sync),
+	.iq_fpu0(iq.fpu0),
+	.iq_prior_sync(iq.prior_sync),
 	.iq_prior_fsync(iq.prior_fsync),
 	.issue0(fpu0_issue),
 	.issue1(fpu1_issue)
@@ -2800,14 +2798,13 @@ memissueLogic umi1
 	.iq_load(iq_load),
 	.iq_store(iq_store),
 	.iq_sel(iq_sel),
-	.iq_fc(iq_fc),
+	.prior_pathchg(iq.prior_pathchg),
 	.iq_aq({IQ_ENTRIES{1'b0}}),
 	.iq_rl({IQ_ENTRIES{1'b0}}),
 	.iq_ma(iq_ma),
-	.iq_memsb(iq_memsb),
-	.iq_memdb(iq_memdb),
+	.prior_memsb(iq.prior_memsb),
+	.prior_memdb(iq.prior_memdb),
 	.iq_stomp(iq_stomp),
-	.iq_canex({IQ_ENTRIES{1'b0}}), 
 	.wb_v(wb_v),
 	.inwb0(inwb0),
 	.inwb1(inwb1),
@@ -2876,12 +2873,12 @@ wire will_clear_branchmiss = branchmiss && (
 															);
 */											
 reg branchmiss2, branchmiss3;
+wire will_clear_branchmiss = branchmiss3 && (pc==misspc);
 always @(posedge clk)
 begin
-	branchmiss2 <= branchmiss;
-	branchmiss3 <= branchmiss2;
+	branchmiss2 <= branchmiss & ~will_clear_branchmiss;
+	branchmiss3 <= branchmiss2 & ~will_clear_branchmiss;
 end
-wire will_clear_branchmiss = branchmiss3 && (pc==misspc);
 
 always @*
 case(fcu_instr.gen.opcode)
@@ -2891,7 +2888,7 @@ case(fcu_instr.gen.opcode)
 `JAL_RN:	fcu_misspc = fcu_argA;
 default:
 	// The length of the branch instruction is hardcoded here.
-	fcu_misspc = fcu_pt ? (fcu_pc + 2'd2) : (fcu_pc + fcu_brdisp + 2'd2);
+	fcu_misspc = fcu_pt ? (fcu_pc + 2'd2) : (fcu_pc + {{40{fcu_brdisp[11]}},fcu_brdisp} + 2'd2);
 endcase
 
 // To avoid false branch mispredicts the branch isn't evaluated until the
@@ -2943,7 +2940,7 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 // additional COMMIT logic
 //
 
-always @(posedge clk)
+always @*	//(posedge clk)
 begin
 	// The first commit bus is always tied to the same place
   commit0_v <= (iq.iqs.cmt[heads[0]] && !iq_stomp[heads[0]] && ~|panic);
@@ -3118,6 +3115,7 @@ agen uagn2
 
 fpUnit ufpu0
 (
+	.big(1'b1),
 	.rst(rst_i),
 	.clk(clk_i),
 	.clk2x(clk2x_i),
@@ -3133,11 +3131,12 @@ fpUnit ufpu0
 	.status(fpu0_status),
 	.exception(fpu0_exc),
 	.done(fpu0_done),
-	.rm(3'd0)
+	.rm(fp_rm)
 );
 
 fpUnit ufpu1
 (
+	.big(1'b0),
 	.rst(rst_i),
 	.clk(clk_i),
 	.clk2x(clk2x_i),
@@ -3153,7 +3152,7 @@ fpUnit ufpu1
 	.status(fpu1_status),
 	.exception(fpu1_exc),
 	.done(fpu1_done),
-	.rm(3'd0)
+	.rm(fp_rm)
 );
 
 wire [WID-1:0] ralu0_bus = alu0_bus;
@@ -3400,17 +3399,18 @@ if (rst_i) begin
 	ins_queued <= 0;
 	q1b <= FALSE;
 	branchmiss <= FALSE;
+	excmiss <= FALSE;
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
   	iq.iqs.v[n] <= `INV;
   	clear_iqs(n);
-  	iq_prior_sync[n] <= FALSE;
+  	iq.prior_sync[n] <= FALSE;
 		iq_sn[n] <= n;
 		iq_pt[n] <= FALSE;
 		iq_bt[n] <= FALSE;
 		iq_br[n] <= FALSE;
 		iq_alu[n] <= FALSE;
 		iq.fpu[n] <= FALSE;
-		iq_fc[n] <= FALSE;
+		iq.fc[n] <= FALSE;
 		iq_takb[n] <= FALSE;
 		iq_jal[n] <= FALSE;
 		iq_load[n] <= FALSE;
@@ -3418,8 +3418,8 @@ if (rst_i) begin
 		iq_pc[n] <= 52'h00E000;
 		iq_instr[n] <= `NOP_INSN;
 		iq_mem[n] <= FALSE;
-		iq_memsb[n] <= FALSE;
-		iq_memdb[n] <= FALSE;
+		iq.memsb[n] <= FALSE;
+		iq.memdb[n] <= FALSE;
 		iq_memndx[n] <= FALSE;
 		iq_memissue[n] <= FALSE;
 		iq_mem_islot[n] <= 3'd0;
@@ -3428,7 +3428,8 @@ if (rst_i) begin
 //		iq_memsb[n] <= 1'd0;
 //		iq_aq[n] <= 1'd0;
 //		iq_rl[n] <= 1'd0;
-		iq_canex[n] <= 1'd0;
+		iq.canex[n] <= 1'd0;
+		iq.prior_pathchg[n] <= FALSE;
 		iq_tgt[n] <= 6'd0;
 		iq_imm[n] <= 1'b0;
 		iq_ma[n] <= 1'b0;
@@ -3440,6 +3441,7 @@ if (rst_i) begin
 		iq_argB_s[n] <= 5'd0;
 		iq_fl[n] <= 2'b00;
 		iq_rid[n] <= 3'd0;
+		iq_exc[n] <= `FLT_NONE;
   end
   	 //rob.reset();
      bwhich <= 2'b00;
@@ -3533,12 +3535,9 @@ end
 else begin
 
 	// Register file updates
-	for (n = 1; n < 32; n = n + 1)
+	for (n = 1; n < 64; n = n + 1)
 		regs[n] <= regsx[n];
 		
-	for (n = 0; n < 32; n = n + 1)
-		fregs[n] <= fregsx[n];
-
 	for (n = 0; n < 5; n = n + 1)
 		lkregs[n] <= lkregsx[n];
 
@@ -3563,6 +3562,7 @@ else begin
 	if (!branchmiss) begin
 		if (excmiss) begin
 			branchmiss <= `TRUE;
+			excmiss <= `FALSE;
 			misspc <= excmisspc;
 			missid <= (|iq_exc[heads[0]] ? heads[0] : heads[1]);
 			misssn <= (|iq_exc[heads[0]] ? iq_sn[heads[0]] : iq_sn[heads[1]]);
@@ -3938,7 +3938,7 @@ else begin
 				fcu_pc		<= iq_pc[n];
 				fcu_nextpc <= iq_pc[n] + iq_len[n];
 				fcu_pt     <= iq_pt[n];
-				fcu_brdisp <= iq_const[n];
+				fcu_brdisp <= iq_instr[n].br.disp;
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
 				fcu_argI <= iq_const[n];
@@ -3962,7 +3962,7 @@ else begin
 				fpu0_id <= n[`QBITS];
 				fpu0_rid <= iq_rid[n];
 				fpu0_instr	<= iq_instr[n];
-	      fpu0_argI <= iq_const[n][5:0];
+	      fpu0_argI <= {46'd0,instr[n].raw[22],instr[n].flt2.Rt};
 				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu0_argA);
 				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu0_argB);
 				fpu0_dataready <= IsSingleCycleFp(iq_instr[n]);
@@ -3982,7 +3982,7 @@ else begin
 				fpu1_id <= n[`QBITS];
 				fpu1_rid <= iq_rid[n];
 				fpu1_instr	<= iq_instr[n];
-				fpu1_argI <= iq_const[n][5:0];
+	      fpu1_argI <= {46'd0,instr[n].raw[22],instr[n].flt2.Rt};
 				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu1_argA);
 				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu1_argB);
 				fpu1_dataready <= IsSingleCycleFp(iq_instr[n]);
@@ -4425,7 +4425,7 @@ endcase
 		 iq.iqs.agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
-		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "A" : "O", 
+		iq.fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "A" : "O", 
 		iq_instr[i],fnMnemonic(iq_instr[i]), iq_tgt[i], 
 		iq_const[i],
 		iq_argA[i], iq_argA_v[i], iq_argA_s[i],
@@ -4596,30 +4596,61 @@ input [`RBITS] head;
 input [1:0] which;
 reg thread;
 begin
+	if (iq.fc[head]|iq.canex[head]) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+			if (iq.prior_pathchg[n])
+				if (iq.prior_pathchg_qid[n]==rob.id[head])
+					iq.prior_pathchg[n] <= FALSE;
+		end
+	end
+	case(rob.instr[head].gen.opcode)
+	// When a sync instruction commits unblock all the dependent following instructions.
+	`STPGRP:
+		if (rob.instr[head].stp.exop==2'd3) begin
+			case(rob.instr[head].stp.cnst)
+			`SYNC:
+				begin // SYNC
+					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+						if (iq.iqs.v[n] & iq.prior_sync[n])
+							if (iq.prior_sync_qid[n]==rob.id[head])
+								iq.prior_sync[n] <= FALSE;
+					end
+				end
+			`FSYNC:
+				begin // SYNC
+					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+						if (iq.iqs.v[n] & iq.prior_fsync[n])
+							if (iq.prior_fsync_qid[n]==rob.id[head])
+								iq.prior_fsync[n] <= FALSE;
+					end
+				end
+			`MEMDB:
+				begin
+					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+						if (iq.iqs.v[n] & iq.prior_memdb[n])
+							if (iq.prior_memdb_qid[n]==rob.id[head])
+								iq.prior_memdb[n] <= FALSE;
+					end
+				end
+			`MEMSB:
+				begin
+					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+						if (iq.iqs.v[n] & iq.prior_memsb[n])
+							if (iq.prior_memsb_qid[n]==rob.id[head])
+								iq.prior_memsb[n] <= FALSE;
+					end
+				end
+			default:	;
+			endcase
+		end
+	default:	;
+	endcase
   if (v) begin
     if (|rob.exc[head]) begin
     	exc(head,iq_exc[head]);
     end
 		else
 			case(rob.instr[head].gen.opcode)
-			// When a sync instruction commits unblock all the dependent following instructions.
-			`STPGRP:
-				if (rob.instr[head].stp.exop==2'd3) begin
-					if (rob.instr[head].stp.cnst==`SYNC)	 begin // SYNC
-						for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-							if (iq.iqs.v[n] & iq_prior_sync[n])
-								if (iq_prior_sync_qid[n]==rob.id[head])
-									iq_prior_sync[n] <= FALSE;
-						end
-					end
-					else if (rob.instr[head].stp.cnst==`FSYNC)	 begin // SYNC
-						for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-							if (iq.iqs.v[n] & iq.prior_fsync[n])
-								if (iq.prior_fsync_qid[n]==rob.id[head])
-									iq.prior_fsync[n] <= FALSE;
-						end
-					end
-				end
 			`BRKGRP:
           begin
             excmiss <= TRUE;
@@ -5013,7 +5044,7 @@ begin
 					rob.rs.cmt[heads[n]] <= `FALSE;
 					iq_mem[heads[n]] <= `FALSE;
 					iq_alu[heads[n]] <= `FALSE;
-					iq_fc[heads[n]] <= `FALSE;
+					iq.fc[heads[n]] <= `FALSE;
 				end
 //				if (alu0_id==heads[n] && iq_state[alu0_id]==IQS_CMT
 //					&& !issuing_on_alu0)
@@ -5163,16 +5194,18 @@ begin
 	iq_bt   [nn]  <= bus[`IB_BT];
 	iq_alu  [nn]  <= bus[`IB_ALU];
 	iq_alu0 [nn]  <= bus[`IB_ALU0];
+	iq.fpu0 [nn]  <= bus[`IB_FPU0];
 	iq.fpu	[nn]  <= bus[`IB_FPU];
-	iq_fc   [nn]  <= bus[`IB_FC];
+	iq.fc   [nn]  <= bus[`IB_FC];
+	iq.canex[nn]  <= bus[`IB_CANEX];
 	iq_load [nn]  <= bus[`IB_LOAD];
 	iq_store[nn]  <= bus[`IB_STORE];
 	iq_store_cr[nn] <= bus[`IB_STORE_CR];
 	iq_memsz[nn]  <= bus[`IB_MEMSZ];
 	iq_mem  [nn]  <= bus[`IB_MEM];
 	iq_memndx[nn] <= bus[`IB_MEMNDX];
-	iq_memsb[nn]	<= bus[`IB_MEMSB];
-	iq_memdb[nn]	<= bus[`IB_MEMDB];
+	iq.memsb[nn]	<= bus[`IB_MEMSB];
+	iq.memdb[nn]	<= bus[`IB_MEMDB];
 	iq.sync	[nn]	<= bus[`IB_SYNC];
 	iq.fsync[nn]	<= bus[`IB_FSYNC];
 	iq_jal  [nn]  <= bus[`IB_JAL];
@@ -5221,12 +5254,12 @@ begin
 	iq_Rb[ndx] <= Rb[slot];
 `endif
 	// Determine the most recent prior sync instruction.
-	iq_prior_sync_qid[n] <= {`QBIT{1'b1}};
-	iq_prior_sync[n] <= FALSE;
+	iq.prior_sync_qid[n] <= {`QBIT{1'b1}};
+	iq.prior_sync[n] <= FALSE;
 	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
 		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.sync[(n+ndx)%IQ_ENTRIES]) begin
-			iq_prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq_prior_sync[ndx] <= TRUE;
+			iq.prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_sync[ndx] <= TRUE;
 		end
 	end
 	iq.prior_fsync_qid[n] <= {`QBIT{1'b1}};
@@ -5235,6 +5268,30 @@ begin
 		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.fsync[(n+ndx)%IQ_ENTRIES]) begin
 			iq.prior_fsync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
 			iq.prior_fsync[ndx] <= TRUE;
+		end
+	end
+	iq.prior_memdb_qid[n] <= {`QBIT{1'b1}};
+	iq.prior_memdb[n] <= FALSE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.memdb[(n+ndx)%IQ_ENTRIES]) begin
+			iq.prior_memdb_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_memdb[ndx] <= TRUE;
+		end
+	end
+	iq.prior_memsb_qid[n] <= {`QBIT{1'b1}};
+	iq.prior_memsb[n] <= FALSE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.memsb[(n+ndx)%IQ_ENTRIES]) begin
+			iq.prior_memsb_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_memsb[ndx] <= TRUE;
+		end
+	end
+	iq.prior_pathchg_qid[n] <= {`QBIT{1'b1}};
+	iq.prior_pathchg[n] <= FALSE;
+	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
+		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & (iq.fc[(n+ndx)%IQ_ENTRIES]|iq.canex[(n+ndx)%IQ_ENTRIES])) begin
+			iq.prior_pathchg_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
+			iq.prior_pathchg[ndx] <= TRUE;
 		end
 	end
 	iq_pt[ndx] <= take_branchq[slot];

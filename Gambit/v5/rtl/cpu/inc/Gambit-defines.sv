@@ -91,7 +91,7 @@
 `define OR_3R			7'h09
 `define OR_RI22		7'h19
 `define OR_RI35		7'h29
-`define ORIS			7'h2C
+`define ISOP			7'h2C
 `define JAL_RN		7'h48
 `define EOR_3R		7'h0A
 `define EOR_RI22	7'h1A
@@ -120,6 +120,12 @@
 `define SLEU_3R		7'h7D
 `define MTx				7'h4A
 `define MFx				7'h5A
+`define LDF_D8		7'h52
+`define LDF_D22		7'h62
+`define LDF_D35		7'h72
+`define STF_D8		7'h57
+`define STF_D22		7'h67
+`define STF_D35		7'h77
 
 `define FLT1		7'h6E
 `define FMOV    5'h00
@@ -140,8 +146,10 @@
 `define FDX     5'h13
 `define FRM     5'h14
 `define TRUNC		5'h15
+`define FRES		5'h17
 `define ISNAN		5'h0E
 `define FINITE	5'h0F
+`define FRSQRTE	5'h1D
 `define FCLASS	5'h1E
 `define UNORD		5'h1F
 
@@ -220,6 +228,8 @@
 `define IB_FPU		7
 `define IB_SYNC		8
 `define IB_FSYNC	9
+`define IB_CANEX	10
+`define IB_FPU0		11
 `define IB_ALU0		12
 `define IB_BT			13
 `define IB_ALU		14

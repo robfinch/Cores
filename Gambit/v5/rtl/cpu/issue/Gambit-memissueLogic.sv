@@ -25,7 +25,7 @@
 `include "..\inc\Gambit-types.sv"
 
 module memissueLogic (heads, iqs_v, iq_memready, iqs_out, iqs_done, iqs_mem, iqs_agen, 
-	iq_load, iq_store, iq_sel, iq_fc, iq_aq, iq_rl, iq_ma, iq_memsb, iq_memdb, iq_stomp, iq_canex, 
+	iq_load, iq_store, iq_sel, prior_pathchg, iq_aq, iq_rl, iq_ma, prior_memsb, prior_memdb, iq_stomp, 
 	wb_v, inwb0, inwb1, sple,
 	memissue, issue_count);
 parameter TRUE = 1'b1;
@@ -43,13 +43,12 @@ input [IQ_ENTRIES-1:0] iqs_agen;
 input [IQ_ENTRIES-1:0] iq_load;
 input [IQ_ENTRIES-1:0] iq_store;
 input [22:0] iq_sel [0:IQ_ENTRIES-1];
-input [IQ_ENTRIES-1:0] iq_fc;
+input [IQ_ENTRIES-1:0] prior_pathchg;
 input [IQ_ENTRIES-1:0] iq_aq;
 input [IQ_ENTRIES-1:0] iq_rl;
-input [IQ_ENTRIES-1:0] iq_memsb;
-input [IQ_ENTRIES-1:0] iq_memdb;
+input [IQ_ENTRIES-1:0] prior_memsb;
+input [IQ_ENTRIES-1:0] prior_memdb;
 input [IQ_ENTRIES-1:0] iq_stomp;
-input [IQ_ENTRIES-1:0] iq_canex;
 input [`WB_DEPTH-1:0] wb_v;
 input inwb0;
 input inwb1;
@@ -61,8 +60,6 @@ output reg [1:0] issue_count;
 integer n, m;
 reg [7:0] store_count;
 reg [QCHKS-1:0] adr_ok [0:QCHKS-1];
-reg [QCHKS-1:0] memsb_ok [0:QCHKS-1];
-reg [QCHKS-1:0] memdb_ok [0:QCHKS-1];
 reg [QCHKS-1:0] adr_pass;
 reg [QCHKS-1:0] memsb_pass;
 reg [QCHKS-1:0] memdb_pass;
@@ -95,40 +92,12 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 end
 
 always @*
-for (n = 0; n < QCHKS; n = n + 1) begin
-	for (m = 0; m < QCHKS; m = m + 1) begin
-		memsb_ok[n][m] = FALSE;
-		if (m < n)
-			memsb_ok[n][m] = iqs_done[heads[m]] || !iqs_v[heads[m]];
-	end
-end
+for (n = 0; n < QCHKS; n = n + 1)
+	memsb_pass[heads[n]] = !prior_memsb[heads[n]];
 
 always @*
-for (n = 0; n < QCHKS; n = n + 1) begin
-	memsb_pass[n] = TRUE;
-	for (m = 1; m < QCHKS; m = m + 1) begin
-		if (m < n)
-			memsb_pass[n] = memsb_pass[n] && (!iq_memsb[m] || memsb_ok[n][m-1]);
-	end
-end
-
-always @*
-for (n = 0; n < QCHKS; n = n + 1) begin
-	for (m = 0; m < QCHKS; m = m + 1) begin
-		memdb_ok[n][m] = FALSE;
-		if (m < n)
-			memdb_ok[n][m] = !iqs_mem[heads[m]] || iqs_done[heads[m]] || !iqs_v[heads[m]];
-	end
-end
-
-always @*
-for (n = 0; n < QCHKS; n = n + 1) begin
-	memdb_pass[n] = TRUE;
-	for (m = 1; m < QCHKS; m = m + 1) begin
-		if (m < n)
-			memdb_pass[n] = memdb_pass[n] && (!iq_memdb[m] || memdb_ok[n][m-1]);
-	end
-end
+for (n = 0; n < QCHKS; n = n + 1)
+	memdb_pass[heads[n]] = !prior_memdb[heads[n]];
 
 
 //generate begin : gMemIssue
@@ -156,8 +125,7 @@ begin
 					// ... and there's nothing in the write buffer during a load
 					&& (!(iq_load[heads[1]] && inwb1) || store_count > 8'd0)
 					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iq_load[heads[1]] && sple) ||
-					   !(iq_fc[heads[0]]||iq_canex[heads[0]]));
+					&& ((iq_load[heads[1]] && sple) || !prior_pathchg[heads[1]]);
 	 if (memissue[heads[1]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[1]])
@@ -183,9 +151,7 @@ begin
 					&& memsb_pass[heads[2]]
 					&& memdb_pass[heads[2]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[2]] && sple) ||
-					      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-					   && !(iq_fc[heads[1]]||iq_canex[heads[1]]));
+					&& ((iq_load[heads[2]] && sple) || !prior_pathchg[heads[2]]);
 	 if (memissue[heads[2]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[2]])
@@ -214,10 +180,7 @@ begin
 					&& memsb_pass[heads[3]]
 					&& memdb_pass[heads[3]]
                     // ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[3]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]]))
+					&& ((iq_load[heads[3]] && sple) || !prior_pathchg[heads[3]])
           ;
 	 if (memissue[heads[3]])
 	 	issue_count = issue_count + 1;
@@ -251,11 +214,7 @@ begin
 					&& memsb_pass[heads[4]]
 					&& memdb_pass[heads[4]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[4]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]]));
+					&& ((iq_load[heads[4]] && sple) || !prior_pathchg[heads[4]]);
 	 if (memissue[heads[4]])
 	 	issue_count = issue_count + 1;
 	end
@@ -292,12 +251,7 @@ begin
 					&& memsb_pass[heads[5]]
 					&& memdb_pass[heads[5]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[5]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]]));
+					&& ((iq_load[heads[5]] && sple) || !prior_pathchg[heads[5]]);
 	 if (memissue[heads[5]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[5]])
@@ -337,13 +291,7 @@ if (IQ_ENTRIES > 6) begin
 					&& memsb_pass[heads[6]]
 					&& memdb_pass[heads[6]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[6]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]]));
+					&& ((iq_load[heads[6]] && sple) || !prior_pathchg[heads[6]]);
 	 if (memissue[heads[6]])
 	 	issue_count = issue_count + 1;
 	end
@@ -385,14 +333,7 @@ if (IQ_ENTRIES > 6) begin
 					&& memsb_pass[heads[7]]
 					&& memdb_pass[heads[7]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[7]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]]));
+					&& ((iq_load[heads[7]] && sple) || !prior_pathchg[heads[7]]);
 	 if (memissue[heads[7]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[7]])
@@ -436,16 +377,7 @@ if (IQ_ENTRIES > 6) begin
 					&& memsb_pass[heads[8]]
 					&& memdb_pass[heads[8]]
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[8]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]])
-                       && !(iq_fc[heads[7]]||iq_canex[heads[7]])
-                       );
+					&& ((iq_load[heads[8]] && sple) || !prior_pathchg[heads[8]]);
 	 if (memissue[heads[8]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[8]])
@@ -491,17 +423,7 @@ if (IQ_ENTRIES > 6) begin
 					&& memsb_pass[heads[9]]
 					&& memdb_pass[heads[9]]
 					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iq_load[heads[9]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]])
-                       && !(iq_fc[heads[7]]||iq_canex[heads[7]])
-                       && !(iq_fc[heads[8]]||iq_canex[heads[8]])
-                       );
+					&& ((iq_load[heads[9]] && sple) || !prior_pathchg[heads[9]]);
 	 if (memissue[heads[9]])
 	 	issue_count = issue_count + 1;
 	 if (iq_store[heads[9]])

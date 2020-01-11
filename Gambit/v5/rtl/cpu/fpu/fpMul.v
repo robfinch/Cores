@@ -7,7 +7,7 @@
 //
 //	fpMul.v
 //		- floating point multiplier
-//		- two cycle latency
+//		- three cycle latency
 //		- can issue every clock cycle
 //		- parameterized width
 //		- IEEE 754 representation
@@ -63,22 +63,23 @@ output inf;
 output overflow;
 output underflow;
 
-reg [EMSB:0] xo1;		// extra bit for sign
+Exponent xo1;		// extra bit for sign
 reg [FX:0] mo1;
 
 // constants
-wire [EMSB:0] infXp = {EMSB+1{1'b1}};	// infinite / NaN - all ones
+Exponent infXp = {EMSB+1{1'b1}};	// infinite / NaN - all ones
 // The following is the value for an exponent of zero, with the offset
 // eg. 8'h7f for eight bit exponent, 11'h7ff for eleven bit exponent, etc.
-wire [EMSB:0] bias = {1'b0,{EMSB{1'b1}}};	//2^0 exponent
+Exponent bias = {1'b0,{EMSB{1'b1}}};	//2^0 exponent
 // The following is a template for a quiet nan. (MSB=1)
-wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
+Mantissa qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
-reg [FX:0] fract1,fract1a;
+wire [FX:0] fract1;
+reg [FX:0] fract1a;
 wire [FX:0] fracto;
 wire [EMSB+2:0] ex1;	// sum of exponents
-wire [EMSB  :0] ex2;
+wire [EMSB:0] ex2;
 
 // Decompose the operands
 wire sa, sb;			// sign bit
@@ -91,10 +92,16 @@ wire aInf, bInf, aInf1, bInf1;
 wire [(FMSB+1)*2:0] prod;
 
 generate begin : mults
-if (FPWID==52)
-	mult41 um1 (.A(fracta), .B(fractb), .P(prod));
+if (FPWID==80)
+	mult65 um1 (.CLK(clk), .CE(ce), .A(fracta), .B(fractb), .P(fract1));
+else if (FPWID==64)
+	mult53 um1 (.CLK(clk), .CE(ce), .A(fracta), .B(fractb), .P(fract1));
+else if (FPWID==52)
+	mult41 um1 (.CLK(clk), .CE(ce), .A(fracta), .B(fractb), .P(fract1));
 else if (FPWID==32)
-	mult24 um1 (.A(fracta), .B(fractb), .P(prod));
+	mult24 um1 (.CLK(clk), .CE(ce), .A(fracta), .B(fractb), .P(fract1));
+else if (FPWID==16)
+	mult11 um1 (.CLK(clk), .CE(ce), .A(fracta), .B(fractb), .P(fract1));
 end
 endgenerate
 
@@ -115,84 +122,6 @@ fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz
 // mul: ex1 = xa + xb,	result should always be < 1ffh
 assign ex1 = (az|bz) ? 0 : (xa|a_dn) + (xb|b_dn) - bias;
 
-generate
-if (FPWID==80) begin
-reg [31:0] p00,p01,p02,p03;
-reg [31:0] p10,p11,p12,p13;
-reg [31:0] p20,p21,p22,p23;
-reg [31:0] p30,p31,p32,p33;
-	always @(posedge clk)
-	if (ce) begin
-		p00 <= fracta[15: 0] * fractb[15: 0];
-		p01 <= fracta[31:16] * fractb[15: 0];
-		p02 <= fracta[47:32] * fractb[15: 0];
-		p03 <= fracta[63:48] * fractb[15: 0];
-		
-		p10 <= fracta[15: 0] * fractb[31:16];
-		p11 <= fracta[31:16] * fractb[31:16];
-		p12 <= fracta[47:32] * fractb[31:16];
-		p13 <= fracta[63:48] * fractb[31:16];
-
-		p20 <= fracta[15: 0] * fractb[47:32];
-		p21 <= fracta[31:16] * fractb[47:32];
-		p22 <= fracta[47:32] * fractb[47:32];
-		p23 <= fracta[63:48] * fractb[47:32];
-
-		p30 <= fracta[15: 0] * fractb[63:48];
-		p31 <= fracta[31:16] * fractb[63:48];
-		p32 <= fracta[47:32] * fractb[63:48];
-		p33 <= fracta[63:48] * fractb[63:48];
-
-		fract1 <= 	              				{p03,48'b0} + {p02,32'b0} + {p01,16'b0} + p00 +
-								  {p13,64'b0} + {p12,48'b0} + {p11,32'b0} + {p10,16'b0} +
-					{p23,80'b0} + {p22,64'b0} + {p21,48'b0} + {p20,32'b0} +
-      {p33,96'b0} + {p32,80'b0} + {p31,64'b0} + {p30,48'b0}
-				;
-	end
-end
-else if (FPWID==64) begin
-reg [35:0] p00,p01,p02;
-reg [35:0] p10,p11,p12;
-reg [35:0] p20,p21,p22;
-	always @(posedge clk)
-	if (ce) begin
-		p00 <= fracta[17: 0] * fractb[17: 0];
-		p01 <= fracta[35:18] * fractb[17: 0];
-		p02 <= fracta[52:36] * fractb[17: 0];
-		p10 <= fracta[17: 0] * fractb[35:18];
-		p11 <= fracta[35:18] * fractb[35:18];
-		p12 <= fracta[52:36] * fractb[35:18];
-		p20 <= fracta[17: 0] * fractb[52:36];
-		p21 <= fracta[35:18] * fractb[52:36];
-		p22 <= fracta[52:36] * fractb[52:36];
-		fract1 <= 	                            {p02,36'b0} + {p01,18'b0} + p00 +
-								  {p12,54'b0} + {p11,36'b0} + {p10,18'b0} +
-					{p22,72'b0} + {p21,54'b0} + {p20,36'b0}
-				;
-	end
-end
-else if (FPWID==52) begin
-	always @(posedge clk)
-		if (ce) begin
-			fract1a <= prod;
-			fract1 <= fract1a;
-		end
-end
-else if (FPWID==32) begin
-	always @(posedge clk)
-		if (ce) begin
-			fract1a <= prod;
-			fract1 <= fract1a;
-		end
-end
-else begin
-	always @(posedge clk)
-    if (ce) begin
-    	fract1a <= fracta * fractb;
-        fract1 <= fract1a;
-    end
-end
-endgenerate
 
 // Status
 wire under1, over1;
@@ -273,7 +202,7 @@ output underflow;
 
 wire [EX:0] o1;
 wire sign_exe1, inf1, overflow1, underflow1;
-wire [MSB+3:0] fpn0;
+FloatGRS fpn0;
 
 fpMul       #(FPWID) u1 (clk, ce, a, b, o1, sign_exe1, inf1, overflow1, underflow1);
 fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );

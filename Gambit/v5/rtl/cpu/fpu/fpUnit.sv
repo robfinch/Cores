@@ -72,6 +72,7 @@
 //
 `include "..\inc\Gambit-types.sv"
 `include "fpConfig.sv"
+`include "fpTypes.sv"
 
 `define TRUE    1'b1
 `define FALSE   1'b0
@@ -103,24 +104,26 @@
 
 `include "fpDefines.v"
 
-module fpUnit(rst, clk, clk2x, clk4x, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
+module fpUnit(big, rst, clk, clk2x, clk4x, ce, pc, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
 );
-parameter FPWID = 52;
+parameter FPWID = `FPWID;
 `include "fpSize.sv"
 localparam EMSBS = 7;
 localparam FMSBS = 22;
 localparam FXS = (FMSBS+2)*2-1;	// the MSB of the expanded fraction
 localparam EXS = FXS + 1 + EMSBS + 1 + 1 - 1;
 
+input big;
 input rst;
 input clk;
 input clk4x;
 input clk2x;
 input ce;
+input Address pc;
 input Instruction ir;
 input ld;
-input [MSB:0] a;
-input [MSB:0] b;
+input Float a;
+input Float b;
 input [5:0] imm;
 output tri [MSB:0] o;
 input [31:0] csr_i;
@@ -132,7 +135,7 @@ input [2:0] rm;
 reg [7:0] fpcnt;
 wire rem_done;
 wire rem_ld;
-wire op_done = fpcnt==8'h00;
+wire op_done;
 assign done = op_done & rem_done;
 
 //------------------------------------------------------------
@@ -167,6 +170,18 @@ wire [2:0] insn_rm = ir[30:28];
 reg [FPWID-1:0] res;
 reg [FPWID-1:0] aop, bop, cop;
 
+// Results cache
+reg [4:0] f51 [0:63];
+Address pcs1 [0:63];
+Float as1 [0:63];
+Float rs1 [0:63];
+// Results cache
+reg [6:0] op72 [0:63];
+Address pcs2 [0:63];
+Float as2 [0:63];
+Float bs2 [0:63];
+Float rs2 [0:63];
+
 wire [2:0] prec = 3'd4;//ir[25:24];
 
 wire fstat 	= {ir.gen.opcode,ir.flt1.func5} == {`FLT1,`FSTAT};	// get status
@@ -187,6 +202,8 @@ wire zl_op =  	 ir.gen.opcode==`FCMP
                     (ir.flt1.func5==`FABS || ir.flt1.func5==`FNABS || ir.flt1.func5==`FMOV
                      || ir.flt1.func5==`FNEG || ir.flt1.func5==`FSIGN || ir.flt1.func5==`FMAN)));
 wire loo_op = (ir.gen.opcode==`FLT1 && (ir.flt1.func5==`ITOF || ir.flt1.func5==`FTOI || ir.flt1.func5==`TRUNC));
+wire frsqrte_op = ir.gen.opcode==`FLT1 && ir.flt1.func5==`FRSQRTE;
+wire fres_op = ir.gen.opcode==`FLT1 && ir.flt1.func5==`FRES;
 wire loo_done;
 
 wire subinf;
@@ -401,10 +418,13 @@ wire [EXS:0] fmuls_o;
 wire [EXS:0] fass_o;
 wire [EXS:0] fres_o;
 reg  [EXS:0] fress;
+wire [MSB:0] frsqrte_o;
 wire divUnder,divUnders;
 wire mulUnder,mulUnders;
 reg under,unders;
 wire sqrneg;
+wire frsqrte_done;
+wire fres_done;
 
 fpAddsub #(FPWID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(ir.flt2.opcode[0]), .a(a), .b(b), .o(fas_o) );
 fpDiv    #(FPWID) u11(.rst(rst), .clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
@@ -412,6 +432,12 @@ fpMul    #(FPWID) u12(.clk(clk), .ce(pipe_ce), .a(a), .b(b), .o(fmul_o), .sign_e
 fpSqrt	 #(FPWID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(a), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
 //fpRes    #(FPWID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
 //fpFMA 	 #(FPWID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(cop), .o(fma_o), .inf());
+fpRes    #(FPWID) u14(.clk(clk), .ce(pipe_ce), .a(a), .o(fres_o));
+fpRsqrte	ursqrte1 (.clk(clk), .ce(pipe_ce), .ld(ld), .a(a), .o(frsqrte_o));
+
+wire f5done = pc==pcs1[pc[5:0]] && a==as1[pc[5:0]] && f51[pc[5:0]]==ir.flt1.func5;
+wire o7done = pc==pcs2[pc[5:0]] && a==as2[pc[5:0]] && b==bs2[pc[5:0]] && op72[pc[5:0]]==ir.gen.opcode;
+assign op_done = (fpcnt==8'h00) || f5done || o7done;
 
 /*
 fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .b(b[31:0]), .o(fass_o) );
@@ -421,7 +447,7 @@ fpMul    #(32) u12s(.clk(clk), .ce(pipe_ce),          .a(a[31:0]), .b(b[31:0]), 
 always @*
 case(ir2.gen.opcode)
 `FMUL:	under = mulUnder;
-`FDIV:	under = divUnder;
+`FDIV:	under = big ? divUnder : 0;
 default: begin under = 0; unders = 0; end
 endcase
 
@@ -430,10 +456,10 @@ case(ir2.gen.opcode)
 `FADD:	fres <= fas_o;
 `FSUB:	fres <= fas_o;
 `FMUL:	fres <= fmul_o;
-`FDIV:	fres <= fdiv_o;
+`FDIV:	fres <= big ? fdiv_o : 1'd0;
 `FLT1:
 	case(ir2.flt1.opcode)
-  `FSQRT:	fres <= fsqrt_o;
+  `FSQRT:	fres <= big ? fsqrt_o : 1'd0;
   default:	begin fres <= 1'd0; fress <= 1'd0; end
   endcase
 default:    begin fres <= fas_o; fress <= fass_o; end
@@ -441,12 +467,12 @@ endcase
 
 // pipeline stage
 // eight cycle latency (double clocked)
-fpNormalize #(FPWID) fpn0(.clk(clk2x), .ce(pipe_ce), .under_i(under), .under_o(), .i(fres), .o(fpn_o) );
+fpNormalize #(FPWID) fpn0(.clk(clk), .ce(pipe_ce), .under_i(under), .under_o(), .i(fres), .o(fpn_o) );
 //fpNormalize #(32) fpns(.clk(clk), .ce(pipe_ce), .under(unders), .i(fress), .o(fpns_o) );
 
 // pipeline stage
 // three cycle latency (double clocked)
-fpRound #(FPWID) fpr0(.clk(clk2x), .ce(pipe_ce), .rm(rmd6), .i(fpn_o), .o(fpu_o) );
+fpRound #(FPWID) fpr0(.clk(clk), .ce(pipe_ce), .rm(rmd6), .i(fpn_o), .o(fpu_o) );
 //fpRoundReg #(32) fprs(.clk(clk), .ce(pipe_ce), .rm(rm4), .i(fpns_o), .o(fpus_o) );
 
 wire so = (isNan?nso:fpu_o[FPWID-1]);
@@ -480,7 +506,7 @@ assign status = {
 	sx,
 	
 	1'b0,  	// cvtx
-	sqrneg,	// sqrtx
+	big & sqrneg,	// sqrtx
 	fcmp & nanx,
 	infzero,
 	zerozero,
@@ -489,13 +515,42 @@ assign status = {
 	isNan
 	};
 
-wire [MSB:0] o1 = 
+wire Float o1 = 
     (frm|fcx|fdx|fex) ? (a|imm) :
     zl_op ? zlq_o :
-    loo_op ? looq_o : 
+    big & loo_op ? looq_o : 
+    f5done ? rs1[pc[5:0]] :		// cached result
+    o7done ? rs2[pc[5:0]] :		// cached result
+    fres_op ? fres_o :
+    frsqrte_op ? frsqrte_o :	// recirpocal square root estimate doesn't go through norm and round.
     {so,fpu_o[MSB-1:0]};
 assign zero = fpu_o[MSB-1:0]==0;
 assign o = o1;
+
+// update results cache
+reg [7:0] pfpcnt;
+always @(posedge clk)
+if (rst)
+	pfpcnt <= 8'h00;
+else begin
+	pfpcnt <= fpcnt;
+	if (fpcnt==8'h00 && pfpcnt==8'h01 && ir.gen.opcode==`FLT1) begin
+		f51[pc[5:0]] <= ir.flt1.func5;
+		pcs1[pc[5:0]] <= pc;
+		as1[pc[5:0]] <= a;
+		rs1[pc[5:0]] <= o1;
+	end
+end
+always @(posedge clk)
+begin
+	if (fpcnt==8'h00 && pfpcnt==8'h01 && ir.gen.opcode!=`FLT1) begin
+		op72[pc[5:0]] <= ir.gen.opcode;
+		pcs2[pc[5:0]] <= pc;
+		as2[pc[5:0]] <= a;
+		bs2[pc[5:0]] <= b;
+		rs2[pc[5:0]] <= o1;
+	end
+end
 
 wire [7:0] maxdivcnt;
 generate begin
@@ -553,23 +608,25 @@ begin
   if (ld|rem_ld)
     case(ir.gen.opcode)
     `FCMP:  begin fpcnt <= 8'd0; end
-    `FADD:  begin fpcnt <= 8'd10; end
-    `FSUB:  begin fpcnt <= 8'd10; end
-    `FMUL:  begin fpcnt <= 8'd10; end
+    `FADD:  begin fpcnt <= 8'd6; end
+    `FSUB:  begin fpcnt <= 8'd6; end
+    `FMUL:  begin fpcnt <= 8'd7; end
     `FDIV:  begin fpcnt <= maxdivcnt; end
     `FLT1:
       case(ir.flt1.func5)
       `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
-      `FTOI:  begin fpcnt <= 8'd1; end
-      `ITOF:  begin fpcnt <= 8'd1; end
+      `FTOI:  begin fpcnt <= 8'd3; end
+      `ITOF:  begin fpcnt <= 8'd3; end
       `TRUNC:  begin fpcnt <= 8'd1; end
       `FSQRT: begin fpcnt <= maxdivcnt + 8'd8; end
+      `FRSQRTE:	fpcnt <= 8'd4;
+      `FRES:		fpcnt <= 8'd4;
       default:    fpcnt <= 8'h00;
       endcase
     default:    fpcnt <= 8'h00;
     endcase
   else if (!op_done) begin
-  	if (ir.flt2.opcode==`FDIV && divDone)
+  	if (big && ir.flt2.opcode==`FDIV && divDone)
   		fpcnt <= 8'h12;
   	else
     	fpcnt <= fpcnt - 1;

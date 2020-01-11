@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -22,14 +22,14 @@
 // ============================================================================
 //
 `include "fpConfig.sv"
+`include "fpTypes.sv"
 
 module fpRes(clk, ce, a, o);
-parameter FPWID = 128;
-`include "fpSize.sv"
+parameter FPWID = `FPWID;
 input clk;
 input ce;
-input [FPWID-1:0] a;
-output [FPWID-1:0] o;
+input Float a;
+output Float o;
 
 // This table encodes two endpoints k0, k1 of a piece-wise linear
 // approximation to the reciprocal in the range [1.0,2.0).
@@ -1063,16 +1063,16 @@ k01[1023] = 32'h800f4009;
 end
 
 wire sa;
-wire [EMSB:0] xa;
-wire [FMSB:0] ma;
-fpDecomp #(FPWID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
+wire Exponent xa;
+wire Mantissa ma;
+fpDecomp #(`FPWID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
 
-wire [EMSB+1:0] bias = {1'b0,{EMSB{1'b1}}};
-wire [EMSB+1:0] x1 = xa - bias;
-wire [EMSB:0] exp = bias - x1 - 2'd1;	// make exponent negative
+wire [`EMSB+1:0] bias = {1'b0,{`EMSB{1'b1}}};
+wire [`EMSB+1:0] x1 = xa - bias;
+wire Exponent exp = bias - x1 - 2'd1;	// make exponent negative
 wire sa3;
-wire [EMSB:0] exp3;
-wire [9:0] index = ma[FMSB:FMSB-9];
+wire Exponent exp3;
+wire [9:0] index = ma[`FMSB:`FMSB-9];
 reg [9:0] indexr;
 reg [15:0] k0, k1;
 always @(posedge clk)
@@ -1081,24 +1081,26 @@ always @(posedge clk)
 	if(ce) k0 <= k01[indexr][31:16];
 always @(posedge clk)
 	if(ce) k1 <= k01[indexr][15: 0];
+
 delay3 #(1) u2 (.clk(clk), .ce(1'b1), .i(sa), .o(sa3));
-delay3 #(EMSB+1) u3 (.clk(clk), .ce(1'b1), .i(exp), .o(exp3));
+delay3 #(`EMSB+1) u3 (.clk(clk), .ce(1'b1), .i(exp), .o(exp3));
+
 wire [15:0] eps;
 generate begin : epscode
-if (FPWID==32)
-assign eps = {ma[FMSB-10:0],3'b0};
+if (`FPWID==32)
+assign eps = {ma[`FMSB-10:0],3'b0};
 else
-assign eps = ma[FMSB-10:FMSB-10-15];
+assign eps = ma[`FMSB-10:`FMSB-10-15];
 end
 endgenerate
 wire [31:0] p = k1 * eps;
 reg [15:0] r0;
 always @(posedge clk)
 	if(ce) r0 <= k0 - (p >> 26);
-assign o = {sa3,exp3,r0[14:0],{FMSB+2-16{1'b0}}};
+assign o = {sa3,exp3,r0[14:0],{`FMSB+2-16{1'b0}}};
 
 always @*
-	if (FPWID < 48) begin
+	if (`FPWID < 48) begin
 		$display("Reciprocal estimate needs at least 48 bit floats.");
 		$stop;
 	end

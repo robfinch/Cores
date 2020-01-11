@@ -35,11 +35,28 @@ parameter FALSE = 1'b0;
 parameter byt = 3'd0;
 parameter word = 3'd1;
 
+function CanException;
+input Instruction isn;
+case(isn.gen.opcode)
+`LDR_D8,
+`LDF_D8,`LDF_D22,`LDF_D35,
+`STF_D8,`STF_D22,`STF_D35,
+`LD_D8,`LD_D22,`LD_D35,
+`LDB_D8,`LDB_D22,`LDB_D35,
+`STC_D8,
+`ST_D8,`ST_D22,`ST_D35,
+`STB_D8,`STB_D22,`STB_D35:
+	CanException = TRUE;
+`DIV_3R:	CanException = TRUE;
+default:	CanException = FALSE;
+endcase
+endfunction
+
 function IsAlu;
 input Instruction isn;
 case(isn.gen.opcode)
 `MTx,`MFx,
-`ADDIS,`ANDIS,`ORIS,
+`ISOP,
 `PERM_3R,`CSR,
 `DIV_3R,
 `ADD_3R,`ADD_RI22,`ADD_RI35,
@@ -75,6 +92,19 @@ default:	IsFpu = FALSE;
 endcase
 endfunction
 
+function IsFpu0;
+input Instruction isn;
+case(isn.gen.opcode)
+`FDIV:	IsFpu0 = TRUE;
+`FLT1:
+	case(isn.flt1.opcode)
+	`FSQRT,`FTOI,`ITOF,`TRUNC:	IsFpu0 = TRUE;
+	default:	IsFpu0 = FALSE;
+	endcase
+default:	IsFpu0 = FALSE;
+endcase
+endfunction
+
 function HasConst8;
 input [51:0] isn;
 case(isn[6:0])
@@ -82,6 +112,7 @@ case(isn[6:0])
 `AND_3R,`OR_3R,`EOR_3R,
 `BIT_3R,`CMP_3R,`CMPU_3R,
 `ASL_3R,`ASR_3R,`ROL_3R,`ROR_3R,`LSR_3R,
+`LDF_D8,`STF_D8,
 `LD_D8,`ST_D8,`LDB_D8,`STB_D8:
 	HasConst8 = TRUE;
 default:	HasConst8 = FALSE;
@@ -94,6 +125,7 @@ case(isn[6:0])
 `ADD_RI22,`SUB_RI22,`MUL_RI22,
 `AND_RI22,`OR_RI22,`EOR_RI22,
 `BIT_RI22,`CMP_RI22,`CMPU_RI22,
+`LDF_D22,`STF_D22,
 `LD_D22,`ST_D22,`LDB_D22,`STB_D22:
 	HasConst22 = TRUE;
 default:	HasConst22 = FALSE;
@@ -106,6 +138,7 @@ case(isn[6:0])
 `ADD_RI35,`SUB_RI35,`MUL_RI35,
 `AND_RI35,`OR_RI35,`EOR_RI35,
 `BIT_RI35,`CMP_RI35,`CMPU_RI35,
+`LDF_D35,`STF_D35,
 `LD_D35,`ST_D35,`LDB_D35,`STB_D35:
 	HasConst35 = TRUE;
 default:	HasConst35 = FALSE;
@@ -116,6 +149,8 @@ function IsMem;
 input [51:0] isn;
 case(isn[6:0])
 `LDR_D8,
+`LDF_D8,`LDF_D22,`LDF_D35,
+`STF_D8,`STF_D22,`STF_D35,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35,
 `STC_D8,
@@ -129,6 +164,8 @@ endfunction
 function IsMemndx;
 input Instruction isn;
 case(isn.gen.opcode)
+`LDF_D8,
+`STF_D8,
 `LD_D8,
 `LDB_D8,
 `ST_D8,
@@ -167,6 +204,7 @@ function IsLoad;
 input [51:0] isn;
 case(isn[6:0])
 `LDR_D8,
+`LDF_D8,`LDF_D22,`LDF_D35,
 `LD_D8,`LD_D22,`LD_D35,
 `LDB_D8,`LDB_D22,`LDB_D35:
 	IsLoad = TRUE;
@@ -179,6 +217,7 @@ function IsStore;
 input [51:0] isn;
 case(isn[6:0])
 `STC_D8,
+`STF_D8,`STF_D22,`STF_D35,
 `ST_D8,`ST_D22,`ST_D35,
 `STB_D8,`STB_D22,`STB_D35:
 	IsStore = TRUE;
@@ -214,6 +253,7 @@ case(isn.gen.opcode)
 `BRKGRP:	IsRFW = FALSE;
 `STPGRP:	IsRFW = FALSE;
 `BRANCH0,`BRANCH1:	IsRFW = FALSE;
+`STF_D8,`STF_D22,`STF_D35,
 `ST_D8,`ST_D22,`ST_D35,`STC_D8,
 `STB_D8,`STB_D22,`STB_D35:	IsRFW = FALSE;
 default:	IsRFW = TRUE;
@@ -225,9 +265,6 @@ begin
 	bus <= 167'h0;
 	bus[`IB_CMP] <= IsCmp(instr);
 	bus[`IB_CONST] <= 
-		IsFpu(instr) ? {46'd0,instr.raw[22],instr.flt2.Rt} :
-		IsJal(instr) ? {9'd0,instr.jal.addr} :
-		IsBranch(instr) ? {{40{instr.br.disp[11]}},instr.br.disp} :
 		HasConst8(instr) ? {{44{instr[24]}},instr[24:17]} :
 		HasConst22(instr) ? {{30{instr[38]}},instr[38:17]} :
 		{{17{instr[51]}},instr[51:17]}
@@ -243,6 +280,7 @@ begin
 	bus[`IB_BT]		 <= 1'b0;
 	bus[`IB_ALU]   <= IsAlu(instr);
 	bus[`IB_ALU0]  <= IsAlu0(instr);
+	bus[`IB_FPU0]  <= IsFpu0(instr);
 	bus[`IB_FPU]	 <= IsFpu(instr);
 	bus[`IB_FC]		 <= IsFlowCtrl(instr);
 //	bus[`IB_CANEX] <= fnCanException(instr);
@@ -261,6 +299,7 @@ begin
 	bus[`IB_SYNC]		<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`SYNC;
 	bus[`IB_FSYNC]	<= instr.gen.opcode==`STPGRP && instr.stp.exop==`SYNCGRP && instr.raw[12:9]==`FSYNC;
 	bus[`IB_RFW]		<= IsRFW(instr);
+	bus[`IB_CANEX]  <= CanException(instr);
 end
 
 endmodule

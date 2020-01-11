@@ -1,13 +1,11 @@
+`timescale 1ns / 1ps
+
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-//	fpNextAfter.v
-//		- floating point nextafter()
-//		- return next representable value
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,55 +21,52 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
+`ifndef FPTYPES_SV
+`define FPTYPES_SV
 
+`ifndef EMSB
 `include "fpConfig.sv"
+`endif
 
-module fpNextAfter(clk, ce, a, b, o);
-parameter FPWID=52;
-`include "fpSize.sv"
-input clk;
-input ce;
-input [MSB:0] a;
-input [MSB:0] b;
-output reg [MSB:0] o;
+typedef logic [`EMSB:0] Exponent;
+typedef logic [`FMSB:0] Mantissa;
+typedef logic [`FX:0] ExpandedMantissa;
+typedef logic [7:0] Exponent32;
+typedef logic [22:0] Mantissa32;
 
-wire [4:0] cmp_o;
-wire nana, nanb;
-wire xza, mza;
+typedef struct packed
+{
+	logic sign;
+	Exponent32 exp;
+	Mantissa32 man;
+} Float32;
 
-fpCompare #(FPWID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
-fpDecomp #(FPWID) u2 (.i(a), .sgn(), .exp(), .man(), .fract(), .xz(xza), .mz(mza), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nana));
-fpDecomp #(FPWID) u3 (.i(b), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nanb));
-wire [MSB:0] ap1 = a + 2'd1;
-wire [MSB:0] am1 = a - 2'd1;
-wire [EMSB:0] infXp = {EMSB+1{1'b1}};
+typedef struct packed
+{
+	logic sign;
+	Exponent exp;
+	Mantissa man;
+} Float;
 
-always  @(posedge clk)
-if (ce)
-	casez({a[MSB],cmp_o})
-	6'b?1????:	o <= nana ? a : b;	// Unordered
-	6'b????1?:	o <= a;							// a,b Equal
-	6'b0????1:
-		if (ap1[MSB-1:FMSB+1]==infXp)
-			o <= {a[MSB:FMSB+1],{FMSB+1{1'b0}}};
-		else
-			o <= ap1;
-	6'b0????0:
-		if (xza && mza)
-			;
-		else
-			o <= am1;
-	6'b1????0:
-		if (ap1[MSB-1:FMSB+1]==infXp)
-			o <= {a[MSB:FMSB+1],{FMSB+1{1'b0}}};
-		else
-			o <= ap1;
-	6'b1????1:
-		if (xza && mza)
-			;
-		else
-			o <= am1;
-	default:	o <= a;
-	endcase
+typedef struct packed
+{
+	Mantissa man;
+	logic g;
+	logic r;
+	logic s;
+} MantissaGRS;
 
-endmodule
+typedef struct packed
+{
+	Float flt;
+	logic g;
+	logic r;
+	logic s;
+} FloatGRS;
+
+typedef struct packed
+{
+	logic [`EX:0] flt;
+} ExpandedFloat;
+
+`endif

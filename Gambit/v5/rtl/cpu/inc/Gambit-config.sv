@@ -26,8 +26,8 @@
 `define CONFIG_H	1
 
 // The following line is to enable simulation versions of some modules.
-// Comment out for synthesis.
-`define SIM		1'b1
+// Comment out for synthesis
+//`define SIM		1'b1
 
 // The following bit select determines how long the reset counter is active.
 // For sim to aid debugging it's good idea to set it to a low number >3
@@ -52,6 +52,7 @@
 // of address bits processed. The test system for instance has only 512MB of
 // memory, so the address size is limited to 32 bits.
 // ** The ASID is stored in the upper 8 bits of the address
+`define ABW				52
 `define AMSB			51
 `define ABITS			`AMSB:0
 

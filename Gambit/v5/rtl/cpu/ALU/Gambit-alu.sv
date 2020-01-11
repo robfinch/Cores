@@ -88,13 +88,21 @@ case(op.rr.opcode)
 	begin
 		os = op.rr.zero ? a | imm : a | b;
 		case(op.rr.padr)
-		3'd1:	o = {39'd0,os[12:0]};
+		3'd1:	o = {39'd0,os[12:0]};	// movzx
 		3'd2:	o = {26'd0,os[25:0]};
-		3'd5:	o = {{39{os[12]}},os[12:0]};
+		3'd5:	o = {{39{os[12]}},os[12:0]};	// movsx
 		3'd6:	o = {{26{os[25]}},os[25:0]};
 		default:	o = os;
 		endcase
 	end
+`ISOP:
+	case(op.raw[51:47])
+	5'd4:		o = a + {op[46:17],22'd0};
+	5'd8:		o = a & {op[46:17],22'h3FFFFF};
+	5'd9:		o = a | {op[46:17],22'd0};
+	5'd10:	o = a ^ {op[46:17],22'd0};
+	default:	o = 52'd0;
+	endcase
 `EOR_3R:	o = op.rr.zero ? a ^ imm : a ^ b;
 `CMP_3R:	o = op.rr.zero ? ($signed(a) < $signed(imm) ? 2'b11 : a == imm ? 2'b00 : 2'b01)
 								: ($signed(a) < $signed(b) ? 2'b11 : a == b ? 2'b00 : 2'b01);
@@ -146,7 +154,7 @@ default:	o = {3{16'hDEAE}};
 endcase
 
 always @*
-if (op.rr.opcode==`DIV_3R && dbz)
+if (op.rr.opcode==`DIV_3R && dbz && big)
 	exc <= `FLT_DBZ;
 else
 	exc <= `FLT_NONE;

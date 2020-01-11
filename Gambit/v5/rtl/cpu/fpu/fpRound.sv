@@ -9,6 +9,7 @@
 //    - floating point rounding unit
 //    - parameterized width
 //    - IEEE 754 representation
+//		- default latency of 3, min latency of 1
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -27,30 +28,35 @@
 // ============================================================================
 
 `include "fpConfig.sv"
+`include "fpTypes.sv"
 
 module fpRound(clk, ce, rm, i, o);
-parameter FPWID = 128;
+parameter FPWID = 52;
 `include "fpSize.sv"
 input clk;
 input ce;
 input [2:0] rm;			// rounding mode
-input [MSB+3:0] i;		// intermediate format input
-output [MSB:0] o;		// rounded output
+input FloatGRS i;		// intermediate format input
+output Float o;		// rounded output
 
 //------------------------------------------------------------
 // variables
+`ifdef MIN_LATENCY
+reg so;
+`else
 wire so;
-wire [EMSB:0] xo;
-reg  [FMSB:0] mo;
-reg [EMSB:0] xo1;
-reg [FMSB+3:0] mo1;
-wire xInf = &i[MSB+2:FMSB+4];
-wire so0 = i[MSB+3];
+`endif
+Exponent xo;
+Mantissa mo;
+Exponent xo1;
+MantissaGRS mo1;
+wire xInf = &i.flt.exp;
+wire so0 = i.flt.sign;
 assign o = {so,xo,mo};
 
-wire g = i[2];	// guard bit: always the same bit for all operations
-wire r = i[1];	// rounding bit
-wire s = i[0];	// sticky bit
+wire g = i.g;	// guard bit: always the same bit for all operations
+wire r = i.r;	// rounding bit
+wire s = i.s;	// sticky bit
 reg rnd;
 
 //------------------------------------------------------------
@@ -62,14 +68,16 @@ reg rnd;
 always @*
 `else
 always @(posedge clk)
+if (ce)
 `endif
-if (ce) xo1 <= i[MSB+2:FMSB+4];
+	xo1 <= i[MSB+2:FMSB+4];
 `ifdef MIN_LATENCY
 always @*
 `else
 always @(posedge clk)
+if (ce) 
 `endif
-if (ce) mo1 <= i[FMSB+3:0];
+	mo1 <= i[FMSB+3:0];
 
 // Compute the round bit
 // Infinities and NaNs are not rounded!
@@ -77,8 +85,8 @@ if (ce) mo1 <= i[FMSB+3:0];
 always @*
 `else
 always @(posedge clk)
-`endif
 if (ce)
+`endif
 	casez ({xInf,rm})
 	4'b0000:	rnd <= (g & r) | (r & s);	// round to nearest even
 	4'b0001:	rnd <= 1'd0;							// round to zero (truncate)
@@ -100,7 +108,7 @@ reg [MSB:0] rounded2;
 reg carry2;
 reg rnd2;
 reg dn2;
-wire [EMSB:0] xo2;
+Exponent xo2;
 wire [MSB:0] rounded1 = {xo1,mo1[FMSB+3:2]} + rnd;
 `ifdef MIN_LATENCY
 always @*
@@ -133,18 +141,14 @@ assign xo2 = rounded2[MSB:FMSB+2];
 // - shift mantissa if required.
 //------------------------------------------------------------
 `ifdef MIN_LATENCY
-assign so = i[MSB+3];
-assign xo = xo2;
+delay1 #(1) u21 (.clk(clk), .ce(ce), .i(i[MSB+3]), .o(so));
+delay1 #(EMSB+1) u22 (.clk(clk), .ce(ce), .i(xo2), .o(xo));
 `else
 delay3 #(1) u21 (.clk(clk), .ce(ce), .i(i[MSB+3]), .o(so));
 delay1 #(EMSB+1) u22 (.clk(clk), .ce(ce), .i(xo2), .o(xo));
 `endif
 
-`ifdef MIN_LATENCY
-always @*
-`else
 always @(posedge clk)
-`endif
 	casez({rnd2,&xo2,carry2,dn2})
 	4'b0??0:	mo <= mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
 	4'b0??1:	mo <= mo1[FMSB+3:3];		// not rounding, denormalized
