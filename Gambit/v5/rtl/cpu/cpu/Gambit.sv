@@ -2434,6 +2434,12 @@ case(ins.gen.opcode)
 `OR_3R,`OR_RI22,`OR_RI35:	fnMnemonic = "OR  ";
 `ASL_3R:	fnMnemonic = "ASL ";
 `LSR_3R:	fnMnemonic = "LSR ";
+`ISOP:
+	case(ins.raw[51:47])
+	5'd8:	fnMnemonic = "ANDI";
+	5'd9:	fnMnemonic = "ORIS";
+	default:	fnMnemonic = "????";
+	endcase
 `LDF_D8,`LDF_D22,`LDF_D35:
 			fnMnemonic = "LDF ";
 `LD_D8,`LD_D22,`LD_D35:	
@@ -2627,30 +2633,6 @@ end
 end
 endgenerate
 
-//end
-//endgenerate
-
-// Detect if there are any valid sync instructions prior to the given queue 
-// entry.
-/*
-reg [IQ_ENTRIES-1:0] prior_sync;
-//generate begin : gPriorSync
-always @*
-for (j = 0; j < IQ_ENTRIES; j = j + 1)
-begin
-	prior_sync[heads[j]] = 1'b0;
-	if (j > 0)
-		for (n = j-1; n >= 0; n = n - 1)
-			if (iqs_v[heads[n]] & iq_sync[heads[n]])
-				if (iq_sn[heads[n]] < iq_sn[heads[j]])
-					prior_sync[heads[j]] = TRUE;
-end
-//end
-//endgenerate
-*/
-
-//end
-//endgenerate
 aluIssue ualui1
 (
 	.rst(rst_i),
@@ -3962,7 +3944,7 @@ else begin
 				fpu0_id <= n[`QBITS];
 				fpu0_rid <= iq_rid[n];
 				fpu0_instr	<= iq_instr[n];
-	      fpu0_argI <= {46'd0,instr[n].raw[22],instr[n].flt2.Rt};
+	      fpu0_argI <= {46'd0,iq_instr[n].raw[22],iq_instr[n].flt2.Rt};
 				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu0_argA);
 				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu0_argB);
 				fpu0_dataready <= IsSingleCycleFp(iq_instr[n]);
@@ -3982,7 +3964,7 @@ else begin
 				fpu1_id <= n[`QBITS];
 				fpu1_rid <= iq_rid[n];
 				fpu1_instr	<= iq_instr[n];
-	      fpu1_argI <= {46'd0,instr[n].raw[22],instr[n].flt2.Rt};
+	      fpu1_argI <= {46'd0,iq_instr[n].raw[22],iq_instr[n].flt2.Rt};
 				argFpBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fpu1_argA);
 				argFpBypass(iq_argB_v[n],iq_argB_s[n],iq_argB[n],fpu1_argB);
 				fpu1_dataready <= IsSingleCycleFp(iq_instr[n]);
@@ -4406,7 +4388,7 @@ endcase
 	$display ("%h: %h    %h:%h #",pcs[0],fetchBuffer[0],pcs[1],fetchBuffer[1]);
 	$display ("--------------------------------- Decode Buffer ---------------------------------------");
 	$display ("%h: %h    %h:%h #",pcsd[0],decodeBuffer[0],pcsd[1],decodeBuffer[1]);
-	$display ("-------------------------------------------------------------- Dispatch Buffer -------------------------------------------------------------");
+	$display ("------------------------------------------------------ Dispatch Buffer -----------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
 	    $display("%c%c %d: %c%c %d %d %c%c %c %c%h %s %d, %h %h %d %d %h %d %d %h %d #",
 		 (i[`QBITS]==heads[0])?"C":".",
@@ -4596,55 +4578,6 @@ input [`RBITS] head;
 input [1:0] which;
 reg thread;
 begin
-	if (iq.fc[head]|iq.canex[head]) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-			if (iq.prior_pathchg[n])
-				if (iq.prior_pathchg_qid[n]==rob.id[head])
-					iq.prior_pathchg[n] <= FALSE;
-		end
-	end
-	case(rob.instr[head].gen.opcode)
-	// When a sync instruction commits unblock all the dependent following instructions.
-	`STPGRP:
-		if (rob.instr[head].stp.exop==2'd3) begin
-			case(rob.instr[head].stp.cnst)
-			`SYNC:
-				begin // SYNC
-					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-						if (iq.iqs.v[n] & iq.prior_sync[n])
-							if (iq.prior_sync_qid[n]==rob.id[head])
-								iq.prior_sync[n] <= FALSE;
-					end
-				end
-			`FSYNC:
-				begin // SYNC
-					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-						if (iq.iqs.v[n] & iq.prior_fsync[n])
-							if (iq.prior_fsync_qid[n]==rob.id[head])
-								iq.prior_fsync[n] <= FALSE;
-					end
-				end
-			`MEMDB:
-				begin
-					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-						if (iq.iqs.v[n] & iq.prior_memdb[n])
-							if (iq.prior_memdb_qid[n]==rob.id[head])
-								iq.prior_memdb[n] <= FALSE;
-					end
-				end
-			`MEMSB:
-				begin
-					for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
-						if (iq.iqs.v[n] & iq.prior_memsb[n])
-							if (iq.prior_memsb_qid[n]==rob.id[head])
-								iq.prior_memsb[n] <= FALSE;
-					end
-				end
-			default:	;
-			endcase
-		end
-	default:	;
-	endcase
   if (v) begin
     if (|rob.exc[head]) begin
     	exc(head,iq_exc[head]);
@@ -5254,45 +5187,45 @@ begin
 	iq_Rb[ndx] <= Rb[slot];
 `endif
 	// Determine the most recent prior sync instruction.
-	iq.prior_sync_qid[n] <= {`QBIT{1'b1}};
-	iq.prior_sync[n] <= FALSE;
-	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.sync[(n+ndx)%IQ_ENTRIES]) begin
-			iq.prior_sync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq.prior_sync[ndx] <= TRUE;
-		end
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+	begin
+		iq.prior_sync[j] <= FALSE;
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			if (iq.iqs.v[n] & iq.sync[n])
+				if (iq_sn[n] < iq_sn[j])
+					iq.prior_sync[j] <= TRUE;
 	end
-	iq.prior_fsync_qid[n] <= {`QBIT{1'b1}};
-	iq.prior_fsync[n] <= FALSE;
-	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.fsync[(n+ndx)%IQ_ENTRIES]) begin
-			iq.prior_fsync_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq.prior_fsync[ndx] <= TRUE;
-		end
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+	begin
+		iq.prior_fsync[j] <= FALSE;
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			if (iq.iqs.v[n] & iq.fsync[n])
+				if (iq_sn[n] < iq_sn[j])
+					iq.prior_fsync[j] <= TRUE;
 	end
-	iq.prior_memdb_qid[n] <= {`QBIT{1'b1}};
-	iq.prior_memdb[n] <= FALSE;
-	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.memdb[(n+ndx)%IQ_ENTRIES]) begin
-			iq.prior_memdb_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq.prior_memdb[ndx] <= TRUE;
-		end
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+	begin
+		iq.prior_memdb[j] <= FALSE;
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			if (iq.iqs.v[n] & iq.memdb[n])
+				if (iq_sn[n] < iq_sn[j])
+					iq.prior_memdb[j] <= TRUE;
 	end
-	iq.prior_memsb_qid[n] <= {`QBIT{1'b1}};
-	iq.prior_memsb[n] <= FALSE;
-	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & iq.memsb[(n+ndx)%IQ_ENTRIES]) begin
-			iq.prior_memsb_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq.prior_memsb[ndx] <= TRUE;
-		end
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+	begin
+		iq.prior_memsb[j] <= FALSE;
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			if (iq.iqs.v[n] & iq.memsb[n])
+				if (iq_sn[n] < iq_sn[j])
+					iq.prior_memsb[j] <= TRUE;
 	end
-	iq.prior_pathchg_qid[n] <= {`QBIT{1'b1}};
-	iq.prior_pathchg[n] <= FALSE;
-	for (n = 1; n < IQ_ENTRIES; n = n + 1) begin
-		if (iq.iqs.v[(n+ndx)%IQ_ENTRIES] & (iq.fc[(n+ndx)%IQ_ENTRIES]|iq.canex[(n+ndx)%IQ_ENTRIES])) begin
-			iq.prior_pathchg_qid[ndx] <= (n+ndx) % IQ_ENTRIES;
-			iq.prior_pathchg[ndx] <= TRUE;
-		end
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+	begin
+		iq.prior_pathchg[j] <= FALSE;
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			if (iq.iqs.v[n] & (iq.fc[n]|iq.canex[n]))
+				if (iq_sn[n] < iq_sn[j])
+					iq.prior_pathchg[j] <= TRUE;
 	end
 	iq_pt[ndx] <= take_branchq[slot];
 	iq_tgt[ndx] <= Rt[slot];

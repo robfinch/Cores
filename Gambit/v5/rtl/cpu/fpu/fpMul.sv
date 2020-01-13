@@ -49,6 +49,7 @@
 // ============================================================================
 
 `include "fpConfig.sv"
+`include "fpTypes.sv"
 
 module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
 parameter FPWID = 52;

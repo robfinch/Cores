@@ -44,7 +44,7 @@ input clk;
 input ce;
 input ld;
 input Float a;
-output reg Float o;
+output Float o;
 
 Float32 a1;
 Float32 o1;

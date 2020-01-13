@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -65,17 +65,27 @@ case(opcode)
 `LD_D8:		len <= 3'd2;
 `LD_D22:	len <= 3'd3;
 `LD_D35:	len <= 3'd4;
+`LDF_D8:	len <= 3'd2;
+`LDF_D22:	len <= 3'd3;
+`LDF_D35:	len <= 3'd4;
 `LDB_D8:	len <= 3'd2;
 `LDB_D22:	len <= 3'd3;
 `LDB_D35:	len <= 3'd4;
+`LDR_D8:	len <= 3'd2;
 `ST_D8:		len <= 3'd2;
 `ST_D22:	len <= 3'd3;
 `ST_D35:	len <= 3'd4;
+`STF_D8:	len <= 3'd2;
+`STF_D22:	len <= 3'd3;
+`STF_D35:	len <= 3'd4;
 `STB_D8:	len <= 3'd2;
 `STB_D22:	len <= 3'd3;
 `STB_D35:	len <= 3'd4;
+`STC_D8:	len <= 3'd2;
 `BRANCH0:	len <= 3'd2;
 `BRANCH1:	len <= 3'd2;
+`ISOP:		len <= 3'd4;
+`STPGRP:	len <= 3'd1;
 default:	len <= 3'd1;	// unimplemented instruction
 endcase
 endmodule

@@ -40,6 +40,7 @@
 // ============================================================================
 
 `include "fpConfig.sv"
+`include "fpTypes.sv"
 
 module fpNormalize(clk, ce, i, o, under_i, under_o, inexact_o);
 parameter FPWID = 52;
