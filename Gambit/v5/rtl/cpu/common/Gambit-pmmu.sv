@@ -27,6 +27,9 @@
 //
 // ============================================================================
 //
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
+
 `ifndef TRUE
 `define TRUE    1'b1
 `define FALSE   1'b0
@@ -35,27 +38,42 @@
 
 typedef struct packed
 {
-	logic [12:0] pad13;
-	logic [38:0] pageno;
-	logic [25:0] rc;			// reference count
-	logic [7:0] asid;
-	logic g;
-	logic pad1;
-	logic [7:0] pl;
+	logic C;				// cacheable
+	logic R;				// readable
+	logic W;				// writeable
+	logic X;				// executable
+} Access;
+
+typedef struct packed
+{
+	logic [37:0] vpageno;
+	logic [13:0] pad14;
+	logic [37:0] ppageno;
 	logic D;
 	logic U;
-	logic S;
 	logic A;
-	logic C;
-	logic R;
-	logic W;
-	logic X;
+	logic [7:0] pad8;
+	logic [1:0] typ;
+	logic P;
+} PDE;
+
+typedef struct packed
+{
+	logic [25:0] rc;			// reference count
+	logic [5:0] pad6;
+	logic [19:0] pk;			// protection key
+	logic [12:0] sc;			// share count
+	logic [12:0] pl;			// privilege level
+	logic U;
+	logic S;							// shortcut
+	Access [5:0] ac;			// one for each operating level
+	PDE		pde;
 } PTE;
 
 module Gambit_pmmu
 #(
 parameter
-	AMSB = 31,
+	AMSB = 51,
 	pAssociativity = 8,		// number of ways (parallel compares)
 	pTLB_size = 64,
 	S_WAIT_MISS = 0,
@@ -68,6 +86,8 @@ parameter
 	S_RD_PTL2 = 7,
 	S_RD_PTL3 = 8,
 	S_RD_PTL3_ACK = 9,
+	S_WR_TLB_ENTRYL = 10,
+	S_WR_TLB_ENTRYH = 11,
 	S_RD_PTL = 12,
 	S_WR_PTL = 13,
 	S_AGE = 14,
@@ -88,14 +108,16 @@ input      ack_i,		// acknowledge from memory system
 output reg we_o,		// write enable output
 output reg [7:0] sel_o,	// lane selects (always all active)
 output reg [AMSB:0] padr_o,
-input      PTE dat_i,	// data input from memory
-output 		 PTE dat_o,	// data to memory
+input      PDE dat_i,	// data input from memory
+output 		 PDE dat_o,	// data to memory
 
 // Translation request / control
 input invalidate,		// invalidate a specific entry
 input invalidate_all,	// causes all entries to be invalidated
 input [51:0] pta,		// page directory/table address register
+input [7:0] asid_i,
 output reg page_fault,
+input Key [7:0] keys,
 
 input [7:0] asid_i,
 input [7:0] pl_i,
@@ -107,6 +129,8 @@ output reg ack_o,
 input we_i,				    // cpu is performing write cycle
 input [7:0] sel_i,
 input [51:0] vadr_i,	    // virtual address to translate
+input [103:0] vdat_i,
+output [103:0] vdat_o,
 
 output reg cac_o,		// cachable
 output reg prv_o,		// privilege violation
@@ -117,7 +141,8 @@ output reg wrv_o,		// write violation
 input clock
 );
 
-integer nn;
+integer nn, kk;
+assign vdat_o = dat_i;
 reg [8:0] tlb_wa;
 reg [8:0] tlb_ra;
 reg [8:0] tlb_ua;
@@ -146,14 +171,26 @@ wire pta_changed;
 wire pgen = pta[11];
 
 wire [AMSB:0] tlb_pte_adr [pAssociativity-1:0];
-wire [pAssociativity-1:0] tlb_d;
-wire [ 6: 0] tlb_flags [pAssociativity-1:0];
-wire [ 7: 0] tlb_pl [pAssociativity-1:0];
-wire [ 7: 0] tlb_asid [pAssociativity-1:0];
-wire [25: 0] tlb_refcount [pAssociativity-1:0];
-wire tlb_g [pAssociativity-1:0];
-wire [51:19] tlb_vadr  [pAssociativity-1:0];
-wire [38:0] tlb_tadr  [pAssociativity-1:0];
+wire tlb_P [pAssociativity-1:0];
+wire [1:0] tlb_T [pAssociativity-1:0];
+wire tlb_A [pAssociativity-1:0];
+wire tlb_U1 [pAssociativity-1:0];
+wire [pAssociativity-1:0] tlb_D;
+wire [51:20] tlb_ppageno [pAssociativity-1:0];
+wire [51:20] tlb_vpageno [pAssociativity-1:0];
+Access tlb_access0 [pAssociativity-1:0];
+Access tlb_access1 [pAssociativity-1:0];
+Access tlb_access2 [pAssociativity-1:0];
+Access tlb_access3 [pAssociativity-1:0];
+Access tlb_access4 [pAssociativity-1:0];
+Access tlb_access5 [pAssociativity-1:0];
+wire tlb_S [pAssociativity-1:0];
+wire tlb_U2 [pAssociativity-1:0];
+wire [12: 0] tlb_pl [pAssociativity-1:0];
+wire [12: 0] tlb_sc [pAssociativity-1:0];
+wire [19: 0] tlb_pk [pAssociativity-1:0];
+wire [25: 0] tlb_rc [pAssociativity-1:0];
+wire [25: 0] tlb_rc1 [pAssociativity-1:0];
 
 initial begin
 	cyc_o = 1'b0;
@@ -183,113 +220,228 @@ genvar g;
 generate
 	for (g = 0; g < pAssociativity; g = g + 1)
 	begin : genTLB
-		ram_ar1w1r #(33,pTLB_size) tlbVadr
+		ram_ar1w1r #(1,pTLB_size) utlbP
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(miss_adr[51:19]),
-			.o(tlb_vadr[g])
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.P),
+			.o(tlb_P[g])
 		);
-		ram_ar1w1r #(AMSB+1,pTLB_size) tlbPteAdr
+		ram_ar1w1r #(2,pTLB_size) utlbT
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(pte_adr),
-			.o(tlb_pte_adr[g])
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.T),
+			.o(tlb_T[g])
 		);
-		ram_ar1w1r #( 7,pTLB_size) tlbFlag
+		ram_ar1w1r #(1,pTLB_size) utlbA
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(pte[6:0]),
-			.o(tlb_flags[g])
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.A),
+			.o(tlb_A[g])
 		);
-		ram_ar1w1r #(8,pTLB_size) tlbPL
-    (
-      .clk(clk_i),
-      .ce(whichSet==g),
-      .we(wr_tlb),
-      .wa(miss_adr[18:13]),
-      .ra(vadr_i[18:13]),
-      .i(pte.pl),
-      .o(tlb_pl[g])
-    );
-		ram_ar1w1r #( 1,pTLB_size) tlbG
+		ram_ar1w1r #(1,pTLB_size) utlbU1
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(pte.g),
-			.o(tlb_g[g])
-		);
-		ram_ar1w1r #(8,pTLB_size) tlbASID
-    (
-      .clk(clk_i),
-      .ce(whichSet==g),
-      .we(wr_tlb),
-      .wa(miss_adr[18:13]),
-      .ra(vadr_i[18:13]),
-      .i(pte.asid),
-      .o(tlb_asid[g])
-    );
-		ram_ar1w1r #(26,pTLB_size) tlbRefCount0
-    (
-      .clk(clk_i),
-      .ce(whichSet==g),
-      .we(wr_tlb),
-      .wa(miss_adr[18:13]),
-      .ra(vadr_i[18:13]),
-      .i(pte.rc),
-      .o(tlb_refcount[g])
-    );
-		ram_ar1w1r #(26,pTLB_size) tlbRefCount1
-		(
-			.clk(clk_i),
-			.ce(wr_tlb?whichSet==g:nnx==g),
-			.we(wr_tlb||state==S_WAIT_MISS && !miss && cyc_i),
-			.wa(wr_tlb?miss_adr[18:13]:vadr_i[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(pte.rc),
-			.o(tlb_refcount[g])
-		);
-		ram_ar1w1r #(39,pTLB_size) tlbTadr
-		(
-			.clk(clk_i),
-			.ce(whichSet==g),
-			.we(wr_tlb),
-			.wa(miss_adr[18:13]),
-			.ra(vadr_i[18:13]),
-			.i(pte.pageno),
-			.o(tlb_tadr[g])
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.U),
+			.o(tlb_U1[g])
 		);
 		ram_ar1w1r #( 1,pTLB_size) tlbD    
 		(
 			.clk(clk_i),
 			.ce(wr_tlb?whichSet==g:nnx==g),
 			.we(wr_tlb||state==S_WAIT_MISS && wr && !miss && cyc_i),
-			.wa(wr_tlb?miss_adr[18:13]:vadr_i[18:13]),
-			.ra(vadr_i[18:13]),
+			.wa(wr_tlb?miss_adr[19:14]:vadr_i[19:14]),
+			.ra(vadr_i[19:14]),
 			.i(!wr_tlb),
-			.o(tlb_d[g])
+			.o(tlb_D[g])
 		);
+		ram_ar1w1r #(38,pTLB_size) utlbPadr
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.ppageno),
+			.o(tlb_ppageno[g])
+		);
+		ram_ar1w1r #(38,pTLB_size) tlbVadr
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.pde.vpageno),
+			.o(tlb_vpageno[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess0
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[0]),
+			.o(tlb_access0[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess1
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[1]),
+			.o(tlb_access1[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess2
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[2]),
+			.o(tlb_access2[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess3
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[3]),
+			.o(tlb_access3[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess4
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[4]),
+			.o(tlb_access4[g])
+		);
+		ram_ar1w1r #(4,pTLB_size) utlbAccess5
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.ac[5]),
+			.o(tlb_access5[g])
+		);
+		ram_ar1w1r #(1,pTLB_size) utlbS
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.S),
+			.o(tlb_S[g])
+		);
+		ram_ar1w1r #(1,pTLB_size) utlbU2
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.U),
+			.o(tlb_U2[g])
+		);
+		ram_ar1w1r #(13,pTLB_size) tlbPL
+    (
+      .clk(clk_i),
+      .ce(whichSet==g),
+      .we(wr_tlb),
+      .wa(miss_adr[19:14]),
+      .ra(vadr_i[19:14]),
+      .i(pte.pl),
+      .o(tlb_pl[g])
+    );
+		ram_ar1w1r #(13,pTLB_size) utlbSC
+    (
+      .clk(clk_i),
+      .ce(whichSet==g),
+      .we(wr_tlb),
+      .wa(miss_adr[19:14]),
+      .ra(vadr_i[19:14]),
+      .i(pte.sc),
+      .o(tlb_sc[g])
+    );
+		ram_ar1w1r #(13,pTLB_size) utlbPK
+    (
+      .clk(clk_i),
+      .ce(whichSet==g),
+      .we(wr_tlb),
+      .wa(miss_adr[19:14]),
+      .ra(vadr_i[19:14]),
+      .i(pte.pk),
+      .o(tlb_pk[g])
+    );
+		ram_ar1w2r #(26,pTLB_size) utlbRefCount
+		(
+			.clk(clk_i),
+			.ce(wr_tlb?whichSet==g:tlb_ra[8:6]==g),
+			.we(wr_tlb||state==S_COUNT||state==S_AGE),
+			.wa(wr_tlb?miss_adr[19:14]:tlb_ra[5:0]),
+			.ra0(vadr_i[19:14]),
+			.ra1(tlb_ra),
+			.i(pte.rc),
+			.o0(tlb_rc[g]),
+			.o1(tlb_rc1[g])
+		);
+
+		ram_ar1w1r #(AMSB+1,pTLB_size) utlbPteAdr
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte_adr),
+			.o(tlb_pte_adr[g])
+		);
+/*
+		ram_ar1w1r #( 1,pTLB_size) tlbG
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[19:14]),
+			.ra(vadr_i[19:14]),
+			.i(pte.g),
+			.o(tlb_g[g])
+		);
+*/
 	end
 endgenerate
 
 reg [pAssociativity*pTLB_size-1:0] tlb_v;	// valid
 
 // The following reg allows detection of when the page table address changes
-change_det #(48) u1
+change_det #(52) u1
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -301,7 +453,6 @@ change_det #(48) u1
 reg age_tick_r;
 wire pe_age_rtick;
 edge_det ued1(.clk(clk_i), .ce(1'b1), .i(age_tick), .pe(pe_age_tick), .ne(), .ee());
-
 
 // This must be fast !!!
 // Lookup the virtual address in the tlb
@@ -331,6 +482,7 @@ else begin
 	stb_o <= stb_i & v_o & ~pv_o;
 	we_o <= we_i & v_o & ~pv_o & w_o;
 	sel_o <= sel_i & {8{~pv_o}};
+	dat_o <= vdat_i;
 
 	wr_tlb <= 1'b0;
 
@@ -348,8 +500,8 @@ else begin
 	// handle invalidate command
 	if (invalidate)
 		for (nn = 0; nn < pAssociativity; nn = nn + 1)
-			if (vadr_i[51:19]==tlb_vadr[nn] && (tlb_g[nn] || tlb_asid[nn]==asid_i))
-				tlb_v[{nn,vadr_i[18:13]}] <= 1'b0;
+			if (vadr_i[51:20]==tlb_vpageno[nn])
+				tlb_v[{nn,vadr_i[19:14]}] <= 1'b0;
 
 	case (state)	// synopsys full_case parallel_case
 
@@ -359,7 +511,6 @@ else begin
 	// size of the app.
 	S_WAIT_MISS:
 		begin
-			goto(S_WAIT_MISS);
 			xlat();
 			ack_o <= ack_i;
 			dbit <= we_i;
@@ -369,41 +520,59 @@ else begin
 				ack_o <= 1'b0;
 			  proc <= `TRUE;
 				miss_adr <= vadr_i;
+
 				// try and pick an empty tlb entry
 				whichSet <= cnt;
 				for (nn = 0; nn < pAssociativity; nn = nn + 1)
-					if (!tlb_v[{nn,vadr_i[18:13]}])
+					if (!tlb_v[nn]) begin
 						whichSet <= nn;
-				goto(S_RD_PTL3);
+						goto(S_RD_PTL3);
+					end
+					else begin
+						tlb2pte(nn,0,0);
+						pte_adr <= tlb_pte_adr[nn];
+						goto(S_WR_TLB_ENTRYL);
+					end
 			end
 			// If there's a write cycle, check to see if the
 			// dirty bit is set. If the dirty bit hasn't been
 			// set yet, then set it and write the dirty status
 			// to memory.
-			else if (cyc_i && we_i && !tlb_d[nnx]) begin
+			else if (cyc_i && we_i && !tlb_D[nnx]) begin
 				ack_o <= 1'b0;
-				miss_adr <= vadr_i;
 				whichSet <= nnx;
 				goto(S_RD_PTL3);
 			end
 			else if (age_tick_r) begin
 				age_tick_r <= 1'b0;
-				tlb_wa <= tlb_ua + 3'd1;
+				miss_adr <= {tlb_ua + 3'd1,13'd0};
 				tlb_ra <= tlb_ua + 3'd1;
 				tlb_ua <= tlb_ua + 3'd1;
 				goto(S_AGE);
 			end
 			else begin
-				tlb_wa <= {nnx,vadr_i[18:13]};
-				tlb_ra <= {nnx,vadr_i[18:13]};
+				tlb_ra <= {nnx,vadr_i[19:14]};
 				goto(S_COUNT);
 			end
 		end
 
+	S_WR_TLB_ENTRYL:
+		begin
+			tmpadr <= {pte_adr[AMSB:4],4'h0};
+			dat_o <= pte[103:0];
+			call(S_WR_PTL,S_WR_TLB_ENTRYH);
+		end
+	S_WR_TLB_ENTRYH:
+		if (ack_i) begin
+			tmpadr <= {pte_adr[AMSB:4],4'h8};
+			dat_o <= pte[207:104];
+			call(S_WR_PTL,S_RD_PTL3);
+		end
+
 	S_RD_PTL3:
 		if (~ack_i & ~cyc_o) begin
-			tlb_ra <= {whichSet,miss_adr[18:13]};
-			tlb_wa <= {whichSet,miss_adr[18:13]};
+			tlb_ra <= {whichSet,miss_adr[19:14]};
+			tlb_wa <= {whichSet,miss_adr[19:14]};
 			cyc_o <= 1'b1;
 			stb_o <= 1'b1;
 			sel_o <= 8'hFF;
@@ -418,10 +587,10 @@ else begin
 			endcase
 			// Set page table address for lookup
 			case(pta[9:8])
-			2'b00:	padr_o <= {pta[51:13],miss_adr[22:13],3'h0};	// 8MB translations
-			2'b01:	padr_o <= {pta[51:13],miss_adr[32:23],3'h0};	// 8GB translations
-			2'b10:	padr_o <= {pta[51:13],miss_adr[42:33],3'h0};	// 8TB translations
-			2'b11:	padr_o <= {pta[51:13],1'b0,miss_adr[51:43],3'h0};	// 8XB translations
+			2'b00:	padr_o <= {pta[51:14],miss_adr[23:14],4'h0};	// 8MB translations
+			2'b01:	padr_o <= {pta[51:14],miss_adr[34:24],3'h0};	// 8GB translations
+			2'b10:	padr_o <= {pta[51:14],miss_adr[45:35],3'h0};	// 8TB translations
+			2'b11:	padr_o <= {pta[51:14],asid_i[4:0],miss_adr[51:46],3'h0};	// 8XB translations
 			default:	;
 			endcase
 		end
@@ -431,14 +600,14 @@ else begin
 	S_RD_PTL3_ACK:
 		if (ack_i) begin
 			nack();
-			if (|dat_i[2:0]) begin	// pte valid bit
-				tmpadr <= {dat_i.pageno,miss_adr[42:33],3'h0};
+			if (dat_i.P) begin	// pte valid bit
+				tmpadr <= {dat_i.pageno,miss_adr[45:35],3'h0};
 				call(S_RD_PTL,S_RD_PTL2);
 			end
 			else begin
 				if (clock) begin
-					clock_adr[51:43] <= clock_adr[51:43] + 3'h1;
-					clock_adr[42:0] <= 43'h0;
+					clock_adr[51:46] <= clock_adr[51:46] + 3'h1;
+					clock_adr[45:0] <= 45'h0;
 					goto (S_WAIT_MISS);
 				end
 				else
@@ -455,13 +624,13 @@ else begin
 		if (ack_i) begin
 			nack();
 			if (|dat_i[2:0]) begin	// pte valid bit
-				tmpadr <= {dat_i.pageno,miss_adr[32:23],3'b0};
+				tmpadr <= {dat_i.pageno,miss_adr[34:24],3'b0};
 				call(S_RD_PTL,S_RD_PTL1);
 			end
 			else begin
 				if (clock) begin
-					clock_adr[51:33] <= clock_adr[51:33] + 3'h1;
-					clock_adr[32:0] <= 33'h0;
+					clock_adr[51:35] <= clock_adr[51:35] + 3'h1;
+					clock_adr[34:0] <= 35'h0;
 					goto (S_WAIT_MISS);
 				end
 				else
@@ -475,7 +644,7 @@ else begin
 	S_RD_PTL1:
 		if (ack_i) begin
 			nack();
-			if (|dat_i[2:0]) begin	// pte valid bit
+			if (dat_i.P) begin	// pte valid bit
 		    // Shortcut 8MiB page ?
 		    if (dat_i.S) begin
 	        pte <= dat_i;
@@ -484,14 +653,14 @@ else begin
 					call(S_WR_PTL,S_WR_PTL0);
 		    end
 		    else begin
-			    tmpadr <= {dat_i.pageno,miss_adr[22:13],3'b0};
+			    tmpadr <= {dat_i.pageno,miss_adr[23:14],4'b0};
 					call(S_RD_PTL,S_RD_PTL0);
 				end
 			end
 			else begin
 				if (clock) begin
-					clock_adr[51:23] <= clock_adr[51:23] + 4'h1;
-					clock_adr[22:0] <= 23'h0;
+					clock_adr[51:24] <= clock_adr[51:24] + 4'h1;
+					clock_adr[23:0] <= 24'h0;
 					goto (S_WAIT_MISS);
 				end
 				else
@@ -510,13 +679,26 @@ else begin
     // Also set dirty bit if a write access.
 		if (ack_i) begin
 			nack();
+			tmpadr <= {padr_o[AMSB:4],4'h8};
+			pte.pde <= dat_i;
+			pte.pde.D = dbit;
+			call(S_RD_PTL,S_RD_PTL0H);
+		end
+
+	S_RD_PTL0H:
+  	// The tlb has been updated so the page must have been accessed
+    // set the accessed bit for the page table entry
+    // Also set dirty bit if a write access.
+		if (ack_i) begin
+			nack();
 			wr_tlb <= 1'b1;
-			pte_adr <= padr_o[AMSB:4];
-			dat_o <= dat_i|{dbit,2'b00,1'b1,4'b0};	// This line will only set bits
-			pte <= dat_i|{dbit,2'b00,1'b1,4'b0};
+			pte_adr <= {padr_o[AMSB:4],4'h0};
+			tmpadr <= {padr_o[AMSB:4],4'h0};
+			dat_o <= pte.pde;
+			pte[207:104] <= dat_i;
 			// If the tlb entry is already marked dirty don't bother with updating
 			// the pte in memory. Only write on a new dirty status.
-			if (tlb_d[tlb_ra[8:6]])
+			if (tlb_D[tlb_ra[8:6]])
 				goto(S_WAIT_MISS);
 			else
 				call(S_WR_PTL,S_WR_PTL0);
@@ -524,10 +706,18 @@ else begin
 
 	S_WR_PTL0:
 		if (ack_i) begin
+			nack();
+			tmpadr <= {padr_o[AMSB:4],4'h8};
+			dat_o <= pte[207:104];
+			call(S_WR_PTL,S_WR_PTL0H);
+		end
+
+	S_WR_PTL0H:
+		if (ack_i) begin
 			wr_tlb <= 1'b1;
 			nack();
-			tlb_v[tlb_wa] <= |pte[2:0];
-			if (~|pte[2:0])
+			tlb_v[tlb_wa] <= pte.pde.P;
+			if (~pte.pde.P)
 		    raise_page_fault();
 			goto(S_WAIT_MISS);
 		end
@@ -538,13 +728,7 @@ else begin
 
 	S_COUNT:
 		begin
-			pte[6:0] <= tlb_flags[tlb_ra[8:6]];
-			pte.D <= tlb_d[tlb_ra[8:6]];
-			pte.pl <= tlb_pl[tlb_ra[8:6]];
-			pte.g <= tlb_g[tlb_ra[8:6]];
-			pte.asid <= tlb_asid[tlb_ra[8:6]];
-			pte.rc <= {tlb_refcount[tlb_ra[8:6]][25:13] + 4'd1,tlb_refcount[tlb_ra[8:6]][12:0]};
-			pte.pageno <= tlb_tadr[tlb_ra[8:6]];
+			tlb2pte(nnx,1,0);
 			wr_tlb <= 1'b1;
 			xlat();
 			ack_o <= ack_i;
@@ -553,13 +737,7 @@ else begin
 
 	S_AGE:
 		begin
-			pte[6:0] <= tlb_flags[tlb_ra[8:6]];
-			pte.D <= tlb_d[tlb_ra[8:6]];
-			pte.pl <= tlb_pl[tlb_ra[8:6]];
-			pte.g <= tlb_g[tlb_ra[8:6]];
-			pte.asid <= tlb_asid[tlb_ra[8:6]];
-			pte.rc <= {1'b0,tlb_refcount[tlb_ra[8:6]][25:1]};
-			pte.pageno <= tlb_tadr[tlb_ra[8:6]];
+			tlb2pte(tlb_ra[8:6],0,1);
 			wr_tlb <= 1'b1;
 			xlat();
 			ack_o <= ack_i;
@@ -590,8 +768,7 @@ else begin
 			sel_o <= 8'hFF;
 			lock_o <= 1'b0;
 			we_o  <= 1'b1;
-			// Address comes from a previous read address
-//			m_adr_o <= tmpadr;
+			padr_o <= tmpadr;
 			retrn();
 		end
 
@@ -621,6 +798,40 @@ else if (state==S_WAIT_MISS && miss) begin
 		cnt <= cnt + 1;
 end
 
+// Copy the tlb to a temporary pte holding register.
+task tlb2pte;
+input [2:0] n;
+input count;
+input age;
+begin
+	pte <= {
+		count ? tlb_rc1[n] + 26'h2000 : age ? {1'b0,tlb_rc1[n][25:1]} : tlb_rc[n],
+		6'h00,
+		tlb_pk[n],
+		tlb_sc[n],
+		tlb_pl[n],
+		tlb_U2[n],
+		tlb_S[n],
+		tlb_access5[n],
+		tlb_access4[n],
+		tlb_access3[n],
+		tlb_access2[n],
+		tlb_access1[n],
+		tlb_access0[n],
+		tlb_vpageno[n],
+		13'b0,
+		tlb_ppageno[n],
+		tlb_D[n],
+		tlb_U1[n],
+		tlb_A[n],
+		8'h00,
+		tlb_T[n],
+		tlb_P[n]
+	};
+end
+endtask
+
+// Perform address translation.
 task xlat;
 begin
 	miss <= 1;
@@ -651,20 +862,70 @@ begin
 		end
 		else
 		for (nn = 0; nn < pAssociativity; nn = nn + 1)
-			if (tlb_v[{nn,vadr_i[18:13]}] && vadr_i[51:19]==tlb_vadr[nn]) begin
-			    if (tlb_flags[nn][`_8MBPG])
-				    padr_o[51:13] <= {tlb_tadr[nn][39:10],vadr_i[22:13]};
+			if (tlb_v[{nn,vadr_i[19:14]}] && vadr_i[51:20]==tlb_vpageno[nn]) begin
+			    if (tlb_S[nn])
+				    padr_o[51:14] <= {tlb_ppageno[nn][51:24],vadr_i[23:14]};
 			    else
-				    padr_o[51:13] <= tlb_tadr[nn];
+				    padr_o[51:14] <= tlb_ppageno[nn];
 				miss <= 1'b0;
 				nnx <= nn;
-				a_o <= tlb_flags[nn][4];
-				c_o <= tlb_flags[nn][3];
-				r_o <= tlb_flags[nn][2];
-				w_o <= tlb_flags[nn][1];
-				x_o <= tlb_flags[nn][0];
-				v_o <= tlb_flags[nn][2]|tlb_flags[nn][1]|tlb_flags[nn][0];
-				pv_o <= (cyc_i & icl_i) ? pl_i != tlb_pl[nn] && pl_i!=8'h00 : pl_i > tlb_pl[nn];
+				a_o <= tlb_A[nn];
+				case(ol_i)
+				3'd1:	
+					begin
+						c_o <= tlb_access4[nn].C;
+						r_o <= tlb_access4[nn].R;
+						w_o <= tlb_access4[nn].W;
+						x_o <= tlb_access4[nn].X;
+					end
+				3'd2:
+					begin
+						c_o <= tlb_access3[nn].C;
+						r_o <= tlb_access3[nn].R;
+						w_o <= tlb_access3[nn].W;
+						x_o <= tlb_access3[nn].X;
+					end
+				3'd3:
+					begin
+						c_o <= tlb_access2[nn].C;
+						r_o <= tlb_access2[nn].R;
+						w_o <= tlb_access2[nn].W;
+						x_o <= tlb_access2[nn].X;
+					end
+				3'd4:
+					begin
+						c_o <= tlb_access1[nn].C;
+						r_o <= tlb_access1[nn].R;
+						w_o <= tlb_access1[nn].W;
+						x_o <= tlb_access1[nn].X;
+					end
+				3'd5:
+					begin
+						c_o <= tlb_access0[nn].C;
+						r_o <= tlb_access0[nn].R;
+						w_o <= tlb_access0[nn].W;
+						x_o <= tlb_access0[nn].X;
+					end
+				default:
+					begin
+						c_o <= tlb_access5[nn].C;
+						r_o <= tlb_access5[nn].R;
+						w_o <= tlb_access5[nn].W;
+						x_o <= tlb_access5[nn].X;
+					end
+				endcase
+				v_o <= tlb_P[nn];
+				pv_o <= (cyc_i & icl_i) ? pl_i != tlb_pl[nn] && ol_i!=3'h0 : pl_i > tlb_pl[nn];
+				if ((keys[0] != tlb_pk[nn]
+					&& keys[1] != tlb_pk[nn]
+					&& keys[2] != tlb_pk[nn]
+					&& keys[3] != tlb_pk[nn]
+					&& keys[4] != tlb_pk[nn]
+					&& keys[5] != tlb_pk[nn]
+					&& keys[6] != tlb_pk[nn]
+					&& keys[7] != tlb_pk[nn]
+					) && tlb_pk[nn] != 20'h0)
+					pv_o <= ol_i != 3'b0;
 			end
 	end
 end

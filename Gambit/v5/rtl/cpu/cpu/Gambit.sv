@@ -35,7 +35,7 @@
 
 module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, hartid_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
-    icl_o, exc_o, ol_o, keys_o, rb_i, sr_o, cr_o);
+    icl_o, exc_o, ol_o, pta_o, keys_o, rb_i, sr_o, cr_o);
 parameter WID = 52;
 input rst_i;
 input clk_i;
@@ -64,7 +64,8 @@ input [103:0] dat_i;
 output icl_o;
 output [7:0] exc_o;
 output [2:0] ol_o;
-output [159:0] keys_o;
+output [51:0] pta_o;
+output Key [7:0] keys_o;
 input rb_i;
 output reg sr_o;
 output reg cr_o;
@@ -204,8 +205,17 @@ reg [127:0] message [0:15];	// indexed by panic
 reg [51:0] cr0;
 wire dce = cr0[30];
 wire sple = cr0[35];
+reg [51:0] pta;
+assign pta_o = pta;
 reg [159:0] keys;
-assign keys_o = keys;
+assign keys_o[0] = keys[19: 0];
+assign keys_o[1] = keys[39:20];
+assign keys_o[2] = keys[59:40];
+assign keys_o[3] = keys[79:60];
+assign keys_o[4] = keys[99:80];
+assign keys_o[5] = keys[119:100];
+assign keys_o[6] = keys[139:120];
+assign keys_o[7] = keys[159:140];
 
 // status register
 reg [51:0] status;
@@ -1067,8 +1077,12 @@ assign slot_pf[1] = freezepc ? 1'b0 : slot_pfx[iclen1];
 assign slot_wai[0] = freezepc ? 1'b0 : slot_waix[0];
 assign slot_wai[1] = freezepc ? 1'b0 : slot_waix[iclen1];
 
+wire [QSLOTS-1:0] slot_jcd;
+wire [QSLOTS-1:0] slot_rtsd;
 delay1 #(QSLOTS) udly6 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_brk), .o(slot_brkd));
 delay1 #(QSLOTS) udly7 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(pc_queuedOn), .o(queuedOn));
+delay1 #(QSLOTS) udly10 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_jc), .o(slot_jcd));
+delay1 #(QSLOTS) udly11 (.rst(rst_i), .clk(clk), .ce(pipe_advance), .i(slot_rts), .o(slot_rtsd));
 
 initial begin
 	take_branch = 2'b00;
@@ -1301,13 +1315,13 @@ RSB ursb1
 	.clk(clk),
 	.clk2x(clk2x_i),
 	.clk4x(clk4x_i),
-	.queuedOn(pc_queuedOn),
-	.jal(slot_jc),
-	.Rd(Rtp),
-	.ret(slot_rts),
-	.pc(pc),
-	.len1(len1),
-	.len2(len2),
+	.queuedOn(queuedOn),
+	.jal(slot_jcd),
+	.Rd(Rt),
+	.ret(slot_rtsd),
+	.pc(pcd),
+	.len1(len1d),
+	.len2(len2d),
 	.ra(ra),
 	.stompedRets(),
 	.stompedRet()
@@ -2974,6 +2988,7 @@ begin
     `CSR_TICK:      csr_r <= tick;
 //    `CSR_WBRCD:		csr_r <= wbrcd;
     `CSR_SEMA:      csr_r <= sema;
+    `CSR_PTA:				csr_r <= pta;
     `CSR_KEYS0:
     	begin
     		csr_r[25:0] <= {6'd0,keys[19:0]};
@@ -4819,6 +4834,7 @@ begin
         		ol_stack <= dat[29:15];
         		dl_stack <= dat[44:30];
         	end
+        `CSR_PTA:		pta <= dat;
         `CSR_KEYS0:
         	begin
         		keys[19:0] <= dat[19:0];

@@ -25,7 +25,8 @@
 // ============================================================================
 //
 //`define CARD_MEMORY	1'b1
-`define IPT		1'b1
+`include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module Gambit_mpu(hartid_i,rst_i, clk4x_i, clk2x_i, clk_i, tm_clk_i,
 	pit_clk2, pit_gate2, pit_out2,
@@ -89,6 +90,10 @@ output sr_o;
 output cr_o;
 input rb_i;
 
+
+wire [103:0] cpu_dati;
+wire [103:0] cpu_dato;
+
 wire [2:0] cti;
 wire [1:0] bte;
 wire cyc,stb,we;
@@ -101,9 +106,15 @@ wire [2:0] irq;
 wire [12:0] cause;
 wire pic_ack;
 wire [51:0] pic_dato;
+
 wire pit_ack;
 wire [51:0] pit_dato;
 wire pit_out0, pit_out1;
+
+wire pit2_ack;
+wire [51:0] pit2_dato;
+wire pit2_out0, pit2_out1, pit2_out2;
+
 wire crd_ack;
 wire [51:0] crd_dato;
 reg ack;
@@ -116,7 +127,8 @@ wire icl;           // instruction cache load
 wire exv,rdv,wrv;
 wire pulse60;
 wire sptr_o;
-wire [159:0] keys;
+wire [51:0] pta;
+Key [7:0] keys;
 
 //always @(posedge clk_i)
 //	cyc_o <= cyc;
@@ -129,8 +141,9 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 	dat_o <= dato;
 
-wire cs_pit = adr[51:8]==44'hFFFFFFFDC11;
-wire cs_ipt = adr[51:8]==44'hFFFFFFFDCD0;
+wire cs_pit  = adr[51:8]==44'hFFFFFFFDC11;
+wire cs_pit2 = adr[51:8]==44'hFFFFFFFDC12;
+wire cs_ipt  = adr[51:8]==44'hFFFFFFFDCD0;
 `ifdef CARD_MEMORY
 wire cs_crd = adr[51:11]==21'd0;	// $00000000 in virtual address space
 `else
@@ -171,6 +184,30 @@ Gambit_pit upit1
 	.clk2(1'b0),
 	.gate2(1'b0),
 	.out2(pit_out2)
+);
+
+Gambit_pit upit2
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.cs_i(cs_pit2),
+	.cyc_i(cyc_o),
+	.stb_i(stb_o),
+	.ack_o(pit2_ack),
+	.sel_i(sel_o[7:4]|sel_o[3:0]),
+	.we_i(we_o),
+	.adr_i(adr52[5:0]),
+	.dat_i(dat52),
+	.dat_o(pit2_dato),
+	.clk0(1'b0),
+	.gate0(1'b0),
+	.out0(pit2_out0),
+	.clk1(1'b0),
+	.gate1(1'b0),
+	.out1(pit2_out1),
+	.clk2(1'b0),
+	.gate2(1'b0),
+	.out2(pit2_out2)
 );
 
 Gambit_pic upic1
@@ -242,47 +279,54 @@ assign crd_dato = 64'd0;
 assign crd_ack = 1'b0;
 `endif
 
-`ifdef IPT
-Gambit_ipt uipt1
+Gambit_pmmu #(.AMSB(51)) upmmu1
 (
-	.rst(rst_i),
-	.clk(clk_i),
-	.keys_i(keys),
-	.ol_i(ol),
-	.bte_i(bte),
-	.cti_i(cti),
-	.cs_i(cs_ipt),
-	.icl_i(icl),
+// syscon
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+
+	.age_tick_i(pit2_out0),			// indicates when to age reference counts
+
+// master
+	.cyc_o(cyc_o),		// valid memory address
+	.stb_o(stb_o),		// strobe
+	.lock_o(),	// lock the bus
+	.ack_i(ack),		// acknowledge from memory system
+	.we_o(we_o),		// write enable output
+	.sel_o(sel_o),	// lane selects (always all active)
+	.padr_o(adr_o),
+	.dat_i(dati),	// data input from memory
+	.dat_o(dato),	// data to memory
+
+// Translation request / control
+	.invalidate(),		// invalidate a specific entry
+	.invalidate_all(),	// causes all entries to be invalidated
+	.pta(pta),		// page directory/table address register
+	.asid_i(8'h00),
+	.page_fault(),
+	.keys(keys),
+
+	.pl_i(13'h0000),
+	.ol_i(ol),		// operating level
+	.icl_i(icl),				// instruction cache load
 	.cyc_i(cyc),
 	.stb_i(stb),
-	.ack_o(ipt_ack),
-	.we_i(we),
+	.ack_o(cpu_ack),
+	.we_i(we),				    // cpu is performing write cycle
 	.sel_i(sel),
-	.vadr_i(adr),
-	.dat_i(dato),
-	.dat_o(ipt_dato),
-	.bte_o(bte_o),
-	.cti_o(cti_o),
-	.cyc_o(cyc_o),
-	.ack_i(ack),
-	.we_o(we_o),
-	.sel_o(sel_o),
-	.padr_o(adr_o),
-	.exv_o(exv),
-	.rdv_o(rdv),
-	.wrv_o(wrv)
+	.vadr_i(adr),	    // virtual address to translate
+	.vdat_i(cpu_dato),
+	.vdat_o(cpu_dati),
+
+	.cac_o(),		// cachable
+	.prv_o(),		// privilege violation
+	.exv_o(),		// execute violation
+	.rdv_o(),		// read violation
+	.wrv_o(),		// write violation
+
+	.clock(pit2_out1)
 );
-`else
-assign bte_o = bte;
-assign cti_o = cti;
-assign cyc_o = cyc;
-assign stb_o = stb;
-assign we_o = we;
-assign sel_o = sel;
-assign adr_o = adr;
-assign dat_o = dato;
-assign ipt_ack = 1'b0;
-`endif
+
 
 always @(posedge clk_i)
 casez({pic_ack,pit_ack,crd_ack,cs_ipt,ack_i})
@@ -316,16 +360,17 @@ Gambit ucpu1
   .bok_i(bok_i),
   .cyc_o(cyc),
   .stb_o(stb),
-  .ack_i(ack),
+  .ack_i(cpu_ack),
 //  .err_i(err_i),
   .we_o(we),
   .sel_o(sel),
   .adr_o(adr),
-  .dat_o(dato),
-  .dat_i(dati),
+  .dat_o(cpu_dato),
+  .dat_i(cpu_dati),
 
   .icl_o(icl),
   .ol_o(ol),
+  .pta_o(pta),
   .keys_o(keys),
  /*
   .pcr_o(pcr),

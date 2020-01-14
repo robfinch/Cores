@@ -364,4 +364,6 @@ class Rob;
 
 endclass
 */
+typedef logic [19:0] Key;
+
 `endif

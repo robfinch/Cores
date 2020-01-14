@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,43 +34,29 @@
 #define I_MOVE	0x12
 #define I_MOVO	0x13
 
-#define I_ADD_RR		0x04
-#define I_ADD_RI22	0x14
-#define I_ADD_RI35	0x24
-#define I_SUB_RR		0x05
-#define I_SUB_RI22	0x15
-#define I_SUB_RI35	0x25
-#define I_CMP_RR		0x06
-#define I_CMP_RI22	0x16
-#define I_CMP_RI35	0x26
-#define I_CMPU_RR		0x07
-#define I_CMPU_RI22	0x17
-#define I_CMPU_RI35	0x27
-#define I_MUL_RR		0x0E
-#define I_MUL_RI22	0x1E
-#define I_DIV_RR		0x03
-#define I_AND_RR		0x08
-#define I_AND_RI22	0x18
-#define I_AND_RI35	0x28
-#define I_OR_RR			0x09
-#define I_OR_RI22		0x19
-#define I_OR_RI35		0x29
-#define I_ISOP			0x2C
-#define I_XOR_RR		0x0A
-#define I_XOR_RI22	0x1A
-#define I_XOR_RI36	0x2A
+#define I_ADD_RR		000
+#define I_ADD_RI23	001
+#define I_ADD_RI36	002
+#define I_AND_RR		030
+#define I_AND_RI23	031
+#define I_AND_RI36	032
+#define I_OR_RR			040
+#define I_OR_RI23		041
+#define I_OR_RI36		042
+#define I_XOR		0x0A
+#define I_XORI	0x8A
 
-#define I_SHL		0x0C
-#define I_SHLI	0x0C
-#define I_ASL		0x0C
-#define I_SHR		0x0D
-#define I_SHRI	0x0D
-#define I_ASR		0x2D
-#define I_ASRI	0x2D
-#define I_ROL		0x1C
-#define I_ROLI	0x1C
-#define I_ROR		0x1D
-#define I_RORI	0x1D
+#define I_SHL		0x32
+#define I_SHLI	0x38
+#define I_ASL		006
+#define I_SHR		0x34
+#define I_SHRI	0x3A
+#define I_ASR		0x35
+#define I_ASRI	0x3B
+#define I_ROL		0x36
+#define I_ROLI	0x3C
+#define I_ROR		0x37
+#define I_RORI	0x3D
 
 #define I_SEQ		0x14
 #define I_SEQI	0xC8
@@ -102,6 +88,8 @@
 #define I_PUSHC	0x14
 #define I_SB	0x15
 #define I_MEMNDX	0x16
+#define I_JAL		0x18
+#define I_CALL	0xD0
 #define I_LFx		0x1B
 #define I_LC		0x20
 #define I_LH		0x21
@@ -110,8 +98,7 @@
 #define I_LUI	0x27
 #define I_CMOVEZ	0x28
 #define I_CMOVNZ	0x29
-#define I_RET	0x44
-#define I_JAL	0x42
+#define I_RET	0xD1
 #define I_Bcc	0x30
 #define I_BEQI	0x32
 #define I_LW	0x33
@@ -121,24 +108,14 @@
 #define I_RTS	0xD1
 #define I_BRANCH	0xD4
 
-#define I_LDB_RR	0x51
-#define I_LDB_RI22	0x61
-#define I_LDB_RI35	0x71
-#define I_LD_RR		0x50
-#define I_LD_RI22	0x60
-#define I_LD_RI35	0x70
-#define I_LDF_RR	0x52
-#define I_LDF_RI22	0x62
-#define I_LDF_RI35	0x72
-#define I_STB_RR	0x59
-#define I_STB_RI22	0x69
-#define I_STB_RI35	0x79
-#define I_ST_RR		0x58
-#define I_ST_RI22	0x68
-#define I_ST_RI35	0x78
-#define I_STF_RR	0x57
-#define I_STF_RI22	0x67
-#define I_STF_RI35	0x77
+#define I_LDB			064
+#define I_LD_RR		060
+#define I_LD_RI23	061
+#define I_LD_RI36	062
+#define I_STB			074
+#define I_ST_RR		070
+#define I_ST_RI23	071
+#define I_ST_RI36	072
 
 #define I_FLT1	0xE1
 #define I_FLT2	0xE2
@@ -185,15 +162,12 @@ static int regCnst;
 #define S_OCTA	3
 #define S_HEXI	4
 
-#define RT(x)		((x) << 7LL)
-#define RA(x)		((x) << 12LL)
-#define RB(x)		((x) << 17LL)
-#define SC(x)		(((x) & 0x3LL) << 22LL)
-#define IMM8(x) (((x) & 0xffLL) << 17LL)
-#define IMM22(x) (((x) & 0x7fffffLL) << 17LL)
-#define IMM35(x)	(((x) & 0x7ffffffffLL) << 17LL)
-#define IMM30(x)	(((x) & 0x3fffffffLL) << 17LL)
-#define ISOP(x)		(((x) & 0x1fLL) << 47LL)
+#define RT(x)		((x) << 6LL)
+#define RA(x)		((x) << 11LL)
+#define RB(x)		((x) << 16LL)
+#define IMM9(x) (((x) & 0x1ffLL) << 16LL)
+#define IMM23(x) (((x) & 0x7fffffLL) << 16LL)
+#define IMM36(x)	(((x) & 0xfffffffffLL) << 16LL)
 
 #define FUNC6(x)	(((x) & 0x3FLL) << 23LL)
 #define IMM(x)	(((x) & 0x1fffffLL) << 18LL)
@@ -202,20 +176,11 @@ static int regCnst;
 #define LDDISP(x)	(((x) & 0x3ffffLL) << 13LL)
 #define AM(x)		(((x) & 1LL << 38LL))
 #define RETIMM(x)	(((x) & 0x1ffff0LL) << 18LL)
-#define COND(x)		(((x) & 0x3LL) << 7LL)
-#define P2(x)			(((x) & 3LL) << 9LL)
-#define BRDISP12(x)	(((x) & 0xfffLL) << 14LL)
-#define CA(x)		(((x) & 0x7LL) << 11LL)
-#define LMT52(x)	((x) & 0xFFFFFFFFFFFFFLL)
-
-static int64_t lmt52(int64_t val)
-{
-	if (val & 0x8000000000000LL)
-		val |= 0xFFF0000000000000LL;
-	else
-		val &= 0x0007FFFFFFFFFFFFLL;
-	return (val);
-}
+#define COND(x)		(((x) & 0x1fLL) << 13LL)
+#define P2(x)			(((x) & 3LL) << 11LL)
+#define BRDISP(x)	(((x) & 0x3fffffLL) << 18LL)
+#define BRDISP4(x)	(((x) & 0xfLL) << 9LL)
+#define BRDISP17(x)	(((x) & 0x1ffffLL) << 9LL)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -441,27 +406,7 @@ static int getRegisterX()
 			NextToken();
 			return (regFP);
 		}
-		if (isdigit(inptr[1])) {
-			reg = inptr[1] - '0';
-			if (isdigit(inptr[2])) {
-				reg = 10 * reg + (inptr[2] - '0');
-				if (isIdentChar(inptr[3]))
-					return (-1);
-				else {
-					inptr += 3;
-					NextToken();
-					return (reg+32);
-				}
-			}
-			else if (isIdentChar(inptr[2]))
-				return (-1);
-			else {
-				inptr += 2;
-				NextToken();
-				return (reg+32);
-			}
-		}
-		return (-1);
+		break;
 
   case 'g': case 'G':
     if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
@@ -538,8 +483,8 @@ static int getRegisterX()
 					return (reg);
 				}
         if (inptr[1]=='K' || inptr[1]=='k') {
-					if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
-						reg = inptr[2] - '0' + 96;
+					if (isdigit(inptr[1]) && !isIdentChar(inptr[2])) {
+						reg = inptr[1] - '0' + 96;
 						inptr += 3;
 						NextToken();
 						return (reg);
@@ -550,18 +495,17 @@ static int getRegisterX()
 		case 'c': case 'C':
 			if (inptr[1] == 'R' || inptr[1] == 'r') {
 				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
-					reg = inptr[2] - '0' + 104;
+					reg = inptr[2] - '0' + 112;
 					inptr += 3;
 					NextToken();
 					return (reg);
 				}
 			}
 			break;
-			// xl
+			// xlr
     case 'x': case 'X':
-        if ((inptr[1]=='L' || inptr[1]=='l') && 
-					(inptr[2] == 'R' || inptr[2] == 'r') &&
-					!isIdentChar(inptr[3])) {
+        if ((inptr[1]=='L' || inptr[1]=='l') && (inptr[2]=='R' || inptr[2]=='r') && 
+			!isIdentChar(inptr[3])) {
             inptr += 3;
             NextToken();
             return (regXL);
@@ -577,33 +521,17 @@ static int getRegisterX()
 				return (reg);
 			}
 		}
-		// return value registers
-		// v0 to v3
+		// v0 to v31
 		if (isdigit(inptr[1])) {
-      reg = inptr[1]-'0' + 1;
-      if (isIdentChar(inptr[2]))
-        return -1;
-      else {
-        inptr += 2;
-        NextToken();
-        return (reg);
-      }
-    }
-		break;
-
-		 // Vectors
-		 // v0 to v31
-		 if ((inptr[1]=='c' || inptr[1]=='C')
-		 && isdigit(inptr[2])) {
-			 reg = inptr[2] - '0' + 64;
-			 if (isIdentChar(inptr[3]))
-				 return -1;
-			 else {
-				 inptr += 2;
-				 NextToken();
-				 return (reg);
-			 }
-		 }
+             reg = inptr[1]-'0' + 64;
+             if (isIdentChar(inptr[2]))
+                 return -1;
+             else {
+                 inptr += 2;
+                 NextToken();
+                 return (reg);
+             }
+         }
 		 break;
 	default:
         return -1;
@@ -1419,7 +1347,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			case I_OR_RR:
 				insnStats.ors++;
 				break;
-			case I_XOR_RR:
+			case I_XOR:
 				insnStats.xors++;
 				break;
 			case I_SLT:
@@ -1430,14 +1358,20 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			case I_SNE:
 				insnStats.sets++;
 				break;
+			case I_SHL:
+			case I_SHLI:
 			case I_ASL:
 				insnStats.shls++;
 				insnStats.shifts++;
 				break;
 			case I_SHR:
+			case I_SHRI:
 			case I_ASR:
+			case I_ASRI:
 			case I_ROL:
+			case I_ROLI:
 			case I_ROR:
+			case I_RORI:
 				insnStats.shifts++;
 				break;
 			case I_PTRDIF:
@@ -1445,19 +1379,19 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 				break;
 			}
 			break;
-		case I_ADD_RI22:
-		case I_ADD_RI35:
+		case I_ADD_RI23:
+		case I_ADD_RI36:
 			insnStats.adds++;
 			break;
-		case I_AND_RI22:
-		case I_AND_RI35:
+		case I_AND_RI23:
+		case I_AND_RI36:
 			insnStats.ands++;
 			break;
-		case I_OR_RI22:
-		case I_OR_RI35:
+		case I_OR_RI23:
+		case I_OR_RI36:
 			insnStats.ors++;
 			break;
-		case I_XOR_RI22:
+		case I_XORI:
 			insnStats.xors++;
 			break;
 		case I_PFX1:
@@ -1465,26 +1399,30 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			insnStats.luis++;
 			break;
 		case I_SFx:
-		case I_STB_RR:
+		case I_STB:
 		case I_ST_RR:
-		case I_ST_RI22:
-		case I_ST_RI35:
+		case I_ST_RI23:
+		case I_ST_RI36:
 			if (oc & 0x4000000000LL)
 				insnStats.indexed++;
 			insnStats.stores++;
 			break;
 		case I_LFx:
-		case I_LDB_RR:
+		case I_LDB:
 		case I_LD_RR:
-		case I_LD_RI22:
-		case I_LD_RI35:
+		case I_LD_RI23:
+		case I_LD_RI36:
 			if (oc & 0x4000000000LL)
 				insnStats.indexed++;
 			insnStats.loads++;
 			break;
+		case I_PUSHC:
+			insnStats.pushes++;
+			break;
 		case I_BRANCH:
 			insnStats.branches++;
 			break;
+		case I_CALL:
 		case I_JAL:
 			insnStats.calls++;
 			break;
@@ -1510,7 +1448,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 		}
 	}
 
-	oc = oc & 0xFFFFFFFFFFFFFLL;
+	oc = oc & 0xFFFFFFFFFFLL;
 	if (pass > 3) {
 		emitCode(oc & 0x1fffLL);
 		num_bytes += 1;
@@ -1573,61 +1511,48 @@ static bool CheckPrefix(Int128 val)
 
 static void LoadConstant(int64_t val, int rg)
 {
-	if (IsNBit(val, 8)) {
+	if (IsNBit(val, 9)) {
 		emit_insn(
 			0x2000000 |
-			IMM8(val) |
+			IMM9(val) |
 			RT(rg) |
 			I_OR_RR,!expand_flag,2
 		);
 		return;
 	}
-	if (IsNBit(val, 22)) {
+	if (IsNBit(val, 23)) {
 		emit_insn(
-			IMM22(val) |
+			IMM23(val) |
 			RT(rg) |
-			I_OR_RI22, !expand_flag, 3
+			I_OR_RI23, !expand_flag, 3
 		);
 		return;
 	}
-	if (IsNBit(val, 35)) {
+	if (IsNBit(val, 36)) {
 		emit_insn(
-			IMM35(val) |
+			IMM36(val) |
 			RT(rg) |
-			I_OR_RI35, !expand_flag, 4
+			I_OR_RI36, !expand_flag, 4
 		);
 		return;
 	}
 	emit_insn(
-		IMM22(val) |
+		IMM23(val >> 36) |
 		RT(rg) |
-		I_OR_RI22, !expand_flag, 3
-	);
-	emit_insn(
-		ISOP(9LL) |
-		IMM30(val >> 22LL) |
-		RA(rg) |
-		RT(rg) |
-		I_ISOP, !expand_flag, 4
-	);
-	return;
-	emit_insn(
-		IMM22(val >> 35) |
-		RT(rg) |
-		I_OR_RI22, !expand_flag, 3
+		I_OR_RI23, !expand_flag, 3
 	);
 	emit_insn(
 		0x2000000 |
-		IMM8(35) |
+		IMM9(36) |
 		RA(rg) |
 		RT(rg) |
 		I_ASL,!expand_flag,2
 	);
 	emit_insn(
-		IMM35(val) |
+		IMM36(val) |
 		RA(rg) |
 		RT(rg) |
-		I_OR_RI35,!expand_flag,4
+		I_OR_RI36,!expand_flag,4
 	);
 	return;
 }
@@ -1810,31 +1735,31 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
   need(',');
   NextToken();
   val = expr();
-	if (IsNBit(val, 8)) {
+	if (IsNBit(val, 9)) {
 		emit_insn(
 			0x2000000 |
-			IMM8(val) |
+			IMM9(val) |
 			RA(Ra) |
 			RT(Rt) |
-			func6,!expand_flag,2
+			opcode6,!expand_flag,2
 		);
 		return;
 	}
-	if (IsNBit(val, 22)) {
+	if (IsNBit(val, 23)) {
 		emit_insn(
-			IMM22(val) |
+			IMM23(val) |
 			RA(Ra) |
 			RT(Rt) |
-			opcode6, !expand_flag, 3
+			opcode6 + 1, !expand_flag, 3
 		);
 		return;
 	}
-	if (IsNBit(val, 35)) {
+	if (IsNBit(val, 36)) {
 		emit_insn(
-			IMM35(val) |
+			IMM36(val) |
 			RA(Ra) |
 			RT(Rt) |
-			opcode6 + 0x10, !expand_flag, 4
+			opcode6 + 2, !expand_flag, 4
 		);
 		return;
 	}
@@ -1862,7 +1787,7 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 	if (*p == '.')
 		getSz(&sz);
 	Cr = getRegisterX();
-	if (Cr < 104 || Cr > 111)
+	if (Cr < 112 || Cr > 119)
 		error("Need condition register for compare");
 	Cr &= 7;
 	need(',');
@@ -1870,40 +1795,13 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 	need(',');
 	NextToken();
 	val = expr();
-	if (IsNBit(val, 8)) {
-		emit_insn(
-			0x200000 |
-			IMM8(val) |
-			RA(Ra) |
-			RT((1<<3)|Cr) |
-			func6,!expand_flag,2
-		);
-		return;
-	}
-	if (IsNBit(val, 22)) {
-		emit_insn(
-			IMM22(val) |
-			RA(Ra) |
-			RT((1 << 3) | Cr) |
-			opcode6, !expand_flag, 3
-		);
-		return;
-	}
-	if (IsNBit(val, 35)) {
-		emit_insn(
-			IMM35(val) |
-			RA(Ra) |
-			RT((1 << 3) | Cr) |
-			opcode6+0x10, !expand_flag, 4
-		);
-		return;
-	}
-	LoadConstant(val, 23);
+	li = CheckPrefix(val);
 	emit_insn(
-		RT((1 << 3)|Cr) |
+		(li ? 0x8000000000 : 0) |
+		IMM(val) |
+		RT((2 << 3)|Cr) |
 		RA(Ra) |
-		RB(23) |
-		func6, !expand_flag, 2);
+		opcode6, !expand_flag, 5);
 xit:
 	ScanToEOL();
 }
@@ -2058,7 +1956,7 @@ static void process_rrop()
 	Ra = Ra & 0x1f;
 	Rb = Rb & 0x1f;
 	Rt = Rt & 0x1f;
-  emit_insn((bit23 << 24LL)|RB(Rb)|RT(Rt)|RA(Ra)|funct6,!expand_flag,2);
+    emit_insn(RB(Rb)|RT(Rt)|RA(Ra)|funct6,!expand_flag,2);
 	xit:
 		prevToken();
 		ScanToEOL();
@@ -2082,7 +1980,7 @@ static void process_cmp()
 	if (*p == '.')
 		getSz(&sz);
 	Cr = getRegisterX();
-	if (Cr < 104 || Cr > 111)
+	if (Cr < 112 || Cr > 119)
 		error("Need condition register for compare");
 	Cr &= 7;
 	need(',');
@@ -2108,7 +2006,7 @@ static void process_cmp()
 	Ra = Ra & 0x1f;
 	Rb = Rb & 0x1f;
 	Rt = Rt & 0x1f;
-	emit_insn(RB(Rb) | RT((1LL << 3LL) | Cr) | RA(Ra) | funct6, !expand_flag, 2);
+	emit_insn(instr | FUNC6(funct6) | RB(Rb) | RT((2 << 3) | Cr) | RA(Ra) | 0x8C, !expand_flag, 5);
 xit:
 	prevToken();
 	ScanToEOL();
@@ -2665,6 +2563,85 @@ static void process_ptrop(int oc, int func)
 }
 
 // ---------------------------------------------------------------------------
+// beqi r2,#123,label
+// ---------------------------------------------------------------------------
+
+static void process_beqi(int64_t opcode6, int64_t opcode3)
+{
+  int Ra, pred = 0;
+  int64_t val, imm;
+  int64_t disp;
+	int sz = 3;
+	int ins48 = 0;
+	char *p;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	imm = expr();
+	need(',');
+	NextToken();
+	val = expr();
+	if (!IsNBit(imm,8LL)) {
+		//printf("Branch immediate too large: %d %I64d", lineno, imm);
+		LoadConstant(imm, 23LL);
+		disp = (val - code_address) >> 1LL;
+		if (!IsNBit(disp, 11LL)) {
+			ins48 = !gpu;
+			if (!IsNBit(disp, 27LL) || gpu) {
+				if (pass > 4)
+					error("BEQI Branch target too far away");
+			}
+			return;
+		}
+		emit_insn(
+			((disp >> 2) << 23LL) |
+			((disp & 3LL) << 11LL) |
+			RB(23) |
+			(opcode3 << 8) |
+			RA(Ra) |
+			(ins48 << 6) |
+			0x30, !expand_flag, ins48 ? 6 : 4
+		);
+		return;
+	}
+	disp = (val - code_address) >> 1LL;
+	if (!IsNBit(disp, 11LL)) {
+		ins48 = !gpu;
+		if (!IsNBit(disp, 27LL) || gpu) {
+			if (pass > 4)
+				error("BEQI Branch target too far away");
+		}
+		return;
+	}
+	emit_insn(
+		((disp >> 2) << 23LL) |
+		((disp & 3LL) << 11LL) |
+		(((imm >> 3LL) & 0x1FLL) << 18LL) |
+		((imm & 7LL) << 8LL) |
+		RA(Ra) |
+		(ins48 << 6) |
+		opcode6,!expand_flag,ins48 ? 6 : 4
+	);
+	return;
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+static int InvertBranchOpcode(int opcode4)
+{
+	switch (opcode4) {
+	case 0:	return (1);	// BEQ to BNE
+	case 1:	return (0);	// BNE to BEQ
+	default:	return (opcode4);	// Otherwise operands are swapped.
+	}
+}
+
+// ---------------------------------------------------------------------------
 // beq r1,r2,label
 // bne r2,r3,r4
 //
@@ -2684,26 +2661,144 @@ static void process_bcc()
 	int64_t opcode4 = parm2[token];
 	int64_t op4 = parm3[token];
 
-	Cr = getRegisterX();
-	if (Cr < 104 || Cr > 111)
-		error("Branch needs condition register.");
-	Cr &= 7;
-	need(',');
 	NextToken();
-	val = lmt52(expr());
-	disp = lmt52((val - lmt52(code_address) - 2));
-	disp = lmt52(disp);
-	if (!IsNBit(disp, 12LL)) {
+	val = expr();
+	disp = (val - code_address - 2);
+	if (!IsNBit(disp, 17LL)) {
 		if (pass > 4)
 			error("Branch target too far away");
 	}
+	if (IsNBit(disp, 4)) {
+		emit_insn(
+			BRDISP4(disp) |
+			opcode6, !expand_flag, 1
+		);
+		return;
+	}
 	emit_insn(
-		BRDISP12(disp) |
-		CA(Cr) |
-		COND(opcode4) |
-		opcode6, !expand_flag, 2
+		BRDISP17(disp) |
+		opcode6 + 8, !expand_flag, 2
 	);
 	return;
+}
+
+// ---------------------------------------------------------------------------
+// dbnz r1,label
+//
+// ---------------------------------------------------------------------------
+
+static void process_dbnz(int opcode6, int opcode3)
+{
+  int Ra, Rc, pred;
+  int64_t val;
+  int64_t disp, offset;
+	char *p1;
+	int sz = 3;
+	int ins48 = 0;
+	char *p;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+    Ra = getRegisterX();
+    need(',');
+	p = inptr;
+	if (Rc==-1) {
+		inptr = p;
+	  NextToken();
+		val = expr();
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
+		offset = val & 0xffLL;
+		if (!IsNBit(disp, 4LL)) {
+			disp = (val >> 8LL) - ((code_address) >> 8LL);
+			ins48 = 1;
+			if (!IsNBit(disp, 20LL)) {
+				printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
+			}
+		}
+		emit_insn(
+			(disp << 28LL) |
+			((offset >> 3LL) << 23LL) |
+			(((offset >> 1LL) & 3LL) << 16LL) |
+			((opcode3 & 3) << 13) |
+			RA(Ra) |
+			(ins48 << 6) |
+			opcode6, !expand_flag, ins48 ? 6 : 4
+		);
+		return;
+	}
+	error("dbnz: target must be a label");
+	emit_insn(
+		(opcode3 << 19) |
+		(0 << 13) |
+		RA(Ra) |
+		opcode6,!expand_flag,4
+	);
+}
+
+// ---------------------------------------------------------------------------
+// ibne r1,r2,label
+//
+// ---------------------------------------------------------------------------
+
+static void process_bbc(int opcode6, int opcode3)
+{
+  int Ra, Rc, pred;
+	int64_t bitno;
+  int64_t val;
+  int64_t disp;
+	char *p1;
+	int sz = 3;
+	char *p;
+	bool isn48 = false;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+	Ra = getRegisterX();
+  need(',');
+	NextToken();
+	bitno = expr();
+  need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc==-1) {
+		inptr = p;
+    NextToken();
+		val = expr();
+		disp = (val - code_address) >> 1;
+		if (!IsNBit(disp, 11LL)) {
+			isn48 = !gpu;
+			if (!IsNBit(disp, 27LL) || gpu) {
+				if (pass > 4)
+					error("BBC/BBS Branch target too far away");
+			}
+		}
+	  emit_insn(
+			((disp >> 2) << 23LL) |
+			((disp & 3LL) << 11LL) |
+			RB(bitno >> 1) |
+			((bitno & 1) << 10) |
+			((opcode3 & 3) << 8) |
+			RA(Ra) |
+			(isn48 << 6) |
+			opcode6, !expand_flag, isn48 ? 6 : 4
+		);
+		return;
+	}
+	error("ibne: target must be a label");
+	emit_insn(
+		(opcode3 << 19) |
+		(0 << 13) |
+		RA(Ra) |
+		0x03,!expand_flag,4
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -2811,17 +2906,17 @@ static void process_bra(int oc, int cond)
 	int ins48 = 0;
 
   NextToken();
-  val = lmt52(expr());
-  disp = lmt52((val - lmt52(code_address) - 2));
-	disp = lmt52(disp);
-	if (!IsNBit(disp, 12LL)) {
-		if (pass > 4)
-			error("Bra target too far away");
+  val = expr();
+  disp = (val - code_address);
+	if (!IsNBit(disp, 21LL)) {
+		ins48 = !gpu;
+			if (pass > 4)
+				error("Bra target too far away");
 	}
 	emit_insn(
-		BRDISP12(disp) |
+		BRDISP(disp) |
 		COND(cond) |
-    oc,!expand_flag,2
+    oc,!expand_flag,5
     );
 }
 
@@ -2946,15 +3041,16 @@ static void process_call(int opcode, int opt)
 		return;
 	}
 	val = expr();
-	if (code_bits > 29 && !IsNBit(val,42)) {
+	if (code_bits > 29 && !IsNBit(val,46)) {
 		LoadConstant(val,23);
 		if (Ra!=0) {
 			// add r23,r23,Ra
 			emit_insn(
+				FUNC6(0x04) |
 				RT(23) |
 				RB(23) |
 				RA(Ra) |
-				I_ADD_RR,!expand_flag,2
+				0x8C,!expand_flag,2
 				);
 		}
 		// JMP or CALL
@@ -2966,55 +3062,9 @@ static void process_call(int opcode, int opt)
 		return;
 	}
 	emit_insn(
-		(((val & 0x7FFFFFFFFFFLL)) << 9LL) |
-		(1 << 7) |
+		(((val & 0x3FFFFFFFFFFLL)) << 6LL) |
 		opcode,!expand_flag,4
 		);
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-
-static void process_jmp(int opcode, int opt)
-{
-	int64_t val;
-	int Ra = -1;
-
-	val = 0;
-	NextToken();
-	if (token == '[') {
-		Ra = getRegisterX();
-		need(']');
-		emit_insn(
-			RA(Ra) |
-			opt, !expand_flag, 1
-		);
-		return;
-	}
-	val = expr();
-	if (code_bits > 29 && !IsNBit(val, 42)) {
-		LoadConstant(val, 23);
-		if (Ra != 0) {
-			// add r23,r23,Ra
-			emit_insn(
-				RT(23) |
-				RB(23) |
-				RA(Ra) |
-				I_ADD_RR, !expand_flag, 2
-			);
-		}
-		// JMP or CALL
-		// jal r0,[r23]
-		emit_insn(
-			RA(23) |
-			opt, !expand_flag, 1
-		);
-		return;
-	}
-	emit_insn(
-		(((val & 0x7FFFFFFFFFFLL)) << 9LL) |
-		opcode, !expand_flag, 4
-	);
 }
 
 static void process_iret(int64_t op)
@@ -3063,8 +3113,12 @@ static void process_ret()
 	val &= 0xFFFFFFFFFFFFFFF0LL;
 	li = CheckPrefix(val);
 	emit_insn(
-		(lk << 9LL) |
-		I_RET,!expand_flag,1
+		(li ? 0x8000000000LL : 0LL) |
+		RETIMM(val) |
+		RB(lk) |
+		RT(regSP) |
+		RA(regSP) |
+		I_RTS,!expand_flag, 5
 	);
 }
 
@@ -3209,19 +3263,19 @@ static void process_brk()
 
 static void GetIndexScale(int *sc)
 {
-	int64_t val;
+      int64_t val;
 
-	NextToken();
-	val = expr();
-	prevToken();
-	switch(val) {
-	case 0: *sc = 0; break;
-	case 1: *sc = 0; break;
-	case 2: *sc = 1; break;
-	case 4: *sc = 2; break;
-	case 8: *sc = 3; break;
-	default: printf("Illegal scaling factor.\r\n");
-	}
+      NextToken();
+      val = expr();
+      prevToken();
+      switch(val) {
+      case 0: *sc = 0; break;
+      case 1: *sc = 0; break;
+      case 2: *sc = 1; break;
+      case 4: *sc = 2; break;
+      case 8: *sc = 3; break;
+      default: printf("Illegal scaling factor.\r\n");
+      }
 }
 
 
@@ -3383,15 +3437,6 @@ static void process_store()
     ScanToEOL();
     return;
   }
-	if (Rs >= 32 && Rs <= 63) {
-		Rs &= 31;
-		switch (opcode6) {
-		case I_ST_RI22:	opcode6 = I_STF_RI22;	break;
-		case I_ST_RI35:	opcode6 = I_STF_RI35;	break;
-		case I_ST_RR:	opcode6 = I_STF_RR;	break;
-		default:;
-		}
-	}
   expect(',');
   mem_operand(&disp, &Ra, &Rb, &Sc, &seg);
 	if (Ra >= 0 && Rb >= 0) {
@@ -3399,8 +3444,7 @@ static void process_store()
 			return;
 		}
 		emit_insn(
-			SC(Sc) |
-			RT(Rs) |
+			RB(Rs) |
 			RA(Ra) |
 			RB(Rb) |
 			opcode6, !expand_flag, 2);
@@ -3408,48 +3452,46 @@ static void process_store()
 	}
   if (Ra < 0) Ra = 0;
   val = disp;
-	if (IsNBit(val, 8)) {
+	if (IsNBit(val, 9)) {
 		emit_insn(
 			0x2000000 |
-			IMM8(val) |
+			IMM9(val) |
 			RA(Ra) |
 			RT(Rs) |
-			opcode6,!expand_flag,2
+			funct6,!expand_flag,2
 		);
 		return;
 	}
-	if (IsNBit(val, 22)) {
+	if (IsNBit(val, 23)) {
 		emit_insn(
-			IMM22(val) |
+			IMM23(val) |
 			RA(Ra) |
 			RT(Rs) |
-			funct6, !expand_flag, 3
+			funct6+1, !expand_flag, 3
 		);
 		return;
 	}
-	if (IsNBit(val, 35)) {
+	if (IsNBit(val, 36)) {
 		emit_insn(
-			IMM35(val) |
+			IMM36(val) |
 			RA(Ra) |
 			RT(Rs) |
-			funct6 + 1, !expand_flag, 4
+			funct6 + 2, !expand_flag, 4
 		);
 		return;
 	}
 	LoadConstant(val, 23);
-	if (Ra != 0)
-		emit_insn(
-			RB(Ra) |
-			RA(23) |
-			RT(23) |
-			I_ADD_RR,!expand_flag,2
-		);
+	emit_insn(
+		RB(Ra) |
+		RA(23) |
+		RT(23) |
+		I_ADD_RR,!expand_flag,2
+	);
 	emit_insn(
 		0x2000000 |
-		IMM8(0) |
-		RA(23) |
+		IMM9(0) |
 		RT(Rs) |
-		opcode6,!expand_flag,2
+		funct6,!expand_flag,2
 	);
 }
 /*
@@ -3577,68 +3619,53 @@ static void process_ldi()
   Rt = getRegisterX();
   expect(',');
   val = expr();
-	if (IsNBit(val, 8)) {
+	if (IsNBit(val, 9)) {
 		emit_insn(
 			0x2000000 |
-			IMM8(val) |
+			IMM9(val) |
 			RT(Rt) |
 			I_OR_RR,!expand_flag,2
 		);
 		return;
 	}
-	if (IsNBit(val, 22)) {
+	if (IsNBit(val, 23)) {
 		emit_insn(
-			IMM22(val) |
+			IMM23(val) |
 			RT(Rt) |
-			I_OR_RI22, !expand_flag, 3
+			I_OR_RI23, !expand_flag, 3
 		);
 		return;
 	}
-	if (IsNBit(val, 35)) {
+	if (IsNBit(val, 36)) {
 		emit_insn(
-			IMM35(val) |
+			IMM36(val) |
 			RT(Rt) |
-			I_OR_RI35, !expand_flag, 4
+			I_OR_RI36, !expand_flag, 4
 		);
 		return;
 	}
-	// Won't fit into 35 bits?
-	// Load lower 22 bits
-	emit_insn(
-		IMM22(val) |
-		RA(0) |
-		RT(Rt) |
-		I_OR_RI22, !expand_flag, 3
-	);
-	emit_insn(
-		ISOP(9LL) |
-		IMM30(val >> 22LL) |
-		RA(Rt) |
-		RT(Rt) |
-		I_ISOP,!expand_flag,4
-	);
-	return;
+	// Won't fit into 36 bits?
 	// Load upper 16 bits
 	emit_insn(
-		IMM22(val >> 35) |
+		IMM23(val >> 36) |
 		RA(0) |
 		RT(Rt) |
-		I_OR_RI22, !expand_flag, 3
+		I_OR_RI23, !expand_flag, 3
 	);
 	// And shift over 36 bits
 	emit_insn(
 		0x2000000 |
-		IMM8(35LL) |
+		IMM9(36LL) |
 		RA(Rt) |
 		RT(Rt) |
-		I_ASL,!expand_flag,2
+		I_ASL,!expand_flag,3
 	);
 	// Or in the low order 36 bits
 	emit_insn(
-		IMM35(val) |
+		IMM36(val) |
 		RA(Rt) |
 		RT(Rt) |
-		I_OR_RI35, !expand_flag, 4
+		I_OR_RI36, !expand_flag, 4
 	);
 	return;
 }
@@ -3681,16 +3708,7 @@ static void process_load()
       inptr-=2;
       return;
   }
-	if (Rt >= 32 && Rt <= 63) {
-		Rt &= 31;
-		switch (opcode6) {
-		case I_LD_RI22:	opcode6 = I_LDF_RI22;	break;
-		case I_LD_RI35:	opcode6 = I_LDF_RI35;	break;
-		case I_LD_RR:	opcode6 = I_LDF_RR;	break;
-		default:;
-		}
-	}
-	expect(',');
+  expect(',');
   mem_operand(&disp, &Ra, &Rb, &Sc, &seg);
 	if (Ra >= 0 && Rb >= 0) {
 		//if (gpu)
@@ -3698,57 +3716,54 @@ static void process_load()
 		// Trap LEA, convert to LEAX opcode
 		emit_insn(
 //			((int64_t)seg << 45LL) |
-			SC(Sc) |
 			RT(Rt) |
 			RB(Rb) |
 			RA(Ra) |
-			opcode6, !expand_flag, 2);// seg != -1 ? 6 : 4);
+			opcode6, !expand_flag, 4);// seg != -1 ? 6 : 4);
 		return;
 	}
 	if (Ra < 0) Ra = 0;
 	val = disp;
-	if (IsNBit(val, 8)) {
+	if (IsNBit(val, 9)) {
 		emit_insn(
 			0x2000000 |
-			IMM8(val) |
+			IMM9(val) |
 			RA(Ra) |
 			RT(Rt) |
-			opcode6, !expand_flag, 2
+			funct6, !expand_flag, 2
 		);
 		return;
 	}
-	if (IsNBit(val, 22)) {
+	if (IsNBit(val, 23)) {
 		emit_insn(
-			IMM22(val) |
+			IMM23(val) |
 			RA(Ra) |
 			RT(Rt) |
-			funct6, !expand_flag, 3
+			funct6 + 1, !expand_flag, 3
 		);
 		return;
 	}
-	if (IsNBit(val, 35)) {
+	if (IsNBit(val, 36)) {
 		emit_insn(
-			IMM35(val) |
+			IMM36(val) |
 			RA(Ra) |
 			RT(Rt) |
-			funct6 + 1, !expand_flag, 4
+			funct6 + 2, !expand_flag, 4
 		);
 		return;
 	}
 	LoadConstant(val, 23);
-	if (Ra != 0)
-		emit_insn(
-			RB(Ra) |
-			RA(23) |
-			RT(23) |
-			I_ADD_RR, !expand_flag, 2
-		);
+	emit_insn(
+		RB(Ra) |
+		RA(23) |
+		RT(23) |
+		I_ADD_RR, !expand_flag, 2
+	);
 	emit_insn(
 		0x2000000 |
-		IMM8(0) |
-		RA(23) |
+		IMM9(0) |
 		RT(Rt) |
-		opcode6, !expand_flag, 2
+		funct6, !expand_flag, 2
 	);
     ScanToEOL();
 }
@@ -4087,10 +4102,6 @@ static void process_mov(int64_t oc, int64_t fn)
 	int d3;
 	int rgs = 8;
 	int sz = 3;
-	bool mtlk = false;
-	bool mflk = false;
-	bool mtcr = false;
-	bool mfcr = false;
 
 	p = inptr;
 	if (*p == '.')
@@ -4112,12 +4123,6 @@ static void process_mov(int64_t oc, int64_t fn)
 			d3 = 4;
 			fp = 1;
 		}
-	}
-	if (Rt >= 96) {
-		if (Rt < 104)
-			mtlk = true;
-		else if (Rt < 112)
-			mtcr = true;
 	}
 	Rt &= 31;
 	if (inptr[-1]==':') {
@@ -4149,12 +4154,6 @@ static void process_mov(int64_t oc, int64_t fn)
 				d3 = 5;
 			fp |= 2;
 		}
-	}
-	if (Rt >= 96) {
-		if (Rt < 104)
-			mflk = true;
-		else if (Rt < 112)
-			mfcr = true;
 	}
 	Ra &= 31;
 	if (inptr[-1]==':') {
@@ -4198,27 +4197,13 @@ static void process_mov(int64_t oc, int64_t fn)
 	 }
 	 rgs &= 0x31;
 	 if (d3 == 7) {
-		 if (mtlk | mtcr) {
-			 emit_insn(
-				 RA(Ra) |
-				 RT(Rt) |
-				 0x4A,!expand_flag,2
-			 );
-			 goto xit;
-		 }
-		 if (mflk | mfcr) {
-			 emit_insn(
-				 RA(Ra) |
-				 RT(Rt) |
-				 0x5A, !expand_flag, 2
-			 );
-			 goto xit;
-		 }
 		 emit_insn(
-			 RA(Ra) |
-			 RT(Rt) |
-			 I_OR_RR, !expand_flag, 2
-		 );
+			 (0 << 12) |
+			 (3 << 6) |
+			 ((Rt >> 1) << 8) |
+			 ((Rt & 1) << 5) |
+			 (Ra),
+		 0,2);
 		 prevToken();
 		 return;
 	 }
@@ -4231,47 +4216,6 @@ static void process_mov(int64_t oc, int64_t fn)
 		 RA(Ra) |
 		 oc,!expand_flag,4
 		 );
-xit:
-	prevToken();
-}
-
-// ----------------------------------------------------------------------------
-// mov r1,r2 -> translated to or Rt,Ra,#0
-// ----------------------------------------------------------------------------
-
-static void process_movxx(int64_t oc, int64_t fn)
-{
-	int Ra;
-	int Rt;
-	char *p;
-	int vec = 0;
-	int fp = 0;
-	int d3;
-	int rgs = 8;
-	int sz = 0;
-
-	p = inptr;
-	if (*p == '.')
-		getSz(&sz);
-
-	d3 = 7;	// current to current
-	p = inptr;
-	Rt = getRegisterX();
-	if (Rt == -1 || Rt > 31)
-		error("Illegal target register for movsz/movzx.");
-	Rt &= 31;
-	need(',');
-	p = inptr;
-	Ra = getRegisterX();
-	if (Ra == -1)
-		error("Illegal source register for movsz/movzx.");
-	Ra &= 31;
-	emit_insn(
-		((((fn) & 0x4) + sz + 1) << 22LL) |
-		RA(Ra) |
-		RT(Rt) |
-		I_OR_RR, !expand_flag, 2
-	);
 	prevToken();
 }
 
@@ -4367,13 +4311,13 @@ static void process_shifti(int64_t op4)
 	need(',');
 	NextToken();
 	val = expr();
-	val &= 63;
+	val &= 127;
 	emit_insn(
-		0x2000000 |
-		IMM8(val) |
+		FUNC6(op4) |
+		SHI7(val) |
 		RT(Rt) |
 		RA(Ra) |
-		op4,!expand_flag,2);
+		I_R2,!expand_flag,5);
 }
 
 // ----------------------------------------------------------------------------
@@ -4482,7 +4426,7 @@ static void process_shift(int64_t op4)
 	else {
 		prevToken();
 		Rb = getRegisterX();
-		emit_insn(RT(Rt)| RB(Rb) | RA(Ra) | op4,!expand_flag,2);
+		emit_insn(FUNC6(op4) | RT(Rt)| RB(Rb) | RA(Ra) | I_R2,!expand_flag,5);
 	 }
 }
 
@@ -5084,8 +5028,8 @@ static void process_default()
 	case tk_addi: process_riop(0x04,0x04,0); break;
 	case tk_align: process_align(); break;
 	case tk_andi:  process_riop(0x08,0x08,0); break;
-	case tk_asl: process_shift(0x0C); break;
-	case tk_asr: process_shift(0x2D); break;
+	case tk_asl: process_shift(0x2); break;
+	case tk_asr: process_shift(0x3); break;
 	//case tk_bbc: process_bbc(0x26, 1); break;
 	//case tk_bbs: process_bbc(0x26, 0); break;
 	case tk_begin_expand: expandedBlock = 1; break;
@@ -5098,7 +5042,7 @@ static void process_default()
 	case tk_bfinsi: process_bitfield(4); break;
 	case tk_bfset: process_bitfield(0); break;
 	//case tk_bnei: process_beqi(0x12, 1); break;
-	case tk_bra: process_bra(0x741,0x00); break;
+	case tk_bra: process_bra(0xD4,0x0C); break;
 	case tk_brk: process_brk(); break;
 		//case tk_bsr: process_bra(0x56); break;
 	case tk_bss:
@@ -5113,7 +5057,7 @@ static void process_default()
 		segment = bssseg;
 		break;
 	case tk_cache: process_cache(0x1E); break;
-	case tk_call:  process_call(I_JAL,0x48); break;
+	case tk_call:  process_call(014,054); break;
 	case tk_cli: emit_insn(0xC0000002, !expand_flag, 4); break;
 	case tk_chk:  process_chk(0x34); break;
 	case tk_cmovenz: process_cmove(0x29); break;
@@ -5182,29 +5126,25 @@ static void process_default()
 	case tk_inc:	process_inc(0x1A); break;
 	case tk_if:		pif1 = inptr - 2; doif(); break;
 	case tk_ifdef:		pif1 = inptr - 5; doifdef(); break;
-	case tk_ifndef:		pif1 = inptr - 6; doifndef(); break;
 	case tk_isnull: process_ptrop(0x06,0); break;
 	case tk_itof: process_itof(0x15); break;
 	case tk_iret:	process_iret(0xC8000002); break;
 	case tk_isptr:  process_ptrop(0x06,1); break;
-	case tk_jal: process_jal(I_JAL); break;
-	case tk_jmp: process_jmp(I_JAL,0x48); break;
+	case tk_jal: process_jal(0x18); break;
+	case tk_jmp: process_call(004,044); break;
 	case tk_jsr:  process_call(014, 054); break;
 	case tk_ld:	process_ld(); break;
 		//case tk_lui: process_lui(0x27); break;
-	case tk_lsr: process_shift(0x0D); break;
 	case tk_lv:  process_lv(0x36); break;
 	case tk_macro:	process_macro(); break;
-	case tk_memdb: emit_insn(0x01C3, !expand_flag, 1); break;
-	case tk_memsb: emit_insn(0x03C3, !expand_flag, 1); break;
+	case tk_memdb: emit_insn(0x04400002, !expand_flag, 4); break;
+	case tk_memsb: emit_insn(0x04440002, !expand_flag, 4); break;
 	case tk_message: process_message(); break;
 	case tk_mov: process_mov(0x02, 0x22); break;
-	case tk_movsx: process_movxx(0x09, 0x00); break;
-	case tk_movzx: process_movxx(0x09, 0x04); break;
 		//case tk_mulh: process_rrop(0x26, 0x3A); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 	case tk_neg: process_neg(); break;
-	case tk_nop: emit_insn(0xC3, !expand_flag, 1); break;
+	case tk_nop: emit_insn(0x0080, !expand_flag, 2); break;
 	case tk_not: process_rop(0x05); break;
 		//        case tk_not: process_rop(0x07); break;
 	case tk_ori: process_riop(0x09,0x09,0); break;
@@ -5227,8 +5167,10 @@ static void process_default()
 	//case tk_redor: process_rop(0x06); break;
 	case tk_ret: process_ret(); break;
 	case tk_rex: process_rex(); break;
-	case tk_rol: process_shift(0x1C); break;
-	case tk_ror: process_shift(0x1D); break;
+	case tk_rol: process_shift(0x4); break;
+	case tk_roli: process_shifti(0x4); break;
+	case tk_ror: process_shift(0x5); break;
+	case tk_rori: process_shifti(0x5); break;
 	case tk_rti: process_iret(0xC8000002); break;
 	case tk_sei: process_sei(); break;
 	case tk_seq:	process_setop(I_SEQ, I_SEQ, 0x00); break;
@@ -5256,6 +5198,7 @@ static void process_default()
 	case tk_slli: process_shifti(0x8); break;
 	case tk_srai: process_shifti(0xB); break;
 	case tk_srli: process_shifti(0x9); break;
+	case tk_subi:  process_riop(0x05,0x05,0x00); break;
 	case tk_sv:  process_sv(0x37); break;
 	case tk_swap: process_rop(0x03); break;
 		//case tk_swp:  process_storepair(0x27); break;
@@ -5299,26 +5242,26 @@ static void process_default()
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-void Gambit_v5_processMaster()
+void Gambit_processMaster()
 {
-  int nn;
-  int64_t bs1, bs2;
+    int nn;
+    int64_t bs1, bs2;
 
-  lineno = 1;
-  binndx = 0;
-  binstart = 0;
-	num_lbranch = 0;
-  bs1 = 0;
-  bs2 = 0;
-  inptr = &masterFile[0];
-  stptr = inptr;
-  code_address = 0;
-  bss_address = 0;
-  start_address = 0;
-  first_org = 1;
-  first_rodata = 1;
-  first_data = 1;
-  first_bss = 1;
+    lineno = 1;
+    binndx = 0;
+    binstart = 0;
+		num_lbranch = 0;
+    bs1 = 0;
+    bs2 = 0;
+    inptr = &masterFile[0];
+    stptr = inptr;
+    code_address = 0;
+    bss_address = 0;
+    start_address = 0;
+    first_org = 1;
+    first_rodata = 1;
+    first_data = 1;
+    first_bss = 1;
 	expandedBlock = 0;
 	//if (pass == 1) 
 	{
@@ -5329,33 +5272,34 @@ void Gambit_v5_processMaster()
 			parm3[nn] = 0;
 		}
 		jumptbl[tk_add] = &process_rrop;
-		parm1[tk_add] = I_ADD_RR;
-		parm2[tk_add] = I_ADD_RI22;
-		jumptbl[tk_sub] = &process_rrop;
-		parm1[tk_sub] = I_SUB_RR;
-		parm2[tk_sub] = I_SUB_RI22;
+		parm1[tk_add] = 0x00LL;
+		parm2[tk_add] = 0x00LL;
 		jumptbl[tk_cmp] = &process_cmp;
-		parm1[tk_cmp] = I_CMP_RR;
-		parm2[tk_cmp] = I_CMP_RI22;
+		parm1[tk_cmp] = 0x06LL;
+		parm2[tk_cmp] = 0x98LL;
 		jumptbl[tk_cmpu] = &process_cmp;
-		parm1[tk_cmpu] = I_CMPU_RR;
-		parm2[tk_cmpu] = I_CMPU_RI22;
+		parm1[tk_cmpu] = 0x07LL;
+		parm2[tk_cmpu] = 0x99LL;
 		jumptbl[tk_and] = &process_rrop;
 		parm1[tk_and] = I_AND_RR;
-		parm2[tk_and] = I_AND_RI22;
+		parm2[tk_and] = I_AND_RI23;
 		jumptbl[tk_or] = &process_rrop;
 		parm1[tk_or] = I_OR_RR;
-		parm2[tk_or] = I_OR_RI22;
+		parm2[tk_or] = I_OR_RI23;
 		jumptbl[tk_xor] = &process_rrop;
-		parm1[tk_xor] = I_XOR_RR;
-		parm2[tk_xor] = I_XOR_RI22;
+		parm1[tk_xor] = 0x0ALL;
+		parm2[tk_xor] = 0x0ALL;
 		jumptbl[tk_eor] = &process_rrop;
-		parm1[tk_eor] = I_XOR_RR;
-		parm2[tk_eor] = I_XOR_RI22;
+		parm1[tk_eor] = 0x0ALL;
+		parm2[tk_eor] = 0x0ALL;
 		jumptbl[tk_div] = &process_rrop;
-		parm1[tk_div] = I_DIV_RR;
-		parm2[tk_div] = -1LL;
-		parm3[tk_div] = 0x00LL;
+		parm1[tk_div] = 0x3ELL;
+		parm2[tk_div] = 0x3ELL;
+		parm3[tk_div] = 0x00;
+		jumptbl[tk_divu] = &process_rrop;
+		parm1[tk_divu] = 0x3CLL;
+		parm2[tk_divu] = 0x3CLL;
+		parm3[tk_divu] = 0x00;
 		jumptbl[tk_max] = &process_rrop;
 		parm1[tk_max] = 0x2DLL;
 		parm2[tk_max] = -1LL;
@@ -5363,12 +5307,25 @@ void Gambit_v5_processMaster()
 		parm1[tk_min] = 0x2CLL;
 		parm2[tk_min] = -1LL;
 		jumptbl[tk_mod] = &process_rrop;
-		parm1[tk_mod] = I_DIV_RR;
-		parm2[tk_mod] = -1LL;
+		parm1[tk_mod] = 0x16LL;
+		parm2[tk_mod] = 0x3ELL;
 		parm3[tk_mod] = 0x01LL;
+		jumptbl[tk_modu] = &process_rrop;
+		parm1[tk_modu] = 0x14LL;
+		parm2[tk_modu] = 0x3CLL;
+		parm3[tk_modu] = 0x01LL;
 		jumptbl[tk_mul] = &process_rrop;
-		parm1[tk_mul] = I_MUL_RR;
-		parm2[tk_mul] = I_MUL_RI22;
+		parm1[tk_mul] = 0x3ALL;
+		parm2[tk_mul] = 0x3ALL;
+		jumptbl[tk_mulf] = &process_rrop;
+		parm1[tk_mulf] = 0x2ALL;
+		parm2[tk_mulf] = 0x2ALL;
+		jumptbl[tk_mulu] = &process_rrop;
+		parm1[tk_mulu] = 0x38LL;
+		parm2[tk_mulu] = 0x38LL;
+		jumptbl[tk_sub] = &process_rrop;
+		parm1[tk_sub] = 010LL;
+		parm2[tk_sub] = 010LL;
 		jumptbl[tk_ptrdif] = &process_ptrdif;
 		parm1[tk_ptrdif] = 0x1ELL;
 		parm2[tk_ptrdif] = -1LL;
@@ -5380,60 +5337,44 @@ void Gambit_v5_processMaster()
 		parm2[tk_xnor] = -1LL;
 
 		jumptbl[tk_beq] = &process_bcc;
-		parm1[tk_beq] = 0x40;
-		parm2[tk_beq] = 0x00;
+		parm1[tk_beq] = 0005;
+		parm2[tk_beq] = 0005;
 		parm3[tk_beq] = 0000;
 		jumptbl[tk_bne] = &process_bcc;
-		parm1[tk_bne] = 0x40;
-		parm2[tk_bne] = 0x01;
-		parm3[tk_bne] = 0x00;
-		jumptbl[tk_blt] = &process_bcc;
-		parm1[tk_blt] = 0x40;
-		parm2[tk_blt] = 0x03;
-		parm3[tk_blt] = 0x00;
-		jumptbl[tk_bgt] = &process_bcc;
-		parm1[tk_bgt] = 0x40;
-		parm2[tk_bgt] = 0x02;
-		parm3[tk_bgt] = 0x00;
-		jumptbl[tk_bge] = &process_bcc;
-		parm1[tk_bge] = 0x41;
-		parm2[tk_bge] = 0x00;
-		parm3[tk_bge] = 0x00;
-		jumptbl[tk_ble] = &process_bcc;
-		parm1[tk_ble] = 0x41;
-		parm2[tk_ble] = 0x01;
-		parm3[tk_ble] = 0x00;
+		parm1[tk_bne] = 0105;
+		parm2[tk_bne] = 0105;
+		parm3[tk_bne] = 0000;
+		jumptbl[tk_bmi] = &process_bcc;
+		parm1[tk_bmi] = 0305;
+		parm2[tk_bmi] = 0305;
+		parm3[tk_bmi] = 0000;
+		jumptbl[tk_bpl] = &process_bcc;
+		parm1[tk_bpl] = 0205;
+		parm2[tk_bpl] = 0205;
+		parm3[tk_bpl] = 0000;
 
 		jumptbl[tk_ldi] = &process_ldi;
 		parm1[tk_ldi] = 0;
 		parm2[tk_ldi] = 0;
 		// stores
 		jumptbl[tk_stb] = &process_store;
-		parm1[tk_stb] = 0x59;
-		parm2[tk_stb] = 0x69;
-		parm3[tk_stb] = 0x00;
+		parm1[tk_stb] = -074;
+		parm2[tk_stb] = 074;
+		parm3[tk_stb] = 000;
 		jumptbl[tk_st] = &process_store;
-		parm1[tk_st] = 0x58;
-		parm2[tk_st] = 0x68;
-		parm3[tk_st] = 0x00;
-		jumptbl[tk_stf] = &process_store;
-		parm1[tk_stf] = I_STF_RR;
-		parm2[tk_stf] = I_STF_RI22;
-		parm3[tk_stf] = 0x00;
+		parm1[tk_st] = 070;
+		parm2[tk_st] = 070;
+		parm3[tk_st] = 000;
 		// loads
 		jumptbl[tk_ldb] = &process_load;
-		parm1[tk_ldb] = 0x51;
-		parm2[tk_ldb] = 0x61;
-		parm3[tk_ldb] = 0x00;
+		parm1[tk_ldb] = -064;
+		parm2[tk_ldb] = 064;
+		parm3[tk_ldb] = 000;
 		jumptbl[tk_ld] = &process_load;
-		parm1[tk_ld] = 0x50;
-		parm2[tk_ld] = 0x60;
-		parm3[tk_ld] = 0x00;
-		jumptbl[tk_ldf] = &process_load;
-		parm1[tk_ldf] = I_LDF_RR;
-		parm2[tk_ldf] = I_LDF_RI22;
-		parm3[tk_ldf] = 0x00;
-		/*
+		parm1[tk_ld] = 060;
+		parm2[tk_ld] = 060;
+		parm3[tk_ld] = 000;
+/*
 		jumptbl[tk_lvb] = &process_load;
 		parm1[tk_lvb] = -1;
 		parm2[tk_lvb] = 0x00;
@@ -5463,6 +5404,14 @@ void Gambit_v5_processMaster()
 		parm2[tk_lvw] = 0x06;
 		parm3[tk_lvw] = 0x04;
 */
+		jumptbl[tk_sf] = &process_store;
+		parm1[tk_sf] = 0x2B;
+		parm2[tk_sf] = 0x2D;
+		parm3[tk_sf] = 0x01;
+		jumptbl[tk_lf] = &process_load;
+		parm1[tk_lf] = 0x1B;
+		parm2[tk_lf] = 0x1D;
+		parm3[tk_lf] = 0x01;
 	}
 	tbndx = 0;
 

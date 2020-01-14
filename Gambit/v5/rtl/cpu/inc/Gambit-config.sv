@@ -128,9 +128,9 @@
 // affects how many instructions are queued.
 `define WAYS			2				// number of ways parallel (1-2) (use only 2)
 `define NUM_IDU		2				// number of instruction decode units (2 only)
-`define NUM_ALU		1				// number of ALU's (1-2)
-`define NUM_AGEN	1				// number of address generators (1-2)
-`define NUM_MEM		1				// number of memory queues (1-2)
+`define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_AGEN	2				// number of address generators (1-2)
+`define NUM_MEM		2				// number of memory queues (1-2)
 `define NUM_FPU		1				// number of floating-point units (0-2)
 
 `define FCU_RSB		1				// return stack buffer

@@ -248,6 +248,7 @@
 `define CSR_HARTID  12'h001
 `define CSR_TICK    12'h002
 `define CSR_PCR     12'h003
+`define CSR_PTA			12'h003
 `define CSR_PMR			12'h005
 `define CSR_CAUSE   12'h006
 `define CSR_BADADR  12'h007

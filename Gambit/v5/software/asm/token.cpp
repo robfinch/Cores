@@ -2552,6 +2552,14 @@ int NextToken()
 							tbndx++;
 							return token = tk_ldb;
 						}
+						if ((inptr[1] == 'd' || inptr[1] == 'D') &&
+							(inptr[2] == 'f' || inptr[2] == 'F') &&
+							isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_ldf;
+							tbndx++;
+							return (token = tk_ldf);
+						}
 					}
 				if (gCpu=='A' || gCpu==NVIO || gCpu==NVIO3 || gCpu==RISCV) {
 				if ((inptr[1]=='d' || inptr[1]=='D') &&
@@ -3498,6 +3506,14 @@ int NextToken()
 							tokenBuffer[tbndx] = tk_stb;
 							tbndx++;
 							return token = tk_stb;
+						}
+						if ((inptr[1] == 't' || inptr[1] == 'T') &&
+							(inptr[2] == 'f' || inptr[2] == 'F') &&
+							isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_stf;
+							tbndx++;
+							return (token = tk_stf);
 						}
 					}
 			if (gCpu=='A' || gCpu=='J' || gCpu==NVIO3 || gCpu==RISCV) {
