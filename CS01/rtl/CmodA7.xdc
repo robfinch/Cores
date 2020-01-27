@@ -6,6 +6,19 @@
 ## Clock signal 12 MHz
 set_property -dict { PACKAGE_PIN L17   IOSTANDARD LVCMOS33 } [get_ports { sysclk }]; #IO_L12P_T1_MRCC_14 Sch=gclk
 create_clock -add -name sys_clk_pin -period 83.33 -waveform {0 41.66} [get_ports {sysclk}];
+set_clock_groups -asynchronous \
+-group { \
+clk14p7_cs01clkgen \
+clk14p7_cs01clkgen_1 \
+} \
+-group { \
+clk100_cs01clkgen \
+clk100_cs01clkgen_1 \
+clk50_cs01clkgen \
+clk50_cs01clkgen_1 \
+clk20_cs01clkgen \
+clk20_cs01clkgen_1 \
+}
 
 
 ## LEDs

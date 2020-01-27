@@ -29,6 +29,7 @@
 		private void InitializeComponent()
 		{
 			this.components = new System.ComponentModel.Container();
+			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
 			this.groupBox1 = new System.Windows.Forms.GroupBox();
 			this.radioButton2 = new System.Windows.Forms.RadioButton();
 			this.radioButton1 = new System.Windows.Forms.RadioButton();
@@ -38,6 +39,7 @@
 			this.radioButton4 = new System.Windows.Forms.RadioButton();
 			this.radioButton3 = new System.Windows.Forms.RadioButton();
 			this.Caching = new System.Windows.Forms.GroupBox();
+			this.checkBox21 = new System.Windows.Forms.CheckBox();
 			this.radioButton11 = new System.Windows.Forms.RadioButton();
 			this.radioButton10 = new System.Windows.Forms.RadioButton();
 			this.radioButton9 = new System.Windows.Forms.RadioButton();
@@ -55,6 +57,8 @@
 			this.checkBox12 = new System.Windows.Forms.CheckBox();
 			this.checkBox11 = new System.Windows.Forms.CheckBox();
 			this.groupBox4 = new System.Windows.Forms.GroupBox();
+			this.linkLabel2 = new System.Windows.Forms.LinkLabel();
+			this.linkLabel1 = new System.Windows.Forms.LinkLabel();
 			this.checkBox10 = new System.Windows.Forms.CheckBox();
 			this.checkBox9 = new System.Windows.Forms.CheckBox();
 			this.checkBox8 = new System.Windows.Forms.CheckBox();
@@ -66,18 +70,22 @@
 			this.checkBox2 = new System.Windows.Forms.CheckBox();
 			this.checkBox1 = new System.Windows.Forms.CheckBox();
 			this.button1 = new System.Windows.Forms.Button();
-			this.checkBox21 = new System.Windows.Forms.CheckBox();
 			this.menuStrip1 = new System.Windows.Forms.MenuStrip();
 			this.fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.saveConfigToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.checkBox22 = new System.Windows.Forms.CheckBox();
 			this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+			this.linkLabel3 = new System.Windows.Forms.LinkLabel();
+			this.groupBox5 = new System.Windows.Forms.GroupBox();
+			this.radioButton12 = new System.Windows.Forms.RadioButton();
+			this.radioButton13 = new System.Windows.Forms.RadioButton();
 			this.groupBox1.SuspendLayout();
 			this.groupBox2.SuspendLayout();
 			this.Caching.SuspendLayout();
 			this.groupBox3.SuspendLayout();
 			this.groupBox4.SuspendLayout();
 			this.menuStrip1.SuspendLayout();
+			this.groupBox5.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// groupBox1
@@ -185,6 +193,16 @@
 			this.Caching.TabStop = false;
 			this.Caching.Text = "Caching";
 			// 
+			// checkBox21
+			// 
+			this.checkBox21.AutoSize = true;
+			this.checkBox21.Location = new System.Drawing.Point(33, 147);
+			this.checkBox21.Name = "checkBox21";
+			this.checkBox21.Size = new System.Drawing.Size(77, 17);
+			this.checkBox21.TabIndex = 29;
+			this.checkBox21.Text = "L2 Caches";
+			this.checkBox21.UseVisualStyleBackColor = true;
+			// 
 			// radioButton11
 			// 
 			this.radioButton11.AutoSize = true;
@@ -195,7 +213,10 @@
 			this.radioButton11.TabIndex = 27;
 			this.radioButton11.TabStop = true;
 			this.radioButton11.Text = "No Caches";
+			this.toolTip1.SetToolTip(this.radioButton11, "Many smaller systems lack caches to simplfiy the system and reduce hardware requi" +
+        "rements.");
 			this.radioButton11.UseVisualStyleBackColor = true;
+			this.radioButton11.CheckedChanged += new System.EventHandler(this.radioButton11_CheckedChanged);
 			// 
 			// radioButton10
 			// 
@@ -215,6 +236,8 @@
 			this.radioButton9.Size = new System.Drawing.Size(98, 17);
 			this.radioButton9.TabIndex = 25;
 			this.radioButton9.Text = "Instruction Only";
+			this.toolTip1.SetToolTip(this.radioButton9, "Some systems are required to not have data caching so that in the event of a fail" +
+        "ure the scope of the data loss is limited.");
 			this.radioButton9.UseVisualStyleBackColor = true;
 			// 
 			// radioButton8
@@ -235,6 +258,8 @@
 			this.radioButton7.Size = new System.Drawing.Size(146, 17);
 			this.radioButton7.TabIndex = 23;
 			this.radioButton7.Text = "Both Instruction and Data";
+			this.toolTip1.SetToolTip(this.radioButton7, "Having separate instruction and data caches can improve performance by allowing d" +
+        "ata ot be accessed at the same time as an instruction.");
 			this.radioButton7.UseVisualStyleBackColor = true;
 			// 
 			// groupBox3
@@ -271,10 +296,11 @@
 			this.checkBox19.AutoSize = true;
 			this.checkBox19.Location = new System.Drawing.Point(27, 115);
 			this.checkBox19.Name = "checkBox19";
-			this.checkBox19.Size = new System.Drawing.Size(128, 17);
+			this.checkBox19.Size = new System.Drawing.Size(150, 17);
 			this.checkBox19.TabIndex = 45;
-			this.checkBox19.Text = "Simplified Paging Unit";
+			this.checkBox19.Text = "Simplified Address Mapper";
 			this.checkBox19.UseVisualStyleBackColor = true;
+			this.checkBox19.CheckedChanged += new System.EventHandler(this.checkBox19_CheckedChanged);
 			// 
 			// checkBox18
 			// 
@@ -334,6 +360,7 @@
 			this.checkBox13.Size = new System.Drawing.Size(142, 17);
 			this.checkBox13.TabIndex = 39;
 			this.checkBox13.Text = "Double Base and Bound";
+			this.toolTip1.SetToolTip(this.checkBox13, resources.GetString("checkBox13.ToolTip"));
 			this.checkBox13.UseVisualStyleBackColor = true;
 			// 
 			// checkBox12
@@ -344,6 +371,7 @@
 			this.checkBox12.Size = new System.Drawing.Size(137, 17);
 			this.checkBox12.TabIndex = 38;
 			this.checkBox12.Text = "Single Base and Bound";
+			this.toolTip1.SetToolTip(this.checkBox12, resources.GetString("checkBox12.ToolTip"));
 			this.checkBox12.UseVisualStyleBackColor = true;
 			// 
 			// checkBox11
@@ -355,9 +383,12 @@
 			this.checkBox11.TabIndex = 37;
 			this.checkBox11.Text = "Bank Selector";
 			this.checkBox11.UseVisualStyleBackColor = true;
+			this.checkBox11.CheckedChanged += new System.EventHandler(this.checkBox11_CheckedChanged);
 			// 
 			// groupBox4
 			// 
+			this.groupBox4.Controls.Add(this.linkLabel2);
+			this.groupBox4.Controls.Add(this.linkLabel1);
 			this.groupBox4.Controls.Add(this.checkBox10);
 			this.groupBox4.Controls.Add(this.checkBox9);
 			this.groupBox4.Controls.Add(this.checkBox8);
@@ -368,12 +399,36 @@
 			this.groupBox4.Controls.Add(this.checkBox3);
 			this.groupBox4.Controls.Add(this.checkBox2);
 			this.groupBox4.Controls.Add(this.checkBox1);
-			this.groupBox4.Location = new System.Drawing.Point(12, 110);
+			this.groupBox4.Location = new System.Drawing.Point(12, 135);
 			this.groupBox4.Name = "groupBox4";
-			this.groupBox4.Size = new System.Drawing.Size(219, 254);
+			this.groupBox4.Size = new System.Drawing.Size(232, 254);
 			this.groupBox4.TabIndex = 38;
 			this.groupBox4.TabStop = false;
 			this.groupBox4.Text = "Instruction Set Extensions";
+			// 
+			// linkLabel2
+			// 
+			this.linkLabel2.AutoSize = true;
+			this.linkLabel2.Enabled = false;
+			this.linkLabel2.Location = new System.Drawing.Point(144, 158);
+			this.linkLabel2.Name = "linkLabel2";
+			this.linkLabel2.Size = new System.Drawing.Size(16, 13);
+			this.linkLabel2.TabIndex = 21;
+			this.linkLabel2.TabStop = true;
+			this.linkLabel2.Text = "...";
+			this.linkLabel2.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel2_LinkClicked);
+			// 
+			// linkLabel1
+			// 
+			this.linkLabel1.AutoSize = true;
+			this.linkLabel1.Enabled = false;
+			this.linkLabel1.Location = new System.Drawing.Point(197, 111);
+			this.linkLabel1.Name = "linkLabel1";
+			this.linkLabel1.Size = new System.Drawing.Size(16, 13);
+			this.linkLabel1.TabIndex = 20;
+			this.linkLabel1.TabStop = true;
+			this.linkLabel1.Text = "...";
+			this.linkLabel1.Click += new System.EventHandler(this.linkLabel1_Click);
 			// 
 			// checkBox10
 			// 
@@ -413,9 +468,9 @@
 			this.checkBox7.AutoSize = true;
 			this.checkBox7.Location = new System.Drawing.Point(24, 65);
 			this.checkBox7.Name = "checkBox7";
-			this.checkBox7.Size = new System.Drawing.Size(152, 17);
+			this.checkBox7.Size = new System.Drawing.Size(155, 17);
 			this.checkBox7.TabIndex = 16;
-			this.checkBox7.Text = "C -compressed instructions";
+			this.checkBox7.Text = "C - compressed instructions";
 			this.checkBox7.UseVisualStyleBackColor = true;
 			// 
 			// checkBox6
@@ -449,6 +504,7 @@
 			this.checkBox4.TabIndex = 13;
 			this.checkBox4.Text = "M - Multiply / Divide";
 			this.checkBox4.UseVisualStyleBackColor = true;
+			this.checkBox4.CheckedChanged += new System.EventHandler(this.checkBox4_CheckedChanged);
 			// 
 			// checkBox3
 			// 
@@ -469,6 +525,7 @@
 			this.checkBox2.TabIndex = 11;
 			this.checkBox2.Text = "F - single precision floating point";
 			this.checkBox2.UseVisualStyleBackColor = true;
+			this.checkBox2.CheckedChanged += new System.EventHandler(this.checkBox2_CheckedChanged);
 			// 
 			// checkBox1
 			// 
@@ -482,23 +539,13 @@
 			// 
 			// button1
 			// 
-			this.button1.Location = new System.Drawing.Point(605, 330);
+			this.button1.Location = new System.Drawing.Point(616, 407);
 			this.button1.Name = "button1";
 			this.button1.Size = new System.Drawing.Size(75, 23);
 			this.button1.TabIndex = 39;
 			this.button1.Text = "Generate";
 			this.button1.UseVisualStyleBackColor = true;
 			this.button1.Click += new System.EventHandler(this.button1_Click);
-			// 
-			// checkBox21
-			// 
-			this.checkBox21.AutoSize = true;
-			this.checkBox21.Location = new System.Drawing.Point(33, 147);
-			this.checkBox21.Name = "checkBox21";
-			this.checkBox21.Size = new System.Drawing.Size(77, 17);
-			this.checkBox21.TabIndex = 29;
-			this.checkBox21.Text = "L2 Caches";
-			this.checkBox21.UseVisualStyleBackColor = true;
 			// 
 			// menuStrip1
 			// 
@@ -521,7 +568,7 @@
 			// saveConfigToolStripMenuItem
 			// 
 			this.saveConfigToolStripMenuItem.Name = "saveConfigToolStripMenuItem";
-			this.saveConfigToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.saveConfigToolStripMenuItem.Size = new System.Drawing.Size(137, 22);
 			this.saveConfigToolStripMenuItem.Text = "Save Config";
 			// 
 			// checkBox22
@@ -536,11 +583,57 @@
         "gned.");
 			this.checkBox22.UseVisualStyleBackColor = true;
 			// 
+			// linkLabel3
+			// 
+			this.linkLabel3.AutoSize = true;
+			this.linkLabel3.Location = new System.Drawing.Point(10, 114);
+			this.linkLabel3.Name = "linkLabel3";
+			this.linkLabel3.Size = new System.Drawing.Size(135, 13);
+			this.linkLabel3.TabIndex = 42;
+			this.linkLabel3.TabStop = true;
+			this.linkLabel3.Text = "Machine Mode Instructions";
+			this.linkLabel3.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel3_LinkClicked);
+			// 
+			// groupBox5
+			// 
+			this.groupBox5.Controls.Add(this.radioButton13);
+			this.groupBox5.Controls.Add(this.radioButton12);
+			this.groupBox5.Location = new System.Drawing.Point(253, 370);
+			this.groupBox5.Name = "groupBox5";
+			this.groupBox5.Size = new System.Drawing.Size(200, 70);
+			this.groupBox5.TabIndex = 43;
+			this.groupBox5.TabStop = false;
+			this.groupBox5.Text = "Bus Standard";
+			// 
+			// radioButton12
+			// 
+			this.radioButton12.AutoSize = true;
+			this.radioButton12.Checked = true;
+			this.radioButton12.Location = new System.Drawing.Point(27, 20);
+			this.radioButton12.Name = "radioButton12";
+			this.radioButton12.Size = new System.Drawing.Size(84, 17);
+			this.radioButton12.TabIndex = 0;
+			this.radioButton12.TabStop = true;
+			this.radioButton12.Text = "WISHBONE";
+			this.radioButton12.UseVisualStyleBackColor = true;
+			// 
+			// radioButton13
+			// 
+			this.radioButton13.AutoSize = true;
+			this.radioButton13.Location = new System.Drawing.Point(27, 43);
+			this.radioButton13.Name = "radioButton13";
+			this.radioButton13.Size = new System.Drawing.Size(83, 17);
+			this.radioButton13.TabIndex = 1;
+			this.radioButton13.Text = "AMBA / AXI";
+			this.radioButton13.UseVisualStyleBackColor = true;
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(703, 375);
+			this.ClientSize = new System.Drawing.Size(703, 452);
+			this.Controls.Add(this.groupBox5);
+			this.Controls.Add(this.linkLabel3);
 			this.Controls.Add(this.checkBox22);
 			this.Controls.Add(this.button1);
 			this.Controls.Add(this.groupBox4);
@@ -564,6 +657,8 @@
 			this.groupBox4.PerformLayout();
 			this.menuStrip1.ResumeLayout(false);
 			this.menuStrip1.PerformLayout();
+			this.groupBox5.ResumeLayout(false);
+			this.groupBox5.PerformLayout();
 			this.ResumeLayout(false);
 			this.PerformLayout();
 
@@ -614,6 +709,12 @@
 		private System.Windows.Forms.ToolStripMenuItem saveConfigToolStripMenuItem;
 		private System.Windows.Forms.CheckBox checkBox22;
 		private System.Windows.Forms.ToolTip toolTip1;
+		private System.Windows.Forms.LinkLabel linkLabel1;
+		private System.Windows.Forms.LinkLabel linkLabel2;
+		private System.Windows.Forms.LinkLabel linkLabel3;
+		private System.Windows.Forms.GroupBox groupBox5;
+		private System.Windows.Forms.RadioButton radioButton13;
+		private System.Windows.Forms.RadioButton radioButton12;
 	}
 }
 

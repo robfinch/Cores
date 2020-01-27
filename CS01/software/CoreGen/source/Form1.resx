@@ -117,10 +117,24 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <metadata name="menuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 17</value>
+  <metadata name="toolTip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>132, 16</value>
   </metadata>
   <metadata name="toolTip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>132, 16</value>
+  </metadata>
+  <data name="checkBox13.ToolTip" xml:space="preserve">
+    <value>For a system with double base and bound memory management all program code memory addresses used by user code
+are added to a base register to form a physical address. All data addresses are added to a second base register to form a physical address.
+The corresponding bound registers sets an upper limit on the allowed memory address.
+Base and bound memory management may be used at the same time as paged addressing.</value>
+  </data>
+  <data name="checkBox12.ToolTip" xml:space="preserve">
+    <value>For a system with single base and bound memory management all memory addresses used by user code
+are added to a base register to form a physical address. The bound register sets an upper limit on the allowed memory address.
+Base and bound memory management may be used at the same time as paged addressing.</value>
+  </data>
+  <metadata name="menuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 17</value>
   </metadata>
 </root>

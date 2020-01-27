@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2014-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// A64 - Assembler
+// AS64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -26,21 +26,25 @@
 #ifndef SYMBOL_H
 #define SYMBOL_H
 
+#include "Int128.h"
+
 typedef struct {
-    int name;       // name table index
-    int64_t value;
-    char segment;
-    char defined;
-    char isExtern;
-    char phaserr;
-    char scope;     // P = public
-    int bits;
+  int ord;        // ordinal
+  int name;       // name table index
+	Int128 value;
+  char segment;
+  char defined;
+  char isExtern;
+  char phaserr;
+  char scope;     // P = public
+	bool isMacro;
+	Macro *macro;
+  int bits;
 } SYM;
 
 SYM *find_symbol(char *name);
 SYM *new_symbol(char *name);
 void DumpSymbols();
 extern int numsym;
-extern SYM syms[65525];
 
 #endif

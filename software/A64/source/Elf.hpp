@@ -23,10 +23,8 @@
 //                                                                          
 // ============================================================================
 //
-#ifndef ELF_H
-#define ELF_H
+#pragma once
 
-#include <inttypes.h>
 #include <string.h>
 
 class clsElf64Header {
@@ -214,6 +212,7 @@ public:
     int64_t start;
     int64_t end;
     uint8_t bytes[10000000];
+    uint8_t storebyte;
 public:
     clsElf64Section() {
         length = 0;
@@ -222,6 +221,7 @@ public:
         end = 0;
         address = 0;
         memset(bytes,0,sizeof(bytes));
+        storebyte = 1;
     };
     void Clear() {
         length = 0;
@@ -232,7 +232,8 @@ public:
         memset(bytes,0,sizeof(bytes));
     };
     void AddByte(int64_t byt) {
-        bytes[index] = byt & 255LL;
+    	if (storebyte)
+        	bytes[index] = byt & 255LL;
         if (index==0)
             start = address;
         index++;
@@ -265,10 +266,10 @@ public:
         AddWord(info);
     };
     void Write(FILE *fp) {
-        fwrite((void *)bytes,1,hdr.sh_size,fp);
+        fwrite((void *)bytes,1,(size_t)hdr.sh_size,fp);
     };
     void Read(FILE *fp) {
-        fread((void *)bytes,1,hdr.sh_size,fp);
+        fread((void *)bytes,1,(size_t)hdr.sh_size,fp);
     };
 };
 
@@ -297,10 +298,10 @@ public:
         hdr.Write(fp);        
         fseek(fp, 512, SEEK_SET);
         for (nn = 0; nn < hdr.e_shnum; nn++) {
-            fseek(fp, sections[nn]->hdr.sh_offset, SEEK_SET);
+            fseek(fp, (size_t)sections[nn]->hdr.sh_offset, SEEK_SET);
             sections[nn]->Write(fp);
         }
-        fseek(fp, hdr.e_shoff, SEEK_SET);
+        fseek(fp, (size_t)hdr.e_shoff, SEEK_SET);
         WriteSectionHeaderTable(fp);
     };
 };
@@ -310,4 +311,3 @@ public:
 #define Elf64pHdrSz  64
 #define Elf64ShdrSz  64
 
-#endif
