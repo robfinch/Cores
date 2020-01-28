@@ -1,4 +1,4 @@
-NPAGES	equ		$300
+NPAGES	equ		$4300
 
 		code	18 bits
 		align	4
@@ -6,7 +6,7 @@ NPAGES	equ		$300
 ;------------------------------------------------------------------------------
 
 MMUInit:
-		ldi		$t0,#255				; set number of available pages
+		ldi		$t0,#246				; set number of available pages (10 pages already allocated)
 		sw		$t0,NPAGES			
 		ldi		$t2,#4096				; number of registers to update
 		ldi		$t0,#$00
@@ -33,7 +33,8 @@ MMUInit:
 ; ASID.
 ;
 ; Parameters:
-;		a0 = number of pages required.
+;		a0 = pid
+;		a1 = number of pages required.
 ; Modifies:
 ;		t1,t2,t3,t5
 ; Returns:
@@ -41,9 +42,7 @@ MMUInit:
 ;------------------------------------------------------------------------------
 
 FindRun:
-	csrrw		$t3,#$300,$x0			; get machine status
-	srl			$t3,$t3,#22				; mask out ASID
-	and			$t3,$t3,#$0F
+	and			$t3,$a0,#$0F			; t3 = pid
 	sll			$t3,$t3,#8				; shift into usable position
 	ldi			$t1,#0						; t1 = count of consecutive empty buckets
 	mov			$t2,$t3						; t2 = map entry number
@@ -60,7 +59,7 @@ FindRun:
 	mov			$t3,$t2						; save first empty bucket
 .empty1:
 	add			$t1,$t1,#1
-	bgeu		$t1,$a0,.foundEnough
+	bgeu		$t1,$a1,.foundEnough
 	add			$t2,$t2,#1				; next bucket
 	mvmap		$v0,$x0,$t2				; get map entry
 	beq			$v0,$x0,.empty1
@@ -72,7 +71,8 @@ FindRun:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		a0 = amount of memory to allocate
+;		a0 = pid
+;		a1 = amount of memory to allocate
 ; Modifies:
 ;		t0
 ; Returns:
@@ -82,21 +82,21 @@ FindRun:
 Alloc:
 	sub			$sp,$sp,#16
 	sw			$ra,[$sp]
-	sw			$s1,4[$sp]
+	sw			$s1,4[$sp]				; these regs must be saved
 	sw			$s2,8[$sp]
 	sw			$s3,12[$sp]
 	; First check if there are enough pages available in the system.
-	add			$v0,$a0,#2047			; v0 = round memory request
+	add			$v0,$a1,#2047			; v0 = round memory request
 	srl			$v0,$v0,#11				; v0 = convert to pages required
 	lw			$t0,NPAGES				; check number of pages available
 	bleu		$v0,$t0,.enough
 	mov			$v0,$x0						; not enough, return null
-	ret
+	bra			.noRun
 .enough:
 	; There are enough pages, but is there a run long enough in map space?
 	sw			$s2,$v0				; save required # pages
-	mov			$a0,$v0
-	call		FindRun
+	mov			$a1,$v0
+	call		FindRun						; find a run of available slots
 	beq			$v0,$x0,.noRun
 	; Now there are enough pages, and a run available, so allocate
 	mov			$s1,$v0						; s1 = start of run
@@ -105,7 +105,7 @@ Alloc:
 	sw			$s3,NPAGES
 	mov			$s3,$v0						; s3 = start of run
 .0001:
-	palloc	$v0								; allocate a page
+	palloc	$v0								; allocate a page (cheat and use hardware)
 	beq			$v0,$x0,.noRun
 	mvmap		$x0,$v0,$s3				; map the page
 	add			$s3,$s3,#1				; next bucket
@@ -113,9 +113,21 @@ Alloc:
 	bne			$s2,$x0,.0001
 	sll			$v0,$s1,#11				; v0 = virtual address of allocated mem.
 .noRun:
-	lw			$ra,[$sp]
+	lw			$ra,[$sp]					; restore saved regs
 	lw			s1,4[$sp]
 	lw			s2,8[$sp]
 	lw			s3,12[$sp]
 	add			$sp,$sp,#16
+	ret
+
+; Parameters:
+;		a0 = pid to allocate for
+;
+AllocStack:
+	palloc	$v0								; allocate a page
+	beq			$v0,$x0,.xit			; success?
+	sll			$v1,$a0,#8				; 
+	or			$v1,$v1,#255			; last page of memory is for stack
+	mvmap		$x0,$v0,$v1
+.xit:
 	ret

@@ -1,3 +1,5 @@
+.include "../fmtk/const.asm"
+
 BS					equ		$08
 LF					equ		$0A
 CR					equ		$0D
@@ -17,44 +19,9 @@ UART				equ		$FFDC0A00
 UART_TRB		equ		$00
 UART_STAT		equ		$04
 UART_CMD		equ		$08
-INBUF				equ		$100
-switchflag	equ		$200
-
-x1Save			equ		$04
-x2Save			equ		$08
-x3Save			equ		$0C
-x4Save			equ		$10
-x5Save			equ		$14
-x6Save			equ		$18
-x7Save			equ		$1C
-x8Save			equ		$20
-x9Save			equ		$24
-x10Save			equ		$28
-x11Save			equ		$2C
-x12Save			equ		$30
-x13Save			equ		$34
-x14Save			equ		$38
-x15Save			equ		$3C
-x16Save			equ		$40
-x17Save			equ		$44
-x18Save			equ		$48
-x19Save			equ		$4C
-x20Save			equ		$50
-x21Save			equ		$54
-x22Save			equ		$58
-x23Save			equ		$5C
-x24Save			equ		$60
-x25Save			equ		$64
-x26Save			equ		$68
-x27Save			equ		$6C
-x28Save			equ		$70
-x29Save			equ		$74
-x30Save			equ		$78
-x31Save			equ		$7C
-f0Save			equ		$80
-f1Save			equ		$84
-f2Save			equ		$88
-f18Save			equ		$C8
+		; First 16kB is for TCB's
+INBUF				equ		$4100
+switchflag	equ		$4200
 
 		code	18 bits
 ;------------------------------------------------------------------------------
@@ -73,14 +40,7 @@ f18Save			equ		$C8
 		org		$FFFC0100
 MachineStart:
 		ldi		$sp,#$80000-4		; setup machine mode stack pointer
-		ldi		$a0,#$1800
-		ldi		$a1,#$7A000
-		sub		a0,a0,a1
-		call	PutHexWord
 		call	MMUInit					; initialize MMU for address space zero.
-		csrrw	$t0,#$300,$x0		; get status
-		or		$t0,$t0,#$10000	; set mprv
-		csrrw	$x0,#$300,$t0		; subsequent machine mode access will use user memory
 		ldi		$t0,#$FFFC0000
 		csrrw $x0,#$301,$t0		; set tvec
 		ldi		$t0,#UserStart
@@ -591,4 +551,5 @@ flt10:
 
 .include "fltToString.asm"
 .include "cs01Mem.asm"
+.include "../fmtk/task.asm"
 .include "TinyBasic.asm"
