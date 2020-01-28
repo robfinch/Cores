@@ -141,6 +141,19 @@ PagemapRam pagemap (
   .dinb(8'h00),    // input wire [7 : 0] dinb
   .doutb(pagemapo)  // output wire [7 : 0] doutb
 );
+reg palloc,pfree,pfreeall;
+wire pdone;
+wire [7:0] pam_pageo;
+PAM upam1 (
+	.rst(rst_i),
+	.clk(clk_g),
+	.alloc_i(palloc),
+	.free_i(pfree),
+	.freeall_i(pfreeall),
+	.pageno_i(ia[7:0]),
+	.pageno_o(pam_pageo),
+	.done(pdone)
+);
 reg [FPWID-1:0] fregfile [0:31];		// floating-point register file
 reg [31:0] pc;			// generic program counter
 reg [31:0] ipc;			// pc value at instruction
@@ -440,6 +453,9 @@ if (rst_i) begin
 	nmif <= 1'b0;
 	ldd <= 1'b0;
 	wrpagemap <= 1'b0;
+	palloc <= 1'b0;
+	pfree <= 1'b0;
+	pfreeall <= 1'b0;
 end
 else begin
 ldd <= 1'b0;
@@ -449,6 +465,9 @@ if (pe_nmi)
 ld_time <= {ld_time[4:0],1'b0};
 wc_times <= wc_time;
 wc_time_irq_clr <= {wc_time_irq_clr,wc_time_irq};
+palloc <= 1'b0;
+pfree <= 1'b0;
+pfreeall <= 1'b0;
 
 if (MachineMode)
 	adr_o <= ladr;
@@ -588,7 +607,18 @@ DECODE:
 			begin
 				imm <= {{20{ir[31]}},ir[31:25],ir[11:7]};
 			end
-		7'd13:	Rd <= ir[11:7];
+		7'd13:
+			begin
+				Rd <= ir[11:7];
+				case (funct3)
+				3'd0:	wrirf <= 1'b1;
+				3'd1:
+					case(funct7)
+					7'd0:	wrirf <= 1'b1;
+					default:	;
+					endcase
+				endcase
+			end
 		7'd19:
 			begin
 				case(funct3)
@@ -666,6 +696,28 @@ EXECUTE:
 				case(funct7)
 				7'd0:	begin res <= sregfile[ib[3:0]]; illegal_insn <= 1'b0; end
 				7'd1:	begin res <= pagemapoa; illegal_insn <= 1'b0; end
+				default:	;
+				endcase
+			3'd1:
+				case(funct7)
+				7'd0:	
+					begin
+						palloc <= 1'b1;
+						state <= PAM;
+						illegal_insn <= 1'b0;
+					end
+				7'd1:
+					begin
+						pfree <= 1'b1;
+						state <= PAM;
+						illegal_insn <= 1'b0;
+					end
+				7'd2:
+					begin
+						pfreeall <= 1'b1;
+						state <= PAM;
+						illegal_insn <= 1'b0;
+					end
 				default:	;
 				endcase
 			default:	;
@@ -962,6 +1014,14 @@ EXECUTE:
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+PAM:
+	if (pdone) begin
+		res <= {24'h0,pam_pageo};
+		state <= WRITEBACK;
+	end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Adjust for sign
@@ -1061,7 +1121,7 @@ MEMORY2_ACK:
 		`LOAD:
 			begin
 				case(funct3)
-				3'd1: begin res[31:8] <= {{16{dat_i[7]}},dat_i[7:0]}; illegal_insn <= 1'b0; end
+				3'd1: begin res <= {{16{dat_i[7]}},dat_i[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				3'd2:
 					case(ea[1:0])
 					2'd1:	begin res <= {dat_i[7:0],dati[31:8]}; illegal_insn <= 1'b0; end
@@ -1069,7 +1129,7 @@ MEMORY2_ACK:
 					2'd3:	begin res <= {dat_i[23:0],dati[31:24]}; illegal_insn <= 1'b0; end
 					default:	;
 					endcase
-				3'd5:	begin res[31:8] <= {16'd0,dat_i[7:0]}; illegal_insn <= 1'b0; end
+				3'd5:	begin res <= {16'd0,dat_i[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			end

@@ -18,7 +18,7 @@ UART_TRB		equ		$00
 UART_STAT		equ		$04
 UART_CMD		equ		$08
 INBUF				equ		$100
-MMUsmc			equ		$200
+switchflag	equ		$200
 
 x1Save			equ		$04
 x2Save			equ		$08
@@ -78,6 +78,9 @@ MachineStart:
 		sub		a0,a0,a1
 		call	PutHexWord
 		call	MMUInit					; initialize MMU for address space zero.
+		csrrw	$t0,#$300,$x0		; get status
+		or		$t0,$t0,#$10000	; set mprv
+		csrrw	$x0,#$300,$t0		; subsequent machine mode access will use user memory
 		ldi		$t0,#$FFFC0000
 		csrrw $x0,#$301,$t0		; set tvec
 		ldi		$t0,#UserStart
@@ -450,15 +453,15 @@ VIAInit:
 ; a char available then return it.
 ;
 ; Modifies:
-;		$t0
+;		none
 ; Returns:
 ;		$v0 = character or -1
 ;------------------------------------------------------------------------------
 
 SerialPeekChar:
-		lb		$t0,UART+UART_STAT
-		and		$t0,$t0,#8					; look for Rx not empty
-		beq		$t0,$x0,.0001
+		lb		$v0,UART+UART_STAT
+		and		$v0,$v0,#8					; look for Rx not empty
+		beq		$v0,$x0,.0001
 		lb		$v0,UART+UART_TRB
 		ret
 .0001:
@@ -473,15 +476,19 @@ SerialPeekChar:
 ; Parameters:
 ;		$a0 = character to put
 ; Modifies:
-;		$t0
+;		none
 ;------------------------------------------------------------------------------
 
 SerialPutChar:
+		sub		$sp,$sp,#4
+		sw		$v0,[$sp]
 .0001:
-		lb		$t0,UART+UART_STAT	; wait until the uart indicates tx empty
-		and		$t0,$t0,#16					; bit #4 of the status reg
-		beq		$t0,$x0,.0001				; branch if transmitter is not empty
+		lb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
+		and		$v0,$v0,#16					; bit #4 of the status reg
+		beq		$v0,$x0,.0001				; branch if transmitter is not empty
 		sb		$a0,UART+UART_TRB		; send the byte
+		lw		$v0,[$sp]
+		add		$sp,$sp,#4
 		ret
 
 ;------------------------------------------------------------------------------
@@ -540,12 +547,17 @@ IRQRout:
 		ldi		$sp,#$80000-4		; setup machine mode stack pointer
 		csrrw	$t0,#$342,$x0			; get cause code
 		blt		$t0,$x0,.isIRQ		; irq or ecall?
+		jmp		OSCALL					; 
 		eret										
 .isIRQ:
  		; Was it the VIA that caused the interrupt?
 		lb		$t0,VIA+VIA_IFR
 		bge		$t0,$x0,.0001			; no
 		lw		$t0,VIA+VIA_T1CL	; yes, clear interrupt
+		lw		$t0,milliseconds
+		add		$t0,$t0,#30
+		sw		$t0,milliseconds
+		sw		$t0,switchflag
 		eret
 		; Was it the uart that caused the interrupt?
 .0001:

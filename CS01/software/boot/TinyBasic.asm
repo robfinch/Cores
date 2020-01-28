@@ -149,7 +149,7 @@ WSTART:
 	ldi		$sp,#STACKOFFS	;	init S.P. again, just in case
 	ldi		a0,#msgReady	;	display "Ready"
 	call	PRMESG
-ST3:
+BASPRMPT:
 	ldi		a0,#'>'		; Prompt with a '>' and
 	call	GETLN		; read a line.
 	call	TOUPBUF 	; convert to upper case
@@ -166,7 +166,7 @@ ST3:
 ST2:
   ; ugliness - store a character at potentially an
   ; odd address (unaligned).
-  mov		$a0,$v0		; a1 = line number
+  mov		$a0,$v0		; a0 = line number
 	sub		$t2,$t2,#4
   sw		$a0,[$t2]		;
 	call	FNDLN		; find this line in save area
@@ -217,13 +217,12 @@ ST4:
 	; here we're inserting because the line wasn't found
 	; or it was deleted	from the text area
 	sub		$a0,$s6,$t2		; calculate the length of new line
-	call	PutHexWord
 	ldi		$t1,#7
-	bleu	$a0,$t1,ST3		; is it just a line no. & CR? if so, it was just a delete
+	bleu	$a0,$t1,BASPRMPT		; is it just a line no. & CR? if so, it was just a delete
 
 	; compute new end of text
-	lw		$t4,TXTUNF		; r10 = old TXTUNF
-	add		$t5,$t4,a0		; r11 = new top of TXTUNF (r1=line length)
+	lw		$t4,TXTUNF		; t4 = old TXTUNF
+	add		$t5,$t4,$a0		; t5 = new top of TXTUNF (a0=line length)
 
 	lw		$t1,VARBGN
 	bleu	$t5,$t1,ST5		; see if there's enough room
@@ -235,15 +234,15 @@ ST5:
 	sw		$t5,TXTUNF	; if so, store new end position
 	mov		a0,$t4		; points to old end of text
 	mov		a1,$t5		; points to new end of text
-	mov		r3,$t3	    ; points to start of line after insert line
+	mov		a2,$t3	    ; points to start of line after insert line
 	call	MVDOWN		; move things out of the way
 
 	; copy line into text space
 	mov		a0,$t2		; set up to do the insertion; move from buffer
 	mov		a1,$s7		; to vacated space
-	mov		r3,$s6		; until end of buffer
+	mov		a2,$s6		; until end of buffer
 	call	MVUP		; do it
-	jmp		ST3			; go back and get another line
+	jmp		BASPRMPT			; go back and get another line
 
 ;******************************************************************
 ;
@@ -473,9 +472,9 @@ EXGO:
 
 NEW:
 	call	ENDCHK
-	ldi		a0,#TXTBGN
-	sw		a0,TXTUNF	;	set the end pointer
-	call    clearVars
+	ldi		v0,#TXTBGN
+	sw		v0,TXTUNF	;	set the end pointer
+	call  clearVars
 
 ; 'STOP<CR>' goes back to WSTART
 ;
@@ -498,14 +497,14 @@ RUN:
 	sw		$t2,CURRNT
 	call  clearVars
 
-RUNNXL					; RUN <next line>
+RUNNXL:					; RUN <next line>
 	lw		a0,CURRNT	; executing a program?
-	beq		a0,r0,WSTART	; if not, we've finished a direct stat.
+	beq		a0,x0,WSTART	; if not, we've finished a direct stat.
 	lw		a0,IRQROUT		; are we handling IRQ's ?
-	beq		a0,r0,RUN1
+	beq		a0,x0,RUN1
 	lw		$t1,IRQFlag		; was there an IRQ ?
-	beq		$t1,r0,RUN1
-	sw		r0,IRQFlag
+	beq		$t1,x0,RUN1
+	sw		x0,IRQFlag
 	call	PUSHA_		; the same code as a GOSUB
 	sub		$sp,$sp,#12
 	lw		a0,STKGOS
@@ -513,14 +512,18 @@ RUNNXL					; RUN <next line>
 	lw		a0,CURRNT
 	sw		a0,4[$sp]
 	sw		$t2,8[$sp]
-	sw		r0,LOPVAR		; load new values
+	sw		x0,LOPVAR		; load new values
 	sw		$sp,STKGOS
 	lw		$t3,IRQROUT
 	bra		RUNTSL
 RUN1:
-	mov		a0,r0	    ; else find the next line number
-	mov		$t3,$t2
-	call	FNDLNP		; search for the next line
+	lw		$t3,CURRNT
+	call	FNDLNP
+	bra		RUNTSL
+;	beq		$v0,$x0,WSTART
+;	mov		a0,x0	    ; else find the next line number
+;	mov		$t3,$t2
+;	call	FNDLNP		; search for the next line
 ;	cmp		#0
 ;	bne		RUNTSL
 	lw		$t1,TXTUNF	; if we've fallen off the end, stop
@@ -537,17 +540,18 @@ RUNSML                 ; RUN <same line>
 	jmp		EXEC		; and execute it
 
 
+;******************************************************************
 ; 'GOTO expr<CR>' evaluates the expression, finds the target
 ; line, and jumps to 'RUNTSL' to do it.
+;******************************************************************
 ;
 GOTO:
 	call	OREXPR		;evaluate the following expression
-;	call	DisplayWord
-	mov     r5,a0
+	mov   r5,v0
 	call 	ENDCHK		;must find end of line
-	mov     a0,r5
+	mov   a0,r5
 	call 	FNDLN		; find the target line
-	bne		a0,r0,RUNTSL; go do it
+	bne		v0,x0,RUNTSL; go do it
 	ldi		a0,#msgBadGotoGosub
 	jmp		ERROR		; no such line no.
 
@@ -561,12 +565,13 @@ clearVars:
 	sw		r6,[$sp]
 	sw		$ra,4[$sp]
   ldi   r6,#1024    ; number of words to clear
-  lw    a0,VARBGN
+  lw    v0,VARBGN
 .cv1:
-  sw		r0,[a0]
-  add		a0,a0,#8
+  sw		x0,[$v0]		; variable name
+  sw		x0,4[$v0]		; and value
+  add		v0,v0,#8
   sub		r6,r6,#1
-	bne		r6,r0,.cv1
+	bne		r6,x0,.cv1
   lw		r6,[$sp]
   lw		$ra,4[$sp]
   add		$sp,$sp,#8
@@ -580,12 +585,12 @@ clearVars:
 ;
 ONIRQ:
 	call	OREXPR		;evaluate the following expression
-	mov     r5,a0
+	mov   r5,v0
 	call 	ENDCHK		;must find end of line
-	mov     a0,r5
+	mov   a0,r5
 	call 	FNDLN		; find the target line
-	bne		a0,r0,ONIRQ1
-	sw		r0,IRQROUT
+	bne		v0,r0,ONIRQ1
+	sw		x0,IRQROUT
 	jmp		FINISH
 ONIRQ1:
 	sw		$t3,IRQROUT
@@ -594,7 +599,7 @@ ONIRQ1:
 WAITIRQ:
 	call	CHKIO		; see if a control-C was pressed
 	lw		$t1,IRQFlag
-	beq		$t1,r0,WAITIRQ
+	beq		$t1,x0,WAITIRQ
 	jmp		FINISH
 
 
@@ -620,18 +625,20 @@ LS1:
 LS4:
 	mov		a0,$t3
 	call	PRTLN		; print the line
-	mov		$t3,a0		; set pointer for next
+	mov		$t3,$v0		; set pointer for next
 	call	CHKIO		; check for listing halt request
-	beq		v0,r0,LS3
+	beq		v0,x0,LS3
 	ldi		$t1,#CTRLS
 	bne		v0,$t1,LS3; pause the listing?
 LS2:
 	call 	CHKIO		; if so, wait for another keypress
 	beq		v0,r0,LS2
 LS3:
-	mov		a0,r0
-	call	FNDLNP		; find the next line
+	mov		$v0,$x0
 	bra		LS1
+;	mov		a0,r0
+;	call	FNDSKP	;FNDLNP		; find the next line
+;	bra		LS1
 
 
 ;******************************************************************
@@ -727,7 +734,7 @@ GOSUB:
 	call	OREXPR		; get line number
 	mov		$a0,$v0
 	call	FNDLN		; find the target line
-	bne		a0,r0,gosub1
+	bne		v0,r0,gosub1
 	ldi		a0,#msgBadGotoGosub
 	jmp		ERROR		; if not there, say "How?"
 gosub1:
@@ -737,7 +744,7 @@ gosub1:
 	lw		a0,CURRNT	; found it, save old 'CURRNT'...
 	sw		a0,4[$sp]
 	sw		$t2,8[$sp]
-	sw		r0,LOPVAR		; load new values
+	sw		$x0,LOPVAR		; load new values
 	sw		$sp,STKGOS
 	jmp		RUNTSL
 
@@ -752,7 +759,7 @@ gosub1:
 RETURN:
 	call	ENDCHK		; there should be just a <CR>
 	lw		a1,STKGOS		; get old stack pointer
-	bne		a1,r0,return1
+	bne		a1,x0,return1
 	ldi		a0,#msgRetWoGosub
 	jmp		ERROR		; if zero, it doesn't exist
 return1:
@@ -822,9 +829,8 @@ FR7:
 	bne		a1,r6,FR6	; same as current LOPVAR? nope, look some more
 
   mov		a0,r3	   ; Else remove 5 words from...
-	add		a1,r3,#20  ; inside the stack.
 	mov		a1,$sp
-	mov		r3,a1
+	add		a2,r3,#20  ; inside the stack.
 	call	MVDOWN
 	add		$sp,$sp,#20	; set the SP 5 long words up
 	lw		a0,[$sp]
@@ -903,12 +909,12 @@ NXPurge:
 IF:
     call	OREXPR		; evaluate the expression
 IF1:
-    bne	    a0,r0,RUNSML		; is it zero? if not, continue
+    bne	  v0,x0,RUNSML		; is it zero? if not, continue
 IF2:
-    mov		$t3,$t2	; set lookup pointer
-	mov		a0,r0		; find line #0 (impossible)
+  mov		$t3,$t2	; set lookup pointer
+	mov		a0,x0		; find line #0 (impossible)
 	call	FNDSKP		; if so, skip the rest of the line
-	blt		a0,r0,WSTART; if no next line, do a warm start
+	beq		v0,r0,WSTART; if no next line, do a warm start
 IF3:
 	jmp		RUNTSL		; run the next line
 
@@ -962,7 +968,8 @@ IP2:
 IP7:
 	mov		$t4,a0		; put away the variable's address
 	lbu		r5,[$t2]		; get ready for 'PRTSTG' by null terminating
-	sb		r0,[$t2]
+	sb		x0,[$t2]
+	mov		a1,x0
 	lw		a0,4[$sp]	; get back text pointer
 	call	PRTSTG		; print string as prompt
 	sb		r5,[$t2]		; un-null terminate
@@ -1877,13 +1884,13 @@ fv1:
   add		v0,r3,#4
   lw		r7,[$sp]
   add		$sp,$sp,#4
-  ret			    ; Z = 0, a0 = address
+  ret			    ; Z = 0, v0 = address
 
     ; didn't find var and not allocating
 fv2:
   lw		r7,[$sp]
   add		$sp,$sp,#4
-	mov		v0,r0	; Z = 1, a0 = 0
+	mov		v0,r0	; Z = 1, v0 = 0
   ret
 
 
@@ -2281,7 +2288,7 @@ FNDRET1:
 	mov		v0,x0	; line not found
 	ret
 FNDRET2:
-	ld		v0,#1	; line found
+	ldi		v0,#1	; line found
 	ret
 
 FNDNXT:
@@ -2297,7 +2304,7 @@ FNDSKP:
 
 ;******************************************************************
 ; 'MVUP' moves a block up from where a0 points to where a1 points
-; until a0=r3
+; until a0=a2
 ;
 MVUP1:
 	lb		r4,[a0]
@@ -2305,13 +2312,12 @@ MVUP1:
 	add		a0,a0,#1
 	add		a1,a1,#1
 MVUP:
-	bne		a0,r3,MVUP1
-MVRET:
+	bne		a0,a2,MVUP1
 	ret
 
 
 ; 'MVDOWN' moves a block down from where a0 points to where a1
-; points until a0=r3
+; points until a0=a2
 ;
 MVDOWN1:
 	sub		a0,a0,#1
@@ -2319,7 +2325,7 @@ MVDOWN1:
 	lb		r4,[a0]
 	sb		r4,[a1]
 MVDOWN:
-	bne		a0,r3,MVDOWN1
+	bne		a0,a2,MVDOWN1
 	ret
 
 
@@ -2335,7 +2341,7 @@ POPA_:
 	lw		a0,[$sp]
 	add		$sp,$sp,#4
 	sw		a0,LOPVAR	; restore LOPVAR, but zero means no more
-	beq		a0,r0,PP1
+	beq		a0,x0,PP1
 	lw		a0,[$sp]
 	sw		a0,LOPPT
 	lw		a0,4[$sp]
@@ -2383,14 +2389,15 @@ PU1:
 
 ; a0 = pointer to string
 ; a1 = stop character
-; return a0 = pointer to end of line + 1
+; return v0 = pointer to end of line + 1
 
 PRTSTG:
-	sub		$sp,$sp,#16
+	sub		$sp,$sp,#20
 	sw		r5,[$sp]
 	sw		r6,4[$sp]
 	sw		r7,8[$sp]
 	sw		$ra,12[$sp]
+	sw		$a0,16[$sp]
 	mov   r5,a0	    ; r5 = pointer
 	mov   r6,a1	    ; r6 = stop char
 .PS1:
@@ -2404,13 +2411,14 @@ PRTSTG:
 	ldi		a0,#LINEFD  ; yes, add a L.F.
 	call	GOOUT
 .PRTRET:
-  mov   a1,r7	    ; return a1 = stop char
-	mov		a0,r5		; return a0 = line pointer
+  mov   v1,r7	    ; return a1 = stop char
+	mov		v0,r5		; return a0 = line pointer
 	lw		$r5,[$sp]
 	lw		$r6,4[$sp]
 	lw		$r7,8[$sp]
 	lw		$ra,12[$sp]
-	add		$sp,$sp,#16
+	lw		$a0,16[$sp]
+	add		$sp,$sp,#20
   ret					; then return
 
 
@@ -2431,7 +2439,7 @@ QTSTG:
 QT1:
 	mov		a0,$t2
 	call	PRTSTG		; print until another
-	mov		$t2,a0
+	mov		$t2,v0
 	ldi		$t1,#CR
 	bne		a1,$t1,QT2	; was last one a CR?
 	jmp		RUNNXL		; if so run next line
@@ -2594,11 +2602,12 @@ PHNRET:
 	ret
 
 ; a0 = pointer to line
-; returns a0 = pointer to end of line + 1
+; returns v0 = pointer to end of line + 1
 PRTLN:
-	sub		$sp,$sp,#8
+	sub		$sp,$sp,#12
 	sw		$r5,[$sp]
 	sw		$ra,4[$sp]
+	sw		$a0,8[$sp]
   mov		$r5,$a0		; r5 = pointer
   lw		$a0,[$r5]		; get the binary line number
 	add		r5,r5,#4
@@ -2611,7 +2620,8 @@ PRTLN:
 	call  PRTSTG		; display the rest of the line
 	lw		$r5,[$sp]
 	lw		$ra,4[$sp]
-	add		$sp,$sp,#8
+	lw		$a0,8[$sp]
+	add		$sp,$sp,#12
 	ret
 
 
@@ -2773,8 +2783,8 @@ CHKIO:
 	sw		$ra,[$sp]
 	call	INCH		; get input if possible
 	beq		$v0,$x0,CHKRET	; if Zero, no input
-	xor		$t1,$v0,#CTRLC
-	bne		$t1,$x0,CHKRET; is it control-C?
+	xor		$v1,$v0,#CTRLC
+	bne		$v1,$x0,CHKRET; is it control-C?
 	jmp		WSTART		; if so, do a warm start
 CHKRET:
 	lw		$ra,[$sp]
@@ -2793,7 +2803,6 @@ CRLF:
 PRMESG:
 	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
-	mov		$a0,$a0
 	call	SerialPutString
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -2810,23 +2819,32 @@ PRMESG:
 OUTC:
 	jmp		SerialPutChar
 
-; ===== Input a character from the console into register R1 (or
+; ===== Input a character from the console into register v0 (or
 ;	return Zero status if there's no character available).
 ;
 INCH:
 	sub 	$sp,$sp,#4
 	sw		$ra,[$sp]
 	call	SerialPeekChar
-	xor		$t1,$v0,#-1
-	beq		$t1,$x0,INCH1
+	add		$v0,$v0,#1				; prepare test -1
+	beq		$v0,$x0,INCH1			; was = -1
+	sub		$v0,$v0,#1				; get char back
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 INCH1:
-	mov		$v0,$x0	; return a zero for no-char
-	lw		$ra,[$sp]
+	lw		$ra,[$sp]		; return a zero for no-char
 	add		$sp,$sp,#4
 	ret
+
+; ===== Return to the resident monitor, operating system, etc.
+;
+//message "BYEBYE"
+BYEBYE:
+//	call	ReleaseIOFocus
+	lw		$sp,OSSP
+	jmp		Monitor
+ 
 
 msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.0",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,LINEFD,LINEFD,0
 OKMSG	db	CR,LINEFD,"OK",CR,LINEFD,0
