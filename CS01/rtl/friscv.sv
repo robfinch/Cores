@@ -242,7 +242,7 @@ endcase
 endfunction
 
 wire [31:0] ea = ia + imm;
-wire [3:0] segsel = ea[3:0];
+wire [3:0] segsel = ea[31:28];
 reg [63:0] dati;
 wire [31:0] datiL = dat_i >> {ea[1:0],3'b0};
 wire [63:0] sdat = (opcode==`STOREF ? fb : ib) << {ea[1:0],3'b0};
@@ -265,6 +265,8 @@ parameter MEMORY_WRITE2 = 5'd13;
 parameter MEMORY_WRITE2ACK = 5'd14;
 parameter MUL1 = 5'd15;
 parameter MUL2 = 5'd16;
+parameter PAM	 = 5'd17;
+parameter REGFETCH2 = 5'd18;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -663,7 +665,7 @@ DECODE:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 RFETCH:
 	begin
-		state <= EXECUTE;
+		state <= REGFETCH2;
 		ia <= Rs1==5'd0 ? {WID{1'd0}} : irfoa;
 		ib <= Rs2==5'd0 ? {WID{1'd0}} : irfob;
 		fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
@@ -679,6 +681,8 @@ RFETCH:
 		fb <= Rs2==5'd0 ? {FPWID{1'd0}} : frfob;
 		fc <= Rs3==5'd0 ? {FPWID{1'd0}} : frfoc;
 	end
+REGFETCH2:
+	state <= EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute stage
@@ -988,7 +992,7 @@ EXECUTE:
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
-						//12'h80?:	begin res <= sysarg[Rs2[2:0]]; illegal_insn <= 1'b0; end
+						12'h80?:	begin res <= sysarg[Rs2[2:0]]; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
 						12'hC01,12'h701,12'hB01:	begin res <= wc_times[31: 0]; illegal_insn <= 1'b0; end
@@ -1319,7 +1323,7 @@ WRITEBACK:
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) mip <= ia; end
-				//12'h80?:	begin sysarg[Rs2[2:0]] <= ia; end
+				12'h80?:	begin sysarg[Rs2[2:0]] <= ia; end
 				default:	;
 				endcase
 			3'd2,3'd6:

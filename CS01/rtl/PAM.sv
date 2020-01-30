@@ -29,12 +29,16 @@ input alloc_i;
 input free_i;
 input freeall_i;
 input [7:0] pageno_i;
-output [7:0] pageno_o;
+output reg [7:0] pageno_o;
 output reg done;
 
 integer n;
 reg [31:0] pam [0:7];
 reg [3:0] state;
+reg [2:0] wordno;
+reg [4:0] bitno;
+reg [31:0] map;
+
 parameter IDLE = 4'd0;
 parameter ALLOC1 = 4'd1;
 parameter ALLOC2 = 4'd2;
@@ -86,9 +90,14 @@ RESET:
 ALLOC1:
 	begin
 		map <= pam[wordno];
-		// Force page #0 to always be allocated already
+		// Force pages to always be allocated already
+		// First 8 pages allocated for TCB's plus 1
+		// more page for OS data
 		if (wordno==3'd0)
-			map[0] <= 1'b1;
+			map[8:0] <= 9'h1FF;
+		// Force last page allocated for system stack
+		else if (wordno==3'd7)
+			map[31] <= 1'b1;
 		goto (ALLOC2);
 	end
 ALLOC2:

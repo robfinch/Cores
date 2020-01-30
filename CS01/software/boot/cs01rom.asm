@@ -22,6 +22,8 @@ UART_CMD		equ		$08
 		; First 16kB is for TCB's
 INBUF				equ		$4100
 switchflag	equ		$4200
+milliseconds	equ		$4208
+
 
 		code	18 bits
 ;------------------------------------------------------------------------------
@@ -41,6 +43,7 @@ switchflag	equ		$4200
 MachineStart:
 		ldi		$sp,#$80000-4		; setup machine mode stack pointer
 		call	MMUInit					; initialize MMU for address space zero.
+		call	FMTKInit
 		ldi		$t0,#$FFFC0000
 		csrrw $x0,#$301,$t0		; set tvec
 		ldi		$t0,#UserStart
@@ -95,12 +98,12 @@ Putch:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 MonEntry:
-		flw			$f2,fltTen
-		fsw			$f2,f2Save
-		flw			$f1,fltTen
-		fsw			$f1,f1Save
-		fadd		$f18,$f2,$f1
-		fsw			$f18,f18Save
+;		flw			$f2,fltTen
+;		fsw			$f2,f2Save
+;		flw			$f1,fltTen
+;		fsw			$f1,f1Save
+;		fadd		$f18,$f2,$f1
+;		fsw			$f18,f18Save
 		ldi		$a0,#10
 		ldi		$a2,#6
 ;		call	fltToString
@@ -108,37 +111,6 @@ MonEntry:
 ;		call	SerialPutString
 
 Monitor:
-		sw		$x1,x1Save
-		sw		$x2,x2Save
-		sw		$x3,x3Save
-		sw		$x4,x4Save
-		sw		$x5,x5Save
-		sw		$x6,x6Save
-		sw		$x7,x7Save
-		sw		$x8,x8Save
-		sw		$x9,x9Save
-		sw		$x10,x10Save
-		sw		$x11,x11Save
-		sw		$x12,x12Save
-		sw		$x13,x13Save
-		sw		$x14,x14Save
-		sw		$x15,x15Save
-		sw		$x16,x16Save
-		sw		$x17,x17Save
-		sw		$x18,x18Save
-		sw		$x19,x18Save
-		sw		$x20,x20Save
-		sw		$x21,x21Save
-		sw		$x22,x22Save
-		sw		$x23,x23Save
-		sw		$x24,x24Save
-		sw		$x25,x25Save
-		sw		$x26,x26Save
-		sw		$x27,x27Save
-		sw		$x28,x28Save
-		sw		$x29,x29Save
-		sw		$x30,x30Save
-		sw		$x31,x31Save
 		ldi		$s1,#0					; s1 = input pointer
 		ldi		$a0,#CR
 		call	Putch
@@ -175,8 +147,7 @@ Monitor:
 		sb		$x0,INBUF[$s2]
 		bra		.0001
 .doBackspace:
-		xor		$t0,$s1,#0
-		beq		$t0,$x0,.0001		; can't backspace anymore
+		beq		$s1,$x0,.0001		; can't backspace anymore
 		mov		$a0,$v0					; show the backspace
 		call	Putch
 		sub		$s1,$s1,#1
@@ -210,8 +181,36 @@ Monitor:
 		beq		$t1,$x0,doMem
 		ldi		$t1,#'B'
 		bne		$t0,$t1,.0006
+		ldi		$a0,#1					; Start task
+		ldi		$a1,#16					; 32 kB (16 pages)
+		ldi		$a2,#CSTART			; start address
+		csrrw $x0,#$800,$a0
+		csrrw $x0,#$801,$a1
+		csrrw	$x0,#$803,$a2
+		ecall
+		ldi		$a0,#msgCRLF
+		call	SerialPutString
+		csrrw	$a0,#$800,$x0
+		call	PutHexByte
+		ldi		$a0,msgTaskStart
+		call	SerialPutString
+;		ldi		$a0,#0					; Switch task
+;		csrrw	$x0,#$800,$a0
+;		ecall
 		jmp		CSTART
 .0006:
+		ldi		$t1,#'D'
+		bne		$t0,$t1,.0007
+		call	DumpReadyQueue
+.0007:
+		ldi		$t1,#'E'
+		bne		$t0,$t1,.0008
+		jmp		EditMem
+.0008:
+		ldi		$t1,#'F'
+		bne		$t0,$t1,.0009
+		jmp		FillMem
+.0009:
 .0005:
 		bra		Monitor
 
@@ -220,8 +219,6 @@ doMem:
 		add		$s1,$s1,#1
 		sw		$s1,[$sp]
 		ldi		$a0,#CR
-		call	Putch
-		ldi		$a0,#LF
 		call	Putch
 		ldi		$a0,INBUF
 		call	SerialPutString
@@ -238,8 +235,6 @@ doMem:
 		beq		$v0,$x0,Monitor
 		ldi		$a0,#CR
 		call	Putch
-		ldi		$a0,#LF
-		call	Putch
 		mov		$a0,$s3
 		call	PutHexWord
 		ldi		$a0,#':'
@@ -255,6 +250,33 @@ doMem:
 		bge		$s2,$x0,.loop
 		bltu	$s3,$s4,.loop2
 		bra		Monitor		
+
+EditMem:
+		call	GetHexNum			; get address to edit
+		mov		$s3,$v0
+		add		$s1,$s1,#1
+		call	GetHexNum			; get value to set
+		sb		$s3,[$v0]			; update mem
+		jmp		Monitor
+
+;------------------------------------------------------------------------------
+;	>F 1000 800 EE
+; Fills memory beginning at address $1000 for $800 bytes with the value $EE
+;------------------------------------------------------------------------------
+
+FillMem:
+		call	GetHexNum			; get address
+		mov		$s3,$v0
+		add		$s1,$s1,#1
+		call	GetHexNum			; get length
+		mov		$s4,$v0
+		add		$s1,$s1,#1
+		call	GetHexNum			; get byte to use
+.0001:
+		sb		$v0,[$s3]
+		sub		$s4,$s4,#1
+		bgt		$s4,$x0,.0001
+		jmp		Monitor
 
 ;------------------------------------------------------------------------------
 ; Skip over spaces and tabs in the input buffer.
@@ -535,13 +557,20 @@ IRQRout:
 ;------------------------------------------------------------------------------
 
 msgStart:
-		db		"CS01 System Starting.",13,10
+		db		"CS01 System Starting.",13
 msgMonHelp:
-		db		"Monitor Commands",13,10
-		db		"B - start tiny basic",13,10
-		db		"M <start> <length>	- dump memory",13,10,0
+		db		"Monitor Commands",13
+		db		"B - start tiny basic",13
+		db		"D - dump ready que",13
+		db		"E - edit memory",13
+		db		"F - fill memory",13
+		db		"M <start> <length>	- dump memory",13
+		db		0
 		align 4
-
+msgTaskStart:
+		db		" task started."
+msgCRLF:
+		db		13,10,0
 flt50:
 	dw	0x00000000,0x00000000,0x00000000,0x40049000
 flt20:

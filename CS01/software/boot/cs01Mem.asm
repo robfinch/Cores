@@ -77,6 +77,7 @@ FindRun:
 ;		t0
 ; Returns:
 ;		v0 = pointer to allocated memory in virtual address space.
+;		v1 = 1 for success, 0 otherwise
 ;------------------------------------------------------------------------------
 ;
 Alloc:
@@ -90,14 +91,15 @@ Alloc:
 	srl			$v0,$v0,#11				; v0 = convert to pages required
 	lw			$t0,NPAGES				; check number of pages available
 	bleu		$v0,$t0,.enough
-	mov			$v0,$x0						; not enough, return null
+.noRun2:
+	ldi			$v1,#0						; not enough, return null
 	bra			.noRun
 .enough:
 	; There are enough pages, but is there a run long enough in map space?
 	sw			$s2,$v0				; save required # pages
 	mov			$a1,$v0
 	call		FindRun						; find a run of available slots
-	beq			$v0,$x0,.noRun
+	beq			$v0,$x0,.noRun2
 	; Now there are enough pages, and a run available, so allocate
 	mov			$s1,$v0						; s1 = start of run
 	lw			$s3,NPAGES				; decrease number of pages available in system
@@ -112,6 +114,7 @@ Alloc:
 	sub			$s2,$s2,#1
 	bne			$s2,$x0,.0001
 	sll			$v0,$s1,#11				; v0 = virtual address of allocated mem.
+	ldi			$v1,#1
 .noRun:
 	lw			$ra,[$sp]					; restore saved regs
 	lw			s1,4[$sp]

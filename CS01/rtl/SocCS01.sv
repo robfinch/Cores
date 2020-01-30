@@ -218,7 +218,7 @@ assign led0_b = ~(pa_o[2] & dvd[12]);	// PWM 50% at about 12kHz.
 cs01memInterface umi1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(clk100),
 	.cs_i(cs_mem),
 	.cyc_i(cyc),
 	.stb_i(stb),
