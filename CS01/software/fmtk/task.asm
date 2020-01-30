@@ -1,14 +1,14 @@
 
 QNDX		EQU		$4304
-HRDY0		EQU		$4305
-HRDY1		EQU		$4306
-HRDY2		EQU		$4307
-HRDY3		EQU		$4308
-TRDY0		EQU		$4309
-TRDY1		EQU		$430A
-TRDY2		EQU		$430B
-TRYD3		EQU		$430C
-PIDMAP	EQU		$430E
+HRDY0		EQU		$4308
+HRDY1		EQU		$4309
+HRDY2		EQU		$430A
+HRDY3		EQU		$430B
+TRDY0		EQU		$430C
+TRDY1		EQU		$430D
+TRDY2		EQU		$430E
+TRDY3		EQU		$430F
+PIDMAP	EQU		$4310
 RDYQ0		EQU		$4400
 RDYQ1		EQU		$4500
 RDYQ2		EQU		$4600
@@ -23,6 +23,8 @@ qToChk:
 	align	4
 
 FMTKInit:
+	sw		$x0,HRDY0			; reset head and tail indexes
+	sw		$x0,TRDY0
 	ldi		$t0,#1				; pid #0 is permanently allocated to OS
 	sh		$t0,PIDMAP
 	ret
@@ -59,18 +61,18 @@ SelectTaskToRun:
 	; prevent starvation of lower priority tasks.
 	lbu		$v1,QNDX						; get index into que check table
 	add		$v1,$v1,#1					; increment it, and limit
-	and		$v1,#31
+	and		$v1,$v1,#31
 	sb		$v1,QNDX						; store back
 	lbu		$v1,qToChk[$v1]			; assume this will be valid
-	ldi		$t0,#4							; 4 queues to check
+	ldi		$t2,#4							; 4 queues to check
 .nxtQ:
 	lbu		$t0,HRDY0[$v1]			; check queue to see if contains any
 	lbu		$t1,TRDY0[$v1]			; ready tasks
 	bne		$t0,$t1,.dq					; yes, go dequeue
 	add		$v1,$v1,#1					; no, advance to next queue
 	and		$v1,$v1,#3					; 4 max
-	sub		$t0,$t0,#1					;
-	bne		$t0,$x0,.nxtQ				; go back to check next queue
+	sub		$t2,$t2,#1					;
+	bgt		$t2,$x0,.nxtQ				; go back to check next queue
 	; Here, nothing else is actually ready to run
 	; just go back to what we were doing.
 	csrrw	$v0,#$300,$x0				; get current pid
@@ -93,51 +95,80 @@ SelectTaskToRun:
 ;
 SwitchTask:
 	; Save register set in TCB
-	csrrw	$x1,#$340,$x1			; swap x1 and scrap
 	csrrw	$x1,#$300,$x0			; get process id
 	srl		$x1,$x1,#22
 	and		$x1,$x1,#15
 	sll		$x1,$x1,#10				; compute TCB address
+	mfu		$x2,$x1
+	sw		$x2,4[$x1]
+	mfu		$x2,$x2
 	sw		$x2,8[$x1]				; save regs in TCB
-	sw		$x3,12[$x1]
-	sw		$x4,16[$x1]
-	sw		$x5,20[$x1]
-	sw		$x6,24[$x1]
-	sw		$x7,28[$x1]
-	sw		$x8,32[$x1]
-	sw		$x9,36[$x1]
-	sw		$x10,40[$x1]
-	sw		$x11,44[$x1]
-	sw		$x12,48[$x1]
-	sw		$x13,52[$x1]
-	sw		$x14,56[$x1]
-	sw		$x15,60[$x1]
-	sw		$x16,64[$x1]
-	sw		$x17,68[$x1]
-	sw		$x18,72[$x1]
-	sw		$x19,76[$x1]
-	sw		$x20,80[$x1]
-	sw		$x21,84[$x1]
-	sw		$x22,88[$x1]
-	sw		$x23,92[$x1]
-	sw		$x24,96[$x1]
-	sw		$x25,100[$x1]
-	sw		$x26,104[$x1]
-	sw		$x27,108[$x1]
-	sw		$x28,112[$x1]
-	sw		$x29,116[$x1]
-	sw		$x30,120[$x1]
-	sw		$x31,124[$x1]
-	csrrw	$x2,#$340,$x0				; get original x1 back
-	sw		$x2,4[$x1]					; and save it too
+	mfu		$x2,$x3
+	sw		$x2,12[$x1]
+	mfu		$x2,$x4
+	sw		$x2,16[$x1]
+	mfu		$x2,$x5
+	sw		$x2,20[$x1]
+	mfu		$x2,$x6
+	sw		$x2,24[$x1]
+	mfu		$x2,$x7
+	sw		$x2,28[$x1]
+	mfu		$x2,$x8
+	sw		$x2,32[$x1]
+	mfu		$x2,$x9
+	sw		$x2,36[$x1]
+	mfu		$x2,$x10
+	sw		$x2,40[$x1]
+	mfu		$x2,$x11
+	sw		$x2,44[$x1]
+	mfu		$x2,$x12
+	sw		$x2,48[$x1]
+	mfu		$x2,$x13
+	sw		$x2,52[$x1]
+	mfu		$x2,$x14
+	sw		$x2,56[$x1]
+	mfu		$x2,$x15
+	sw		$x2,60[$x1]
+	mfu		$x2,$x16
+	sw		$x2,64[$x1]
+	mfu		$x2,$x17
+	sw		$x2,68[$x1]
+	mfu		$x2,$x18
+	sw		$x2,72[$x1]
+	mfu		$x2,$x19
+	sw		$x2,76[$x1]
+	mfu		$x2,$x20
+	sw		$x2,80[$x1]
+	mfu		$x2,$x21
+	sw		$x2,84[$x1]
+	mfu		$x2,$x22
+	sw		$x2,88[$x1]
+	mfu		$x2,$x23
+	sw		$x2,92[$x1]
+	mfu		$x2,$x24
+	sw		$x2,96[$x1]
+	mfu		$x2,$x25
+	sw		$x2,100[$x1]
+	mfu		$x2,$x26
+	sw		$x2,104[$x1]
+	mfu		$x2,$x27
+	sw		$x2,108[$x1]
+	mfu		$x2,$x28
+	sw		$x2,112[$x1]
+	mfu		$x2,$x29
+	sw		$x2,116[$x1]
+	mfu		$x2,$x30
+	sw		$x2,120[$x1]
+	mfu		$x2,$x31
+	sw		$x2,124[$x1]
 	csrrw	$x2,#$341,$x0				; save off mepc
-	sw		$x3,TCBepc[$x1]
+	sw		$x2,TCBepc[$x1]
 	ldi		$t1,#0
 .svseg:
 	mvseg	$t0,$x0,$t1
 	sll		$x2,$t1,#2
 	add		$x2,$x2,$x1
-	sw		$t0,TCBseg[$x2]
+	sw		$t0,TCBsegs[$x2]
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.svseg
@@ -163,15 +194,17 @@ SwitchTask:
 	
 .ready:
 	; Add task back into ready queue
+	mov		$s1,$x1							; save off x1 (normally return address)
 	srl		$a0,$v0,#22					; compute ASID/PID
 	call	InsertTask
+	mov		$x1,$s1							; get back x1
 
 	; Restore register set
 	ldi		$t1,#0
 .rsseg:
 	sll		$x2,$t1,#2
 	add		$x2,$x2,$x1
-	lw		$t0,TCBseg[$x2]
+	lw		$t0,TCBsegs[$x2]
 	mvseg	$x0,$t0,$t1
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
@@ -179,45 +212,79 @@ SwitchTask:
 
 	lw		$x2,TCBepc[$x1]			; restore epc
 	csrrw	$x0,#$341,$x2
+	lw		$x2,4[$x1]
+	mtu		$x1,$x2
 	lw		$x2,8[$x1]
-	lw		$x3,12[$x1]
-	lw		$x4,16[$x1]
-	lw		$x5,20[$x1]
-	lw		$x6,24[$x1]
-	lw		$x7,28[$x1]
-	lw		$x8,32[$x1]
-	lw		$x9,36[$x1]
-	lw		$x10,40[$x1]
-	lw		$x11,44[$x1]
-	lw		$x12,48[$x1]
-	lw		$x13,52[$x1]
-	lw		$x14,56[$x1]
-	lw		$x15,60[$x1]
-	lw		$x16,64[$x1]
-	lw		$x17,68[$x1]
-	lw		$x18,72[$x1]
-	lw		$x19,76[$x1]
-	lw		$x20,80[$x1]
-	lw		$x21,84[$x1]
-	lw		$x22,88[$x1]
-	lw		$x23,92[$x1]
-	lw		$x24,96[$x1]
-	lw		$x25,100[$x1]
-	lw		$x26,104[$x1]
-	lw		$x27,108[$x1]
-	lw		$x28,112[$x1]
-	lw		$x29,116[$x1]
-	lw		$x30,120[$x1]
-	lw		$x31,124[$x1]
-	lw		$x1,4[$x1]
+	mtu		$x2,$x2
+	lw		$x2,12[$x1]
+	mtu		$x3,$x2
+	lw		$x2,16[$x1]
+	mtu		$x4,$x2
+	lw		$x2,20[$x1]
+	mtu		$x5,$x2
+	lw		$x2,24[$x1]
+	mtu		$x6,$x2
+	lw		$x2,28[$x1]
+	mtu		$x7,$x2
+	lw		$x2,32[$x1]
+	mtu		$x8,$x2
+	lw		$x2,36[$x1]
+	mtu		$x9,$x2
+	lw		$x2,40[$x1]
+	mtu		$x10,$x2
+	lw		$x2,44[$x1]
+	mtu		$x11,$x2
+	lw		$x2,48[$x1]
+	mtu		$x12,$x2
+	lw		$x2,52[$x1]
+	mtu		$x13,$x2
+	lw		$x2,56[$x1]
+	mtu		$x14,$x2
+	lw		$x2,60[$x1]
+	mtu		$x15,$x2
+	lw		$x2,64[$x1]
+	mtu		$x16,$x2
+	lw		$x2,68[$x1]
+	mtu		$x17,$x2
+	lw		$x2,72[$x1]
+	mtu		$x18,$x2
+	lw		$x2,76[$x1]
+	mtu		$x19,$x2
+	lw		$x2,80[$x1]
+	mtu		$x20,$x2
+	lw		$x2,84[$x1]
+	mtu		$x21,$x2
+	lw		$x2,88[$x1]
+	mtu		$x22,$x2
+	lw		$x2,92[$x1]
+	mtu		$x23,$x2
+	lw		$x2,96[$x1]
+	mtu		$x24,$x2
+	lw		$x2,100[$x1]
+	mtu		$x25,$x2
+	lw		$x2,104[$x1]
+	mtu		$x26,$x2
+	lw		$x2,108[$x1]
+	mtu		$x27,$x2
+	lw		$x2,112[$x1]
+	mtu		$x28,$x2
+	lw		$x2,116[$x1]
+	mtu		$x29,$x2
+	lw		$x2,120[$x1]
+	mtu		$x30,$x2
+	lw		$x2,124[$x1]
+	mtu		$x31,$x2
 	eret
 
 OSCALL:
+	mfu		$a0,$a0
+	mfu		$a1,$a1
+	mfu		$a2,$a2
 	beq		$a0,$x0,SwitchTask
 	sub		$a0,$a0,#1
 	beq		$a0,$x0,StartTask
 	sub		$a0,$a0,#1
-	beq		$a0,$x0,GetFreePid
+	beq		$a0,$x0,KillTask
 	eret
 
 ;------------------------------------------------------------------------------
@@ -265,43 +332,106 @@ GetFreePid:
 ;------------------------------------------------------------------------------
 ;
 StartTask:
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
 	call	GetFreePid
 	beq		$v0,$x0,.err
 	mov		$a0,$v0
-	sll		$x1,$a0,#10			; compute TCB address
+	sll		$s1,$a0,#10			; compute TCB address
 	call	AllocStack
 	ldi		$t0,#$7F800			; set stack pointer
-	sw		$t0,56[$x1]
-	sw		$a2,TCBepc[$x1]	; address task will begin at
+	sw		$t0,56[$s1]
+	sw		$a2,TCBepc[$s1]	; address task will begin at
 	call	Alloc
-	beq		$v0,$x0,.err
+	beq		$v1,$x0,.err
 	ldi		$t0,#TS_READY
-	sb		$t0,TCBStatus[$x1]
+	sb		$t0,TCBStatus[$s1]
 	ldi		$t0,#2					; normal execution priority
-	sb		$t0,TCBPriority[$x1]
+	sb		$t0,TCBPriority[$s1]
 	; leave segment base at $0, flat memory model
 	ldi		$t0,#6							; read,write
-	sw		$t0,TCBseg[$x1]			; segs 0 to 11
-	sw		$t0,TCBseg+4[$x1]
-	sw		$t0,TCBseg+8[$x1]
-	sw		$t0,TCBseg+12[$x1]
-	sw		$t0,TCBseg+16[$x1]
-	sw		$t0,TCBseg+20[$x1]
-	sw		$t0,TCBseg+24[$x1]
-	sw		$t0,TCBseg+28[$x1]
-	sw		$t0,TCBseg+32[$x1]
-	sw		$t0,TCBseg+36[$x1]
-	sw		$t0,TCBseg+40[$x1]
-	sw		$t0,TCBseg+44[$x1]
+	sw		$t0,TCBsegs[$s1]			; segs 0 to 11
+	sw		$t0,TCBsegs+4[$s1]
+	sw		$t0,TCBsegs+8[$s1]
+	sw		$t0,TCBsegs+12[$s1]
+	sw		$t0,TCBsegs+16[$s1]
+	sw		$t0,TCBsegs+20[$s1]
+	sw		$t0,TCBsegs+24[$s1]
+	sw		$t0,TCBsegs+28[$s1]
+	sw		$t0,TCBsegs+32[$s1]
+	sw		$t0,TCBsegs+36[$s1]
+	sw		$t0,TCBsegs+40[$s1]
+	sw		$t0,TCBsegs+44[$s1]
 	ldi		$t0,#5							; read,execute
-	sw		$t0,TCBseg+48[$x1]	; segs 12 to 15
-	sw		$t0,TCBseg+52[$x1]
-	sw		$t0,TCBseg+56[$x1]
-	sw		$t0,TCBseg+60[$x1]
+	sw		$t0,TCBsegs+48[$s1]	; segs 12 to 15
+	sw		$t0,TCBsegs+52[$s1]
+	sw		$t0,TCBsegs+56[$s1]
+	sw		$t0,TCBsegs+60[$s1]
 	call	InsertTask
-	mov		$v0,$a0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	mtu		$v0,$a0
 	eret
 .err:
-	mov		$v0,$x0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	mtu		$v0,$x0
 	eret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = pid of task to kill
+;------------------------------------------------------------------------------
+
+KillTask:
+	ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
+	and		$t1,$a1,#15					; limit pid
+	sll		$t1,$t1,#10					; convert to TCB address
+	sb		$t0,TCBStatus[$t1]
+	call	FreeAll							; free all the memory associated with the task
+	; Now make process ID available for reuse
+	lhu		$t1,PIDMAP
+	ldi		$t0,#1
+	sll		$t0,$t0,$a1
+	xor		$t0,$t0,#-1
+	and		$t1,$t1,$t0
+	sh		$t1,PIDMAP
+	eret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DumpReadyQueue:
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
+	ldi		$t1,#0
+.0002:
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,#'Q'
+	call	Putch
+	mov		$a0,$t1
+	call	PutHexNybble
+	ldi		$a0,#':'
+	call	Putch
+	lbu		$a2,HRDY0[$t1]
+	lbu		$a3,TRDY0[$t1]
+	beq		$a2,$a3,.nxt
+	sll		$t2,$t1,#8
+	add		$t2,$t2,#RDYQ0
+.0001:
+	add		$t3,$t2,$a2
+	lbu		$a0,[$t3]
+	call	PutHexByte
+	ldi		$a0,#' '
+	call	Putch
+	add		$a2,$a2,#1
+	bne		$a2,$a3,.0001
+.nxt:
+	add		$t1,$t1,#1
+	slt		$t2,$t1,#4
+	bne		$t2,$x0,.0002
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 

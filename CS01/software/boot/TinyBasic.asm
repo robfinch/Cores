@@ -356,6 +356,7 @@ TAB2:
 	db	"POK",'E'+0x80
 	db	"POKE",'W'+0x80
 	db	"POKE",'H'+0x80
+	db	"YIEL",'D'+0x80
 	db	"STO",'P'+0x80
 	db	"BY",'E'+0x80
 	db	"SY",'S'+0x80
@@ -410,7 +411,7 @@ TAB1_1:
 TAB2_1:
 	dh	NEXT		;	Direct / statement
 	dh	LET
-	dh	IF
+	dh	IF0
 	dh	GOTO
 	dh	GOSUB
 	dh	RETURN
@@ -421,6 +422,7 @@ TAB2_1:
 	dh	POKE
 	dh	POKEW
 	dh	POKEH
+	dh	YIELD0
 	dh	STOP
 	dh	GOBYE
 	dh	SYSX
@@ -544,6 +546,16 @@ STOP:
 	call	ENDCHK
 	jmp		WSTART		; WSTART will reset the stack
 
+;------------------------------------------------------------------------------
+; YIELD suspends execution of TinyBasic by switching to the next ready task.
+;------------------------------------------------------------------------------
+
+YIELD0:
+	ldi		a0,#0
+	ecall
+	jmp		FINISH
+	
+;------------------------------------------------------------------------------
 ; 'RUN<CR>' finds the first stored line, stores its address
 ; in CURRNT, and starts executing it. Note that only those
 ; commands in TAB2 are legal for a stored program.
@@ -560,8 +572,11 @@ RUN:
 	call  clearVars
 
 RUNNXL:					; RUN <next line>
-	lw		a0,CURRNT	; executing a program?
-	beq		a0,x0,WSTART	; if not, we've finished a direct stat.
+	lw		$t2,CURRNT	; executing a program?
+	bne		$t2,x0,.0001	; if not, we've finished a direct stat.
+RUN2:
+	jmp		WSTART
+.0001:
 	lw		a0,IRQROUT		; are we handling IRQ's ?
 	beq		a0,x0,RUN1
 	lw		$t1,IRQFlag		; was there an IRQ ?
@@ -579,11 +594,11 @@ RUNNXL:					; RUN <next line>
 	lw		$t3,IRQROUT
 	bra		RUNTSL
 RUN1:
-	lw		$t3,CURRNT
+	lw		$t3,$t2
 	mov		a0,x0
 	call	FNDLNP		; else find the next line number
 	lw		$t1,TXTUNF	; if we've fallen off the end, stop
-	bgeu	$t3,$t1,WSTART
+	bgeu	$t3,$t1,RUN2
 
 RUNTSL					; RUN <this line>
 	sw		$t3,CURRNT	; set CURRNT to point to the line no.
@@ -855,13 +870,13 @@ return1:
 FOR:
 	call	PUSHA_		; save the old 'FOR' save area
 	call	SETVAL		; set the control variable
-	sw		a0,LOPVAR		; save its address
+	sw		v0,LOPVAR		; save its address
 	ldi		$t3,#TAB5
 	ldi		$t4,#TAB5_1	; use 'EXEC' to test for 'TO'
 	jmp		EXEC
 FR1:
 	call	OREXPR		; evaluate the limit
-	sw		a0,LOPLMT	; save that
+	sw		v0,LOPLMT	; save that
 	ldi		$t3,#TAB6
 	ldi		$t4,#TAB6_1	; use 'EXEC' to test for the word 'STEP
 	jmp		EXEC
@@ -869,9 +884,9 @@ FR2:
 	call	OREXPR		; found it, get the step value
 	bra		FR4
 FR3:
-	ldi		a0,#1		; not found, step defaults to 1
+	ldi		v0,#1		; not found, step defaults to 1
 FR4:
-	sw		a0,LOPINC	; save that too
+	sw		v0,LOPINC	; save that too
 FR5:
 	lw		a1,CURRNT
 	sw		a1,LOPLN	; save address of current line number
@@ -883,7 +898,7 @@ FR6:
 	add		r3,r3,#20	; look at next stack frame
 FR7:
 	lw		a1,[r3]		; is it zero?
-	beq		a1,r0,FR8	; if so, we're done
+	beq		a1,x0,FR8	; if so, we're done
 	bne		a1,r6,FR6	; same as current LOPVAR? nope, look some more
 
   mov		a0,r3	   ; Else remove 5 words from...
@@ -891,8 +906,8 @@ FR7:
 	add		a2,r3,#20  ; inside the stack.
 	call	MVDOWN
 	add		$sp,$sp,#20	; set the SP 5 long words up
-	lw		a0,[$sp]
-	add		$sp,$sp,#4
+;	lw		a0,[$sp]		; ???
+;	add		$sp,$sp,#4
 FR8:
   jmp	    FINISH		; and continue execution
 
@@ -910,16 +925,16 @@ FR8:
 ;******************************************************************
 ;
 NEXT:
-	mov		a0,r0		; don't allocate it
+	mov		a0,x0		; don't allocate it
 	call	TSTV		; get address of variable
-	bne		a0,r0,NX4
+	bne		v0,x0,NX4
 	ldi		a0,#msgNextVar
 	bra		ERROR		; if no variable, say "What?"
 NX4:
-	mov		$t3,a0	; save variable's address
+	mov		$t3,v0	; save variable's address
 NX0:
 	lw		a0,LOPVAR	; If 'LOPVAR' is zero, we never...
-	bne		a0,r0,NX5	; had a FOR loop
+	bne		a0,x0,NX5	; had a FOR loop
 	ldi		a0,#msgNextFor
 	bra		ERROR
 NX5:
@@ -933,7 +948,7 @@ NX2:
 ;	BVS.L	QHOW		say "How?" for 32-bit overflow
 	sw		a0,[$t3]		; save control variable's new value
 	lw		r3,LOPLMT	; get loop's limit value
-	bge		a1,r0,NX1	; check loop increment, branch if loop increment is positive
+	bge		a1,x0,NX1	; check loop increment, branch if loop increment is positive
 	blt		a0,r3,NXPurge	; test against limit
 	bra     NX3
 NX1:
@@ -964,15 +979,17 @@ NXPurge:
 ; continues on the next line.
 ;******************************************************************
 ;
-IF:
-    call	OREXPR		; evaluate the expression
+IF0:
+  call	OREXPR		; evaluate the expression
 IF1:
-    bne	  v0,x0,RUNSML		; is it zero? if not, continue
+  beq	  v0,x0,IF2	; is it zero? if not, continue
+  jmp		RUNSML
 IF2:
   mov		$t3,$t2	; set lookup pointer
 	mov		a0,x0		; find line #0 (impossible)
 	call	FNDSKP		; if so, skip the rest of the line
-	beq		v0,r0,WSTART; if no next line, do a warm start
+	bne		v0,x0,IF3; if no next line, do a warm start
+	jmp		WSTART
 IF3:
 	jmp		RUNTSL		; run the next line
 
@@ -2438,7 +2455,7 @@ PUSHA_:
 	add		a0,a0,#20	; we might need this many bytes
 	blt		$sp,a0,QSORRY	; out of stack space
 	lw		a1,LOPVAR		; save loop variables
-	beq		a1,r0,PU1		; if LOPVAR is zero, that's all
+	beq		a1,x0,PU1		; if LOPVAR is zero, that's all
 	sub		$sp,$sp,#16
 	lw		a0,LOPPT
 	sw		a0,[$sp]

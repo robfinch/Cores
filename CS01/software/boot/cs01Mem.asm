@@ -134,3 +134,30 @@ AllocStack:
 	mvmap		$x0,$v0,$v1
 .xit:
 	ret
+
+;------------------------------------------------------------------------------
+; This routine will de-allocate all the pages associated with a task including
+; the stack.
+;
+; Parameters:
+;		a0 = pid to free memory for
+;------------------------------------------------------------------------------
+
+FreeAll:
+	ldi			$t3,#0
+	sll			$t4,$a0,#8
+.nxt:
+	slt			$t1,$t3,#256
+	beq			$t1,$x0,.0001
+	mvmap		$t0,$x0,$t3			; get page mapping
+	add			$t3,$t3,#1			; advance to next bucket
+	and			$t0,$t0,#255		; pages are 1-255
+	beq			$t0,$x0,.nxt		; 0 = no map in this bucket
+	or			$t0,$t0,$t4			; add in PID/ASID
+	pfree		$t0							; free the page
+	lw			$t0,NPAGES			; update the number of available pages
+	add			$t0,$t0,#1
+	sw			$t0,NPAGES
+	bra			.nxt
+.0001:
+	ret

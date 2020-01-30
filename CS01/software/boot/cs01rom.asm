@@ -66,6 +66,10 @@ UserStart:
 .0002:
 		ldi		$a0,#msgStart				; spit out a startup message
 		call	SerialPutString
+		ldi		a0,#1
+		ldi		a1,#12
+		ldi		a2,#Monitor
+		ecall
 		bra		MonEntry
 
 		; Now a loop to recieve and echo back characters
@@ -184,20 +188,16 @@ Monitor:
 		ldi		$a0,#1					; Start task
 		ldi		$a1,#16					; 32 kB (16 pages)
 		ldi		$a2,#CSTART			; start address
-		csrrw $x0,#$800,$a0
-		csrrw $x0,#$801,$a1
-		csrrw	$x0,#$803,$a2
 		ecall
+		mov		v0,a0
 		ldi		$a0,#msgCRLF
 		call	SerialPutString
-		csrrw	$a0,#$800,$x0
 		call	PutHexByte
 		ldi		$a0,msgTaskStart
 		call	SerialPutString
-;		ldi		$a0,#0					; Switch task
-;		csrrw	$x0,#$800,$a0
-;		ecall
-		jmp		CSTART
+		ldi		$a0,#0					; Switch task
+		ecall
+		jmp		Monitor
 .0006:
 		ldi		$t1,#'D'
 		bne		$t0,$t1,.0007
@@ -211,6 +211,20 @@ Monitor:
 		bne		$t0,$t1,.0009
 		jmp		FillMem
 .0009:
+		ldi		$t1,#'S'
+		bne		$t0,$t1,.0010
+		ldi		$a0,#0
+		ecall
+		jmp		Monitor
+.0010:
+		ldi		$t1,#'K'
+		bne		$t0,$t1,.0011
+		call	GetHexNum
+		ldi		$a0,#2					; kill task
+		mov		$a1,$v0					; a0 = pid
+		ecall
+		jmp		Monitor
+.0011:
 .0005:
 		bra		Monitor
 
@@ -564,7 +578,9 @@ msgMonHelp:
 		db		"D - dump ready que",13
 		db		"E - edit memory",13
 		db		"F - fill memory",13
+		db		"K <tid> - kill task", 13
 		db		"M <start> <length>	- dump memory",13
+		db		"S - switch task",13
 		db		0
 		align 4
 msgTaskStart:
