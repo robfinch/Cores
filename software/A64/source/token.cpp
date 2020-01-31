@@ -1820,7 +1820,7 @@ int NextToken()
 						 }
 						 break;
 
-        // end eor eori endif endpublic extern equ eret es
+        // ecall end eor eori endif endpublic extern equ eret es
         case 'e': case 'E':
              if ((inptr[1]=='q' || inptr[1]=='Q') &&
                  (inptr[2]=='u' || inptr[2]=='U') &&
@@ -1907,6 +1907,16 @@ int NextToken()
 								 return token = tk_es;
              }
 			 if (gCpu==RISCV) {
+				 if ((inptr[1] == 'c' || inptr[1] == 'C') &&
+					 (inptr[2] == 'a' || inptr[2] == 'A') &&
+					 (inptr[3] == 'l' || inptr[3] == 'L') &&
+					 (inptr[4] == 'l' || inptr[4] == 'L') &&
+					 isspace(inptr[5])) {
+					 inptr += 5;
+					 tokenBuffer[tbndx] = tk_ecall;
+					 tbndx++;
+					 return token = tk_ecall;
+				 }
 				 if ((inptr[1]=='r' || inptr[1]=='R') &&
 					 (inptr[2]=='e' || inptr[2]=='E') &&
 					 (inptr[3]=='t' || inptr[3]=='T') &&
@@ -2935,7 +2945,7 @@ int NextToken()
 			}
             break;
 
-        // max min mod modu modi modui mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb
+        // max min mod modu modi modui mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb mfu mtu
         case 'm': case 'M':
 					if (gCpu == GAMBIT_V5) {
 						if ((inptr[1] == 'o' || inptr[1] == 'O')
@@ -3184,6 +3194,44 @@ int NextToken()
 								tbndx++;
 								return (token = tk_macro);
             }
+						if (gCpu == RISCV) {
+							if ((inptr[1] == 'v' || inptr[1] == 'V') &&
+								(inptr[2] == 's' || inptr[2] == 'S') &&
+								(inptr[3] == 'e' || inptr[3] == 'E') &&
+								(inptr[4] == 'g' || inptr[4] == 'G') &&
+								isspace(inptr[5])) {
+								inptr += 5;
+								tokenBuffer[tbndx] = tk_mvseg;
+								tbndx++;
+								return token = tk_mvseg;
+							}
+							if ((inptr[1] == 'v' || inptr[1] == 'V') &&
+								(inptr[2] == 'm' || inptr[2] == 'M') &&
+								(inptr[3] == 'a' || inptr[3] == 'A') &&
+								(inptr[4] == 'p' || inptr[4] == 'P') &&
+								isspace(inptr[5])) {
+								inptr += 5;
+								tokenBuffer[tbndx] = tk_mvmap;
+								tbndx++;
+								return token = tk_mvmap;
+							}
+							if ((inptr[1] == 'f' || inptr[1] == 'F') &&
+								(inptr[2] == 'u' || inptr[2] == 'U') &&
+								isspace(inptr[3])) {
+								inptr += 3;
+								tokenBuffer[tbndx] = tk_mfu;
+								tbndx++;
+								return token = tk_mfu;
+							}
+							if ((inptr[1] == 't' || inptr[1] == 'T') &&
+								(inptr[2] == 'u' || inptr[2] == 'U') &&
+								isspace(inptr[3])) {
+								inptr += 3;
+								tokenBuffer[tbndx] = tk_mtu;
+								tbndx++;
+								return token = tk_mtu;
+							}
+						}
             break;
 
         // not neg nop
@@ -3230,7 +3278,7 @@ int NextToken()
             }
             break;
 
-        // pea push pop php plp public
+        // palloc pfree pea push pop php plp public
         case 'p': case 'P':
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='s' || inptr[2]=='S') &&
@@ -3383,7 +3431,30 @@ int NextToken()
 										return token = tk_penor;
                 }
             }
-            break;
+						if (gCpu == RISCV) {
+							if ((inptr[1] == 'a' || inptr[1] == 'A') &&
+								(inptr[2] == 'l' || inptr[2] == 'L') &&
+								(inptr[3] == 'l' || inptr[3] == 'L') &&
+								(inptr[4] == 'o' || inptr[4] == 'O') &&
+								(inptr[5] == 'c' || inptr[5] == 'C') &&
+								isspace(inptr[6])) {
+								inptr += 6;
+								tokenBuffer[tbndx] = tk_palloc;
+								tbndx++;
+								return (token = tk_palloc);
+							}
+							if ((inptr[1] == 'f' || inptr[1] == 'F') &&
+								(inptr[2] == 'r' || inptr[2] == 'R') &&
+								(inptr[3] == 'e' || inptr[3] == 'E') &&
+								(inptr[4] == 'e' || inptr[4] == 'E') &&
+								isspace(inptr[5])) {
+								inptr += 5;
+								tokenBuffer[tbndx] = tk_pfree;
+								tbndx++;
+								return (token = tk_pfree);
+							}
+						}
+						break;
 
         // ret rem rex rol roli ror rori rtd rte rtf rts rti rtl rodata
         case 'r': case 'R':

@@ -1,4 +1,5 @@
 .include "../fmtk/const.asm"
+.include "../fmtk/config.asm"
 
 BS					equ		$08
 LF					equ		$0A
@@ -61,8 +62,6 @@ UserStart:
 		call	SerialPutChar
 		sub		$t2,$t2,#1
 		bne		$t2,$x0,.0004
-		ldi		$a0,#'A'						; Try sending the letter 'A'
-		call	SerialPutChar
 .0002:
 		ldi		$a0,#msgStart				; spit out a startup message
 		call	SerialPutString
@@ -196,7 +195,7 @@ Monitor:
 		call	PutHexByte
 		ldi		$a0,msgTaskStart
 		call	SerialPutString
-		ldi		$a0,#13					; Switch task
+		ldi		$a0,#13					; Reschedule task
 		ecall
 		jmp		Monitor
 .0006:

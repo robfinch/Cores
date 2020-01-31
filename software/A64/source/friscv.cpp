@@ -710,7 +710,24 @@ static void process_mul()
     prevToken();
     emit_insn((1 << 25)|(Rb << 20)|(Ra<<15)|(0<<12)|(Rt<<7)|0x33,1);
 }
-       
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void process_palloc(int funct7)
+{
+	int Rs1, Rt;
+
+	Rs1 = Rt = getRegisterX();
+	if (funct7 == 1)
+		Rt = 0;
+	else
+		Rs1 = 0;
+	emit_insn(FN7(funct7) | FN3(1) | RS1(Rs1) | RD(Rt) | 13, 1);
+	prevToken();
+	ScanToEOL();
+}
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
@@ -1052,6 +1069,23 @@ static void process_rop(int oc)
     emitCode(Rt);
     emitCode(0x00);
     emitCode(oc);
+}
+
+// ---------------------------------------------------------------------------
+// not r3,r3
+// ---------------------------------------------------------------------------
+
+static void process_umove(int oc, int funct7)
+{
+	int Ra;
+	int Rt;
+
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	prevToken();
+	emit_insn(FN7(funct7) | RD(Rt) | RS1(Ra) | oc, !expand_flag);
+	ScanToEOL();
 }
 
 // ---------------------------------------------------------------------------
@@ -1489,6 +1523,12 @@ static void process_call()
 			return;
 		}
 		val += code_address;
+		if (val & 0x800LL)
+			emit_insn(((val - 0x800LL) & 0xFFFFF000LL) | RD(12) | 0x37, 1);
+		else
+			emit_insn((val & 0xFFFFF000LL) | RD(12) | 0x37, 1);
+		emit_insn(((val & 0xFFFLL) << 20LL) | RS1(12) | RD(Rt) | 0x67, 1);
+		return;
 	}
 	if (val == 0) {
 		emit_insn(((val & 0xFFF) << 20) | RS1(Ra) | RD(Rt) | 0x67, 1);
@@ -1500,6 +1540,8 @@ static void process_call()
 				emit_insn(((val-0x800) & 0xFFFFF000) | RD(12) | 0x37, 1);
 			else
 				emit_insn((val & 0xFFFFF000) | RD(12) | 0x37, 1);
+			emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+			return;
 		}
 		emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
 		return;
@@ -1845,6 +1887,7 @@ void Friscv_processMaster()
         case tk_endpublic: break;
         case tk_eor: process_rrop(0x33,0x04,0x00); break;
         case tk_eori: process_riop(0x13,0x04,0x00); break;
+				case tk_ecall: emit_insn(0x00000073, 1); break;
 				case tk_eret: emit_insn(0x10000073, 1); break;
 				case tk_extern: process_extern(); break;
         case tk_fabs: process_fprop(0x88); break;
@@ -1892,16 +1935,22 @@ void Friscv_processMaster()
 				case tk_ldt:  process_load(0x03, 2); break;
 				case tk_macro:	process_macro(); break;
 				case tk_mfspr: process_mfspr(0x49); break;
+				case tk_mfu: process_umove(13, 2); break;
         case tk_mov: process_mov(0x04); break;
         case tk_mtspr: process_mtspr(0x48); break;
-        case tk_mul: process_rrop(0x33,0x00,0x01); break;
-        case tk_neg: process_rop(0x05); break;
+				case tk_mtu: process_umove(13, 3); break;
+				case tk_mul: process_rrop(0x33,0x00,0x01); break;
+				case tk_mvmap: process_rrop(13, 0x00, 0x01); break;
+				case tk_mvseg: process_rrop(13, 0x00, 0x00); break;
+				case tk_neg: process_rop(0x05); break;
         case tk_nop: emit_insn(0xEAEAEAEAEA,1); break;
         case tk_not: process_rop(0x07); break;
         case tk_or:  process_rrop(0x33,0x06,0x00); break;
         case tk_ori: process_addi(6); break;
         case tk_org: process_org(); break;
-        case tk_php: emit_insn(0x3200000001,1); break;
+				case tk_palloc: process_palloc(0); break;
+				case tk_pfree: process_palloc(1); break;
+				case tk_php: emit_insn(0x3200000001,1); break;
         case tk_plp: emit_insn(0x3300000001,1); break;
         case tk_plus: expand_flag = 1; break;
         case tk_public: process_public(); break;
