@@ -10,9 +10,45 @@
                         	TCBStatus		EQU		$288
                         	TCBPriority	EQU		$289
                         	TCBStackBot	EQU		$290
+                        	TCBMsgD1		EQU		$298
+                        	TCBMsgD2		EQU		$2A0
+                        	TCBMsgD3		EQU		$2A8
                         	
                         	TS_READY		EQU		1
                         	TS_DEAD			EQU		2
+                        	TS_MSGRDY		EQU		4
+                        	TS_WAITMSG	EQU		8
+                        	
+                        	; error codes
+                        	E_Ok		=		0x00
+                        	E_Arg		=		0x01
+                        	E_BadMbx	=		0x04
+                        	E_QueFull	=		0x05
+                        	E_NoThread	=		0x06
+                        	E_NotAlloc	=		0x09
+                        	E_NoMsg		=		0x0b
+                        	E_Timeout	=		0x10
+                        	E_BadAlarm	=		0x11
+                        	E_NotOwner	=		0x12
+                        	E_QueStrategy =		0x13
+                        	E_BadDevNum	=		0x18
+                        	E_DCBInUse	=		0x19
+                        	; Device driver errors
+                        	E_BadDevNum	=		0x20
+                        	E_NoDev		=		0x21
+                        	E_BadDevOp	=		0x22
+                        	E_ReadError	=		0x23
+                        	E_WriteError =		0x24
+                        	E_BadBlockNum	=	0x25
+                        	E_TooManyBlocks	=	0x26
+                        	
+                        	; resource errors
+                        	E_NoMoreMbx	=		0x40
+                        	E_NoMoreMsgBlks	=	0x41
+                        	E_NoMoreAlarmBlks	=0x44
+                        	E_NoMoreTCBs	=	0x45
+                        	E_NoMem		= 12
+                        	
                         	.file "cs01rom.asm",1
                         	.file "cs01rom.asm",1
                         	
@@ -47,7 +83,7 @@
                         	; Exception vector table.
                         	;------------------------------------------------------------------------------
                         			org		$FFFC0000				; user mode exception
-FFFC0000 7640006F			jmp		IRQRout
+FFFC0000 7700006F			jmp		IRQRout
 FFFC0004 00000000			org 	$FFFC00C0				; machine mode exception
 FFFC0008 00000000
 FFFC000C 00000000
@@ -95,7 +131,7 @@ FFFC00B0 00000000
 FFFC00B4 00000000
 FFFC00B8 00000000
 FFFC00BC 00000000
-FFFC00C0 6A40006F			jmp		IRQRout
+FFFC00C0 6B00006F			jmp		IRQRout
 FFFC00C4 00000000			org		$FFFC00FC				; non-maskable interrupt
 FFFC00C8 00000000
 FFFC00CC 00000000
@@ -119,8 +155,8 @@ FFFC00FC 0040006F			jmp		MachineStart
                         	MachineStart:
 FFFC0100 00080737			ldi		$sp,#$80000-4		; setup machine mode stack pointer
 FFFC0104 FFC70713
-FFFC0108 3B5000EF			call	MMUInit					; initialize MMU for address space zero.
-FFFC010C 591000EF			call	FMTKInit
+FFFC0108 3C1000EF			call	MMUInit					; initialize MMU for address space zero.
+FFFC010C 611000EF			call	FMTKInit
 FFFC0110 FFFC0D37			ldi		$t0,#$FFFC0000
 FFFC0114 000D0D13
 FFFC0118 301D1073			csrrw $x0,#$301,$t0		; set tvec
@@ -131,25 +167,25 @@ FFFC0128 10000073			eret									; switch to user mode
                         	UserStart:
 FFFC012C 00080737			ldi		$sp,#$80000-1028		; setup user mode stack pointer
 FFFC0130 BFC70713
-FFFC0134 4E0000EF			call	VIAInit
+FFFC0134 4EC000EF			call	VIAInit
 FFFC0138 00806D13			ldi		$t0,#$08						; turn on the LED
 FFFC013C FFDC0637			sw		$t0,VIA+VIA_PARAW
 FFFC0140 63C60613
 FFFC0144 00060633
 FFFC0148 01A62023
-FFFC014C 5D4000EF			call	SerialInit
+FFFC014C 5E0000EF			call	SerialInit
 FFFC0150 01006E13			ldi		$t2,#16							; send an XON just in case
 FFFC0154 01106913			ldi		$a0,#XON
                         	.0004:
-FFFC0158 558000EF			call	SerialPutChar
+FFFC0158 564000EF			call	SerialPutChar
 FFFC015C FFFE0E13			sub		$t2,$t2,#1
 FFFC0160 FE0E1CE3			bne		$t2,$x0,.0004
 FFFC0164 04106913			ldi		$a0,#'A'						; Try sending the letter 'A'
-FFFC0168 548000EF			call	SerialPutChar
+FFFC0168 554000EF			call	SerialPutChar
                         	.0002:
 FFFC016C FFFC1937			ldi		$a0,#msgStart				; spit out a startup message
-FFFC0170 80890913
-FFFC0174 578000EF			call	SerialPutString
+FFFC0170 81490913
+FFFC0174 584000EF			call	SerialPutString
 FFFC0178 00106913			ldi		a0,#1
 FFFC017C 00C06993			ldi		a1,#12
 FFFC0180 FFFC0A37			ldi		a2,#Monitor
@@ -159,10 +195,10 @@ FFFC018C 04000463			bra		MonEntry
                         	
                         			; Now a loop to recieve and echo back characters
                         	.0003:
-FFFC0190 4EC000EF			call	SerialPeekChar
+FFFC0190 4F8000EF			call	SerialPeekChar
 FFFC0194 FE084EE3			blt		$v0,$x0,.0003
 FFFC0198 00086933			mov		$a0,$v0
-FFFC019C 514000EF			call	SerialPutChar
+FFFC019C 520000EF			call	SerialPutChar
 FFFC01A0 FE0008E3			bra		.0003
                         	
                         	;------------------------------------------------------------------------------
@@ -171,7 +207,7 @@ FFFC01A0 FE0008E3			bra		.0003
                         	Getch:
 FFFC01A4 FFC70713			sub		$sp,$sp,#4
 FFFC01A8 00172023			sw		$ra,[$sp]
-FFFC01AC 4D0000EF			call	SerialPeekChar
+FFFC01AC 4DC000EF			call	SerialPeekChar
 FFFC01B0 00072083			lw		$ra,[$sp]
 FFFC01B4 00470713			add		$sp,$sp,#4
 FFFC01B8 00008067			ret
@@ -179,7 +215,7 @@ FFFC01B8 00008067			ret
                         	Putch:
 FFFC01BC FFC70713			sub		$sp,$sp,#4
 FFFC01C0 00172023			sw		$ra,[$sp]
-FFFC01C4 4EC000EF			call	SerialPutChar
+FFFC01C4 4F8000EF			call	SerialPutChar
 FFFC01C8 00072083			lw		$ra,[$sp]
 FFFC01CC 00470713			add		$sp,$sp,#4
 FFFC01D0 00008067			ret
@@ -286,7 +322,7 @@ FFFC0300 00004637			lb		$t0,INBUF[$s1]
 FFFC0304 10060613
 FFFC0308 00460633
 FFFC030C 00060D03
-FFFC0310 0C0D0463			beq		$t0,$x0,.0005
+FFFC0310 0C0D0A63			beq		$t0,$x0,.0005
 FFFC0314 03ED4D93			xor		$t1,$t0,#'>'
 FFFC0318 000D9663			bne		$t1,$x0,.0004
                         	.skip2:
@@ -298,100 +334,103 @@ FFFC0328 FE0D8AE3			beq		$t1,$x0,.skip2
 FFFC032C 009D4D93			xor		$t1,$t0,#'\t'
 FFFC0330 FE0D86E3			beq		$t1,$x0,.skip2
 FFFC0334 04DD4D93			xor		$t1,$t0,#'M'
-FFFC0338 0A0D8263			beq		$t1,$x0,doMem
+FFFC0338 0A0D8863			beq		$t1,$x0,doMem
 FFFC033C 04206D93			ldi		$t1,#'B'
-FFFC0340 05BD1263			bne		$t0,$t1,.0006
+FFFC0340 05BD1463			bne		$t0,$t1,.0006
 FFFC0344 00106913			ldi		$a0,#1					; Start task
 FFFC0348 01006993			ldi		$a1,#16					; 32 kB (16 pages)
 FFFC034C FFFC2A37			ldi		$a2,#CSTART			; start address
 FFFC0350 030A0A13
 FFFC0354 00000073			ecall
-FFFC0358 00096833			mov		v0,a0
+FFFC0358 00096233			mov		$s1,$a0					; save a0
 FFFC035C FFFC1937			ldi		$a0,#msgCRLF
-FFFC0360 8CE90913
-FFFC0364 388000EF			call	SerialPutString
-FFFC0368 24C000EF			call	PutHexByte
-FFFC036C FFFC1937			ldi		$a0,msgTaskStart
-FFFC0370 8C090913
-FFFC0374 378000EF			call	SerialPutString
-FFFC0378 00006913			ldi		$a0,#0					; Switch task
-FFFC037C 00000073			ecall
-FFFC0380 E5DFF06F			jmp		Monitor
+FFFC0360 8DA90913
+FFFC0364 394000EF			call	SerialPutString
+FFFC0368 00026933			mov		$a0,$s1					; get back a0
+FFFC036C 254000EF			call	PutHexByte
+FFFC0370 FFFC1937			ldi		$a0,msgTaskStart
+FFFC0374 8CC90913
+FFFC0378 380000EF			call	SerialPutString
+FFFC037C 00D06913			ldi		$a0,#13					; Switch task
+FFFC0380 00000073			ecall
+FFFC0384 E59FF06F			jmp		Monitor
                         	.0006:
-FFFC0384 04406D93			ldi		$t1,#'D'
-FFFC0388 01BD1463			bne		$t0,$t1,.0007
-FFFC038C 084010EF			call	DumpReadyQueue
+FFFC0388 04406D93			ldi		$t1,#'D'
+FFFC038C 01BD1863			bne		$t0,$t1,.0007
+FFFC0390 00E06913			ldi		$a0,#14
+FFFC0394 00000073			ecall
+FFFC0398 E45FF06F			jmp		Monitor
                         	.0007:
-FFFC0390 04506D93			ldi		$t1,#'E'
-FFFC0394 01BD1463			bne		$t0,$t1,.0008
-FFFC0398 0CC0006F			jmp		EditMem
+FFFC039C 04506D93			ldi		$t1,#'E'
+FFFC03A0 01BD1463			bne		$t0,$t1,.0008
+FFFC03A4 0CC0006F			jmp		EditMem
                         	.0008:
-FFFC039C 04606D93			ldi		$t1,#'F'
-FFFC03A0 01BD1463			bne		$t0,$t1,.0009
-FFFC03A4 0D80006F			jmp		FillMem
+FFFC03A8 04606D93			ldi		$t1,#'F'
+FFFC03AC 01BD1463			bne		$t0,$t1,.0009
+FFFC03B0 0D80006F			jmp		FillMem
                         	.0009:
-FFFC03A8 05306D93			ldi		$t1,#'S'
-FFFC03AC 01BD1863			bne		$t0,$t1,.0010
-FFFC03B0 00006913			ldi		$a0,#0
-FFFC03B4 00000073			ecall
-FFFC03B8 E25FF06F			jmp		Monitor
+FFFC03B4 05306D93			ldi		$t1,#'S'
+FFFC03B8 01BD1863			bne		$t0,$t1,.0010
+FFFC03BC 00D06913			ldi		$a0,#13
+FFFC03C0 00000073			ecall
+FFFC03C4 E19FF06F			jmp		Monitor
                         	.0010:
-FFFC03BC 04B06D93			ldi		$t1,#'K'
-FFFC03C0 01BD1C63			bne		$t0,$t1,.0011
-FFFC03C4 110000EF			call	GetHexNum
-FFFC03C8 00206913			ldi		$a0,#2					; kill task
-FFFC03CC 000869B3			mov		$a1,$v0					; a0 = pid
-FFFC03D0 00000073			ecall
-FFFC03D4 E09FF06F			jmp		Monitor
+FFFC03C8 04B06D93			ldi		$t1,#'K'
+FFFC03CC 01BD1C63			bne		$t0,$t1,.0011
+FFFC03D0 110000EF			call	GetHexNum
+FFFC03D4 00306913			ldi		$a0,#3					; kill task
+FFFC03D8 000869B3			mov		$a1,$v0					; a0 = pid
+FFFC03DC 00000073			ecall
+FFFC03E0 DFDFF06F			jmp		Monitor
                         	.0011:
                         	.0005:
-FFFC03D8 E00002E3			bra		Monitor
+FFFC03E4 DE000CE3			bra		Monitor
                         	
                         	doMem:
-FFFC03DC FFC70713			sub		$sp,$sp,#4
-FFFC03E0 00120213			add		$s1,$s1,#1
-FFFC03E4 00472023			sw		$s1,[$sp]
-FFFC03E8 00D06913			ldi		$a0,#CR
-FFFC03EC DD1FF0EF			call	Putch
-FFFC03F0 00004937			ldi		$a0,INBUF
-FFFC03F4 10090913
-FFFC03F8 2F4000EF			call	SerialPutString
-FFFC03FC 00072203			lw		$s1,[$sp]
-FFFC0400 00470713			add		$sp,$sp,#4
-FFFC0404 0D0000EF			call	GetHexNum
-FFFC0408 00086333			mov		$s3,$v0
-FFFC040C 00120213			add		$s1,$s1,#1
-FFFC0410 0C4000EF			call	GetHexNum
-FFFC0414 006803B3			add		$s4,$v0,$s3
+FFFC03E8 FFC70713			sub		$sp,$sp,#4
+FFFC03EC 00120213			add		$s1,$s1,#1
+FFFC03F0 00472023			sw		$s1,[$sp]
+FFFC03F4 00D06913			ldi		$a0,#CR
+FFFC03F8 DC5FF0EF			call	Putch
+FFFC03FC 00004937			ldi		$a0,INBUF
+FFFC0400 10090913
+FFFC0404 2F4000EF			call	SerialPutString
+FFFC0408 00072203			lw		$s1,[$sp]
+FFFC040C 00470713			add		$sp,$sp,#4
+FFFC0410 0D0000EF			call	GetHexNum
+FFFC0414 00086333			mov		$s3,$v0
+FFFC0418 00120213			add		$s1,$s1,#1
+FFFC041C 0C4000EF			call	GetHexNum
+FFFC0420 006803B3			add		$s4,$v0,$s3
                         	.loop2:
-FFFC0418 D8DFF0EF			call	Getch						; check for ctrl-c
-FFFC041C 00384813			xor		$v0,$v0,#3
-FFFC0420 DA080EE3			beq		$v0,$x0,Monitor
-FFFC0424 00D06913			ldi		$a0,#CR
-FFFC0428 D95FF0EF			call	Putch
-FFFC042C 00036933			mov		$a0,$s3
-FFFC0430 144000EF			call	PutHexWord
-FFFC0434 03A06913			ldi		$a0,#':'
-FFFC0438 D85FF0EF			call	Putch
-FFFC043C 00706293			ldi		$s2,#7
-                        	.loop:
-FFFC0440 02006913			ldi		$a0,#' '
+FFFC0424 D81FF0EF			call	Getch						; check for ctrl-c
+FFFC0428 00384813			xor		$v0,$v0,#3
+FFFC042C DA0808E3			beq		$v0,$x0,Monitor
+FFFC0430 00D06913			ldi		$a0,#CR
+FFFC0434 D89FF0EF			call	Putch
+FFFC0438 00036933			mov		$a0,$s3
+FFFC043C 144000EF			call	PutHexWord
+FFFC0440 03A06913			ldi		$a0,#':'
 FFFC0444 D79FF0EF			call	Putch
-FFFC0448 00030903			lb		$a0,[$s3]
-FFFC044C 168000EF			call	PutHexByte
-FFFC0450 00130313			add		$s3,$s3,#1
-FFFC0454 FFF28293			sub		$s2,$s2,#1
-FFFC0458 FE02D4E3			bge		$s2,$x0,.loop
-FFFC045C FA736EE3			bltu	$s3,$s4,.loop2
-FFFC0460 D6000EE3			bra		Monitor		
+FFFC0448 00706293			ldi		$s2,#7
+                        	.loop:
+FFFC044C 02006913			ldi		$a0,#' '
+FFFC0450 D6DFF0EF			call	Putch
+FFFC0454 00030903			lb		$a0,[$s3]
+FFFC0458 168000EF			call	PutHexByte
+FFFC045C 00130313			add		$s3,$s3,#1
+FFFC0460 FFF28293			sub		$s2,$s2,#1
+FFFC0464 FE02D4E3			bge		$s2,$x0,.loop
+FFFC0468 FA736EE3			bltu	$s3,$s4,.loop2
+FFFC046C D60008E3			bra		Monitor		
                         	
                         	EditMem:
-FFFC0464 070000EF			call	GetHexNum			; get address to edit
-FFFC0468 00086333			mov		$s3,$v0
-FFFC046C 00120213			add		$s1,$s1,#1
-FFFC0470 064000EF			call	GetHexNum			; get value to set
-FFFC0474 00680023			sb		$s3,[$v0]			; update mem
-FFFC0478 D65FF06F			jmp		Monitor
+FFFC0470 070000EF			call	GetHexNum			; get address to edit
+FFFC0474 00086333			mov		$s3,$v0
+FFFC0478 00120213			add		$s1,$s1,#1
+FFFC047C 064000EF			call	GetHexNum			; get value to set
+FFFC0480 00680023			sb		$s3,[$v0]			; update mem
+FFFC0484 D59FF06F			jmp		Monitor
                         	
                         	;------------------------------------------------------------------------------
                         	;	>F 1000 800 EE
@@ -399,18 +438,18 @@ FFFC0478 D65FF06F			jmp		Monitor
                         	;------------------------------------------------------------------------------
                         	
                         	FillMem:
-FFFC047C 058000EF			call	GetHexNum			; get address
-FFFC0480 00086333			mov		$s3,$v0
-FFFC0484 00120213			add		$s1,$s1,#1
-FFFC0488 04C000EF			call	GetHexNum			; get length
-FFFC048C 000863B3			mov		$s4,$v0
+FFFC0488 058000EF			call	GetHexNum			; get address
+FFFC048C 00086333			mov		$s3,$v0
 FFFC0490 00120213			add		$s1,$s1,#1
-FFFC0494 040000EF			call	GetHexNum			; get byte to use
+FFFC0494 04C000EF			call	GetHexNum			; get length
+FFFC0498 000863B3			mov		$s4,$v0
+FFFC049C 00120213			add		$s1,$s1,#1
+FFFC04A0 040000EF			call	GetHexNum			; get byte to use
                         	.0001:
-FFFC0498 01030023			sb		$v0,[$s3]
-FFFC049C FFF38393			sub		$s4,$s4,#1
-FFFC04A0 FE704CE3			bgt		$s4,$x0,.0001
-FFFC04A4 D39FF06F			jmp		Monitor
+FFFC04A4 01030023			sb		$v0,[$s3]
+FFFC04A8 FFF38393			sub		$s4,$s4,#1
+FFFC04AC FE704CE3			bgt		$s4,$x0,.0001
+FFFC04B0 D2DFF06F			jmp		Monitor
                         	
                         	;------------------------------------------------------------------------------
                         	; Skip over spaces and tabs in the input buffer.
@@ -418,135 +457,135 @@ FFFC04A4 D39FF06F			jmp		Monitor
                         	
                         	SkipSpaces:
                         	.skip2:
-FFFC04A8 00004637			lb		$t0,INBUF[$s1]
-FFFC04AC 10060613
-FFFC04B0 00460633
-FFFC04B4 00060D03
-FFFC04B8 020D4D93			xor		$t1,$t0,#' '
-FFFC04BC 000D8863			beq		$t1,$x0,.skip1
-FFFC04C0 009D4D93			xor		$t1,$t0,#'\t'
-FFFC04C4 000D8463			beq		$t1,$x0,.skip1
-FFFC04C8 00008067			ret
+FFFC04B4 00004637			lb		$t0,INBUF[$s1]
+FFFC04B8 10060613
+FFFC04BC 00460633
+FFFC04C0 00060D03
+FFFC04C4 020D4D93			xor		$t1,$t0,#' '
+FFFC04C8 000D8863			beq		$t1,$x0,.skip1
+FFFC04CC 009D4D93			xor		$t1,$t0,#'\t'
+FFFC04D0 000D8463			beq		$t1,$x0,.skip1
+FFFC04D4 00008067			ret
                         	.skip1:
-FFFC04CC 00120213			add		$s1,$s1,#1
-FFFC04D0 FC000CE3			bra		.skip2
+FFFC04D8 00120213			add		$s1,$s1,#1
+FFFC04DC FC000CE3			bra		.skip2
                         	
                         	;------------------------------------------------------------------------------
                         	; Get a hex number from the input buffer.
                         	;------------------------------------------------------------------------------
                         	
                         	GetHexNum:
-FFFC04D4 00006813			ldi		$v0,#0							; v0 = num
-FFFC04D8 FFC70713			sub		$sp,$sp,#4
-FFFC04DC 00172023			sw		$ra,[$sp]
-FFFC04E0 FC9FF0EF			call	SkipSpaces
+FFFC04E0 00006813			ldi		$v0,#0							; v0 = num
+FFFC04E4 FFC70713			sub		$sp,$sp,#4
+FFFC04E8 00172023			sw		$ra,[$sp]
+FFFC04EC FC9FF0EF			call	SkipSpaces
                         	.next:
-FFFC04E4 00004637			lb		$t0,INBUF[$s1]
-FFFC04E8 10060613
-FFFC04EC 00460633
-FFFC04F0 00060D03
-FFFC04F4 03006E13			ldi		$t2,#'0'
-FFFC04F8 03CD4663			blt		$t0,$t2,.0001
-FFFC04FC 03A06E13			ldi		$t2,#'9'+1
-FFFC0500 07CD4063			blt		$t0,$t2,.isDigit
-FFFC0504 04106E13			ldi		$t2,#'A'
-FFFC0508 01CD4E63			blt		$t0,$t2,.0001
-FFFC050C 04706E13			ldi		$t2,#'F'+1
-FFFC0510 03CD4063			blt		$t0,$t2,.isHexUpper
-FFFC0514 06106E13			ldi		$t2,#'a'
-FFFC0518 01CD4663			blt		$t0,$t2,.0001
-FFFC051C 06706E13			ldi		$t2,#'f'+1
-FFFC0520 03CD4463			blt		$t0,$t2,.isHexLower
+FFFC04F0 00004637			lb		$t0,INBUF[$s1]
+FFFC04F4 10060613
+FFFC04F8 00460633
+FFFC04FC 00060D03
+FFFC0500 03006E13			ldi		$t2,#'0'
+FFFC0504 03CD4663			blt		$t0,$t2,.0001
+FFFC0508 03A06E13			ldi		$t2,#'9'+1
+FFFC050C 07CD4063			blt		$t0,$t2,.isDigit
+FFFC0510 04106E13			ldi		$t2,#'A'
+FFFC0514 01CD4E63			blt		$t0,$t2,.0001
+FFFC0518 04706E13			ldi		$t2,#'F'+1
+FFFC051C 03CD4063			blt		$t0,$t2,.isHexUpper
+FFFC0520 06106E13			ldi		$t2,#'a'
+FFFC0524 01CD4663			blt		$t0,$t2,.0001
+FFFC0528 06706E13			ldi		$t2,#'f'+1
+FFFC052C 03CD4463			blt		$t0,$t2,.isHexLower
                         	.0001:
-FFFC0524 00072083			lw		$ra,[$sp]
-FFFC0528 00470713			add		$sp,$sp,#4
-FFFC052C 00008067			ret
+FFFC0530 00072083			lw		$ra,[$sp]
+FFFC0534 00470713			add		$sp,$sp,#4
+FFFC0538 00008067			ret
                         	.isHexUpper:
-FFFC0530 00481813			sll		$v0,$v0,#4
-FFFC0534 FBFD0D13			sub		$t0,$t0,#'A'
-FFFC0538 00AD0D13			add		$t0,$t0,#10
-FFFC053C 01A86833			or		$v0,$v0,$t0
-FFFC0540 00120213			add		$s1,$s1,#1
-FFFC0544 FA0000E3			bra		.next
+FFFC053C 00481813			sll		$v0,$v0,#4
+FFFC0540 FBFD0D13			sub		$t0,$t0,#'A'
+FFFC0544 00AD0D13			add		$t0,$t0,#10
+FFFC0548 01A86833			or		$v0,$v0,$t0
+FFFC054C 00120213			add		$s1,$s1,#1
+FFFC0550 FA0000E3			bra		.next
                         	.isHexLower:
-FFFC0548 00481813			sll		$v0,$v0,#4
-FFFC054C F9FD0D13			sub		$t0,$t0,#'a'
-FFFC0550 00AD0D13			add		$t0,$t0,#10
-FFFC0554 01A86833			or		$v0,$v0,$t0
-FFFC0558 00120213			add		$s1,$s1,#1
-FFFC055C F80004E3			bra		.next
+FFFC0554 00481813			sll		$v0,$v0,#4
+FFFC0558 F9FD0D13			sub		$t0,$t0,#'a'
+FFFC055C 00AD0D13			add		$t0,$t0,#10
+FFFC0560 01A86833			or		$v0,$v0,$t0
+FFFC0564 00120213			add		$s1,$s1,#1
+FFFC0568 F80004E3			bra		.next
                         	.isDigit:
-FFFC0560 00481813			sll		$v0,$v0,#4
-FFFC0564 FD0D0D13			sub		$t0,$t0,#'0'
-FFFC0568 01A86833			or		$v0,$v0,$t0
-FFFC056C 00120213			add		$s1,$s1,#1
-FFFC0570 F6000AE3			bra		.next
+FFFC056C 00481813			sll		$v0,$v0,#4
+FFFC0570 FD0D0D13			sub		$t0,$t0,#'0'
+FFFC0574 01A86833			or		$v0,$v0,$t0
+FFFC0578 00120213			add		$s1,$s1,#1
+FFFC057C F6000AE3			bra		.next
                         	
                         	;------------------------------------------------------------------------------
                         	; Output a word as a hex string.
                         	;------------------------------------------------------------------------------
                         	
                         	PutHexWord:
-FFFC0574 FF870713			sub		$sp,$sp,#8
-FFFC0578 00172023			sw		$ra,[$sp]
-FFFC057C 01272223			sw		$a0,4[$sp]
-FFFC0580 01095913			srl		$a0,$a0,#16
-FFFC0584 010000EF			call	PutHexHalf
-FFFC0588 00072083			lw		$ra,[$sp]
-FFFC058C 00472903			lw		$a0,4[$sp]
-FFFC0590 00870713			add		$sp,$sp,#8	; fall through to PutHexHalf
+FFFC0580 FF870713			sub		$sp,$sp,#8
+FFFC0584 00172023			sw		$ra,[$sp]
+FFFC0588 01272223			sw		$a0,4[$sp]
+FFFC058C 01095913			srl		$a0,$a0,#16
+FFFC0590 010000EF			call	PutHexHalf
+FFFC0594 00072083			lw		$ra,[$sp]
+FFFC0598 00472903			lw		$a0,4[$sp]
+FFFC059C 00870713			add		$sp,$sp,#8	; fall through to PutHexHalf
                         	
                         	;------------------------------------------------------------------------------
                         	; Output a half-word (16 bits) as a hex string.
                         	;------------------------------------------------------------------------------
                         	
                         	PutHexHalf:
-FFFC0594 FF870713			sub		$sp,$sp,#8
-FFFC0598 00172023			sw		$ra,[$sp]
-FFFC059C 01272223			sw		$a0,4[$sp]
-FFFC05A0 00895913			srl		$a0,$a0,#8
-FFFC05A4 010000EF			call	PutHexByte
-FFFC05A8 00072083			lw		$ra,[$sp]
-FFFC05AC 00472903			lw		$a0,4[$sp]		
-FFFC05B0 00870713			add		$sp,$sp,#8	; fall through to PutHexByte
+FFFC05A0 FF870713			sub		$sp,$sp,#8
+FFFC05A4 00172023			sw		$ra,[$sp]
+FFFC05A8 01272223			sw		$a0,4[$sp]
+FFFC05AC 00895913			srl		$a0,$a0,#8
+FFFC05B0 010000EF			call	PutHexByte
+FFFC05B4 00072083			lw		$ra,[$sp]
+FFFC05B8 00472903			lw		$a0,4[$sp]		
+FFFC05BC 00870713			add		$sp,$sp,#8	; fall through to PutHexByte
                         	
                         	;------------------------------------------------------------------------------
                         	; Output a byte as a hex string.
                         	;------------------------------------------------------------------------------
                         	
                         	PutHexByte:
-FFFC05B4 FF870713			sub		$sp,$sp,#8
-FFFC05B8 00172023			sw		$ra,[$sp]
-FFFC05BC 01272223			sw		$a0,4[$sp]
-FFFC05C0 00495913			srl		$a0,$a0,#4		; put the high order nybble first
-FFFC05C4 010000EF			call	PutHexNybble
-FFFC05C8 00072083			lw		$ra,[$sp]
-FFFC05CC 00472903			lw		$a0,4[$sp]
-FFFC05D0 00870713			add		$sp,$sp,#8		; fall through to PutHexNybble
+FFFC05C0 FF870713			sub		$sp,$sp,#8
+FFFC05C4 00172023			sw		$ra,[$sp]
+FFFC05C8 01272223			sw		$a0,4[$sp]
+FFFC05CC 00495913			srl		$a0,$a0,#4		; put the high order nybble first
+FFFC05D0 010000EF			call	PutHexNybble
+FFFC05D4 00072083			lw		$ra,[$sp]
+FFFC05D8 00472903			lw		$a0,4[$sp]
+FFFC05DC 00870713			add		$sp,$sp,#8		; fall through to PutHexNybble
                         	
                         	;------------------------------------------------------------------------------
                         	; Output a nybble as a hex string.
                         	;------------------------------------------------------------------------------
                         	
                         	PutHexNybble:
-FFFC05D4 FF870713			sub		$sp,$sp,#8
-FFFC05D8 00172023			sw		$ra,[$sp]
-FFFC05DC 01272223			sw		$a0,4[$sp]
-FFFC05E0 00F97913			and		$a0,$a0,#15		; strip off high order bits
-FFFC05E4 00A06D13			ldi		$t0,#10
-FFFC05E8 01A94A63			blt		$a0,$t0,.lt10
-FFFC05EC FF690913			sub		$a0,$a0,#10
-FFFC05F0 04190913			add		$a0,$a0,#'A'
-FFFC05F4 BC9FF0EF			call	Putch
-FFFC05F8 00000663			bra		.0001
-                        	.lt10:
-FFFC05FC 03090913			add		$a0,$a0,#'0'
+FFFC05E0 FF870713			sub		$sp,$sp,#8
+FFFC05E4 00172023			sw		$ra,[$sp]
+FFFC05E8 01272223			sw		$a0,4[$sp]
+FFFC05EC 00F97913			and		$a0,$a0,#15		; strip off high order bits
+FFFC05F0 00A06D13			ldi		$t0,#10
+FFFC05F4 01A94A63			blt		$a0,$t0,.lt10
+FFFC05F8 FF690913			sub		$a0,$a0,#10
+FFFC05FC 04190913			add		$a0,$a0,#'A'
 FFFC0600 BBDFF0EF			call	Putch
+FFFC0604 00000663			bra		.0001
+                        	.lt10:
+FFFC0608 03090913			add		$a0,$a0,#'0'
+FFFC060C BB1FF0EF			call	Putch
                         	.0001:
-FFFC0604 00072083			lw		$ra,[$sp]
-FFFC0608 00472903			lw		$a0,4[$sp]
-FFFC060C 00870713			add		$sp,$sp,#8
-FFFC0610 00008067			ret
+FFFC0610 00072083			lw		$ra,[$sp]
+FFFC0614 00472903			lw		$a0,4[$sp]
+FFFC0618 00870713			add		$sp,$sp,#8
+FFFC061C 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; VIAInit
@@ -557,32 +596,32 @@ FFFC0610 00008067			ret
                         	VIAInit:
                         			; Initialize port A low order eight bits as output, the remaining bits as
                         			; input.
-FFFC0614 0FF06D13			ldi		$t0,#$000000FF
-FFFC0618 FFDC0637			sw		$t0,VIA+VIA_DDRA
-FFFC061C 60C60613
-FFFC0620 00060633
-FFFC0624 01A62023
-FFFC0628 00106D13			ldi		$t0,#1							; select timer 3 access
-FFFC062C FFDC0637			sb		$t0,VIA+VIA_PCR+1
-FFFC0630 63160613
-FFFC0634 00060633
-FFFC0638 01A60023
-FFFC063C 01F06D13			ldi		$t0,#$1F
-FFFC0640 FFDC0637			sb		$t0,VIA+VIA_ACR+1		; set timer 3 mode, timer 1/2 = 64 bit
-FFFC0644 62D60613
-FFFC0648 00060633
-FFFC064C 01A60023
-FFFC0650 00197D37			ldi		$t0,#$00196E6B			;	divider value for 30Hz
-FFFC0654 E6BD0D13
-FFFC0658 FFDC0637			sw		$t0,VIA+VIA_T1CL
-FFFC065C 61060613
-FFFC0660 00060633
-FFFC0664 01A62023
-FFFC0668 FFDC0637			sw		$x0,VIA+VIA_T1CH		; trigger transfer to count registers
-FFFC066C 61460613
-FFFC0670 00060633
-FFFC0674 00062023
-FFFC0678 00008067			ret
+FFFC0620 0FF06D13			ldi		$t0,#$000000FF
+FFFC0624 FFDC0637			sw		$t0,VIA+VIA_DDRA
+FFFC0628 60C60613
+FFFC062C 00060633
+FFFC0630 01A62023
+FFFC0634 00106D13			ldi		$t0,#1							; select timer 3 access
+FFFC0638 FFDC0637			sb		$t0,VIA+VIA_PCR+1
+FFFC063C 63160613
+FFFC0640 00060633
+FFFC0644 01A60023
+FFFC0648 01F06D13			ldi		$t0,#$1F
+FFFC064C FFDC0637			sb		$t0,VIA+VIA_ACR+1		; set timer 3 mode, timer 1/2 = 64 bit
+FFFC0650 62D60613
+FFFC0654 00060633
+FFFC0658 01A60023
+FFFC065C 00197D37			ldi		$t0,#$00196E6B			;	divider value for 30Hz
+FFFC0660 E6BD0D13
+FFFC0664 FFDC0637			sw		$t0,VIA+VIA_T1CL
+FFFC0668 61060613
+FFFC066C 00060633
+FFFC0670 01A62023
+FFFC0674 FFDC0637			sw		$x0,VIA+VIA_T1CH		; trigger transfer to count registers
+FFFC0678 61460613
+FFFC067C 00060633
+FFFC0680 00062023
+FFFC0684 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; SerialPeekChar
@@ -597,20 +636,20 @@ FFFC0678 00008067			ret
                         	;------------------------------------------------------------------------------
                         	
                         	SerialPeekChar:
-FFFC067C FFDC1637			lb		$v0,UART+UART_STAT
-FFFC0680 A0460613
-FFFC0684 00060633
-FFFC0688 00060803
-FFFC068C 00887813			and		$v0,$v0,#8					; look for Rx not empty
-FFFC0690 00080C63			beq		$v0,$x0,.0001
-FFFC0694 FFDC1637			lb		$v0,UART+UART_TRB
-FFFC0698 A0060613
-FFFC069C 00060633
-FFFC06A0 00060803
-FFFC06A4 00008067			ret
+FFFC0688 FFDC1637			lb		$v0,UART+UART_STAT
+FFFC068C A0460613
+FFFC0690 00060633
+FFFC0694 00060803
+FFFC0698 00887813			and		$v0,$v0,#8					; look for Rx not empty
+FFFC069C 00080C63			beq		$v0,$x0,.0001
+FFFC06A0 FFDC1637			lb		$v0,UART+UART_TRB
+FFFC06A4 A0060613
+FFFC06A8 00060633
+FFFC06AC 00060803
+FFFC06B0 00008067			ret
                         	.0001:
-FFFC06A8 FFF06813			ldi		$v0,#-1
-FFFC06AC 00008067			ret
+FFFC06B4 FFF06813			ldi		$v0,#-1
+FFFC06B8 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; SerialPutChar
@@ -624,22 +663,22 @@ FFFC06AC 00008067			ret
                         	;------------------------------------------------------------------------------
                         	
                         	SerialPutChar:
-FFFC06B0 FFC70713			sub		$sp,$sp,#4
-FFFC06B4 01072023			sw		$v0,[$sp]
+FFFC06BC FFC70713			sub		$sp,$sp,#4
+FFFC06C0 01072023			sw		$v0,[$sp]
                         	.0001:
-FFFC06B8 FFDC1637			lb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
-FFFC06BC A0460613
-FFFC06C0 00060633
-FFFC06C4 00060803
-FFFC06C8 01087813			and		$v0,$v0,#16					; bit #4 of the status reg
-FFFC06CC FE0806E3			beq		$v0,$x0,.0001				; branch if transmitter is not empty
-FFFC06D0 FFDC1637			sb		$a0,UART+UART_TRB		; send the byte
-FFFC06D4 A0060613
-FFFC06D8 00060633
-FFFC06DC 01260023
-FFFC06E0 00072803			lw		$v0,[$sp]
-FFFC06E4 00470713			add		$sp,$sp,#4
-FFFC06E8 00008067			ret
+FFFC06C4 FFDC1637			lb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
+FFFC06C8 A0460613
+FFFC06CC 00060633
+FFFC06D0 00060803
+FFFC06D4 01087813			and		$v0,$v0,#16					; bit #4 of the status reg
+FFFC06D8 FE0806E3			beq		$v0,$x0,.0001				; branch if transmitter is not empty
+FFFC06DC FFDC1637			sb		$a0,UART+UART_TRB		; send the byte
+FFFC06E0 A0060613
+FFFC06E4 00060633
+FFFC06E8 01260023
+FFFC06EC 00072803			lw		$v0,[$sp]
+FFFC06F0 00470713			add		$sp,$sp,#4
+FFFC06F4 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; SerialPutString
@@ -656,21 +695,21 @@ FFFC06E8 00008067			ret
                         	;------------------------------------------------------------------------------
                         	
                         	SerialPutString:
-FFFC06EC FF870713			sub		$sp,$sp,#8				; save link register
-FFFC06F0 00172023			sw		$ra,[$sp]
-FFFC06F4 01272223			sw		$a0,4[$sp]				; and argument
-FFFC06F8 00096DB3			mov		$t1,$a0						; t1 = pointer to string
+FFFC06F8 FF870713			sub		$sp,$sp,#8				; save link register
+FFFC06FC 00172023			sw		$ra,[$sp]
+FFFC0700 01272223			sw		$a0,4[$sp]				; and argument
+FFFC0704 00096DB3			mov		$t1,$a0						; t1 = pointer to string
                         	.0001:
-FFFC06FC 000D8903			lb		$a0,[$t1]
-FFFC0700 001D8D93			add		$t1,$t1,#1				; advance pointer to next byte
-FFFC0704 00090663			beq		$a0,$x0,.done			; branch if done
-FFFC0708 FA9FF0EF			call	SerialPutChar			; output character
-FFFC070C FE0008E3			bra		.0001
+FFFC0708 000D8903			lb		$a0,[$t1]
+FFFC070C 001D8D93			add		$t1,$t1,#1				; advance pointer to next byte
+FFFC0710 00090663			beq		$a0,$x0,.done			; branch if done
+FFFC0714 FA9FF0EF			call	SerialPutChar			; output character
+FFFC0718 FE0008E3			bra		.0001
                         	.done:
-FFFC0710 00072083			lw		$ra,[$sp]					; restore return address
-FFFC0714 00472903			lw		$a0,4[$sp]				; and argument
-FFFC0718 00870713			add		$sp,$sp,#8
-FFFC071C 00008067			ret
+FFFC071C 00072083			lw		$ra,[$sp]					; restore return address
+FFFC0720 00472903			lw		$a0,4[$sp]				; and argument
+FFFC0724 00870713			add		$sp,$sp,#8
+FFFC0728 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; Initialize serial port.
@@ -680,158 +719,158 @@ FFFC071C 00008067			ret
                         	;------------------------------------------------------------------------------
                         	
                         	SerialInit:
-FFFC0720 00B06D13			ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
-FFFC0724 FFDC1637			sw		$t0,UART+8
-FFFC0728 A0860613
-FFFC072C 00060633
-FFFC0730 01A62023
-FFFC0734 00060D37			ldi		$t0,#$0006001E			; reset the fifo's
-FFFC0738 01ED0D13
-FFFC073C FFDC1637			sw		$t0,UART+12
-FFFC0740 A0C60613
-FFFC0744 00060633
-FFFC0748 01A62023
-FFFC074C 01E06D13			ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
-FFFC0750 FFDC1637			sw		$t0,UART+12
-FFFC0754 A0C60613
-FFFC0758 00060633
-FFFC075C 01A62023
-FFFC0760 00008067			ret
+FFFC072C 00B06D13			ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
+FFFC0730 FFDC1637			sw		$t0,UART+8
+FFFC0734 A0860613
+FFFC0738 00060633
+FFFC073C 01A62023
+FFFC0740 00060D37			ldi		$t0,#$0006001E			; reset the fifo's
+FFFC0744 01ED0D13
+FFFC0748 FFDC1637			sw		$t0,UART+12
+FFFC074C A0C60613
+FFFC0750 00060633
+FFFC0754 01A62023
+FFFC0758 01E06D13			ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
+FFFC075C FFDC1637			sw		$t0,UART+12
+FFFC0760 A0C60613
+FFFC0764 00060633
+FFFC0768 01A62023
+FFFC076C 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; Exception processing code starts here.
                         	;------------------------------------------------------------------------------
-                        	.file "cs01rom.asm",540
+                        	.file "cs01rom.asm",543
                         			code
                         			align	4                        	
                         	IRQRout:
-FFFC0764 00080737			ldi		$sp,#$80000-4		; setup machine mode stack pointer
-FFFC0768 FFC70713
-FFFC076C 34201D73			csrrw	$t0,#$342,$x0			; get cause code
-FFFC0770 000D4663			blt		$t0,$x0,.isIRQ		; irq or ecall?
-FFFC0774 3190006F			jmp		OSCALL					; 
-FFFC0778 10000073			eret										
+FFFC0770 00080737			ldi		$sp,#$80000-4		; setup machine mode stack pointer
+FFFC0774 FFC70713
+FFFC0778 34201D73			csrrw	$t0,#$342,$x0			; get cause code
+FFFC077C 000D4663			blt		$t0,$x0,.isIRQ		; irq or ecall?
+FFFC0780 4090006F			jmp		OSCALL					; 
+FFFC0784 10000073			eret										
                         	.isIRQ:
                         	 		; Was it the VIA that caused the interrupt?
-FFFC077C FFDC0637			lb		$t0,VIA+VIA_IFR
-FFFC0780 63460613
-FFFC0784 00060633
-FFFC0788 00060D03
-FFFC078C 040D5663			bge		$t0,$x0,.0001			; no
-FFFC0790 FFDC0637			lw		$t0,VIA+VIA_T1CL	; yes, clear interrupt
-FFFC0794 61060613
-FFFC0798 00060633
-FFFC079C 00062D03
-FFFC07A0 00004637			lw		$t0,milliseconds
-FFFC07A4 20860613
-FFFC07A8 00060633
-FFFC07AC 00062D03
-FFFC07B0 01ED0D13			add		$t0,$t0,#30
-FFFC07B4 00004637			sw		$t0,milliseconds
-FFFC07B8 20860613
-FFFC07BC 00060633
-FFFC07C0 01A62023
-FFFC07C4 00004637			sw		$t0,switchflag
-FFFC07C8 20060613
-FFFC07CC 00060633
-FFFC07D0 01A62023
-FFFC07D4 10000073			eret
+FFFC0788 FFDC0637			lb		$t0,VIA+VIA_IFR
+FFFC078C 63460613
+FFFC0790 00060633
+FFFC0794 00060D03
+FFFC0798 040D5663			bge		$t0,$x0,.0001			; no
+FFFC079C FFDC0637			lw		$t0,VIA+VIA_T1CL	; yes, clear interrupt
+FFFC07A0 61060613
+FFFC07A4 00060633
+FFFC07A8 00062D03
+FFFC07AC 00004637			lw		$t0,milliseconds
+FFFC07B0 20860613
+FFFC07B4 00060633
+FFFC07B8 00062D03
+FFFC07BC 01ED0D13			add		$t0,$t0,#30
+FFFC07C0 00004637			sw		$t0,milliseconds
+FFFC07C4 20860613
+FFFC07C8 00060633
+FFFC07CC 01A62023
+FFFC07D0 00004637			sw		$t0,switchflag
+FFFC07D4 20060613
+FFFC07D8 00060633
+FFFC07DC 01A62023
+FFFC07E0 10000073			eret
                         			; Was it the uart that caused the interrupt?
                         	.0001:
-FFFC07D8 FFDC1637			lb		$t0,UART+UART_STAT
-FFFC07DC A0460613
-FFFC07E0 00060633
-FFFC07E4 00060D03
-FFFC07E8 000D4463			blt		$t0,$x0,.0002			; uart cause interrupt?
+FFFC07E4 FFDC1637			lb		$t0,UART+UART_STAT
+FFFC07E8 A0460613
+FFFC07EC 00060633
+FFFC07F0 00060D03
+FFFC07F4 000D4463			blt		$t0,$x0,.0002			; uart cause interrupt?
                         			; Some other interrupt
-FFFC07EC 10000073			eret
+FFFC07F8 10000073			eret
                         	.0002:
-FFFC07F0 00B06D13			ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
-FFFC07F4 FFDC1637			sw		$t0,UART+UART_CMD
-FFFC07F8 A0860613
-FFFC07FC 00060633
-FFFC0800 01A62023
-FFFC0804 10000073			eret
+FFFC07FC 00B06D13			ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
+FFFC0800 FFDC1637			sw		$t0,UART+UART_CMD
+FFFC0804 A0860613
+FFFC0808 00060633
+FFFC080C 01A62023
+FFFC0810 10000073			eret
                         	
                         	;------------------------------------------------------------------------------
                         	; Message strings
                         	;------------------------------------------------------------------------------
                         	
                         	msgStart:
-FFFC0808 31305343			db		"CS01 System Starting.",13
-FFFC080C 73795320
-FFFC0810 206D6574
-FFFC0814 72617453
-FFFC0818 676E6974
-FFFC081C 6F4D0D2E
+FFFC0814 31305343			db		"CS01 System Starting.",13
+FFFC0818 73795320
+FFFC081C 206D6574
+FFFC0820 72617453
+FFFC0824 676E6974
+FFFC0828 6F4D0D2E
                         	msgMonHelp:
-FFFC081E 696E6F4D			db		"Monitor Commands",13
-FFFC0822 20726F74
-FFFC0826 6D6D6F43
-FFFC082A 73646E61
-FFFC082E 2D20420D
-FFFC082F 202D2042			db		"B - start tiny basic",13
-FFFC0833 72617473
-FFFC0837 69742074
-FFFC083B 6220796E
-FFFC083F 63697361
-FFFC0843 2D20440D
-FFFC0844 202D2044			db		"D - dump ready que",13
-FFFC0848 706D7564
-FFFC084C 61657220
-FFFC0850 71207964
-FFFC0854 450D6575
-FFFC0857 202D2045			db		"E - edit memory",13
-FFFC085B 74696465
-FFFC085F 6D656D20
-FFFC0863 0D79726F
-FFFC0867 202D2046			db		"F - fill memory",13
-FFFC086B 6C6C6966
-FFFC086F 6D656D20
-FFFC0873 0D79726F
-FFFC0877 743C204B			db		"K <tid> - kill task", 13
-FFFC087B 203E6469
-FFFC087F 696B202D
-FFFC0883 74206C6C
-FFFC0887 0D6B7361
-FFFC088B 733C204D			db		"M <start> <length>	- dump memory",13
-FFFC088F 74726174
-FFFC0893 6C3C203E
-FFFC0897 74676E65
-FFFC089B 2D093E68
-FFFC089F 6D756420
-FFFC08A3 656D2070
-FFFC08A7 79726F6D
-FFFC08AB 2D20530D
-FFFC08AC 202D2053			db		"S - switch task",13
-FFFC08B0 74697773
-FFFC08B4 74206863
-FFFC08B8 0D6B7361
-FFFC08BC 00000000			db		0
-FFFC08BD 20000000			align 
+FFFC082A 696E6F4D			db		"Monitor Commands",13
+FFFC082E 20726F74
+FFFC0832 6D6D6F43
+FFFC0836 73646E61
+FFFC083A 2D20420D
+FFFC083B 202D2042			db		"B - start tiny basic",13
+FFFC083F 72617473
+FFFC0843 69742074
+FFFC0847 6220796E
+FFFC084B 63697361
+FFFC084F 2D20440D
+FFFC0850 202D2044			db		"D - dump ready que",13
+FFFC0854 706D7564
+FFFC0858 61657220
+FFFC085C 71207964
+FFFC0860 450D6575
+FFFC0863 202D2045			db		"E - edit memory",13
+FFFC0867 74696465
+FFFC086B 6D656D20
+FFFC086F 0D79726F
+FFFC0873 202D2046			db		"F - fill memory",13
+FFFC0877 6C6C6966
+FFFC087B 6D656D20
+FFFC087F 0D79726F
+FFFC0883 743C204B			db		"K <tid> - kill task", 13
+FFFC0887 203E6469
+FFFC088B 696B202D
+FFFC088F 74206C6C
+FFFC0893 0D6B7361
+FFFC0897 733C204D			db		"M <start> <length>	- dump memory",13
+FFFC089B 74726174
+FFFC089F 6C3C203E
+FFFC08A3 74676E65
+FFFC08A7 2D093E68
+FFFC08AB 6D756420
+FFFC08AF 656D2070
+FFFC08B3 79726F6D
+FFFC08B7 2D20530D
+FFFC08B8 202D2053			db		"S - switch task",13
+FFFC08BC 74697773
+FFFC08C0 74206863
+FFFC08C4 0D6B7361
+FFFC08C8 00000000			db		0
+FFFC08C9 20000000			align 
                         	
                         	msgTaskStart:
-FFFC08C0 73617420			db		" task started."
-FFFC08C4 7473206B
-FFFC08C8 65747261
-FFFC08CC 0A0D2E64
+FFFC08CC 73617420			db		" task started."
+FFFC08D0 7473206B
+FFFC08D4 65747261
+FFFC08D8 0A0D2E64
                         	msgCRLF:
-FFFC08CE 00000A0D			db		13,10,0
+FFFC08DA 00000A0D			db		13,10,0
                         	flt50:
-FFFC08D1 00000000		dw	0x00000000,0x00000000,0x00000000,0x40049000
-FFFC08D5 00000000
-FFFC08D9 00000000
-FFFC08DD 40049000
-                        	flt20:
-FFFC08E1 00000000		dw	0x00000000,0x00000000,0x00000000,0x40034000
+FFFC08DD 00000000		dw	0x00000000,0x00000000,0x00000000,0x40049000
+FFFC08E1 00000000
 FFFC08E5 00000000
-FFFC08E9 00000000
-FFFC08ED 40034000
-                        	flt10:
-FFFC08F1 00000000		dw	0x00000000,0x00000000,0x00000000,0x40024000
+FFFC08E9 40049000
+                        	flt20:
+FFFC08ED 00000000		dw	0x00000000,0x00000000,0x00000000,0x40034000
+FFFC08F1 00000000
 FFFC08F5 00000000
-FFFC08F9 00000000
-FFFC08FD 40024000
+FFFC08F9 40034000
+                        	flt10:
+FFFC08FD 00000000		dw	0x00000000,0x00000000,0x00000000,0x40024000
+FFFC0901 00000000
+FFFC0905 00000000
+FFFC0909 40024000
                         	
                         	.file "fltToString.asm",1
                         	.file "fltToString.asm",1
@@ -847,47 +886,47 @@ FFFC08FD 40024000
                         	; -----------------------------------------------------------------------------
                         	
                         	fltToString:
-FFFC0901 006E1300			ldi		$t2,#0				; $t2 = 0
-FFFC0905 09095300
-FFFC0906 E0090953			fmv		$a0,$f18
-FFFC090A 7F800637			and		$t0,$a0,#$7F800000
-FFFC090E 01267D33
-FFFC0912 7F800DB7			ldi		$t1,#$7F800000
-FFFC0916 000D8D93
-FFFC091A 05BD1063			bne		$t0,$t1,.0001
-FFFC091E 00800637			and		$t0,$a0,#$007FFFFF
-FFFC0922 01267D33
-FFFC0926 000D0E63			beq		$t0,$x0,.inf
-FFFC092A FFFC1637			ldt		$t0,msgNan
-FFFC092E CAC60613
-FFFC0932 00060633
-FFFC0936 00062D03
-FFFC093A 21A02023			stt		$t0,STRTMP
-FFFC093E 2E000A63			bra		.prt
+FFFC090D 006E1300			ldi		$t2,#0				; $t2 = 0
+FFFC0911 09095300
+FFFC0912 E0090953			fmv		$a0,$f18
+FFFC0916 7F800637			and		$t0,$a0,#$7F800000
+FFFC091A 01267D33
+FFFC091E 7F800DB7			ldi		$t1,#$7F800000
+FFFC0922 000D8D93
+FFFC0926 05BD1063			bne		$t0,$t1,.0001
+FFFC092A 00800637			and		$t0,$a0,#$007FFFFF
+FFFC092E 01267D33
+FFFC0932 000D0E63			beq		$t0,$x0,.inf
+FFFC0936 FFFC1637			ldt		$t0,msgNan
+FFFC093A CB860613
+FFFC093E 00060633
+FFFC0942 00062D03
+FFFC0946 21A02023			stt		$t0,STRTMP
+FFFC094A 2E000A63			bra		.prt
                         	.inf:
-FFFC0942 FFFC1637			ldt		$t0,msgInf
-FFFC0946 CA860613
-FFFC094A 00060633
-FFFC094E 00062D03
-FFFC0952 21A02023			stt		$t0,STRTMP
-FFFC0956 2C000E63			bra		.prt
+FFFC094E FFFC1637			ldt		$t0,msgInf
+FFFC0952 CB460613
+FFFC0956 00060633
+FFFC095A 00062D03
+FFFC095E 21A02023			stt		$t0,STRTMP
+FFFC0962 2C000E63			bra		.prt
                         	.0001:
-FFFC095A 80000637			and		$t0,$a0,#$80000000
-FFFC095E 01267D33
-FFFC0962 000D0C63			beq		$t0,$x0,.pos
-FFFC0966 02D06D13			ldi		$t0,#'-'
-FFFC096A 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC096E 001E0E13			add		$t2,$t2,#1
-FFFC0972 80000637			and		$a0,$a0,#$7FFFFFFF
-FFFC0976 01267933
+FFFC0966 80000637			and		$t0,$a0,#$80000000
+FFFC096A 01267D33
+FFFC096E 000D0C63			beq		$t0,$x0,.pos
+FFFC0972 02D06D13			ldi		$t0,#'-'
+FFFC0976 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC097A 001E0E13			add		$t2,$t2,#1
+FFFC097E 80000637			and		$a0,$a0,#$7FFFFFFF
+FFFC0982 01267933
                         	.pos:
-FFFC097A 00091A63			bne		$a0,$x0,.notZero
-FFFC097E 03006D13			ldi		$t0,#'0'
-FFFC0982 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0986 200E00A3			stb		$x0,STRTMP+1[$t2]
-FFFC098A 2A000463			bra		.prt		
+FFFC0986 00091A63			bne		$a0,$x0,.notZero
+FFFC098A 03006D13			ldi		$t0,#'0'
+FFFC098E 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0992 200E00A3			stb		$x0,STRTMP+1[$t2]
+FFFC0996 2A000463			bra		.prt		
                         	.notZero:
-FFFC098E 00006633			mov		$s9,$x0			; exp = 0.0
+FFFC099A 00006633			mov		$s9,$x0			; exp = 0.0
                         	;	// Make a small number > 0 so we can get at the digits.
                         	;	if (dbl < 1.0) {
                         	;		while (dbl < 1.0) {
@@ -895,23 +934,23 @@ FFFC098E 00006633			mov		$s9,$x0			; exp = 0.0
                         	;			exp -= 6;  
                         	;		}
                         	;	}
-FFFC0992 FFFC1637			flw		$f3,fltOne
-FFFC0996 CB060613
-FFFC099A 00060633
-FFFC099E 00062187
-FFFC09A2 F0090053			fmv		$f0,$a0
-FFFC09A6 A0391D53			flt		$t0,$f18,$f3
-FFFC09AA 020D0463			beq		$t0,$x0,.0002
-FFFC09AE FFFC1637			flw		$f4,fltMillion
-FFFC09B2 CB860613
-FFFC09B6 00060633
-FFFC09BA 00062207
+FFFC099E FFFC1637			flw		$f3,fltOne
+FFFC09A2 CBC60613
+FFFC09A6 00060633
+FFFC09AA 00062187
+FFFC09AE F0090053			fmv		$f0,$a0
+FFFC09B2 A0391D53			flt		$t0,$f18,$f3
+FFFC09B6 020D0463			beq		$t0,$x0,.0002
+FFFC09BA FFFC1637			flw		$f4,fltMillion
+FFFC09BE CC460613
+FFFC09C2 00060633
+FFFC09C6 00062207
                         	.0003:
-FFFC09BE A0391D53			flt		$t0,$f18,$f3
-FFFC09C2 000D0863			beq		$t0,$x0,.0002
-FFFC09C6 10490953			fmul	$f18,$f18,$f4
-FFFC09CA FFA60613			sub		$s9,$s9,#6
-FFFC09CE FE0008E3			bra		.0003
+FFFC09CA A0391D53			flt		$t0,$f18,$f3
+FFFC09CE 000D0863			beq		$t0,$x0,.0002
+FFFC09D2 10490953			fmul	$f18,$f18,$f4
+FFFC09D6 FFA60613			sub		$s9,$s9,#6
+FFFC09DA FE0008E3			bra		.0003
                         	.0002:
                         	;	// The following is similar to using log10() and pow() functions.
                         	;	// Now dbl is >= 1.0
@@ -930,27 +969,27 @@ FFFC09CE FE0008E3			bra		.0003
                         	;		dbl2 = dbla;
                         	;		exp--;
                         	;	}
-FFFC09D2 FFFC1637			flw		$f1,fltOne				; $f1 = dbl2 = 1.0
-FFFC09D6 CB060613
-FFFC09DA 00060633
-FFFC09DE 00062087
-FFFC09E2 38008153			fmov	$f2,$f1						; $f2 = dbla = dbl2
-FFFC09E6 A1209D53			flt		$t0,$f1,$f18				; if (dbl2 < dbl)
-FFFC09EA 020D0A63			beq		$t0,$x0,.0004
-FFFC09EE FFFC1637			flw		$f5,fltTen				; $f5 = 10.0
-FFFC09F2 CB460613
-FFFC09F6 00060633
-FFFC09FA 00062287
+FFFC09DE FFFC1637			flw		$f1,fltOne				; $f1 = dbl2 = 1.0
+FFFC09E2 CBC60613
+FFFC09E6 00060633
+FFFC09EA 00062087
+FFFC09EE 38008153			fmov	$f2,$f1						; $f2 = dbla = dbl2
+FFFC09F2 A1209D53			flt		$t0,$f1,$f18				; if (dbl2 < dbl)
+FFFC09F6 020D0A63			beq		$t0,$x0,.0004
+FFFC09FA FFFC1637			flw		$f5,fltTen				; $f5 = 10.0
+FFFC09FE CC060613
+FFFC0A02 00060633
+FFFC0A06 00062287
                         	.0006:
-FFFC09FE A1208D53			fle		$t0,$f1,$f18				; while ($f1 <= $f18)
-FFFC0A02 000D0A63			beq		$t0,$x0,.0005
-FFFC0A06 38008153			fmov	$f2,$f1						; dbla = dbl2
-FFFC0A0A 105080D3			fmul	$f1,$f1,$f5				; dbl2 *= 10.0
-FFFC0A0E 00160613			add		$s9,$s9,#1				; exp++;
-FFFC0A12 FE0006E3			bra		.0006
+FFFC0A0A A1208D53			fle		$t0,$f1,$f18				; while ($f1 <= $f18)
+FFFC0A0E 000D0A63			beq		$t0,$x0,.0005
+FFFC0A12 38008153			fmov	$f2,$f1						; dbla = dbl2
+FFFC0A16 105080D3			fmul	$f1,$f1,$f5				; dbl2 *= 10.0
+FFFC0A1A 00160613			add		$s9,$s9,#1				; exp++;
+FFFC0A1E FE0006E3			bra		.0006
                         	.0005:
-FFFC0A16 380100D3			fmov	$f1,$f2						; dbl2 = dbla
-FFFC0A1A FFF60613			sub		$s9,$s9,#1				; exp--;
+FFFC0A22 380100D3			fmov	$f1,$f2						; dbl2 = dbla
+FFFC0A26 FFF60613			sub		$s9,$s9,#1				; exp--;
                         	.0004:
                         	;	// For small constants < 1000000 try and spit out a whole number
                         	;    if (exp >= 0 && exp < 6) {
@@ -961,20 +1000,20 @@ FFFC0A1A FFF60613			sub		$s9,$s9,#1				; exp--;
                         	;		digits_before_decpt = 1;
                         	;	else
                         	;		digits_before_decpt = -1;
-FFFC0A1E 00064E63			blt		$s9,$x0,.0007
-FFFC0A22 00606413			ldi		$s5,#6
-FFFC0A26 00865A63			bge		$s9,$s5,.0007
-FFFC0A2A FFFFE233			mov		$s1,#s0						; s1 = digits before decpt
-FFFC0A2E 00120213			add		$s1,$s1,#1
-FFFC0A32 00006613			ldi		$s9,#0						; exp = 0
-FFFC0A36 00000C63			bra		.0008
+FFFC0A2A 00064E63			blt		$s9,$x0,.0007
+FFFC0A2E 00606413			ldi		$s5,#6
+FFFC0A32 00865A63			bge		$s9,$s5,.0007
+FFFC0A36 FFFFE233			mov		$s1,#s0						; s1 = digits before decpt
+FFFC0A3A 00120213			add		$s1,$s1,#1
+FFFC0A3E 00006613			ldi		$s9,#0						; exp = 0
+FFFC0A42 00000C63			bra		.0008
                         	.0007:
-FFFC0A3A FF906413			ldi		$s5,#-7
-FFFC0A3E 00864663			blt		$s9,$s5,.0009
-FFFC0A42 00106213			ldi		$s1,#1
-FFFC0A46 00000463			bra		.0008
+FFFC0A46 FF906413			ldi		$s5,#-7
+FFFC0A4A 00864663			blt		$s9,$s5,.0009
+FFFC0A4E 00106213			ldi		$s1,#1
+FFFC0A52 00000463			bra		.0008
                         	.0009:
-FFFC0A4A FFF06213			ldi		$s1,#-1
+FFFC0A56 FFF06213			ldi		$s1,#-1
                         	.0008:
                         	;	// Spit out a leading zero before the decimal point for a small number.
                         	;    if (exp < -6) {
@@ -983,14 +1022,14 @@ FFFC0A4A FFF06213			ldi		$s1,#-1
                         	;        buf[ndx] = '.';
                         	;        ndx++;
                         	;    }
-FFFC0A4E FFA06413			ldi		$s5,#-6
-FFFC0A52 00865E63			bge		$s9,$s5,.0010
-FFFC0A56 03006D13			ldi		$t0,#'0'
-FFFC0A5A 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0A5E 001E0E13			add		$t2,$t2,#1
-FFFC0A62 02E06D13			ldi		$t0,#'.'
+FFFC0A5A FFA06413			ldi		$s5,#-6
+FFFC0A5E 00865E63			bge		$s9,$s5,.0010
+FFFC0A62 03006D13			ldi		$t0,#'0'
 FFFC0A66 21AE0023			stb		$t0,STRTMP[$t2]
 FFFC0A6A 001E0E13			add		$t2,$t2,#1
+FFFC0A6E 02E06D13			ldi		$t0,#'.'
+FFFC0A72 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0A76 001E0E13			add		$t2,$t2,#1
                         	.0010:
                         	;	// Now loop processing one digit at a time.
                         	;    for (nn = 0; nn < 30 && precision > 0; nn++) {
@@ -1019,47 +1058,47 @@ FFFC0A6A 001E0E13			add		$t2,$t2,#1
                         	;		// Shift the next digit to be tested into position.
                         	;        dbl *= 10.0;
                         	;    }
-FFFC0A6E 00006313			ldi		$s3,#0						; s3 = nn = 0
-FFFC0A72 01E06413			ldi		$s5,#30
-FFFC0A76 FFFC1637			flw		$f7,fltTen				; f7 = 10.0
-FFFC0A7A CB460613
-FFFC0A7E 00060633
-FFFC0A82 00062387
+FFFC0A7A 00006313			ldi		$s3,#0						; s3 = nn = 0
+FFFC0A7E 01E06413			ldi		$s5,#30
+FFFC0A82 FFFC1637			flw		$f7,fltTen				; f7 = 10.0
+FFFC0A86 CC060613
+FFFC0A8A 00060633
+FFFC0A8E 00062387
                         	.0016:
-FFFC0A86 00832D33			slt		$t0,$s3,$s5
-FFFC0A8A 060D0863			beq		$t0,$x0,.0011
-FFFC0A8E 00006413			ldi		$s5,#0
-FFFC0A92 07445463			bge		$s5,$a2,.0011			; (0 < precision)
-FFFC0A96 00006393			ldi		$s4,#0						; s4 = digit = 0
-FFFC0A9A 38090153			fmov	$f2,$f18						; dbla = dbl
+FFFC0A92 00832D33			slt		$t0,$s3,$s5
+FFFC0A96 060D0863			beq		$t0,$x0,.0011
+FFFC0A9A 00006413			ldi		$s5,#0
+FFFC0A9E 07445463			bge		$s5,$a2,.0011			; (0 < precision)
+FFFC0AA2 00006393			ldi		$s4,#0						; s4 = digit = 0
+FFFC0AA6 38090153			fmov	$f2,$f18						; dbla = dbl
                         	.0013:
-FFFC0A9E A1208D53			fle		$t0,$f1,$f18						; while (dbl2 <= dbl)
-FFFC0AA2 000D0863			beq		$t0,$x0,.0012
-FFFC0AA6 08190953			fsub	$f18,$f18,$f1						; dbl -= dbl2
-FFFC0AAA 00138393			add		$s4,$s4,#1						; digit++
-FFFC0AAE FE0008E3			bra		.0013
+FFFC0AAA A1208D53			fle		$t0,$f1,$f18						; while (dbl2 <= dbl)
+FFFC0AAE 000D0863			beq		$t0,$x0,.0012
+FFFC0AB2 08190953			fsub	$f18,$f18,$f1						; dbl -= dbl2
+FFFC0AB6 00138393			add		$s4,$s4,#1						; digit++
+FFFC0ABA FE0008E3			bra		.0013
                         	.0012:
-FFFC0AB2 03038413			add		$s5,$s4,#'0'			; buf[ndx] = digit + '0'
-FFFC0AB6 208E0023			stb		$s5,STRTMP[$t2]
-FFFC0ABA 00206413			ldi		$s5,#2						; if (2 < digit)
-FFFC0ABE 00745863			bge		$s5,$s4,.0014
-FFFC0AC2 D00382D3			fcvt.s.w	$f5,$s4				; f5 = digit as float
-FFFC0AC6 10508353			fmul	$f6,$f1,$f5				; f6 = dbl2 * digit
-FFFC0ACA 08610953			fsub	$f18,$f2,$f6				; dbl = dbla - dbl2 * digit
+FFFC0ABE 03038413			add		$s5,$s4,#'0'			; buf[ndx] = digit + '0'
+FFFC0AC2 208E0023			stb		$s5,STRTMP[$t2]
+FFFC0AC6 00206413			ldi		$s5,#2						; if (2 < digit)
+FFFC0ACA 00745863			bge		$s5,$s4,.0014
+FFFC0ACE D00382D3			fcvt.s.w	$f5,$s4				; f5 = digit as float
+FFFC0AD2 10508353			fmul	$f6,$f1,$f5				; f6 = dbl2 * digit
+FFFC0AD6 08610953			fsub	$f18,$f2,$f6				; dbl = dbla - dbl2 * digit
                         	.0014:
-FFFC0ACE 001E0E13			add		$t2,$t2,#1				; ndx++
-FFFC0AD2 FFF20213			sub		$s1,$s1,#1				; digits_before_decpt--;
-FFFC0AD6 00021A63			bne		$s1,$x0,.0015			; if (digits_before_decpt==0)
-FFFC0ADA 02E06D13			ldi		$t0,#'.'
-FFFC0ADE 21AE0023			stb		$t0,STRTMP[$t2]		; buf[ndx] = '.'
-FFFC0AE2 001E0E13			add		$t2,$t2,#1				; ndx++
-FFFC0AE6 00000663			bra		.0017
+FFFC0ADA 001E0E13			add		$t2,$t2,#1				; ndx++
+FFFC0ADE FFF20213			sub		$s1,$s1,#1				; digits_before_decpt--;
+FFFC0AE2 00021A63			bne		$s1,$x0,.0015			; if (digits_before_decpt==0)
+FFFC0AE6 02E06D13			ldi		$t0,#'.'
+FFFC0AEA 21AE0023			stb		$t0,STRTMP[$t2]		; buf[ndx] = '.'
+FFFC0AEE 001E0E13			add		$t2,$t2,#1				; ndx++
+FFFC0AF2 00000663			bra		.0017
                         	.0015:
-FFFC0AEA 00025463			bge		$s1,$x0,.0017			; else if (digits_before_decpt < 0)
-FFFC0AEE FFFA0A13			sub		$a2,$a2,#1				; 	precision--
+FFFC0AF6 00025463			bge		$s1,$x0,.0017			; else if (digits_before_decpt < 0)
+FFFC0AFA FFFA0A13			sub		$a2,$a2,#1				; 	precision--
                         	.0017:
-FFFC0AF2 10790953			fmul	$f18,$f18,$f7				; dbl *= 10.0
-FFFC0AF6 F80008E3			bra		.0016
+FFFC0AFE 10790953			fmul	$f18,$f18,$f7				; dbl *= 10.0
+FFFC0B02 F80008E3			bra		.0016
                         	.0011:
                         	;	// Trim trailing zeros from the number
                         	;    do {
@@ -1067,11 +1106,11 @@ FFFC0AF6 F80008E3			bra		.0016
                         	;    } while(buf[ndx]=='0');
                         	;    ndx++;
                         	.0018:
-FFFC0AFA FFFE0E13			sub		$t2,$t2,#1				; ndx--
-FFFC0AFE 200E0D03			ldb		$t0,STRTMP[$t2]
-FFFC0B02 030D4D13			xor		$t0,$t0,#'0'
-FFFC0B06 FE0D0AE3			beq		$t0,$x0,.0018
-FFFC0B0A 001E0E13			add		$t2,$t2,#1				; ndx++
+FFFC0B06 FFFE0E13			sub		$t2,$t2,#1				; ndx--
+FFFC0B0A 200E0D03			ldb		$t0,STRTMP[$t2]
+FFFC0B0E 030D4D13			xor		$t0,$t0,#'0'
+FFFC0B12 FE0D0AE3			beq		$t0,$x0,.0018
+FFFC0B16 001E0E13			add		$t2,$t2,#1				; ndx++
                         	;	// Make sure we have at least one digit after the decimal point.
                         	;	if (buf[ndx]=='.') {
                         	;		ndx++;
@@ -1079,23 +1118,23 @@ FFFC0B0A 001E0E13			add		$t2,$t2,#1				; ndx++
                         	;		ndx++;
                         	;        buf[ndx]='\0';
                         	;	}
-FFFC0B0E 200E0D03			ldb		$t0,STRTMP[$t2]
-FFFC0B12 02ED4D13			xor		$t0,$t0,#'.'
-FFFC0B16 000D1C63			bne		$t0,$x0,.0019
-FFFC0B1A 001E0E13			add		$t2,$t2,#1
-FFFC0B1E 03006D13			ldi		$t0,#'0'
-FFFC0B22 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0B1A 200E0D03			ldb		$t0,STRTMP[$t2]
+FFFC0B1E 02ED4D13			xor		$t0,$t0,#'.'
+FFFC0B22 000D1C63			bne		$t0,$x0,.0019
 FFFC0B26 001E0E13			add		$t2,$t2,#1
-FFFC0B2A 200E0023			stb		$x0,STRTMP[$t2]
+FFFC0B2A 03006D13			ldi		$t0,#'0'
+FFFC0B2E 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0B32 001E0E13			add		$t2,$t2,#1
+FFFC0B36 200E0023			stb		$x0,STRTMP[$t2]
                         	.0019:
                         	;	// If the number is times 10^0 don't output the exponent
                         	;   if (exp==0) {
                         	;        buf[ndx]='\0';
                         	;        goto prt;
                         	;    }
-FFFC0B2E 00061663			bne		$s9,$x0,.0020
-FFFC0B32 200E0023			stb		$x0,STRTMP[$t2]
-FFFC0B36 0E000E63			bra		.prt
+FFFC0B3A 00061663			bne		$s9,$x0,.0020
+FFFC0B3E 200E0023			stb		$x0,STRTMP[$t2]
+FFFC0B42 0E000E63			bra		.prt
                         	.0020:
                         	;	// Spit out +/-E
                         	;    buf[ndx] = E;
@@ -1109,19 +1148,19 @@ FFFC0B36 0E000E63			bra		.prt
                         	;         buf[ndx]='+';
                         	;         ndx++;
                         	;    }
-FFFC0B3A 04506D13			ldi		$t0,#'E'
-FFFC0B3E 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0B42 001E0E13			add		$t2,$t2,#1
-FFFC0B46 00065C63			bge		$s9,$x0,.0021
-FFFC0B4A 02D06D13			ldi		$t0,#'-'
-FFFC0B4E 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0B52 001E0E13			add		$t2,$t2,#1
-FFFC0B56 40C00633			sub		$s9,$x0,$s9			; exp = -exp
-FFFC0B5A 00000863			bra		.0022
+FFFC0B46 04506D13			ldi		$t0,#'E'
+FFFC0B4A 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0B4E 001E0E13			add		$t2,$t2,#1
+FFFC0B52 00065C63			bge		$s9,$x0,.0021
+FFFC0B56 02D06D13			ldi		$t0,#'-'
+FFFC0B5A 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0B5E 001E0E13			add		$t2,$t2,#1
+FFFC0B62 40C00633			sub		$s9,$x0,$s9			; exp = -exp
+FFFC0B66 00000863			bra		.0022
                         	.0021:
-FFFC0B5E 02B06D13			ldi		$t0,#'+'
-FFFC0B62 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0B66 001E0E13			add		$t2,$t2,#1
+FFFC0B6A 02B06D13			ldi		$t0,#'+'
+FFFC0B6E 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0B72 001E0E13			add		$t2,$t2,#1
                         	.0022:
                         	;	// now process the exponent
                         	;    digit = 0;
@@ -1129,41 +1168,41 @@ FFFC0B66 001E0E13			add		$t2,$t2,#1
                         	;        exp -= 1000;
                         	;        digit++;
                         	;    }
-FFFC0B6A 00006393			ldi		$s4,#0
-FFFC0B6E 3E806D13			ldi		$t0,#1000
+FFFC0B76 00006393			ldi		$s4,#0
+FFFC0B7A 3E806D13			ldi		$t0,#1000
                         	.0025:
-FFFC0B72 01A65463			bge		$s9,$t0,.0023
-FFFC0B76 00000863			bra		.0024
+FFFC0B7E 01A65463			bge		$s9,$t0,.0023
+FFFC0B82 00000863			bra		.0024
                         	.0023:
-FFFC0B7A 41A60633			sub		$s9,$s9,$t0
-FFFC0B7E 00138393			add		$s4,$s4,#1
-FFFC0B82 FE0008E3			bra		.0025
+FFFC0B86 41A60633			sub		$s9,$s9,$t0
+FFFC0B8A 00138393			add		$s4,$s4,#1
+FFFC0B8E FE0008E3			bra		.0025
                         	.0024:
                         	;	d1 = digit;
                         	;	if (digit) {
                         	;		buf[ndx] = digit + '0';
                         	;		ndx++;
                         	;	}
-FFFC0B86 0003E4B3			mov		$s6,$s4					; s6 = d1 = s4 = digit
-FFFC0B8A 00039863			bne		$s4,$x0,.0026
-FFFC0B8E 03038D13			add		$t0,$s4,#'0'
-FFFC0B92 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0B96 001E0E13			add		$t2,$t2,#1
+FFFC0B92 0003E4B3			mov		$s6,$s4					; s6 = d1 = s4 = digit
+FFFC0B96 00039863			bne		$s4,$x0,.0026
+FFFC0B9A 03038D13			add		$t0,$s4,#'0'
+FFFC0B9E 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0BA2 001E0E13			add		$t2,$t2,#1
                         	.0026:
                         	;	digit = 0;
                         	;    while (exp >= 100) {
                         	;        exp -= 100;
                         	;        digit++;
                         	;    }
-FFFC0B9A 00006393			ldi		$s4,#0
-FFFC0B9E 06406D13			ldi		$t0,#100
+FFFC0BA6 00006393			ldi		$s4,#0
+FFFC0BAA 06406D13			ldi		$t0,#100
                         	.0027:
-FFFC0BA2 01A65463			bge		$s9,$t0,.0028
-FFFC0BA6 00000863			bra		.0029
+FFFC0BAE 01A65463			bge		$s9,$t0,.0028
+FFFC0BB2 00000863			bra		.0029
                         	.0028:
-FFFC0BAA 41A60633			sub		$s9,$s9,$t0
-FFFC0BAE 00138393			add		$s4,$s4,#1
-FFFC0BB2 FE0008E3			bra		.0027
+FFFC0BB6 41A60633			sub		$s9,$s9,$t0
+FFFC0BBA 00138393			add		$s4,$s4,#1
+FFFC0BBE FE0008E3			bra		.0027
                         	.0029:	
                         	;	d2 = digit;
                         	;	if (digit==0 && d1==0)
@@ -1172,28 +1211,28 @@ FFFC0BB2 FE0008E3			bra		.0027
                         	;		buf[ndx] = digit + '0';
                         	;		ndx++;
                         	;	}
-FFFC0BB6 0003E533			mov		$s7,$s4				; $s7 = d2
-FFFC0BBA 00049463			bne		$s6,$x0,.0030
-FFFC0BBE 00038863			beq		$s4,$x0,.0031
+FFFC0BC2 0003E533			mov		$s7,$s4				; $s7 = d2
+FFFC0BC6 00049463			bne		$s6,$x0,.0030
+FFFC0BCA 00038863			beq		$s4,$x0,.0031
                         	.0030:
-FFFC0BC2 03038D13			add		$t0,$s4,#'0'
-FFFC0BC6 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0BCA 001E0E13			add		$t2,$t2,#1
+FFFC0BCE 03038D13			add		$t0,$s4,#'0'
+FFFC0BD2 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0BD6 001E0E13			add		$t2,$t2,#1
                         	.0031:
                         	;	digit = 0;
                         	;    while (exp >= 10) {
                         	;        exp -= 10;
                         	;        digit++;
                         	;    }
-FFFC0BCE 00006393			ldi		$s4,#0
-FFFC0BD2 00A06D13			ldi		$t0,#10
+FFFC0BDA 00006393			ldi		$s4,#0
+FFFC0BDE 00A06D13			ldi		$t0,#10
                         	.0032:
-FFFC0BD6 01A65463			bge		$s9,$t0,.0034
-FFFC0BDA 00000863			bra		.0035
+FFFC0BE2 01A65463			bge		$s9,$t0,.0034
+FFFC0BE6 00000863			bra		.0035
                         	.0034:
-FFFC0BDE 41A60633			sub		$s9,$s9,$t0
-FFFC0BE2 00138393			add		$s4,$s4,#1
-FFFC0BE6 FE0008E3			bra		.0032
+FFFC0BEA 41A60633			sub		$s9,$s9,$t0
+FFFC0BEE 00138393			add		$s4,$s4,#1
+FFFC0BF2 FE0008E3			bra		.0032
                         	.0035:	
                         	;	d3 = digit;
                         	;	if (digit==0 && d1==0 && d2==0)
@@ -1202,37 +1241,37 @@ FFFC0BE6 FE0008E3			bra		.0032
                         	;		buf[ndx] = digit + '0';
                         	;		ndx++;
                         	;	}
-FFFC0BEA 0003E5B3			mov		$s8,$s4
-FFFC0BEE 00039663			bne		$s4,$x0,.0036
-FFFC0BF2 00049463			bne		$s6,$x0,.0036
-FFFC0BF6 00050863			beq		$s7,$x0,.0037
+FFFC0BF6 0003E5B3			mov		$s8,$s4
+FFFC0BFA 00039663			bne		$s4,$x0,.0036
+FFFC0BFE 00049463			bne		$s6,$x0,.0036
+FFFC0C02 00050863			beq		$s7,$x0,.0037
                         	.0036:
-FFFC0BFA 03038D13			add		$t0,$s4,#'0'
-FFFC0BFE 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0C02 001E0E13			add		$t2,$t2,#1
+FFFC0C06 03038D13			add		$t0,$s4,#'0'
+FFFC0C0A 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0C0E 001E0E13			add		$t2,$t2,#1
                         	.0037:
                         	;	digit = 0;
                         	;    while (exp >= 1) {
                         	;        exp -= 1;
                         	;        digit++;
                         	;    }
-FFFC0C06 00006393			ldi		$s4,#0
-FFFC0C0A 00106D13			ldi		$t0,#1
+FFFC0C12 00006393			ldi		$s4,#0
+FFFC0C16 00106D13			ldi		$t0,#1
                         	.0038:
-FFFC0C0E 01A65463			bge		$s9,$t0,.0040
-FFFC0C12 00000863			bra		.0039
+FFFC0C1A 01A65463			bge		$s9,$t0,.0040
+FFFC0C1E 00000863			bra		.0039
                         	.0040:
-FFFC0C16 41A60633			sub		$s9,$s9,$t0
-FFFC0C1A 00138393			add		$s4,$s4,#1
-FFFC0C1E FE0008E3			bra		.0038
+FFFC0C22 41A60633			sub		$s9,$s9,$t0
+FFFC0C26 00138393			add		$s4,$s4,#1
+FFFC0C2A FE0008E3			bra		.0038
                         	.0039:	
                         	;    buf[ndx] = digit + '0';
                         	;    ndx++;
                         	;    buf[ndx] = '\0';
-FFFC0C22 03038D13			add		$t0,$s4,#'0'
-FFFC0C26 21AE0023			sb		$t0,STRTMP[$t2]
-FFFC0C2A 001E0E13			add		$t2,$t2,#1
-FFFC0C2E 200E0023			sb		$x0,STRTMP[$t2]
+FFFC0C2E 03038D13			add		$t0,$s4,#'0'
+FFFC0C32 21AE0023			sb		$t0,STRTMP[$t2]
+FFFC0C36 001E0E13			add		$t2,$t2,#1
+FFFC0C3A 200E0023			sb		$x0,STRTMP[$t2]
                         	;	// Now pad the number on the left or right as requested.
                         	.prt:
                         	;    // pad left
@@ -1244,31 +1283,31 @@ FFFC0C2E 200E0023			sb		$x0,STRTMP[$t2]
                         	;                buf[nn] = ' ';
                         	;        }
                         	;    }
-FFFC0C32 0409C663			blt		$a1,$x0,.0041
-FFFC0C36 04098463			beq		$a1,$x0,.0041
-FFFC0C3A 013E4463			blt		$t2,$a1,.0042
-FFFC0C3E 04000063			bra		.0041
+FFFC0C3E 0409C663			blt		$a1,$x0,.0041
+FFFC0C42 04098463			beq		$a1,$x0,.0041
+FFFC0C46 013E4463			blt		$t2,$a1,.0042
+FFFC0C4A 04000063			bra		.0041
                         	.0042:
-FFFC0C42 02706313			ldi		$s3,#39					; s3 = nn
-FFFC0C46 41C98D33			sub		$t0,$a1,$t2			; width-ndx
+FFFC0C4E 02706313			ldi		$s3,#39					; s3 = nn
+FFFC0C52 41C98D33			sub		$t0,$a1,$t2			; width-ndx
                         	.0045:
-FFFC0C4A 01A35463			bge		$s3,$t0,.0043
-FFFC0C4E 00000C63			bra		.0044
+FFFC0C56 01A35463			bge		$s3,$t0,.0043
+FFFC0C5A 00000C63			bra		.0044
                         	.0043:
-FFFC0C52 41A304B3			sub		$s6,$s3,$t0			; nn-(width-ndx)
-FFFC0C56 20030D83			ldb		$t1,STRTMP[$s3]
-FFFC0C5A 21B48023			stb		$t1,STRTMP[$s6]
-FFFC0C5E FFF30313			sub		$s3,$s3,#1
-FFFC0C62 FE0004E3			bra		.0045
+FFFC0C5E 41A304B3			sub		$s6,$s3,$t0			; nn-(width-ndx)
+FFFC0C62 20030D83			ldb		$t1,STRTMP[$s3]
+FFFC0C66 21B48023			stb		$t1,STRTMP[$s6]
+FFFC0C6A FFF30313			sub		$s3,$s3,#1
+FFFC0C6E FE0004E3			bra		.0045
                         	.0044:
-FFFC0C66 02006D13			ldi		$t0,#' '
+FFFC0C72 02006D13			ldi		$t0,#' '
                         	.0048:
-FFFC0C6A 00035463			bge		$s3,$x0,.0046
-FFFC0C6E 00000863			bra		.0047
+FFFC0C76 00035463			bge		$s3,$x0,.0046
+FFFC0C7A 00000863			bra		.0047
                         	.0046:
-FFFC0C72 21A30023			stb		$t0,STRTMP[$s3]
-FFFC0C76 FFF30313			sub		$s3,$s3,#1
-FFFC0C7A FE0008E3			bra		.0048
+FFFC0C7E 21A30023			stb		$t0,STRTMP[$s3]
+FFFC0C82 FFF30313			sub		$s3,$s3,#1
+FFFC0C86 FE0008E3			bra		.0048
                         	.0047:
                         	.0041:
                         	;    // pad right
@@ -1281,32 +1320,32 @@ FFFC0C7A FE0008E3			bra		.0048
                         	;        buf[ndx]='\0';
                         	;    }
                         	;    return (ndx);
-FFFC0C7E 0209D063			bge		$a1,$x0,.0050
-FFFC0C82 413009B3			sub		$a1,$x0,$a1
-FFFC0C86 02006D13			ldi		$t0,#' '
+FFFC0C8A 0209D063			bge		$a1,$x0,.0050
+FFFC0C8E 413009B3			sub		$a1,$x0,$a1
+FFFC0C92 02006D13			ldi		$t0,#' '
                         	.0052:
-FFFC0C8A 013E5863			bge		$t2,$a1,.0051
-FFFC0C8E 21AE0023			stb		$t0,STRTMP[$t2]
-FFFC0C92 001E0E13			add		$t2,$t2,#1
-FFFC0C96 FE000AE3			bra		.0052
+FFFC0C96 013E5863			bge		$t2,$a1,.0051
+FFFC0C9A 21AE0023			stb		$t0,STRTMP[$t2]
+FFFC0C9E 001E0E13			add		$t2,$t2,#1
+FFFC0CA2 FE000AE3			bra		.0052
                         	.0051:
-FFFC0C9A 200E0023			stb		$x0,STRTMP[$t2]
+FFFC0CA6 200E0023			stb		$x0,STRTMP[$t2]
                         	.0050:
-FFFC0C9E 000E6833			mov		$v0,$t2
-FFFC0CA2 00008067			ret
+FFFC0CAA 000E6833			mov		$v0,$t2
+FFFC0CAE 00008067			ret
                         	
-FFFC0CA6 6E490000			align	
+FFFC0CB2 6E490000			align	
                         	
                         	msgInf:
-FFFC0CA8 00666E49			db	"Inf",0
+FFFC0CB4 00666E49			db	"Inf",0
                         	msgNan:
-FFFC0CAC 006E614E			db	"Nan",0
+FFFC0CB8 006E614E			db	"Nan",0
                         	fltOne:
-FFFC0CB0 3F800000			dw		$3F800000					; 1.0
+FFFC0CBC 3F800000			dw		$3F800000					; 1.0
                         	fltTen:
-FFFC0CB4 41200000			dw		$41200000					; 10.0
+FFFC0CC0 41200000			dw		$41200000					; 10.0
                         	fltMillion:
-FFFC0CB8 49742400			dw		$49742400					; 1,000,000
+FFFC0CC4 49742400			dw		$49742400					; 1,000,000
                         	
                         	.file "cs01rom.asm",1
                         	.file "cs01rom.asm",1
@@ -1321,30 +1360,30 @@ FFFC0CB8 49742400			dw		$49742400					; 1,000,000
                         	;------------------------------------------------------------------------------
                         	
                         	MMUInit:
-FFFC0CBC 0F606D13			ldi		$t0,#246				; set number of available pages (10 pages already allocated)
-FFFC0CC0 00004637			sw		$t0,NPAGES			
-FFFC0CC4 30060613
-FFFC0CC8 00060633
-FFFC0CCC 01A62023
-FFFC0CD0 00001E37			ldi		$t2,#4096				; number of registers to update
-FFFC0CD4 000E0E13
-FFFC0CD8 00006D13			ldi		$t0,#$00
-FFFC0CDC 00006D93			ldi		$t1,#$000				; regno
+FFFC0CC8 0F606D13			ldi		$t0,#246				; set number of available pages (10 pages already allocated)
+FFFC0CCC 00004637			sw		$t0,NPAGES			
+FFFC0CD0 30060613
+FFFC0CD4 00060633
+FFFC0CD8 01A62023
+FFFC0CDC 00001E37			ldi		$t2,#4096				; number of registers to update
+FFFC0CE0 000E0E13
+FFFC0CE4 00006D13			ldi		$t0,#$00
+FFFC0CE8 00006D93			ldi		$t1,#$000				; regno
                         	.0001:
-FFFC0CE0 03BD000D			mvmap	$x0,$t0,$t1
-FFFC0CE4 001D0D13			add		$t0,$t0,#$01		; increment page numbers
-FFFC0CE8 001D8D93			add		$t1,$t1,#$01
-FFFC0CEC FFFE0E13			sub		$t2,$t2,#1
-FFFC0CF0 FE0E18E3			bne		$t2,$x0,.0001
+FFFC0CEC 03BD000D			mvmap	$x0,$t0,$t1
+FFFC0CF0 001D0D13			add		$t0,$t0,#$01		; increment page numbers
+FFFC0CF4 001D8D93			add		$t1,$t1,#$01
+FFFC0CF8 FFFE0E13			sub		$t2,$t2,#1
+FFFC0CFC FE0E18E3			bne		$t2,$x0,.0001
                         			; Now setup segment registers
-FFFC0CF4 00006D13			ldi		$t0,#$0
-FFFC0CF8 00706D93			ldi		$t1,#$07				; t1 = value to load RWX=111, base = 0
+FFFC0D00 00006D13			ldi		$t0,#$0
+FFFC0D04 00706D93			ldi		$t1,#$07				; t1 = value to load RWX=111, base = 0
                         	.0002:
-FFFC0CFC 01AD800D			mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
-FFFC0D00 001D0D13			add		$t0,$t0,#1			; pick next segment register
-FFFC0D04 010D2E13			slt		$t2,$t0,#16			; 16 segment regs
-FFFC0D08 FE0E1AE3			bne		$t2,$x0,.0002
-FFFC0D0C 00008067			ret
+FFFC0D08 01AD800D			mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
+FFFC0D0C 001D0D13			add		$t0,$t0,#1			; pick next segment register
+FFFC0D10 010D2E13			slt		$t2,$t0,#16			; 16 segment regs
+FFFC0D14 FE0E1AE3			bne		$t2,$x0,.0002
+FFFC0D18 00008067			ret
                         	
                         	;------------------------------------------------------------------------------
                         	; Find a run of buckets available for mapping virtual to physical addresses.
@@ -1361,32 +1400,32 @@ FFFC0D0C 00008067			ret
                         	;------------------------------------------------------------------------------
                         	
                         	FindRun:
-FFFC0D10 00F97E93		and			$t3,$a0,#$0F			; t3 = pid
-FFFC0D14 008E9E93		sll			$t3,$t3,#8				; shift into usable position
-FFFC0D18 00006D93		ldi			$t1,#0						; t1 = count of consecutive empty buckets
-FFFC0D1C 000EEE33		mov			$t2,$t3						; t2 = map entry number
-FFFC0D20 0FF06F93		ldi			$t5,#255					; max number of pages - 1
-FFFC0D24 01DFEFB3		or			$t5,$t5,$t3				; t5 = max in ASID
+FFFC0D1C 00F97E93		and			$t3,$a0,#$0F			; t3 = pid
+FFFC0D20 008E9E93		sll			$t3,$t3,#8				; shift into usable position
+FFFC0D24 00006D93		ldi			$t1,#0						; t1 = count of consecutive empty buckets
+FFFC0D28 000EEE33		mov			$t2,$t3						; t2 = map entry number
+FFFC0D2C 0FF06F93		ldi			$t5,#255					; max number of pages - 1
+FFFC0D30 01DFEFB3		or			$t5,$t5,$t3				; t5 = max in ASID
                         	.0001:
-FFFC0D28 03C0080D		mvmap		$v0,$x0,$t2				; get map entry into v0
-FFFC0D2C 00080A63		beq			$v0,$x0,.empty0		; is it empty?
-FFFC0D30 001E0E13		add			$t2,$t2,#1
-FFFC0D34 FFFE6AE3		bltu		$t2,$t5,.0001
-FFFC0D38 00006833		mov			$v0,$x0						; got here so no run was found
-FFFC0D3C 00008067		ret
+FFFC0D34 03C0080D		mvmap		$v0,$x0,$t2				; get map entry into v0
+FFFC0D38 00080A63		beq			$v0,$x0,.empty0		; is it empty?
+FFFC0D3C 001E0E13		add			$t2,$t2,#1
+FFFC0D40 FFFE6AE3		bltu		$t2,$t5,.0001
+FFFC0D44 00006833		mov			$v0,$x0						; got here so no run was found
+FFFC0D48 00008067		ret
                         	.empty0:
-FFFC0D40 000E6EB3		mov			$t3,$t2						; save first empty bucket
+FFFC0D4C 000E6EB3		mov			$t3,$t2						; save first empty bucket
                         	.empty1:
-FFFC0D44 001D8D93		add			$t1,$t1,#1
-FFFC0D48 013DFC63		bgeu		$t1,$a1,.foundEnough
-FFFC0D4C 001E0E13		add			$t2,$t2,#1				; next bucket
-FFFC0D50 03C0080D		mvmap		$v0,$x0,$t2				; get map entry
-FFFC0D54 FE0808E3		beq			$v0,$x0,.empty1
-FFFC0D58 00006DB3		mov			$t1,$x0						; reset counter
-FFFC0D5C FC0006E3		bra			.0001							; go back and find another run
+FFFC0D50 001D8D93		add			$t1,$t1,#1
+FFFC0D54 013DFC63		bgeu		$t1,$a1,.foundEnough
+FFFC0D58 001E0E13		add			$t2,$t2,#1				; next bucket
+FFFC0D5C 03C0080D		mvmap		$v0,$x0,$t2				; get map entry
+FFFC0D60 FE0808E3		beq			$v0,$x0,.empty1
+FFFC0D64 00006DB3		mov			$t1,$x0						; reset counter
+FFFC0D68 FC0006E3		bra			.0001							; go back and find another run
                         	.foundEnough:
-FFFC0D60 000EE833		mov			$v0,$t3						; v0 = start of run
-FFFC0D64 00008067		ret
+FFFC0D6C 000EE833		mov			$v0,$t3						; v0 = start of run
+FFFC0D70 00008067		ret
                         	
                         	;------------------------------------------------------------------------------
                         	; Parameters:
@@ -1400,70 +1439,82 @@ FFFC0D64 00008067		ret
                         	;------------------------------------------------------------------------------
                         	;
                         	Alloc:
-FFFC0D68 FF070713		sub			$sp,$sp,#16
-FFFC0D6C 00172023		sw			$ra,[$sp]
-FFFC0D70 00472223		sw			$s1,4[$sp]				; these regs must be saved
-FFFC0D74 00572423		sw			$s2,8[$sp]
-FFFC0D78 00672623		sw			$s3,12[$sp]
+FFFC0D74 FF070713		sub			$sp,$sp,#16
+FFFC0D78 00172023		sw			$ra,[$sp]
+FFFC0D7C 00472223		sw			$s1,4[$sp]				; these regs must be saved
+FFFC0D80 00572423		sw			$s2,8[$sp]
+FFFC0D84 00672623		sw			$s3,12[$sp]
                         		; First check if there are enough pages available in the system.
-FFFC0D7C 7FF98813		add			$v0,$a1,#2047			; v0 = round memory request
-FFFC0D80 00B85813		srl			$v0,$v0,#11				; v0 = convert to pages required
-FFFC0D84 00004637		lw			$t0,NPAGES				; check number of pages available
-FFFC0D88 30060613
-FFFC0D8C 00060633
-FFFC0D90 00062D03
-FFFC0D94 010D7663		bleu		$v0,$t0,.enough
+FFFC0D88 7FF98813		add			$v0,$a1,#2047			; v0 = round memory request
+FFFC0D8C 00B85813		srl			$v0,$v0,#11				; v0 = convert to pages required
+FFFC0D90 00004637		lw			$t0,NPAGES				; check number of pages available
+FFFC0D94 30060613
+FFFC0D98 00060633
+FFFC0D9C 00062D03
+FFFC0DA0 010D7663		bleu		$v0,$t0,.enough
                         	.noRun2:
-FFFC0D98 00006893		ldi			$v1,#0						; not enough, return null
-FFFC0D9C 06000063		bra			.noRun
+FFFC0DA4 00006893		ldi			$v1,#0						; not enough, return null
+FFFC0DA8 06000063		bra			.noRun
                         	.enough:
                         		; There are enough pages, but is there a run long enough in map space?
-FFFC0DA0 00502023		sw			$s2,$v0				; save required # pages
-FFFC0DA4 000869B3		mov			$a1,$v0
-FFFC0DA8 F69FF0EF		call		FindRun						; find a run of available slots
-FFFC0DAC FE0806E3		beq			$v0,$x0,.noRun2
+FFFC0DAC 00502023		sw			$s2,$v0				; save required # pages
+FFFC0DB0 000869B3		mov			$a1,$v0
+FFFC0DB4 F69FF0EF		call		FindRun						; find a run of available slots
+FFFC0DB8 FE0806E3		beq			$v0,$x0,.noRun2
                         		; Now there are enough pages, and a run available, so allocate
-FFFC0DB0 00086233		mov			$s1,$v0						; s1 = start of run
-FFFC0DB4 00004637		lw			$s3,NPAGES				; decrease number of pages available in system
-FFFC0DB8 30060613
-FFFC0DBC 00060633
-FFFC0DC0 00062303
-FFFC0DC4 40530333		sub			$s3,$s3,$s2
-FFFC0DC8 00004637		sw			$s3,NPAGES
-FFFC0DCC 30060613
-FFFC0DD0 00060633
-FFFC0DD4 00662023
-FFFC0DD8 00086333		mov			$s3,$v0						; s3 = start of run
+FFFC0DBC 00086233		mov			$s1,$v0						; s1 = start of run
+FFFC0DC0 00004637		lw			$s3,NPAGES				; decrease number of pages available in system
+FFFC0DC4 30060613
+FFFC0DC8 00060633
+FFFC0DCC 00062303
+FFFC0DD0 40530333		sub			$s3,$s3,$s2
+FFFC0DD4 00004637		sw			$s3,NPAGES
+FFFC0DD8 30060613
+FFFC0DDC 00060633
+FFFC0DE0 00662023
+FFFC0DE4 00086333		mov			$s3,$v0						; s3 = start of run
                         	.0001:
-FFFC0DDC 0000180D		palloc	$v0								; allocate a page (cheat and use hardware)
-	beq			$v0,$x0,.noRun
-FFFC0DE0 00080E63
-FFFC0DE4 0268000D		mvmap		$x0,$v0,$s3				; map the page
-FFFC0DE8 00130313		add			$s3,$s3,#1				; next bucket
-FFFC0DEC FFF28293		sub			$s2,$s2,#1
-FFFC0DF0 FE0296E3		bne			$s2,$x0,.0001
-FFFC0DF4 00B21813		sll			$v0,$s1,#11				; v0 = virtual address of allocated mem.
-FFFC0DF8 00106893		ldi			$v1,#1
+FFFC0DE8 0000180D		palloc	$v0								; allocate a page (cheat and use hardware)
+FFFC0DEC 00080E63		beq			$v0,$x0,.noRun
+FFFC0DF0 0268000D		mvmap		$x0,$v0,$s3				; map the page
+FFFC0DF4 00130313		add			$s3,$s3,#1				; next bucket
+FFFC0DF8 FFF28293		sub			$s2,$s2,#1
+FFFC0DFC FE0296E3		bne			$s2,$x0,.0001
+FFFC0E00 00B21813		sll			$v0,$s1,#11				; v0 = virtual address of allocated mem.
+FFFC0E04 00106893		ldi			$v1,#1
                         	.noRun:
-FFFC0DFC 00072083		lw			$ra,[$sp]					; restore saved regs
-FFFC0E00 00472203		lw			s1,4[$sp]
-FFFC0E04 00872283		lw			s2,8[$sp]
-FFFC0E08 00C72303		lw			s3,12[$sp]
-FFFC0E0C 01070713		add			$sp,$sp,#16
-FFFC0E10 00008067		ret
+FFFC0E08 00072083		lw			$ra,[$sp]					; restore saved regs
+FFFC0E0C 00472203		lw			s1,4[$sp]
+FFFC0E10 00872283		lw			s2,8[$sp]
+FFFC0E14 00C72303		lw			s3,12[$sp]
+FFFC0E18 01070713		add			$sp,$sp,#16
+FFFC0E1C 00008067		ret
                         	
+                        	;------------------------------------------------------------------------------
+                        	; Allocate the stack page for a task. The stack is located at the highest
+                        	; virtual address ($7F800).
+                        	;
                         	; Parameters:
                         	;		a0 = pid to allocate for
+                        	;	Returns:
+                        	;		v0 = physical address, 0 if unsuccessful
+                        	;		v1 = virtual address, not valid unless successful
+                        	;------------------------------------------------------------------------------
                         	;
                         	AllocStack:
-FFFC0E14 0000180D		palloc	$v0								; allocate a page
-	beq			$v0,$x0,.xit			; success?
-FFFC0E18 00080863
-FFFC0E1C 00891893		sll			$v1,$a0,#8				; 
-FFFC0E20 0FF8E893		or			$v1,$v1,#255			; last page of memory is for stack
-FFFC0E24 0318000D		mvmap		$x0,$v0,$v1
+FFFC0E20 00891893		sll			$v1,$a0,#8			; 
+FFFC0E24 0FF8E893		or			$v1,$v1,#255		; last page of memory is for stack
+FFFC0E28 0310080D		mvmap		$v0,$x0,$v1			; check if stack already allocated
+FFFC0E2C 00081863		bne			$v0,$x0,.0001
+FFFC0E30 0000180D		palloc	$v0							; allocate a page
+FFFC0E34 00080A63		beq			$v0,$x0,.xit		; success?
+FFFC0E38 0318000D		mvmap		$x0,$v0,$v1
+                        	.0001:
+FFFC0E3C 0FF8F893		and			$v1,$v1,#255
+FFFC0E40 00B81813		sll			$v0,$v0,#11			; convert pages to addresses
+FFFC0E44 00B89893		sll			$v1,$v1,#11
                         	.xit:
-FFFC0E28 00008067		ret
+FFFC0E48 00008067		ret
                         	
                         	;------------------------------------------------------------------------------
                         	; This routine will de-allocate all the pages associated with a task including
@@ -1471,32 +1522,65 @@ FFFC0E28 00008067		ret
                         	;
                         	; Parameters:
                         	;		a0 = pid to free memory for
+                        	;	Modifies:
+                        	;		t0,t1,t3,t4
+                        	; Returns:
+                        	;		none
                         	;------------------------------------------------------------------------------
                         	
                         	FreeAll:
-FFFC0E2C 00006E93		ldi			$t3,#0
-FFFC0E30 00891F13		sll			$t4,$a0,#8
+FFFC0E4C 00006E93		ldi			$t3,#0
+FFFC0E50 00891F13		sll			$t4,$a0,#8
                         	.nxt:
-FFFC0E34 100EAD93		slt			$t1,$t3,#256
-FFFC0E38 A60D8C63		beq			$t1,$x0,.0001
-FFFC0E3C 03D00D0D		mvmap		$t0,$x0,$t3			; get page mapping
-FFFC0E40 001E8E93		add			$t3,$t3,#1			; advance to next bucket
-FFFC0E44 0FFD7D13		and			$t0,$t0,#255		; pages are 1-255
-FFFC0E48 FE0D06E3		beq			$t0,$x0,.nxt		; 0 = no map in this bucket
-FFFC0E4C 01ED6D33		or			$t0,$t0,$t4			; add in PID/ASID
-                        		pfree		$t0							; free the page
-FFFC0E50 00004637		lw			$t0,NPAGES			; update the number of available pages
-FFFC0E54 30060613
-FFFC0E58 00060633
-FFFC0E5C 00062D03
-FFFC0E60 001D0D13		add			$t0,$t0,#1
-FFFC0E64 00004637		sw			$t0,NPAGES
-FFFC0E68 30060613
-FFFC0E6C 00060633
-FFFC0E70 01A62023
-FFFC0E74 A4000063		bra			.nxt
+FFFC0E54 100EAD93		slt			$t1,$t3,#256		; number of buckets to check
+FFFC0E58 040D8863		beq			$t1,$x0,.0001
+FFFC0E5C 00001637		and			$t4,$t4,#$F00
+FFFC0E60 01E67F33
+FFFC0E64 01DF6F33		or			$t4,$t4,$t3			; combine pid and bucket number
+FFFC0E68 00006D13		ldi			$t0,#0					; new page number to set (indicates free)
+FFFC0E6C 03ED0D0D		mvmap		$t0,$t0,$t4			; get page mapping and set to zero
+FFFC0E70 001E8E93		add			$t3,$t3,#1			; advance to next bucket
+FFFC0E74 0FFD7D13		and			$t0,$t0,#255		; pages are 1-255
+FFFC0E78 FC0D0EE3		beq			$t0,$x0,.nxt		; 0 = no map in this bucket
+FFFC0E7C 020D100D		pfree		$t0							; free the page
+FFFC0E80 00004637		lw			$t0,NPAGES			; update the number of available pages
+FFFC0E84 30060613
+FFFC0E88 00060633
+FFFC0E8C 00062D03
+FFFC0E90 001D0D13		add			$t0,$t0,#1
+FFFC0E94 00004637		sw			$t0,NPAGES
+FFFC0E98 30060613
+FFFC0E9C 00060633
+FFFC0EA0 01A62023
+FFFC0EA4 FA0008E3		bra			.nxt
                         	.0001:
-FFFC0E78 00008067		ret
+FFFC0EA8 00008067		ret
+                        	
+                        	;------------------------------------------------------------------------------
+                        	; Convert a virtual address to a physical one
+                        	;
+                        	; Parameters:
+                        	;		a0 = virtual address to convert
+                        	; Modifies:
+                        	;		t0
+                        	; Returns:
+                        	;		v0 = physcial address
+                        	;------------------------------------------------------------------------------
+                        	
+                        	VirtToPhys:
+FFFC0EAC 30001873		csrrw	$v0,#$300,$x0				; get tid
+FFFC0EB0 01685813		srl		$v0,$v0,#22					; extract
+FFFC0EB4 00F87813		and		$v0,$v0,#15
+FFFC0EB8 00881813		sll		$v0,$v0,#8
+FFFC0EBC 00B95D13		srl		$t0,$a0,#11					; convert virt to page
+FFFC0EC0 0FFD7D13		and		$t0,$t0,#255
+FFFC0EC4 01A86833		or		$v0,$v0,$t0					; and in tid
+FFFC0EC8 0300080D		mvmap	$v0,$x0,$v0					; get the translation
+FFFC0ECC 00B81813		sll		$v0,$v0,#11					; convert page to address
+FFFC0ED0 7FF97D13		and		$t0,$a0,#$7FF				; insert LSB's
+FFFC0ED4 01A86833		or		$v0,$v0,$t0
+FFFC0ED8 00008067		ret
+                        	
                         	.file "cs01rom.asm",1
                         	.file "cs01rom.asm",1
                         	.file "../fmtk/task.asm",1
@@ -1517,321 +1601,388 @@ FFFC0E78 00008067		ret
                         	RDYQ2		EQU		$4600
                         	RDYQ3		EQU		$4700
                         	
-                        	qToChk:
-FFFC0E7C 01000000		db	0,0,0,1,0,0,2,1
-FFFC0E80 01020000
-FFFC0E84 01030000		db	0,0,3,1,0,0,2,1
-FFFC0E88 01020000
-FFFC0E8C 01000000		db	0,0,0,1,0,0,2,1
-FFFC0E90 01020000
-FFFC0E94 01030000		db	0,0,3,1,0,0,2,1
-FFFC0E98 01020000
+                        		align	2                        	
+                        	OSCallTbl:
+FFFC0EDC 142C00DF		dh		FMTK_Initialize
+FFFC0EDE 14DC142C		dh		FMTK_StartTask
+FFFC0EE0 14E814DC		dh		FMTK_ExitTask
+FFFC0EE2 00E314E8		dh		FMTK_KillTask
+FFFC0EE4 00E400E3		dh		FMTK_SetTaskPriority
+FFFC0EE6 00E500E4		dh		FMTK_Sleep
+FFFC0EE8 00E600E5		dh		FMTK_AllocMbx
+FFFC0EEA 00E700E6		dh		FMTK_FreeMbx
+FFFC0EEC 00E800E7		dh		FMTK_PostMsg
+FFFC0EEE 00E900E8		dh		FMTK_SendMsg
+FFFC0EF0 00EA00E9		dh		FMTK_WaitMsg
+FFFC0EF2 00EB00EA		dh		FMTK_PeekMsg
+FFFC0EF4 107000EB		dh		FMTK_StartApp
+FFFC0EF6 15341070		dh		FMTK_SwitchTask
+FFFC0EF8 00001534		dh		DumpReadyQueue
                         	
-                        		align	4                        	
+                        	qToChk:
+FFFC0EFA 01000000		db	0,0,0,1,0,0,2,1
+FFFC0EFE 01020000
+FFFC0F02 01030000		db	0,0,3,1,0,0,2,1
+FFFC0F06 01020000
+FFFC0F0A 01000000		db	0,0,0,1,0,0,2,1
+FFFC0F0E 01020000
+FFFC0F12 01030000		db	0,0,3,1,0,0,2,1
+FFFC0F16 01020000
+                        	
+FFFC0F1A 46370000		align	
+                        	
                         	
                         	FMTKInit:
-FFFC0E9C 00004637		sw		$x0,HRDY0			; reset head and tail indexes
-FFFC0EA0 30860613
-FFFC0EA4 00060633
-FFFC0EA8 00062023
-FFFC0EAC 00004637		sw		$x0,TRDY0
-FFFC0EB0 30C60613
-FFFC0EB4 00060633
-FFFC0EB8 00062023
-FFFC0EBC 00106D13		ldi		$t0,#1				; pid #0 is permanently allocated to OS
-FFFC0EC0 00004637		sh		$t0,PIDMAP
-FFFC0EC4 31060613
-FFFC0EC8 00060633
-FFFC0ECC 01A61023
-FFFC0ED0 00008067		ret
+FFFC0F1C 00004637		sw		$x0,HRDY0			; reset head and tail indexes
+FFFC0F20 30860613
+FFFC0F24 00060633
+FFFC0F28 00062023
+FFFC0F2C 00004637		sw		$x0,TRDY0
+FFFC0F30 30C60613
+FFFC0F34 00060633
+FFFC0F38 00062023
+FFFC0F3C 00106D13		ldi		$t0,#1				; pid #0 is permanently allocated to OS
+FFFC0F40 00004637		sh		$t0,PIDMAP
+FFFC0F44 31060613
+FFFC0F48 00060633
+FFFC0F4C 01A61023
+FFFC0F50 00008067		ret
                         	
+                        	;------------------------------------------------------------------------------
                         	; Insert task into ready queue
                         	;
                         	; Parameters:
                         	;		a0 = pid to insert
                         	; Returns:
                         	;		v0 = 1 for success, 0 if failed
-                        	;
-                        	InsertTask:
-FFFC0ED4 00A91893		sll		$v1,$a0,#10					; compute TCB address
-FFFC0ED8 2898C883		lbu		$v1,TCBPriority[$v1]
-FFFC0EDC 0038F893		and		$v1,$v1,#3
-FFFC0EE0 00004637		lbu		$t0,HRDY0[$v1]
-FFFC0EE4 30860613
-FFFC0EE8 01160633
-FFFC0EEC 00064D03
-FFFC0EF0 00004637		lbu		$t1,TRDY0[$v1]			; increment tail pointer
-FFFC0EF4 30C60613
-FFFC0EF8 01160633
-FFFC0EFC 00064D83
-FFFC0F00 001D8D93		add		$t1,$t1,#1
-FFFC0F04 03BD0863		beq		$t0,$t1,.qfull			; test queue full?
-FFFC0F08 00004637		sb		$t1,TRDY0[$v1]			; store it back
-FFFC0F0C 30C60613
-FFFC0F10 01160633
-FFFC0F14 01B60023
-FFFC0F18 00889E93		sll		$t3,$v1,#8					; compute t3 = readyq index
-FFFC0F1C 00004637		add		$t3,$t3,#RDYQ0
-FFFC0F20 01D60EB3
-FFFC0F24 01DD8E33		add		$t2,$t1,$t3
-FFFC0F28 012E0023		sb		$a0,[$t2]						; store pid of task
-FFFC0F2C 00106813		ldi		$v0,#1							; return non-zero
-FFFC0F30 00008067		ret
-                        	.qfull:
-FFFC0F34 00006833		mov		$v0,$x0
-FFFC0F38 00008067		ret
+                        	;------------------------------------------------------------------------------
                         	
+                        	InsertTask:
+FFFC0F54 00A91893		sll		$v1,$a0,#10					; compute TCB address
+FFFC0F58 2898C883		lbu		$v1,TCBPriority[$v1]
+FFFC0F5C 0038F893		and		$v1,$v1,#3
+FFFC0F60 00004637		lbu		$t0,HRDY0[$v1]
+FFFC0F64 30860613
+FFFC0F68 01160633
+FFFC0F6C 00064D03
+FFFC0F70 00004637		lbu		$t1,TRDY0[$v1]			; increment tail pointer
+FFFC0F74 30C60613
+FFFC0F78 01160633
+FFFC0F7C 00064D83
+FFFC0F80 001D8D93		add		$t1,$t1,#1
+FFFC0F84 03BD0863		beq		$t0,$t1,.qfull			; test queue full?
+FFFC0F88 00004637		sb		$t1,TRDY0[$v1]			; store it back
+FFFC0F8C 30C60613
+FFFC0F90 01160633
+FFFC0F94 01B60023
+FFFC0F98 00889E93		sll		$t3,$v1,#8					; compute t3 = readyq index
+FFFC0F9C 00004637		add		$t3,$t3,#RDYQ0
+FFFC0FA0 01D60EB3
+FFFC0FA4 01DD8E33		add		$t2,$t1,$t3
+FFFC0FA8 012E0023		sb		$a0,[$t2]						; store pid of task
+FFFC0FAC 00106813		ldi		$v0,#1							; return non-zero
+FFFC0FB0 00008067		ret
+                        	.qfull:
+FFFC0FB4 00006833		mov		$v0,$x0
+FFFC0FB8 00008067		ret
+                        	
+                        	;------------------------------------------------------------------------------
+                        	;------------------------------------------------------------------------------
                         	SelectTaskToRun:
                         		; Pick the first queue to check, occasionally the queue
                         		; chosen isn't the highest priority one in order to 
                         		; prevent starvation of lower priority tasks.
-FFFC0F3C 00004637		lbu		$v1,QNDX						; get index into que check table
-FFFC0F40 30460613
-FFFC0F44 00060633
-FFFC0F48 00064883
-FFFC0F4C 00188893		add		$v1,$v1,#1					; increment it, and limit
-FFFC0F50 01F8F893		and		$v1,$v1,#31
-FFFC0F54 00004637		sb		$v1,QNDX						; store back
-FFFC0F58 30460613
-FFFC0F5C 00060633
-FFFC0F60 01160023
-FFFC0F64 FFFC1637		lbu		$v1,qToChk[$v1]			; assume this will be valid
-FFFC0F68 E7C60613
-FFFC0F6C 01160633
-FFFC0F70 00064883
-FFFC0F74 00406E13		ldi		$t2,#4							; 4 queues to check
+FFFC0FBC 00004637		lbu		$v1,QNDX						; get index into que check table
+FFFC0FC0 30460613
+FFFC0FC4 00060633
+FFFC0FC8 00064883
+FFFC0FCC 00188893		add		$v1,$v1,#1					; increment it, and limit
+FFFC0FD0 01F8F893		and		$v1,$v1,#31
+FFFC0FD4 00004637		sb		$v1,QNDX						; store back
+FFFC0FD8 30460613
+FFFC0FDC 00060633
+FFFC0FE0 01160023
+FFFC0FE4 FFFC1637		lbu		$v1,qToChk[$v1]			; assume this will be valid
+FFFC0FE8 EFA60613
+FFFC0FEC 01160633
+FFFC0FF0 00064883
+FFFC0FF4 00406E13		ldi		$t2,#4							; 4 queues to check
                         	.nxtQ:
-FFFC0F78 00004637		lbu		$t0,HRDY0[$v1]			; check queue to see if contains any
-FFFC0F7C 30860613
-FFFC0F80 01160633
-FFFC0F84 00064D03
-FFFC0F88 00004637		lbu		$t1,TRDY0[$v1]			; ready tasks
-FFFC0F8C 30C60613
-FFFC0F90 01160633
-FFFC0F94 00064D83
-FFFC0F98 03BD1263		bne		$t0,$t1,.dq					; yes, go dequeue
-FFFC0F9C 00188893		add		$v1,$v1,#1					; no, advance to next queue
-FFFC0FA0 0038F893		and		$v1,$v1,#3					; 4 max
-FFFC0FA4 FFFE0E13		sub		$t2,$t2,#1					;
-FFFC0FA8 FDC048E3		bgt		$t2,$x0,.nxtQ				; go back to check next queue
+FFFC0FF8 00004637		lbu		$t0,HRDY0[$v1]			; check queue to see if contains any
+FFFC0FFC 30860613
+FFFC1000 01160633
+FFFC1004 00064D03
+FFFC1008 00004637		lbu		$t1,TRDY0[$v1]			; ready tasks
+FFFC100C 30C60613
+FFFC1010 01160633
+FFFC1014 00064D83
+FFFC1018 03BD1263		bne		$t0,$t1,.dq					; yes, go dequeue
+FFFC101C 00188893		add		$v1,$v1,#1					; no, advance to next queue
+FFFC1020 0038F893		and		$v1,$v1,#3					; 4 max
+FFFC1024 FFFE0E13		sub		$t2,$t2,#1					;
+FFFC1028 FDC048E3		bgt		$t2,$x0,.nxtQ				; go back to check next queue
                         		; Here, nothing else is actually ready to run
                         		; just go back to what we were doing.
-FFFC0FAC 30001873		csrrw	$v0,#$300,$x0				; get current pid
-FFFC0FB0 FFFFD813		srl		$v0,#22							; extract field
-FFFC0FB4 00F87813		and		$v0,$v0,#15					; mask off extra bits
-FFFC0FB8 00008067		ret
+FFFC102C 30001873		csrrw	$v0,#$300,$x0				; get current pid
+FFFC1030 FFFFD813		srl		$v0,#22							; extract field
+FFFC1034 00F87813		and		$v0,$v0,#15					; mask off extra bits
+FFFC1038 00008067		ret
                         	.dq:
-FFFC0FBC 00889E93		sll		$t3,$v1,#8					; compute t3 = readyq index
-FFFC0FC0 00004637		add		$t3,$t3,#RDYQ0
-FFFC0FC4 01D60EB3
-FFFC0FC8 01DD0E33		add		$t2,$t0,$t3
-FFFC0FCC 000E4803		lbu		$v0,[$t2]						; v0 = pid of ready task
-FFFC0FD0 00F87813		and		$v0,$v0,#15					; make sure pid will be valid
-FFFC0FD4 001D0D13		add		$t0,$t0,#1					; advance readyq head
-FFFC0FD8 0FFD7D13		and		$t0,$t0,#255
-FFFC0FDC 00004637		sb		$t0,HRDY0[$v1]			; save head pointer
-FFFC0FE0 30860613
-FFFC0FE4 01160633
-FFFC0FE8 01A60023
-FFFC0FEC 00008067		ret
+FFFC103C 00889E93		sll		$t3,$v1,#8					; compute t3 = readyq index
+FFFC1040 00004637		add		$t3,$t3,#RDYQ0
+FFFC1044 01D60EB3
+FFFC1048 01DD0E33		add		$t2,$t0,$t3
+FFFC104C 000E4803		lbu		$v0,[$t2]						; v0 = pid of ready task
+FFFC1050 00F87813		and		$v0,$v0,#15					; make sure pid will be valid
+FFFC1054 001D0D13		add		$t0,$t0,#1					; advance readyq head
+FFFC1058 0FFD7D13		and		$t0,$t0,#255
+FFFC105C 00004637		sb		$t0,HRDY0[$v1]			; save head pointer
+FFFC1060 30860613
+FFFC1064 01160633
+FFFC1068 01A60023
+FFFC106C 00008067		ret
                         	
-                        	;
+                        	;------------------------------------------------------------------------------
                         	; Switch tasks
+                        	;------------------------------------------------------------------------------
                         	;
-                        	SwitchTask:
+                        	FMTK_SwitchTask:
                         		; Save register set in TCB
-FFFC0FF0 300010F3		csrrw	$x1,#$300,$x0			; get process id
-FFFC0FF4 0160D093		srl		$x1,$x1,#22
-FFFC0FF8 00F0F093		and		$x1,$x1,#15
-FFFC0FFC 00A09093		sll		$x1,$x1,#10				; compute TCB address
-FFFC1000 0400810D		mfu		$x2,$x1
-FFFC1004 0020A223		sw		$x2,4[$x1]
-FFFC1008 0401010D		mfu		$x2,$x2
-FFFC100C 0020A423		sw		$x2,8[$x1]				; save regs in TCB
-FFFC1010 0401810D		mfu		$x2,$x3
-FFFC1014 0020A623		sw		$x2,12[$x1]
-FFFC1018 0402010D		mfu		$x2,$x4
-FFFC101C 0020A823		sw		$x2,16[$x1]
-FFFC1020 0402810D		mfu		$x2,$x5
-FFFC1024 0020AA23		sw		$x2,20[$x1]
-FFFC1028 0403010D		mfu		$x2,$x6
-FFFC102C 0020AC23		sw		$x2,24[$x1]
-FFFC1030 0403810D		mfu		$x2,$x7
-FFFC1034 0020AE23		sw		$x2,28[$x1]
-FFFC1038 0404010D		mfu		$x2,$x8
-FFFC103C 0220A023		sw		$x2,32[$x1]
-FFFC1040 0404810D		mfu		$x2,$x9
-FFFC1044 0220A223		sw		$x2,36[$x1]
-FFFC1048 0405010D		mfu		$x2,$x10
-FFFC104C 0220A423		sw		$x2,40[$x1]
-FFFC1050 0405810D		mfu		$x2,$x11
-FFFC1054 0220A623		sw		$x2,44[$x1]
-FFFC1058 0406010D		mfu		$x2,$x12
-FFFC105C 0220A823		sw		$x2,48[$x1]
-FFFC1060 0406810D		mfu		$x2,$x13
-FFFC1064 0220AA23		sw		$x2,52[$x1]
-FFFC1068 0407010D		mfu		$x2,$x14
-FFFC106C 0220AC23		sw		$x2,56[$x1]
-FFFC1070 0407810D		mfu		$x2,$x15
-FFFC1074 0220AE23		sw		$x2,60[$x1]
-FFFC1078 0408010D		mfu		$x2,$x16
-FFFC107C 0420A023		sw		$x2,64[$x1]
-FFFC1080 0408810D		mfu		$x2,$x17
-FFFC1084 0420A223		sw		$x2,68[$x1]
-FFFC1088 0409010D		mfu		$x2,$x18
-FFFC108C 0420A423		sw		$x2,72[$x1]
-FFFC1090 0409810D		mfu		$x2,$x19
-FFFC1094 0420A623		sw		$x2,76[$x1]
-FFFC1098 040A010D		mfu		$x2,$x20
-FFFC109C 0420A823		sw		$x2,80[$x1]
-FFFC10A0 040A810D		mfu		$x2,$x21
-FFFC10A4 0420AA23		sw		$x2,84[$x1]
-FFFC10A8 040B010D		mfu		$x2,$x22
-FFFC10AC 0420AC23		sw		$x2,88[$x1]
-FFFC10B0 040B810D		mfu		$x2,$x23
-FFFC10B4 0420AE23		sw		$x2,92[$x1]
-FFFC10B8 040C010D		mfu		$x2,$x24
-FFFC10BC 0620A023		sw		$x2,96[$x1]
-FFFC10C0 040C810D		mfu		$x2,$x25
-FFFC10C4 0620A223		sw		$x2,100[$x1]
-FFFC10C8 040D010D		mfu		$x2,$x26
-FFFC10CC 0620A423		sw		$x2,104[$x1]
-FFFC10D0 040D810D		mfu		$x2,$x27
-FFFC10D4 0620A623		sw		$x2,108[$x1]
-FFFC10D8 040E010D		mfu		$x2,$x28
-FFFC10DC 0620A823		sw		$x2,112[$x1]
-FFFC10E0 040E810D		mfu		$x2,$x29
-FFFC10E4 0620AA23		sw		$x2,116[$x1]
-FFFC10E8 040F010D		mfu		$x2,$x30
-FFFC10EC 0620AC23		sw		$x2,120[$x1]
-FFFC10F0 040F810D		mfu		$x2,$x31
-FFFC10F4 0620AE23		sw		$x2,124[$x1]
-FFFC10F8 34101173		csrrw	$x2,#$341,$x0				; save off mepc
-FFFC10FC 2820A023		sw		$x2,TCBepc[$x1]
-FFFC1100 00006D93		ldi		$t1,#0
+FFFC1070 300010F3		csrrw	$x1,#$300,$x0			; get process id
+FFFC1074 0160D093		srl		$x1,$x1,#22
+FFFC1078 00F0F093		and		$x1,$x1,#15
+FFFC107C 00A09093		sll		$x1,$x1,#10				; compute TCB address
+FFFC1080 0400810D		mfu		$x2,$x1
+FFFC1084 0020A223		sw		$x2,4[$x1]
+FFFC1088 0401010D		mfu		$x2,$x2
+FFFC108C 0020A423		sw		$x2,8[$x1]				; save regs in TCB
+FFFC1090 0401810D		mfu		$x2,$x3
+FFFC1094 0020A623		sw		$x2,12[$x1]
+FFFC1098 0402010D		mfu		$x2,$x4
+FFFC109C 0020A823		sw		$x2,16[$x1]
+FFFC10A0 0402810D		mfu		$x2,$x5
+FFFC10A4 0020AA23		sw		$x2,20[$x1]
+FFFC10A8 0403010D		mfu		$x2,$x6
+FFFC10AC 0020AC23		sw		$x2,24[$x1]
+FFFC10B0 0403810D		mfu		$x2,$x7
+FFFC10B4 0020AE23		sw		$x2,28[$x1]
+FFFC10B8 0404010D		mfu		$x2,$x8
+FFFC10BC 0220A023		sw		$x2,32[$x1]
+FFFC10C0 0404810D		mfu		$x2,$x9
+FFFC10C4 0220A223		sw		$x2,36[$x1]
+FFFC10C8 0405010D		mfu		$x2,$x10
+FFFC10CC 0220A423		sw		$x2,40[$x1]
+FFFC10D0 0405810D		mfu		$x2,$x11
+FFFC10D4 0220A623		sw		$x2,44[$x1]
+FFFC10D8 0406010D		mfu		$x2,$x12
+FFFC10DC 0220A823		sw		$x2,48[$x1]
+FFFC10E0 0406810D		mfu		$x2,$x13
+FFFC10E4 0220AA23		sw		$x2,52[$x1]
+FFFC10E8 0407010D		mfu		$x2,$x14
+FFFC10EC 0220AC23		sw		$x2,56[$x1]
+FFFC10F0 0407810D		mfu		$x2,$x15
+FFFC10F4 0220AE23		sw		$x2,60[$x1]
+FFFC10F8 0408010D		mfu		$x2,$x16
+FFFC10FC 0420A023		sw		$x2,64[$x1]
+FFFC1100 0408810D		mfu		$x2,$x17
+FFFC1104 0420A223		sw		$x2,68[$x1]
+FFFC1108 0409010D		mfu		$x2,$x18
+FFFC110C 0420A423		sw		$x2,72[$x1]
+FFFC1110 0409810D		mfu		$x2,$x19
+FFFC1114 0420A623		sw		$x2,76[$x1]
+FFFC1118 040A010D		mfu		$x2,$x20
+FFFC111C 0420A823		sw		$x2,80[$x1]
+FFFC1120 040A810D		mfu		$x2,$x21
+FFFC1124 0420AA23		sw		$x2,84[$x1]
+FFFC1128 040B010D		mfu		$x2,$x22
+FFFC112C 0420AC23		sw		$x2,88[$x1]
+FFFC1130 040B810D		mfu		$x2,$x23
+FFFC1134 0420AE23		sw		$x2,92[$x1]
+FFFC1138 040C010D		mfu		$x2,$x24
+FFFC113C 0620A023		sw		$x2,96[$x1]
+FFFC1140 040C810D		mfu		$x2,$x25
+FFFC1144 0620A223		sw		$x2,100[$x1]
+FFFC1148 040D010D		mfu		$x2,$x26
+FFFC114C 0620A423		sw		$x2,104[$x1]
+FFFC1150 040D810D		mfu		$x2,$x27
+FFFC1154 0620A623		sw		$x2,108[$x1]
+FFFC1158 040E010D		mfu		$x2,$x28
+FFFC115C 0620A823		sw		$x2,112[$x1]
+FFFC1160 040E810D		mfu		$x2,$x29
+FFFC1164 0620AA23		sw		$x2,116[$x1]
+FFFC1168 040F010D		mfu		$x2,$x30
+FFFC116C 0620AC23		sw		$x2,120[$x1]
+FFFC1170 040F810D		mfu		$x2,$x31
+FFFC1174 0620AE23		sw		$x2,124[$x1]
+FFFC1178 34101173		csrrw	$x2,#$341,$x0				; save off mepc
+FFFC117C 2820A023		sw		$x2,TCBepc[$x1]
+FFFC1180 00006D93		ldi		$t1,#0
                         	.svseg:
-FFFC1104 01B00D0D		mvseg	$t0,$x0,$t1
-FFFC1108 002D9113		sll		$x2,$t1,#2
-FFFC110C 00110133		add		$x2,$x2,$x1
-FFFC1110 21A12023		sw		$t0,TCBsegs[$x2]
-FFFC1114 001D8D93		add		$t1,$t1,#1
-FFFC1118 00FDFD93		and		$t1,$t1,#15
-FFFC111C FE0D94E3		bne		$t1,$x0,.svseg
+FFFC1184 01B00D0D		mvseg	$t0,$x0,$t1
+FFFC1188 002D9113		sll		$x2,$t1,#2
+FFFC118C 00110133		add		$x2,$x2,$x1
+FFFC1190 21A12023		sw		$t0,TCBsegs[$x2]
+FFFC1194 001D8D93		add		$t1,$t1,#1
+FFFC1198 00FDFD93		and		$t1,$t1,#15
+FFFC119C FE0D94E3		bne		$t1,$x0,.svseg
                         	
                         	.dead:
-FFFC1120 E1DFF0EF		call	SelectTaskToRun			; v0 = pid
+FFFC11A0 E1DFF0EF		call	SelectTaskToRun			; v0 = pid
                         	
                         		; Switch memory maps
-FFFC1124 00F87813		and		$v0,$v0,#$F					; mask to 16 task
-FFFC1128 01681813		sll		$v0,$v0,#22					; shift into position
-FFFC112C 300018F3		csrrw	$v1,#$300,$x0				; get status
-FFFC1130 FC400637		and		$v1,$v1,#$FC3FFFFF	; mask off ASID/PID bits
-FFFC1134 011678B3
-FFFC1138 0108E8B3		or		$v1,$v1,$v0					; set new ASID
-FFFC113C 30089073		csrrw	$x0,#$300,$v1				; save status
+FFFC11A4 00F87813		and		$v0,$v0,#$F					; mask to 16 task
+FFFC11A8 01681813		sll		$v0,$v0,#22					; shift into position
+FFFC11AC 300018F3		csrrw	$v1,#$300,$x0				; get status
+FFFC11B0 FC400637		and		$v1,$v1,#$FC3FFFFF	; mask off ASID/PID bits
+FFFC11B4 011678B3
+FFFC11B8 0108E8B3		or		$v1,$v1,$v0					; set new ASID
+FFFC11BC 30089073		csrrw	$x0,#$300,$v1				; save status
                         		; User map has now been switched
-FFFC1140 00C85093		srl		$x1,$v0,#12					; compute incoming TCB address
+FFFC11C0 00C85093		srl		$x1,$v0,#12					; compute incoming TCB address
                         	.0001:
-FFFC1144 28808883		lb		$v1,TCBStatus[$x1]
-FFFC1148 0018F113		and		$x2,$v1,#TS_READY
-FFFC114C 00011663		bne		$x2,$x0,.ready
-FFFC1150 0028F113		and		$x2,$v1,#TS_DEAD
-FFFC1154 FC0116E3		bne		$x2,$x0,.dead
+FFFC11C4 28808883		lb		$v1,TCBStatus[$x1]
+                        		; If a message is ready, update status to ready and put
+                        		; message in target memory.
+FFFC11C8 0048F113		and		$x2,$v1,#TS_MSGRDY
+FFFC11CC 06010C63		beq		$x2,$x0,.noMsg
+FFFC11D0 00086EB3		mov		$t3,$v0							; save off v0 (tid)
+FFFC11D4 00106113		ldi		$x2,#TS_READY
+FFFC11D8 00000637		sb		$x2,TCB_Status[$x1]
+FFFC11DC 0F860613
+FFFC11E0 00160633
+FFFC11E4 00260023
+FFFC11E8 0500A903		lw		$a0,80[$x1]					; user a2 (x20)
+FFFC11EC CC1FF0EF		call	VirtToPhys
+FFFC11F0 00000637		lw		$x2,TCB_MsgD1[$x1]
+FFFC11F4 0F960613
+FFFC11F8 00160633
+FFFC11FC 00062103
+FFFC1200 00282023		sw		$x2,[$v0]
+FFFC1204 0540A903		lw		$a0,84[$x1]
+FFFC1208 CA5FF0EF		call	VirtToPhys
+FFFC120C 00000637		lw		$x2,TCB_MsgD2[$x1]
+FFFC1210 0FA60613
+FFFC1214 00160633
+FFFC1218 00062103
+FFFC121C 00282023		sw		$x2,[$v0]
+FFFC1220 0580A903		lw		$a0,88[$x1]
+FFFC1224 C89FF0EF		call	VirtToPhys
+FFFC1228 00000637		lw		$x2,TCB_MsgD3[$x1]
+FFFC122C 0FB60613
+FFFC1230 00160633
+FFFC1234 00062103
+FFFC1238 00282023		sw		$x2,[$v0]
+FFFC123C 000EE833		mov		$v0,$t3
+FFFC1240 00000A63		bra		.ready
+                        	.noMsg:
+FFFC1244 0018F113		and		$x2,$v1,#TS_READY
+FFFC1248 00011663		bne		$x2,$x0,.ready
+FFFC124C 0028F113		and		$x2,$v1,#TS_DEAD
+FFFC1250 F40118E3		bne		$x2,$x0,.dead
                         	
                         	.ready:
                         		; Add task back into ready queue
-FFFC1158 0000E233		mov		$s1,$x1							; save off x1 (normally return address)
-FFFC115C 01685913		srl		$a0,$v0,#22					; compute ASID/PID
-FFFC1160 D75FF0EF		call	InsertTask
-FFFC1164 000260B3		mov		$x1,$s1							; get back x1
+FFFC1254 0000E233		mov		$s1,$x1							; save off x1 (normally return address)
+FFFC1258 01685913		srl		$a0,$v0,#22					; compute ASID/PID
+FFFC125C CF9FF0EF		call	InsertTask
+FFFC1260 000260B3		mov		$x1,$s1							; get back x1
                         	
                         		; Restore register set
-FFFC1168 00006D93		ldi		$t1,#0
+FFFC1264 00006D93		ldi		$t1,#0
                         	.rsseg:
-FFFC116C 002D9113		sll		$x2,$t1,#2
-FFFC1170 00110133		add		$x2,$x2,$x1
-FFFC1174 20012D03		lw		$t0,TCBsegs[$x2]
-FFFC1178 01BD000D		mvseg	$x0,$t0,$t1
-FFFC117C 001D8D93		add		$t1,$t1,#1
-FFFC1180 00FDFD93		and		$t1,$t1,#15
-FFFC1184 FE0D94E3		bne		$t1,$x0,.rsseg
+FFFC1268 002D9113		sll		$x2,$t1,#2
+FFFC126C 00110133		add		$x2,$x2,$x1
+FFFC1270 20012D03		lw		$t0,TCBsegs[$x2]
+FFFC1274 01BD000D		mvseg	$x0,$t0,$t1
+FFFC1278 001D8D93		add		$t1,$t1,#1
+FFFC127C 00FDFD93		and		$t1,$t1,#15
+FFFC1280 FE0D94E3		bne		$t1,$x0,.rsseg
                         	
-FFFC1188 2800A103		lw		$x2,TCBepc[$x1]			; restore epc
-FFFC118C 34111073		csrrw	$x0,#$341,$x2
-FFFC1190 0040A103		lw		$x2,4[$x1]
-FFFC1194 0601008D		mtu		$x1,$x2
-FFFC1198 0080A103		lw		$x2,8[$x1]
-FFFC119C 0601010D		mtu		$x2,$x2
-FFFC11A0 00C0A103		lw		$x2,12[$x1]
-FFFC11A4 0601018D		mtu		$x3,$x2
-FFFC11A8 0100A103		lw		$x2,16[$x1]
-FFFC11AC 0601020D		mtu		$x4,$x2
-FFFC11B0 0140A103		lw		$x2,20[$x1]
-FFFC11B4 0601028D		mtu		$x5,$x2
-FFFC11B8 0180A103		lw		$x2,24[$x1]
-FFFC11BC 0601030D		mtu		$x6,$x2
-FFFC11C0 01C0A103		lw		$x2,28[$x1]
-FFFC11C4 0601038D		mtu		$x7,$x2
-FFFC11C8 0200A103		lw		$x2,32[$x1]
-FFFC11CC 0601040D		mtu		$x8,$x2
-FFFC11D0 0240A103		lw		$x2,36[$x1]
-FFFC11D4 0601048D		mtu		$x9,$x2
-FFFC11D8 0280A103		lw		$x2,40[$x1]
-FFFC11DC 0601050D		mtu		$x10,$x2
-FFFC11E0 02C0A103		lw		$x2,44[$x1]
-FFFC11E4 0601058D		mtu		$x11,$x2
-FFFC11E8 0300A103		lw		$x2,48[$x1]
-FFFC11EC 0601060D		mtu		$x12,$x2
-FFFC11F0 0340A103		lw		$x2,52[$x1]
-FFFC11F4 0601068D		mtu		$x13,$x2
-FFFC11F8 0380A103		lw		$x2,56[$x1]
-FFFC11FC 0601070D		mtu		$x14,$x2
-FFFC1200 03C0A103		lw		$x2,60[$x1]
-FFFC1204 0601078D		mtu		$x15,$x2
-FFFC1208 0400A103		lw		$x2,64[$x1]
-FFFC120C 0601080D		mtu		$x16,$x2
-FFFC1210 0440A103		lw		$x2,68[$x1]
-FFFC1214 0601088D		mtu		$x17,$x2
-FFFC1218 0480A103		lw		$x2,72[$x1]
-FFFC121C 0601090D		mtu		$x18,$x2
-FFFC1220 04C0A103		lw		$x2,76[$x1]
-FFFC1224 0601098D		mtu		$x19,$x2
-FFFC1228 0500A103		lw		$x2,80[$x1]
-FFFC122C 06010A0D		mtu		$x20,$x2
-FFFC1230 0540A103		lw		$x2,84[$x1]
-FFFC1234 06010A8D		mtu		$x21,$x2
-FFFC1238 0580A103		lw		$x2,88[$x1]
-FFFC123C 06010B0D		mtu		$x22,$x2
-FFFC1240 05C0A103		lw		$x2,92[$x1]
-FFFC1244 06010B8D		mtu		$x23,$x2
-FFFC1248 0600A103		lw		$x2,96[$x1]
-FFFC124C 06010C0D		mtu		$x24,$x2
-FFFC1250 0640A103		lw		$x2,100[$x1]
-FFFC1254 06010C8D		mtu		$x25,$x2
-FFFC1258 0680A103		lw		$x2,104[$x1]
-FFFC125C 06010D0D		mtu		$x26,$x2
-FFFC1260 06C0A103		lw		$x2,108[$x1]
-FFFC1264 06010D8D		mtu		$x27,$x2
-FFFC1268 0700A103		lw		$x2,112[$x1]
-FFFC126C 06010E0D		mtu		$x28,$x2
-FFFC1270 0740A103		lw		$x2,116[$x1]
-FFFC1274 06010E8D		mtu		$x29,$x2
-FFFC1278 0780A103		lw		$x2,120[$x1]
-FFFC127C 06010F0D		mtu		$x30,$x2
-FFFC1280 07C0A103		lw		$x2,124[$x1]
-FFFC1284 06010F8D		mtu		$x31,$x2
-FFFC1288 10000073		eret
+FFFC1284 2800A103		lw		$x2,TCBepc[$x1]			; restore epc
+FFFC1288 34111073		csrrw	$x0,#$341,$x2
+FFFC128C 0040A103		lw		$x2,4[$x1]
+FFFC1290 0601008D		mtu		$x1,$x2
+FFFC1294 0080A103		lw		$x2,8[$x1]
+FFFC1298 0601010D		mtu		$x2,$x2
+FFFC129C 00C0A103		lw		$x2,12[$x1]
+FFFC12A0 0601018D		mtu		$x3,$x2
+FFFC12A4 0100A103		lw		$x2,16[$x1]
+FFFC12A8 0601020D		mtu		$x4,$x2
+FFFC12AC 0140A103		lw		$x2,20[$x1]
+FFFC12B0 0601028D		mtu		$x5,$x2
+FFFC12B4 0180A103		lw		$x2,24[$x1]
+FFFC12B8 0601030D		mtu		$x6,$x2
+FFFC12BC 01C0A103		lw		$x2,28[$x1]
+FFFC12C0 0601038D		mtu		$x7,$x2
+FFFC12C4 0200A103		lw		$x2,32[$x1]
+FFFC12C8 0601040D		mtu		$x8,$x2
+FFFC12CC 0240A103		lw		$x2,36[$x1]
+FFFC12D0 0601048D		mtu		$x9,$x2
+FFFC12D4 0280A103		lw		$x2,40[$x1]
+FFFC12D8 0601050D		mtu		$x10,$x2
+FFFC12DC 02C0A103		lw		$x2,44[$x1]
+FFFC12E0 0601058D		mtu		$x11,$x2
+FFFC12E4 0300A103		lw		$x2,48[$x1]
+FFFC12E8 0601060D		mtu		$x12,$x2
+FFFC12EC 0340A103		lw		$x2,52[$x1]
+FFFC12F0 0601068D		mtu		$x13,$x2
+FFFC12F4 0380A103		lw		$x2,56[$x1]
+FFFC12F8 0601070D		mtu		$x14,$x2
+FFFC12FC 03C0A103		lw		$x2,60[$x1]
+FFFC1300 0601078D		mtu		$x15,$x2
+FFFC1304 0400A103		lw		$x2,64[$x1]
+FFFC1308 0601080D		mtu		$x16,$x2
+FFFC130C 0440A103		lw		$x2,68[$x1]
+FFFC1310 0601088D		mtu		$x17,$x2
+FFFC1314 0480A103		lw		$x2,72[$x1]
+FFFC1318 0601090D		mtu		$x18,$x2
+FFFC131C 04C0A103		lw		$x2,76[$x1]
+FFFC1320 0601098D		mtu		$x19,$x2
+FFFC1324 0500A103		lw		$x2,80[$x1]
+FFFC1328 06010A0D		mtu		$x20,$x2
+FFFC132C 0540A103		lw		$x2,84[$x1]
+FFFC1330 06010A8D		mtu		$x21,$x2
+FFFC1334 0580A103		lw		$x2,88[$x1]
+FFFC1338 06010B0D		mtu		$x22,$x2
+FFFC133C 05C0A103		lw		$x2,92[$x1]
+FFFC1340 06010B8D		mtu		$x23,$x2
+FFFC1344 0600A103		lw		$x2,96[$x1]
+FFFC1348 06010C0D		mtu		$x24,$x2
+FFFC134C 0640A103		lw		$x2,100[$x1]
+FFFC1350 06010C8D		mtu		$x25,$x2
+FFFC1354 0680A103		lw		$x2,104[$x1]
+FFFC1358 06010D0D		mtu		$x26,$x2
+FFFC135C 06C0A103		lw		$x2,108[$x1]
+FFFC1360 06010D8D		mtu		$x27,$x2
+FFFC1364 0700A103		lw		$x2,112[$x1]
+FFFC1368 06010E0D		mtu		$x28,$x2
+FFFC136C 0740A103		lw		$x2,116[$x1]
+FFFC1370 06010E8D		mtu		$x29,$x2
+FFFC1374 0780A103		lw		$x2,120[$x1]
+FFFC1378 06010F0D		mtu		$x30,$x2
+FFFC137C 07C0A103		lw		$x2,124[$x1]
+FFFC1380 06010F8D		mtu		$x31,$x2
+FFFC1384 10000073		eret
+                        	
+                        	;------------------------------------------------------------------------------
+                        	;------------------------------------------------------------------------------
                         	
                         	OSCALL:
-FFFC128C 0409090D		mfu		$a0,$a0
-FFFC1290 0409898D		mfu		$a1,$a1
-FFFC1294 040A0A0D		mfu		$a2,$a2
-FFFC1298 D4090CE3		beq		$a0,$x0,SwitchTask
-FFFC129C FFF90913		sub		$a0,$a0,#1
-FFFC12A0 06090C63		beq		$a0,$x0,StartTask
-FFFC12A4 FFF90913		sub		$a0,$a0,#1
-FFFC12A8 12090063		beq		$a0,$x0,KillTask
-FFFC12AC 10000073		eret
+FFFC1388 0409090D		mfu		$a0,$a0
+FFFC138C 0409898D		mfu		$a1,$a1
+FFFC1390 040A0A0D		mfu		$a2,$a2
+FFFC1394 040A8A8D		mfu		$a3,$a3
+FFFC1398 040B0B0D		mfu		$a4,$a4
+FFFC139C 040B8B8D		mfu		$a5,$a5
+FFFC13A0 00F97913		and		$a0,$a0,#15
+FFFC13A4 00191913		sll		$a0,$a0,#1
+FFFC13A8 FFFC1637		lhu		$t0,OSCallTbl[$a0]
+FFFC13AC EDC60613
+FFFC13B0 01260633
+FFFC13B4 00065D03
+FFFC13B8 FFFC0637		or		$t0,$t0,#$FFFC0000
+FFFC13BC 01A66D33
+FFFC13C0 000D0067		jmp		[$t0]
                         	
                         	;------------------------------------------------------------------------------
                         	; Returns:
@@ -1839,36 +1990,36 @@ FFFC12AC 10000073		eret
                         	;------------------------------------------------------------------------------
                         	
                         	GetFreePid:
-FFFC12B0 00006D93		ldi		$t1,#0
-FFFC12B4 00004637		lhu		$v1,PIDMAP
-FFFC12B8 31060613
-FFFC12BC 00060633
-FFFC12C0 00065883
+FFFC13C4 00006D93		ldi		$t1,#0
+FFFC13C8 00004637		lhu		$v1,PIDMAP
+FFFC13CC 31060613
+FFFC13D0 00060633
+FFFC13D4 00065883
                         	.0001:
-FFFC12C4 0018FD13		and		$t0,$v1,#1
-FFFC12C8 020D0263		beq		$t0,$x0,.allocPid
-FFFC12CC 0018D893		srl		$v1,$v1,#1
-FFFC12D0 00008637		or		$v1,$v1,#$8000
-FFFC12D4 011668B3
-FFFC12D8 001D8D93		add		$t1,$t1,#1
-FFFC12DC 00FDFD93		and		$t1,$t1,#15
-FFFC12E0 FE0D92E3		bne		$t1,$x0,.0001
+FFFC13D8 0018FD13		and		$t0,$v1,#1
+FFFC13DC 020D0263		beq		$t0,$x0,.allocPid
+FFFC13E0 0018D893		srl		$v1,$v1,#1
+FFFC13E4 00008637		or		$v1,$v1,#$8000
+FFFC13E8 011668B3
+FFFC13EC 001D8D93		add		$t1,$t1,#1
+FFFC13F0 00FDFD93		and		$t1,$t1,#15
+FFFC13F4 FE0D92E3		bne		$t1,$x0,.0001
                         	; here no pids available
-FFFC12E4 00006833		mov		$v0,$x0
-FFFC12E8 00008067		ret
+FFFC13F8 00006833		mov		$v0,$x0
+FFFC13FC 00008067		ret
                         	.allocPid:
-FFFC12EC 000DE833		mov		$v0,$t1
-FFFC12F0 0018E893		or		$v1,$v1,#1
+FFFC1400 000DE833		mov		$v0,$t1
+FFFC1404 0018E893		or		$v1,$v1,#1
                         	.0002:
-FFFC12F4 00189893		sll		$v1,$v1,#1
-FFFC12F8 0018E893		or		$v1,$v1,#1
-FFFC12FC FFFD8D93		sub		$t1,$t1,#1
-FFFC1300 FFAD9AE3		bne		$t1,$t0,.0002
-FFFC1304 00004637		sh		$v1,PIDMAP
-FFFC1308 31060613
-FFFC130C 00060633
-FFFC1310 01161023
-FFFC1314 00008067		ret
+FFFC1408 00189893		sll		$v1,$v1,#1
+FFFC140C 0018E893		or		$v1,$v1,#1
+FFFC1410 FFFD8D93		sub		$t1,$t1,#1
+FFFC1414 FFAD9AE3		bne		$t1,$t0,.0002
+FFFC1418 00004637		sh		$v1,PIDMAP
+FFFC141C 31060613
+FFFC1420 00060633
+FFFC1424 01161023
+FFFC1428 00008067		ret
                         	
                         	;------------------------------------------------------------------------------
                         	; Start a task.
@@ -1884,123 +2035,139 @@ FFFC1314 00008067		ret
                         	;		v0 = pid of started task if successful, otherwise zero
                         	;------------------------------------------------------------------------------
                         	;
-                        	StartTask:
-FFFC1318 FFC70713		sub		$sp,$sp,#4
-FFFC131C 00172023		sw		$ra,[$sp]
-FFFC1320 F91FF0EF		call	GetFreePid
-FFFC1324 08080A63		beq		$v0,$x0,.err
-FFFC1328 00086933		mov		$a0,$v0
-FFFC132C 00A91213		sll		$s1,$a0,#10			; compute TCB address
-FFFC1330 AE5FF0EF		call	AllocStack
-FFFC1334 00080D37		ldi		$t0,#$7F800			; set stack pointer
-FFFC1338 800D0D13
-FFFC133C 03A22C23		sw		$t0,56[$s1]
-FFFC1340 29422023		sw		$a2,TCBepc[$s1]	; address task will begin at
-FFFC1344 A25FF0EF		call	Alloc
-FFFC1348 06088863		beq		$v1,$x0,.err
-FFFC134C 00106D13		ldi		$t0,#TS_READY
-FFFC1350 29A20423		sb		$t0,TCBStatus[$s1]
-FFFC1354 00206D13		ldi		$t0,#2					; normal execution priority
-FFFC1358 29A204A3		sb		$t0,TCBPriority[$s1]
+                        	FMTK_StartTask:
+FFFC142C FFC70713		sub		$sp,$sp,#4
+FFFC1430 00172023		sw		$ra,[$sp]
+FFFC1434 F91FF0EF		call	GetFreePid
+FFFC1438 08080A63		beq		$v0,$x0,.err
+FFFC143C 00086933		mov		$a0,$v0
+FFFC1440 00A91213		sll		$s1,$a0,#10			; compute TCB address
+FFFC1444 9DDFF0EF		call	AllocStack
+FFFC1448 00080D37		ldi		$t0,#$7F800			; set stack pointer
+FFFC144C 800D0D13
+FFFC1450 03A22C23		sw		$t0,56[$s1]
+FFFC1454 29422023		sw		$a2,TCBepc[$s1]	; address task will begin at
+FFFC1458 91DFF0EF		call	Alloc
+FFFC145C 06088863		beq		$v1,$x0,.err
+FFFC1460 00106D13		ldi		$t0,#TS_READY
+FFFC1464 29A20423		sb		$t0,TCBStatus[$s1]
+FFFC1468 00206D13		ldi		$t0,#2					; normal execution priority
+FFFC146C 29A204A3		sb		$t0,TCBPriority[$s1]
                         		; leave segment base at $0, flat memory model
-FFFC135C 00606D13		ldi		$t0,#6							; read,write
-FFFC1360 21A22023		sw		$t0,TCBsegs[$s1]			; segs 0 to 11
-FFFC1364 21A22223		sw		$t0,TCBsegs+4[$s1]
-FFFC1368 21A22423		sw		$t0,TCBsegs+8[$s1]
-FFFC136C 21A22623		sw		$t0,TCBsegs+12[$s1]
-FFFC1370 21A22823		sw		$t0,TCBsegs+16[$s1]
-FFFC1374 21A22A23		sw		$t0,TCBsegs+20[$s1]
-FFFC1378 21A22C23		sw		$t0,TCBsegs+24[$s1]
-FFFC137C 21A22E23		sw		$t0,TCBsegs+28[$s1]
-FFFC1380 23A22023		sw		$t0,TCBsegs+32[$s1]
-FFFC1384 23A22223		sw		$t0,TCBsegs+36[$s1]
-FFFC1388 23A22423		sw		$t0,TCBsegs+40[$s1]
-FFFC138C 23A22623		sw		$t0,TCBsegs+44[$s1]
-FFFC1390 00506D13		ldi		$t0,#5							; read,execute
-FFFC1394 23A22823		sw		$t0,TCBsegs+48[$s1]	; segs 12 to 15
-FFFC1398 23A22A23		sw		$t0,TCBsegs+52[$s1]
-FFFC139C 23A22C23		sw		$t0,TCBsegs+56[$s1]
-FFFC13A0 23A22E23		sw		$t0,TCBsegs+60[$s1]
-FFFC13A4 B31FF0EF		call	InsertTask
-FFFC13A8 00072083		lw		$ra,[$sp]
-FFFC13AC 00470713		add		$sp,$sp,#4
-FFFC13B0 0609080D		mtu		$v0,$a0
-FFFC13B4 10000073		eret
+FFFC1470 00606D13		ldi		$t0,#6							; read,write
+FFFC1474 21A22023		sw		$t0,TCBsegs[$s1]			; segs 0 to 11
+FFFC1478 21A22223		sw		$t0,TCBsegs+4[$s1]
+FFFC147C 21A22423		sw		$t0,TCBsegs+8[$s1]
+FFFC1480 21A22623		sw		$t0,TCBsegs+12[$s1]
+FFFC1484 21A22823		sw		$t0,TCBsegs+16[$s1]
+FFFC1488 21A22A23		sw		$t0,TCBsegs+20[$s1]
+FFFC148C 21A22C23		sw		$t0,TCBsegs+24[$s1]
+FFFC1490 21A22E23		sw		$t0,TCBsegs+28[$s1]
+FFFC1494 23A22023		sw		$t0,TCBsegs+32[$s1]
+FFFC1498 23A22223		sw		$t0,TCBsegs+36[$s1]
+FFFC149C 23A22423		sw		$t0,TCBsegs+40[$s1]
+FFFC14A0 23A22623		sw		$t0,TCBsegs+44[$s1]
+FFFC14A4 00506D13		ldi		$t0,#5							; read,execute
+FFFC14A8 23A22823		sw		$t0,TCBsegs+48[$s1]	; segs 12 to 15
+FFFC14AC 23A22A23		sw		$t0,TCBsegs+52[$s1]
+FFFC14B0 23A22C23		sw		$t0,TCBsegs+56[$s1]
+FFFC14B4 23A22E23		sw		$t0,TCBsegs+60[$s1]
+FFFC14B8 A9DFF0EF		call	InsertTask
+FFFC14BC 00072083		lw		$ra,[$sp]
+FFFC14C0 00470713		add		$sp,$sp,#4
+FFFC14C4 0609080D		mtu		$v0,$a0
+FFFC14C8 10000073		eret
                         	.err:
-FFFC13B8 00072083		lw		$ra,[$sp]
-FFFC13BC 00470713		add		$sp,$sp,#4
-FFFC13C0 0600080D		mtu		$v0,$x0
-FFFC13C4 10000073		eret
+FFFC14CC 00072083		lw		$ra,[$sp]
+FFFC14D0 00470713		add		$sp,$sp,#4
+FFFC14D4 0600080D		mtu		$v0,$x0
+FFFC14D8 10000073		eret
+                        	
+                        	;------------------------------------------------------------------------------
+                        	; Exit the current task.
+                        	;
+                        	; Parameters:
+                        	;		none
+                        	; Modifies:
+                        	;		a1 = task id
+                        	;------------------------------------------------------------------------------
+                        	
+                        	FMTK_ExitTask:
+FFFC14DC 300019F3		csrrw	$a1,#$300,$x0				; get tid
+FFFC14E0 0169D993		srl		$a1,$a1,#22
+FFFC14E4 00F9F993		and		$a1,$a1,#15
+                        		; fall through to KillTask
                         	
                         	;------------------------------------------------------------------------------
                         	; Parameters:
                         	;		a1 = pid of task to kill
                         	;------------------------------------------------------------------------------
                         	
-                        	KillTask:
-FFFC13C8 00206D13		ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
-FFFC13CC 00F9FD93		and		$t1,$a1,#15					; limit pid
-FFFC13D0 00AD9D93		sll		$t1,$t1,#10					; convert to TCB address
-FFFC13D4 29AD8423		sb		$t0,TCBStatus[$t1]
-FFFC13D8 A55FF0EF		call	FreeAll							; free all the memory associated with the task
+                        	FMTK_KillTask:
+FFFC14E8 00206D13		ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
+FFFC14EC 00F9FD93		and		$t1,$a1,#15					; limit pid
+FFFC14F0 00AD9D93		sll		$t1,$t1,#10					; convert to TCB address
+FFFC14F4 29AD8423		sb		$t0,TCBStatus[$t1]
+FFFC14F8 0009E933		mov		a0,a1								; a0 = pid
+FFFC14FC 951FF0EF		call	FreeAll							; free all the memory associated with the task
                         		; Now make process ID available for reuse
-FFFC13DC 00004637		lhu		$t1,PIDMAP
-FFFC13E0 31060613
-FFFC13E4 00060633
-FFFC13E8 00065D83
-FFFC13EC 00106D13		ldi		$t0,#1
-FFFC13F0 013D1D13		sll		$t0,$t0,$a1
-FFFC13F4 FFFD4D13		xor		$t0,$t0,#-1
-FFFC13F8 01ADFDB3		and		$t1,$t1,$t0
-FFFC13FC 00004637		sh		$t1,PIDMAP
-FFFC1400 31060613
-FFFC1404 00060633
-FFFC1408 01B61023
-FFFC140C 10000073		eret
+FFFC1500 00004637		lhu		$t1,PIDMAP
+FFFC1504 31060613
+FFFC1508 00060633
+FFFC150C 00065D83
+FFFC1510 00106D13		ldi		$t0,#1							; generate bit "off" mask
+FFFC1514 013D1D13		sll		$t0,$t0,$a1
+FFFC1518 FFFD4D13		xor		$t0,$t0,#-1					; complment for inverted mask
+FFFC151C 01ADFDB3		and		$t1,$t1,$t0
+FFFC1520 00004637		sh		$t1,PIDMAP
+FFFC1524 31060613
+FFFC1528 00060633
+FFFC152C 01B61023
+FFFC1530 10000073		eret
                         	
                         	;------------------------------------------------------------------------------
                         	;------------------------------------------------------------------------------
                         	
                         	DumpReadyQueue:
-FFFC1410 FFC70713		sub		$sp,$sp,#4
-FFFC1414 00172023		sw		$ra,[$sp]
-FFFC1418 00006D93		ldi		$t1,#0
+FFFC1534 FFC70713		sub		$sp,$sp,#4
+FFFC1538 00172023		sw		$ra,[$sp]
+FFFC153C 00006D93		ldi		$t1,#0
                         	.0002:
-FFFC141C 00D06913		ldi		$a0,#CR
-FFFC1420 D9DFE0EF		call	Putch
-FFFC1424 05106913		ldi		$a0,#'Q'
-FFFC1428 D95FE0EF		call	Putch
-FFFC142C 000DE933		mov		$a0,$t1
-FFFC1430 9A4FF0EF		call	PutHexNybble
-FFFC1434 03A06913		ldi		$a0,#':'
-FFFC1438 D85FE0EF		call	Putch
-FFFC143C 00004637		lbu		$a2,HRDY0[$t1]
-FFFC1440 30860613
-FFFC1444 01B60633
-FFFC1448 00064A03
-FFFC144C 00004637		lbu		$a3,TRDY0[$t1]
-FFFC1450 30C60613
-FFFC1454 01B60633
-FFFC1458 00064A83
-FFFC145C 035A0663		beq		$a2,$a3,.nxt
-FFFC1460 008D9E13		sll		$t2,$t1,#8
-FFFC1464 00004637		add		$t2,$t2,#RDYQ0
-FFFC1468 01C60E33
+FFFC1540 00D06913		ldi		$a0,#CR
+FFFC1544 C79FE0EF		call	Putch
+FFFC1548 05106913		ldi		$a0,#'Q'
+FFFC154C C71FE0EF		call	Putch
+FFFC1550 000DE933		mov		$a0,$t1
+FFFC1554 88CFF0EF		call	PutHexNybble
+FFFC1558 03A06913		ldi		$a0,#':'
+FFFC155C C61FE0EF		call	Putch
+FFFC1560 00004637		lbu		$a2,HRDY0[$t1]
+FFFC1564 30860613
+FFFC1568 01B60633
+FFFC156C 00064A03
+FFFC1570 00004637		lbu		$a3,TRDY0[$t1]
+FFFC1574 30C60613
+FFFC1578 01B60633
+FFFC157C 00064A83
+FFFC1580 035A0663		beq		$a2,$a3,.nxt
+FFFC1584 008D9E13		sll		$t2,$t1,#8
+FFFC1588 00004637		add		$t2,$t2,#RDYQ0
+FFFC158C 01C60E33
                         	.0001:
-FFFC146C 014E0EB3		add		$t3,$t2,$a2
-FFFC1470 000EC903		lbu		$a0,[$t3]
-FFFC1474 940FF0EF		call	PutHexByte
-FFFC1478 02006913		ldi		$a0,#' '
-FFFC147C D41FE0EF		call	Putch
-FFFC1480 001A0A13		add		$a2,$a2,#1
-FFFC1484 FF5A14E3		bne		$a2,$a3,.0001
+FFFC1590 014E0EB3		add		$t3,$t2,$a2
+FFFC1594 000EC903		lbu		$a0,[$t3]
+FFFC1598 828FF0EF		call	PutHexByte
+FFFC159C 02006913		ldi		$a0,#' '
+FFFC15A0 C1DFE0EF		call	Putch
+FFFC15A4 001A0A13		add		$a2,$a2,#1
+FFFC15A8 FF5A14E3		bne		$a2,$a3,.0001
                         	.nxt:
-FFFC1488 001D8D93		add		$t1,$t1,#1
-FFFC148C 004DAE13		slt		$t2,$t1,#4
-FFFC1490 F80E16E3		bne		$t2,$x0,.0002
-FFFC1494 00072083		lw		$ra,[$sp]
-FFFC1498 00470713		add		$sp,$sp,#4
-FFFC149C 00008067		ret
+FFFC15AC 001D8D93		add		$t1,$t1,#1
+FFFC15B0 004DAE13		slt		$t2,$t1,#4
+FFFC15B4 F80E16E3		bne		$t2,$x0,.0002
+FFFC15B8 00072083		lw		$ra,[$sp]
+FFFC15BC 00470713		add		$sp,$sp,#4
+FFFC15C0 10000073		eret
                         	
                         	.file "cs01rom.asm",1
                         	.file "cs01rom.asm",1
@@ -2090,80 +2257,7 @@ FFFC149C 00008067		ret
                         	
                         	.file "TinyBasic.asm",84
                         			code
-FFFC14A0 00000000			align	409
-FFFC14A4 00000000
-FFFC14A8 00000000
-FFFC14AC 00000000
-FFFC14B0 00000000
-FFFC14B4 00000000
-FFFC14B8 00000000
-FFFC14BC 00000000
-FFFC14C0 00000000
-FFFC14C4 00000000
-FFFC14C8 00000000
-FFFC14CC 00000000
-FFFC14D0 00000000
-FFFC14D4 00000000
-FFFC14D8 00000000
-FFFC14DC 00000000
-FFFC14E0 00000000
-FFFC14E4 00000000
-FFFC14E8 00000000
-FFFC14EC 00000000
-FFFC14F0 00000000
-FFFC14F4 00000000
-FFFC14F8 00000000
-FFFC14FC 00000000
-FFFC1500 00000000
-FFFC1504 00000000
-FFFC1508 00000000
-FFFC150C 00000000
-FFFC1510 00000000
-FFFC1514 00000000
-FFFC1518 00000000
-FFFC151C 00000000
-FFFC1520 00000000
-FFFC1524 00000000
-FFFC1528 00000000
-FFFC152C 00000000
-FFFC1530 00000000
-FFFC1534 00000000
-FFFC1538 00000000
-FFFC153C 00000000
-FFFC1540 00000000
-FFFC1544 00000000
-FFFC1548 00000000
-FFFC154C 00000000
-FFFC1550 00000000
-FFFC1554 00000000
-FFFC1558 00000000
-FFFC155C 00000000
-FFFC1560 00000000
-FFFC1564 00000000
-FFFC1568 00000000
-FFFC156C 00000000
-FFFC1570 00000000
-FFFC1574 00000000
-FFFC1578 00000000
-FFFC157C 00000000
-FFFC1580 00000000
-FFFC1584 00000000
-FFFC1588 00000000
-FFFC158C 00000000
-FFFC1590 00000000
-FFFC1594 00000000
-FFFC1598 00000000
-FFFC159C 00000000
-FFFC15A0 00000000
-FFFC15A4 00000000
-FFFC15A8 00000000
-FFFC15AC 00000000
-FFFC15B0 00000000
-FFFC15B4 00000000
-FFFC15B8 00000000
-FFFC15BC 00000000
-FFFC15C0 00000000
-FFFC15C4 00000000
+FFFC15C4 00000000			align	409
 FFFC15C8 00000000
 FFFC15CC 00000000
 FFFC15D0 00000000
@@ -2834,10 +2928,10 @@ FFFC2008 3290106F			jmp	OUTC	;	Jump to character-out routine
 FFFC200C 3290106F			jmp	INCH	;Jump to character-in routine
                         	GOAUXO:	
 FFFC2010 00000637			jmp	AUXOUT	;	Jump to auxiliary-out routine
-FFFC2014 10860067
+FFFC2014 13460067
                         	GOAUXI:	
 FFFC2018 00000637			jmp	AUXIN	;	Jump to auxiliary-in routine
-FFFC201C 10A60067
+FFFC201C 13660067
                         	GOBYE:	
 FFFC2020 3450106F			jmp	BYEBYE	;	Jump to monitor, DOS, etc.
                         	
@@ -3190,10 +3284,10 @@ FFFC230A 24002C18		dh	POKEH
 FFFC230C 23F82400		dh	YIELD0
 FFFC230E 202023F8		dh	STOP
 FFFC2310 2C502020		dh	GOBYE
-FFFC2312 014D2C50		dh	SYSX
-FFFC2314 24C4014D		dh	_cls
-FFFC2316 014F24C4		dh  _clr
-FFFC2318 2504014F		dh	_rdcf
+FFFC2312 01792C50		dh	SYSX
+FFFC2314 24C40179		dh	_cls
+FFFC2316 017B24C4		dh  _clr
+FFFC2318 2504017B		dh	_rdcf
 FFFC231A 252C2504		dh  ONIRQ
 FFFC231C 28B0252C		dh	WAITIRQ
 FFFC231E 328028B0		dh	DEFLT
@@ -3324,7 +3418,7 @@ FFFC23FC CB1FF06F		jmp		WSTART		; WSTART will reset the stack
                         	;------------------------------------------------------------------------------
                         	
                         	YIELD0:
-FFFC2400 00006913		ldi		a0,#0
+FFFC2400 00D06913		ldi		a0,#13
 FFFC2404 00000073		ecall
 FFFC2408 2140006F		jmp		FINISH
                         	
@@ -3347,7 +3441,7 @@ FFFC241C 0B0000EF		call  clearVars
                         	
                         	RUNNXL:					; RUN <next line>
 FFFC2420 71802E03		lw		$t2,CURRNT	; executing a program?
-FFFC2424 D40E1BE3		bne		$t2,x0,.0001	; if not, we've finished a direct stat.
+FFFC2424 D80E11E3		bne		$t2,x0,.0001	; if not, we've finished a direct stat.
                         	RUN2:
 FFFC2428 C85FF06F		jmp		WSTART
                         	.0001:
@@ -3999,7 +4093,7 @@ FFFC2A00 EACFF06F		jmp		WSTART
                         	LOAD3:
 FFFC2A04 F95FF0EF		call	GetFilename
 FFFC2A08 00000637		call	AUXIN_INIT
-FFFC2A0C 1C6600E7
+FFFC2A0C 1F2600E7
 FFFC2A10 EC5FF06F		jmp		LOAD
                         	
                         	;	call		OREXPR		;evaluate the following expression
@@ -4007,7 +4101,7 @@ FFFC2A10 EC5FF06F		jmp		LOAD
 FFFC2A14 000019B7		ld		a1,#$E00
 FFFC2A18 E0098993
 FFFC2A1C 00000637		call	SDReadSector
-FFFC2A20 1C7600E7
+FFFC2A20 1F3600E7
 FFFC2A24 00190913		add		a0,a0,#1
 FFFC2A28 000029B7		ldi		a1,#TXTBGN
 FFFC2A2C 80098993
@@ -4015,7 +4109,7 @@ FFFC2A2C 80098993
 FFFC2A30 FFC70713		sub		$sp,$sp,#4
 FFFC2A34 01272023		sw		a0,[$sp]
 FFFC2A38 00000637		call	SDReadSector
-FFFC2A3C 1C7600E7
+FFFC2A3C 1F3600E7
 FFFC2A40 20098993		add		a1,a1,#512
 FFFC2A44 00072903		lw		a0,[$sp]
 FFFC2A48 00470713		add		$sp,$sp,#4
@@ -4032,7 +4126,7 @@ FFFC2A64 E4000463		bra		WSTART
                         	SAVE3:
 FFFC2A68 F31FF0EF		call	GetFilename
 FFFC2A6C 00000637		call	AUXOUT_INIT
-FFFC2A70 1CA600E7
+FFFC2A70 1F6600E7
 FFFC2A74 05C0006F		jmp		SAVE
                         	
 FFFC2A78 204000EF		call	OREXPR		;evaluate the following expression
@@ -4040,7 +4134,7 @@ FFFC2A78 204000EF		call	OREXPR		;evaluate the following expression
 FFFC2A7C 000019B7		ldi		a1,#$E00	; starting address to write
 FFFC2A80 E0098993
 FFFC2A84 00000637		call	SDWriteSector
-FFFC2A88 1CC600E7
+FFFC2A88 1F8600E7
 FFFC2A8C 00190913		add		a0,a0,#1
 FFFC2A90 000029B7		ldi		a1,#TXTBGN
 FFFC2A94 80098993
@@ -4048,7 +4142,7 @@ FFFC2A94 80098993
 FFFC2A98 FFC70713		sub		$sp,$sp,#4
 FFFC2A9C 01272023		sw		a0,[$sp]
 FFFC2AA0 00000637		call	SDWriteSector
-FFFC2AA4 1CC600E7
+FFFC2AA4 1F8600E7
 FFFC2AA8 20098993		add		a1,a1,#512
 FFFC2AAC 00072903		lw		a0,[$sp]
 FFFC2AB0 00470713		add		$sp,$sp,#4
@@ -4086,7 +4180,7 @@ FFFC2B18 018000EF		call	AUXOCRLF    ; followed by a CR & LF
 FFFC2B1C 01A06913		ldi		a0,#$1A		; and a control-Z to end the CP/M file
 FFFC2B20 CF0FF0EF		call	GOAUXO
 FFFC2B24 00000637		call	AUXOUT_FLUSH
-FFFC2B28 1D3600E7
+FFFC2B28 1FF600E7
 FFFC2B2C D8000063		bra		WSTART		; then go do a warm start
                         	
                         	; output a CR LF sequence to auxillary output
@@ -4852,7 +4946,7 @@ FFFC3310 02084663		blt		v0,r0,rnd1
 FFFC3314 000869B3		mov		a1,v0
 FFFC3318 000868B3		mov		v1,v0
 FFFC331C 00000637		call	gen_rand	; generate a random number
-FFFC3320 215600E7
+FFFC3320 241600E7
 FFFC3324 03186833		rem		v0,v0,v1
 FFFC3328 00180813		add		v0,v0,#1
 FFFC332C 000068B3		mov		v1,x0
@@ -4866,7 +4960,7 @@ FFFC3344 00470713		add		$sp,$sp,#4
 FFFC3348 1A00006F		jmp		ERROR
                         	rnd2:
 FFFC334C 00000637		call	gen_rand	; generate a random number
-FFFC3350 215600E7
+FFFC3350 241600E7
 FFFC3354 000068B3		mov		v1,x0
 FFFC3358 00072083		lw		$ra,[$sp]
 FFFC335C 00470713		add		$sp,$sp,#4
@@ -5715,7 +5809,7 @@ FFFC3B14 BB590913
                         	PRMESG:
 FFFC3B18 FFC70713		sub		$sp,$sp,#4
 FFFC3B1C 00172023		sw		$ra,[$sp]
-FFFC3B20 BCDFC0EF		call	SerialPutString
+FFFC3B20 BD9FC0EF		call	SerialPutString
 FFFC3B24 00072083		lw		$ra,[$sp]
 FFFC3B28 00470713		add		$sp,$sp,#4
 FFFC3B2C 00008067		ret
@@ -5729,7 +5823,7 @@ FFFC3B2C 00008067		ret
                         	;	(Preserves all registers.)
                         	;
                         	OUTC:
-FFFC3B30 B81FC06F		jmp		SerialPutChar
+FFFC3B30 B8DFC06F		jmp		SerialPutChar
                         	
                         	; ===== Input a character from the console into register v0 (or
                         	;	return Zero status if there's no character available).
@@ -5737,7 +5831,7 @@ FFFC3B30 B81FC06F		jmp		SerialPutChar
                         	INCH:
 FFFC3B34 FFC70713		sub 	$sp,$sp,#4
 FFFC3B38 00172023		sw		$ra,[$sp]
-FFFC3B3C B41FC0EF		call	SerialPeekChar
+FFFC3B3C B4DFC0EF		call	SerialPeekChar
 FFFC3B40 00180813		add		$v0,$v0,#1				; prepare test -1
 FFFC3B44 00080A63		beq		$v0,$x0,INCH1			; was = -1
 FFFC3B48 FFF80813		sub		$v0,$v0,#1				; get char back
@@ -5901,25 +5995,26 @@ FFFC3D3B 0000000D
                         		align 8                        	
                         	end_init_data:
                         	_end_init_data:
-606 symbols
+650 symbols
   Symbol Name                              seg     address bits
   ABS                                        code  fffc3364 18
   ABS1                                       code  fffc3378 18
   ADDEXPR                                    code  fffc2ef8 18
   ANDEXPR                                    code  fffc2ce4 18
-  AUXIN                                      code  800000000000010a 32
-  AUXIN_INIT                                 code  80000000000001c6 32
+  AUXIN                                      code  8000000000000136 32
+  AUXIN_INIT                                 code  80000000000001f2 32
   AUXOCRLF                                   code  fffc2b30 18
-  AUXOUT                                     code  8000000000000108 32
-  AUXOUT_FLUSH                               code  80000000000001d3 32
-  AUXOUT_INIT                                code  80000000000001ca 32
-  Alloc                                      code  fffc0d68 18
-  Alloc.0001                                 code  fffc0ddc 18
-  Alloc.enough                               code  fffc0da0 18
-  Alloc.noRun                                code  fffc0dfc 18
-  Alloc.noRun2                               code  fffc0d98 18
-  AllocStack                                 code  fffc0e14 18
-  AllocStack.xit                             code  fffc0e28 18
+  AUXOUT                                     code  8000000000000134 32
+  AUXOUT_FLUSH                               code  80000000000001ff 32
+  AUXOUT_INIT                                code  80000000000001f6 32
+  Alloc                                      code  fffc0d74 18
+  Alloc.0001                                 code  fffc0de8 18
+  Alloc.enough                               code  fffc0dac 18
+  Alloc.noRun                                code  fffc0e08 18
+  Alloc.noRun2                               code  fffc0da4 18
+  AllocStack                                 code  fffc0e20 18
+  AllocStack.0001                            code  fffc0e3c 18
+  AllocStack.xit                             code  fffc0e48 18
   BASPRMPT                                   code  fffc20cc 18
   BS                                        const  000008 5
   BUFFER                                    const  00071c 12
@@ -5950,10 +6045,10 @@ FFFC3D3B 0000000D
   DeleteLine.0001                            code  fffc2190 18
   DeleteLine.0002                            code  fffc217c 18
   DeleteLine.0003                            code  fffc2194 18
-  DumpReadyQueue                             code  fffc1410 18
-  DumpReadyQueue.0001                        code  fffc146c 18
-  DumpReadyQueue.0002                        code  fffc141c 18
-  DumpReadyQueue.nxt                         code  fffc1488 18
+  DumpReadyQueue                             code  fffc1534 18
+  DumpReadyQueue.0001                        code  fffc1590 18
+  DumpReadyQueue.0002                        code  fffc1540 18
+  DumpReadyQueue.nxt                         code  fffc15ac 18
   ENDCHK                                     code  fffc3498 18
   ENDMEM                                    const  008000 17
   ERROR                                      code  fffc34e8 18
@@ -5965,14 +6060,59 @@ FFFC3D3B 0000000D
   EXMAT                                      code  fffc23c0 18
   EXNGO                                      code  fffc2394 18
   EXPR                                       code  fffc2dd4 18
-  EditMem                                    code  fffc0464 18
+  E_Arg                                     const  000001 2
+  E_BadAlarm                                const  000011 6
+  E_BadBlockNum                             const  000025 7
+  E_BadDevNum                               const  000020 7
+  E_BadDevOp                                const  000022 7
+  E_BadMbx                                  const  000004 4
+  E_DCBInUse                                const  000019 6
+  E_NoDev                                   const  000021 7
+  E_NoMem                                   const  00000c 5
+  E_NoMoreAlarmBlks                         const  000044 8
+  E_NoMoreMbx                               const  000040 8
+  E_NoMoreMsgBlks                           const  000041 8
+  E_NoMoreTCBs                              const  000045 8
+  E_NoMsg                                   const  00000b 5
+  E_NoThread                                const  000006 4
+  E_NotAlloc                                const  000009 5
+  E_NotOwner                                const  000012 6
+  E_Ok                                      const  000000 1
+  E_QueFull                                 const  000005 4
+  E_QueStrategy                             const  000013 6
+  E_ReadError                               const  000023 7
+  E_Timeout                                 const  000010 6
+  E_TooManyBlocks                           const  000026 7
+  E_WriteError                              const  000024 7
+  EditMem                                    code  fffc0470 18
   FI1                                        code  fffc3478 18
   FI2                                        code  fffc348c 18
   FILEBUF                                   const  07f600 20
   FILENAME                                  const  0006c0 12
   FIN                                        code  fffc345c 18
   FINISH                                     code  fffc261c 18
-  FMTKInit                                   code  fffc0e9c 18
+  FMTKInit                                   code  fffc0f1c 18
+  FMTK_AllocMbx                              code  80000000000000e5 32
+  FMTK_ExitTask                              code  fffc14dc 18
+  FMTK_FreeMbx                               code  80000000000000e6 32
+  FMTK_Initialize                            code  80000000000000df 32
+  FMTK_KillTask                              code  fffc14e8 18
+  FMTK_PeekMsg                               code  80000000000000ea 32
+  FMTK_PostMsg                               code  80000000000000e7 32
+  FMTK_SendMsg                               code  80000000000000e8 32
+  FMTK_SetTaskPriority                       code  80000000000000e3 32
+  FMTK_Sleep                                 code  80000000000000e4 32
+  FMTK_StartApp                              code  80000000000000eb 32
+  FMTK_StartTask                             code  fffc142c 18
+  FMTK_StartTask.err                         code  fffc14cc 18
+  FMTK_SwitchTask                            code  fffc1070 18
+  FMTK_SwitchTask.0001                       code  fffc11c4 18
+  FMTK_SwitchTask.dead                       code  fffc11a0 18
+  FMTK_SwitchTask.noMsg                      code  fffc1244 18
+  FMTK_SwitchTask.ready                      code  fffc1254 18
+  FMTK_SwitchTask.rsseg                      code  fffc1268 18
+  FMTK_SwitchTask.svseg                      code  fffc1184 18
+  FMTK_WaitMsg                               code  80000000000000e9 32
   FNDLN                                      code  fffc3620 18
   FNDLNP                                     code  fffc3640 18
   FNDNXT                                     code  fffc3688 18
@@ -5993,16 +6133,16 @@ FFFC3D3B 0000000D
   FR7                                        code  fffc2714 18
   FR8                                        code  fffc2734 18
   FUNCEXPR                                   code  fffc302c 18
-  FillMem                                    code  fffc047c 18
-  FillMem.0001                               code  fffc0498 18
-  FindRun                                    code  fffc0d10 18
-  FindRun.0001                               code  fffc0d28 18
-  FindRun.empty0                             code  fffc0d40 18
-  FindRun.empty1                             code  fffc0d44 18
-  FindRun.foundEnough                        code  fffc0d60 18
-  FreeAll                                    code  fffc0e2c 18
-  FreeAll.0001                               code  80000000000000b1 32
-  FreeAll.nxt                                code  fffc0e34 18
+  FillMem                                    code  fffc0488 18
+  FillMem.0001                               code  fffc04a4 18
+  FindRun                                    code  fffc0d1c 18
+  FindRun.0001                               code  fffc0d34 18
+  FindRun.empty0                             code  fffc0d4c 18
+  FindRun.empty1                             code  fffc0d50 18
+  FindRun.foundEnough                        code  fffc0d6c 18
+  FreeAll                                    code  fffc0e4c 18
+  FreeAll.0001                               code  fffc0ea8 18
+  FreeAll.nxt                                code  fffc0e54 18
   GCHAR                                      code  fffc2934 18
   GCHAR1                                     code  fffc294c 18
   GETLN                                      code  fffc352c 18
@@ -6027,16 +6167,16 @@ FFFC3D3B 0000000D
   GetBuflen.0002                             code  fffc21e4 18
   GetBuflen.0004                             code  fffc21fc 18
   GetFilename                                code  fffc2998 18
-  GetFreePid                                 code  fffc12b0 18
-  GetFreePid.0001                            code  fffc12c4 18
-  GetFreePid.0002                            code  fffc12f4 18
-  GetFreePid.allocPid                        code  fffc12ec 18
-  GetHexNum                                  code  fffc04d4 18
-  GetHexNum.0001                             code  fffc0524 18
-  GetHexNum.isDigit                          code  fffc0560 18
-  GetHexNum.isHexLower                       code  fffc0548 18
-  GetHexNum.isHexUpper                       code  fffc0530 18
-  GetHexNum.next                             code  fffc04e4 18
+  GetFreePid                                 code  fffc13c4 18
+  GetFreePid.0001                            code  fffc13d8 18
+  GetFreePid.0002                            code  fffc1408 18
+  GetFreePid.allocPid                        code  fffc1400 18
+  GetHexNum                                  code  fffc04e0 18
+  GetHexNum.0001                             code  fffc0530 18
+  GetHexNum.isDigit                          code  fffc056c 18
+  GetHexNum.isHexLower                       code  fffc0554 18
+  GetHexNum.isHexUpper                       code  fffc053c 18
+  GetHexNum.next                             code  fffc04f0 18
   Getch                                      code  fffc01a4 18
   HRDY0                                     const  004308 16
   HRDY1                                     const  004309 16
@@ -6066,16 +6206,15 @@ FFFC3D3B 0000000D
   IP7                                        code  fffc2838 18
   IRQFlag                                   const  0007b4 12
   IRQROUT                                   const  0007a4 12
-  IRQRout                                    code  fffc0764 18
-  IRQRout.0001                               code  fffc07d8 18
-  IRQRout.0002                               code  fffc07f0 18
-  IRQRout.isIRQ                              code  fffc077c 18
+  IRQRout                                    code  fffc0770 18
+  IRQRout.0001                               code  fffc07e4 18
+  IRQRout.0002                               code  fffc07fc 18
+  IRQRout.isIRQ                              code  fffc0788 18
   InsertLine                                 code  fffc21b8 18
   InsertLine.0001                            code  fffc21bc 18
   InsertLine.done                            code  fffc21d4 18
-  InsertTask                                 code  fffc0ed4 18
-  InsertTask.qfull                           code  fffc0f34 18
-  KillTask                                   code  fffc13c8 18
+  InsertTask                                 code  fffc0f54 18
+  InsertTask.qfull                           code  fffc0fb4 18
   LET                                        code  fffc28bc 18
   LINEFD                                    const  00000a 5
   LISTX                                      code  fffc253c 18
@@ -6099,9 +6238,9 @@ FFFC3D3B 0000000D
   LSTROM                                    const  000000 1
   LT1                                        code  fffc28d0 18
   LoadWord                                   code  fffc38f0 18
-  MMUInit                                    code  fffc0cbc 18
-  MMUInit.0001                               code  fffc0ce0 18
-  MMUInit.0002                               code  fffc0cfc 18
+  MMUInit                                    code  fffc0cc8 18
+  MMUInit.0001                               code  fffc0cec 18
+  MMUInit.0002                               code  fffc0d08 18
   MULEXPR                                    code  fffc2f90 18
   MVDOWN                                     code  fffc36c8 18
   MVDOWN1                                    code  fffc36b8 18
@@ -6114,13 +6253,13 @@ FFFC3D3B 0000000D
   Monitor.0002                               code  fffc0248 18
   Monitor.0003                               code  fffc02a4 18
   Monitor.0004                               code  fffc0324 18
-  Monitor.0005                               code  fffc03d8 18
-  Monitor.0006                               code  fffc0384 18
-  Monitor.0007                               code  fffc0390 18
-  Monitor.0008                               code  fffc039c 18
-  Monitor.0009                               code  fffc03a8 18
-  Monitor.0010                               code  fffc03bc 18
-  Monitor.0011                               code  fffc03d8 18
+  Monitor.0005                               code  fffc03e4 18
+  Monitor.0006                               code  fffc0388 18
+  Monitor.0007                               code  fffc039c 18
+  Monitor.0008                               code  fffc03a8 18
+  Monitor.0009                               code  fffc03b4 18
+  Monitor.0010                               code  fffc03c8 18
+  Monitor.0011                               code  fffc03e4 18
   Monitor.doBackspace                        code  fffc0290 18
   Monitor.doDelete                           code  fffc0240 18
   Monitor.procLine                           code  fffc02ec 18
@@ -6141,7 +6280,8 @@ FFFC3D3B 0000000D
   ONIRQ                                      code  fffc2504 18
   ONIRQ1                                     code  fffc2524 18
   OREXPR                                     code  fffc2c7c 18
-  OSCALL                                     code  fffc128c 18
+  OSCALL                                     code  fffc1388 18
+  OSCallTbl                                  code  fffc0edc 18
   OSSP                                      const  000700 12
   OUTC                                       code  fffc3b30 18
   OUTPTR                                    const  0007a8 12
@@ -6183,12 +6323,12 @@ FFFC3D3B 0000000D
   PU1                                        code  fffc3740 18
   PUSHA_                                     code  fffc3708 18
   PWORD                                      code  fffc2b54 18
-  PutHexByte                                 code  fffc05b4 18
-  PutHexHalf                                 code  fffc0594 18
-  PutHexNybble                               code  fffc05d4 18
-  PutHexNybble.0001                          code  fffc0604 18
-  PutHexNybble.lt10                          code  fffc05fc 18
-  PutHexWord                                 code  fffc0574 18
+  PutHexByte                                 code  fffc05c0 18
+  PutHexHalf                                 code  fffc05a0 18
+  PutHexNybble                               code  fffc05e0 18
+  PutHexNybble.0001                          code  fffc0610 18
+  PutHexNybble.lt10                          code  fffc0608 18
+  PutHexWord                                 code  fffc0580 18
   Putch                                      code  fffc01bc 18
   QNDX                                      const  004304 16
   QSORRY                                     code  fffc34d4 18
@@ -6210,7 +6350,7 @@ FFFC3D3B 0000000D
   RUN2                                       code  fffc2428 18
   RUN2.0001                                  code  fffc242c 18
   RUNNXL                                     code  fffc2420 18
-  RUNNXL.0001                                code  800000000000017a 32
+  RUNNXL.0001                                code  80000000000001a6 32
   RUNSML                                     code  fffc2488 18
   RUNTSL                                     code  fffc2480 18
   SAVE                                       code  fffc2ad0 18
@@ -6219,8 +6359,8 @@ FFFC3D3B 0000000D
   SAVE3                                      code  fffc2a68 18
   SAVE4                                      code  fffc2a98 18
   SAVEND                                     code  fffc2b10 18
-  SDReadSector                               code  80000000000001c7 32
-  SDWriteSector                              code  80000000000001cc 32
+  SDReadSector                               code  80000000000001f3 32
+  SDWriteSector                              code  80000000000001f8 32
   SETVAL                                     code  fffc33f4 18
   SETVAL.sv2                                 code  fffc3418 18
   SGN                                        code  fffc339c 18
@@ -6237,28 +6377,20 @@ FFFC3D3B 0000000D
   STRTMP                                    const  000200 11
   SV1                                        code  fffc3454 18
   SYSX                                       code  fffc2c50 18
-  SelectTaskToRun                            code  fffc0f3c 18
-  SelectTaskToRun.dq                         code  fffc0fbc 18
-  SelectTaskToRun.nxtQ                       code  fffc0f78 18
-  SerialInit                                 code  fffc0720 18
-  SerialPeekChar                             code  fffc067c 18
-  SerialPeekChar.0001                        code  fffc06a8 18
-  SerialPutChar                              code  fffc06b0 18
-  SerialPutChar.0001                         code  fffc06b8 18
-  SerialPutString                            code  fffc06ec 18
-  SerialPutString.0001                       code  fffc06fc 18
-  SerialPutString.done                       code  fffc0710 18
-  SkipSpaces                                 code  fffc04a8 18
-  SkipSpaces.skip1                           code  fffc04cc 18
-  SkipSpaces.skip2                           code  fffc04a8 18
-  StartTask                                  code  fffc1318 18
-  StartTask.err                              code  fffc13b8 18
-  SwitchTask                                 code  fffc0ff0 18
-  SwitchTask.0001                            code  fffc1144 18
-  SwitchTask.dead                            code  fffc1120 18
-  SwitchTask.ready                           code  fffc1158 18
-  SwitchTask.rsseg                           code  fffc116c 18
-  SwitchTask.svseg                           code  fffc1104 18
+  SelectTaskToRun                            code  fffc0fbc 18
+  SelectTaskToRun.dq                         code  fffc103c 18
+  SelectTaskToRun.nxtQ                       code  fffc0ff8 18
+  SerialInit                                 code  fffc072c 18
+  SerialPeekChar                             code  fffc0688 18
+  SerialPeekChar.0001                        code  fffc06b4 18
+  SerialPutChar                              code  fffc06bc 18
+  SerialPutChar.0001                         code  fffc06c4 18
+  SerialPutString                            code  fffc06f8 18
+  SerialPutString.0001                       code  fffc0708 18
+  SerialPutString.done                       code  fffc071c 18
+  SkipSpaces                                 code  fffc04b4 18
+  SkipSpaces.skip1                           code  fffc04d8 18
+  SkipSpaces.skip2                           code  fffc04b4 18
   TAB                                       const  000009 5
   TAB1                                       code  fffc2240 18
   TAB10                                      code  fffc22e4 18
@@ -6277,9 +6409,16 @@ FFFC3D3B 0000000D
   TAB9                                       code  fffc22e0 18
   TAB9_1                                     code  fffc234a 18
   TC1                                        code  fffc39ac 18
+  TCBMsgD1                                  const  000298 11
+  TCBMsgD2                                  const  0002a0 11
+  TCBMsgD3                                  const  0002a8 11
   TCBPriority                               const  000289 11
   TCBStackBot                               const  000290 11
   TCBStatus                                 const  000288 11
+  TCB_MsgD1                                  code  80000000000000f9 32
+  TCB_MsgD2                                  code  80000000000000fa 32
+  TCB_MsgD3                                  code  80000000000000fb 32
+  TCB_Status                                 code  80000000000000f8 32
   TCBepc                                    const  000280 11
   TCBsegs                                   const  000200 11
   TICKX                                      code  fffc3388 18
@@ -6300,7 +6439,9 @@ FFFC3D3B 0000000D
   TSTV                                       code  fffc30bc 18
   TSTVRT                                     code  fffc312c 18
   TS_DEAD                                   const  000002 3
+  TS_MSGRDY                                 const  000004 4
   TS_READY                                  const  000001 2
+  TS_WAITMSG                                const  000008 5
   TV1                                        code  fffc3118 18
   TV2                                        code  fffc310c 18
   TV3                                        code  fffc30ec 18
@@ -6319,7 +6460,7 @@ FFFC3D3B 0000000D
   VARBGN                                    const  000708 12
   VAREND                                    const  00070c 12
   VIA                                       const  ffdc0600 33
-  VIAInit                                    code  fffc0614 18
+  VIAInit                                    code  fffc0620 18
   VIA_ACR                                   const  00002c 7
   VIA_DDRA                                  const  00000c 5
   VIA_IFR                                   const  000034 7
@@ -6328,6 +6469,7 @@ FFFC3D3B 0000000D
   VIA_PCR                                   const  000030 7
   VIA_T1CH                                  const  000014 6
   VIA_T1CL                                  const  000010 6
+  VirtToPhys                                 code  fffc0eac 18
   WAITIRQ                                    code  fffc252c 18
   WSTART                                     code  fffc20ac 18
   XOFF                                      const  000013 6
@@ -6366,87 +6508,87 @@ FFFC3D3B 0000000D
   XP_ORX                                     code  fffc2cc4 18
   YIELD0                                     code  fffc2400 18
   _clr                                       code  fffc24c4 18
-  _cls                                       code  800000000000014d 32
+  _cls                                       code  8000000000000179 32
   _end_init_data                           rodata  fffc4000 32
-  _rdcf                                      code  800000000000014f 32
+  _rdcf                                      code  800000000000017b 32
   a2h1                                       code  fffc298c 18
   asciiToHex                                 code  fffc2980 18
   begin_init_data                          rodata  fffc4000 32
   clearVars                                  code  fffc24cc 18
   clearVars.cv1                              code  fffc24e0 18
-  doMem                                      code  fffc03dc 18
-  doMem.loop                                 code  fffc0440 18
-  doMem.loop2                                code  fffc0418 18
+  doMem                                      code  fffc03e8 18
+  doMem.loop                                 code  fffc044c 18
+  doMem.loop2                                code  fffc0424 18
   ec1                                        code  fffc34bc 18
   end_init_data                            rodata  fffc4000 32
   findVar                                    code  fffc3210 18
   fl1                                        code  fffc3638 18
-  flt10                                      code  fffc08f1 18
-  flt20                                      code  fffc08e1 18
-  flt50                                      code  fffc08d1 18
-  fltMillion                                 code  fffc0cb8 18
-  fltOne                                     code  fffc0cb0 18
-  fltTen                                     code  fffc0cb4 18
-  fltToString                                code  fffc0901 18
-  fltToString.0001                           code  fffc095a 18
-  fltToString.0002                           code  fffc09d2 18
-  fltToString.0003                           code  fffc09be 18
-  fltToString.0004                           code  fffc0a1e 18
-  fltToString.0005                           code  fffc0a16 18
-  fltToString.0006                           code  fffc09fe 18
-  fltToString.0007                           code  fffc0a3a 18
-  fltToString.0008                           code  fffc0a4e 18
-  fltToString.0009                           code  fffc0a4a 18
-  fltToString.0010                           code  fffc0a6e 18
-  fltToString.0011                           code  fffc0afa 18
-  fltToString.0012                           code  fffc0ab2 18
-  fltToString.0013                           code  fffc0a9e 18
-  fltToString.0014                           code  fffc0ace 18
-  fltToString.0015                           code  fffc0aea 18
-  fltToString.0016                           code  fffc0a86 18
-  fltToString.0017                           code  fffc0af2 18
-  fltToString.0018                           code  fffc0afa 18
-  fltToString.0019                           code  fffc0b2e 18
-  fltToString.0020                           code  fffc0b3a 18
-  fltToString.0021                           code  fffc0b5e 18
-  fltToString.0022                           code  fffc0b6a 18
-  fltToString.0023                           code  fffc0b7a 18
-  fltToString.0024                           code  fffc0b86 18
-  fltToString.0025                           code  fffc0b72 18
-  fltToString.0026                           code  fffc0b9a 18
-  fltToString.0027                           code  fffc0ba2 18
-  fltToString.0028                           code  fffc0baa 18
-  fltToString.0029                           code  fffc0bb6 18
-  fltToString.0030                           code  fffc0bc2 18
-  fltToString.0031                           code  fffc0bce 18
-  fltToString.0032                           code  fffc0bd6 18
-  fltToString.0034                           code  fffc0bde 18
-  fltToString.0035                           code  fffc0bea 18
-  fltToString.0036                           code  fffc0bfa 18
-  fltToString.0037                           code  fffc0c06 18
-  fltToString.0038                           code  fffc0c0e 18
-  fltToString.0039                           code  fffc0c22 18
-  fltToString.0040                           code  fffc0c16 18
-  fltToString.0041                           code  fffc0c7e 18
-  fltToString.0042                           code  fffc0c42 18
-  fltToString.0043                           code  fffc0c52 18
-  fltToString.0044                           code  fffc0c66 18
-  fltToString.0045                           code  fffc0c4a 18
-  fltToString.0046                           code  fffc0c72 18
-  fltToString.0047                           code  fffc0c7e 18
-  fltToString.0048                           code  fffc0c6a 18
-  fltToString.0050                           code  fffc0c9e 18
-  fltToString.0051                           code  fffc0c9a 18
-  fltToString.0052                           code  fffc0c8a 18
-  fltToString.inf                            code  fffc0942 18
-  fltToString.notZero                        code  fffc098e 18
-  fltToString.pos                            code  fffc097a 18
-  fltToString.prt                            code  fffc0c32 18
+  flt10                                      code  fffc08fd 18
+  flt20                                      code  fffc08ed 18
+  flt50                                      code  fffc08dd 18
+  fltMillion                                 code  fffc0cc4 18
+  fltOne                                     code  fffc0cbc 18
+  fltTen                                     code  fffc0cc0 18
+  fltToString                                code  fffc090d 18
+  fltToString.0001                           code  fffc0966 18
+  fltToString.0002                           code  fffc09de 18
+  fltToString.0003                           code  fffc09ca 18
+  fltToString.0004                           code  fffc0a2a 18
+  fltToString.0005                           code  fffc0a22 18
+  fltToString.0006                           code  fffc0a0a 18
+  fltToString.0007                           code  fffc0a46 18
+  fltToString.0008                           code  fffc0a5a 18
+  fltToString.0009                           code  fffc0a56 18
+  fltToString.0010                           code  fffc0a7a 18
+  fltToString.0011                           code  fffc0b06 18
+  fltToString.0012                           code  fffc0abe 18
+  fltToString.0013                           code  fffc0aaa 18
+  fltToString.0014                           code  fffc0ada 18
+  fltToString.0015                           code  fffc0af6 18
+  fltToString.0016                           code  fffc0a92 18
+  fltToString.0017                           code  fffc0afe 18
+  fltToString.0018                           code  fffc0b06 18
+  fltToString.0019                           code  fffc0b3a 18
+  fltToString.0020                           code  fffc0b46 18
+  fltToString.0021                           code  fffc0b6a 18
+  fltToString.0022                           code  fffc0b76 18
+  fltToString.0023                           code  fffc0b86 18
+  fltToString.0024                           code  fffc0b92 18
+  fltToString.0025                           code  fffc0b7e 18
+  fltToString.0026                           code  fffc0ba6 18
+  fltToString.0027                           code  fffc0bae 18
+  fltToString.0028                           code  fffc0bb6 18
+  fltToString.0029                           code  fffc0bc2 18
+  fltToString.0030                           code  fffc0bce 18
+  fltToString.0031                           code  fffc0bda 18
+  fltToString.0032                           code  fffc0be2 18
+  fltToString.0034                           code  fffc0bea 18
+  fltToString.0035                           code  fffc0bf6 18
+  fltToString.0036                           code  fffc0c06 18
+  fltToString.0037                           code  fffc0c12 18
+  fltToString.0038                           code  fffc0c1a 18
+  fltToString.0039                           code  fffc0c2e 18
+  fltToString.0040                           code  fffc0c22 18
+  fltToString.0041                           code  fffc0c8a 18
+  fltToString.0042                           code  fffc0c4e 18
+  fltToString.0043                           code  fffc0c5e 18
+  fltToString.0044                           code  fffc0c72 18
+  fltToString.0045                           code  fffc0c56 18
+  fltToString.0046                           code  fffc0c7e 18
+  fltToString.0047                           code  fffc0c8a 18
+  fltToString.0048                           code  fffc0c76 18
+  fltToString.0050                           code  fffc0caa 18
+  fltToString.0051                           code  fffc0ca6 18
+  fltToString.0052                           code  fffc0c96 18
+  fltToString.inf                            code  fffc094e 18
+  fltToString.notZero                        code  fffc099a 18
+  fltToString.pos                            code  fffc0986 18
+  fltToString.prt                            code  fffc0c3e 18
   fv1                                        code  fffc3258 18
   fv2                                        code  fffc326c 18
   fv3                                        code  fffc3250 18
   fv4                                        code  fffc3220 18
-  gen_rand                                   code  8000000000000215 32
+  gen_rand                                   code  8000000000000241 32
   getVarName                                 code  fffc3150 18
   gfn1                                       code  fffc2a00 18
   gfn2                                       code  fffc29b0 18
@@ -6467,16 +6609,16 @@ FFFC3D3B 0000000D
   milliseconds                              const  004208 16
   msgBadGotoGosub                            code  fffc3cd5 18
   msgBytesFree                               code  fffc3c0d 18
-  msgCRLF                                    code  fffc08ce 18
+  msgCRLF                                    code  fffc08da 18
   msgComma                                   code  fffc3c22 18
   msgDivZero                                 code  fffc3be4 18
   msgExtraChars                              code  fffc3d1b 18
-  msgInf                                     code  fffc0ca8 18
+  msgInf                                     code  fffc0cb4 18
   msgInit                                    code  fffc3b6c 18
   msgInputVar                                code  fffc3c84 18
   msgLineRange                               code  fffc3c35 18
-  msgMonHelp                                 code  fffc081e 18
-  msgNan                                     code  fffc0cac 18
+  msgMonHelp                                 code  fffc082a 18
+  msgNan                                     code  fffc0cb8 18
   msgNextFor                                 code  fffc3ca0 18
   msgNextVar                                 code  fffc3cb2 18
   msgNumTooBig                               code  fffc3bd1 18
@@ -6485,25 +6627,21 @@ FFFC3D3B 0000000D
   msgReady                                   code  fffc3c1a 18
   msgRetWoGosub                              code  fffc3cf1 18
   msgSYSBad                                  code  fffc3c73 18
-  msgStart                                   code  fffc0808 18
-  msgTaskStart                               code  fffc08c0 18
+  msgStart                                   code  fffc0814 18
+  msgTaskStart                               code  fffc08cc 18
   msgTooBig                                  code  fffc3d07 18
   msgVar                                     code  fffc3c4a 18
   msgVarSpace                                code  fffc3bf6 18
   msgWhat                                    code  fffc3ba8 18
-  pfree                                      code  fffc0e50 18
   prCRLF                                     code  fffc3824 18
   pword1                                     code  fffc2b68 18
   pword2                                     code  fffc2b84 18
-  qToChk                                     code  fffc0e7c 18
+  qToChk                                     code  fffc0efa 18
   return1                                    code  fffc2680 18
   rnd1                                       code  fffc333c 18
   rnd2                                       code  fffc334c 18
   switchflag                                const  004200 16
   sysx1                                      code  fffc2c64 18
-  t0                                         code  fffc0e50 18
-  t0.0001                                    code  fffc0e78 18
-  t0.nxt                                     code  80000000000000b4 32
   tah1                                       code  fffc2bb8 18
   toAsciiHex                                 code  fffc2ba8 18
   toUpper                                    code  fffc3acc 18
@@ -6511,19 +6649,31 @@ FFFC3D3B 0000000D
   usrJmp                                    const  0007a0 12
 
 Undefined Symbols
-  AUXIN                                      code  800000000000010a 32
-  AUXIN_INIT                                 code  80000000000001c6 32
-  AUXOUT                                     code  8000000000000108 32
-  AUXOUT_FLUSH                               code  80000000000001d3 32
-  AUXOUT_INIT                                code  80000000000001ca 32
-  FreeAll.0001                               code  80000000000000b1 32
-  RUNNXL.0001                                code  800000000000017a 32
-  SDReadSector                               code  80000000000001c7 32
-  SDWriteSector                              code  80000000000001cc 32
-  _cls                                       code  800000000000014d 32
-  _rdcf                                      code  800000000000014f 32
-  gen_rand                                   code  8000000000000215 32
-  t0.nxt                                     code  80000000000000b4 32
+  AUXIN                                      code  8000000000000136 32
+  AUXIN_INIT                                 code  80000000000001f2 32
+  AUXOUT                                     code  8000000000000134 32
+  AUXOUT_FLUSH                               code  80000000000001ff 32
+  AUXOUT_INIT                                code  80000000000001f6 32
+  FMTK_AllocMbx                              code  80000000000000e5 32
+  FMTK_FreeMbx                               code  80000000000000e6 32
+  FMTK_Initialize                            code  80000000000000df 32
+  FMTK_PeekMsg                               code  80000000000000ea 32
+  FMTK_PostMsg                               code  80000000000000e7 32
+  FMTK_SendMsg                               code  80000000000000e8 32
+  FMTK_SetTaskPriority                       code  80000000000000e3 32
+  FMTK_Sleep                                 code  80000000000000e4 32
+  FMTK_StartApp                              code  80000000000000eb 32
+  FMTK_WaitMsg                               code  80000000000000e9 32
+  RUNNXL.0001                                code  80000000000001a6 32
+  SDReadSector                               code  80000000000001f3 32
+  SDWriteSector                              code  80000000000001f8 32
+  TCB_MsgD1                                  code  80000000000000f9 32
+  TCB_MsgD2                                  code  80000000000000fa 32
+  TCB_MsgD3                                  code  80000000000000fb 32
+  TCB_Status                                 code  80000000000000f8 32
+  _cls                                       code  8000000000000179 32
+  _rdcf                                      code  800000000000017b 32
+  gen_rand                                   code  8000000000000241 32
 
   Macro Name
 0 compressable instructions

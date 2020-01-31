@@ -14,6 +14,24 @@ RDYQ1		EQU		$4500
 RDYQ2		EQU		$4600
 RDYQ3		EQU		$4700
 
+	align	2
+OSCallTbl:
+	dh		FMTK_Initialize
+	dh		FMTK_StartTask
+	dh		FMTK_ExitTask
+	dh		FMTK_KillTask
+	dh		FMTK_SetTaskPriority
+	dh		FMTK_Sleep
+	dh		FMTK_AllocMbx
+	dh		FMTK_FreeMbx
+	dh		FMTK_PostMsg
+	dh		FMTK_SendMsg
+	dh		FMTK_WaitMsg
+	dh		FMTK_PeekMsg
+	dh		FMTK_StartApp
+	dh		FMTK_SwitchTask
+	dh		DumpReadyQueue
+
 qToChk:
 	db	0,0,0,1,0,0,2,1
 	db	0,0,3,1,0,0,2,1
@@ -29,13 +47,15 @@ FMTKInit:
 	sh		$t0,PIDMAP
 	ret
 
+;------------------------------------------------------------------------------
 ; Insert task into ready queue
 ;
 ; Parameters:
 ;		a0 = pid to insert
 ; Returns:
 ;		v0 = 1 for success, 0 if failed
-;
+;------------------------------------------------------------------------------
+
 InsertTask:
 	sll		$v1,$a0,#10					; compute TCB address
 	lbu		$v1,TCBPriority[$v1]
@@ -55,6 +75,8 @@ InsertTask:
 	mov		$v0,$x0
 	ret
 	
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 SelectTaskToRun:
 	; Pick the first queue to check, occasionally the queue
 	; chosen isn't the highest priority one in order to 
@@ -90,10 +112,11 @@ SelectTaskToRun:
 	sb		$t0,HRDY0[$v1]			; save head pointer
 	ret
 
-;
+;------------------------------------------------------------------------------
 ; Switch tasks
+;------------------------------------------------------------------------------
 ;
-SwitchTask:
+FMTK_SwitchTask:
 	; Save register set in TCB
 	csrrw	$x1,#$300,$x0			; get process id
 	srl		$x1,$x1,#22
@@ -187,6 +210,28 @@ SwitchTask:
 	srl		$x1,$v0,#12					; compute incoming TCB address
 .0001:
 	lb		$v1,TCBStatus[$x1]
+	; If a message is ready, update status to ready and put
+	; message in target memory.
+	and		$x2,$v1,#TS_MSGRDY
+	beq		$x2,$x0,.noMsg
+	mov		$t3,$v0							; save off v0 (tid)
+	ldi		$x2,#TS_READY
+	sb		$x2,TCB_Status[$x1]
+	lw		$a0,80[$x1]					; user a2 (x20)
+	call	VirtToPhys
+	lw		$x2,TCB_MsgD1[$x1]
+	sw		$x2,[$v0]
+	lw		$a0,84[$x1]
+	call	VirtToPhys
+	lw		$x2,TCB_MsgD2[$x1]
+	sw		$x2,[$v0]
+	lw		$a0,88[$x1]
+	call	VirtToPhys
+	lw		$x2,TCB_MsgD3[$x1]
+	sw		$x2,[$v0]
+	mov		$v0,$t3
+	bra		.ready
+.noMsg:
 	and		$x2,$v1,#TS_READY
 	bne		$x2,$x0,.ready
 	and		$x2,$v1,#TS_DEAD
@@ -276,16 +321,21 @@ SwitchTask:
 	mtu		$x31,$x2
 	eret
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
 OSCALL:
 	mfu		$a0,$a0
 	mfu		$a1,$a1
 	mfu		$a2,$a2
-	beq		$a0,$x0,SwitchTask
-	sub		$a0,$a0,#1
-	beq		$a0,$x0,StartTask
-	sub		$a0,$a0,#1
-	beq		$a0,$x0,KillTask
-	eret
+	mfu		$a3,$a3
+	mfu		$a4,$a4
+	mfu		$a5,$a5
+	and		$a0,$a0,#15
+	sll		$a0,$a0,#1
+	lhu		$t0,OSCallTbl[$a0]
+	or		$t0,$t0,#$FFFC0000
+	jmp		[$t0]
 
 ;------------------------------------------------------------------------------
 ; Returns:
@@ -331,7 +381,7 @@ GetFreePid:
 ;		v0 = pid of started task if successful, otherwise zero
 ;------------------------------------------------------------------------------
 ;
-StartTask:
+FMTK_StartTask:
 	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
 	call	GetFreePid
@@ -379,21 +429,37 @@ StartTask:
 	eret
 
 ;------------------------------------------------------------------------------
+; Exit the current task.
+;
+; Parameters:
+;		none
+; Modifies:
+;		a1 = task id
+;------------------------------------------------------------------------------
+
+FMTK_ExitTask:
+	csrrw	$a1,#$300,$x0				; get tid
+	srl		$a1,$a1,#22
+	and		$a1,$a1,#15
+	; fall through to KillTask
+	
+;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = pid of task to kill
 ;------------------------------------------------------------------------------
 
-KillTask:
+FMTK_KillTask:
 	ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
 	and		$t1,$a1,#15					; limit pid
 	sll		$t1,$t1,#10					; convert to TCB address
 	sb		$t0,TCBStatus[$t1]
+	mov		a0,a1								; a0 = pid
 	call	FreeAll							; free all the memory associated with the task
 	; Now make process ID available for reuse
 	lhu		$t1,PIDMAP
-	ldi		$t0,#1
+	ldi		$t0,#1							; generate bit "off" mask
 	sll		$t0,$t0,$a1
-	xor		$t0,$t0,#-1
+	xor		$t0,$t0,#-1					; complment for inverted mask
 	and		$t1,$t1,$t0
 	sh		$t1,PIDMAP
 	eret
@@ -433,5 +499,5 @@ DumpReadyQueue:
 	bne		$t2,$x0,.0002
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
-	ret
+	eret
 

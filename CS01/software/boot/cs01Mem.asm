@@ -123,15 +123,29 @@ Alloc:
 	add			$sp,$sp,#16
 	ret
 
+;------------------------------------------------------------------------------
+; Allocate the stack page for a task. The stack is located at the highest
+; virtual address ($7F800).
+;
 ; Parameters:
 ;		a0 = pid to allocate for
+;	Returns:
+;		v0 = physical address, 0 if unsuccessful
+;		v1 = virtual address, not valid unless successful
+;------------------------------------------------------------------------------
 ;
 AllocStack:
-	palloc	$v0								; allocate a page
-	beq			$v0,$x0,.xit			; success?
-	sll			$v1,$a0,#8				; 
-	or			$v1,$v1,#255			; last page of memory is for stack
+	sll			$v1,$a0,#8			; 
+	or			$v1,$v1,#255		; last page of memory is for stack
+	mvmap		$v0,$x0,$v1			; check if stack already allocated
+	bne			$v0,$x0,.0001
+	palloc	$v0							; allocate a page
+	beq			$v0,$x0,.xit		; success?
 	mvmap		$x0,$v0,$v1
+.0001:
+	and			$v1,$v1,#255
+	sll			$v0,$v0,#11			; convert pages to addresses
+	sll			$v1,$v1,#11
 .xit:
 	ret
 
@@ -141,19 +155,25 @@ AllocStack:
 ;
 ; Parameters:
 ;		a0 = pid to free memory for
+;	Modifies:
+;		t0,t1,t3,t4
+; Returns:
+;		none
 ;------------------------------------------------------------------------------
 
 FreeAll:
 	ldi			$t3,#0
 	sll			$t4,$a0,#8
 .nxt:
-	slt			$t1,$t3,#256
+	slt			$t1,$t3,#256		; number of buckets to check
 	beq			$t1,$x0,.0001
-	mvmap		$t0,$x0,$t3			; get page mapping
+	and			$t4,$t4,#$F00
+	or			$t4,$t4,$t3			; combine pid and bucket number
+	ldi			$t0,#0					; new page number to set (indicates free)
+	mvmap		$t0,$t0,$t4			; get page mapping and set to zero
 	add			$t3,$t3,#1			; advance to next bucket
 	and			$t0,$t0,#255		; pages are 1-255
 	beq			$t0,$x0,.nxt		; 0 = no map in this bucket
-	or			$t0,$t0,$t4			; add in PID/ASID
 	pfree		$t0							; free the page
 	lw			$t0,NPAGES			; update the number of available pages
 	add			$t0,$t0,#1
@@ -161,3 +181,29 @@ FreeAll:
 	bra			.nxt
 .0001:
 	ret
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a physical one
+;
+; Parameters:
+;		a0 = virtual address to convert
+; Modifies:
+;		t0
+; Returns:
+;		v0 = physcial address
+;------------------------------------------------------------------------------
+
+VirtToPhys:
+	csrrw	$v0,#$300,$x0				; get tid
+	srl		$v0,$v0,#22					; extract
+	and		$v0,$v0,#15
+	sll		$v0,$v0,#8
+	srl		$t0,$a0,#11					; convert virt to page
+	and		$t0,$t0,#255
+	or		$v0,$v0,$t0					; and in tid
+	mvmap	$v0,$x0,$v0					; get the translation
+	sll		$v0,$v0,#11					; convert page to address
+	and		$t0,$a0,#$7FF				; insert LSB's
+	or		$v0,$v0,$t0
+	ret
+

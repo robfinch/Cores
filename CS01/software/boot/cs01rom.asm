@@ -189,19 +189,22 @@ Monitor:
 		ldi		$a1,#16					; 32 kB (16 pages)
 		ldi		$a2,#CSTART			; start address
 		ecall
-		mov		v0,a0
+		mov		$s1,$a0					; save a0
 		ldi		$a0,#msgCRLF
 		call	SerialPutString
+		mov		$a0,$s1					; get back a0
 		call	PutHexByte
 		ldi		$a0,msgTaskStart
 		call	SerialPutString
-		ldi		$a0,#0					; Switch task
+		ldi		$a0,#13					; Switch task
 		ecall
 		jmp		Monitor
 .0006:
 		ldi		$t1,#'D'
 		bne		$t0,$t1,.0007
-		call	DumpReadyQueue
+		ldi		$a0,#14
+		ecall
+		jmp		Monitor
 .0007:
 		ldi		$t1,#'E'
 		bne		$t0,$t1,.0008
@@ -213,14 +216,14 @@ Monitor:
 .0009:
 		ldi		$t1,#'S'
 		bne		$t0,$t1,.0010
-		ldi		$a0,#0
+		ldi		$a0,#13
 		ecall
 		jmp		Monitor
 .0010:
 		ldi		$t1,#'K'
 		bne		$t0,$t1,.0011
 		call	GetHexNum
-		ldi		$a0,#2					; kill task
+		ldi		$a0,#3					; kill task
 		mov		$a1,$v0					; a0 = pid
 		ecall
 		jmp		Monitor
