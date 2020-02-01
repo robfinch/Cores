@@ -81,6 +81,8 @@ GetCurrentTid:
 ;------------------------------------------------------------------------------
 
 InsertTask:
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
 	ldi		$v1,#MAX_TID
 	bgtu	$a0,$v1,.badTid
 	sll		$t0,$a0,#10					; compute TCB address
@@ -96,13 +98,20 @@ InsertTask:
 	sb		$t1,TRDY0[$v1]			; store it back
 	sll		$t3,$v1,#8					; compute t3 = readyq index
 	add		$t3,$t3,#RDYQ0
+	sub		$t1,$t1,#1					; back for store
+	and		$t1,$t1,#255
 	add		$t2,$t1,$t3
 	sb		$a0,[$t2]						; store tid of task
-	ldi		$v0,#1							; return non-zero
-	ret
+	ldi		$v0,#E_Ok
+	bra		.xit
 .badTid:
+	ldi		$v0,#E_Arg
+	bra		.xit
 .qfull:
-	mov		$v0,$x0
+	ldi		$v0,#E_QueFull
+.xit:
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
 	ret
 	
 ;------------------------------------------------------------------------------
@@ -116,7 +125,7 @@ InsertTask:
 ; Parameters:
 ;		none
 ; Modifies:
-;		v1, t0, t1, t2, t3
+;		v1, t0, t1, t2, t3, t4
 ;	Returns:
 ;		v0 = task id of task to run
 ;------------------------------------------------------------------------------
@@ -143,21 +152,22 @@ SelectTaskToRun:
 	bgt		$t2,$x0,.nxtQ				; go back to check next queue
 	; Here, nothing else is actually ready to run
 	; just go back to what we were doing.
-	jmp		GetCurrentTid				; tail recursion here
+	call	GetCurrentTid				; tail recursion here
+	bra		.goodTid
 .dq:
 	sll		$t3,$v1,#8					; compute t3 = readyq index
 	add		$t3,$t3,#RDYQ0
-	add		$t2,$t0,$t3
-	lbu		$v0,[$t2]						; v0 = pid of ready task
-	ldi		$t0,#MAX_TID				; ensure we have a valid tid
-	bleu	$v0,$t0,.goodTid
+	add		$t4,$t0,$t3
+	lbu		$v0,[$t4]						; v0 = tid of ready task
+	ldi		$t3,#MAX_TID				; ensure we have a valid tid
+	bleu	$v0,$t3,.goodTid
 	; If the tid isn't valid, remove it from the queue and go back
 	; and check the next queue entry
 	add		$t0,$t0,#1					; advance readyq head
 	and		$t0,$t0,#255
 	sb		$t0,HRDY0[$v1]			; save head pointer
 	bra		.nxtQ
-.goodtid:
+.goodTid:
 	add		$t0,$t0,#1					; advance readyq head
 	and		$t0,$t0,#255
 	sb		$t0,HRDY0[$v1]			; save head pointer
@@ -767,24 +777,24 @@ FMTK_SchedulerIRQ:
 
 ;------------------------------------------------------------------------------
 ; Returns:
-;		v0 = process id
+;		v1 = process id
 ;------------------------------------------------------------------------------
 
-GetFreePid:
+AllocTCB:
 	ldi		$t1,#0
 	lhu		$v1,PIDMAP
 .0001:
 	and		$t0,$v1,#1
-	beq		$t0,$x0,.allocPid
+	beq		$t0,$x0,.allocTid
 	srl		$v1,$v1,#1
 	or		$v1,$v1,#$8000
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.0001
-; here no pids available
-	mov		$v0,$x0
+; here no tcbs available
+	ldi		$v0,#E_NoMoreTCBs
 	ret
-.allocPid:
+.allocTid:
 	mov		$v0,$t1
 	or		$v1,$v1,#1
 	beq		$t1,$x0,.0003
@@ -792,9 +802,11 @@ GetFreePid:
 	sll		$v1,$v1,#1
 	or		$v1,$v1,#1
 	sub		$t1,$t1,#1
-	bne		$t1,$t0,.0002
+	bne		$t1,$x0,.0002
 .0003:
 	sh		$v1,PIDMAP
+	mov		$v1,$v0
+	ldi		$v0,#E_Ok
 	ret
 
 ;------------------------------------------------------------------------------
@@ -803,27 +815,28 @@ GetFreePid:
 ; the ready queue. Segment registers are setup for a flat memory model.
 ; 
 ;	Parameters:
-;		a1 = memory pages required
+;		a1 = memory required
 ;		a2 = start pc (usually $100)
 ;	Modifies:
 ;		a0 = tid
 ;	Returns:
-;		v0 = tid of started task if successful, otherwise zero
+;		v0 = E_Ok if successful
+;		v1 = tid of started task if successful
 ;------------------------------------------------------------------------------
 ;
 FMTK_StartTask:
 	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
-	call	GetFreePid
-	beq		$v0,$x0,.err
-	mov		$a0,$v0
-	sll		$s1,$v0,#10			; compute TCB address
+	call	AllocTCB
+	bne		$v0,$x0,.err
+	mov		$a0,$v1
+	sll		$s1,$v1,#10			; compute TCB address
 	call	AllocStack
 	ldi		$t0,#$7F800			; set stack pointer
 	sw		$t0,56[$s1]
 	sw		$a2,TCBepc[$s1]	; address task will begin at
 	call	Alloc
-	beq		$v1,$x0,.err
+	bne		$v0,$x0,.err
 	ldi		$t0,#TS_READY
 	sb		$t0,TCBStatus[$s1]
 	ldi		$t0,#2					; normal execution priority
@@ -849,14 +862,18 @@ FMTK_StartTask:
 	sw		$t0,TCBsegs+60[$s1]
 	srl		$a0,$s1,#10					; need the tid again
 	call	InsertTask
+	mov		v1,a0
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
-	mtu		$v0,$a0
+	mtu		$v0,$v0
+	mtu		$v1,$v1
 	eret
 .err:
+;	mov		$a0,$v0
+;	call	PutHexByte
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
-	mtu		$v0,$x0
+	mtu		$v0,$v0
 	eret
 
 ;------------------------------------------------------------------------------
@@ -880,6 +897,7 @@ FMTK_ExitTask:
 ;------------------------------------------------------------------------------
 
 FMTK_KillTask:
+	beq		$a1,$x0,.immortal		; tid #0 is immortal (the system)
 	ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
 	and		$t1,$a1,#15					; limit pid
 	sll		$t1,$t1,#10					; convert to TCB address
@@ -893,6 +911,7 @@ FMTK_KillTask:
 	xor		$t0,$t0,#-1					; complment for inverted mask
 	and		$t1,$t1,$t0
 	sh		$t1,PIDMAP
+.immortal:
 	eret
 
 ;------------------------------------------------------------------------------
@@ -1032,8 +1051,14 @@ FMTK_Sleep:
 ;------------------------------------------------------------------------------
 
 DumpReadyQueue:
-	sub		$sp,$sp,#4
+	sub		$sp,$sp,#28
 	sw		$ra,[$sp]
+	sw		$a0,4[$sp]
+	sw		$a2,8[$sp]
+	sw		$a3,12[$sp]
+	sw		$t1,16[$sp]
+	sw		$t2,20[$sp]
+	sw		$t3,24[$sp]
 	ldi		$t1,#0
 .0002:
 	ldi		$a0,#CR
@@ -1062,6 +1087,12 @@ DumpReadyQueue:
 	slt		$t2,$t1,#4
 	bne		$t2,$x0,.0002
 	lw		$ra,[$sp]
-	add		$sp,$sp,#4
+	lw		$a0,4[$sp]
+	lw		$a2,8[$sp]
+	lw		$a3,12[$sp]
+	lw		$t1,16[$sp]
+	lw		$t2,20[$sp]
+	lw		$t3,24[$sp]
+	add		$sp,$sp,#28
 	eret
 

@@ -66,7 +66,7 @@ UserStart:
 		ldi		$a0,#msgStart				; spit out a startup message
 		call	SerialPutString
 		ldi		a0,#1
-		ldi		a1,#12
+		ldi		a1,#24000
 		ldi		a2,#Monitor
 		ecall
 		bra		MonEntry
@@ -185,13 +185,13 @@ Monitor:
 		ldi		$t1,#'B'
 		bne		$t0,$t1,.0006
 		ldi		$a0,#1					; Start task
-		ldi		$a1,#16					; 32 kB (16 pages)
+		ldi		$a1,#32000			; 32 kB
 		ldi		$a2,#CSTART			; start address
 		ecall
-		mov		$s1,$a0					; save a0
+		mov		$s1,$v1					; save v1
 		ldi		$a0,#msgCRLF
 		call	SerialPutString
-		mov		$a0,$s1					; get back a0
+		mov		$a0,$s1					; get back v1
 		call	PutHexByte
 		ldi		$a0,msgTaskStart
 		call	SerialPutString

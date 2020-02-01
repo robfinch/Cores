@@ -1,4 +1,5 @@
 NPAGES	equ		$4300
+PAM			equ		$4800
 
 		code	18 bits
 		align	4
@@ -8,15 +9,33 @@ NPAGES	equ		$4300
 MMUInit:
 		ldi		$t0,#246				; set number of available pages (10 pages already allocated)
 		sw		$t0,NPAGES			
-		ldi		$t2,#4096				; number of registers to update
+		; Setup PAM
+		ldi		$t0,#$1FF				; permanently allocate pages for OS data
+		sw		$t0,PAM
+		sw		$x0,PAM+4
+		sw		$x0,PAM+8
+		sw		$x0,PAM+12
+		sw		$x0,PAM+16
+		sw		$x0,PAM+20
+		sw		$x0,PAM+24
+		ldi		$t0,#$80000000	; last page is system stack
+		sw		$t0,PAM+28
 		ldi		$t0,#$00
 		ldi		$t1,#$000				; regno
+		ldi		$t2,#4096				; number of registers to update
+		ldi		$t3,#10					; number of pages pre-allocated
 .0001:
 		mvmap	$x0,$t0,$t1
-		add		$t0,$t0,#$01		; increment page numbers
-		add		$t1,$t1,#$01
+		add		$t0,$t0,#$01
+		add		$t1,$t1,#$01		; increment page number
+		bltu	$t1,$t3,.0003
+		mov		$t0,$x0					; mark pages after 9 unallocated
+.0003:
 		sub		$t2,$t2,#1
 		bne		$t2,$x0,.0001
+		ldi		$t1,#$0FF				; allocate last page for stack
+		ldi		$t0,#$FF
+		mvmap	$x0,$t0,$t1
 		; Now setup segment registers
 		ldi		$t0,#$0
 		ldi		$t1,#$07				; t1 = value to load RWX=111, base = 0
@@ -26,11 +45,132 @@ MMUInit:
 		slt		$t2,$t0,#16			; 16 segment regs
 		bne		$t2,$x0,.0002
 		ret
-				
+
+;------------------------------------------------------------------------------
+; Allocate a single page of memory. Available memory is indicated by a bitmmap
+; called the PAM for page allocation map.
+; There's only eight words to check so an unrolled loop works here.
+;
+; Modifies:
+;		t0,t1,t2
+; Returns:
+;		v0 = page allocated
+;------------------------------------------------------------------------------
+;
+AllocPage:
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
+	lw		$t0,PAM
+	ldi		$t1,#$FFFFFFFF
+	beq		$t0,$t1,.chkPam4
+	call	BitIndex
+	sw		$t0,PAM
+	bra		.0001
+.chkPam4:
+	lw		$t0,PAM+4
+	beq		$t0,$t1,.chkPam8
+	call	BitIndex
+	sw		$t0,PAM+4
+	add		$v0,$v0,#32
+	bra		.0001
+.chkPam8:
+	lw		$t0,PAM+8
+	beq		$t0,$t1,.chkPam12
+	call	BitIndex
+	sw		$t0,PAM+8
+	add		$v0,$v0,#64
+	bra		.0001
+.chkPam12:
+	lw		$t0,PAM+12
+	beq		$t0,$t1,.chkPam16
+	call	BitIndex
+	sw		$t0,PAM+12
+	add		$v0,$v0,#96
+	bra		.0001
+.chkPam16:
+	lw		$t0,PAM+16
+	beq		$t0,$t1,.chkPam20
+	call	BitIndex
+	sw		$t0,PAM+16
+	add		$v0,$v0,#128
+	bra		.0001
+.chkPam20:
+	lw		$t0,PAM+20
+	beq		$t0,$t1,.chkPam24
+	call	BitIndex
+	sw		$t0,PAM+20
+	add		$v0,$v0,#160
+	bra		.0001
+.chkPam24:
+	lw		$t0,PAM+24
+	beq		$t0,$t1,.chkPam28
+	call	BitIndex
+	sw		$t0,PAM+24
+	add		$v0,$v0,#192
+	bra		.0001
+.chkPam28:
+	lw		$t0,PAM+28
+	beq		$t0,$t1,.chkPamDone
+	call	BitIndex
+	sw		$t0,PAM+28
+	add		$v0,$v0,#224
+	bra		.0001
+.chkPamDone:
+	ldi		$v0,#0						; no memory available
+.0001:
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+; Returns:
+;		v0 = bit index of allocated page
+;
+BitIndex:
+	ldi		$v0,#0
+.0001:
+	and		$t2,$t0,#1
+	beq		$t2,$x0,.foundFree
+	srl		$t0,$t0,#1
+	or		$t0,$t0,#$80000000	; do a rotate, we know bit = 1
+	add		$v0,$v0,#1
+	bra		.0001
+.foundFree:
+	or		$t0,$t0,#1					; mark page allocated
+	mov		$t1,$v0
+	beq		$t1,$x0,.0003
+.0004:
+	sll		$t0,$t0,#1					; do a rotate
+	or		$t0,$t0,#1					; we know bit = 1
+	sub		$t1,$t1,#1
+	bne		$t1,$x0,.0004
+.0003:
+	ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = page number to free
+; Modifies:
+;		v0,v1,t0
+;------------------------------------------------------------------------------
+
+FreePage:
+	ldi		$v0,#255						; last page is permanently allocated to system stack
+	bgeu	$a0,$v0,.xit
+	ldi		$v0,#9
+	bltu	$a0,$v0,.xit				; first 9 pages (18kB) allocated permanently to system
+	srl		$v0,$a0,#5					; v0 = word
+	and		$v1,$a0,#31					; v1 = bit no
+	ldi		$t0,#1							; make a bitmask
+	sll		$t0,$t0,$v1
+	xor		$t0,$t0,#-1					; invert mask
+	lw		$v1,PAM[$v0]
+	and		$v1,$v1,$t0					; clear bit
+	sw		$v1,PAM[$v0]				; save PAM word back
+.xit:
+	ret
+
 ;------------------------------------------------------------------------------
 ; Find a run of buckets available for mapping virtual to physical addresses.
-; The buckets searched are for the current address space, identified by the
-; ASID.
 ;
 ; Parameters:
 ;		a0 = pid
@@ -38,7 +178,7 @@ MMUInit:
 ; Modifies:
 ;		t1,t2,t3,t5
 ; Returns:
-;		v0 = starting bucket number (includes ASID)
+;		v0 = starting bucket number (includes ASID), -1 if no run found
 ;------------------------------------------------------------------------------
 
 FindRun:
@@ -53,7 +193,7 @@ FindRun:
 	beq			$v0,$x0,.empty0		; is it empty?
 	add			$t2,$t2,#1
 	bltu		$t2,$t5,.0001
-	mov			$v0,$x0						; got here so no run was found
+	ldi			$v0,#-1						; got here so no run was found
 	ret
 .empty0:
 	mov			$t3,$t2						; save first empty bucket
@@ -76,8 +216,8 @@ FindRun:
 ; Modifies:
 ;		t0
 ; Returns:
-;		v0 = pointer to allocated memory in virtual address space.
-;		v1 = 1 for success, 0 otherwise
+;		v1 = pointer to allocated memory in virtual address space.
+;		v0 = E_Ok for success, E_NotAlloc otherwise
 ;------------------------------------------------------------------------------
 ;
 Alloc:
@@ -95,12 +235,18 @@ Alloc:
 	ldi			$v1,#0						; not enough, return null
 	bra			.noRun
 .enough:
+	mov			$s1,$a0
+	ldi			$a0,#'E'
+	call		Putch
+	mov			$a0,$s1
 	; There are enough pages, but is there a run long enough in map space?
-	sw			$s2,$v0				; save required # pages
+	mov			$s2,$v0				; save required # pages
 	mov			$a1,$v0
 	call		FindRun						; find a run of available slots
-	beq			$v0,$x0,.noRun2
+	blt			$v0,$x0,.noRun2
 	; Now there are enough pages, and a run available, so allocate
+	ldi			$a0,#'F'
+	call		Putch
 	mov			$s1,$v0						; s1 = start of run
 	lw			$s3,NPAGES				; decrease number of pages available in system
 	sub			$s3,$s3,$s2
@@ -108,14 +254,18 @@ Alloc:
 	mov			$s3,$v0						; s3 = start of run
 .0001:
 	palloc	$v0								; allocate a page (cheat and use hardware)
+	;call		AllocPage
 	beq			$v0,$x0,.noRun
 	mvmap		$x0,$v0,$s3				; map the page
 	add			$s3,$s3,#1				; next bucket
 	sub			$s2,$s2,#1
 	bne			$s2,$x0,.0001
-	sll			$v0,$s1,#11				; v0 = virtual address of allocated mem.
-	ldi			$v1,#1
+	sll			$v1,$s1,#11				; v0 = virtual address of allocated mem.
+	ldi			$v0,#E_Ok
+	bra			.xit
 .noRun:
+	ldi			$v0,#E_NotAlloc
+.xit
 	lw			$ra,[$sp]					; restore saved regs
 	lw			s1,4[$sp]
 	lw			s2,8[$sp]
@@ -135,11 +285,13 @@ Alloc:
 ;------------------------------------------------------------------------------
 ;
 AllocStack:
+	; need save ra here if calling AllocPage
 	sll			$v1,$a0,#8			; 
 	or			$v1,$v1,#255		; last page of memory is for stack
 	mvmap		$v0,$x0,$v1			; check if stack already allocated
 	bne			$v0,$x0,.0001
 	palloc	$v0							; allocate a page
+	;call		AllocPage
 	beq			$v0,$x0,.xit		; success?
 	mvmap		$x0,$v0,$v1
 .0001:
@@ -156,12 +308,13 @@ AllocStack:
 ; Parameters:
 ;		a0 = pid to free memory for
 ;	Modifies:
-;		t0,t1,t3,t4
+;		a0,t0,t1,t3,t4
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
 
 FreeAll:
+	; need save ra if calling FreePage
 	ldi			$t3,#0
 	sll			$t4,$a0,#8
 .nxt:
@@ -175,6 +328,8 @@ FreeAll:
 	and			$t0,$t0,#255		; pages are 1-255
 	beq			$t0,$x0,.nxt		; 0 = no map in this bucket
 	pfree		$t0							; free the page
+	;mov			$a0,$t0
+	;call		FreePage
 	lw			$t0,NPAGES			; update the number of available pages
 	add			$t0,$t0,#1
 	sw			$t0,NPAGES
