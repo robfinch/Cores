@@ -201,7 +201,7 @@ Monitor:
 .0006:
 		ldi		$t1,#'D'
 		bne		$t0,$t1,.0007
-		ldi		$a0,#14
+		ldi		$a0,#15
 		ecall
 		jmp		Monitor
 .0007:
@@ -599,4 +599,5 @@ flt10:
 .include "fltToString.asm"
 .include "cs01Mem.asm"
 .include "../fmtk/task.asm"
+.include "../fmtk/msg.asm"
 .include "TinyBasic.asm"

@@ -10,14 +10,17 @@ MSG_D2		equ		8
 MSG_D3		equ		12
 MSG_SIZE	equ		16
 
-	align 4
-FreeMsg	dw	0
-msgs:
-	fill.b	MSG_SIZE*1024,0
-mbxs:
-	fill.b	MBX_SIZE*32,0
-mbxs_end:
+;	bss
+;	align 4
+;FreeMsg	dw	0
+;msgs:
+;	fill.b	MSG_SIZE*1024,0
+;mbxs:
+;	fill.b	MBX_SIZE*32,0
+;mbxs_end:
 
+	code
+	align	4
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = task id of owner

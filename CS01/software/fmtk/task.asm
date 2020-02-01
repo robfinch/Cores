@@ -16,6 +16,9 @@ RDYQ0		EQU		$4400
 RDYQ1		EQU		$4500
 RDYQ2		EQU		$4600
 RDYQ3		EQU		$4700
+msgs		EQU		$4800
+mbxs		EQU		$8800
+FreeMsg	EQU		$8C00
 
 	align	2
 OSCallTbl:
@@ -33,6 +36,7 @@ OSCallTbl:
 	dh		FMTK_PeekMsg
 	dh		FMTK_StartApp
 	dh		FMTK_Reschedule					; 13
+	dh		FMTK_GetCurrentTid
 	dh		DumpReadyQueue
 
 qToChk:
@@ -68,6 +72,12 @@ GetCurrentTid:
 	srl		$v0,$v0,#22					; extract field
 	and		$v0,$v0,#15					; mask off extra bits
 	ret
+
+FMTK_GetCurrentTid:
+	call	GetCurrentTid
+	mov		$v1,$v0
+	ldi		$v0,#E_Ok
+	eret
 
 ;------------------------------------------------------------------------------
 ; Insert task into ready queue
@@ -470,18 +480,18 @@ FMTK_SwitchTask:
 	beq		$x2,$x0,.noMsg
 	mov		$t3,$v0							; save off v0 (tid)
 	ldi		$x2,#TS_READY
-	sb		$x2,TCB_Status[$x1]
+	sb		$x2,TCBStatus[$x1]
 	lw		$a0,80[$x1]					; user a2 (x20)
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD1[$x1]
+	lw		$x2,TCBMsgD1[$x1]
 	sw		$x2,[$v0]
 	lw		$a0,84[$x1]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD2[$x1]
+	lw		$x2,TCBMsgD2[$x1]
 	sw		$x2,[$v0]
 	lw		$a0,88[$x1]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD3[$x1]
+	lw		$x2,TCBMsgD3[$x1]
 	sw		$x2,[$v0]
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sw		$x2,64[$x1]					; in v0
@@ -633,7 +643,7 @@ FMTK_Reschedule:
 	call	AccountTime						; uses s1
 	call	SelectTaskToRun
 
-	srl		$s2,$v0,#10						; s2 = pointer to incoming TCB
+	sll		$s2,$v0,#10						; s2 = pointer to incoming TCB
 	lbu		$x2,TCBStatus[$s2]		; x2 = incoming status
 	or		$t2,$x2,#TS_RUNNING|TS_READY	; set status = running
 	lw		$x2,TCBException[$s2]	;
@@ -659,15 +669,15 @@ FMTK_Reschedule:
 	beq		$x2,$x0,.noMsg
 	lw		$a0,80[$s2]					; user a2 (x20)
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD1[$s2]
+	lw		$x2,TCBMsgD1[$s2]
 	sw		$x2,[$v0]
 	lw		$a0,84[$s2]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD2[$s2]
+	lw		$x2,TCBMsgD2[$s2]
 	sw		$x2,[$v0]
 	lw		$a0,88[$s2]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD3[$s2]
+	lw		$x2,TCBMsgD3[$s2]
 	sw		$x2,[$v0]
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sw		$x2,64[$s2]					; in v0
@@ -675,7 +685,7 @@ FMTK_Reschedule:
 .noMsg:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	sb		$t2,TCBStatus[$s2]
-	beq		$s1,$s2,.noCtxSwitch	; incoming and outgoing contexts the same?
+;	beq		$s1,$s2,.noCtxSwitch	; incoming and outgoing contexts the same?
 	mov		$a0,$s1
 	mov		$a1,$s2
 	call	SwapContext
@@ -698,7 +708,7 @@ FMTK_SchedulerIRQ:
 	sll		$s1,$v0,#10						; compute pointer to TCB
 	call	AccountTime
 	lbu		$t5,TCBStatus[$s1]
-	or		$t5,$t5,#TS_PREMPT
+	or		$t5,$t5,#TS_PREEMPT
 	and		$t5,$t5,#~TS_RUNNING	; no longer running, but may still be ready
 	sb		$t5,TCBStatus[$s1]
 	; Keep popping the timeout list as long as there are tasks on it with
@@ -748,15 +758,15 @@ FMTK_SchedulerIRQ:
 	beq		$x2,$x0,.noMsg
 	lw		$a0,80[$s2]					; user a2 (x20)
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD1[$s2]
+	lw		$x2,TCBMsgD1[$s2]
 	sw		$x2,[$v0]
 	lw		$a0,84[$s2]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD2[$s2]
+	lw		$x2,TCBMsgD2[$s2]
 	sw		$x2,[$v0]
 	lw		$a0,88[$s2]
 	call	VirtToPhys
-	lw		$x2,TCB_MsgD3[$s2]
+	lw		$x2,TCBMsgD3[$s2]
 	sw		$x2,[$v0]
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sw		$x2,64[$s2]					; in v0
@@ -764,7 +774,7 @@ FMTK_SchedulerIRQ:
 .noMsg:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	sb		$t2,TCBStatus[$s2]
-	beq		$s1,$s2,.noCtxSwitch
+;	beq		$s1,$s2,.noCtxSwitch
 	mov		$a0,$s1
 	mov		$a1,$s2
 	call	SwapContext

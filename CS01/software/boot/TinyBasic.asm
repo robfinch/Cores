@@ -81,7 +81,7 @@ STACKOFFS	EQU		0x07FFFC	; stack offset
 
 
 		code
-		align	4096
+		align	256
 ;
 ; Standard jump table. You can change these addresses if you are
 ; customizing this interpreter for a different environment.
@@ -145,6 +145,10 @@ WSTART:
 	ldi		a0,#msgReady	;	display "Ready"
 	call	PRMESG
 BASPRMPT:
+	ldi		a0,#14		; get current tid
+	ecall
+	mov		a0,v1
+	call	PutHexByte
 	ldi		a0,#'>'		; Prompt with a '>' and
 	call	GETLN		; read a line.
 	call	TOUPBUF 	; convert to upper case
@@ -365,6 +369,9 @@ TAB2:
     db	"RDC",'F'+0x80
     db	"ONIR",'Q'+0x80
     db	"WAI",'T'+0x80
+    db	"OPENMB",'X'+0x80
+    db	"SENDMS",'G'+0x80
+    db	"WAITMS",'G'+0x80
 	db	0
 TAB4:
 	db	"PEE",'K'+0x80         ;Functions
@@ -431,6 +438,9 @@ TAB2_1:
 	dh	_rdcf
 	dh  ONIRQ
 	dh	WAITIRQ
+	dh	OPENMBX
+	dh	SENDMSG
+	dh	WAITMSG
 	dh	DEFLT
 TAB4_1:
 	dh	PEEK			;Functions
@@ -573,10 +583,10 @@ RUN:
 
 RUNNXL:					; RUN <next line>
 	lw		$t2,CURRNT	; executing a program?
-	bne		$t2,x0,.0001	; if not, we've finished a direct stat.
+	bne		$t2,x0,RUN3	; if not, we've finished a direct stat.
 RUN2:
 	jmp		WSTART
-.0001:
+RUN3:
 	lw		a0,IRQROUT		; are we handling IRQ's ?
 	beq		a0,x0,RUN1
 	lw		$t1,IRQFlag		; was there an IRQ ?
@@ -594,7 +604,7 @@ RUN2:
 	lw		$t3,IRQROUT
 	bra		RUNTSL
 RUN1:
-	lw		$t3,$t2
+	mov		$t3,$t2
 	mov		a0,x0
 	call	FNDLNP		; else find the next line number
 	lw		$t1,TXTUNF	; if we've fallen off the end, stop
@@ -1863,12 +1873,11 @@ tstv_notfound:
 ;   v0 = 3 character variable name + type
 ;
 getVarName:
-	sub		$sp,$sp,#8
+	sub		$sp,$sp,#12
 	sw		r5,[$sp]
 	sw		$ra,4[$sp]
   lbu   a0,[$t2]		; get first character
-  sub		$sp,$sp,#4	; save off current name
-  sw		a0,[$sp]
+  sw		a0,8[$sp]		; save off current name
   call	isAlpha
   beq   v0,r0,gvn1
   ldi	  r5,#2       ; loop two more times
@@ -1879,13 +1888,11 @@ gvn4:
 	lbu   a0,[$t2]		; do we have another char ?
 	call	isAlnum
 	beq   v0,x0,gvn2	; nope
-	lw		a0,[$sp]
-	add		$sp,$sp,#4	; get varname
+	lw		a0,8[$sp]		; get varname
 	sll		a0,a0,#8
 	lbu   a1,[$t2]
-	or    a0,a0,a1   ; add in new char
-  sub		$sp,$sp,#4	; save off current name again
-  sw		a0,[$sp]
+	or    a0,a0,a1   	; add in new char
+  sw		a0,8[$sp]		; save off current name again
   sub		r5,r5,#1
   bgt		r5,x0,gvn4
 
@@ -1909,21 +1916,19 @@ gvn2:
   ; insert variable type indicator and return
 gvn3:
 	add		$t2,$t2,#1
-	lw		a0,[$sp]
-	add		$sp,$sp,#4	; get varname
+	lw		a0,8[$sp]		; get varname
 	sll		a0,a0,#8
   or    v0,a0,a1    ; add in variable type
   lw		r5,[$sp]
   lw		$ra,4[$sp]
-  add		$sp,$sp,#8
+  add		$sp,$sp,#12
   ret								; return a0 = varname
 
   ; not a variable name
 gvn1:
-	add		$sp,$sp,#4	; pop a0 (varname)
 	lw		r5,[$sp]
   lw		$ra,4[$sp]
-	add		$sp,$sp,#8
+	add		$sp,$sp,#12
   mov		v0,x0       ; return v0 = 0 if not a varname
   ret
 
@@ -2891,6 +2896,113 @@ PRMESG:
 	add		$sp,$sp,#4
 	ret
 
+;------------------------------------------------------------------------------
+;	OPENMBX <handle var>
+;------------------------------------------------------------------------------
+
+OPENMBX:
+	ldi		a0,#1
+	call	TSTV
+	bne		v0,x0,.0001
+	ldi		a0,#msgVar
+	jmp		ERROR
+.0001:
+	mov		s1,v0
+	ldi		a0,#6
+	ecall
+	beq		v0,x0,.0002
+	ldi		a0,#msgEnvFail
+	jmp		ERROR
+.0002:
+	sw		v1,[s1]				; save handle in variable
+	jmp		FINISH
+
+;------------------------------------------------------------------------------
+; SENDMSG <handle var>, <msg data 1>, <msg data 2>, <msg data 3>
+;------------------------------------------------------------------------------
+
+SENDMSG:
+	call	OREXPR	; get the mailbox handle
+	mov		s1,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	call	OREXPR	; get the memory address
+	mov		s2,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	call	OREXPR	; get the memory address
+	mov		s3,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	call	OREXPR	; get the memory address
+	mov		s4,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	mov		a0,#9		; SendMsg
+	mov		a1,s1
+	mov		a2,s2
+	mov		a3,s3
+	mov		a4,s4
+	ecall
+	jmp		FINISH
+.err:
+	ldi		a0,#msgComma
+	jmp		ERROR
+
+;------------------------------------------------------------------------------
+; WAITMSG <handle var>, <var for data 1>, <var for data 2>, <var for data 3>,
+;		<expr>
+;------------------------------------------------------------------------------
+
+WAITMSG:
+	call	OREXPR	; get the mailbox handle
+	mov		s1,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	ldi		a0,#1
+	call	TSTV
+	bne		v0,x0,.0001
+.0002:
+	ldi		a0,#msgVar
+	jmp		ERROR
+.0001:
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	mov		s2,v0
+	ldi		a0,#1
+	call	TSTV
+	beq		v0,x0,.0002
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	mov		s3,v0
+	ldi		a0,#1
+	call	TSTV
+	beq		v0,x0,.0002
+	mov		s4,v0
+	call	TSTC		; it must be followed by a comma
+	dw		','
+	bra		.err
+	call	OREXPR	; get queue remove flag
+	mov		a5,v0
+	mov		s4,v0
+	ldi		a0,#10		; WaitMsg
+	mov		a1,s1
+	mov		a2,s2
+	mov		a3,s3
+	mov		a4,s4
+	ecall
+	jmp		FINISH
+.err:
+	ldi		a0,#msgComma
+	jmp		ERROR
+	
 ;*****************************************************
 ; The following routines are the only ones that need *
 ; to be changed for a different I/O environment.     *
@@ -2952,6 +3064,7 @@ msgBadGotoGosub	db	"GOTO/GOSUB bad line number",CR,0
 msgRetWoGosub   db	"RETURN without GOSUB",CR,0
 msgTooBig		db	"Program is too big",CR,0
 msgExtraChars	db	"Extra characters on line ignored",CR,0
+msgEnvFail		db	"Environment call failed",CR,0
 
 LSTROM	equ	*		; end of possible ROM area
 ;	END
