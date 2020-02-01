@@ -5,6 +5,7 @@ TCBsegs			EQU		$200		; segment register storage
 TCBepc			EQU		$280
 TCBStatus		EQU		$288
 TCBPriority	EQU		$289
+TCBWaitMbx	EQU		$28A
 TCBStackBot	EQU		$290
 TCBMsgD1		EQU		$298
 TCBMsgD2		EQU		$2A0

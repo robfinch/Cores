@@ -369,9 +369,6 @@ TAB2:
     db	"RDC",'F'+0x80
     db	"ONIR",'Q'+0x80
     db	"WAI",'T'+0x80
-    db	"OPENMB",'X'+0x80
-    db	"SENDMS",'G'+0x80
-    db	"WAITMS",'G'+0x80
 	db	0
 TAB4:
 	db	"PEE",'K'+0x80         ;Functions
@@ -383,6 +380,9 @@ TAB4:
 	db	"TIC",'K'+0x80
 	db	"SIZ",'E'+0x80
 	db  "US",'R'+0x80
+  db	"ALLOCMB",'X'+0x80
+  db	"SENDMS",'G'+0x80
+  db	"WAITMS",'G'+0x80
 	db	0
 TAB5:
 	db	"T",'O'+0x80           ;"TO" in "FOR"
@@ -438,9 +438,6 @@ TAB2_1:
 	dh	_rdcf
 	dh  ONIRQ
 	dh	WAITIRQ
-	dh	OPENMBX
-	dh	SENDMSG
-	dh	WAITMSG
 	dh	DEFLT
 TAB4_1:
 	dh	PEEK			;Functions
@@ -452,6 +449,9 @@ TAB4_1:
 	dh	TICKX
 	dh	SIZEX
 	dh  USRX
+	dh	ALLOCMBX
+	dh	SENDMSG
+	dh	WAITMSG
 	dh	XP40
 TAB5_1
 	dh	FR1			;"TO" in "FOR"
@@ -610,11 +610,11 @@ RUN1:
 	lw		$t1,TXTUNF	; if we've fallen off the end, stop
 	bgeu	$t3,$t1,RUN2
 
-RUNTSL					; RUN <this line>
+RUNTSL:					; RUN <this line>
 	sw		$t3,CURRNT	; set CURRNT to point to the line no.
 	add		$t2,$t3,#4	; set the text pointer to
 
-RUNSML                 ; RUN <same line>
+RUNSML:                 ; RUN <same line>
 	call	CHKIO		; see if a control-C was pressed
 	ldi		$t3,#TAB2		; find command in TAB2
 	ldi		$t4,#TAB2_1
@@ -2381,6 +2381,12 @@ FNDLNP:
 	beq		v0,a0,FNDRET2
 	bltu	v0,a0,FNDNXT	; is this the line we want? no, not there yet
 FNDRET:
+	add		$t3,$t3,#4	; find the next line, skip over line number
+.0001:
+	lbu		v1,[$t3]
+	add		$t3,$t3,#1
+	ldi		$t1,#CR
+	bne		v1,$t1,.0001	; try to find a CR, keep looking
 	mov		v0,x0	; line not found, but $t3=next line pointer
 	ret
 FNDRET1:
@@ -2897,31 +2903,48 @@ PRMESG:
 	ret
 
 ;------------------------------------------------------------------------------
-;	OPENMBX <handle var>
+;	erc = ALLOCMBX (<handle var>)
 ;------------------------------------------------------------------------------
 
-OPENMBX:
+ALLOCMBX:
+	call	TSTC		; else look for ( OREXPR )
+	dw		'('
+	bra		.paren
 	ldi		a0,#1
 	call	TSTV
 	bne		v0,x0,.0001
 	ldi		a0,#msgVar
 	jmp		ERROR
 .0001:
+	call	TSTC		; else look for ( OREXPR )
+	dw		')'
+	bra		.paren
 	mov		s1,v0
+	ldi		a0,#14			; get current tid
+	ecall
+	mov		a1,v1
+	mov		a2,s1
 	ldi		a0,#6
 	ecall
-	beq		v0,x0,.0002
-	ldi		a0,#msgEnvFail
-	jmp		ERROR
-.0002:
+	bne		v0,x0,.0002
 	sw		v1,[s1]				; save handle in variable
-	jmp		FINISH
+.0002:
+	mov		v1,x0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+.paren:
+	ldi		a0,#msgParen
+	jmp		ERROR
 
 ;------------------------------------------------------------------------------
-; SENDMSG <handle var>, <msg data 1>, <msg data 2>, <msg data 3>
+; erc = SENDMSG (<handle var>, <msg data 1>, <msg data 2>, <msg data 3>)
 ;------------------------------------------------------------------------------
 
 SENDMSG:
+	call	TSTC		; else look for ( OREXPR )
+	dw		'('
+	bra		.paren
 	call	OREXPR	; get the mailbox handle
 	mov		s1,v0
 	call	TSTC		; it must be followed by a comma
@@ -2939,18 +2962,24 @@ SENDMSG:
 	bra		.err
 	call	OREXPR	; get the memory address
 	mov		s4,v0
-	call	TSTC		; it must be followed by a comma
-	dw		','
-	bra		.err
-	mov		a0,#9		; SendMsg
+	call	TSTC		; else look for ( OREXPR )
+	dw		')'
+	bra		.paren
+	ldi		a0,#9		; SendMsg
 	mov		a1,s1
 	mov		a2,s2
 	mov		a3,s3
 	mov		a4,s4
 	ecall
-	jmp		FINISH
+	mov		v1,x0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 .err:
 	ldi		a0,#msgComma
+	jmp		ERROR
+.paren:
+	ldi		a0,#msgParen
 	jmp		ERROR
 
 ;------------------------------------------------------------------------------
@@ -2959,6 +2988,9 @@ SENDMSG:
 ;------------------------------------------------------------------------------
 
 WAITMSG:
+	call	TSTC		; else look for ( OREXPR )
+	dw		'('
+	bra		.paren
 	call	OREXPR	; get the mailbox handle
 	mov		s1,v0
 	call	TSTC		; it must be followed by a comma
@@ -2992,15 +3024,24 @@ WAITMSG:
 	call	OREXPR	; get queue remove flag
 	mov		a5,v0
 	mov		s4,v0
+	call	TSTC		; else look for ( OREXPR )
+	dw		')'
+	bra		.paren
 	ldi		a0,#10		; WaitMsg
 	mov		a1,s1
 	mov		a2,s2
 	mov		a3,s3
 	mov		a4,s4
 	ecall
-	jmp		FINISH
+	mov		v1,x0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 .err:
 	ldi		a0,#msgComma
+	jmp		ERROR
+.paren:
+	ldi		a0,#msgParen
 	jmp		ERROR
 	
 ;*****************************************************
@@ -3064,7 +3105,8 @@ msgBadGotoGosub	db	"GOTO/GOSUB bad line number",CR,0
 msgRetWoGosub   db	"RETURN without GOSUB",CR,0
 msgTooBig		db	"Program is too big",CR,0
 msgExtraChars	db	"Extra characters on line ignored",CR,0
-msgEnvFail		db	"Environment call failed",CR,0
+msgEnvFail		db	" Environment call failed",CR,0
+msgParen		db	"Expecting parenthesis",CR,0
 
 LSTROM	equ	*		; end of possible ROM area
 ;	END

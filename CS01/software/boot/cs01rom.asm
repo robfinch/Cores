@@ -600,4 +600,5 @@ flt10:
 .include "cs01Mem.asm"
 .include "../fmtk/task.asm"
 .include "../fmtk/msg.asm"
+.include "../fmtk/tcb.asm"
 .include "TinyBasic.asm"
