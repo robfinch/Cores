@@ -186,6 +186,7 @@ FindRun:
 	sll			$t3,$t3,#8				; shift into usable position
 	ldi			$t1,#0						; t1 = count of consecutive empty buckets
 	mov			$t2,$t3						; t2 = map entry number
+	or			$t2,$t2,#OSPAGES	; start looking at page 32 (others are for OS)
 	ldi			$t5,#255					; max number of pages - 1
 	or			$t5,$t5,$t3				; t5 = max in ASID
 .0001:
@@ -236,8 +237,6 @@ Alloc:
 	bra			.noRun
 .enough:
 	mov			$s1,$a0
-	ldi			$a0,#'E'
-	call		Putch
 	mov			$a0,$s1
 	; There are enough pages, but is there a run long enough in map space?
 	mov			$s2,$v0				; save required # pages
@@ -245,8 +244,6 @@ Alloc:
 	call		FindRun						; find a run of available slots
 	blt			$v0,$x0,.noRun2
 	; Now there are enough pages, and a run available, so allocate
-	ldi			$a0,#'F'
-	call		Putch
 	mov			$s1,$v0						; s1 = start of run
 	lw			$s3,NPAGES				; decrease number of pages available in system
 	sub			$s3,$s3,$s2
@@ -349,16 +346,20 @@ FreeAll:
 ;------------------------------------------------------------------------------
 
 VirtToPhys:
-	csrrw	$v0,#$300,$x0				; get tid
-	srl		$v0,$v0,#22					; extract
-	and		$v0,$v0,#15
-	sll		$v0,$v0,#8
+	blt		$a0,$x0,.notMapped
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
 	srl		$t0,$a0,#11					; convert virt to page
-	and		$t0,$t0,#255
+	call	GetCurrentTid
+	sll		$v0,$v0,#8
 	or		$v0,$v0,$t0					; and in tid
 	mvmap	$v0,$x0,$v0					; get the translation
 	sll		$v0,$v0,#11					; convert page to address
 	and		$t0,$a0,#$7FF				; insert LSB's
 	or		$v0,$v0,$t0
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
 	ret
-
+.notMapped:
+	mov		$v0,$a0
+	ret

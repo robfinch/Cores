@@ -36,9 +36,20 @@ OSCallTbl:
 	dh		FMTK_WaitMsg						; 10
 	dh		FMTK_PeekMsg
 	dh		FMTK_StartApp
-	dh		FMTK_Reschedule					; 13
+	dh		0												; 13
 	dh		FMTK_GetCurrentTid
 	dh		DumpReadyQueue
+	dh		0
+	dh		0
+	dh		0
+	dh		0
+	dh		FMTK_HasIOFocus					; 20
+	dh		FMTK_SwitchIOFocus			; 21
+	dh		FMTK_ReleaseIOFocus			; 22
+	dh		FMTK_ForceReleaseIOFocus	; 23
+	dh		FMTK_RequestIOFocus			; 24
+	dh		0
+	dh		FMTK_IO									; 26
 
 qToChk:
 	db	0,0,0,1,0,0,2,1
@@ -60,6 +71,18 @@ FMTKInit:
 	ldi		$t0,#-1
 	sw		$t0,TimeoutList
 	
+	sw		$x0,IOFocusTbl
+	sw		$t0,IOFocusNdx
+	
+	; zero out device function table
+	ldi		$t0,#DVF_Base
+	ldi		$t1,#32*32
+.0003:
+	sw		$x0,[$t0]
+	add		$t0,$t0,#4
+	sub		$t1,$t1,#1
+	bgt		$t1,$x0,.0003
+
 	; Initialize mailboxes
 	ldi		$t0,#mbxs
 	ldi		$t1,#4*32
@@ -90,8 +113,7 @@ FMTKInit:
 ;------------------------------------------------------------------------------
 
 GetCurrentTid:
-	csrrw	$v0,#$300,$x0				; get current pid
-	srl		$v0,$v0,#22					; extract field
+	csrrw	$v0,#$181,$x0				; get current pid
 	and		$v0,$v0,#15					; mask off extra bits
 	ret
 
@@ -100,6 +122,22 @@ FMTK_GetCurrentTid:
 	mov		$v1,$v0
 	ldi		$v0,#E_Ok
 	eret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = task id
+;------------------------------------------------------------------------------
+
+MapOSPages:
+	ldi			$v0,#OSPAGES	; number of pages pre-mapped
+	ldi			$v1,#0
+	sll			$v1,$a0,#8		; put ASID in proper spot
+.nxt:
+	mvmap		$x0,$v1,$v1
+	add			$v1,$v1,#1
+	sub			$v0,$v0,#1
+	bgt			$v0,$x0,.nxt
+	ret
 
 ;------------------------------------------------------------------------------
 ; Select the next task to run. The ready queues are searched in a circular
@@ -259,11 +297,7 @@ SwapContext:
 	; Switch memory maps
 	srl		$v0,$a1,#10					; convert pointer to tid
 	and		$v0,$v0,#$F					; mask to 16 task
-	sll		$v0,$v0,#22					; shift into position
-	csrrw	$v1,#$300,$x0				; get status
-	and		$v1,$v1,#$FC3FFFFF	; mask off ASID/PID bits
-	or		$v1,$v1,$v0					; set new ASID
-	csrrw	$x0,#$300,$v1				; save status
+	csrrw	$v1,#$181,$v0				; set ASID
 	; User map has now been switched
 
 	; Restore segment register set
@@ -345,237 +379,18 @@ SwapContext:
 	ret
 
 ;------------------------------------------------------------------------------
-; Switch tasks
-;
-; Parameters:
-;		none
-; Modifies:
-;		v0, v1, t0, t1, x1, x2, a0, s1
-; Returns:
-;		none
-;------------------------------------------------------------------------------
-;
-FMTK_SwitchTask:
-	; Save register set in TCB
-	csrrw	$x1,#$300,$x0			; get process id
-	srl		$x1,$x1,#22
-	and		$x1,$x1,#15
-	sll		$x1,$x1,#10				; compute TCB address
-	mfu		$x2,$x1
-	sw		$x2,4[$x1]
-	mfu		$x2,$x2
-	sw		$x2,8[$x1]				; save regs in TCB
-	mfu		$x2,$x3
-	sw		$x2,12[$x1]
-	mfu		$x2,$x4
-	sw		$x2,16[$x1]
-	mfu		$x2,$x5
-	sw		$x2,20[$x1]
-	mfu		$x2,$x6
-	sw		$x2,24[$x1]
-	mfu		$x2,$x7
-	sw		$x2,28[$x1]
-	mfu		$x2,$x8
-	sw		$x2,32[$x1]
-	mfu		$x2,$x9
-	sw		$x2,36[$x1]
-	mfu		$x2,$x10
-	sw		$x2,40[$x1]
-	mfu		$x2,$x11
-	sw		$x2,44[$x1]
-	mfu		$x2,$x12
-	sw		$x2,48[$x1]
-	mfu		$x2,$x13
-	sw		$x2,52[$x1]
-	mfu		$x2,$x14
-	sw		$x2,56[$x1]
-	mfu		$x2,$x15
-	sw		$x2,60[$x1]
-	mfu		$x2,$x16
-	sw		$x2,64[$x1]
-	mfu		$x2,$x17
-	sw		$x2,68[$x1]
-	mfu		$x2,$x18
-	sw		$x2,72[$x1]
-	mfu		$x2,$x19
-	sw		$x2,76[$x1]
-	mfu		$x2,$x20
-	sw		$x2,80[$x1]
-	mfu		$x2,$x21
-	sw		$x2,84[$x1]
-	mfu		$x2,$x22
-	sw		$x2,88[$x1]
-	mfu		$x2,$x23
-	sw		$x2,92[$x1]
-	mfu		$x2,$x24
-	sw		$x2,96[$x1]
-	mfu		$x2,$x25
-	sw		$x2,100[$x1]
-	mfu		$x2,$x26
-	sw		$x2,104[$x1]
-	mfu		$x2,$x27
-	sw		$x2,108[$x1]
-	mfu		$x2,$x28
-	sw		$x2,112[$x1]
-	mfu		$x2,$x29
-	sw		$x2,116[$x1]
-	mfu		$x2,$x30
-	sw		$x2,120[$x1]
-	mfu		$x2,$x31
-	sw		$x2,124[$x1]
-	csrrw	$x2,#$341,$x0				; save off mepc
-	sw		$x2,TCBepc[$x1]
-	ldi		$t1,#0
-.svseg:
-	mvseg	$t0,$x0,$t1
-	sll		$x2,$t1,#2
-	add		$x2,$x2,$x1
-	sw		$t0,TCBsegs[$x2]
-	add		$t1,$t1,#1
-	and		$t1,$t1,#15
-	bne		$t1,$x0,.svseg
-
-.dead:
-	call	SelectTaskToRun			; v0 = pid
-
-	; Switch memory maps
-	and		$v0,$v0,#$F					; mask to 16 task
-	sll		$v0,$v0,#22					; shift into position
-	csrrw	$v1,#$300,$x0				; get status
-	and		$v1,$v1,#$FC3FFFFF	; mask off ASID/PID bits
-	or		$v1,$v1,$v0					; set new ASID
-	csrrw	$x0,#$300,$v1				; save status
-	; User map has now been switched
-	srl		$x1,$v0,#12					; compute incoming TCB address
-.0001:
-	lb		$v1,TCBStatus[$x1]
-
-	; If a message is ready, update status to ready and put
-	; message in target memory. The task will be returning
-	; from a WaitMsg so a return status of E_Ok is also set.
-	and		$x2,$v1,#TS_MSGRDY
-	beq		$x2,$x0,.noMsg
-	mov		$t3,$v0							; save off v0 (tid)
-	ldi		$x2,#TS_READY
-	sb		$x2,TCBStatus[$x1]
-	lw		$a0,80[$x1]					; user a2 (x20)
-	call	VirtToPhys
-	lw		$x2,TCBMsgD1[$x1]
-	sw		$x2,[$v0]
-	lw		$a0,84[$x1]
-	call	VirtToPhys
-	lw		$x2,TCBMsgD2[$x1]
-	sw		$x2,[$v0]
-	lw		$a0,88[$x1]
-	call	VirtToPhys
-	lw		$x2,TCBMsgD3[$x1]
-	sw		$x2,[$v0]
-	ldi		$x2,#E_Ok						; setup to return E_Ok
-	sw		$x2,64[$x1]					; in v0
-	mov		$v0,$t3
-	bra		.ready
-.noMsg:
-	and		$x2,$v1,#TS_READY
-	bne		$x2,$x0,.ready
-	and		$x2,$v1,#TS_DEAD
-	bne		$x2,$x0,.dead
-	
-.ready:
-	; Add task back into ready queue
-	mov		$s1,$x1							; save off x1 (normally return address)
-	srl		$a0,$v0,#22					; compute ASID/PID
-	call	InsertTask
-	mov		$x1,$s1							; get back x1
-
-	; Restore register set
-	ldi		$t1,#0
-.rsseg:
-	sll		$x2,$t1,#2
-	add		$x2,$x2,$x1
-	lw		$t0,TCBsegs[$x2]
-	mvseg	$x0,$t0,$t1
-	add		$t1,$t1,#1
-	and		$t1,$t1,#15
-	bne		$t1,$x0,.rsseg
-
-	lw		$x2,TCBepc[$x1]			; restore epc
-	csrrw	$x0,#$341,$x2
-	lw		$x2,4[$x1]
-	mtu		$x1,$x2
-	lw		$x2,8[$x1]
-	mtu		$x2,$x2
-	lw		$x2,12[$x1]
-	mtu		$x3,$x2
-	lw		$x2,16[$x1]
-	mtu		$x4,$x2
-	lw		$x2,20[$x1]
-	mtu		$x5,$x2
-	lw		$x2,24[$x1]
-	mtu		$x6,$x2
-	lw		$x2,28[$x1]
-	mtu		$x7,$x2
-	lw		$x2,32[$x1]
-	mtu		$x8,$x2
-	lw		$x2,36[$x1]
-	mtu		$x9,$x2
-	lw		$x2,40[$x1]
-	mtu		$x10,$x2
-	lw		$x2,44[$x1]
-	mtu		$x11,$x2
-	lw		$x2,48[$x1]
-	mtu		$x12,$x2
-	lw		$x2,52[$x1]
-	mtu		$x13,$x2
-	lw		$x2,56[$x1]
-	mtu		$x14,$x2
-	lw		$x2,60[$x1]
-	mtu		$x15,$x2
-	lw		$x2,64[$x1]
-	mtu		$x16,$x2
-	lw		$x2,68[$x1]
-	mtu		$x17,$x2
-	lw		$x2,72[$x1]
-	mtu		$x18,$x2
-	lw		$x2,76[$x1]
-	mtu		$x19,$x2
-	lw		$x2,80[$x1]
-	mtu		$x20,$x2
-	lw		$x2,84[$x1]
-	mtu		$x21,$x2
-	lw		$x2,88[$x1]
-	mtu		$x22,$x2
-	lw		$x2,92[$x1]
-	mtu		$x23,$x2
-	lw		$x2,96[$x1]
-	mtu		$x24,$x2
-	lw		$x2,100[$x1]
-	mtu		$x25,$x2
-	lw		$x2,104[$x1]
-	mtu		$x26,$x2
-	lw		$x2,108[$x1]
-	mtu		$x27,$x2
-	lw		$x2,112[$x1]
-	mtu		$x28,$x2
-	lw		$x2,116[$x1]
-	mtu		$x29,$x2
-	lw		$x2,120[$x1]
-	mtu		$x30,$x2
-	lw		$x2,124[$x1]
-	mtu		$x31,$x2
-	eret
-
-;------------------------------------------------------------------------------
 ; Operating system call dispatcher.
 ;------------------------------------------------------------------------------
 
 OSCALL:
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	mfu		$a0,$a0
 	mfu		$a1,$a1
 	mfu		$a2,$a2
 	mfu		$a3,$a3
 	mfu		$a4,$a4
 	mfu		$a5,$a5
-	and		$a0,$a0,#15
+	and		$a0,$a0,#31
 	sll		$a0,$a0,#1
 	lhu		$t0,OSCallTbl[$a0]
 	or		$t0,$t0,#$FFFC0000
@@ -607,12 +422,26 @@ AccountTime:
 	ret
 
 ;------------------------------------------------------------------------------
-; Reschedule tasks.
+; Sleep for a number of ticks. Tick interval determined by the VIA timer #3.
+; Passing a time of zero or less causes the function to return right away.
+;
+; Parameters:
+;		a1 = length of time to sleep (must be >= 0)
+; Returns:
+;		none
 ;------------------------------------------------------------------------------
 
-FMTK_Reschedule:
+FMTK_Sleep:
+	blt		$a1,$x0,ERETx
 	call	GetCurrentTid
-	sll		$s1,$v0,#10						; compute pointer to TCB
+	sll		$s1,$v0,#10
+	beq		$a1,$x0,.0001
+	lbu		$t1,TCBStatus[$s1]		; changing status will remove from ready queue
+	and		$t1,$t1,#~TS_READY		; on next dequeue
+	sb		$t1,TCBStatus[$s1]
+	mov		$a0,$v0								; a0 = current tid
+	call	InsertIntoTimeoutList	; a1 = timeout
+.0001:
 	lbu		$v0,TCBStatus[$s1]		; flag task as no longer running
 	and		$v0,$v0,#~TS_RUNNING
 	sb		$v0,TCBStatus[$s1]
@@ -669,6 +498,7 @@ FMTK_Reschedule:
 .noCtxSwitch:
 	lw		$t2,Tick						; get tick
 	sw		$t2,TCBStartTick[$s1]
+ERETx:
 	eret
 
 ;------------------------------------------------------------------------------
@@ -691,7 +521,7 @@ FMTK_SchedulerIRQ:
 	; Keep popping the timeout list as long as there are tasks on it with
 	; expired timeouts.
 .0001:
-	lhu		$t5,TimeoutList
+	lh		$t5,TimeoutList
 	blt		$t5,$x0,.noTimeouts
 	ldi		$t4,#NR_TCB
 	bge		$t5,$t4,.noTimeouts
@@ -713,7 +543,7 @@ FMTK_SchedulerIRQ:
 	; ready to run.
 	call	SelectTaskToRun
 
-	srl		$s2,$v0,#22					; s2 = pointer to incoming TCB
+	sll		$s2,$v0,#10					; s2 = pointer to incoming TCB
 	lbu		$x2,TCBStatus[$s2]	; x2 = incoming status
 	or		$t2,$x2,#TS_RUNNING|TS_READY	; status = running
 	lw		$x2,TCBException[$s2]	;
@@ -751,7 +581,7 @@ FMTK_SchedulerIRQ:
 .noMsg:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	sb		$t2,TCBStatus[$s2]
-;	beq		$s1,$s2,.noCtxSwitch
+	beq		$s1,$s2,.noCtxSwitch
 	mov		$a0,$s1
 	mov		$a1,$s2
 	call	SwapContext
@@ -817,6 +647,7 @@ FMTK_StartTask:
 	call	AllocTCB
 	bne		$v0,$x0,.err
 	mov		$a0,$v1
+	call	MapOSPages			; Map OS pages into address space
 	sll		$s1,$v1,#10			; compute TCB address
 	call	AllocStack
 	ldi		$t0,#$7F800			; set stack pointer
@@ -873,9 +704,8 @@ FMTK_StartTask:
 ;------------------------------------------------------------------------------
 
 FMTK_ExitTask:
-	csrrw	$a1,#$300,$x0				; get tid
-	srl		$a1,$a1,#22
-	and		$a1,$a1,#15
+	call	GetCurrentTid
+	mov		a1,v0
 	; fall through to KillTask
 	
 ;------------------------------------------------------------------------------
@@ -901,30 +731,4 @@ FMTK_KillTask:
 .immortal:
 	eret
 
-;------------------------------------------------------------------------------
-; Sleep for a length of time. Time determined by the resolution of wall clock 
-; time. Passing a time of zero causes the function to return right away with
-; and E_Ok status.
-;
-; Parameters:
-;		a1 = length of time to sleep
-; Returns:
-;		v0 = E_Ok if successful
-;------------------------------------------------------------------------------
-
-FMTK_Sleep:
-	ble		$a1,$x0,.xit
-	csrrw	$t0,#$701,$x0
-	call	GetCurrentTid
-	sll		$s1,$v0,#10
-	lbu		$t1,TCBStatus[$s1]		; changing status will remove from ready queue
-	and		$t1,$t1,#~TS_READY		; on next dequeue
-	sb		$t1,TCBStatus[$s1]
-	mov		$a0,$v0								; a0 = current tid
-	call	InsertIntoTimeoutList	; a1 = timeout
-	jmp		FMTK_Reschedule
-.xit:
-	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	eret
-
+	

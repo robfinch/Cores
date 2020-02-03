@@ -108,7 +108,11 @@ public CSTART:
 	; First save off the link register and OS sp value
 	sw		$sp,OSSP
 	ldi		$sp,#STACKOFFS	; initialize stack pointer
-//	call	_RequestIOFocus
+	ldi		$a0,#14							; Get current tid
+	ecall
+	mov		$a1,$v1
+	ldi		$a0,#24							; RequestIOFocus
+	ecall
 ;	call	_DBGHomeCursor[pc]
 	mov		a0,r0			; turn off keyboard echoing
 //	call	SetKeyboardEcho
@@ -2897,7 +2901,7 @@ CRLF:
 PRMESG:
 	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
-	call	SerialPutString
+	call	PutString
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
@@ -3053,7 +3057,7 @@ WAITMSG:
 ;	(Preserves all registers.)
 ;
 OUTC:
-	jmp		SerialPutChar
+	jmp		Putch
 
 ; ===== Input a character from the console into register v0 (or
 ;	return Zero status if there's no character available).
@@ -3061,7 +3065,7 @@ OUTC:
 INCH:
 	sub 	$sp,$sp,#4
 	sw		$ra,[$sp]
-	call	SerialPeekChar
+	call	Getch
 	add		$v0,$v0,#1				; prepare test -1
 	beq		$v0,$x0,INCH1			; was = -1
 	sub		$v0,$v0,#1				; get char back

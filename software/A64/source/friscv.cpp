@@ -623,11 +623,12 @@ static void process_riop(int oc, int funct3, int funct7)
 		oc = -oc;
 		val = -val;
 	}
-  if (val < -2048 || val > 2047) {
-		if (val & 0x800)
+  if (!IsNBit(val,12)) {
+		if (val & 0x800LL)
 			emit_insn(((val+0x1000LL) & 0xFFFFF000LL) | RD(12) | 0x37, 1);    // LUI
 		else
       emit_insn((val & 0xFFFFF000LL) | RD(12) |0x37,1);    // LUI
+		emit_insn(((val & 0xFFFLL) << 20LL) | FN3(0) | RS1(12) | RD(12) | 0x13, !expand_flag);  // ADDI
 		switch (funct3) {
 		case 0: case 1: case 3: case 4: case 5: case 6: case 7:	// ADD, SLL, SLT, SLTU, XOR, OR, AND
 			emit_insn(FN7(funct7) | RD(Rt) | RS2(Ra) | RS1(12) | FN3(funct3) | 0x33, 1);
@@ -1564,7 +1565,8 @@ static void process_csrrw(int opcode3)
   int64_t val;
   int64_t val2 = 0;
   int flag = 0;
-  
+	char *p;
+
   Rd = getRegisterX();
   need(',');
   NextToken();
@@ -1572,11 +1574,14 @@ static void process_csrrw(int opcode3)
   prevToken();
   need(',');
   NextToken();
+	p = inptr;
+	NextToken();
   if (token=='#') {
     val2 = expr();
 	flag = 4;
   }
   else {
+		inptr = p;
     Rs = getRegisterX();
 	prevToken();
   }

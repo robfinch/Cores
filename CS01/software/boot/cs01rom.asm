@@ -1,5 +1,6 @@
 .include "../fmtk/const.asm"
 .include "../fmtk/config.asm"
+.include "../fmtk/device.inc"
 
 BS					equ		$08
 LF					equ		$0A
@@ -15,6 +16,7 @@ VIA_T1CH		equ		$14
 VIA_ACR			equ		$2C
 VIA_PCR			equ		$30
 VIA_IFR			equ		$34
+VIA_IER			equ		$38
 VIA_PARAW		equ		$3C
 UART				equ		$FFDC0A00
 UART_TRB		equ		$00
@@ -45,26 +47,32 @@ MachineStart:
 		ldi		$sp,#$80000-4		; setup machine mode stack pointer
 		call	MMUInit					; initialize MMU for address space zero.
 		call	FMTKInit
+		call	ViaInit
+		call	SerialInit
 		ldi		$t0,#$FFFC0000
 		csrrw $x0,#$301,$t0		; set tvec
 		ldi		$t0,#UserStart
 		csrrw	$x0,#$341,$t0		; set mepc
+		csrrs	$x0,#$300,#1		; enable interrupts
 		eret									; switch to user mode
 UserStart:
+		ldi		$a0,#14							; Get current tid
+		ecall
+		mov		$a1,$v1
+		ldi		$a0,#24							; RequestIOFocus
+		ecall
 		ldi		$sp,#$80000-1028		; setup user mode stack pointer
-		call	VIAInit
 		ldi		$t0,#$08						; turn on the LED
 		sw		$t0,VIA+VIA_PARAW
-		call	SerialInit
 		ldi		$t2,#16							; send an XON just in case
-		ldi		$a0,#XON
+		ldi		$a3,#XON
 .0004:
 		call	SerialPutChar
 		sub		$t2,$t2,#1
 		bne		$t2,$x0,.0004
 .0002:
 		ldi		$a0,#msgStart				; spit out a startup message
-		call	SerialPutString
+		call	PutString
 		ldi		a0,#1
 		ldi		a1,#24000
 		ldi		a2,#Monitor
@@ -80,23 +88,105 @@ UserStart:
 		bra		.0003
 
 ;------------------------------------------------------------------------------
+; Get a character from input device. Checks for a CTRL-T which indicates to
+; switch the I/O focus.
+;
+; Parameters:
+;		none
+; Returns:
+;		v0 = character, -1 if none available
 ;------------------------------------------------------------------------------
 
 Getch:
-		sub		$sp,$sp,#4
-		sw		$ra,[$sp]
-		call	SerialPeekChar
-		lw		$ra,[$sp]
-		add		$sp,$sp,#4
-		ret
+	sub		$sp,$sp,#8
+	sw		$ra,[$sp]
+	sw		$a0,4[$sp]
+.0002:
+	ldi		$a0,#20							; HasIOFocus?
+	ecall
+	bne		$v1,$x0,.hasFocus
+;	ldi		a0,#13							; reschedule
+;	ecall
+;	bra		.0002
+.hasFocus:
+	call	SerialPeekCharDirect
+	ldi		a0,#$14							; CTRL-T
+	bne		$v0,$a0,.0001
+	ldi		$a0,#21							; switch IO Focus
+	ecall
+.0001:
+	lw		$ra,[$sp]
+	lw		$a0,4[$sp]
+	add		$sp,$sp,#8
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 Putch:
-		sub		$sp,$sp,#4
-		sw		$ra,[$sp]
-		call	SerialPutChar
-		lw		$ra,[$sp]
-		add		$sp,$sp,#4
-		ret
+	sub		$sp,$sp,#20
+	sw		$ra,[$sp]
+	sw		$v0,4[$sp]
+	sw		$a0,8[$sp]
+	sw		$v1,12[$sp]
+	sw		$a1,16[$sp]
+	mov		$a3,$a0
+	ldi		$a1,#5							; serial port
+	call	fputc
+	lw		$ra,[$sp]
+	lw		$v0,4[$sp]
+	lw		$a0,8[$sp]
+	lw		$v1,12[$sp]
+	lw		$a1,16[$sp]
+	add		$sp,$sp,#20
+	ret
+
+;------------------------------------------------------------------------------
+; fputc - put a character to an I/O device. If the task doesn't have the I/O
+; focus then it is rescheduled, allowing another task to run.
+;
+; Stack Space:
+;		6 words
+; Register Usage:
+;		a0 = FMTK_IO specify
+;		a2 = device putchar function
+; Parameters:
+;		a1 = I/O channel
+;		a3 = character to put
+; Modifies:
+;		none
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+fputc:
+	sub		$sp,$sp,#24
+	sw		$ra,[$sp]
+	sw		$v0,4[$sp]
+	sw		$a0,8[$sp]
+	sw		$v1,12[$sp]
+	sw		$a1,16[$sp]
+	sw		$a2,20[$sp]
+.0001:
+	ldi		$a0,#20							; HasIOFocus?
+	ecall
+	bne		$v1,$x0,.hasFocus
+	ldi		a0,#5								; reschedule (sleep 0)
+	ldi		a1,#0
+	ecall
+	bra		.0001
+.hasFocus:
+	ldi		$a0,#26							; FMTK_IO
+	ldi		$a2,#13							; putchar function
+	ecall
+	lw		$ra,[$sp]
+	lw		$v0,4[$sp]
+	lw		$a0,8[$sp]
+	lw		$v1,12[$sp]
+	lw		$a1,16[$sp]
+	lw		$a2,20[$sp]
+	add		$sp,$sp,#24
+	ret
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -111,7 +201,7 @@ MonEntry:
 		ldi		$a2,#6
 ;		call	fltToString
 ;		ldi		$a0,#STRTMP
-;		call	SerialPutString
+;		call	PutString
 
 Monitor:
 		ldi		$s1,#0					; s1 = input pointer
@@ -190,19 +280,20 @@ Monitor:
 		ecall
 		mov		$s1,$v1					; save v1
 		ldi		$a0,#msgCRLF
-		call	SerialPutString
+		call	PutString
 		mov		$a0,$s1					; get back v1
 		call	PutHexByte
 		ldi		$a0,msgTaskStart
-		call	SerialPutString
+		call	PutString
 		ldi		$a0,#13					; Reschedule task
 		ecall
 		jmp		Monitor
 .0006:
 		ldi		$t1,#'D'
 		bne		$t0,$t1,.0007
-		ldi		$a0,#15
-		ecall
+		call 	DumpReadyQueue
+		;ldi		$a0,#15
+		;ecall
 		jmp		Monitor
 .0007:
 		ldi		$t1,#'E'
@@ -237,7 +328,7 @@ doMem:
 		ldi		$a0,#CR
 		call	Putch
 		ldi		$a0,INBUF
-		call	SerialPutString
+		call	PutString
 		lw		$s1,[$sp]
 		add		$sp,$sp,#4
 		call	GetHexNum
@@ -425,74 +516,9 @@ PutHexNybble:
 		ret
 
 ;------------------------------------------------------------------------------
-; VIAInit
-;
-; Initialize the versatile interface adapter.
-;------------------------------------------------------------------------------
-
-VIAInit:
-		; Initialize port A low order eight bits as output, the remaining bits as
-		; input.
-		ldi		$t0,#$000000FF
-		sw		$t0,VIA+VIA_DDRA
-		ldi		$t0,#1							; select timer 3 access
-		sb		$t0,VIA+VIA_PCR+1
-		ldi		$t0,#$1F
-		sb		$t0,VIA+VIA_ACR+1		; set timer 3 mode, timer 1/2 = 64 bit
-		ldi		$t0,#$00196E6B			;	divider value for 30Hz
-		sw		$t0,VIA+VIA_T1CL
-		sw		$x0,VIA+VIA_T1CH		; trigger transfer to count registers
-		ret
-
-;------------------------------------------------------------------------------
-; SerialPeekChar
-;
-; Check the serial port status to see if there's a char available. If there's
-; a char available then return it.
-;
-; Modifies:
-;		none
-; Returns:
-;		$v0 = character or -1
-;------------------------------------------------------------------------------
-
-SerialPeekChar:
-		lb		$v0,UART+UART_STAT
-		and		$v0,$v0,#8					; look for Rx not empty
-		beq		$v0,$x0,.0001
-		lb		$v0,UART+UART_TRB
-		ret
-.0001:
-		ldi		$v0,#-1
-		ret
-
-;------------------------------------------------------------------------------
-; SerialPutChar
-;    Put a character to the serial transmitter. This routine blocks until the
-; transmitter is empty.
-;
-; Parameters:
-;		$a0 = character to put
-; Modifies:
-;		none
-;------------------------------------------------------------------------------
-
-SerialPutChar:
-		sub		$sp,$sp,#4
-		sw		$v0,[$sp]
-.0001:
-		lb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
-		and		$v0,$v0,#16					; bit #4 of the status reg
-		beq		$v0,$x0,.0001				; branch if transmitter is not empty
-		sb		$a0,UART+UART_TRB		; send the byte
-		lw		$v0,[$sp]
-		add		$sp,$sp,#4
-		ret
-
-;------------------------------------------------------------------------------
-; SerialPutString
+; PutString
 ;    Put a string of characters to the serial transmitter. Calls the 
-; SerialPutChar routine, so this routine also blocks if the transmitter is not
+; Putch routine, so this routine also blocks if the transmitter is not
 ; empty.
 ;
 ; Parameters:
@@ -503,7 +529,7 @@ SerialPutChar:
 ;		2 words
 ;------------------------------------------------------------------------------
 
-SerialPutString:
+PutString:
 		sub		$sp,$sp,#8				; save link register
 		sw		$ra,[$sp]
 		sw		$a0,4[$sp]				; and argument
@@ -512,7 +538,7 @@ SerialPutString:
 		lb		$a0,[$t1]
 		add		$t1,$t1,#1				; advance pointer to next byte
 		beq		$a0,$x0,.done			; branch if done
-		call	SerialPutChar			; output character
+		call	Putch							; output character
 		bra		.0001
 .done:
 		lw		$ra,[$sp]					; restore return address
@@ -521,52 +547,25 @@ SerialPutString:
 		ret
 
 ;------------------------------------------------------------------------------
-; Initialize serial port.
-;
-; Modifies:
-;		$t0
-;------------------------------------------------------------------------------
-
-SerialInit:
-		ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
-		sw		$t0,UART+8
-		ldi		$t0,#$0006001E			; reset the fifo's
-		sw		$t0,UART+12
-		ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
-		sw		$t0,UART+12
-		ret
-		
-;------------------------------------------------------------------------------
 ; Exception processing code starts here.
 ;------------------------------------------------------------------------------
-		code
-		align	4
+	code
+	align	4
 IRQRout:
-		ldi		$sp,#$80000-4		; setup machine mode stack pointer
-		csrrw	$t0,#$342,$x0			; get cause code
-		blt		$t0,$x0,.isIRQ		; irq or ecall?
-		jmp		OSCALL					; 
-		eret										
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
+	csrrw	$t0,#$342,$x0			; get cause code
+	blt		$t0,$x0,.isIRQ		; irq or ecall?
+	jmp		OSCALL					; 
+	eret										
 .isIRQ:
- 		; Was it the VIA that caused the interrupt?
-		lb		$t0,VIA+VIA_IFR
-		bge		$t0,$x0,.0001			; no
-		lw		$t0,VIA+VIA_T1CL	; yes, clear interrupt
-		lw		$t0,milliseconds
-		add		$t0,$t0,#30
-		sw		$t0,milliseconds
-		sw		$t0,switchflag
-		eret
-		; Was it the uart that caused the interrupt?
-.0001:
-		lb		$t0,UART+UART_STAT
-		blt		$t0,$x0,.0002			; uart cause interrupt?
-		; Some other interrupt
-		eret
-.0002:
-		ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
-		sw		$t0,UART+UART_CMD
-		eret
+	and		$t0,$t0,#31			; device # is low order 5 bits of cause code
+	sll		$t0,$t0,#7				; 128 bytes per device func table
+	add		$t0,$t0,#DVF_Base+22*4	; IRQ routine
+	lw		$t0,[$t0]
+	beq		$t0,$x0,.noIRQ
+	jmp		[$t0]
+.noIRQ:
+	eret
 
 ;------------------------------------------------------------------------------
 ; Message strings
@@ -598,7 +597,11 @@ flt10:
 
 .include "fltToString.asm"
 .include "cs01Mem.asm"
+.include "../fmtk/serial.asm"
+.include "../fmtk/via.asm"
 .include "../fmtk/task.asm"
 .include "../fmtk/msg.asm"
 .include "../fmtk/tcb.asm"
+.include "../fmtk/iofocus.asm"
+.include "../fmtk/io.asm"
 .include "TinyBasic.asm"

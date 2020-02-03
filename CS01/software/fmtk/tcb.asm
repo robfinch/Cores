@@ -198,5 +198,5 @@ DumpReadyQueue:
 	lw		$t2,20[$sp]
 	lw		$t3,24[$sp]
 	add		$sp,$sp,#28
-	eret
+	ret
 
