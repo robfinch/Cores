@@ -146,16 +146,33 @@ char *Macro::GetBody()
 		buf = new char[count];
 		ZeroMemory(buf, count);
 		SkipSpaces();
+		if (parms.count <= 0) {
+			for (b = buf; count >= 0; ) {
+				p1 = inptr;
+				NextToken();
+				p2 = inptr;
+				if (token == tk_endm)
+					break;
+				if (p2 - p1 < count) {
+					memcpy(b, p1, p2 - p1);
+					b += p2 - p1;
+				}
+				count -= (p2 - p1);
+			}
+		}
+		else
 		for (b = buf; count >= 0; )
 		{
 			// First search for an identifier to substitute with parameter
 			if (parms.count > 0) {
+				/*
 				ii = CountLeadingSpaces();
 				count -= ii;
 				if (count < 0)
 					break;
 				memcpy(b, inptr - ii, ii);
 				b += ii;
+				*/
 				p1 = inptr;
 				NextToken();
 				p2 = inptr;
@@ -183,15 +200,21 @@ char *Macro::GetBody()
 					// if the identifier was not a parameter then just copy it to
 					// the macro body
 					if (!found) {
-						count -= p2 - p1;
+						count -= (p2 - p1);
 						if (count < 0)
 							break;
 						memcpy(b, p1, p2 - p1);
 						b += p2 - p1;
 					}
 				}
-				else
-					inptr = p1;    // reset inptr if no identifier found
+				else {
+//					inptr = p1;    // reset inptr if no identifier found
+					count -= (p2 - p1);
+					if (count <= 0)
+						break;
+					memcpy(b, p1, p2 - p1);
+					b += p2 - p1;
+				}
 			}
 			// Parms.count <= 0
 			else {
@@ -201,16 +224,21 @@ char *Macro::GetBody()
 			}
 			if (token == tk_endm)
 				break;
+			/*
+			if (token == tk_endm)
+				break;
 			if (token != tk_id) {
 				memcpy(b, p1, p2 - p1);
 				b += p2 - p1;
 				inptr = p2;
 				c = *inptr;
 				//inptr++;
+				
 				if (c == '"') {
 					inptr++;
 					InQuote = !InQuote;
 				}
+				
 				if (!InQuote) {
 					p1 = inptr;
 					c = ProcessUnquoted();
@@ -230,6 +258,11 @@ char *Macro::GetBody()
 					break;
 				}
 			}
+			else {
+				memcpy(b, p1, p2 - p1);
+				b += p2 - p1;
+			}
+			*/
 		}
 
 		if (count < 0) {

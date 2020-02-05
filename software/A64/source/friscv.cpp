@@ -1234,6 +1234,37 @@ static void process_store(int oc, int func3)
     //ScanToEOL();
 }
 
+static void process_storec(int oc, int func3, int func5)
+{
+	int Rs1, Rs2;
+	int Rd;
+	int64_t disp;
+
+	Rd = getRegisterX();
+	if (Rd < 0) {
+		printf("Expecting a target register.\r\n");
+		ScanToEOL();
+		return;
+	}
+	expect(',');
+	Rs2 = getRegisterX();
+	if (Rs2 < 0) {
+		printf("Expecting a source register.\r\n");
+		ScanToEOL();
+		return;
+	}
+	expect(',');
+	mem_operand(&disp, &Rs1);
+	if (disp != 0)
+		printf("No displacement allowed.\r\n");
+	if (Rs1 < 0) {
+		printf("An address register is needed.\r\n");
+		ScanToEOL();
+		return;
+	}
+	emit_insn(FN5(func5) | RS2(Rs2) | RS1(Rs1) | FN3(func3) | RD(Rd) | oc, !expand_flag);
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1321,6 +1352,35 @@ static void process_load(int oc, int func3)
 		*/
     emit_insn(((disp & 0xFFF) << 20)|RS1(Ra)|(func3<<12)|RD(Rt)|oc,!expand_flag);
     ScanToEOL();
+}
+
+static void process_loadr(int oc, int func3, int func5)
+{
+	int Ra;
+	int Rt;
+	char *p;
+	int64_t disp;
+	int fixup = 5;
+
+	p = inptr;
+	Rt = getRegisterX();
+	if (Rt < 0) {
+		printf("Expecting a target register.\r\n");
+		//        printf("Line:%.60s\r\n",p);
+		ScanToEOL();
+		inptr -= 2;
+		return;
+	}
+	expect(',');
+	mem_operand(&disp, &Ra);
+	if (disp != 0) {
+		printf("Displacement cannot be non-zero.\r\n");
+		ScanToEOL();
+		return;
+	}
+	if (Ra < 0) Ra = 0;
+	emit_insn(FN5(func5) | RS1(Ra) | FN3(func3) | RD(Rt) | oc, !expand_flag);
+	ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -1936,7 +1996,8 @@ void Friscv_processMaster()
 				case tk_ldw:  process_load(0x03, 1); break;
 				case tk_ldwu: process_load(0x03, 5); break;
 					//        case tk_lui: process_lui(); break;
-        case tk_lw:  process_load(0x03,2); break;
+				case tk_lr:  process_loadr(0x2f, 0x02, 0x02); break;
+				case tk_lw:  process_load(0x03,2); break;
 				case tk_ldt:  process_load(0x03, 2); break;
 				case tk_macro:	process_macro(); break;
 				case tk_mfspr: process_mfspr(0x49); break;
@@ -1975,7 +2036,8 @@ void Friscv_processMaster()
             break;
         case tk_rts: process_rts(0x60); break;
         case tk_sb:  process_store(0x23,0); break;
-        case tk_sei: emit_insn(0x3000000001,1); break;
+				case tk_sc:  process_storec(0x2F, 0x02, 0x03); break;
+				case tk_sei: emit_insn(0x3000000001,1); break;
         case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         case tk_slti:  process_riop(0x13,0x02,0x00); break;

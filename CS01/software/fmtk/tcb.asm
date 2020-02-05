@@ -44,46 +44,127 @@ InsertTask:
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
-	
+
+InsertIntoReadyList:
+	ldi		$v1,#MAX_TID
+	bgtu	$a0,$v1,.badTid
+	sub		$sp,$sp,#8
+	sw		$s1,[$sp]
+	sw		$s2,4[$sp]
+	sll		$s1,$a0,#10				; tid to pointer
+	lb		$t0,TCBPriority[$s1]
+	and		$t0,$t0,#3
+	sll		$t0,$t0,#1
+	lh		$t1,READYQ[$t0]
+	bge		$t1,$x0,.insert
+	sh		$a0,READYQ[$t0]
+	sh		$a0,TCBNext[$s1]
+	sh		$a0,TCBPrev[$s1]
+	bra		.ok
+.insert:
+	sll		$s2,$t1,#10
+	lh		$t2,TCBPrev[$s2]
+	sh		$t2,TCBPrev[$s1]
+	sh		$t1,TCBNext[$s1]
+	sll		$s1,$t2,#10
+	sh		$a0,TCBNext[$s1]
+	sh		$a0,TCBPrev[$s2]
+.ok:
+	ldi		$v0,#E_Ok
+.xit:
+	lw		$s1,[$sp]
+	lw		$s2,4[$sp]
+	add		$sp,$sp,#8
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
+	call	DumpReadyList
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+.badTid:
+	ldi		$v0,#E_Arg
+	ret
+
+RemoveFromReadyList:
+	ldi		$v1,#MAX_TID
+	bgtu	$a0,$v1,.badTid
+	sub		$sp,$sp,#8
+	sw		$s1,[$sp]
+	sw		$s2,4[$sp]
+	sll		$s1,$a0,#10
+	lb		$t0,TCBStatus[$s1]
+	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
+	sb		$t0,TCBStatus[$s1]
+	lb		$t0,TCBPriority[$s1]
+	and		$t0,$t0,#3
+	sll		$t0,$t0,#1
+	lh		$t1,READYQ[$t0]
+	lh		$t2,TCBNext[$s1]
+	bne		$t1,$a0,.0001
+	sh		$t2,READYQ[$t0]
+.0001:
+	blt		$t2,$x0,.0002				; validate t2
+	bgtu	$t2,$v1,.0002
+	lh		$t3,TCBPrev[$s1]
+	sll		$s2,$t2,#10
+	sh		$t3,TCBPrev[$s2]
+	sll		$s2,$t3,#10
+	sh		$t2,TCBNext[$s2]
+.0002:
+	ldi		$v0,#-1
+	sh		$v0,TCBNext[$s1]
+	sh		$v0,TCBPrev[$s1]
+	ldi		$v0,#E_Ok
+	lw		$s1,[$sp]
+	lw		$s2,4[$sp]
+	add		$sp,$sp,#8
+	ret
+.badTid:
+	ldi		$v0,#E_Arg
+	ret
+
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a0 = task id to insert
 ;		a1 = timeout value
+; Modifies:
+;		t0,t1,t2,t3,t4,s1
 ;------------------------------------------------------------------------------
 
 InsertIntoTimeoutList:
-	sll		$s1,$a0,#10				; tid to pointer
-	lw		$t0,TimeoutList
+	sll		$s1,$a0,#10					; tid to pointer
+	ldi		$t0,#-1						
+	sh		$t0,TCBNext[$s1]		; initialize indexes to -1
+	sh		$t0,TCBPrev[$s1]
+	lh		$t0,TimeoutList
 	bge		$t0,$x0,.0001
 	sw		$a1,TCBTimeout[$s1]
 	sh		$a0,TimeoutList
-	ldi		$t0,#-1
-	sh		$t0,TCBNext[$s1]
-	sh		$t0,TCBPrev[$s1]
 	ldi		$v0,#E_Ok
 	ret
 .0001:
 	mov		$t1,$x0
-	lhu		$t2,TimeoutList
+	mov		$t2,$t0
 	sll		$t3,$t2,#10
 .beginWhile:
 	lw		$t4,TCBTimeout[$t3]
 	ble		$a1,$t4,.endWhile
 	sub		$a1,$a1,$t4
 	mov		$t1,$t3
-	lhu		$t3,TCBNext[$t3]
+	lh		$t3,TCBNext[$t3]
+	blt		$t3,$x0,.endWhile
 	sll		$t3,$t3,#10
-	bra		.beginWhile
+	bne		$t3,$t1,.beginWhile		; list screwed up?
 .endWhile
-	srl		$t2,$t3,#10
+	sra		$t2,$t3,#10
 	sh		$t2,TCBNext[$s1]
-	srl		$t2,$t1,#10
+	sra		$t2,$t1,#10
 	sh		$t2,TCBPrev[$s1]
 	lw		$t2,TCBTimeout[$t3]
 	sub		$t2,$t2,$a1
 	sw		$t2,TCBTimeout[$t3]
 	sh		$a0,TCBPrev[$t3]
-	beq		$t1,$x0,.0002
+	blt		$t1,$x0,.0002
 	sh		$a0,TCBNext[$t1]
 	bra		.0003
 .0002:
@@ -96,65 +177,112 @@ InsertIntoTimeoutList:
 	ret
 
 ;------------------------------------------------------------------------------
+; Remove a task from the timeout list. The timeouts of following tasks are
+; adjusted.
+;
+; Parameters:
+;		a0 = task id to remove
+; Modifies:
+;		t0,t1,t2
+; Returns:
+;		none
 ;------------------------------------------------------------------------------
 
 RemoveFromTimeoutList:
-	sll		$s1,$a0,#10					; tid to pointer
-	lhu		$t0,TCBNext[$s1]
-	blt		$t0,$x0,.0001
+	sub		$sp,$sp,#12
+	sw		$s1,[$sp]
+	sw		$s2,8[$sp]
+	sw		$ra,4[$sp]
+	sll		$s1,$a0,#10						; tid to pointer
+	lbu		$t0,TCBStatus[$s1]		; check if waiting at a mailbox
+	and		$t0,$t0,#TS_WAITMSG
+	beq		$t0,$x0,.noWait				
+	mMbxRemoveTask
+.noWait:
+	lh		$t0,TimeoutList
+	bne		$a0,$t0,.0001					; check removing head of list
+	lh		$t0,TCBNext[$s1]
+	sh		$t0,TimeoutList
+.0001:
+	lh		$t0,TCBNext[$s1]
+	blt		$t0,$x0,.noNext
 	sll		$s2,$t0,#10
-	lhu		$t1,TCBPrev[$s1]
+	lh		$t1,TCBPrev[$s1]
 	sh		$t1,TCBPrev[$s2]
 	lw		$t1,TCBTimeout[$s2]
 	lw		$t2,TCBTimeout[$s1]
 	add		$t1,$t1,$t2
 	sw		$t1,TCBTimeout[$s2]
-.0001:
-	lhu		$t0,TCBPrev[$s1]
-	blt		$t0,$x0,.0002
+.noNext:
+	lh		$t0,TCBPrev[$s1]
+	blt		$t0,$x0,.noPrev
 	sll		$s2,$t0,#10
-	lhu		$t0,TCBNext[$s1]
+	lh		$t0,TCBNext[$s1]
 	sh		$t0,TCBNext[$s2]
-.0002:
-	sb		$x0,TCBStatus[$s1]	; status = TS_NONE
+.noPrev:
+	lb		$t0,TCBStatus[$s1]		; no longer timing out
+	and		$t0,$t0,#~(TS_TIMEOUT|TS_WAITMSG)
+	sb		$t0,TCBStatus[$s1]
 	ldi		$t0,#-1
 	sh		$t0,TCBNext[$s1]
 	sh		$t0,TCBPrev[$s1]
+	lw		$s1,[$sp]							; restore callee saves
+	lw		$ra,4[$sp]
+	lw		$s2,8[$sp]
+	add		$sp,$sp,#12
 	ret
 
 ;------------------------------------------------------------------------------
-; Pop an entry off the timeout list.
-;
-; Modifies:
-;		v1,t0
-;	Returns:
-		v0 = timeout list entry tid
+; Returns:
+;		v1 = process id
 ;------------------------------------------------------------------------------
 
-PopTimeoutList:
-	lhu		$v0,TimeoutList
-	blt		$v0,$x0,.done
-	ldi		$v1,#NR_TCB
-	bgeu	$v0,$v1,.done
-	sll		$t0,$v0,#10						; tid to pointer
-	lbu		$v1,TCBStatus[$t0]		; no longer a waiting status
-	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
-	sb		$v1,TCBStatus[$t0]
-	lhu		$v1,TCBNext[$t0]
-	sh		$v1,TimeoutList
-	blt		$v0,$x0,.done
-	ldi		$v1,#NR_TCB
-	bgeu	$v0,$v1,.done
-	ldi		$v1,#-1
-	sh		$v1,TCBPrev[$t0]
-.done:	
+AllocTCB:
+	ldi		$t1,#0
+	lhu		$v1,PIDMAP
+.0001:
+	and		$t0,$v1,#1
+	beq		$t0,$x0,.allocTid
+	srl		$v1,$v1,#1
+	or		$v1,$v1,#$8000
+	add		$t1,$t1,#1
+	and		$t1,$t1,#15
+	bne		$t1,$x0,.0001
+; here no tcbs available
+	ldi		$v0,#E_NoMoreTCBs
+	ret
+.allocTid:
+	mov		$v0,$t1
+	or		$v1,$v1,#1
+	beq		$t1,$x0,.0003
+.0002:
+	sll		$v1,$v1,#1
+	or		$v1,$v1,#1
+	sub		$t1,$t1,#1
+	bne		$t1,$x0,.0002
+.0003:
+	sh		$v1,PIDMAP
+	mov		$v1,$v0
+	ldi		$v0,#E_Ok
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FreeTCB:
+	ldi		$t0,#1
+	sll		$t0,$t0,$a0
+	xor		$t0,$t0,#-1
+	lhu		$t1,PIDMAP
+	and		$t1,$t1,$t0
+	sh		$t1,PIDMAP
 	ret
 
 ;------------------------------------------------------------------------------
 ; Diagnostics
 ;------------------------------------------------------------------------------
 
-DumpReadyQueue:
+DumpReadyList:
 	sub		$sp,$sp,#28
 	sw		$ra,[$sp]
 	sw		$a0,4[$sp]
@@ -163,33 +291,47 @@ DumpReadyQueue:
 	sw		$t1,16[$sp]
 	sw		$t2,20[$sp]
 	sw		$t3,24[$sp]
+	ldi		$a0,#msgReadyList
+	call	PutString
 	ldi		$t1,#0
+	csrrc	$x0,#$300,#1		; disable ints
 .0002:
+	call	SerialPeekCharDirect
+	xor		$v0,$v0,#CTRLC
+	beq		$v0,$x0,.brk
 	ldi		$a0,#CR
 	call	Putch
 	ldi		$a0,#'Q'
 	call	Putch
-	mov		$a0,$t1
+	srl		$a0,$t1,#1
 	call	PutHexNybble
 	ldi		$a0,#':'
 	call	Putch
-	lbu		$a2,HRDY0[$t1]
-	lbu		$a3,TRDY0[$t1]
-	beq		$a2,$a3,.nxt
-	sll		$t2,$t1,#8
-	add		$t2,$t2,#RDYQ0
+	lh		$a2,READYQ[$t1]
+	blt		$a2,$x0,.nxt
+	mov		$a3,$a2
 .0001:
-	add		$t3,$t2,$a2
-	lbu		$a0,[$t3]
-	call	PutHexByte
+	mov		$a0,$a3
+	call	PutHexHalf
 	ldi		$a0,#' '
 	call	Putch
-	add		$a2,$a2,#1
+	sll		$a3,$a3,#10
+	lh		$a0,TCBNext[$a3]
+	call	PutHexHalf
+	ldi		$a0,#' '
+	call	Putch
+	lh		$a0,TCBPrev[$a3]
+	call	PutHexHalf
+	ldi		$a0,#CR
+	call	Putch
+	lh		$a3,TCBNext[$a3]
 	bne		$a2,$a3,.0001
 .nxt:
-	add		$t1,$t1,#1
-	slt		$t2,$t1,#4
+	add		$t1,$t1,#2
+	slt		$t2,$t1,#8
 	bne		$t2,$x0,.0002
+.brk:
+	csrrs	$x0,#$300,#1		; enable ints
 	lw		$ra,[$sp]
 	lw		$a0,4[$sp]
 	lw		$a2,8[$sp]
@@ -200,3 +342,58 @@ DumpReadyQueue:
 	add		$sp,$sp,#28
 	ret
 
+DumpTimeoutList:
+	sub		$sp,$sp,#28
+	sw		$ra,[$sp]
+	sw		$a0,4[$sp]
+	sw		$a2,8[$sp]
+	sw		$a3,12[$sp]
+	sw		$t1,16[$sp]
+	sw		$t2,20[$sp]
+	sw		$t3,24[$sp]
+	ldi		$t1,#0
+	csrrc	$x0,#$300,#1		; disable ints
+.0002:
+	call	SerialPeekCharDirect
+	xor		$v0,$v0,#CTRLC
+	beq		$v0,$x0,.brk
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,#'Q'
+	call	Putch
+	srl		$a0,$t1,#1
+	call	PutHexNybble
+	ldi		$a0,#':'
+	call	Putch
+	lh		$a2,TimeoutList
+	blt		$a2,$x0,.brk
+	mov		$a3,$a2
+.0001:
+	mov		$a0,$a3
+	call	PutHexHalf
+	ldi		$a0,#'-'
+	call	Putch
+	sll		$a3,$a3,#10
+	lw		$a0,TCBTimeout[$a3]
+	call	PutHexWord
+	ldi		$a0,#CR
+	call	Putch
+	lh		$a3,TCBNext[$a3]
+	bge		$a3,$x0,.0001
+.brk:
+	csrrs	$x0,#$300,#1		; enable ints
+	lw		$ra,[$sp]
+	lw		$a0,4[$sp]
+	lw		$a2,8[$sp]
+	lw		$a3,12[$sp]
+	lw		$t1,16[$sp]
+	lw		$t2,20[$sp]
+	lw		$t3,24[$sp]
+	add		$sp,$sp,#28
+	ret
+
+msgReadyList:
+	db	"Que Tid  Prv  Nxt",CR
+	db	"-----------------",CR,0
+
+	align 4

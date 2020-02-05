@@ -1265,7 +1265,7 @@ void process_macro()
 		getIdentifier();
 		sym = find_symbol(lastid);
 		if (sym != nullptr) {
-			printf("Macro already defined %d.", lineno);
+			printf("Macro %s already defined %d.", lastid, lineno);
 			alreadyDef = true;
 		}
 		else {
@@ -1274,11 +1274,16 @@ void process_macro()
 			sym->isMacro = true;
 			sym->macro = macr;
 		}
+		p = inptr;
 		NextToken();
 		if (token == '(') {
 			macr->GetParmList();
 			NextToken();
 			need(')');
+		}
+		else {
+			inptr = p;
+			ScanToEOL();
 		}
 		p = inptr;
 		macr->GetBody();
@@ -1289,11 +1294,16 @@ void process_macro()
 		Macro mthrowaway;
 		SkipSpaces();
 		getIdentifier();
+		p = inptr;
 		NextToken();
 		if (token == '(') {
 			mthrowaway.GetParmList();
 			NextToken();
 			need(')');
+		}
+		else {
+			inptr = p;
+			ScanToEOL();
 		}
 		mthrowaway.GetBody();
 	}
@@ -1369,14 +1379,17 @@ void process_label()
 //       ca = bss_address;
 //    else
 //        ca = code_address;
-  if (lastid[0]=='.') {
+  if (lastid[0]=='.')
     sprintf_s(nm, sizeof(nm), "%s%s", current_label, lastid);
-  }
-  else { 
-    strcpy_s(current_label, sizeof(current_label), lastid);
+  else
     strcpy_s(nm, sizeof(nm), lastid);
-  }
-  if (strcmp("end_init_data", nm)==0)
+	sym = find_symbol(nm);
+	if (sym == nullptr && lastid[0]!='.')
+		strcpy_s(current_label, sizeof(current_label), lastid);
+	if (lastid[0]!='.' && sym)
+		if (!sym->isMacro)
+			strcpy_s(current_label, sizeof(current_label), lastid);
+	if (strcmp("end_init_data", nm)==0)
     isInitializationData = 0;
   NextToken();
 //    SkipSpaces();
@@ -1395,7 +1408,7 @@ void process_label()
   // ignore the labels in initialization data
   if (isInitializationData)
     return;
-  sym = find_symbol(nm);
+//  sym = find_symbol(nm);
   if (pass==4 || pass==3) {
     if (sym) {
       if (sym->defined) {

@@ -58,7 +58,7 @@ ViaInit:
 	sb		$t0,VIA_PCR+1[$t1]
 	ldi		$t0,#$1F
 	sb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
-	ldi		$t0,#$00196E6B			;	divider value for 30Hz
+	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
 	sw		$t0,VIA_T1CL[$t1]
 	sw		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
 	ldi		$t0,#$180						; emable timer3 interrupts

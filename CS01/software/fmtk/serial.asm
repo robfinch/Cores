@@ -20,7 +20,7 @@ SerialFuncTbl:
 	dw		0							; build BPB
 	dw		0							; open
 	dw		0							; close
-	dw		0							; get char
+	dw		SerialGetChar	; get char
 	dw		SerialPeekChar
 	dw		0							; get char direct
 	dw		SerialPeekCharDirect	; peek char direct
@@ -60,7 +60,11 @@ SerialInit:
 	ldi		$a0,#5							; serial device
 	ldi		$a1,#SerialFuncTbl
 	call	CopyDevFuncTbl
-	ldi		$t0,#$0B						; dtr,rts active, rxint disabled, no parity
+	sw		$x0,SerHeadRcv
+	sw		$x0,SerTailRcv
+	sw		$x0,SerHeadXmit
+	sw		$x0,SerTailXmit
+	ldi		$t0,#$09						; dtr,rts active, rxint enabled, no parity
 	sw		$t0,UART+8
 	ldi		$t0,#$0006001E			; reset the fifo's
 	sw		$t0,UART+12
@@ -117,10 +121,50 @@ SerialFinishCmd:
 	jmp		SerialServiceLoop
 
 ;------------------------------------------------------------------------------
-; SerialPeekChar
+; SerialGetChar
 ;
 ; Check the serial port buffer to see if there's a char available. If there's
 ; a char available then return it.
+;
+; Modifies:
+;		none
+; Returns:
+;		$v0 = character or -1
+;------------------------------------------------------------------------------
+
+SerialGetChar:
+		sub		$sp,$sp,#8
+		sw		$ra,[$sp]
+		sw		$v1,4[$sp]
+;		call	SerialRcvCount
+;		slt		$v0,$v0,#8
+;		beq		$v0,$x0,.0002
+;		ldi		$v0,#XON
+;		sb		$v0,UART+UART_TRB
+.0002:
+		csrrc	$x0,#$300,#1				; disable interrupts
+		lbu		$v1,SerHeadRcv			; check if anything is in buffer
+		lbu		$v0,SerTailRcv
+		beq		$v0,$v1,.noChars		; no?
+		lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
+		add		$v1,$v1,#1					; update head index
+		sb		$v1,SerHeadRcv				
+		bra		.xit
+.noChars:
+.0001:
+		ldi		$v0,#-1
+.xit
+		csrrs	$x0,#$300,#1				; enable interrupts
+		lw		$ra,[$sp]
+		lw		$v1,4[$sp]
+		add		$sp,$sp,#8
+		ret
+
+;------------------------------------------------------------------------------
+; SerialPeekChar
+;
+; Check the serial port buffer to see if there's a char available. If there's
+; a char available then return it. But don't update the buffer indexes.
 ;
 ; Modifies:
 ;		none
@@ -138,17 +182,17 @@ SerialPeekChar:
 ;		ldi		$v0,#XON
 ;		sb		$v0,UART+UART_TRB
 .0002:
+		csrrc	$x0,#$300,#1				; disable interrupts
 		lbu		$v1,SerHeadRcv			; check if anything is in buffer
 		lbu		$v0,SerTailRcv
 		beq		$v0,$v1,.noChars		; no?
 		lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
-		add		$v1,$v1,#1					; update head index
-		sb		$v1,SerHeadRcv				
 		bra		.xit
 .noChars:
 .0001:
 		ldi		$v0,#-1
 .xit
+		csrrs	$x0,#$300,#1				; enable interrupts
 		lw		$ra,[$sp]
 		lw		$v1,4[$sp]
 		add		$sp,$sp,#8
@@ -247,15 +291,15 @@ SerialIRQ:
 	add		$t3,$t3,#1					; see if buffer full
 	and		$t3,$t3,#255
 	beq		$t2,$t3,.rxFull
-	sb		$t2,SerTailRcv			; update tail pointer
-	sub		$t2,$t2,#1
+	sb		$t3,SerTailRcv			; update tail pointer
+	sub		$t3,$t3,#1
 	and		$t2,$t3,#255
 	sb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
 	call	SerialRcvCount
-	slt		$v0,$v0,#240
-	bne		$v0,$x0,.0001
-	ldi		$a0,#XOFF
-	sb		UART+UART_TRB
+;	slt		$v0,$v0,#240
+;	bne		$v0,$x0,.0001
+;	ldi		$a0,#XOFF
+;	sb		UART+UART_TRB
 .0001:
 	lw		$a0,UART+UART_STAT	; check the status for another byte
 	bra		.nxtByte

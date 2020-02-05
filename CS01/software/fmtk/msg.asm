@@ -21,6 +21,7 @@ MSG_SIZE	equ		16
 
 	code
 	align	4
+
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = task id of owner
@@ -80,7 +81,7 @@ FMTK_FreeMbx:
 	call	RemoveFromTimeoutList
 .0003:
 	mov		$a0,$s2
-	call	InsertTask
+	call	InsertIntoReadyList
 	ldi		$v0,#E_NoMsg					; but no message
 	sw		$v0,64[$s5]						; v0 = E_NoMsg
 .0001:
@@ -135,7 +136,7 @@ FMTK_SendMsg:
 	mov		$a0,$s1
 	sub		$sp,$sp,#4
 	sw		$t0,[$sp]						; push t0
-	call	InsertTask
+	call	InsertIntoReadyList
 	lw		$t0,[$sp]						; pop t0
 	add		$sp,$sp,#4
 .nxtTid:
@@ -269,10 +270,10 @@ FMTK_WaitMsg:
 	mtu		$v0,$v0
 	eret
 .qt:
-	call	GetCurrentTid
+	mGetCurrentTid
 	ldi		$t2,#1
 	sll		$t2,$t2,$v0
-	sll		$t3,$a0,#4					; convert handle to pointer
+	sll		$t3,$a1,#4					; convert handle to pointer
 	add		$t3,$t3,#mbxs
 	lw		$t4,MBX_WTIDS[$t3]	; get waiting task list
 	or		$t4,$t4,$t2					; set bit for tid
@@ -283,12 +284,8 @@ FMTK_WaitMsg:
 	and		$t3,$t3,#~TS_READY	; not ready
 	sb		$t3,TCBStatus[$t4]
 	sb		$a1,TCBWaitMbx[$t4]	; set mailbox task is waiting for
-	beq		$a5,$x0,.noTimelimit
-	mov		$a0,$v0							; a0 = tid
 	mov		$a1,$a5
-	call	InsertIntoTimeoutList
-.noTimelimit:
 	; Continue by switching tasks
-	jmp		FMTK_Reschedule
+	jmp		FMTK_Sleep
 
 	

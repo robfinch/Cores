@@ -279,6 +279,7 @@ enum {
      tk_lmr,
      tk_loop,
      tk_lor,
+		 tk_lr,
      tk_lshift,
      tk_lsr,
      tk_lsri,

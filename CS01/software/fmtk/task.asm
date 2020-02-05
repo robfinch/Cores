@@ -1,17 +1,33 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
 
 QNDX		EQU		$4304
-HRDY0		EQU		$4308
-HRDY1		EQU		$4309
-HRDY2		EQU		$430A
-HRDY3		EQU		$430B
-TRDY0		EQU		$430C
-TRDY1		EQU		$430D
-TRDY2		EQU		$430E
-TRDY3		EQU		$430F
+READYQ	EQU		$4308
 PIDMAP	EQU		$4310
 missed_ticks	equ		$4320
 TimeoutList		equ		$4328
 Tick		EQU		$4330
+SysSema	EQU		$4340
 RDYQ0		EQU		$4400
 RDYQ1		EQU		$4500
 RDYQ2		EQU		$4600
@@ -52,10 +68,10 @@ OSCallTbl:
 	dh		FMTK_IO									; 26
 
 qToChk:
-	db	0,0,0,1,0,0,2,1
-	db	0,0,3,1,0,0,2,1
-	db	0,0,0,1,0,0,2,1
-	db	0,0,3,1,0,0,2,1
+	db	0,0,0,2,0,0,4,2
+	db	0,0,6,2,0,0,4,2
+	db	0,0,0,2,0,0,4,2
+	db	0,0,6,2,0,0,4,2
 
 	align	4
 
@@ -64,12 +80,12 @@ qToChk:
 
 FMTKInit:
 	sw		$x0,QNDX
-	sw		$x0,HRDY0				; reset head and tail indexes
-	sw		$x0,TRDY0
 	sw		$x0,PIDMAP
 	sw		$x0,missed_ticks
 	ldi		$t0,#-1
 	sw		$t0,TimeoutList
+	sw		$t0,READYQ
+	sw		$t0,READYQ+4
 	
 	sw		$x0,IOFocusTbl
 	sw		$t0,IOFocusNdx
@@ -103,6 +119,9 @@ FMTKInit:
 	add		$t0,$t0,#16
 	sub		$t2,$t2,#1
 	bgt		$t2,$x0,.0002
+
+	; unlock the system semaphore	
+	mUnlockSemaphore(SysSema)
 	ret
 
 ;------------------------------------------------------------------------------
@@ -118,7 +137,7 @@ GetCurrentTid:
 	ret
 
 FMTK_GetCurrentTid:
-	call	GetCurrentTid
+	mGetCurrentTid
 	mov		$v1,$v0
 	ldi		$v0,#E_Ok
 	eret
@@ -168,43 +187,29 @@ SelectTaskToRun:
 	lbu		$v1,qToChk[$v1]			; assume this will be valid
 	ldi		$t2,#4							; 4 queues to check
 .nxtQ:
-	lbu		$t0,HRDY0[$v1]			; check queue to see if contains any
-	lbu		$t1,TRDY0[$v1]			; ready tasks
-	bne		$t0,$t1,.dq					; yes, go dequeue
-	add		$v1,$v1,#1					; no, advance to next queue
-	and		$v1,$v1,#3					; 4 max
+	lh		$v0,READYQ[$v1]			; check queue to see if contains any
+	bge		$v0,$x0,.dq					; yes, go dequeue
+.0001:
+	add		$v1,$v1,#2					; no, advance to next queue
+	and		$v1,$v1,#6					; 4 max
 	sub		$t2,$t2,#1					;
 	bgt		$t2,$x0,.nxtQ				; go back to check next queue
 	; Here, nothing else is actually ready to run
 	; just go back to what we were doing.
-	call	GetCurrentTid				; tail recursion here
-	bra		.goodTid
+	mGetCurrentTid
+	bra		.noTask
 .dq:
-	sll		$t3,$v1,#8					; compute t3 = readyq index
-	add		$t3,$t3,#RDYQ0
-	add		$t4,$t0,$t3
-	lbu		$v0,[$t4]						; v0 = tid of ready task
 	ldi		$t3,#MAX_TID				; ensure we have a valid tid
 	bleu	$v0,$t3,.goodTid
-	; If the tid isn't valid, remove it from the queue and go back
-	; and check the next queue entry
-	add		$t0,$t0,#1					; advance readyq head
-	and		$t0,$t0,#255
-	sb		$t0,HRDY0[$v1]			; save head pointer
-	bra		.nxtQ
+	; If the tid isn't valid the readyq was screwed up
+	ldi		$t3,#-1							; indicate queue empty
+	sh		$t3,READYQ[$v1]
+	bra		.0001								; and try next queue
 .goodTid:
-	add		$t0,$t0,#1					; advance readyq head
-	and		$t0,$t0,#255
-	sb		$t0,HRDY0[$v1]			; save head pointer
-	; Now filter out tasks (remove from ready list) that aren't ready to run
-	sll		$t0,$v0,#10					; tid to pointer
-	lb		$t0,TCBStatus[$t0]	; get status
-	and		$t0,$t0,#TS_READY		; is it ready?
-	beq		$t0,$x0,.nxtQ
-	; And re-insert task into queue for next time
-	mov		$a0,$v0
-	call	InsertTask					; could check if insert failed
-	mov		$v0,$a0							; get back tid
+	sll		$t1,$v0,#10
+	lh		$t0,TCBNext[$t1]		; update head of ready queue
+	sh		$t0,READYQ[$v1]
+.noTask:
 	lw		$ra,[$sp]						; restore return address
 	add		$sp,$sp,#4
 	ret
@@ -433,13 +438,11 @@ AccountTime:
 
 FMTK_Sleep:
 	blt		$a1,$x0,ERETx
-	call	GetCurrentTid
+	mGetCurrentTid
 	sll		$s1,$v0,#10
 	beq		$a1,$x0,.0001
-	lbu		$t1,TCBStatus[$s1]		; changing status will remove from ready queue
-	and		$t1,$t1,#~TS_READY		; on next dequeue
-	sb		$t1,TCBStatus[$s1]
 	mov		$a0,$v0								; a0 = current tid
+	call	RemoveFromReadyList
 	call	InsertIntoTimeoutList	; a1 = timeout
 .0001:
 	lbu		$v0,TCBStatus[$s1]		; flag task as no longer running
@@ -474,24 +477,30 @@ FMTK_Sleep:
 	and		$x2,$t2,#TS_MSGRDY
 	beq		$x2,$x0,.noMsg
 	lw		$a0,80[$s2]					; user a2 (x20)
+	beq		$a0,$x0,.0002
 	call	VirtToPhys
 	lw		$x2,TCBMsgD1[$s2]
 	sw		$x2,[$v0]
+.0002:
 	lw		$a0,84[$s2]
+	beq		$a0,$x0,.0003
 	call	VirtToPhys
 	lw		$x2,TCBMsgD2[$s2]
 	sw		$x2,[$v0]
+.0003:
 	lw		$a0,88[$s2]
+	beq		$a0,$x0,.0004
 	call	VirtToPhys
 	lw		$x2,TCBMsgD3[$s2]
 	sw		$x2,[$v0]
+.0004:
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sw		$x2,64[$s2]					; in v0
 
 .noMsg:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	sb		$t2,TCBStatus[$s2]
-;	beq		$s1,$s2,.noCtxSwitch	; incoming and outgoing contexts the same?
+	beq		$s1,$s2,.noCtxSwitch	; incoming and outgoing contexts the same?
 	mov		$a0,$s1
 	mov		$a1,$s2
 	call	SwapContext
@@ -508,11 +517,19 @@ ERETx:
 FMTK_SchedulerIRQ:
 	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
+	ldi		$a0,#SysSema
+	ldi		$a1,#20
+	mGetCurrentTid
+	sll		$s1,$v0,#10						; compute pointer to TCB
+;	call	LockSemaphore
+;	beq		$v0,$x0,.noLock
+; Might need the following if the external timer isn't used.
+;	csrrw	$v0,#$701,$x0					; get the time
+;	add		$v0,$v0,#600000				; wait 600,000 cycles @20MHz (30ms)
+;	csrrw	$x0,#$321,$v0					; set next interrupt time
 	lw		$t5,Tick							; update tick count
 	add		$t5,$t5,#1
 	sw		$t5,Tick
-	call	GetCurrentTid
-	sll		$s1,$v0,#10						; compute pointer to TCB
 	call	AccountTime
 	lbu		$t5,TCBStatus[$s1]
 	or		$t5,$t5,#TS_PREEMPT
@@ -528,9 +545,9 @@ FMTK_SchedulerIRQ:
 	sll		$t4,$t5,#10					; index to pointer
 	lw		$t3,TCBTimeout[$t4]
 	bgt		$t3,$x0,.timeoutNotDone
-	call	PopTimeoutList
+	mPopTimeoutList
 	mov		$a0,$v0
-	call	InsertTask
+	call	InsertIntoReadyList
 	bra		.0001
 .timeoutNotDone:
 	sub		$t3,$t3,#1
@@ -561,20 +578,27 @@ FMTK_SchedulerIRQ:
 	; If a message is ready, update status to ready and put
 	; message in target memory. The task will be returning
 	; from a WaitMsg so a return status of E_Ok is also set.
+	bra		.noMsg
 	and		$x2,$t2,#TS_MSGRDY
 	beq		$x2,$x0,.noMsg
 	lw		$a0,80[$s2]					; user a2 (x20)
+	beq		$a0,$x0,.0002
 	call	VirtToPhys
 	lw		$x2,TCBMsgD1[$s2]
 	sw		$x2,[$v0]
+.0002:
 	lw		$a0,84[$s2]
+	beq		$a0,$x0,.0003
 	call	VirtToPhys
 	lw		$x2,TCBMsgD2[$s2]
 	sw		$x2,[$v0]
+.0003:
 	lw		$a0,88[$s2]
+	beq		$a0,$x0,.0004
 	call	VirtToPhys
 	lw		$x2,TCBMsgD3[$s2]
 	sw		$x2,[$v0]
+.0004:
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sw		$x2,64[$s2]					; in v0
 
@@ -586,44 +610,12 @@ FMTK_SchedulerIRQ:
 	mov		$a1,$s2
 	call	SwapContext
 .noCtxSwitch:
+	mUnlockSemaphore(SysSema)
+.noLock:
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
 	lw		$t2,Tick					; get tick
 	sw		$t2,TCBStartTick[$s1]
-	ret
-
-;------------------------------------------------------------------------------
-; Returns:
-;		v1 = process id
-;------------------------------------------------------------------------------
-
-AllocTCB:
-	ldi		$t1,#0
-	lhu		$v1,PIDMAP
-.0001:
-	and		$t0,$v1,#1
-	beq		$t0,$x0,.allocTid
-	srl		$v1,$v1,#1
-	or		$v1,$v1,#$8000
-	add		$t1,$t1,#1
-	and		$t1,$t1,#15
-	bne		$t1,$x0,.0001
-; here no tcbs available
-	ldi		$v0,#E_NoMoreTCBs
-	ret
-.allocTid:
-	mov		$v0,$t1
-	or		$v1,$v1,#1
-	beq		$t1,$x0,.0003
-.0002:
-	sll		$v1,$v1,#1
-	or		$v1,$v1,#1
-	sub		$t1,$t1,#1
-	bne		$t1,$x0,.0002
-.0003:
-	sh		$v1,PIDMAP
-	mov		$v1,$v0
-	ldi		$v0,#E_Ok
 	ret
 
 ;------------------------------------------------------------------------------
@@ -648,7 +640,7 @@ FMTK_StartTask:
 	bne		$v0,$x0,.err
 	mov		$a0,$v1
 	call	MapOSPages			; Map OS pages into address space
-	sll		$s1,$v1,#10			; compute TCB address
+	sll		$s1,$a0,#10			; compute TCB address
 	call	AllocStack
 	ldi		$t0,#$7F800			; set stack pointer
 	sw		$t0,56[$s1]
@@ -679,7 +671,7 @@ FMTK_StartTask:
 	sw		$t0,TCBsegs+56[$s1]
 	sw		$t0,TCBsegs+60[$s1]
 	srl		$a0,$s1,#10					; need the tid again
-	call	InsertTask
+	call	InsertIntoReadyList
 	mov		v1,a0
 	lw		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -704,7 +696,7 @@ FMTK_StartTask:
 ;------------------------------------------------------------------------------
 
 FMTK_ExitTask:
-	call	GetCurrentTid
+	mGetCurrentTid
 	mov		a1,v0
 	; fall through to KillTask
 	

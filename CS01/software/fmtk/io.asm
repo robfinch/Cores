@@ -35,6 +35,7 @@
 ;30   Random Number		PRNG
 ;31		Debug						DBG
 
+; The following must be at least 128 byte aligned
 DVF_Base		EQU		$A000
 DVF_Limit		EQU		$B000
 
@@ -46,7 +47,11 @@ DVF_Limit		EQU		$B000
 ;------------------------------------------------------------------------------
 
 FMTK_IO:
+	ldi		$v0,#32
+	bgeu	$a1,$v0,.badDev
 	sll		$v0,$a1,#7					; each device allowed 32 functions (*128)
+	ldi		$v1,#32
+	bgeu	$a2,$v1,.badFunc
 	sll		$v1,$a2,#2					; function number *4
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	or		$v0,$v0,$v1
@@ -59,6 +64,9 @@ FMTK_IO:
 	eret
 .badFunc:
 	ldi		$v0,#E_BadDevOp
+	bra		.xit
+.badDev:
+	ldi		$v0,#E_BadDevNum
 	bra		.xit
 
 ;------------------------------------------------------------------------------
