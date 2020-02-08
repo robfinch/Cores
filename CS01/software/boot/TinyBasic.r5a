@@ -1230,7 +1230,7 @@ LOAD3:
 
 ;	call		OREXPR		;evaluate the following expression
 ;	ld		a0,#5000
-	ld		a1,#$E00
+	ldi		a1,#$E00
 	call	SDReadSector
 	add		a0,a0,#1
 	ldi		a1,#TXTBGN
@@ -1419,13 +1419,13 @@ PKER:
 SYSX:
 	call	OREXPR		; get the subroutine's address
 	bne		v0,r0,sysx1; make sure we got a valid address
-	ld		a0,#msgSYSBad
+	ldi		a0,#msgSYSBad
 	jmp		ERROR
 sysx1:
 	sub		$sp,$sp,#4
-	sw		$t2,[$sp]	; save the text pointer
+	stt		$t2,[$sp]	; save the text pointer
 	call	[v0]			; jump to the subroutine
-	lw		$t2,[$sp]	; restore the text pointer
+	ldt		$t2,[$sp]	; restore the text pointer
 	add		$sp,$sp,#4
 	jmp		FINISH
 
@@ -2366,7 +2366,7 @@ GETLN:
 FNDLN:
 	ldi		$t1,#$FFFFF
 	blt		a0,$t1,fl1	; line no. must be < 65535
-	ld		a0,#msgLineRange
+	ldi		a0,#msgLineRange
 	jmp		ERROR
 fl1:
 	ldi		$t3,#TXTBGN	; init. the text save pointer

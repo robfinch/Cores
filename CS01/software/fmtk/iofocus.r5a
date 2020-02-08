@@ -49,8 +49,8 @@ IOFocusTbl		EQU		$8C10
 
 FMTK_HasIOFocus:
 	mGetCurrentTid
-	sll		$v0,$v0,#10
-	lw		$v1,IOFocusNdx
+	sll		$v0,$v0,#LOG_TCBSZ
+	ldt		$v1,IOFocusNdx
 	beq		$v0,$v1,.hasFocus
 	ldi		$v1,#0
 	bra		.xit
@@ -58,9 +58,7 @@ FMTK_HasIOFocus:
 	ldi		$v1,#1
 .xit:
 	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	mtu		$v1,$v1
-	eret
+	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
 ; First check if it's even possible to switch the focus to another
@@ -68,8 +66,6 @@ FMTK_HasIOFocus:
 ; single task in the list. In either case it's not possible to
 ; switch.
 ;
-; Stack Space:
-;		2 words
 ;	Parameters:
 ;		none
 ;	Modifies:
@@ -79,28 +75,22 @@ FMTK_HasIOFocus:
 ;-----------------------------------------------------------------------------
 
 SwitchIOFocusHelper:
-	sub		$sp,$sp,#8
-	sw		$t0,[$sp]
-	sw		$t1,4[$sp]
-	lw		$t0,IOFocusNdx			; get focus pointer
-	blt		$t0,$x0,.noFocus		; is it -1?
-	lw		$t1,IOF_NEXT[$t0]
+	ldt		$t0,IOFocusNdx			; get focus pointer
+	bltz	$t0,.noFocus		; is it -1?
+	ldt		$t1,IOF_NEXT[$t0]
 	beq		$t1,$t0,.sameFocus
+	bltz	$t1,.noFocus
 	; swap virtual screens
 	; set vidmem pointer
-	sw		$t1,IOFocusNdx
+	stt		$t1,IOFocusNdx
 .sameFocus:
 .noFocus:
 	ldi		$v0,E_Ok
-	lw		$t0,[$sp]
-	lw		$t1,4[$sp]
-	add		$sp,$sp,#8
 	ret
 
 FMTK_SwitchIOFocus:
 	call	SwitchIOFocusHelper
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
 ; The I/O focus list is an array indicating which jobs are requesting the
@@ -114,29 +104,28 @@ FMTK_SwitchIOFocus:
 FMTK_RequestIOFocus:
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
-	lw		$t1,IOFocusTbl			; Is the task already included in the IO focus?
+	ldt		$t1,IOFocusTbl			; Is the task already included in the IO focus?
 	and		$t2,$t1,$t0					; test bit
 	bne		$t2,$x0,.ret				; If so, don't add again
 	or		$t1,$t1,$t0					; set bit indicator
-	sw		$t1,IOFocusTbl
-	lw		$t0,IOFocusNdx			; get current index
-	sll		$t1,$a1,#10					; t1 = pointer to TCB
+	stt		$t1,IOFocusTbl
+	ldt		$t0,IOFocusNdx			; get current index
+	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
 	bge		$t0,$x0,.notEmpty		; is there one? (!= -1)
-	sw		$t1,IOFocusNdx			; no current index, so set equal to requester
-	sw		$t1,IOF_NEXT[$t1]		; and loop back to self
-	sw		$t1,IOF_PREV[$t1]
+	stt		$t1,IOFocusNdx			; no current index, so set equal to requester
+	stt		$t1,IOF_NEXT[$t1]		; and loop back to self
+	stt		$t1,IOF_PREV[$t1]
 	bra		.ret
 .notEmpty:
-	lw		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
-	sw		$t2,IOF_PREV[$t1]
-	sw		$t0,IOF_NEXT[$t1]
-	lw		$t2,IOF_PREV[$t0]
-	sw		$t1,IOF_NEXT[$t2]
-	sw		$t1,IOF_PREV[$t0]
+	ldt		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
+	stt		$t2,IOF_PREV[$t1]
+	stt		$t0,IOF_NEXT[$t1]
+	ldt		$t2,IOF_PREV[$t0]
+	stt		$t1,IOF_NEXT[$t2]
+	stt		$t1,IOF_PREV[$t0]
 .ret:
 	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
 ; ReleaseIOFocus called when the task no longer desires to be on the I/O
@@ -154,6 +143,8 @@ FMTK_ReleaseIOFocus:
 ; ForceReleaseIOFocus forces the release of the IO focus for a job
 ; different than the one currently running.
 ; 
+; Stack Space:
+;		2 words
 ; Parameters:
 ;		a1 = task id to release
 ; Returns:
@@ -163,33 +154,38 @@ FMTK_ReleaseIOFocus:
 FMTK_ForceReleaseIOFocus:
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
-	lw		$t1,IOFocusTbl
+	ldt		$t1,IOFocusTbl
 	and		$t2,$t1,$t0				; test bit for task
 	beq		$t2,$x0,.noFocus	; does it even have the focus?
 	xor		$t0,$t0,#-1				; get inverted mask
 	and		$t1,$t1,$t0				; clear bit for task
-	sw		$t1,IOFocusTbl
-	lw		$t1,IOFocusNdx		; check if the focus being released is the current
-	sll		$t0,$a1,#10				; io focus. If so, switch focus
+	stt		$t1,IOFocusTbl
+	ldt		$t1,IOFocusNdx		; check if the focus being released is the current
+	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
 	bne		$t0,$t1,.notSame
+	sub		$sp,$sp,#8
+	stt		$t0,[$sp]
+	stt		$t1,4[$sp]
 	call	SwitchIOFocusHelper
+	ldt		$t0,[$sp]
+	ldt		$t1,4[$sp]
+	add		$sp,$sp,#8
 .notSame:
-	lw		$t2,IOF_NEXT[$t0]
+	ldt		$t2,IOF_NEXT[$t0]
 	blt		$t2,$x0,.done
 	beq		$t2,$t0,.pjSame
-	lw		$t1,IOF_PREV[$t0]
-	sw		$t1,IOF_PREV[$t2]
-	sw		$t2,IOF_NEXT[$t1]
+	ldt		$t1,IOF_PREV[$t0]
+	stt		$t1,IOF_PREV[$t2]
+	stt		$t2,IOF_NEXT[$t1]
 	bra		.0001
 .pjSame:
 	ldi		$t1,#-1
-	sw		$t1,IOFocusNdx
+	stt		$t1,IOFocusNdx
 .0001:
 	ldi		$t1,#-1
-	sw		$t1,IOF_NEXT[$t0]	
-	sw		$t1,IOF_PREV[$t0]	
+	stt		$t1,IOF_NEXT[$t0]	
+	stt		$t1,IOF_PREV[$t0]	
 .done:
 .noFocus:
 	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx

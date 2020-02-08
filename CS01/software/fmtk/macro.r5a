@@ -81,7 +81,7 @@ macro mMbxRemoveTask
 	sw		$t0,4[$sp]
 	sw		$t1,8[$sp]
 	sw		$t2,12[$sp]
-	sll		$s1,$a0,#10						; tid to pointer
+	sll		$s1,$a0,#LOG_TCBSZ		; tid to pointer
 	lh		$t0,TCBWaitMbx[$s1]		; get mailbox handle
 	blt		$t0,$x0,.xit@					; handle good?
 	sll		$t0,$t0,#4						; convert to pointer
@@ -105,6 +105,8 @@ endm
 ; its timeout reached zero. Hence there is no adjustment of the following
 ; timeout made. Routine used only in the schedulerIRQ, so written as a macro.
 ;
+; Parameters:
+;		v0 = top timeout list
 ; Modifies:
 ;		v1,t0,t1,t2,t3
 ;	Returns:
@@ -112,29 +114,25 @@ endm
 ;------------------------------------------------------------------------------
 
 macro mPopTimeoutList
-	lh		$v0,TimeoutList				; anything on timeout list?
-	blt		$v0,$x0,.done@
-	ldi		$v1,#NR_TCB
-	bgeu	$v0,$v1,.done@
-	sll		$t0,$v0,#10						; tid to pointer
+	sll		$t0,$v0,#LOG_TCBSZ		; tid to pointer
 	lbu		$v1,TCBStatus[$t0]		; no longer a waiting status
-	and		$t1,$v1,#TS_WAITMSG
-	beq		$t1,$x0,.noWait@
-	mMbxRemoveTask
+	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
+	beqz	$t1,.noWait@
+	mMbxRemoveTask							; remove task from mailbox list
 .noWait@:
 	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
-	sb		$v1,TCBStatus[$t0]
-	lh		$v1,TCBNext[$t0]
-	sh		$v1,TimeoutList
-	ldi		$t1,#NR_TCB
+	stb		$v1,TCBStatus[$t0]
+	ldw		$v1,TCBNext[$t0]			; get next task on timeout list
+	stw		$v1,TimeoutList				; update list head
+	ldi		$t1,#NR_TCB						; check valid handle
 	bgeu	$v1,$t1,.done@
-	lh		$t1,TCBPrev[$t0]			; t1 = h->prev
-	sll		$v1,$v1,#10
-	sh		$t1,TCBPrev[$v1]			; TimeoutList->prev = h->prev
-	srl		$v1,$v1,#10
-	sll		$t1,$t1,#10
-	sh		$v1,TCBNext[$t1]			; h->prev->next = TimeoutList
-.done@:	
+	ldi		$t1,#-1								;
+	sll		$v1,$v1,#LOG_TCBSZ		; v1 = tid to pointer
+	stw		$t1,TCBPrev[$v1]			; TimeoutList->prev = -1
+.done@:
+	ldi		$t1,#-1								; reset next and prev indexes
+	stw		$t1,TCBNext[$t0]			; on popped task
+	stw		$t1,TCBPrev[$t0]
 endm
 
 

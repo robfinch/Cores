@@ -116,7 +116,6 @@ reg [31:0] ladr;		// linear address
 
 // Non visible registers
 reg MachineMode;
-reg UserS,UserD;
 reg [31:0] ir;			// instruction register
 reg [31:0] upc;			// user mode pc
 reg [31:0] spc;			// system mode pc
@@ -137,37 +136,70 @@ reg [WID-1:0] sregfile [0:15];		// segment registers
 reg [3:0] ASID;
 {+PGMAP}
 reg wrpagemap;
-wire [11:0] pagemap_ndx;
-wire [7:0] pagemapoa, pagemapo;
-wire [11:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : irfob;
+wire [12:0] pagemap_ndx;
+wire [8:0] pagemapoa, pagemapo;
+wire [12:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
 PagemapRam pagemap (
-  .clka(clk_g),    // input wire clka
-  .ena(1'b1),      // input wire ena
-  .wea(wrpagemap),      // input wire [0 : 0] wea
-  .addra(pagemapa),  // input wire [11 : 0] addra
-  .dina(ia[7:0]),    // input wire [7 : 0] dina
-  .douta(pagemapoa),  // output wire [7 : 0] douta
-  .clkb(clk_g),    // input wire clkb
-  .enb(1'b1),      // input wire enb
-  .web(1'b0),      // input wire [0 : 0] web
-  .addrb(pagemap_ndx),  // input wire [11 : 0] addrb
-  .dinb(8'h00),    // input wire [7 : 0] dinb
-  .doutb(pagemapo)  // output wire [7 : 0] doutb
+  .clka(clk_g),
+  .ena(1'b1),
+  .wea(wrpagemap),
+  .addra(pagemapa),
+  .dina(ia[8:0]),
+  .douta(pagemapoa),
+  .clkb(clk_g),
+  .enb(1'b1),
+  .web(1'b0),
+  .addrb(pagemap_ndx),
+  .dinb(9'h00),
+  .doutb(pagemapo)
 );
 reg palloc,pfree,pfreeall;
 wire pdone;
-wire [7:0] pam_pageo;
+wire [8:0] pam_pageo;
 PAM upam1 (
 	.rst(rst_i),
 	.clk(clk_g),
 	.alloc_i(palloc),
 	.free_i(pfree),
 	.freeall_i(pfreeall),
-	.pageno_i(ia[7:0]),
+	.pageno_i(ia[8:0]),
 	.pageno_o(pam_pageo),
 	.done(pdone)
 );
 {-PGMAP}
+reg decto, setto, getto;
+wire [31:0] to_out;
+wire [15:0] zl_out;
+wire to_done;
+Timeouter utmo1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_g),
+	.dec_i(decto),
+	.set_i(setto),
+	.qry_i(getto),
+	.tid_i(ia[3:0]),
+	.timeout_i(ib),
+	.timeout_o(to_out),
+	.zeros_o(zl_out),
+	.done_o(to_done)
+);
+reg insrdy, rmvrdy, getrdy;
+wire rdy_done;
+wire [4:0] rdy_out;
+ReadyList url1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_g),
+	.insert_i(insrdy),
+	.remove_i(rmvrdy),
+	.get_i(getrdy),
+	.tid_i(ia[3:0]),
+	.priority_i(ib[2:0]),
+	.tid_o(rdy_out),
+	.done_o(rdy_done)
+);
+
 {+F}
 reg [FPWID-1:0] fregfile [0:31];		// floating-point register file
 {-F}
@@ -175,9 +207,9 @@ reg [31:0] pc;			// generic program counter
 reg [31:0] ipc;			// pc value at instruction
 reg [2:0] rm;
 reg wrirf, wrfrf;
-wire [WID-1:0] irfoa = iregfile[{MachineMode&~UserS,Rs1}];
-wire [WID-1:0] irfob = iregfile[{MachineMode,Rs2}];
-wire [WID-1:0] irfoc = iregfile[{MachineMode,Rs3}];
+wire [WID-1:0] irfoa = iregfile[{regset[1],Rs1}];
+wire [WID-1:0] irfob = iregfile[{regset[2],Rs2}];
+wire [WID-1:0] irfoc = iregfile[{regset[3],Rs3}];
 {+F}
 wire [FPWID-1:0] frfoa = fregfile[Rs1];
 wire [FPWID-1:0] frfob = fregfile[Rs2];
@@ -185,7 +217,7 @@ wire [FPWID-1:0] frfoc = fregfile[Rs3];
 {-F}
 always @(posedge clk_i)
 if (wrirf && state==WRITEBACK)
-	iregfile[{MachineMode&~UserD,Rd}] <= res[WID-1:0];
+	iregfile[{regset[0],Rd}] <= res[WID-1:0];
 {+F}
 always @(posedge clk_i)
 if (wrfrf && state==WRITEBACK)
@@ -194,6 +226,7 @@ if (wrfrf && state==WRITEBACK)
 reg illegal_insn;
 
 // CSRs
+reg [3:0] regset;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
 reg wc_time_irq;
@@ -218,7 +251,6 @@ assign mip[31:8] = 24'h0;
 assign mip[6:4] = 3'b0;
 assign mip[3] = msip;
 assign mip[2:0] = 3'b0;
-reg [WID-1:0] sysarg [0:7];
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 wire ie = mstatus[0];
@@ -327,6 +359,7 @@ parameter PAM	 = 5'd17;
 parameter REGFETCH2 = 5'd18;
 parameter MEMORY3 = 5'd19;
 parameter MEMORY4 = 5'd20;
+parameter TMO = 5'd21;
 wire ld = state==EXECUTE;
 
 {+M}
@@ -558,10 +591,16 @@ if (rst_i) begin
 	palloc <= 1'b0;
 	pfree <= 1'b0;
 	pfreeall <= 1'b0;
-	UserS <= 1'b0;
-	UserD <= 1'b0;
+	regset <= 4'hF;
+	setto <= 1'b0;
+	getto <= 1'b0;
+	decto <= 1'b0;
+	insrdy <= 1'b0;
+	rmvrdy <= 1'b0;
+	getrdy <= 1'b0;
 end
 else begin
+decto <= 1'b0;
 ldd <= 1'b0;
 {+PGMAP}
 wrpagemap <= 1'b0;
@@ -570,7 +609,8 @@ if (pe_nmi)
 	nmif <= 1'b1;
 ld_time <= {ld_time[4:0],1'b0};
 wc_times <= wc_time;
-wc_time_irq_clr <= {wc_time_irq_clr,wc_time_irq};
+if (wc_time_irq==1'b0)
+	wc_time_irq_clr <= 1'd0;
 palloc <= 1'b0;
 pfree <= 1'b0;
 pfreeall <= 1'b0;
@@ -578,10 +618,10 @@ pfreeall <= 1'b0;
 if (MachineMode)
 	adr_o <= ladr;
 else begin
-	if (ladr[31])
+	if (ladr[31:24]==8'hFF)
 		adr_o <= ladr;
 	else
-		adr_o <= ladr;//{pagemapo & 8'hFF,ladr[10:0]};
+		adr_o <= {pagemapo & 9'h1FF,ladr[9:0]};
 end
 
 case (state)
@@ -592,8 +632,6 @@ case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 IFETCH:
 	begin
-		UserS <= 1'b0;
-		UserD <= 1'b0;
 		illegal_insn <= 1'b1;
 		ipc <= pc;
 		wrirf <= 1'b0;
@@ -602,7 +640,7 @@ IFETCH:
 		lcyc <= HIGH;
 		stb_o <= HIGH;
 		sel_o <= 4'hF;
-		ladr <= pc;
+		tPC();
 		state <= IFETCH2;
 		if (nmif) begin
 			nmif <= 1'b0;
@@ -654,10 +692,7 @@ IFETCH2:
 		lcyc <= LOW;
 		stb_o <= LOW;
 		sel_o <= 4'h0;
-		if (MachineMode || pc[31])
-			ladr <= pc;
-		else
-			ladr <= pc + {sregfile[15][WID-1:4],11'd0};
+		tPC();
 		ir <= dat_i[31:0];
 		state <= DECODE;
 	end
@@ -754,16 +789,10 @@ DECODE:
 					begin
 						wrirf <= 1'b1;
 						case(funct7)
-						7'd2:	UserS <= 1'b1;
-						7'd3:	UserD <= 1'b1;
+						7'd4:	wrirf <= 1'b1;
 						default:	;
 						endcase
 					end
-				3'd1:
-					case(funct7)
-					7'd0:	wrirf <= 1'b1;
-					default:	;
-					endcase
 				endcase
 			end
 		7'd19:
@@ -856,27 +885,63 @@ EXECUTE:
 				7'd1:	begin res <= pagemapoa; illegal_insn <= 1'b0; end
 {-PGMAP}
 				7'd2:	begin res <= ia; illegal_insn <= 1'b0; end
-				7'd3:	begin res <= ia; illegal_insn <= 1'b0; end
-				default:	;
-				endcase
-			3'd1:
-				case(funct7)
-				7'd0:	
+				7'd4:	
 					begin
 						palloc <= 1'b1;
 						state <= PAM;
 						illegal_insn <= 1'b0;
 					end
-				7'd1:
+				7'd5:
 					begin
 						pfree <= 1'b1;
 						state <= PAM;
 						illegal_insn <= 1'b0;
 					end
-				7'd2:
+				7'd6:
 					begin
 						pfreeall <= 1'b1;
 						state <= PAM;
+						illegal_insn <= 1'b0;
+					end
+				7'd8:
+					begin
+						setto <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd9:
+					begin
+						getto <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd10:	// GETZL
+					begin
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd11:
+					begin
+						decto <= 1'b1;
+						illegal_insn <= 1'b0;
+						state <= IFETCH;
+					end
+				7'd12:
+					begin
+						insrdy <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd13:
+					begin
+						rmvrdy <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd14:
+					begin
+						getrdy <= 1'b1;
+						state <= TMO;
 						illegal_insn <= 1'b0;
 					end
 				default:	;
@@ -1109,10 +1174,7 @@ EXECUTE:
 				lcyc <= HIGH;
 				stb_o <= HIGH;
 				sel_o <= ssel[3:0];
-				if (MachineMode || ea[31])
-					ladr <= ea;
-				else
-					ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+				tEA();
 				state <= MEMORY;
 			end
 		`STORE:
@@ -1121,10 +1183,7 @@ EXECUTE:
 				stb_o <= HIGH;
 				we_o <= HIGH;
 				sel_o <= ssel[3:0];
-				if (MachineMode || ea[31])
-					ladr <= ea;
-				else
-					ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+				tEA();
 				dat_o <= sdat[31:0];
 				case(funct3)
 				3'd0,3'd1,3'd2:	illegal_insn <= 1'b0;
@@ -1138,10 +1197,7 @@ EXECUTE:
 				lcyc <= HIGH;
 				stb_o <= HIGH;
 				sel_o <= ssel[3:0];
-				if (MachineMode || ea[31])
-					ladr <= ea;
-				else
-					ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+				tEA();
 				state <= MEMORY;
 			end
 		`STOREF:
@@ -1150,10 +1206,7 @@ EXECUTE:
 				stb_o <= HIGH;
 				we_o <= HIGH;
 				sel_o <= ssel[3:0];
-				if (MachineMode || ea[31])
-					ladr <= ea;
-				else
-					ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+				tEA();
 				dat_o <= sdat[31:0];
 				case(funct3)
 				3'd2:	illegal_insn <= 1'b0;
@@ -1171,10 +1224,7 @@ EXECUTE:
 				sel_o <= ssel[3:0];
 				sr_o <= funct5==5'd2;			// LR
 				cr_o <= funct5==5'd3;
-				if (MachineMode || ea[31])
-					ladr <= ea;
-				else
-					ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+				tEA();
 				dat_o <= sdat[31:0];
 				case(funct3)
 				3'd2:	illegal_insn <= 1'b0;
@@ -1195,6 +1245,8 @@ EXECUTE:
 						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 						mcause <= 4'h3;
 						illegal_insn <= 1'b0;
+						state <= IFETCH;
+						instret <= instret + 2'd1;
 					end
 {-EBREAK}
 				`ECALL:
@@ -1205,6 +1257,8 @@ EXECUTE:
 						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 						mcause <= 4'h8 + mstatus[2:1];
 						illegal_insn <= 1'b0;
+						state <= IFETCH;
+						instret <= instret + 2'd1;
 					end
 				`ERET:
 					if (MachineMode) begin
@@ -1212,6 +1266,8 @@ EXECUTE:
 						pc <= mepc;
 						mstatus[5:0] <= {2'b00,1'b1,mstatus[5:3]};
 						illegal_insn <= 1'b0;
+						state <= IFETCH;
+						instret <= instret + 2'd1;
 					end
 {+WFI}					
 				`WFI:
@@ -1235,7 +1291,7 @@ EXECUTE:
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
-						12'h80?:	begin res <= sysarg[Rs2[2:0]]; illegal_insn <= 1'b0; end
+						12'h800:	begin res <= regset; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
 						12'hC01,12'h701,12'hB01:	begin res <= wc_times[31: 0]; illegal_insn <= 1'b0; end
@@ -1267,7 +1323,16 @@ PAM:
 		res <= {24'h0,pam_pageo};
 		state <= WRITEBACK;
 	end
-
+TMO:
+	if (to_done&rdy_done) begin
+		illegal_insn <= 1'b0;
+		case({getto,getrdy})
+		2'b10:	res <= to_out;
+		2'b01:	res <= {{27{rdy_out[4]}},rdy_out};
+		default:	res <= {16'd0,zl_out};
+		endcase
+		state <= WRITEBACK;
+	end
 {+M}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide
@@ -1344,10 +1409,7 @@ MEMORY:
 			sel_o <= 4'h0;
 			sr_o <= 1'b0;
 			cr_o <= 1'b0;
-			if (MachineMode || pc[31])
-				ladr <= pc;
-			else
-				ladr <= pc + {sregfile[15][WID-1:4],11'd0};
+			tPC();
 			state <= WRITEBACK;
 			case(opcode)
 {+A}
@@ -1415,10 +1477,7 @@ MEMORY2_ACK:
 	end
 MEMORY3:
 	if (~ack_i) begin
-		if (MachineMode || pc[31])
-			ladr <= pc;
-		else
-			ladr <= pc + {sregfile[15][WID-1:4],11'd0};
+		tPC();
 		state <= MEMORY4;
 		case(opcode)
 		`LOAD:
@@ -1469,10 +1528,7 @@ MEMORY_WRITE:
 		stb_o <= HIGH;
 		we_o <= HIGH;
 		sel_o <= ssel[3:0];
-		if (MachineMode || ea[31])
-			ladr <= ea;
-		else
-			ladr <= ea + {sregfile[segsel][WID-1:4],11'd0};
+		tEA();
 		dat_o <= sdat[31:0];
 		state <= MEMORY_WRITEACK;
 	end
@@ -1483,10 +1539,7 @@ MEMORY_WRITEACK:
 			lcyc <= LOW;
 			we_o <= LOW;
 			sel_o <= 4'h0;
-			if (MachineMode || pc[31])
-				ladr <= pc;
-			else
-				ladr <= pc + {sregfile[15][WID-1:4],11'd0};
+			tPC();
 			state <= WRITEBACK;
 		end		
 		else
@@ -1507,10 +1560,7 @@ MEMORY_WRITE2ACK:
 		stb_o <= LOW;
 		we_o <= LOW;
 		sel_o <= 4'h0;
-		if (MachineMode || pc[31])
-			ladr <= pc;
-		else
-			ladr <= pc + {sregfile[15][WID-1:4],11'd0};
+		tPC();
 		state <= WRITEBACK;
 	end
 {-A}
@@ -1661,6 +1711,11 @@ FLOAT:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 WRITEBACK:
 	begin
+		getto <= 1'b0;
+		setto <= 1'b0;
+		insrdy <= 1'b0;
+		rmvrdy <= 1'b0;
+		getrdy <= 1'b0;
 		if (illegal_insn) begin
 			MachineMode <= 1'b1;
 			pc <= mtvec + {mstatus[2:1],6'h00};
@@ -1711,13 +1766,13 @@ WRITEBACK:
 				12'h300:	begin if (MachineMode) mstatus <= ia; end
 				12'h301:	begin if (MachineMode) mtvec <= {ia[31:2],2'b0}; end
 				12'h304:	begin if (MachineMode) mie <= ia; end
-				12'h321:	begin if (MachineMode) mtimecmp <= ia; wc_time_irq <= 1'b0; end
+				12'h321:	begin if (MachineMode) mtimecmp <= ia; end
 				12'h340:	begin if (MachineMode) mscratch <= ia; end
 				12'h341:	begin if (MachineMode) mepc <= ia; end
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
-				12'h80?:	begin sysarg[Rs2[2:0]] <= ia; end
+				12'h800:	begin if (MachineMode) regset <= ia[3:0]; end
 				default:	;
 				endcase
 {+F}
@@ -1740,7 +1795,8 @@ WRITEBACK:
 										rm <= rm | ia[7:5];
 									end
 				12'h304:	if (MachineMode) mie <= mie | ia;
-				12'h344:	if (MachineMode) maip <= maip | ia[3];
+				12'h344:	if (MachineMode) msip <= msip | ia[3];
+				12'h800:	if (MachineMode) regset <= regset | ia[3:0];
 				default: ;
 				endcase
 			3'd3,3'd7:
@@ -1763,6 +1819,7 @@ WRITEBACK:
 									end
 				12'h304:	if (MachineMode) mie <= mie & ~ia;
 				12'h344:	if (MachineMode) msip <= msip & ~ia[3];
+				12'h800:	if (MachineMode) regset <= regset & ~ia[3:0];
 				default: ;
 				endcase
 {-F}
@@ -1774,5 +1831,23 @@ WRITEBACK:
 	end
 endcase
 end
+
+task tEA;
+begin
+	if (MachineMode || ea[31:24]==8'hFF)
+		ladr <= ea;
+	else
+		ladr <= ea[27:0] + {sregfile[segsel][WID-1:4],10'd0};
+end
+endtask
+
+task tPC;
+begin
+	if (MachineMode || pc[31:24]==8'hFF)
+		ladr <= pc;
+	else
+		ladr <= pc[29:0] + {sregfile[{2'b11,pc[31:30]}][WID-1:4],10'd0};
+end
+endtask
 
 endmodule

@@ -68,7 +68,7 @@ ViaFuncTbl:
 
 ViaInit:
 	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	stt		$ra,[$sp]
 	ldi		$a0,#15							; VIA device
 	ldi		$a1,#ViaFuncTbl
 	call	CopyDevFuncTbl
@@ -76,17 +76,17 @@ ViaInit:
 	; input.
 	ldi		$t1,VIA
 	ldi		$t0,#$000000FF
-	sw		$t0,VIA_DDRA[$t1]
+	stt		$t0,VIA_DDRA[$t1]
 	ldi		$t0,#1							; select timer 3 access
-	sb		$t0,VIA_PCR+1[$t1]
+	stb		$t0,VIA_PCR+1[$t1]
 	ldi		$t0,#$1F
-	sb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
+	stb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
 	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
-	sw		$t0,VIA_T1CL[$t1]
-	sw		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
+	stt		$t0,VIA_T1CL[$t1]
+	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
 	ldi		$t0,#$180						; emable timer3 interrupts
-	sw		$t0,VIA_IER[$t1]
-	lw		$ra,[$sp]
+	stt		$t0,VIA_IER[$t1]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 
@@ -96,13 +96,17 @@ ViaInit:
 
 ViaIRQ:
 	; Was it the VIA that caused the interrupt?
-	lb		$t0,VIA+VIA_IFR
-	bge		$t0,$x0,.0003			; no
-	lw		$t0,VIA+VIA_T1CL	; yes, clear interrupt
-	lw		$t0,milliseconds
+	ldi		$t1,VIA
+	ldb		$t0,VIA_IFR[$t1]
+	bge		$t0,$x0,.0003				; no
+	ldi		$t0,#1							; select timer 3 access
+	stb		$t0,VIA_PCR+1[$t1]
+	ldt		$t0,VIA_T1CL[$t1]		; yes, clear interrupt
+	ldt		$t0,milliseconds
 	add		$t0,$t0,#30
-	sw		$t0,milliseconds
-	sw		$t0,switchflag
+	stt		$t0,milliseconds
+	stt		$t0,switchflag
 	call	FMTK_SchedulerIRQ
 .0003:
+	csrrc	$x0,#$800,#15				; switch to user regset
 	eret

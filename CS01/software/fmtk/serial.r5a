@@ -216,26 +216,26 @@ SerialGetChar:
 ;------------------------------------------------------------------------------
 
 SerialPeekChar:
-		sub		$sp,$sp,#12
-		sw		$ra,[$sp]
-		sw		$v1,4[$sp]
-		sw		$s1,8[$sp]
-		csrrc	$s1,#$300,#1				; disable interrupts
-		lbu		$v1,SerHeadRcv			; check if anything is in buffer
-		lbu		$v0,SerTailRcv
-		beq		$v0,$v1,.noChars		; no?
-		lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
-		bra		.xit
+	sub		$sp,$sp,#12
+	sw		$ra,[$sp]
+	sw		$v1,4[$sp]
+	sw		$s1,8[$sp]
+	csrrc	$s1,#$300,#1				; disable interrupts
+	lbu		$v1,SerHeadRcv			; check if anything is in buffer
+	lbu		$v0,SerTailRcv
+	beq		$v0,$v1,.noChars		; no?
+	lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
+	bra		.xit
 .noChars:
 .0001:
-		ldi		$v0,#-1
+	ldi		$v0,#-1
 .xit
-		csrrw	$x0,#$300,$s1				; restore interrupts
-		lw		$ra,[$sp]
-		lw		$v1,4[$sp]
-		lw		$s1,8[$sp]
-		add		$sp,$sp,#12
-		ret
+	csrrw	$x0,#$300,$s1				; restore interrupts
+	lw		$ra,[$sp]
+	lw		$v1,4[$sp]
+	lw		$s1,8[$sp]
+	add		$sp,$sp,#12
+	ret
 
 ;------------------------------------------------------------------------------
 ; SerialPeekChar
@@ -253,25 +253,25 @@ SerialPeekChar:
 ;------------------------------------------------------------------------------
 
 SerialPeekCharDirect:
-		sub		$sp,$sp,#12
-		sw		$ra,[$sp]
-		sw		$v1,4[$sp]
-		sw		$s1,8[$sp]
-		csrrc	$s1,#$300,#1				; disable interrupts
-		lb		$v0,UART+UART_STAT
-		and		$v0,$v0,#8					; look for Rx not empty
-		beq		$v0,$x0,.0001
-		lb		$v0,UART+UART_TRB
-		bra		.xit
+	sub		$sp,$sp,#12
+	sw		$ra,[$sp]
+	sw		$v1,4[$sp]
+	sw		$s1,8[$sp]
+	csrrc	$s1,#$300,#1				; disable interrupts
+	lb		$v0,UART+UART_STAT
+	and		$v0,$v0,#8					; look for Rx not empty
+	beq		$v0,$x0,.0001
+	lb		$v0,UART+UART_TRB
+	bra		.xit
 .0001:
-		ldi		$v0,#-1
+	ldi		$v0,#-1
 .xit
-		csrrw	$x0,#$300,$s1				; restore interrupts
-		lw		$ra,[$sp]
-		lw		$v1,4[$sp]
-		lw		$s1,8[$sp]
-		add		$sp,$sp,#12
-		ret
+	csrrw	$x0,#$300,$s1				; restore interrupts
+	lw		$ra,[$sp]
+	lw		$v1,4[$sp]
+	lw		$s1,8[$sp]
+	add		$sp,$sp,#12
+	ret
 
 ;------------------------------------------------------------------------------
 ; SerialPutChar
@@ -291,32 +291,32 @@ SerialPeekCharDirect:
 
 SerialPutChar:
 	sub		$sp,$sp,#12
-	sw		$v0,[$sp]
-	sw		$ra,4[$sp]
-	sw		$v1,8[$sp]
+	stt		$v0,[$sp]
+	stt		$ra,4[$sp]
+	stt		$v1,8[$sp]
 .0002:
-	ldi		$v1,#-1
+	ldi		$v1,#10
 .0001:
-	sub		$v1,$v1,#1
-	beq		$v1,$x0,.goSleep
-	lb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
+;	sub		$v1,$v1,#1
+;	beq		$v1,$x0,.goSleep
+	ldb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$v0,$v0,#16					; bit #4 of the status reg
 	beq		$v0,$x0,.0001				; branch if transmitter is not empty
-	sb		$a3,UART+UART_TRB		; send the byte
-	lw		$v0,[$sp]
-	lw		$ra,4[$sp]
-	lw		$v1,8[$sp]
+	stb		$a3,UART+UART_TRB		; send the byte
+	ldt		$v0,[$sp]
+	ldt		$ra,4[$sp]
+	ldt		$v1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 .goSleep:
 	sub		$sp,$sp,#8
-	sw		a0,[$sp]
-	sw		a1,4[$sp]
+	stt		a0,[$sp]
+	stt		a1,4[$sp]
 	ldi		a0,#5								; sleep function
 	ldi		a1,#1								; 1 tick
 	ecall
-	lw		a0,[$sp]
-	lw		a1,4[$sp]
+	ldt		a0,[$sp]
+	ldt		a1,4[$sp]
 	add		$sp,$sp,#8
 	bra		.0002
 	
@@ -325,8 +325,8 @@ SerialPutChar:
 ;------------------------------------------------------------------------------
 
 SerialRcvCount:
-	lbu		$v0,SerTailRcv	; v0 = tail index
-	lbu		$v1,SerHeadRcv	; v1 = head index
+	ldbu	$v0,SerTailRcv	; v0 = tail index
+	ldbu	$v1,SerHeadRcv	; v1 = head index
 	sub		$t0,$v0,$v1
 	bge		$t0,$x0,.xit
 	ldi		$t0,#256
@@ -369,6 +369,7 @@ SerialIRQ:
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
+	csrrc	$x0,#$800,#15				; switch to user regset
 	eret
 	
 nmeSerial:

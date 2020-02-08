@@ -78,13 +78,11 @@ FMTK_IO:
 	sll		$v1,$a2,#2					; function number *4
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	or		$v0,$v0,$v1
-	lw		$v0,[$v0]
+	ldt		$v0,[$v0]
 	beq		$v0,$x0,.badFunc
 	call	[$v0]
 .xit:
-	mtu		$v0,$v0
-	mtu		$v1,$v1
-	eret
+	jmp		ERETx
 .badFunc:
 	ldi		$v0,#E_BadDevOp
 	bra		.xit
@@ -103,8 +101,8 @@ CopyDevFuncTbl:
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	ldi		$t0,#32							; 32 functions to copy
 .again:
-	lw		$t2,[$a1]
-	sw		$t2,[$v0]
+	ldt		$t2,[$a1]
+	stt		$t2,[$v0]
 	add		$a1,$a1,#4
 	add		$v0,$v0,#4
 	sub		$t0,$t0,#1

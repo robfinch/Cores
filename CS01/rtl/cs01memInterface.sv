@@ -55,6 +55,7 @@ parameter RD2 = 4'd7;
 reg [3:0] memCount;
 reg [31:0] memDat;
 reg memT;		// tri-state for write
+reg [3:0] sel;
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -62,6 +63,7 @@ if (rst_i) begin
 	RamWEn <= HIGH;
 	RamOEn <= HIGH;
 	RamCEn <= HIGH;
+	sel <= 4'b0;
 	memCount <= 4'd0;
 	memT <= HIGH;
 	ack_o <= 1'b0;
@@ -79,7 +81,12 @@ IDLE:
 			RamCEn <= LOW;											// tell the ram it's selected
 			MemAdr <= {adr_i[31:2],2'b0};
 			memDat <= dat_i;
-			memCount <= 4'd0;
+			casez(sel_i)
+			4'b???1:	begin memCount <= 4'd0; MemAdr[1:0] <= 2'b00; sel <= sel_i; end
+			4'b??10:	begin memCount <= 4'd1;	MemAdr[1:0] <= 2'b01; sel <= {1'b0,sel_i[3:1]}; end
+			4'b?100:	begin memCount <= 4'd2;	MemAdr[1:0] <= 2'b10; sel <= {2'b0,sel_i[3:2]}; end
+			4'b1000:	begin memCount <= 4'd3; MemAdr[1:0] <= 2'b11; sel <= {3'b0,sel_i[3]}; end
+			endcase
 			state <= we_i ? WR1 : RD2;
 			if (!we_i)						// For a read cycle enable the ram's output drivers
 				RamOEn <= LOW;
@@ -100,7 +107,8 @@ RD1:
 		endcase
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
 		memCount <= memCount + 4'd1;
-		if (memCount==4'd3)
+		sel <= {1'b0,sel[3:1]};
+		if (sel[3:1]==3'b000)
 			state <= RWDONE;
 		else
 			state <= RD2;
@@ -130,8 +138,9 @@ WR3:
 	begin
 		memDat <= {8'h00,memDat[31:8]};
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
+		sel <= {1'b0,sel[3:1]};
 		memCount <= memCount + 2'd1;
-		if (memCount==4'd3)
+		if (sel[3:1]==3'b000)
 			state <= RWDONE;
 		else
 			state <= WR1;

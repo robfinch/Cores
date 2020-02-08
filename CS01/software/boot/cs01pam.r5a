@@ -1,0 +1,123 @@
+;------------------------------------------------------------------------------
+; Allocate a single page of memory. Available memory is indicated by a bitmmap
+; called the PAM for page allocation map.
+; There's only eight words to check so an unrolled loop works here.
+;
+; Modifies:
+;		t0,t1,t2
+; Returns:
+;		v0 = page allocated
+;------------------------------------------------------------------------------
+;
+AllocPage:
+	sub		$sp,$sp,#4
+	sw		$ra,[$sp]
+	lw		$t0,PAM
+	ldi		$t1,#$FFFFFFFF
+	beq		$t0,$t1,.chkPam4
+	call	BitIndex
+	sw		$t0,PAM
+	bra		.0001
+.chkPam4:
+	lw		$t0,PAM+4
+	beq		$t0,$t1,.chkPam8
+	call	BitIndex
+	sw		$t0,PAM+4
+	add		$v0,$v0,#32
+	bra		.0001
+.chkPam8:
+	lw		$t0,PAM+8
+	beq		$t0,$t1,.chkPam12
+	call	BitIndex
+	sw		$t0,PAM+8
+	add		$v0,$v0,#64
+	bra		.0001
+.chkPam12:
+	lw		$t0,PAM+12
+	beq		$t0,$t1,.chkPam16
+	call	BitIndex
+	sw		$t0,PAM+12
+	add		$v0,$v0,#96
+	bra		.0001
+.chkPam16:
+	lw		$t0,PAM+16
+	beq		$t0,$t1,.chkPam20
+	call	BitIndex
+	sw		$t0,PAM+16
+	add		$v0,$v0,#128
+	bra		.0001
+.chkPam20:
+	lw		$t0,PAM+20
+	beq		$t0,$t1,.chkPam24
+	call	BitIndex
+	sw		$t0,PAM+20
+	add		$v0,$v0,#160
+	bra		.0001
+.chkPam24:
+	lw		$t0,PAM+24
+	beq		$t0,$t1,.chkPam28
+	call	BitIndex
+	sw		$t0,PAM+24
+	add		$v0,$v0,#192
+	bra		.0001
+.chkPam28:
+	lw		$t0,PAM+28
+	beq		$t0,$t1,.chkPamDone
+	call	BitIndex
+	sw		$t0,PAM+28
+	add		$v0,$v0,#224
+	bra		.0001
+.chkPamDone:
+	ldi		$v0,#0						; no memory available
+.0001:
+	lw		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+; Returns:
+;		v0 = bit index of allocated page
+;
+BitIndex:
+	ldi		$v0,#0
+.0001:
+	and		$t2,$t0,#1
+	beq		$t2,$x0,.foundFree
+	srl		$t0,$t0,#1
+	or		$t0,$t0,#$80000000	; do a rotate, we know bit = 1
+	add		$v0,$v0,#1
+	bra		.0001
+.foundFree:
+	or		$t0,$t0,#1					; mark page allocated
+	mov		$t1,$v0
+	beq		$t1,$x0,.0003
+.0004:
+	sll		$t0,$t0,#1					; do a rotate
+	or		$t0,$t0,#1					; we know bit = 1
+	sub		$t1,$t1,#1
+	bne		$t1,$x0,.0004
+.0003:
+	ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = page number to free
+; Modifies:
+;		v0,v1,t0
+;------------------------------------------------------------------------------
+
+FreePage:
+	ldi		$v0,#511						; last page is permanently allocated to system stack
+	bgeu	$a0,$v0,.xit
+	ldi		$v0,#64
+	bltu	$a0,$v0,.xit				; first 64 pages (64kB) allocated permanently to system
+	srl		$v0,$a0,#5					; v0 = word
+	and		$v1,$a0,#31					; v1 = bit no
+	ldi		$t0,#1							; make a bitmask
+	sll		$t0,$t0,$v1
+	xor		$t0,$t0,#-1					; invert mask
+	lw		$v1,PAM[$v0]
+	and		$v1,$v1,$t0					; clear bit
+	sw		$v1,PAM[$v0]				; save PAM word back
+.xit:
+	ret
+

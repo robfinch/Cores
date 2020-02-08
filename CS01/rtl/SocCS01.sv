@@ -81,6 +81,7 @@ wire cs_rom;
 wire cs_io;
 wire cs_mem;
 wire cs_via;
+wire cs_sema;
 wire ack_rom;
 wire ack_mem;
 wire uart_irq, via_irq;
@@ -88,6 +89,7 @@ wire ack_uart, ack_via;
 wire [31:0] uart_dato;
 wire [31:0] via_dato;
 wire [31:0] mem_dato;
+wire [7:0] sema_dato;
 wire [31:0] pa;
 wire [31:0] pa_i;
 wire [31:0] pa_o;
@@ -133,6 +135,10 @@ assign clk = clk50;
 //
 // I/O Map
 //
+// FFDB0000	+---------------+
+//          |  semaphores   |
+//          +---------------+
+//
 // FFDC0600	+---------------+
 //          |    VIA6522    |
 //          +---------------+
@@ -147,9 +153,10 @@ assign cs_rom = cyc && stb && adr[31:16]==16'b1111_1111_1111_1100;	// $FFFCxxxx 
 assign cs_mem = cyc && stb && adr[31:16] < 16'h0008;
 assign cs_via = cyc && stb && adr[31:8]==24'hFFDC06;
 assign cs_uart = cyc && stb && adr[31:4]==28'hFFDC0A0;
+assign cs_sema = cyc && stb && adr[31:12]==20'hFFDB0;
 
 (* ram_style="block" *)
-reg [31:0] rommem [0:4095];
+reg [31:0] rommem [0:5119];
 wire [31:0] rom_dato;
 initial begin
 `include "../software/boot/cs01rom.ve0"
@@ -157,7 +164,7 @@ end
 reg [31:0] adrr;
 always @(posedge clk)
 	adrr <= adr;
-assign rom_dato = rommem[adrr[13:2]];
+assign rom_dato = rommem[adrr[14:2]];
 ack_gen #(.READ_STAGES(3), .WRITE_STAGES(3)) uag1
 (
  .clk_i(clk),
@@ -238,6 +245,19 @@ cs01memInterface umi1
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
+semamem usema1
+(
+	.clk(clk),
+	.cs(cs_sema),
+	.wr(we),
+	.ad(adr[9:0]),
+	.i(dat_o[7:0]),
+	.o(sema_dato)
+);
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
 via6522 uvia1
 (
 	.rst_i(rst),
@@ -300,14 +320,15 @@ uart6551 uuart1
 // -----------------------------------------------------------------------------
 
 always @(posedge clk)
-	ack <= ack_rom|ack_mem|ack_via|ack_uart;
+	ack <= ack_rom|ack_mem|ack_via|ack_uart|cs_sema;
 
 always @(posedge clk)
-casez({cs_rom,cs_mem,cs_via,cs_uart})
-4'b1???:	dat_i <= rom_dato;
-4'b01??:	dat_i <= mem_dato;
-4'b001?:	dat_i <= via_dato;
-4'b0001:	dat_i <= uart_dato;
+casez({cs_rom,cs_mem,cs_via,cs_uart,cs_sema})
+5'b1????:	dat_i <= rom_dato;
+5'b01???:	dat_i <= mem_dato;
+5'b001??:	dat_i <= via_dato;
+5'b0001?:	dat_i <= uart_dato;
+5'b00001:	dat_i <= {24'd0,sema_dato};
 default:	dat_i <= 32'hCCEECCEE;
 endcase
 
@@ -317,6 +338,7 @@ friscv_wb ucpu1
 	.clk_i(clk),
 	.wc_clk_i(clk20),
 	.irq_i(uart_irq|via_irq),
+	.cause_i(uart_irq ? 8'd37 : via_irq ? 8'd47 : 8'd00),
 	.cyc_o(cyc),
 	.stb_o(stb),
 	.ack_i(ack),
@@ -336,7 +358,8 @@ CS01_ILA uila1 (
 	.probe2(ucpu1.cyc_o), // input wire [0:0]  probe2 
 	.probe3(ucpu1.we_o), // input wire [0:0]  probe3 
 	.probe4(ucpu1.adr_o), // input wire [31:0]  probe4 
-	.probe5(ucpu1.dat_o) // input wire [31:0]  probe5
+	.probe5(ucpu1.dat_o), // input wire [31:0]  probe5
+	.probe6(ucpu1.mepc)
 );
 
 

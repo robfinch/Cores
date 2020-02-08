@@ -57,9 +57,20 @@ MachineStart:
 		csrrw $x0,#$301,$t0		; set tvec
 		ldi		$t0,#UserStart
 		csrrw	$x0,#$341,$t0		; set mepc
-		csrrs	$x0,#$300,#1		; enable interrupts
+		;csrrs	$x0,#$300,#8		; enable interrupts (on eret)
+		csrrc	$x0,#$800,#15		; select user register set
 		eret									; switch to user mode
 UserStart:
+		ldi		$a0,#1					; start TinyBasic
+		ldi		$a1,#32000
+		ldi		$a2,#CSTART
+		ecall
+		ldi		$a0,#1
+		ldi		$a1,#24000
+		ldi		$a2,#UserStart2
+		ecall
+;		wfi
+UserStart2:
 		ldi		$a0,#14							; Get current tid
 		ecall
 		mov		$a1,$v1
@@ -77,10 +88,10 @@ UserStart:
 .0002:
 		ldi		$a0,#msgStart				; spit out a startup message
 		call	PutString
-		ldi		a0,#1
-		ldi		a1,#24000
-		ldi		a2,#Monitor
-		ecall
+;		ldi		a0,#1
+;		ldi		a1,#24000
+;		ldi		a2,#Monitor
+;		ecall
 		call	DumpReadyList
 		bra		MonEntry
 
@@ -91,6 +102,12 @@ UserStart:
 		mov		$a0,$v0
 		call	SerialPutChar
 		bra		.0003
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+IdleTask:
+	bra		IdleTask
 
 ;------------------------------------------------------------------------------
 ; Get a character from input device. Checks for a CTRL-T which indicates to
@@ -104,14 +121,14 @@ UserStart:
 
 Getch:
 	sub		$sp,$sp,#12
-	sw		$ra,[$sp]
-	sw		$a0,4[$sp]
-	sw		$a1,8[$sp]
-	mWaitForFocus
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	stt		$a1,8[$sp]
+;	mWaitForFocus
 	call	SerialGetChar
-	lw		$ra,[$sp]
-	lw		$a0,4[$sp]
-	lw		$a1,8[$sp]
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	ldt		$a1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 
@@ -156,22 +173,22 @@ Putch:
 
 fputc:
 	sub		$sp,$sp,#24
-	sw		$ra,[$sp]
-	sw		$v0,4[$sp]
-	sw		$a0,8[$sp]
-	sw		$v1,12[$sp]
-	sw		$a1,16[$sp]
-	sw		$a2,20[$sp]
-	mWaitForFocus
+	stt		$ra,[$sp]
+	stt		$v0,4[$sp]
+	stt		$a0,8[$sp]
+	stt		$v1,12[$sp]
+	stt		$a1,16[$sp]
+	stt		$a2,20[$sp]
+;	mWaitForFocus
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
-	lw		$ra,[$sp]
-	lw		$v0,4[$sp]
-	lw		$a0,8[$sp]
-	lw		$v1,12[$sp]
-	lw		$a1,16[$sp]
-	lw		$a2,20[$sp]
+	ldt		$ra,[$sp]
+	ldt		$v0,4[$sp]
+	ldt		$a0,8[$sp]
+	ldt		$v1,12[$sp]
+	ldt		$a1,16[$sp]
+	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
 
@@ -191,6 +208,10 @@ MonEntry:
 ;		call	PutString
 
 Monitor:
+		csrrc	$x0,#$300,#1
+		call	DumpReadyList
+		call	DumpTimeoutList
+		csrrs	$x0,#$300,#1
 		ldi		$s1,#0					; s1 = input pointer
 		ldi		$a0,#CR
 		call	Putch
@@ -272,9 +293,10 @@ Monitor:
 		call	PutHexByte
 		ldi		$a0,#msgTaskStart
 		call	PutString
-		ldi		$a0,#5					; Reschedule task
-		ldi		$a1,#1					; sleep(0)
-		ecall
+		call  DumpReadyList
+		;ldi		$a0,#5					; Reschedule task
+		;ldi		$a1,#1					; sleep(0)
+		;ecall
 		jmp		Monitor
 .0006:
 		ldi		$t1,#'D'
@@ -556,6 +578,7 @@ PutString:
 	code
 	align	4
 IRQRout:
+	csrrs	$x0,#$800,#15		; select machine regs
 	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	csrrw	$t0,#$342,$x0			; get cause code
 	blt		$t0,$x0,.isIRQ		; irq or ecall?
@@ -568,6 +591,7 @@ IRQRout:
 	beq		$t0,$x0,.noIRQ	; make sure there's an address to go to
 	jmp		[$t0]						; jump to the IRQ routine
 .noIRQ:
+	csrrc	$x0,#$800,#15
 	eret
 
 ;------------------------------------------------------------------------------

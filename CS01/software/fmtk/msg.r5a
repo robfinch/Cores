@@ -63,7 +63,7 @@ FMTK_AllocMbx:
 	slt		$t1,$t0,#mbxs_end
 	bne		$t1,$x0,.nxt
 	ldi		$v0,#E_NoMoreMbx
-	mtu		$v0,$v0
+	mov		u:$v0,m:$v0
 	eret
 .noOwner:
 	sb		$a1,MBX_OWNER[$t0]
@@ -73,12 +73,10 @@ FMTK_AllocMbx:
 	call	VirtToPhys
 	sw		$t5,[$v0]
 	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 .badArg:
 	ldi		$v0,#E_Arg
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -94,7 +92,7 @@ FMTK_FreeMbx:
 .0002:
 	and		$s3,$s6,#1
 	beq		$s3,$x0,.0001
-	sll		$s5,$s2,#10						; tid to pointer
+	sll		$s5,$s2,#LOG_TCBSZ		; tid to pointer
 	lbu		$v0,TCBStatus[$s5]
 	and		$v0,$v0,#~TS_WAITMSG	; no longer waiting
 	sb		$v0,TCBStatus[$s5]
@@ -112,12 +110,10 @@ FMTK_FreeMbx:
 	add		$s2,$s2,#1
 	bltu	$s2,$s4,.0002
 	ldi		$v0,#E_Ok
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 .badMbx:
 	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;------------------------------------------------------------------------------
 ; Send a message to a mailbox.
@@ -149,7 +145,7 @@ FMTK_SendMsg:
 .0001:
 	and		$s3,$t5,#1					; is tid waiting?
 	beq		$s3,$x0,.nxtTid
-	sll		$s3,$s1,#10					; convert tid to TCB pointer
+	sll		$s3,$s1,#LOG_TCBSZ	; convert tid to TCB pointer
 	sw		$a2,TCBMsgD1[$s3]		; copy message to TCB
 	sw		$a3,TCBMsgD2[$s3]
 	sw		$a4,TCBMsgD3[$s3]
@@ -195,8 +191,7 @@ FMTK_SendMsg:
 .badMbx:
 	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
 .xit:
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -269,8 +264,7 @@ PeekMsg:
 
 FMTK_PeekMsg:
 	call	PeekMsg
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 
 ;------------------------------------------------------------------------------
 ; Calling WaitMsg will cause the task to be queued at the mailbox and a task
@@ -290,23 +284,22 @@ FMTK_WaitMsg:
 	call	PeekMsg							; check for a message, return if available
 	ldi		$t1,#E_NoMsg
 	beq		$v0,$t1,.qt					; no message? Then go queue task
-	mtu		$v0,$v0
-	eret
+	jmp		ERETx
 .qt:
 	mGetCurrentTid
 	ldi		$t2,#1
 	sll		$t2,$t2,$v0
 	sll		$t3,$a1,#4					; convert handle to pointer
 	add		$t3,$t3,#mbxs
-	lw		$t4,MBX_WTIDS[$t3]	; get waiting task list
+	ldt		$t4,MBX_WTIDS[$t3]	; get waiting task list
 	or		$t4,$t4,$t2					; set bit for tid
-	sw		$t4,MBX_WTIDS[$t3]	; save task list
-	sll		$t4,$v0,#10					; convert tid to TCB pointer
-	lbu		$t3,TCBStatus[$t4]
+	stt		$t4,MBX_WTIDS[$t3]	; save task list
+	sll		$t4,$v0,#LOG_TCBSZ	; convert tid to TCB pointer
+	ldbu	$t3,TCBStatus[$t4]
 	or		$t3,$t3,#TS_WAITMSG	; set waiting for message status
 	and		$t3,$t3,#~TS_READY	; not ready
-	sb		$t3,TCBStatus[$t4]
-	sb		$a1,TCBWaitMbx[$t4]	; set mailbox task is waiting for
+	stb		$t3,TCBStatus[$t4]
+	stb		$a1,TCBWaitMbx[$t4]	; set mailbox task is waiting for
 	mov		$a1,$a5
 	; Continue by switching tasks
 	jmp		FMTK_Sleep
