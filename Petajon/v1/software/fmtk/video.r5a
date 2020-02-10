@@ -1,0 +1,177 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+CursorX		equ		$19900
+CursorY		equ		$19901
+DispAttr	equ		$19908
+TC64CursorAddr	equ		$FFD1DF1C
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	align	8
+VideoFuncTbl:
+	dco		0							; no operation
+	dco		0							; setup
+	dco		0							; initialize
+	dco		0							; status
+	dco		0							; media check
+	dco		0							; build BPB
+	dco		0							; open
+	dco		0							; close
+	dco		0							; get char
+	dco		0							; Peek char
+	dco		0							; get char direct
+	dco		0							; peek char direct
+	dco		0							; input status
+	dco		VideoPutChar	; Put char
+	dco		0							; reserved
+	dco		0							; set position
+	dco		0							; read block
+	dco		0							; write block
+	dco		0							; verify block
+	dco		0							; output status
+	dco		0							; flush input
+	dco		0							; flush output
+	dco		VideoIRQ			; IRQ routine
+	dco		0							; Is removable
+	dco		0							; ioctrl read
+	dco		0							; ioctrl write
+	dco		0							; output until busy
+	dco		0							; 27
+	dco		0
+	dco		0
+	dco		0
+	dco		0							; 31
+
+;------------------------------------------------------------------------------
+; VideoInit
+;
+; Initialize the versatile interface adapter.
+;------------------------------------------------------------------------------
+
+VideoInit:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#2							; Video device
+	ldi		$a1,#ViaFuncTbl
+	call	CopyDevFuncTbl
+	stb		$x0,CursorX
+	stb		$x0,CursorY
+	ldi		$t0,#$0020FFFF
+	stt		$x0,DispAttr
+	stt		$t0,DispAttr+4
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+UpdateCursorPos:
+	ldbu	$t0,CursorY
+	ldi		$t1,#56
+	mul		$t0,$t0,$t1
+	ldbu	$t1,CursorX
+	add		$t0,$t0,$t1
+	stw		$t0,TC64CursorAddr
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+VideoPutChar:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$t0,#CR
+	beq		$a0,$t0,.doCR
+	ldi		$t0,#$0A				; line feed
+	beq		$a0,$t0,.doLF
+	ldi		$t0,#$FFD00000
+	ldi		$t0,#$91
+	beq		$a0,$t0,.cursorRight
+	ldbu	$t1,CursorX
+	sll		$t1,$t1,#3
+	add		$t0,$t0,$t1
+	ldbu	$t1,CursorY
+	ldi		$t2,#56*8
+	mul		$t1,$t1,$t2
+	add		$t0,$t0,$t1
+	ldo		$t1,DispAttr
+	or		$t1,$t1,$a1
+	sto		$t1,[$t0]
+	ldbu	$t0,CursorX
+	add		$t0,$t0,#1
+	ldi		$t1,#56
+	blt		$t0,$t1,.saveX
+	ldi		$t0,#0
+.doLF1:
+	ldbu	$t2,CursorY
+	add		$t2,$t2,#1
+	ldi		$t1,#29
+	blt		$t2,$t1,.saveY
+	; scroll up
+	ldi		$t3,#56*29
+	ldi		$t4,#$FFD00000
+.0001:
+	ldo		$t5,56*8[$t4]
+	sto		$t5,[$t4]
+	add		$t4,$t4,#8
+	sub		$t3,$t3,#1
+	bgt		$t3,$x0,.0001
+	ret
+.saveY:
+	stb		$t2,CursorY
+.saveX:
+	stb		$t0,CursorX
+	ret
+.doCR:
+	stb		$x0,CursorX
+	call	UpdateCursorPos
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+.doLF:
+	ldbu	$t0,CursorX
+	bra		.doLF1
+.cursorRight:
+	ldbu	$t0,CursorX
+	add		$t0,$t0,#1
+	ldi		$t1,#55
+	bge		$t0,$t1,.cr1
+	stb		$t0,CursorX
+	call	UpdateCursorPos
+.cr1:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+VideoIRQ:
+	; Was it the Video that caused the interrupt?
+.0003:
+	csrrc	$x0,#$800,#15				; switch to user regset
+	eret

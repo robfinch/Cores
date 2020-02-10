@@ -1,0 +1,6 @@
+MAX_TID		EQU		63
+NR_TCB		EQU		64
+NR_MBX		EQU		256
+LOG_TCBSZ	EQU		10
+LOG_PGSZ	EQU		10
+OSPAGES		EQU		2			; pages of memory dedicated to OS

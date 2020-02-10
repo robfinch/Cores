@@ -1,0 +1,112 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	align	8
+ViaFuncTbl:
+	dco		0							; no operation
+	dco		0							; setup
+	dco		0							; initialize
+	dco		0							; status
+	dco		0							; media check
+	dco		0							; build BPB
+	dco		0							; open
+	dco		0							; close
+	dco		0							; get char
+	dco		0							; Peek char
+	dco		0							; get char direct
+	dco		0							; peek char direct
+	dco		0							; input status
+	dco		0							; Put char
+	dco		0							; reserved
+	dco		0							; set position
+	dco		0							; read block
+	dco		0							; write block
+	dco		0							; verify block
+	dco		0							; output status
+	dco		0							; flush input
+	dco		0							; flush output
+	dco		ViaIRQ				; IRQ routine
+	dco		0							; Is removable
+	dco		0							; ioctrl read
+	dco		0							; ioctrl write
+	dco		0							; output until busy
+	dco		0							; 27
+	dco		0
+	dco		0
+	dco		0
+	dco		0							; 31
+
+;------------------------------------------------------------------------------
+; ViaInit
+;
+; Initialize the versatile interface adapter.
+;------------------------------------------------------------------------------
+
+ViaInit:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#15							; VIA device
+	ldi		$a1,#ViaFuncTbl
+	call	CopyDevFuncTbl
+	; Initialize port A low order eight bits as output, the remaining bits as
+	; input.
+	ldi		$t1,VIA
+	ldi		$t0,#$000000FF
+	stt		$t0,VIA_DDRA[$t1]
+	ldi		$t0,#1							; select timer 3 access
+	stb		$t0,VIA_PCR+1[$t1]
+	ldi		$t0,#$1F
+	stb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
+	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
+	stt		$t0,VIA_T1CL[$t1]
+	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
+	ldi		$t0,#$180						; emable timer3 interrupts
+	stt		$t0,VIA_IER[$t1]
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ViaIRQ:
+	; Was it the VIA that caused the interrupt?
+	ldi		$t1,VIA
+	ldb		$t0,VIA_IFR[$t1]
+	bge		$t0,$x0,.0003				; no
+	ldi		$t0,#1							; select timer 3 access
+	stb		$t0,VIA_PCR+1[$t1]
+	ldt		$t0,VIA_T1CL[$t1]		; yes, clear interrupt
+	ldt		$t0,milliseconds
+	add		$t0,$t0,#30
+	stt		$t0,milliseconds
+	stt		$t0,switchflag
+	call	FMTK_SchedulerIRQ
+.0003:
+	csrrc	$x0,#$800,#15				; switch to user regset
+	eret

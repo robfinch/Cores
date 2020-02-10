@@ -1,0 +1,436 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+	code
+	align	4
+;------------------------------------------------------------------------------
+; Insert task into ready list. The list is a doubly linked circular list.
+;
+; Parameters:
+;		a0 = tid to insert
+; Modifies:
+;		v1,t0,t1,t2
+; Returns:
+;		v0 = 1 for success, 0 if failed
+;------------------------------------------------------------------------------
+
+InsertIntoReadyList:
+	ldi		$v0,#E_Ok						; setup for ok
+	ldi		$v1,#MAX_TID				; check argument
+	bgtu	$a0,$v1,.badTid
+	sll		$t3,$a0,#LOG_TCBSZ	; tid to pointer
+	ldbu	$t0,TCBStatus[$t3]	; set status to ready
+	or		$t0,$t0,#TS_READY
+	sb		$t0,TCBStatus[$t3]
+	ldb		$t0,TCBPriority[$t3]
+	insrdy	$a0,$t0
+	ret
+	and		$t0,$t0,#3					; limit to four
+	sll		$t0,$t0,#1					; *2 for indexing
+	ldw		$t1,READYQ[$t0]			; get head of queue for that priority
+	bge		$t1,$x0,.insert			; Is there a head?
+	; level 0 insert - nothing in list, create a ring to self
+	stw		$a0,READYQ[$t0]			; no head, simple to insert
+	stw		$a0,TCBNext[$t3]		; remember it's a ring
+	stw		$a0,TCBPrev[$t3]
+	ret
+	; Insert at tail of list, which is just before the head.
+.insert:
+	sll		$t4,$t1,#LOG_TCBSZ	; tid to pointer
+	ldw		$t2,TCBPrev[$t4]		; t2 = head->prev
+	bne		$t2,$t1,.level2
+	;level 1 insert - only 1 item currently in list, items point to each other
+	; This bit probably redundant code as normal insertion should work as well.
+	stw		$a0,TCBPrev[$t4]		; simple to insert
+	stw		$a0,TCBNext[$t4]		; head->prev = head->next = arg
+	stw		$t1,TCBPrev[$t3]		; arg->prev = arg->next = head
+	stw		$t1,TCBNext[$t3]
+	ret
+	; Here there will be three or more entries in the list. Arg is inserted
+	; between head and head->prev to make it the last on the list.
+.level2:
+	stw		$t2,TCBPrev[$t3]		; arg->prev = head->prev
+	stw		$t1,TCBNext[$t3]		; arg->next = head, arg links are now set
+	; If there's a head there should be a head->prev and head->next at least pointing to the head
+	bltz	$t2,.0001						; head->prev valid?
+	sll		$t3,$t2,#LOG_TCBSZ	; t3 = head->prev (as a pointer)
+	stw		$a0,TCBNext[$t3]		; head->prev->next = arg
+.0001:
+	stw		$a0,TCBPrev[$t4]		; head->prev = arg
+	ret
+.badTid:
+	ldi		$v0,#E_Arg
+	ret
+
+;------------------------------------------------------------------------------
+; The ready list is a doubly linked list to make it easier and faster to
+; remove items from the list. There's no need to search the list for the item
+; to remove.
+;
+; Parameters:
+;		a0 = tid to remove
+; Modifies:
+;		t0,t1,t2,t3,t4,t5
+; Returns:
+;		v0 = E_Ok for success
+;------------------------------------------------------------------------------
+
+RemoveFromReadyList:
+	ldi		$v1,#MAX_TID					; check arg
+	bleu	$a0,$v1,.tidOk
+	ldi		$v0,#E_Arg
+	jmp		badTid
+.tidOk:
+	rmvrdy	$a0									; cheat and use hardware
+	sll		$t4,$a0,#LOG_TCBSZ		; s1 = pointer to tcb
+	ldb		$t0,TCBStatus[$t4]		; set status no longer ready or running
+	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
+	stb		$t0,TCBStatus[$t4]
+	ret
+
+RemoveFromReadyList2:
+	ldi		$v1,#MAX_TID					; check arg
+	bgtu	$a0,$v1,.badTid
+	sll		$t4,$a0,#LOG_TCBSZ		; s1 = pointer to tcb
+	ldb		$t0,TCBStatus[$t4]		; set status no longer ready or running
+	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
+	stb		$t0,TCBStatus[$t4]
+	ldb		$t0,TCBPriority[$t4]	; t0 = priority
+	and		$t0,$t0,#3						; limit to 0-3
+	sll		$t0,$t0,#1						; *2 for indexing
+	ldw		$t1,READYQ[$t0]				; get head tid
+	ldw		$t2,TCBNext[$t4]			; get arg->next
+	bne		$t1,$a0,.0001					; removing head of list?
+	bne		$t2,$a0,.0003					; list emptying? (if arg->next points back to arg)
+	ldi		$t2,#-1
+.0003:
+	stw		$t2,READYQ[$t0]				; yes, set new head to arg->next
+.0001:
+	bltz	$t2,.0002							; validate t2 (arg->next)
+	bgeu	$t2,$v1,.0002					; there should always be an arg->next, arg->prev
+	ldw		$t3,TCBPrev[$t4]			; because the list is circular t3=arg->prev
+	sll		$t5,$t3,#LOG_TCBSZ		; t5 = arg->prev as a pointer
+	stw		$t2,TCBNext[$t5]			; arg->prev->next = arg->next
+	sll		$t5,$t2,#LOG_TCBSZ		; t5 = arg->next as a pointer
+	stw		$t3,TCBPrev[$t5]			; arg->next->prev = arg->prev
+	; Now indicate links in TCB are not in use.
+.0002:
+	ldi		$v0,#-1
+	stw		$v0,TCBNext[$t4]
+	stw		$v0,TCBPrev[$t4]
+	ldi		$v0,#E_Ok							; we're ok
+	ret
+.badTid:
+	ldi		$v0,#E_Arg
+	ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = task id to insert
+;		a1 = timeout value
+; Modifies:
+;		t0,t1,t2,t3,t4,t5
+;------------------------------------------------------------------------------
+
+InsertIntoTimeoutList:
+	setto	$a0,$a1
+	sll		$t5,$a0,#LOG_TCBSZ		; tid to pointer
+	bra		.0003
+	ldi		$t0,#-1						
+	stw		$t0,TCBNext[$t5]			; initialize indexes to -1
+	stw		$t0,TCBPrev[$t5]
+	ldw		$t0,TimeoutList
+	bge		$t0,$x0,.0001
+	; Here the timeout list was empty, easy to insert.
+	stt		$a1,TCBTimeout[$t5]		; set timeout for task
+	stw		$a0,TimeoutList				; set head of list
+	ldi		$v0,#E_Ok							; and return
+	ret
+.0001:
+	ldi		$t1,#-1								; t1 used as previous index
+	mov		$t2,$t0								; t2 = head of timeout list index
+	sll		$t3,$t2,#LOG_TCBSZ		; t3 = head of timeout list as a pointer
+	; Search the timeout list for the proper insertion point. The timeouts are
+	; relative, so the requested amount is decremented by the amounts in the
+	; list as it is searched.
+.beginWhile:
+	ldt		$t4,TCBTimeout[$t3]		; get the timeout
+	ble		$a1,$t4,.endWhile			; is it greater than the requested timeout ?
+	sub		$a1,$a1,$t4						; decrement by list amount
+	mov		$t1,$t3								; t1 = pointer to previous entry
+	ldw		$t3,TCBNext[$t3]			; get the next entry in list
+	bltz	$t3,.endOfList					; end of list?
+	sll		$t3,$t3,#LOG_TCBSZ		; no, set pointer to current entry
+	bne		$t3,$t1,.beginWhile		; list screwed up? (This test should always be true)
+.endOfList:
+	; Here the end of the list was reached, insert as last entry
+	stw		$a0,TCBNext[$t1]			; entry->next = arg
+	stw		$t1,TCBPrev[$t5]			; arg->prev = entry
+	stt		$a1,TCBTimeout[$t5]
+	bra		.0003
+.endWhile:
+	; Here we found a timeout greater than the requested amount. Insert before.
+	sra		$t2,$t3,#LOG_TCBSZ		; pointer to tid
+	stw		$t2,TCBNext[$t5]			; arg->next = entry
+	sra		$t2,$t1,#LOG_TCBSZ
+	stw		$t2,TCBPrev[$t5]			; arg->prev = prev entry
+	ldt		$t2,TCBTimeout[$t3]		; update timeout of entry by subtracting off
+	sub		$t2,$t2,$a1						; the arg's timeout
+	stt		$t2,TCBTimeout[$t3]
+	stw		$a0,TCBPrev[$t3]			; entry->prev = arg
+	bltz	$t1,.0002							; previous entry? no - go update list head
+	stw		$a0,TCBNext[$t1]			; prev entry->next = arg
+	bra		.0003
+.0002:
+	stw		$a0,TimeoutList				; list head = arg
+.0003:
+	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
+	or		$t2,$t2,#TS_TIMEOUT
+	stb		$t2,TCBStatus[$t5]
+	ldi		$v0,#E_Ok
+	ret
+
+;------------------------------------------------------------------------------
+; Remove a task from the timeout list. The timeouts of following tasks are
+; adjusted. Called when a mailbox is freed and a task is waiting at the
+; mailbox. From within scheduling code mPopTimeoutList is used instead.
+;
+; Parameters:
+;		a0 = task id to remove
+; Modifies:
+;		t0,t3,t4
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+RemoveFromTimeoutList:
+	sll		$t3,$a0,#LOG_TCBSZ		; tid to pointer
+	ldbu	$t0,TCBStatus[$t3]		; check if waiting at a mailbox
+	and		$t0,$t0,#TS_WAITMSG
+	beqz	$t0,.noWait				
+	mMbxRemoveTask							; remove task from mailbox
+.noWait:
+	ldw		$t1,TimeoutList
+	ldw		$t0,TCBNext[$t3]			; t0 = arg->next
+	bne		$a0,$t1,.0001					; check removing head of list
+	stw		$t0,TimeoutList				; set new head = arg->next
+.0001:
+	bltz	$t0,.noNext
+	sll		$t4,$t0,#LOG_TCBSZ
+	ldw		$t1,TCBPrev[$t3]			; next->prev = arg->prev
+	stw		$t1,TCBPrev[$t4]			
+	ldt		$t1,TCBTimeout[$t4]		; next->timeout += arg->timeout
+	ldt		$t2,TCBTimeout[$t3]
+	add		$t1,$t1,$t2
+	stt		$t1,TCBTimeout[$t4]
+.noNext:
+	ldw		$t0,TCBPrev[$t3]			; check for previous
+	bltz	$t0,.noPrev
+	sll		$t4,$t0,#LOG_TCBSZ
+	ldw		$t0,TCBNext[$t3]			; prev->next = arg->next
+	stw		$t0,TCBNext[$t4]
+.noPrev:
+	ldb		$t0,TCBStatus[$t3]		; no longer timing out
+	and		$t0,$t0,#~(TS_TIMEOUT|TS_WAITMSG)
+	stb		$t0,TCBStatus[$t3]
+	ldi		$t0,#-1								; reset links
+	stw		$t0,TCBNext[$t3]
+	stw		$t0,TCBPrev[$t3]
+	ret
+
+;------------------------------------------------------------------------------
+; Returns:
+;		v1 = process id
+;------------------------------------------------------------------------------
+
+AllocTCB:
+	ldi		$t1,#0
+	ldwu	$v1,PIDMAP
+.0001:
+	and		$t0,$v1,#1
+	beqz	$t0,.allocTid
+	srl		$v1,$v1,#1
+	or		$v1,$v1,#$8000
+	add		$t1,$t1,#1
+	and		$t1,$t1,#15
+	bne		$t1,$x0,.0001
+; here no tcbs available
+	ldi		$v0,#E_NoMoreTCBs
+	ret
+.allocTid:
+	mov		$v0,$t1
+	or		$v1,$v1,#1
+	beqz	$t1,.0003
+.0002:
+	sll		$v1,$v1,#1
+	or		$v1,$v1,#1
+	sub		$t1,$t1,#1
+	bnez	$t1,.0002
+.0003:
+	stw		$v1,PIDMAP
+	mov		$v1,$v0
+	ldi		$v0,#E_Ok
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FreeTCB:
+	ldi		$t0,#1
+	sll		$t0,$t0,$a0
+	xor		$t0,$t0,#-1
+	lhu		$t1,PIDMAP
+	and		$t1,$t1,$t0
+	stw		$t1,PIDMAP
+	ret
+
+;------------------------------------------------------------------------------
+; Diagnostics
+;------------------------------------------------------------------------------
+
+DumpReadyList:
+	sub		$sp,$sp,#32
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	stt		$a2,8[$sp]
+	stt		$a3,12[$sp]
+	stt		$t1,16[$sp]
+	stt		$t2,20[$sp]
+	stt		$t3,24[$sp]
+	stt		$s1,28[$sp]
+	ldi		$a0,#msgReadyList
+	call	PutString
+	ldi		$t1,#0
+	csrrc	$s1,#$300,#1
+.0002:
+	call	SerialPeekCharDirect
+	xor		$v0,$v0,#CTRLC
+	beqz	$v0,.brk
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,#'Q'
+	call	Putch
+	srl		$a0,$t1,#1
+	call	PutHexNybble
+	ldi		$a0,#':'
+	call	Putch
+	ldw		$a2,READYQ[$t1]
+	blt		$a2,$x0,.nxt
+	mov		$a3,$a2
+.0001:
+	mov		$a0,$a3
+	call	PutHexHalf
+	ldi		$a0,#' '
+	call	Putch
+	sll		$a3,$a3,#LOG_TCBSZ
+	ldw		$a0,TCBNext[$a3]
+	call	PutHexHalf
+	ldi		$a0,#' '
+	call	Putch
+	ldw		$a0,TCBPrev[$a3]
+	call	PutHexHalf
+	ldi		$a0,#CR
+	call	Putch
+	ldw		$a3,TCBNext[$a3]
+	bne		$a2,$a3,.0001
+.nxt:
+	add		$t1,$t1,#2
+	slt		$t2,$t1,#8
+	bnez	$t2,.0002
+.brk:
+	csrrw	$x0,#$300,$s1
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	ldt		$a2,8[$sp]
+	ldt		$a3,12[$sp]
+	ldt		$t1,16[$sp]
+	ldt		$t2,20[$sp]
+	ldt		$t3,24[$sp]
+	ldt		$s1,28[$sp]
+	add		$sp,$sp,#32
+	ret
+
+DumpTimeoutList:
+	sub		$sp,$sp,#32
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	stt		$a2,8[$sp]
+	stt		$a3,12[$sp]
+	stt		$t1,16[$sp]
+	stt		$t2,20[$sp]
+	stt		$t3,24[$sp]
+	stt		$s1,28[$sp]
+	ldi		$a0,#msgTimeoutList
+	call	PutString
+	ldi		$t1,#0
+	csrrc	$s1,#$300,#1
+	ldi		$a3,#0
+.0002:
+	call	SerialPeekCharDirect
+	xor		$v0,$v0,#CTRLC
+	beqz	$v0,.brk
+	ldi		$a0,#CR
+	call	Putch
+;	ldw		$a2,TimeoutList
+;	bltz	$a2,.brk
+;	mov		$a3,$a2
+;.0001:
+	mov		$a0,$a3
+	call	PutHexHalf
+	ldi		$a0,#'-'
+	call	Putch
+	getto	$a0,$t1
+;	sll		$a3,$a3,#LOG_TCBSZ
+;	ldt		$a0,TCBTimeout[$a3]
+	call	PutHexWord
+;	ldi		$a0,#CR
+;	call	Putch
+	add		$a3,$a3,#1
+	and		$a3,$a3,#15
+	bgt		$a3,$x0,.0002
+;	ldw		$a3,TCBNext[$a3]
+;	bge		$a3,$x0,.0001
+.brk:
+	csrrw	$x0,#$300,$s1
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	ldt		$a2,8[$sp]
+	ldt		$a3,12[$sp]
+	ldt		$t1,16[$sp]
+	ldt		$t2,20[$sp]
+	ldt		$t3,24[$sp]
+	ldt		$s1,28[$sp]
+	add		$sp,$sp,#32
+	ret
+
+msgReadyList:
+	db	CR,"Ready List",CR
+	db	"Que Tid  Prv  Nxt",CR
+	db	"-----------------",CR,0
+
+msgTimeoutList:
+	db	CR,"Timeout List",CR
+	db	" Tid - Timeout",CR
+	db	"--------------",CR,0
+
+	align 4
