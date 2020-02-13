@@ -99,7 +99,7 @@ RemoveFromReadyList:
 	ldi		$v1,#MAX_TID					; check arg
 	bleu	$a0,$v1,.tidOk
 	ldi		$v0,#E_Arg
-	jmp		badTid
+	jmp		ERETx
 .tidOk:
 	rmvrdy	$a0									; cheat and use hardware
 	sll		$t4,$a0,#LOG_TCBSZ		; s1 = pointer to tcb
@@ -155,7 +155,11 @@ RemoveFromReadyList2:
 InsertIntoTimeoutList:
 	setto	$a0,$a1
 	sll		$t5,$a0,#LOG_TCBSZ		; tid to pointer
-	bra		.0003
+	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
+	or		$t2,$t2,#TS_TIMEOUT
+	stb		$t2,TCBStatus[$t5]
+	ldi		$v0,#E_Ok
+	ret
 	ldi		$t0,#-1						
 	stw		$t0,TCBNext[$t5]			; initialize indexes to -1
 	stw		$t0,TCBPrev[$t5]
@@ -228,8 +232,14 @@ RemoveFromTimeoutList:
 	ldbu	$t0,TCBStatus[$t3]		; check if waiting at a mailbox
 	and		$t0,$t0,#TS_WAITMSG
 	beqz	$t0,.noWait				
-	mMbxRemoveTask							; remove task from mailbox
+	call	MbxRemoveTask					; remove task from mailbox
 .noWait:
+	and		$t0,$t0,#~(TS_TIMEOUT|TS_WAITMSG)
+	stb		$t0,TCBStatus[$t3]
+	setto	$a0,$x0
+	ldi		$v0,#E_Ok
+	ret
+
 	ldw		$t1,TimeoutList
 	ldw		$t0,TCBNext[$t3]			; t0 = arg->next
 	bne		$a0,$t1,.0001					; check removing head of list
@@ -309,15 +319,15 @@ FreeTCB:
 ;------------------------------------------------------------------------------
 
 DumpReadyList:
-	sub		$sp,$sp,#32
-	stt		$ra,[$sp]
-	stt		$a0,4[$sp]
-	stt		$a2,8[$sp]
-	stt		$a3,12[$sp]
-	stt		$t1,16[$sp]
-	stt		$t2,20[$sp]
-	stt		$t3,24[$sp]
-	stt		$s1,28[$sp]
+	sub		$sp,$sp,#64
+	sto		$ra,[$sp]
+	sto		$a0,8[$sp]
+	sto		$a2,16[$sp]
+	sto		$a3,24[$sp]
+	sto		$t1,32[$sp]
+	sto		$t2,40[$sp]
+	sto		$t3,48[$sp]
+	sto		$s1,56[$sp]
 	ldi		$a0,#msgReadyList
 	call	PutString
 	ldi		$t1,#0
@@ -359,15 +369,15 @@ DumpReadyList:
 	bnez	$t2,.0002
 .brk:
 	csrrw	$x0,#$300,$s1
-	ldt		$ra,[$sp]
-	ldt		$a0,4[$sp]
-	ldt		$a2,8[$sp]
-	ldt		$a3,12[$sp]
-	ldt		$t1,16[$sp]
-	ldt		$t2,20[$sp]
-	ldt		$t3,24[$sp]
-	ldt		$s1,28[$sp]
-	add		$sp,$sp,#32
+	ldo		$ra,[$sp]
+	ldo		$a0,8[$sp]
+	ldo		$a2,16[$sp]
+	ldo		$a3,24[$sp]
+	ldo		$t1,32[$sp]
+	ldo		$t2,40[$sp]
+	ldo		$t3,48[$sp]
+	ldo		$s1,56[$sp]
+	add		$sp,$sp,#64
 	ret
 
 DumpTimeoutList:

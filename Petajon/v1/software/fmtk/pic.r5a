@@ -1,0 +1,44 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+;
+;  0x80    - irq control for irq #0
+;  0x84    - irq control for irq #1
+;            bits 0 to 7  = cause code to issue
+;            bits 13 to 15 = irq level to issue
+;            bit 16 = irq enable
+;            bit 17 = edge sensitivity
+
+PIC				equ		$FFDC0F00
+PIC_CH16	equ		$C0
+PIC_CH28	equ		$F0
+PIC_CH31	equ		$FC
+
+PicInit:
+	ldi		$t1,#$PIC					; t1 = address of pic
+	ldi		$t0,#$0001E025		; level sensitive cause 37, interrupt enabled
+	stt		$t0,PIC_CH16[$t1]
+	ldi		$t0,#$0001E021		; level sensitive cause 33, interrupt enabled
+	stt		$t0,PIC_CH28[$t1]
+	ldi		$t0,#$0000E02F		; level sensitive cause 47, interrupt enabled
+	stt		$t0,PIC_CH31[$t1]
+	ret

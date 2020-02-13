@@ -21,9 +21,6 @@
 ;
 ; ============================================================================
 
-IOFocusNdx		EQU		$8C08
-IOFocusTbl		EQU		$8C10
-
 ;-----------------------------------------------------------------------------
 ; IO Focus routines complicated by the fact that the base address of TCB
 ; zero is zero (looks like a null pointer but isn't). So the value -1 is 
@@ -48,6 +45,13 @@ IOFocusTbl		EQU		$8C10
 ;-----------------------------------------------------------------------------
 
 FMTK_HasIOFocus:
+	; Enable interrupts
+	csrrs	$x0,#$300,#1				
+	ldb		$v0,SwitchIOFocus
+	beqz	$v0,.noSwitch
+	stb		$x0,SwitchIOFocus
+	call	FMTK_SwitchIOFocus
+.noSwitch:
 	mGetCurrentTid
 	sll		$v0,$v0,#LOG_TCBSZ
 	ldt		$v1,IOFocusNdx
@@ -58,7 +62,7 @@ FMTK_HasIOFocus:
 	ldi		$v1,#1
 .xit:
 	ldi		$v0,#E_Ok
-	jmp		ERETx
+	ret
 
 ;-----------------------------------------------------------------------------
 ; First check if it's even possible to switch the focus to another
@@ -74,23 +78,45 @@ FMTK_HasIOFocus:
 ;		v0 = E_Ok
 ;-----------------------------------------------------------------------------
 
-SwitchIOFocusHelper:
+FMTK_SwitchIOFocus:
+	csrrs	$x0,#$300,#1				; enable interrupts
 	ldt		$t0,IOFocusNdx			; get focus pointer
-	bltz	$t0,.noFocus		; is it -1?
+	bltz	$t0,.noFocus				; is it -1?
 	ldt		$t1,IOF_NEXT[$t0]
 	beq		$t1,$t0,.sameFocus
 	bltz	$t1,.noFocus
-	; swap virtual screens
-	; set vidmem pointer
+	; swap virtual text screens
+	ldi		$s1,#56*29
+	ldo		$t2,TCBVideoMem[$t0]
+	beqz	$t2,.0002
+	sto		$t2,TCBpVideo[$t0]
+	ldi		$t3,#$FFD00000
+.0001:
+	ldo		$t4,[$t3]
+	sto		$t4,[$t2]
+	add		$t3,$t3,#8
+	add		$t2,$t2,#8
+	sub		$s1,$s1,#1
+	bgt		$s1,$x0,.0001
+.0002:
+	ldi		$s1,#56*29
+	ldo		$t2,TCBVideoMem[$t1]
+	beqz	$t2,.0004
+	ldi		$t3,#$FFD00000
+	sto		$t3,TCBpVideo[$t1]
+.0003:
+	ldo		$t4,[$t2]
+	sto		$t4,[$t3]
+	add		$t3,$t3,#8
+	add		$t2,$t2,#8
+	sub		$s1,$s1,#1
+	bgt		$s1,$x0,.0003
+.0004:
 	stt		$t1,IOFocusNdx
 .sameFocus:
 .noFocus:
 	ldi		$v0,E_Ok
 	ret
-
-FMTK_SwitchIOFocus:
-	call	SwitchIOFocusHelper
-	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
 ; The I/O focus list is an array indicating which jobs are requesting the
@@ -104,28 +130,30 @@ FMTK_SwitchIOFocus:
 FMTK_RequestIOFocus:
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
-	ldt		$t1,IOFocusTbl			; Is the task already included in the IO focus?
+	ldo		$t1,IOFocusTbl			; Is the task already included in the IO focus?
 	and		$t2,$t1,$t0					; test bit
-	bne		$t2,$x0,.ret				; If so, don't add again
+	bnez	$t2,.ret						; If so, don't add again
 	or		$t1,$t1,$t0					; set bit indicator
-	stt		$t1,IOFocusTbl
-	ldt		$t0,IOFocusNdx			; get current index
+	sto		$t1,IOFocusTbl
+	; Disable interrupts while manipulating IO focus list
+	csrrc	$x0,#$300,#1				
+	ldo		$t0,IOFocusNdx			; get current index
 	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
 	bge		$t0,$x0,.notEmpty		; is there one? (!= -1)
-	stt		$t1,IOFocusNdx			; no current index, so set equal to requester
-	stt		$t1,IOF_NEXT[$t1]		; and loop back to self
-	stt		$t1,IOF_PREV[$t1]
+	sto		$t1,IOFocusNdx			; no current index, so set equal to requester
+	sto		$t1,IOF_NEXT[$t1]		; and loop back to self
+	sto		$t1,IOF_PREV[$t1]
 	bra		.ret
 .notEmpty:
-	ldt		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
-	stt		$t2,IOF_PREV[$t1]
-	stt		$t0,IOF_NEXT[$t1]
-	ldt		$t2,IOF_PREV[$t0]
-	stt		$t1,IOF_NEXT[$t2]
-	stt		$t1,IOF_PREV[$t0]
+	ldo		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
+	sto		$t2,IOF_PREV[$t1]
+	sto		$t0,IOF_NEXT[$t1]
+	ldo		$t2,IOF_PREV[$t0]
+	sto		$t1,IOF_NEXT[$t2]
+	sto		$t1,IOF_PREV[$t0]
 .ret:
 	ldi		$v0,#E_Ok
-	jmp		ERETx
+	ret
 
 ;-----------------------------------------------------------------------------
 ; ReleaseIOFocus called when the task no longer desires to be on the I/O
@@ -152,6 +180,7 @@ FMTK_ReleaseIOFocus:
 ;-----------------------------------------------------------------------------
 
 FMTK_ForceReleaseIOFocus:
+	csrrs	$x0,#$300,#1				; enable interrupts
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
 	ldt		$t1,IOFocusTbl
@@ -166,11 +195,13 @@ FMTK_ForceReleaseIOFocus:
 	sub		$sp,$sp,#8
 	stt		$t0,[$sp]
 	stt		$t1,4[$sp]
-	call	SwitchIOFocusHelper
+	call	FMTK_SwitchIOFocus
 	ldt		$t0,[$sp]
 	ldt		$t1,4[$sp]
 	add		$sp,$sp,#8
 .notSame:
+	; Disable interrupts while manipulating IO focus list
+	csrrc	$x0,#$300,#1				
 	ldt		$t2,IOF_NEXT[$t0]
 	blt		$t2,$x0,.done
 	beq		$t2,$t0,.pjSame
@@ -188,4 +219,4 @@ FMTK_ForceReleaseIOFocus:
 .done:
 .noFocus:
 	ldi		$v0,#E_Ok
-	jmp		ERETx
+	ret

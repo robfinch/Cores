@@ -21,22 +21,6 @@
 ;
 ; ============================================================================
 
-QNDX		EQU		$14304
-READYQ	EQU		$14308
-PIDMAP	EQU		$14310
-missed_ticks	equ		$14320
-TimeoutList		equ		$14328
-Tick		EQU		$14330
-SysSema	EQU		$14340
-RDYQ0		EQU		$14400
-RDYQ1		EQU		$14500
-RDYQ2		EQU		$14600
-RDYQ3		EQU		$14700
-msgs		EQU		$14800
-mbxs		EQU		$18800
-mbxs_end	EQU	$1A800
-FreeMsg	EQU		$1AC00
-
 	code
 	align	2
 OSCallTbl:
@@ -87,7 +71,9 @@ FMTKInit:
 	stt		$t0,TimeoutList
 	stt		$t0,READYQ
 	stt		$t0,READYQ+4
-	
+	stw		$t0,hKeybdMbx
+
+	stb		$x0,SwitchIOFocus	
 	stt		$x0,IOFocusTbl
 	stt		$t0,IOFocusNdx
 	
@@ -104,20 +90,20 @@ FMTKInit:
 	ldi		$t0,#mbxs
 	ldi		$t1,#4*32
 .0001:
-	stt		$x0,[$t0]
-	add		$t0,$t0,#4
+	sto		$x0,[$t0]
+	add		$t0,$t0,#8
 	sub		$t1,$t1,#1
 	bgt		$t1,$x0,.0001
 
 	; Initialize free message list
 	ldi		$t0,#msgs
-	stt		$t0,FreeMsg
+	sto		$t0,FreeMsg
 	ldi		$t1,#0
-	ldi		$t2,#512
+	ldi		$t2,#NR_MSG
 .0002:
 	add		$t1,$t1,#1
-	stt		$t1,MSG_LINK[$t0]
-	add		$t0,$t0,#16
+	sto		$t1,MSG_LINK[$t0]
+	add		$t0,$t0,#32
 	sub		$t2,$t2,#1
 	bgt		$t2,$x0,.0002
 
@@ -134,14 +120,15 @@ FMTKInit:
 
 GetCurrentTid:
 	csrrw	$v0,#$181,$x0				; get current pid
-	and		$v0,$v0,#15					; mask off extra bits
+	and		$v0,$v0,#MAX_TID		; mask off extra bits
 	ret
 
 FMTK_GetCurrentTid:
+	csrrs	$x0,#$300,#1				; enable ints
 	mGetCurrentTid
 	mov		$v1,$v0
 	ldi		$v0,#E_Ok
-	jmp		ERETx
+	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -203,89 +190,88 @@ SelectTaskToRun:
 ;	stw		$t3,READYQ[$v1]
 ;	bra		.0001								; and try next queue
 .goodTid:
+	csrrw		$x0,#$181,$v0
 	;sll		$t1,$v0,#LOG_TCBSZ
 	;ldw		$t0,TCBNext[$t1]		; update head of ready queue
 	;stw		$t0,READYQ[$v1]
 	ret
 
 ;------------------------------------------------------------------------------
-; Swap from outgoing context to incoming context.
-;
-; Parameters:
-;		a0 = pointer to TCB of outgoing context
-;		a1 = pointer to TCB of incoming context
 ;------------------------------------------------------------------------------
 
-SwapContext:
-	beq		$s1,$s2,.noCtxSwitch@
+SaveContext:
 	; Save outgoing register set in TCB
-	csrrc	$x0,#$800,#4	; select user register set for Rs2
-	stt		$x1,8[$s1]
-	stt		$x2,16[$s1]
-	stt		$x3,24[$s1]
-	stt		$x4,32[$s1]
-	stt		$x5,40[$s1]
-	stt		$x6,48[$s1]
-	stt		$x7,56[$s1]
-	stt		$x8,64[$s1]
-	stt		$x9,72[$s1]
-	stt		$x10,80[$s1]
-	stt		$x11,88[$s1]
-	stt		$x12,96[$s1]
-	stt		$x13,104[$s1]
-	stt		$x14,112[$s1]
-	stt		$x15,120[$s1]
-	stt		$x16,128[$s1]
-	stt		$x17,136[$s1]
-	stt		$x18,144[$s1]
-	stt		$x19,152[$s1]
-	stt		$x20,160[$s1]
-	stt		$x21,168[$s1]
-	stt		$x22,176[$s1]
-	stt		$x23,184[$s1]
-	stt		$x24,192[$s1]
-	stt		$x25,200[$s1]
-	stt		$x26,208[$s1]
-	stt		$x27,216[$s1]
-	stt		$x28,224[$s1]
-	stt		$x29,232[$s1]
-	stt		$x30,240[$s1]
-	stt		$x31,248[$s1]
-	csrrs	$x0,#$800,#4				; select machine register set for Rs2
+	csrrc	$x0,#CSR_REGSET,#4	; select previous (user) register set for Rs2
+	sto		$x1,8[$s1]
+	sto		$x2,16[$s1]
+	sto		$x3,24[$s1]
+	sto		$x4,32[$s1]
+	sto		$x5,40[$s1]
+	sto		$x6,48[$s1]
+	sto		$x7,56[$s1]
+	sto		$x8,64[$s1]
+	sto		$x9,72[$s1]
+	sto		$x10,80[$s1]
+	sto		$x11,88[$s1]
+	sto		$x12,96[$s1]
+	sto		$x13,104[$s1]
+	sto		$x14,112[$s1]
+	sto		$x15,120[$s1]
+	sto		$x16,128[$s1]
+	sto		$x17,136[$s1]
+	sto		$x18,144[$s1]
+	sto		$x19,152[$s1]
+	sto		$x20,160[$s1]
+	sto		$x21,168[$s1]
+	sto		$x22,176[$s1]
+	sto		$x23,184[$s1]
+	sto		$x24,192[$s1]
+	sto		$x25,200[$s1]
+	sto		$x26,208[$s1]
+	sto		$x27,216[$s1]
+	sto		$x28,224[$s1]
+	sto		$x29,232[$s1]
+	sto		$x30,240[$s1]
+	sto		$x31,248[$s1]
+	csrrs	$x0,#CSR_REGSET,#4				; select current register set for Rs2
 	csrrw	$x2,#$341,$x0				; save off mepc
-	stt		$x2,TCBepc[$a0]
+	sto		$x2,TCBepc[$s1]
 	; Now save off segment registers
 	ldi		$t1,#0
 .svseg:
 	mvseg	$t0,$x0,$t1
 	sll		$x2,$t1,#3
-	add		$x2,$x2,$a0
+	add		$x2,$x2,$s1
 	sto		$t0,TCBsegs[$x2]
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.svseg
+	ret
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+RestoreContext:
 	; Switch memory maps
-	srl		$v0,$a1,#10					; convert pointer to tid
+	srl		$v0,$s2,#10					; convert pointer to tid
 	and		$v0,$v0,#$3F				; mask to 64 task
 	csrrw	$v1,#$181,$v0				; set ASID
-	; User map has now been switched
 
 	; Restore segment register set
 	ldi		$t1,#0
 .rsseg:
 	sll		$x2,$t1,#3
-	add		$x2,$x2,$a1
-	lw		$t0,TCBsegs[$x2]
+	add		$x2,$x2,$s2
+	ldo		$t0,TCBsegs[$x2]
 	mvseg	$x0,$t0,$t1
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.rsseg
 
-	ldo		$x2,TCBepc[$a1]			; restore epc
+	ldo		$x2,TCBepc[$s2]			; restore epc
 	csrrw	$x0,#$341,$x2
 	; Restore incoming registers
-	csrrc	$x0,#$800,#1				; select user regset for Rd
+	csrrc	$x0,#CSR_REGSET,#1				; select previous regset for Rd
 	ldo		$x1,8[$s2]
 	ldo		$x2,16[$s2]
 	ldo		$x3,24[$s2]
@@ -317,54 +303,147 @@ SwapContext:
 	ldo		$x29,232[$s2]
 	ldo		$x30,240[$s2]
 	ldo		$x31,248[$s2]
-	csrrs	$x0,#$800,#1				; select machine regset for Rd
+	csrrs	$x0,#CSR_REGSET,#1				; select current regset for Rd
+	ret
+
+;------------------------------------------------------------------------------
+; Swap from outgoing context to incoming context.
+;
+; Parameters:
+;		s1 = pointer to TCB of outgoing context
+;		s2 = pointer to TCB of incoming context
+;------------------------------------------------------------------------------
+
+SwapContext:
+	beq		$s1,$s2,.noCtxSwitch@
+	; Save outgoing register set in TCB
+	csrrw	$v0,#CSR_REGSET,$x0				; get register set
+	and		$v1,$v0,#$FFFFFF3F				; set previous to user regset
+	csrrw	$x0,#CSR_REGSET,$v1	
+	csrrc	$x0,#CSR_REGSET,#4				; select previous (user) register set for Rs2
+	sto		$x1,8[$s1]
+	sto		$x2,16[$s1]
+	sto		$x3,24[$s1]
+	sto		$x4,32[$s1]
+	sto		$x5,40[$s1]
+	sto		$x6,48[$s1]
+	sto		$x7,56[$s1]
+	sto		$x8,64[$s1]
+	sto		$x9,72[$s1]
+	sto		$x10,80[$s1]
+	sto		$x11,88[$s1]
+	sto		$x12,96[$s1]
+	sto		$x13,104[$s1]
+	sto		$x14,112[$s1]
+	sto		$x15,120[$s1]
+	sto		$x16,128[$s1]
+	sto		$x17,136[$s1]
+	sto		$x18,144[$s1]
+	sto		$x19,152[$s1]
+	sto		$x20,160[$s1]
+	sto		$x21,168[$s1]
+	sto		$x22,176[$s1]
+	sto		$x23,184[$s1]
+	sto		$x24,192[$s1]
+	sto		$x25,200[$s1]
+	sto		$x26,208[$s1]
+	sto		$x27,216[$s1]
+	sto		$x28,224[$s1]
+	sto		$x29,232[$s1]
+	sto		$x30,240[$s1]
+	sto		$x31,248[$s1]
+	csrrs	$x0,#CSR_REGSET,#4				; select current register set for Rs2
+	csrrw	$x2,#$341,$x0				; save off mepc
+	sto		$x2,TCBepc[$s1]
+	; Now save off segment registers
+	ldi		$t1,#0
+.svseg:
+	mvseg	$t0,$x0,$t1
+	sll		$x2,$t1,#3
+	add		$x2,$x2,$s1
+	sto		$t0,TCBsegs[$x2]
+	add		$t1,$t1,#1
+	and		$t1,$t1,#15
+	bne		$t1,$x0,.svseg
+
+	; Restore segment register set
+	ldi		$t1,#0
+.rsseg:
+	sll		$x2,$t1,#3
+	add		$x2,$x2,$s2
+	ldo		$t0,TCBsegs[$x2]
+	mvseg	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	and		$t1,$t1,#15
+	bne		$t1,$x0,.rsseg
+
+	ldo		$x2,TCBepc[$a1]			; restore epc
+	csrrw	$x0,#$341,$x2
+	; Restore incoming registers
+	csrrc	$x0,#CSR_REGSET,#1				; select previous regset for Rd
+	ldo		$x1,8[$s2]
+	ldo		$x2,16[$s2]
+	ldo		$x3,24[$s2]
+	ldo		$x4,32[$s2]
+	ldo		$x5,40[$s2]
+	ldo		$x6,48[$s2]
+	ldo		$x7,56[$s2]
+	ldo		$x8,64[$s2]
+	ldo		$x9,72[$s2]
+	ldo		$x10,80[$s2]
+	ldo		$x11,88[$s2]
+	ldo		$x12,96[$s2]
+	ldo		$x13,104[$s2]
+	ldo		$x14,112[$s2]
+	ldo		$x15,120[$s2]
+	ldo		$x16,128[$s2]
+	ldo		$x17,136[$s2]
+	ldo		$x18,144[$s2]
+	ldo		$x19,152[$s2]
+	ldo		$x20,160[$s2]
+	ldo		$x21,168[$s2]
+	ldo		$x22,176[$s2]
+	ldo		$x23,184[$s2]
+	ldo		$x24,192[$s2]
+	ldo		$x25,200[$s2]
+	ldo		$x26,208[$s2]
+	ldo		$x27,216[$s2]
+	ldo		$x28,224[$s2]
+	ldo		$x29,232[$s2]
+	ldo		$x30,240[$s2]
+	ldo		$x31,248[$s2]
+	csrrw	$x0,#CSR_REGSET,$v0				; restore register set selections
 .noCtxSwitch:
 	ret
 
 ;------------------------------------------------------------------------------
 ; Operating system call dispatcher.
-; On entry machine registers are selected.
 ;------------------------------------------------------------------------------
 
 OSCALL:
-	csrrc	$x0,#$800,#2		; select user regs for Rs1		
-	mov		$a0,$a0					; move user to machine
+	csrrc	$x0,#CSR_REGSET,#2		; select previous regs for Rs1		
+	mov		$a0,$a0								; move previous to current
 	mov		$a1,$a1
 	mov		$a2,$a2
 	mov		$a3,$a3
 	mov		$a4,$a4
 	mov		$a5,$a5
-	csrrs	$x0,#$800,#2		; get back machine registers for all
+	csrrs	$x0,#CSR_REGSET,#2		; get back current registers for all
 	and		$a0,$a0,#31
+	beqz	$a0,.zero
 	sll		$a0,$a0,#1
 	lhu		$t0,OSCallTbl[$a0]
+	beqz	$t0,.zero
 	or		$t0,$t0,#$FFFC0000
-	jmp		[$t0]
-
-;------------------------------------------------------------------------------
-; Time accounting.
-; Update the length of time the task has been running.
-;
-; Parameters:
-;		s1 = pointer to TCB
-; Modifies:
-;		t2,t3,t4,t5
-;------------------------------------------------------------------------------
-
-AccountTime:
-.again:
-;	csrrw	$t3,#$741,$x0					; get high time
-;	csrrw	$t2,#$701,$x0					; get low time
-;	csrrw	$t4,#$741,$x0
-;	bne		$t3,$t4,.again
-	ldt		$t2,Tick
-	stt		$t2,TCBEndTick[$s1]
-	ldt		$t3,TCBStartTick[$s1]
-	sub		$t4,$t2,$t3						; end - start
-	ldt		$t5,TCBTicks[$s1]
-	add		$t5,$t5,$t4						; ticks + (end - start)
-	stt		$t5,TCBTicks[$s1]
-	ret
+	call	[$t0]									; call the OS Function
+.xit:
+	csrrc	$x0,#CVSR_REGSET,#1		; select previous regs for Rd
+	mov		$v0,$v0
+	mov		$v1,$v1
+	eret
+.zero:
+	ldi		$v0,#E_BadCallno
+	bra		.xit
 
 ;------------------------------------------------------------------------------
 ; Sleep for a number of ticks. Tick interval determined by the VIA timer #3.
@@ -377,19 +456,35 @@ AccountTime:
 ;------------------------------------------------------------------------------
 
 FMTK_Sleep:
-	bltz	$a1,ERETx
+	csrrs	$x0,#$300,#1				; enable ints
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	bltz	$a1,.xit
 	mGetCurrentTid
 	sll		$s1,$v0,#LOG_TCBSZ
+	; First thing: set end time. We don't want to include time spent in the OS in
+	; the time accounting, so we set the end time as soon as possible.
+	csrrw	$t2,#$701,$x0					; get time
+	sto		$t2,TCBEndTime[$s1]
 	beqz	$a1,.0001
 	mov		$a0,$v0								; a0 = current tid
-	mRemoveFromReadyList
-	mInsertIntoTimeoutList			; a1 = timeout
+	csrrc	$x0,#$300,#1					; disable ints
+	call	RemoveFromReadyList
+	call	InsertIntoTimeoutList	; a1 = timeout
+	csrrs	$x0,#$300,#1					; enable ints
 .0001:
 	ldbu	$v0,TCBStatus[$s1]		; flag task as no longer running
 	and		$v0,$v0,#~TS_RUNNING
 	stb		$v0,TCBStatus[$s1]
 
-	call	AccountTime						; uses s1
+	;	AccountTime
+	ldo		$t2,TCBEndTime[$s1]		; get back end time
+	ldo		$t3,TCBStartTime[$s1]
+	sub		$t4,$t2,$t3						; end - start
+	ldo		$t5,TCBElapsedTime[$s1]
+	add		$t5,$t5,$t4						; ticks + (end - start)
+	sto		$t5,TCBElapsedTime[$s1]
+	; Will switch to target memory map.
 	call	SelectTaskToRun
 
 	sll		$s2,$v0,#LOG_TCBSZ		; s2 = pointer to incoming TCB
@@ -441,88 +536,92 @@ FMTK_Sleep:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	stb		$t2,TCBStatus[$s2]
 
-	call	SwapContext
-	ldt		$t2,Tick						; get tick
-	stt		$t2,TCBStartTick[$s1]
-	jmp		ERETx
+	; A context switch will be performed by the scheduler IRQ when a tick occurs.
+	; Go to a low power mode while waiting for the interrupt.
+	; The context switch will return after the wfi. However, another interrupt
+	; might have occurred that didn't switch the context. So, the task status
+	; is checked to see if it's ready yet. If not the wait continues.
+	; What's really wanted is a wait for scheduler task interrupt.
+.wait:
+	wfi
+	ldbu	$t2,TCBStatus[$s1]
+	and		$t2,$t2,#TS_READY
+	beqz	$t2,.wait
+
+	; As above, we want to minimize the impact of the OS on the tasks scheduled
+	; time. So we set the start time as late as possible.
+	csrrw	$t2,#$701,$x0					; get time
+	sto		$t2,TCBStartTime[$s1]
+.xit:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
 
 ;------------------------------------------------------------------------------
 ; SchedulerIRQ meant to be called from the timer ISR.
 ;------------------------------------------------------------------------------
 
 FMTK_SchedulerIRQ:
-	decto
+	csrrs	$x0,#$300,#1				; enable ints
+	mGetCurrentTid
+	sll		$s1,$v0,#LOG_TCBSZ		; compute pointer to TCB
+	csrrw	$t2,#$701,$x0					; get time
+	sto		$t2,TCBEndTime[$s1]
+	decto												; decrement timeouts (takes 64 clock cycles async)
 	sub		$sp,$sp,#8
 	sto		$ra,[$sp]
 	ldi		$a0,#SysSema
 	ldi		$a1,#20
-	mGetCurrentTid
-	sll		$s1,$v0,#LOG_TCBSZ		; compute pointer to TCB
 ;	call	LockSemaphore
 ;	beq		$v0,$x0,.noLock
 ; Might need the following if the external timer isn't used.
 ;	csrrw	$v0,#$701,$x0					; get the time
-;	add		$v0,$v0,#600000				; wait 600,000 cycles @20MHz (30ms)
+;	add		$v0,$v0,#300000				; wait 300,000 cycles @40MHz (30ms)
 ;	csrrw	$x0,#$321,$v0					; set next interrupt time
-	ldt		$t5,Tick							; update tick count
-	add		$t5,$t5,#1
-	stt		$t5,Tick
-	call	AccountTime
+	;	AccountTime
+	ldo		$t3,TCBStartTime[$s1]
+	sub		$t4,$t2,$t3						; end - start
+	ldo		$t5,TCBElapsedTime[$s1]
+	add		$t5,$t5,$t4						; ticks + (end - start)
+	sto		$t5,TCBElapsedTime[$s1]
+
 	ldbu	$t5,TCBStatus[$s1]
 	or		$t5,$t5,#TS_PREEMPT
 	and		$t5,$t5,#~TS_RUNNING	; no longer running, but may still be ready
 	stb		$t5,TCBStatus[$s1]
 	; Keep popping the timeout list as long as there are tasks on it with
 	; expired timeouts.
-	ldi		$s5,#0
-	ldi		$s3,#1
-	getzl	$s4
+	ldi		$a0,#0
+	getzl	$s4		; Get list of tasks whose timeout is zero
 .0001:
-	sll		$t4,$s5,#10
+	sll		$t4,$a0,#10
 	lbu		$t2,TCBStatus[$t4]
 	and		$t2,$t2,#TS_TIMEOUT
 	beqz	$t2,.noTimeout
-	and		$t2,$s4,$s3					; is zero bit set?
+	and		$t2,$s4,#1					; is zero bit set?
 	beqz	$t2,.notZero
 	lbu		$t2,TCBStatus[$t4]
 	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG)
 	sb		$t2,TCBStatus[$t4]
-	mov		$a0,$s5
-	mMbxRemoveTask
+	csrrc	$x0,#$300,#1				; disable ints
+	call	MbxRemoveTask
 	call	InsertIntoReadyList
+	csrrs	$x0,#$300,#1				; enable ints
 .notZero:
 .noTimeout:
-	add		$s5,$s5,#1
-	sll		$s3,$s3,#1	
-	slt		$t2,$s5,#NR_TCB
-	bnez	$t2,.0001
+	add		$a0,$a0,#1
+	srl		$s4,$s4,#1	
+	bnez	$s4,.0001
 
-;	ldw		$v0,TimeoutList
-;	ldi		$t4,#NR_TCB
-;	bgeu	$v0,$t4,.noTimeouts
-;	sll		$t4,$v0,#LOG_TCBSZ	; index to pointer
-;	ldt		$t3,TCBTimeout[$t4]
-;	bgt		$t3,$x0,.timeoutNotDone
-;	mPopTimeoutList						; popping timeout list modifies head of it
-;	mov		$a0,$v0
-;	call	InsertIntoReadyList
-;	bra		.0001
-;.timeoutNotDone:
-;	sub		$t3,$t3,#1
-;	ldt		$t2,missed_ticks
-;	sub		$t3,$t3,$t2
-;	stt		$t3,TCBTimeout[$t4]
-;	stt		$x0,missed_ticks
-;.noTimeouts:
-	; The ready queue was just updated, there could be new tasks
-	; ready to run.
+	; The ready list was just updated, there could be new tasks
+	; ready to run. Will switch to target memory map.
 	call	SelectTaskToRun
 
 	sll		$s2,$v0,#LOG_TCBSZ	; s2 = pointer to incoming TCB
 	lbu		$x2,TCBStatus[$s2]	; x2 = incoming status
 	or		$t2,$x2,#TS_RUNNING|TS_READY	; status = running
-	ldt		$x2,TCBException[$s2]	;
-	beq		$x2,$x0,.noException
+	ldo		$x2,TCBException[$s2]	;
+	beqz	$x2,.noException
 	; set link register to catch handler address
 	;{
 	;	t->regs[29] = t->regs[28];   // set link register to catch handler
@@ -564,13 +663,13 @@ FMTK_SchedulerIRQ:
 	and		$t2,$t2,#~TS_MSGRDY		; mask out message ready status
 	stb		$t2,TCBStatus[$s2]
 
-	call	SwapContext
 	mUnlockSemaphore(SysSema)
 .noLock:
+	call	SwapContext
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
-	ldt		$t2,Tick					; get tick
-	stt		$t2,TCBStartTick[$s1]
+	csrrw	$t2,#$701,$x0					; get low time
+	sto		$t2,TCBStartTime[$s2]
 	ret
 
 ;------------------------------------------------------------------------------
@@ -589,6 +688,9 @@ FMTK_SchedulerIRQ:
 ;------------------------------------------------------------------------------
 ;
 FMTK_StartTask:
+	csrrs	$x0,#$300,#1				; enable ints
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
 	call	AllocTCB
 	stb		$v1,$4321
 	bnez	$v0,.err
@@ -597,7 +699,7 @@ FMTK_StartTask:
 	call	MapOSPages			; Map OS pages into address space
 	sll		$s1,$a0,#LOG_TCBSZ	; compute TCB address
 	call	AllocStack
-	ldi		$t0,#$A007FFFC	; set stack pointer
+	add		$t0,$v1,#$A000FFFC	; set stack pointer
 	sto		$t0,112[$s1]
 	sto		$a2,TCBepc[$s1]	; address task will begin at
 	call	Alloc
@@ -626,16 +728,16 @@ FMTK_StartTask:
 	sto		$t0,TCBsegs+104[$s1]
 	sto		$t0,TCBsegs+112[$s1]
 	sto		$t0,TCBsegs+120[$s1]
+	sto		$x0,TCBVideoMem[$s1]
 	srl		$a0,$s1,#LOG_TCBSZ	; need the tid again
+	csrrc	$x0,#$300,#1				; disable ints
 	call	InsertIntoReadyList
 	mov		$v1,$a0
 .err:
-ERETx:
-	csrrc	$x0,#$800,#1				; select user for destination
-	mov		$v1,$v1							; move return values to user registers
-	mov		$v0,$v0
-	csrrc	$x0,#$800,#15				; select user register set for all
-	eret											; and return
+.xit:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -647,9 +749,16 @@ ERETx:
 ;------------------------------------------------------------------------------
 
 FMTK_ExitTask:
+	csrrs	$x0,#$300,#1				; enable ints
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
 	mGetCurrentTid
 	mov		a1,v0
-	; fall through to KillTask
+	call	KillTask
+.xit:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
 	
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -657,13 +766,17 @@ FMTK_ExitTask:
 ;------------------------------------------------------------------------------
 
 FMTK_KillTask:
+	csrrs	$x0,#$300,#1				; enable ints
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
 	beqz	$a1,.immortal		; tid #0 is immortal (the system)
 	ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
-	and		$t1,$a1,#63					; limit tid
+	and		$t1,$a1,#MAX_TID		; limit tid
 	sll		$t1,$t1,#LOG_TCBSZ	; convert to TCB address
 	stb		$t0,TCBStatus[$t1]
 	mov		$a0,$a1								; a0 = pid
-	mRemoveFromReadyList
+	csrrc	$x0,#$300,#1				; disable ints
+	call	RemoveFromReadyList
 	call	FreeAll							; free all the memory associated with the task
 	; Now make process ID available for reuse
 	ldo		$t1,PIDMAP
@@ -674,6 +787,9 @@ FMTK_KillTask:
 	sto		$t1,PIDMAP
 .immortal:
 	ldi		$v0,#E_Ok
-	jmp		ERETx
+.xit:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
 
 	

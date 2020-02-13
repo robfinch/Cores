@@ -2,6 +2,7 @@
 .include "../fmtk/config.r5a"
 .include "../fmtk/device.r5a"
 .include "../fmtk/macro.r5a"
+.include "../fmtk/global.r5a"
 
 CTRLC				equ		$03
 BS					equ		$08
@@ -31,79 +32,97 @@ switchflag	equ		$14200
 milliseconds	equ		$14208
 
 
-		code	18 bits
+	code	18 bits
 ;------------------------------------------------------------------------------
 ; Exception vector table.
 ;------------------------------------------------------------------------------
-		org		$FFFC0000				; user mode exception
-		jmp		IRQRout
-		org 	$FFFC00C0				; machine mode exception
-		jmp		IRQRout
-		org		$FFFC00FC				; non-maskable interrupt
-		jmp		MachineStart
+	org		$FFFC0000				; user mode exception
+	jmp		IRQRout
+	org		$FFFC0040				; supervisor mode exception (not possible)
+	jmp		IRQRout
+	org		$FFFC0080				; hypervisor mode exception (not possible)
+	jmp		IRQRout
+	org 	$FFFC00C0				; machine mode exception
+	jmp		IRQRout
+	org		$FFFC00FC				; non-maskable interrupt
+	jmp		MachineStart
 
 ;------------------------------------------------------------------------------
 ; User mode code starts here
 ;------------------------------------------------------------------------------
-		org		$FFFC0100
+	org		$FFFC0100
 MachineStart:
-		ldi		$sp,#$80000-4		; setup machine mode stack pointer
-		call	MMUInit					; initialize MMU for address space zero.
-		call	FMTKInit
-		call	VideoInit
-		call	ViaInit
-		call	SerialInit
-		ldi		$t0,#0
-		csrrw	$x0,#$181,$t0		; set ASID
-		ldi		$t0,#$FFFC0000
-		csrrw $x0,#$301,$t0		; set tvec
-		ldi		$t0,#UserStart
-		csrrw	$x0,#$341,$t0		; set mepc
-		;csrrs	$x0,#$300,#8		; enable interrupts (on eret)
-		csrrc	$x0,#$800,#15		; select user register set
-		eret									; switch to user mode
+	ldi		$sp,#$1FFFBFF8		; setup machine mode stack pointer
+	; The dram needs a bit of time before it's ready for access. along with
+	; the video screen which also needs some time. So the first thing done is
+	; to delay for about 3 seconds.
+	ldi		$t1,#VIA
+	ldi		$t0,#$000000FF		; set via so we can see output on LEDs
+	stt		$t0,VIA_DDRA[$t1]
+	ldi		$a0,#60000000			; 3s in 50ns intervals
+	call	_MicroDelay
+	call	MMUInit					; initialize MMU for address space zero.
+	call	FMTKInit
+	call	VideoInit
+	call	ViaInit
+	call	SerialInit
+	call	_KeybdInit
+	call	PicInit
+	ldi		$t0,#0
+	csrrw	$x0,#$181,$t0		; set ASID
+	ldi		$t0,#$FFFC0000
+	csrrw $x0,#$301,$t0		; set tvec
+	ldi		$t0,#UserStart
+	csrrw	$x0,#$341,$t0		; set mepc
+	csrrs	$x0,#$300,#8		; enable interrupts (on eret)
+	eret									; switch to user mode
 UserStart:
-		ldi		$a0,#1					; start TinyBasic
-		ldi		$a1,#32000
-		ldi		$a2,#CSTART
-		ecall
-		ldi		$a0,#1
-		ldi		$a1,#24000
-		ldi		$a2,#UserStart2
-		ecall
-;		wfi
+	ldi		$a0,#1					; start TinyBasic
+	ldi		$a1,#32000
+	ldi		$a2,#CSTART
+	ecall
+	ldi		$a0,#1
+	ldi		$a1,#24000
+	ldi		$a2,#UserStart2
+	ecall
+;	wfi
 UserStart2:
-		ldi		$a0,#14							; Get current tid
-		ecall
-		mov		$a1,$v1
-		ldi		$a0,#24							; RequestIOFocus
-		ecall
-		ldi		$sp,#$80000-1028		; setup user mode stack pointer
-		ldi		$t0,#$04						; turn on the LED
-		sw		$t0,VIA+VIA_PARAW
-		ldi		$t2,#16							; send an XON just in case
-		ldi		$a3,#XON
-.0004:
-		call	SerialPutChar
-		sub		$t2,$t2,#1
-		bne		$t2,$x0,.0004
+	ldi		$a0,#60000000				; 3s in 50ns intervals
+	call	_MicroDelay
+	call	VideoClearScreen
+	call	VideoHomeCursor
+	ldi		$a0,#14							; Get current tid
+	ecall
+	mov		$a1,$v1
+	ldi		$a0,#24							; RequestIOFocus
+	ecall
+;	ldi		$sp,#$1FFF7FF8			; setup user mode stack pointer
+	ldi		$sp,#$AFFFFFFC
+	ldi		$t0,#$04						; turn on the LED
+	stt		$t0,VIA+VIA_PARAW
+	ldi		$t2,#16							; send an XON just in case
+;	ldi		$a3,#XON
+;.0004:
+;	call	SerialPutChar
+;	sub		$t2,$t2,#1
+;	bnez	$t2,.0004
 .0002:
-		ldi		$a0,#msgStart				; spit out a startup message
-		call	PutString
+	ldi		$a0,#msgStart				; spit out a startup message
+	call	PutString
 ;		ldi		a0,#1
 ;		ldi		a1,#24000
 ;		ldi		a2,#Monitor
 ;		ecall
-		call	DumpReadyList
-		bra		MonEntry
+	call	DumpReadyList
+	bra		MonEntry
 
 		; Now a loop to recieve and echo back characters
 .0003:
-		call	SerialPeekChar
-		blt		$v0,$x0,.0003
-		mov		$a0,$v0
-		call	SerialPutChar
-		bra		.0003
+	call	SerialPeekChar
+	blt		$v0,$x0,.0003
+	mov		$a0,$v0
+	call	SerialPutChar
+	bra		.0003
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -122,37 +141,41 @@ IdleTask:
 ;------------------------------------------------------------------------------
 
 Getch:
-	sub		$sp,$sp,#12
-	stt		$ra,[$sp]
-	stt		$a0,4[$sp]
-	stt		$a1,8[$sp]
-	mWaitForFocus
+	sub		$sp,$sp,#24
+	sto		$ra,[$sp]
+	sto		$a0,8[$sp]
+	sto		$a1,16[$sp]
+;	mWaitForFocus
 	call	SerialGetChar
-	ldt		$ra,[$sp]
-	ldt		$a0,4[$sp]
-	ldt		$a1,8[$sp]
-	add		$sp,$sp,#12
+	ldo		$ra,[$sp]
+	ldo		$a0,8[$sp]
+	ldo		$a1,16[$sp]
+	add		$sp,$sp,#24
 	ret
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 Putch:
-	sub		$sp,$sp,#20
-	sw		$ra,[$sp]
-	sw		$v0,4[$sp]
-	sw		$a3,8[$sp]
-	sw		$v1,12[$sp]
-	sw		$a1,16[$sp]
+	sub		$sp,$sp,#40
+	sto		$ra,[$sp]
+	sto		$v0,8[$sp]
+	sto		$a3,16[$sp]
+	sto		$v1,24[$sp]
+	sto		$a1,32[$sp]
 	mov		$a3,$a0
-	ldi		$a1,#5							; serial port
-	call	fputc
-	lw		$ra,[$sp]
-	lw		$v0,4[$sp]
-	lw		$a3,8[$sp]
-	lw		$v1,12[$sp]
-	lw		$a1,16[$sp]
-	add		$sp,$sp,#20
+;	call	SerialPutChar
+	call	VideoPutChar
+;	ldi		$a1,#5							; serial port = 5
+;	call	fputc
+;	ldi		$a1,#2							; video = 2
+;	call	fputc
+	ldo		$ra,[$sp]
+	ldo		$v0,8[$sp]
+	ldo		$a3,16[$sp]
+	ldo		$v1,24[$sp]
+	ldo		$a1,32[$sp]
+	add		$sp,$sp,#40
 	ret
 
 ;------------------------------------------------------------------------------
@@ -174,24 +197,24 @@ Putch:
 ;------------------------------------------------------------------------------
 
 fputc:
-	sub		$sp,$sp,#24
-	stt		$ra,[$sp]
-	stt		$v0,4[$sp]
-	stt		$a0,8[$sp]
-	stt		$v1,12[$sp]
-	stt		$a1,16[$sp]
-	stt		$a2,20[$sp]
-	mWaitForFocus
+	sub		$sp,$sp,#48
+	sto		$ra,[$sp]
+	sto		$v0,8[$sp]
+	sto		$a0,16[$sp]
+	sto		$v1,24[$sp]
+	sto		$a1,32[$sp]
+	sto		$a2,40[$sp]
+;	mWaitForFocus
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
-	ldt		$ra,[$sp]
-	ldt		$v0,4[$sp]
-	ldt		$a0,8[$sp]
-	ldt		$v1,12[$sp]
-	ldt		$a1,16[$sp]
-	ldt		$a2,20[$sp]
-	add		$sp,$sp,#24
+	ldo		$ra,[$sp]
+	ldo		$v0,8[$sp]
+	ldo		$a0,16[$sp]
+	ldo		$v1,24[$sp]
+	ldo		$a1,32[$sp]
+	ldo		$a2,40[$sp]
+	add		$sp,$sp,#48
 	ret
 
 ;------------------------------------------------------------------------------
@@ -210,17 +233,18 @@ MonEntry:
 ;		call	PutString
 
 Monitor:
-		csrrc	$x0,#$300,#1
+	ldi		$sp,#$AFFFFFFC
+	csrrc	$x0,#$300,#1
 ;		call	DumpReadyList
 ;		call	DumpTimeoutList
-		csrrs	$x0,#$300,#1
-		ldi		$s1,#0					; s1 = input pointer
-		ldi		$a0,#CR
-		call	Putch
-		ldi		$a0,#LF
-		call	Putch
-		ldi		$a0,#'>'
-		call	Putch
+	csrrs	$x0,#$300,#1
+	ldi		$s1,#0					; s1 = input pointer
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,#LF
+	call	Putch
+	ldi		$a0,#'>'
+	call	Putch
 .0001:
 		call	Getch						; wait until character pressed
 		blt		$v0,$x0,.0001
@@ -347,15 +371,15 @@ Monitor:
 		bra		Monitor
 
 doMem:
-		sub		$sp,$sp,#4
+		sub		$sp,$sp,#8
 		add		$s1,$s1,#1
-		sw		$s1,[$sp]
+		sto		$s1,[$sp]
 		ldi		$a0,#CR
 		call	Putch
 		ldi		$a0,INBUF
 		call	PutString
-		lw		$s1,[$sp]
-		add		$sp,$sp,#4
+		ldo		$s1,[$sp]
+		add		$sp,$sp,#8
 		call	GetHexNum
 		mov		$s3,$v0
 		add		$s1,$s1,#1
@@ -375,7 +399,7 @@ doMem:
 .loop:
 		ldi		$a0,#' '
 		call	Putch
-		lb		$a0,[$s3]
+		ldb		$a0,[$s3]
 		call	PutHexByte
 		add		$s3,$s3,#1
 		sub		$s2,$s2,#1
@@ -388,7 +412,7 @@ EditMem:
 		mov		$s3,$v0
 		add		$s1,$s1,#1
 		call	GetHexNum			; get value to set
-		sb		$s3,[$v0]			; update mem
+		stb		$s3,[$v0]			; update mem
 		jmp		Monitor
 
 ;------------------------------------------------------------------------------
@@ -405,7 +429,7 @@ FillMem:
 		add		$s1,$s1,#1
 		call	GetHexNum			; get byte to use
 .0001:
-		sb		$v0,[$s3]
+		stb		$v0,[$s3]
 		sub		$s4,$s4,#1
 		bgt		$s4,$x0,.0001
 		jmp		Monitor
@@ -416,7 +440,7 @@ FillMem:
 
 SkipSpaces:
 .skip2:
-		lb		$t0,INBUF[$s1]
+		ldb		$t0,INBUF[$s1]
 		xor		$t1,$t0,#' '
 		beq		$t1,$x0,.skip1
 		xor		$t1,$t0,#'\t'
@@ -432,8 +456,8 @@ SkipSpaces:
 
 GetHexNum:
 		ldi		$v0,#0							; v0 = num
-		sub		$sp,$sp,#4
-		sw		$ra,[$sp]
+		sub		$sp,$sp,#8
+		sto		$ra,[$sp]
 		call	SkipSpaces
 .next:
 		lb		$t0,INBUF[$s1]
@@ -450,8 +474,8 @@ GetHexNum:
 		ldi		$t2,#'f'+1
 		blt		$t0,$t2,.isHexLower
 .0001:
-		lw		$ra,[$sp]
-		add		$sp,$sp,#4
+		ldo		$ra,[$sp]
+		add		$sp,$sp,#8
 		ret
 .isHexUpper:
 		sll		$v0,$v0,#4
@@ -478,52 +502,66 @@ GetHexNum:
 ; Output a word as a hex string.
 ;------------------------------------------------------------------------------
 
+PutHexDword:
+		sub		$sp,$sp,#16
+		sto		$ra,[$sp]
+		sto		$a0,8[$sp]
+		srl		$a0,$a0,#32
+		call	PutHexWord
+		ldo		$ra,[$sp]
+		ldo		$a0,8[$sp]
+		add		$sp,$sp,#16	; fall through to PutHexWord
+
+;------------------------------------------------------------------------------
+; Output a word as a hex string.
+;------------------------------------------------------------------------------
+
 PutHexWord:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		sub		$sp,$sp,#16
+		sto		$ra,[$sp]
+		sto		$a0,8[$sp]
 		srl		$a0,$a0,#16
 		call	PutHexHalf
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
-		add		$sp,$sp,#8	; fall through to PutHexHalf
+		ldo		$ra,[$sp]
+		ldo		$a0,8[$sp]
+		add		$sp,$sp,#16	; fall through to PutHexHalf
 
 ;------------------------------------------------------------------------------
 ; Output a half-word (16 bits) as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexHalf:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		sub		$sp,$sp,#16
+		sto		$ra,[$sp]
+		sto		$a0,8[$sp]
 		srl		$a0,$a0,#8
 		call	PutHexByte
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]		
-		add		$sp,$sp,#8	; fall through to PutHexByte
+		ldo		$ra,[$sp]
+		ldo		$a0,8[$sp]		
+		add		$sp,$sp,#16	; fall through to PutHexByte
 
 ;------------------------------------------------------------------------------
 ; Output a byte as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexByte:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		sub		$sp,$sp,#16
+		sto		$ra,[$sp]
+		sto		$a0,8[$sp]
 		srl		$a0,$a0,#4		; put the high order nybble first
 		call	PutHexNybble
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
-		add		$sp,$sp,#8		; fall through to PutHexNybble
+		ldo		$ra,[$sp]
+		ldo		$a0,8[$sp]
+		add		$sp,$sp,#16		; fall through to PutHexNybble
 
 ;------------------------------------------------------------------------------
 ; Output a nybble as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexNybble:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		sub		$sp,$sp,#16
+		sto		$ra,[$sp]
+		sto		$a0,8[$sp]
 		and		$a0,$a0,#15		; strip off high order bits
 		ldi		$t0,#10
 		blt		$a0,$t0,.lt10
@@ -535,14 +573,14 @@ PutHexNybble:
 		add		$a0,$a0,#'0'
 		call	Putch
 .0001:
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
-		add		$sp,$sp,#8
+		ldo		$ra,[$sp]
+		ldo		$a0,8[$sp]
+		add		$sp,$sp,#16
 		ret
 
 ;------------------------------------------------------------------------------
 ; PutString
-;    Put a string of characters to the serial transmitter. Calls the 
+;    Put a string of characters to output device. Calls the 
 ; Putch routine, so this routine also blocks if the transmitter is not
 ; empty.
 ;
@@ -555,21 +593,40 @@ PutHexNybble:
 ;------------------------------------------------------------------------------
 
 PutString:
-		sub		$sp,$sp,#8				; save link register
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]				; and argument
-		mov		$t1,$a0						; t1 = pointer to string
+	sub		$sp,$sp,#16				; save link register
+	sto		$ra,[$sp]
+	sto		$a0,8[$sp]				; and argument
+	mov		$t1,$a0						; t1 = pointer to string
 .0001:
-		lb		$a0,[$t1]
-		add		$t1,$t1,#1				; advance pointer to next byte
-		beq		$a0,$x0,.done			; branch if done
-		call	Putch							; output character
-		bra		.0001
+	lb		$a0,[$t1]
+	add		$t1,$t1,#1				; advance pointer to next byte
+	beqz	$a0,.done			; branch if done
+	call	Putch							; output character
+	bra		.0001
 .done:
-		lw		$ra,[$sp]					; restore return address
-		lw		$a0,4[$sp]				; and argument
-		add		$sp,$sp,#8
-		ret
+	ldo		$ra,[$sp]					; restore return address
+	ldo		$a0,8[$sp]				; and argument
+	add		$sp,$sp,#16
+	ret
+
+;------------------------------------------------------------------------------
+; MicroDelay - delay for a few clock ticks
+;
+; Parameters:
+;		a0 = wait in ticks (50 ns intervals)
+;------------------------------------------------------------------------------
+
+_MicroDelay:
+	csrrw	$t3,#$C00,$x0
+.0001:
+	csrrw	$t4,#$C00,$x0
+	sub		$t4,$t4,$t3
+	srl		$t5,$t4,#17
+	stt		$t5,VIA+VIA_PARAW
+	slt		$t4,$t4,$a0
+	bnez	$t4,.0001
+	ret
+
 
 ;------------------------------------------------------------------------------
 ; Exception processing code starts here.
@@ -580,20 +637,21 @@ PutString:
 	code
 	align	4
 IRQRout:
-	csrrs	$x0,#$800,#15		; select machine regs
-	ldi		$sp,#$80000-4		; setup machine mode stack pointer
+	csrrw	$t0,#$780,$x0			; get register set
+	sll		$t0,$t0,#10				; 1k stack area
+	ldi		$sp,#$20000000-8	; setup machine mode stack pointer (top of ram)
+	sub		$sp,$sp,$t0				; set stack pointer for register set
 	csrrw	$t0,#$342,$x0			; get cause code
 	blt		$t0,$x0,.isIRQ		; irq or ecall?
-	jmp		OSCALL					; goto operating system call dispatcher
+	jmp		OSCALL						; goto operating system call dispatcher
 .isIRQ:
-	and		$t0,$t0,#31			; interrupting device # is low order 5 bits of cause code
-	sll		$t0,$t0,#7				; 128 bytes per device func table
-	add		$t0,$t0,#DVF_Base+22*4	; load IRQ routine vector from device func table
-	lw		$t0,[$t0]
-	beq		$t0,$x0,.noIRQ	; make sure there's an address to go to
-	jmp		[$t0]						; jump to the IRQ routine
+	and		$t0,$t0,#31				; interrupting device # is low order 5 bits of cause code
+	sll		$t0,$t0,#8				; 256 bytes per device func table
+	add		$t0,$t0,#DVF_Base+22*8	; load IRQ routine vector from device func table
+	ldo		$t0,[$t0]
+	beq		$t0,$x0,.noIRQ		; make sure there's an address to go to
+	jmp		[$t0]							; jump to the IRQ routine
 .noIRQ:
-	csrrc	$x0,#$800,#15
 	eret
 
 ;------------------------------------------------------------------------------
@@ -601,7 +659,7 @@ IRQRout:
 ;------------------------------------------------------------------------------
 
 msgStart:
-		db		"CS01 System Starting.",13
+		db		"Petajon System Starting.",13
 msgMonHelp:
 		db		"Monitor Commands",13
 		db		"B - start tiny basic",13
@@ -626,6 +684,7 @@ flt10:
 
 .include "fltToString.r5a"
 .include "cs01Mem.r5a"
+.include "../fmtk/pic.r5a"
 .include "../fmtk/serial.r5a"
 .include "../fmtk/via.r5a"
 .include "../fmtk/video.r5a"
@@ -634,4 +693,6 @@ flt10:
 .include "../fmtk/tcb.r5a"
 .include "../fmtk/iofocus.r5a"
 .include "../fmtk/io.r5a"
+.include "../fmtk/scancodes.r5a"
+.include "../fmtk/keybd_driver_asm.r5a"
 .include "TinyBasic.r5a"

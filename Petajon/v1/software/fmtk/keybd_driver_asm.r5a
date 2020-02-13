@@ -1,0 +1,383 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	align	8
+KeybdFuncTbl:
+	dco		0							; no operation
+	dco		0							; setup
+	dco		0							; initialize
+	dco		0							; status
+	dco		0							; media check
+	dco		0							; build BPB
+	dco		0							; open
+	dco		0							; close
+	dco		0							; get char
+	dco		0							; Peek char
+	dco		_KeybdGetScancode		; get char direct
+	dco		_KeybdPeekScancode	; Peek char direct
+	dco		0							; input status
+	dco		0							; Put char
+	dco		0							; reserved
+	dco		0							; set position
+	dco		0							; read block
+	dco		0							; write block
+	dco		0							; verify block
+	dco		0							; output status
+	dco		0							; flush input
+	dco		0							; flush output
+	dco		KeybdIRQ			; IRQ routine
+	dco		0							; Is removable
+	dco		0							; ioctrl read
+	dco		0							; ioctrl write
+	dco		0							; output until busy
+	dco		0							; 27
+	dco		0
+	dco		0
+	dco		0
+	dco		0							; 31
+
+;===============================================================================
+; Keyboard routines
+;===============================================================================
+
+SC_C		equ		$21
+SC_Z		equ		$1A
+SC_TAB	equ		$0D
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Initialize the keyboard.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	align	4		; we don't know what was before
+_KeybdInit:
+	sub		$sp,$sp,#16
+	sto		$ra,[$sp]
+	ldi		$a0,#1					; Keyboard device
+	ldi		$a1,#KeybdFuncTbl
+	call	CopyDevFuncTbl
+	ldi		$a1,#0
+	ldi		$a2,#hKeybdMbx
+	call	FMTK_AllocMbx
+	bra		.xit
+	ldi		$t3,#5
+.0002:
+	ldi		$a0,#200000			; 10ms wait
+	sto		$t3,8[$sp]
+	call	_MicroDelay
+	ldi		$a0,#-1					; send reset code to keyboard
+	stb		$a0,KEYBD+1			; write $FF to status reg to clear TX state
+	call	_KeybdSendByte	; now write to transmit register
+	call	_KeybdWaitTx		; wait until no longer busy
+	call	_KeybdRecvByte	; look for an ACK ($FA)
+	xor		$t2,$v0,#$FA
+	bnez	$t2,.tryAgain
+	call	_KeybdRecvByte	; look for BAT completion code ($AA)
+	xor		$t2,$v0,#$FC		; reset error ?
+	beqz	$t2,.tryAgain
+	xor		$v0,$v0,#$AA	; reset complete okay ?
+	bnez	$v0,.tryAgain
+
+	; After a reset, scan code set #2 should be active
+.config:
+	ldi		$a0,#$F0			; send scan code select
+	stb		$a0,LEDS
+	call	_KeybdSendByte
+	call	_KeybdWaitTx
+	and		$v0,$v0,#$80
+	bnez	$v0,.tryAgain
+	call	_KeybdRecvByte	; wait for response from keyboard
+	and		$v1,$v0,#$80
+	bnez	$v1,.tryAgain
+	xor		$t2,$v0,#$FA
+	beqz	$t2,.0004
+.tryAgain:
+	ldo		$t3,8[$sp]
+  sub   $t3,$t3,#1
+	bnez	$t3,.0002
+.keybdErr:
+	ldi		$a0,#msgBadKeybd
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]
+	call	PutString		; _DBGDisplayAsciiStringCRLF
+	bra		.ledxit
+.0004:
+	ldi		$a0,#2			; select scan code set #2
+	call	_KeybdSendByte
+	call	_KeybdWaitTx
+	and		$v0,$v0,#$80
+	bnez	$v0,.tryAgain
+	call	_KeybdRecvByte	; wait for response from keyboard
+	and		$v1,$v0,#$80
+	bnez	$v1,.tryAgain
+	xor		$t2,$v0,#$FA
+	bnez	$t2,.tryAgain
+	call	_KeybdGetID
+.ledxit:
+	ldi		$a0,#$07
+	call	_KeybdSetLED
+	ldi		$a0,#6000000	; 300 ms
+	call	_MicroDelay
+	ldi		$a0,#$00
+	call	_KeybdSetLED
+.xit:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#16
+	ret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Set the LEDs on the keyboard.
+;
+; Parameters: $a0 LED status to set
+; Returns: none
+; Modifies: none
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdSetLED:
+	sub		$sp,$sp,#16
+	sto		$ra,[$sp]
+	mov		$t2,$a0
+	ldi		$a0,#$ED
+	sto		$t2,8[$sp]
+	call	_KeybdSendByte
+	call	_KeybdWaitTx
+	call	_KeybdRecvByte	; should be an ack
+	ldo		$t2,8[$sp]
+	mov		$a0,$t2
+	call	_KeybdSendByte
+	call	_KeybdWaitTx
+	call	_KeybdRecvByte	; should be an ack
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#16
+	ret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Get ID - get the keyboards identifier code.
+;
+; Parameters: none
+; Returns: r1 = $AB83, $00 on fail
+; Modifies: r1, KeybdID updated
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdGetID:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#$F2
+	call	_KeybdSendByte
+	call	_KeybdWaitTx
+	call	_KeybdRecvByte
+	and		$v1,$v0,#$80
+	bnez	$v1,.notKbd
+	xor		$t2,$v0,#$AB
+	bnez	$t2,.notKbd
+	call	_KeybdRecvByte
+	and		$v1,$v0,#$80
+	bnez	$v1,.notKbd
+	xor		$t2,$v0,#$83
+	bnez	$t2,.notKbd
+	ldi		$v0,#$AB83
+.0001:
+	stt		$v0,_KeybdID
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+.notKbd:
+	ldi		$v0,#$00
+	bra		.0001
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Recieve a byte from the keyboard, used after a command is sent to the
+; keyboard in order to wait for a response.
+;
+; Parameters: none
+; Returns: r1 = recieved byte ($00 to $FF), -1 on timeout
+; Modifies: r1
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdRecvByte:
+	sub		$sp,$sp,#16
+	sto		$ra,[$sp]
+	ldi		$t3,#100				; wait up to 1s
+.0003:
+	call	_KeybdGetStatus	; wait for response from keyboard
+	and		$v0,$v0,#$80		; is input buffer full ? yes, branch
+	bnez	$v0,.0004
+	ldi		$a0,#200000
+	sto		$t3,8[$sp]
+	call	_MicroDelay
+	ldo		$t3,8[$sp]
+	sub   $t3,$t3,#1
+	bnez	$t3,.0003				; go back and try again
+	ldi		$v0,#-1				; return -1
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#16
+	ret
+.0004:
+	call	_KeybdGetScancode
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#16
+	ret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Send a byte to the keyboard.
+;
+; Parameters: $a0 byte to send
+; Returns: none
+; Modifies: none
+; Stack Space: 0 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdSendByte:
+	stb		$a0,KEYBD
+	ret
+	
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Wait until the keyboard transmit is complete
+;
+; Parameters: none
+; Returns: r1 = 0 if successful, r1 = -1 timeout
+; Modifies: v0,t3
+; Stack Space: 1 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdWaitTx:
+	sub		$sp,$sp,#16
+	sto		$ra,[$sp]
+	ldi		$t3,#100			; wait a max of 1s
+.0001:
+	call	_KeybdGetStatus
+	and		$v0,$v0,#$40	; check for transmit complete bit; branch if bit set
+	bnez	$v0,.0002
+	sto		$t3,8[$sp]
+	ldi		$a0,#200000		; 10 ms @20MHz
+	call	_MicroDelay		; delay a little bit
+	ldo		$t3,8[$sp]
+	sub		$t3,$t3,#1
+	bnez	$t3,.0001
+	ldo		$ra,[$sp]			; timed out
+	add		$sp,$sp,#8
+	ldi		$v0,#-1
+	ret		
+.0002:
+	ldo		$ra,[$sp]			; timed out
+	add		$sp,$sp,#16
+	ldi		$v0,#0
+	ret		
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Get the keyboard status
+;
+; Parameters: none
+; Returns: r1 = status
+; Modifies: r1
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdGetStatus:
+	ldb		$v0,KEYBD+1
+	ret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Get the scancode from the keyboard port. Getting the scancode clears the
+; interrupt status.
+;
+; Parameters: none
+; Returns: r1 = scancode
+; Modifies: r1
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+_KeybdPeekScancode:
+	ldbu		$v0,KEYBD			; get the scan code
+	ret
+	
+_KeybdGetScancode:
+	ldbu		$v0,KEYBD			; get the scan code
+	stb			$x0,KEYBD+1		; clear receive register
+	ret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+KeybdIRQ:
+	call	_KeybdGetStatus
+	bge		$v0,$x0,.notKbd
+	call	_KeybdGetScancode
+	ldo		$s1,IOFocusNdx
+	beqz	$s1,.notKbd
+	ldbu	$t0,TCBKbdHead[$s1]
+	ldbu	$t1,TCBKbdTail[$s1]
+	add		$t0,$t0,#1
+	and		$t0,$t0,#31
+	beq		$t0,$t1,.noRoom
+	stb		$t0,TCBKbdHead[$s1]
+	stb		$v0,TCBKbdBuf[$s1]
+.noRoom:
+	; check trigger debugger
+	; check CTRL-C
+	lbu		$t0,TCBKbdState2
+	and		$t1,$t0,#4
+	beqz	$t1,.notCtrl
+	ldi		$t0,#SC_C
+	bne		$v0,$t0,.notCtrlC
+	ldi		$t0,#3
+	sto		$t0,TCBException[$s1]
+	bra		.0001
+.notCtrlC:
+	ldi		$t0,#SC_Z
+	bne		$v0,$t0,.notCtrlZ
+	ldi		$t0,#26
+	mGetCurrentTid
+	sll		$v0,$v0,#32
+	or		$v0,$v0,$t0
+	sto		$v0,TCBException[$s1]
+	bra		.0001
+.notCtrlZ:
+.0001:
+.notCtrl:
+	and		$t1,$t0,#2
+	beqz	$t1,.notAlt
+	ldi		$t0,#SC_TAB
+	bne		$v0,$t0,.notAltTab
+	stb		$t0,SwitchIOFocus
+.notAltTab:
+	; Send a message indicating a key is available
+	; Keyboard mailbox setup yet?
+	ldw		$a1,hKeybdMbx
+	blt		$a1,$x0,.notKbd
+	; If there's already a keyboard message, don't send another one.
+	sll		$s1,$a1,#LOG_MBXSZ
+	add		$s1,$s1,#mbxs
+	ldo		$t0,MBX_MQTAIL[$s1]
+	bnez	$t0,.notKbd
+	ldi		$a2,#-1
+	ldi		$a3,#-1
+	ldi		$a4,#-1
+	call	FMTK_SendMsg
+.notKbd:
+	eret
+
+	

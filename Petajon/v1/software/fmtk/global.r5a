@@ -1,0 +1,74 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+;
+; 00000000	+-----------------------------------
+;						| Task Control Blocks (64 x 1kB)
+; 00010000	+-----------------------------------
+;						| Message Array (2048 x 32b)
+; 00020000	+-----------------------------------
+;						| Mailbox Array (256 x 32b)
+; 00022000	+-----------------------------------
+;						| Device Control Blocks (32 x 256b)
+; 00024000	+-----------------------------------
+
+msgs		EQU		$10000
+mbxs		EQU		$20000
+mbxs_end	EQU	$22000
+; The following must be at least 256 byte aligned
+DVF_Base		EQU		$22000
+DVF_Limit		EQU		$24000
+QNDX		EQU		$24304
+READYQ	EQU		$24308
+PIDMAP	EQU		$24310
+missed_ticks	equ		$24320
+TimeoutList		equ		$24328
+Tick		EQU		$24330
+SysSema	EQU		$24340
+FreeMsg	EQU		$24350
+RDYQ0		EQU		$24400
+RDYQ1		EQU		$24500
+RDYQ2		EQU		$24600
+RDYQ3		EQU		$24700
+CursorX		equ		$24800
+CursorY		equ		$24801
+DispAttr	equ		$24808
+IOFocusNdx		EQU		$24810
+IOFocusTbl		EQU		$24818
+SwitchIOFocus	EQU		$24820
+hKeybdMbx	equ		$24822
+NPAGES	equ		$24828
+
+SerRcvBuf		EQU		$25000
+SerXmitBuf	EQU		$25400
+SerHeadRcv	EQU		$25800
+SerTailRcv	EQU		$25804
+SerHeadXmit	EQU		$25808
+SerTailXmit	EQU		$2580C
+SerRcvXon		EQU		$25810
+SerRcvXoff	EQU		$25811
+
+
+
+
+
+

@@ -21,15 +21,6 @@
 ;
 ; ============================================================================
 
-SerRcvBuf		EQU		$19000
-SerXmitBuf	EQU		$19400
-SerHeadRcv	EQU		$19800
-SerTailRcv	EQU		$19804
-SerHeadXmit	EQU		$19808
-SerTailXmit	EQU		$1980C
-SerRcvXon		EQU		$19810
-SerRcvXoff	EQU		$19811
-
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; Device command 
@@ -301,7 +292,7 @@ SerialPutChar:
 ;	beq		$v1,$x0,.goSleep
 	ldb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$v0,$v0,#16					; bit #4 of the status reg
-	beq		$v0,$x0,.0001				; branch if transmitter is not empty
+	beqz	$v0,.0001						; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
 	ldo		$v0,[$sp]
 	ldo		$ra,8[$sp]
@@ -310,13 +301,13 @@ SerialPutChar:
 	ret
 .goSleep:
 	sub		$sp,$sp,#16
-	sto		a0,[$sp]
-	sto		a1,8[$sp]
-	ldi		a0,#5								; sleep function
-	ldi		a1,#1								; 1 tick
+	sto		$a0,[$sp]
+	sto		$a1,8[$sp]
+	ldi		$a0,#5							; sleep function
+	ldi		$a1,#1							; 1 tick
 	ecall
-	ldo		a0,[$sp]
-	ldo		a1,8[$sp]
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
 	add		$sp,$sp,#16
 	bra		.0002
 	
@@ -369,7 +360,6 @@ SerialIRQ:
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
-	csrrc	$x0,#$800,#15				; switch to user regset
 	eret
 	
 nmeSerial:

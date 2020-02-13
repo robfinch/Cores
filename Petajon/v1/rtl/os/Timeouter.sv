@@ -1,18 +1,40 @@
-
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2020  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 module Timeouter(rst_i, clk_i, dec_i, set_i, qry_i, tid_i, timeout_i, timeout_o, zeros_o, done_o);
 input rst_i;
 input clk_i;
 input dec_i;
 input set_i;
 input qry_i;
-input [3:0] tid_i;
-input [31:0] timeout_i;
-output reg [31:0] timeout_o;
-output reg [15:0] zeros_o;
+input [5:0] tid_i;
+input [63:0] timeout_i;
+output reg [63:0] timeout_o;
+output reg [63:0] zeros_o;
 output reg done_o;
 
-reg [31:0] tmo [0:15];
-reg [3:0] ndx;
+reg [47:0] tmo [0:63];
+reg [5:0] ndx;
 reg [2:0] state;
 parameter IDLE = 3'd0;
 parameter DEC1 = 3'd1;
@@ -21,7 +43,7 @@ parameter QRY1 = 3'd3;
 
 always @(posedge clk_i)
 if (rst_i) begin
-	zeros_o <= 16'hFFFF;
+	zeros_o <= 64'hFFFFFFFFFFFFFFFF;
 	done_o <= 1'b1;
 	goto (IDLE);
 end
@@ -30,7 +52,7 @@ case(state)
 IDLE:
 	begin
 		if (dec_i) begin
-			ndx <= 4'd0;
+			ndx <= 6'd0;
 			goto (DEC1);
 		end
 		else if (set_i) begin
@@ -47,25 +69,25 @@ IDLE:
 DEC1:
 	begin
 		ndx <= ndx + 1;
-		if (tmo[ndx] > 32'd0) begin
+		if (tmo[ndx] > 48'd0) begin
 			tmo[ndx] <= tmo[ndx] - 2'd1;
 			zeros_o[ndx] <= 1'b0;
 		end
 		else
 			zeros_o[ndx] <= 1'b1;
-		if (ndx==4'd15) begin
+		if (ndx==6'd63) begin
 			goto (IDLE);
 		end
 	end
 SET1:
 	begin
-		tmo[ndx] <= timeout_i;
+		tmo[ndx] <= timeout_i[47:0];
 		done_o <= 1'b1;
 		goto (IDLE);
 	end
 QRY1:
 	begin
-		timeout_o <= tmo[ndx];
+		timeout_o <= {{16{tmo[ndx][47]}},tmo[ndx]};
 		done_o <= 1'b1;
 		goto (IDLE);
 	end

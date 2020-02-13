@@ -58,10 +58,6 @@
 ;30   Random Number		PRNG
 ;31		Debug						DBG
 
-; The following must be at least 128 byte aligned
-DVF_Base		EQU		$1A000
-DVF_Limit		EQU		$1C000
-
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = I/O channel
@@ -82,7 +78,7 @@ FMTK_IO:
 	beq		$v0,$x0,.badFunc
 	call	[$v0]
 .xit:
-	jmp		ERETx
+	ret
 .badFunc:
 	ldi		$v0,#E_BadDevOp
 	bra		.xit
@@ -97,7 +93,7 @@ FMTK_IO:
 ;------------------------------------------------------------------------------
 
 CopyDevFuncTbl:
-	sll		$v0,$a0,#8					; each device allowed 32 functions (*128)
+	sll		$v0,$a0,#8					; each device allowed 32 functions (*256)
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	ldi		$t0,#32							; 32 functions to copy
 .again:

@@ -33,9 +33,9 @@ TCBStackBot	EQU		$290
 TCBMsgD1		EQU		$298
 TCBMsgD2		EQU		$2A0
 TCBMsgD3		EQU		$2A8
-TCBStartTick	EQU	$2B0
-TCBEndTick	EQU		$2B8
-TCBTicks		EQU		$2C0
+TCBStartTime	EQU		$2B0
+TCBEndTime		EQU		$2B8
+TCBElapsedTime		EQU		$2C0
 TCBException	EQU	$2C8
 TCBNext			EQU		$2D0
 TCBPrev			EQU		$2D8
@@ -43,6 +43,13 @@ TCBTimeout	EQU		$2E0
 IOF_NEXT		EQU		$2E8
 IOF_PREV		EQU		$2F0
 TCBName			EQU		$2F8
+TCBKbdHead	EQU		$300
+TCBKbdTail	EQU		$301
+TCBKbdBuf		EQU		$308
+; 328 end of keyboard buffer
+TCBResource	EQU		$328
+TCBVideoMem	EQU		$330
+TCBpVideo		EQU		$338
 
 TS_NONE			EQU		0
 TS_READY		EQU		1
@@ -67,6 +74,7 @@ E_NotOwner	=		0x12
 E_QueStrategy =		0x13
 E_BadDevNum	=		0x18
 E_DCBInUse	=		0x19
+E_BadCallno	=  0x1A
 ; Device driver errors
 E_BadDevNum	=		0x20
 E_NoDev		=		0x21
@@ -83,3 +91,4 @@ E_NoMoreAlarmBlks	=0x44
 E_NoMoreTCBs	=	0x45
 E_NoMem		= 12
 
+CSR_REGSET	equ		$790

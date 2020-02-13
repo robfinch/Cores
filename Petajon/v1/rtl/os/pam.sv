@@ -93,7 +93,7 @@ ALLOC1:
 		// Force pages to always be allocated already
 		// First 32 pages allocated for the OS
 		if (wordno==7'd0)
-			map <= 64'h00000003;
+			map <= 64'h00000007;
 		// Force last page allocated for system stack
 		else if (wordno==7'd127)
 			map[63] <= 1'b1;
