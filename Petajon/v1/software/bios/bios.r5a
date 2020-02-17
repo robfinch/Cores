@@ -20,25 +20,23 @@
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 ;
 ; ============================================================================
-;
-;  0x80    - irq control for irq #0
-;  0x84    - irq control for irq #1
-;            bits 0 to 7  = cause code to issue
-;            bits 13 to 15 = irq level to issue
-;            bit 16 = irq enable
-;            bit 17 = edge sensitivity
 
-PIC				equ		$FFDC0F00
-PIC_CH16	equ		$C0
-PIC_CH28	equ		$F0
-PIC_CH31	equ		$FC
+	code
+	align	2
+BIOSCallTbl:
+	dh		BIOS_ClearScreen
+	dh		BIOS_HomeCursor
+	dh		BIOS_VideoPutChar
+	
+	align	4
+BIOS_ClearScreen:
+	jmp		VideoClearScreen
+BIOS_HomeCursor:
+	jmp		VideoHomeCursor
+BIOS_VideoPutChar:
+	jmp		VideoPutChar
 
-PicInit:
-	ldi		$t1,#PIC					; t1 = address of pic
-	ldi		$t0,#$0001E025		; level sensitive cause 37, interrupt enabled
-	stt		$t0,PIC_CH16[$t1]
-	ldi		$t0,#$0001E021		; level sensitive cause 33, interrupt enabled
-	stt		$t0,PIC_CH28[$t1]
-	ldi		$t0,#$0001E02F		; level sensitive cause 47, interrupt enabled
-	stt		$t0,PIC_CH31[$t1]
-	ret
+
+
+
+

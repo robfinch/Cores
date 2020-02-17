@@ -185,7 +185,7 @@ begin
 		default:	dat_o <= ie;
 		endcase
 	else
-		dat_o <= 52'h0000;
+		dat_o <= 64'h0000;
 end
 
 assign irqo = (irqenc == 5'h0) ? 3'd0 : irq[irqenc] & {3{ie[irqenc]}};

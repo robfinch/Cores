@@ -54,7 +54,7 @@ FMTK_HasIOFocus:
 .noSwitch:
 	mGetCurrentTid
 	sll		$v0,$v0,#LOG_TCBSZ
-	ldt		$v1,IOFocusNdx
+	ldo		$v1,IOFocusNdx
 	beq		$v0,$v1,.hasFocus
 	ldi		$v1,#0
 	bra		.xit
@@ -73,29 +73,34 @@ FMTK_HasIOFocus:
 ;	Parameters:
 ;		none
 ;	Modifies:
-;		none
+;		a0,a1,t0,t1,t2,t3
 ;	Returns:
 ;		v0 = E_Ok
 ;-----------------------------------------------------------------------------
 
 FMTK_SwitchIOFocus:
-	csrrs	$x0,#$300,#1				; enable interrupts
-	ldt		$t0,IOFocusNdx			; get focus pointer
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldo		$t0,IOFocusNdx			; get focus pointer
 	bltz	$t0,.noFocus				; is it -1?
-	ldt		$t1,IOF_NEXT[$t0]
+	ldo		$t1,IOF_NEXT[$t0]
 	beq		$t1,$t0,.sameFocus
 	bltz	$t1,.noFocus
+	csrrs	$x0,#$300,#1				; enable interrupts
 	; swap virtual text screens
 	ldi		$s1,#56*29
 	ldo		$t2,TCBVideoMem[$t0]
 	beqz	$t2,.0002
 	sto		$t2,TCBpVideo[$t0]
 	ldi		$t3,#$FFD00000
+	srl		$a0,$t0,#LOG_TCBSZ
+	mov		$a1,$t2
+	call	VirtToPhys
 .0001:
 	ldo		$t4,[$t3]
-	sto		$t4,[$t2]
+	sto		$t4,[$v0]
 	add		$t3,$t3,#8
-	add		$t2,$t2,#8
+	add		$v0,$v0,#8
 	sub		$s1,$s1,#1
 	bgt		$s1,$x0,.0001
 .0002:
@@ -104,18 +109,23 @@ FMTK_SwitchIOFocus:
 	beqz	$t2,.0004
 	ldi		$t3,#$FFD00000
 	sto		$t3,TCBpVideo[$t1]
+	srl		$a0,$t1,#LOG_TCBSZ
+	mov		$a1,$t2
+	call	VirtToPhys
 .0003:
-	ldo		$t4,[$t2]
+	ldo		$t4,[$v0]
 	sto		$t4,[$t3]
 	add		$t3,$t3,#8
-	add		$t2,$t2,#8
+	add		$v0,$v0,#8
 	sub		$s1,$s1,#1
 	bgt		$s1,$x0,.0003
 .0004:
-	stt		$t1,IOFocusNdx
+	sto		$t1,IOFocusNdx
 .sameFocus:
 .noFocus:
 	ldi		$v0,E_Ok
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
 	ret
 
 ;-----------------------------------------------------------------------------
@@ -162,7 +172,7 @@ FMTK_RequestIOFocus:
 
 FMTK_ReleaseIOFocus:
 	mGetCurrentTid
-	mov		a1,v0
+	mov		$a1,$v0
 	; fall into ForceReleaseIOFocus
 
 ;-----------------------------------------------------------------------------
@@ -183,39 +193,39 @@ FMTK_ForceReleaseIOFocus:
 	csrrs	$x0,#$300,#1				; enable interrupts
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
-	ldt		$t1,IOFocusTbl
+	ldo		$t1,IOFocusTbl
 	and		$t2,$t1,$t0				; test bit for task
 	beq		$t2,$x0,.noFocus	; does it even have the focus?
 	xor		$t0,$t0,#-1				; get inverted mask
 	and		$t1,$t1,$t0				; clear bit for task
-	stt		$t1,IOFocusTbl
-	ldt		$t1,IOFocusNdx		; check if the focus being released is the current
+	sto		$t1,IOFocusTbl
+	ldo		$t1,IOFocusNdx		; check if the focus being released is the current
 	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
 	bne		$t0,$t1,.notSame
-	sub		$sp,$sp,#8
-	stt		$t0,[$sp]
-	stt		$t1,4[$sp]
+	sub		$sp,$sp,#16
+	sto		$t0,[$sp]
+	sto		$t1,8[$sp]
 	call	FMTK_SwitchIOFocus
-	ldt		$t0,[$sp]
-	ldt		$t1,4[$sp]
-	add		$sp,$sp,#8
+	ldo		$t0,[$sp]
+	ldo		$t1,8[$sp]
+	add		$sp,$sp,#16
 .notSame:
 	; Disable interrupts while manipulating IO focus list
 	csrrc	$x0,#$300,#1				
-	ldt		$t2,IOF_NEXT[$t0]
+	ldo		$t2,IOF_NEXT[$t0]
 	blt		$t2,$x0,.done
 	beq		$t2,$t0,.pjSame
-	ldt		$t1,IOF_PREV[$t0]
-	stt		$t1,IOF_PREV[$t2]
-	stt		$t2,IOF_NEXT[$t1]
+	ldo		$t1,IOF_PREV[$t0]
+	sto		$t1,IOF_PREV[$t2]
+	sto		$t2,IOF_NEXT[$t1]
 	bra		.0001
 .pjSame:
 	ldi		$t1,#-1
-	stt		$t1,IOFocusNdx
+	sto		$t1,IOFocusNdx
 .0001:
 	ldi		$t1,#-1
-	stt		$t1,IOF_NEXT[$t0]	
-	stt		$t1,IOF_PREV[$t0]	
+	sto		$t1,IOF_NEXT[$t0]	
+	sto		$t1,IOF_PREV[$t0]	
 .done:
 .noFocus:
 	ldi		$v0,#E_Ok

@@ -46,6 +46,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Database3DataSet.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Database3DataSet.xsd</DependentUpon>
+    </Compile>
+    <Compile Include="Database3DataSet1.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Database3DataSet1.xsd</DependentUpon>
+    </Compile>
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -58,6 +68,12 @@
     <Compile Include="frmBank.Designer.cs">
       <DependentUpon>frmBank.cs</DependentUpon>
     </Compile>
+    <Compile Include="frmCache.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmCache.Designer.cs">
+      <DependentUpon>frmCache.cs</DependentUpon>
+    </Compile>
     <Compile Include="frmF.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -69,6 +85,12 @@
     </Compile>
     <Compile Include="frmM.Designer.cs">
       <DependentUpon>frmM.cs</DependentUpon>
+    </Compile>
+    <Compile Include="frmMemmgnt.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmMemmgnt.Designer.cs">
+      <DependentUpon>frmMemmgnt.cs</DependentUpon>
     </Compile>
     <Compile Include="frmMM.cs">
       <SubType>Form</SubType>
@@ -96,11 +118,17 @@
     <EmbeddedResource Include="frmBank.resx">
       <DependentUpon>frmBank.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="frmCache.resx">
+      <DependentUpon>frmCache.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmF.resx">
       <DependentUpon>frmF.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmM.resx">
       <DependentUpon>frmM.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmMemmgnt.resx">
+      <DependentUpon>frmMemmgnt.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmMM.resx">
       <DependentUpon>frmMM.cs</DependentUpon>
@@ -120,6 +148,28 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <None Include="Database3DataSet.xsc">
+      <DependentUpon>Database3DataSet.xsd</DependentUpon>
+    </None>
+    <None Include="Database3DataSet.xsd">
+      <Generator>MSDataSetGenerator</Generator>
+      <LastGenOutput>Database3DataSet.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="Database3DataSet.xss">
+      <DependentUpon>Database3DataSet.xsd</DependentUpon>
+    </None>
+    <None Include="Database3DataSet1.xsc">
+      <DependentUpon>Database3DataSet1.xsd</DependentUpon>
+    </None>
+    <None Include="Database3DataSet1.xsd">
+      <Generator>MSDataSetGenerator</Generator>
+      <LastGenOutput>Database3DataSet1.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="Database3DataSet1.xss">
+      <DependentUpon>Database3DataSet1.xsd</DependentUpon>
+    </None>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -132,6 +182,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Database3.accdb">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

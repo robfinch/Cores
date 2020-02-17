@@ -19,7 +19,8 @@ namespace FriscCoreGen
 		string MCap, MCapn;
 		string Fcap, Fcapn;
 		string MMcap, MMcapn;
-
+		string Memmgnt;
+	
 		public Form1()
 		{
 			InitializeComponent();
@@ -33,6 +34,29 @@ namespace FriscCoreGen
 			floatsz = 32;
 		}
 
+		private void SubVar(string varname, string varvalue)
+		{
+			int n;
+			int k;
+			int ln = varname.Length + 2;
+			int lv = varvalue.Length;
+			int i;
+
+			for (n = 0; n < lines.Count(); n = n + 1)
+			{
+				for (k = 0; k < lines[n].Length-2; k = k + 1)
+				{
+j1:
+					i = lines[n].IndexOf("%" + varname + "%");
+					if (i >= 0)
+					{
+						lines[n].Remove(i, ln);
+						lines[n].Insert(i, varvalue);
+						goto j1;
+					}
+				}
+			}
+		}
 		private void FilterPos(string ext)
 		{
 			int n, k;
@@ -165,6 +189,15 @@ namespace FriscCoreGen
 				FilterPos("PGMAP");
 			else
 				FilterNeg("PGMAP");
+			if (checkBox24.Checked)
+				FilterPos("LSAF");
+			else
+				FilterNeg("LSAF");
+			if (checkBox25.Checked)
+				FilterPos("IAF");
+			else
+				FilterNeg("IAF");
+			FilterNeg("SBB");
 			cha = new char[1];
 			cha[0] = ',';
 			Mops = MCap.Split(cha);
@@ -266,6 +299,20 @@ namespace FriscCoreGen
 			}
 		}
 
+		private void checkBox24_CheckedChanged(object sender, EventArgs e)
+		{
+
+		}
+
+		private void button2_Click(object sender, EventArgs e)
+		{
+			frmMemmgnt fm = new frmMemmgnt();
+			if (fm.ShowDialog()==DialogResult.OK)
+			{
+				Memmgnt = fm.cap;
+			}
+		}
+
 		private void checkBox19_CheckedChanged(object sender, EventArgs e)
 		{
 			if (checkBox19.Checked)
@@ -273,7 +320,6 @@ namespace FriscCoreGen
 				frmSAM fm = new frmSAM();
 				if (fm.ShowDialog() == DialogResult.OK)
 				{
-
 				}
 			}
 		}

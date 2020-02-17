@@ -32,17 +32,17 @@ endm
 ; Look at the asid register for task id
 macro mGetCurrentTid
 	csrrw	v0,#$181,x0
-	and		v0,v0,#15
+	and		v0,v0,#MAX_TID
 endm
 
 macro	mHasFocus
-	ldi		a0,#20
+	ldi		$a0,#20
 	ecall
 endm
 
 macro mSleep(tm)
-	ldi		a0,#5
-	ldi		a1,#tm
+	ldi		$a0,#5
+	ldi		$a1,#tm
 	ecall
 endm
 
@@ -102,3 +102,15 @@ macro mPopTimeoutList
 endm
 
 
+macro mVideoGetPtr:
+	mGetCurrentTid
+	sll		$v0,$v0,#LOG_TCBSZ
+	ldo		$v0,TCBpVideo[$v0]
+	ldi		$v0,#$FFD00000
+endm
+
+macro mDispIRQLive
+     ldo      $v0,$FFD00000+440
+     add     	$v0,$v0,#1
+     sto      $v0,$FFD00000+440
+endm

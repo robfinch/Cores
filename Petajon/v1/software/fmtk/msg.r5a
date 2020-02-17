@@ -110,7 +110,8 @@ FMTK_AllocMbx:
 	stb		$a1,MBX_OWNER[$t0]
 	sub		$t5,$t0,#mbxs				; convert pointer to handle
 	srl		$t5,$t5,#LOG_MBXSZ
-	mov		$a0,$a2
+	mov		$a0,$a1
+	mov		$a1,$a2
 	call	VirtToPhys
 	sto		$t5,[$v0]
 	ldi		$v0,#E_Ok
@@ -292,24 +293,25 @@ FMTK_PeekMsg:
 	sto		$t3,MSG_LINK[$t1]
 	sto		$t1,FreeMsg
 .nodq:
+	ldi		$t0,#$10000
 	csrrs	$x0,#$300,#1				; enable ints
-	beq		$a2,$x0,.nod1
-	mov		$a0,$a2
-	call	VirtToPhys
+	beqz	$a2,.nod1
 	ldo		$t3,MSG_D1[$t1]
-	sto		$t3,[$v0]
+	csrrs	$x0,#$300,$t0				; set mprv
+	sto		$t3,[$a2]
+	csrrc	$x0,#$300,$t0				; clear mprv
 .nod1:
-	beq		$a3,$x0,.nod2
-	mov		$a0,$a3
-	call	VirtToPhys
+	beqz	$a3,.nod2
 	ldo		$t3,MSG_D2[$t1]
-	sto		$t3,[$v0]
+	csrrs	$x0,#$300,$t0				; set mprv
+	sto		$t3,[$a3]
+	csrrc	$x0,#$300,$t0				; clear mprv
 .nod2:
-	beq		$a4,$x0,.nod3
-	mov		$a0,$a4
-	call	VirtToPhys
+	beqz	$a4,.nod3
 	ldo		$t3,MSG_D3[$t1]
-	sto		$t3,[$v0]
+	csrrs	$x0,#$300,$t0				; set mprv
+	sto		$t3,[$a4]
+	csrrc	$x0,#$300,$t0				; clear mprv
 .nod3:
 	ldi		$v0,#E_Ok
 	bra		.ret

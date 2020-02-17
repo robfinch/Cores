@@ -46,6 +46,7 @@
 			this.radioButton8 = new System.Windows.Forms.RadioButton();
 			this.radioButton7 = new System.Windows.Forms.RadioButton();
 			this.groupBox3 = new System.Windows.Forms.GroupBox();
+			this.checkBox23 = new System.Windows.Forms.CheckBox();
 			this.checkBox20 = new System.Windows.Forms.CheckBox();
 			this.checkBox19 = new System.Windows.Forms.CheckBox();
 			this.checkBox18 = new System.Windows.Forms.CheckBox();
@@ -77,9 +78,11 @@
 			this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
 			this.linkLabel3 = new System.Windows.Forms.LinkLabel();
 			this.groupBox5 = new System.Windows.Forms.GroupBox();
-			this.radioButton12 = new System.Windows.Forms.RadioButton();
 			this.radioButton13 = new System.Windows.Forms.RadioButton();
-			this.checkBox23 = new System.Windows.Forms.CheckBox();
+			this.radioButton12 = new System.Windows.Forms.RadioButton();
+			this.checkBox24 = new System.Windows.Forms.CheckBox();
+			this.checkBox25 = new System.Windows.Forms.CheckBox();
+			this.button2 = new System.Windows.Forms.Button();
 			this.groupBox1.SuspendLayout();
 			this.groupBox2.SuspendLayout();
 			this.Caching.SuspendLayout();
@@ -103,22 +106,22 @@
 			// radioButton2
 			// 
 			this.radioButton2.AutoSize = true;
+			this.radioButton2.Checked = true;
 			this.radioButton2.Location = new System.Drawing.Point(75, 22);
 			this.radioButton2.Name = "radioButton2";
 			this.radioButton2.Size = new System.Drawing.Size(55, 17);
 			this.radioButton2.TabIndex = 13;
+			this.radioButton2.TabStop = true;
 			this.radioButton2.Text = "RV64I";
 			this.radioButton2.UseVisualStyleBackColor = true;
 			// 
 			// radioButton1
 			// 
 			this.radioButton1.AutoSize = true;
-			this.radioButton1.Checked = true;
 			this.radioButton1.Location = new System.Drawing.Point(21, 22);
 			this.radioButton1.Name = "radioButton1";
 			this.radioButton1.Size = new System.Drawing.Size(55, 17);
 			this.radioButton1.TabIndex = 12;
-			this.radioButton1.TabStop = true;
 			this.radioButton1.Text = "RV32I";
 			this.radioButton1.UseVisualStyleBackColor = true;
 			// 
@@ -265,6 +268,7 @@
 			// 
 			// groupBox3
 			// 
+			this.groupBox3.Controls.Add(this.button2);
 			this.groupBox3.Controls.Add(this.checkBox23);
 			this.groupBox3.Controls.Add(this.checkBox20);
 			this.groupBox3.Controls.Add(this.checkBox19);
@@ -282,6 +286,18 @@
 			this.groupBox3.TabIndex = 37;
 			this.groupBox3.TabStop = false;
 			this.groupBox3.Text = "Memory Management";
+			// 
+			// checkBox23
+			// 
+			this.checkBox23.AutoSize = true;
+			this.checkBox23.Checked = true;
+			this.checkBox23.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.checkBox23.Location = new System.Drawing.Point(27, 251);
+			this.checkBox23.Name = "checkBox23";
+			this.checkBox23.Size = new System.Drawing.Size(66, 17);
+			this.checkBox23.TabIndex = 47;
+			this.checkBox23.Text = "SSMMU";
+			this.checkBox23.UseVisualStyleBackColor = true;
 			// 
 			// checkBox20
 			// 
@@ -500,6 +516,8 @@
 			// checkBox4
 			// 
 			this.checkBox4.AutoSize = true;
+			this.checkBox4.Checked = true;
+			this.checkBox4.CheckState = System.Windows.Forms.CheckState.Checked;
 			this.checkBox4.Location = new System.Drawing.Point(24, 157);
 			this.checkBox4.Name = "checkBox4";
 			this.checkBox4.Size = new System.Drawing.Size(120, 17);
@@ -521,6 +539,8 @@
 			// checkBox2
 			// 
 			this.checkBox2.AutoSize = true;
+			this.checkBox2.Checked = true;
+			this.checkBox2.CheckState = System.Windows.Forms.CheckState.Checked;
 			this.checkBox2.Location = new System.Drawing.Point(24, 111);
 			this.checkBox2.Name = "checkBox2";
 			this.checkBox2.Size = new System.Drawing.Size(176, 17);
@@ -576,7 +596,9 @@
 			// checkBox22
 			// 
 			this.checkBox22.AutoSize = true;
-			this.checkBox22.Location = new System.Drawing.Point(518, 338);
+			this.checkBox22.Checked = true;
+			this.checkBox22.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.checkBox22.Location = new System.Drawing.Point(489, 330);
 			this.checkBox22.Name = "checkBox22";
 			this.checkBox22.Size = new System.Drawing.Size(123, 17);
 			this.checkBox22.TabIndex = 41;
@@ -607,6 +629,16 @@
 			this.groupBox5.TabStop = false;
 			this.groupBox5.Text = "Bus Standard";
 			// 
+			// radioButton13
+			// 
+			this.radioButton13.AutoSize = true;
+			this.radioButton13.Location = new System.Drawing.Point(27, 43);
+			this.radioButton13.Name = "radioButton13";
+			this.radioButton13.Size = new System.Drawing.Size(83, 17);
+			this.radioButton13.TabIndex = 1;
+			this.radioButton13.Text = "AMBA / AXI";
+			this.radioButton13.UseVisualStyleBackColor = true;
+			// 
 			// radioButton12
 			// 
 			this.radioButton12.AutoSize = true;
@@ -619,31 +651,48 @@
 			this.radioButton12.Text = "WISHBONE";
 			this.radioButton12.UseVisualStyleBackColor = true;
 			// 
-			// radioButton13
+			// checkBox24
 			// 
-			this.radioButton13.AutoSize = true;
-			this.radioButton13.Location = new System.Drawing.Point(27, 43);
-			this.radioButton13.Name = "radioButton13";
-			this.radioButton13.Size = new System.Drawing.Size(83, 17);
-			this.radioButton13.TabIndex = 1;
-			this.radioButton13.Text = "AMBA / AXI";
-			this.radioButton13.UseVisualStyleBackColor = true;
+			this.checkBox24.AutoSize = true;
+			this.checkBox24.Checked = true;
+			this.checkBox24.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.checkBox24.Location = new System.Drawing.Point(489, 353);
+			this.checkBox24.Name = "checkBox24";
+			this.checkBox24.Size = new System.Drawing.Size(194, 17);
+			this.checkBox24.TabIndex = 44;
+			this.checkBox24.Text = "Check for load / store access faults";
+			this.checkBox24.UseVisualStyleBackColor = true;
+			this.checkBox24.CheckedChanged += new System.EventHandler(this.checkBox24_CheckedChanged);
 			// 
-			// checkBox23
+			// checkBox25
 			// 
-			this.checkBox23.AutoSize = true;
-			this.checkBox23.Location = new System.Drawing.Point(27, 251);
-			this.checkBox23.Name = "checkBox23";
-			this.checkBox23.Size = new System.Drawing.Size(66, 17);
-			this.checkBox23.TabIndex = 47;
-			this.checkBox23.Text = "SSMMU";
-			this.checkBox23.UseVisualStyleBackColor = true;
+			this.checkBox25.AutoSize = true;
+			this.checkBox25.Checked = true;
+			this.checkBox25.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.checkBox25.Location = new System.Drawing.Point(489, 376);
+			this.checkBox25.Name = "checkBox25";
+			this.checkBox25.Size = new System.Drawing.Size(188, 17);
+			this.checkBox25.TabIndex = 45;
+			this.checkBox25.Text = "Check for instruction access faults";
+			this.checkBox25.UseVisualStyleBackColor = true;
+			// 
+			// button2
+			// 
+			this.button2.Location = new System.Drawing.Point(119, 249);
+			this.button2.Name = "button2";
+			this.button2.Size = new System.Drawing.Size(75, 23);
+			this.button2.TabIndex = 48;
+			this.button2.Text = "Memory Management";
+			this.button2.UseVisualStyleBackColor = true;
+			this.button2.Click += new System.EventHandler(this.button2_Click);
 			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(703, 452);
+			this.Controls.Add(this.checkBox25);
+			this.Controls.Add(this.checkBox24);
 			this.Controls.Add(this.groupBox5);
 			this.Controls.Add(this.linkLabel3);
 			this.Controls.Add(this.checkBox22);
@@ -728,6 +777,9 @@
 		private System.Windows.Forms.RadioButton radioButton13;
 		private System.Windows.Forms.RadioButton radioButton12;
 		private System.Windows.Forms.CheckBox checkBox23;
+		private System.Windows.Forms.CheckBox checkBox24;
+		private System.Windows.Forms.CheckBox checkBox25;
+		private System.Windows.Forms.Button button2;
 	}
 }
 

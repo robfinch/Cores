@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="Database3DataSet" targetNamespace="http://tempuri.org/Database3DataSet.xsd" xmlns:mstns="http://tempuri.org/Database3DataSet.xsd" xmlns="http://tempuri.org/Database3DataSet.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" xmlns:msprop="urn:schemas-microsoft-com:xml-msprop" attributeFormDefault="qualified" elementFormDefault="qualified">
+  <xs:annotation>
+    <xs:appinfo source="urn:schemas-microsoft-com:xml-msdatasource">
+      <DataSource DefaultConnectionIndex="0" FunctionsComponentName="QueriesTableAdapter" Modifier="AutoLayout, AnsiClass, Class, Public" SchemaSerializationMode="IncludeSchema" xmlns="urn:schemas-microsoft-com:xml-msdatasource">
+        <Connections>
+          <Connection AppSettingsObjectName="Settings" AppSettingsPropertyName="Database3ConnectionString" ConnectionStringObject="" IsAppSettingsProperty="true" Modifier="Assembly" Name="Database3ConnectionString (Settings)" PropertyReference="ApplicationSettings.FriscCoreGen.Properties.Settings.GlobalReference.Default.Database3ConnectionString" Provider="System.Data.OleDb" />
+        </Connections>
+        <Tables>
+          <TableAdapter BaseClass="System.ComponentModel.Component" DataAccessorModifier="AutoLayout, AnsiClass, Class, Public" DataAccessorName="MemoryManagementTableAdapter" GeneratorDataComponentClassName="MemoryManagementTableAdapter" Name="MemoryManagement" UserDataComponentName="MemoryManagementTableAdapter">
+            <MainSource>
+              <DbSource ConnectionRef="Database3ConnectionString (Settings)" DbObjectName="MemoryManagement" DbObjectType="Table" FillMethodModifier="Public" FillMethodName="Fill" GenerateMethods="Both" GenerateShortCommands="false" GeneratorGetMethodName="GetData" GeneratorSourceName="Fill" GetMethodModifier="Public" GetMethodName="GetData" QueryType="Rowset" ScalarCallRetval="System.Object, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" UseOptimisticConcurrency="true" UserGetMethodName="GetData" UserSourceName="Fill">
+                <SelectCommand>
+                  <DbCommand CommandType="Text" ModifiedByUser="false">
+                    <CommandText>SELECT Sv39, Sv48, Sv32, [Bank Selector], [Single Base and Bound], [Double Base and Bound], Segmentation, [Simplified Address Mapper], PagesPerAddressSpace, AddressSpaces FROM MemoryManagement</CommandText>
+                    <Parameters />
+                  </DbCommand>
+                </SelectCommand>
+              </DbSource>
+            </MainSource>
+            <Mappings>
+              <Mapping SourceColumn="Sv39" DataSetColumn="Sv39" />
+              <Mapping SourceColumn="Sv48" DataSetColumn="Sv48" />
+              <Mapping SourceColumn="Sv32" DataSetColumn="Sv32" />
+              <Mapping SourceColumn="Bank Selector" DataSetColumn="Bank Selector" />
+              <Mapping SourceColumn="Single Base and Bound" DataSetColumn="Single Base and Bound" />
+              <Mapping SourceColumn="Double Base and Bound" DataSetColumn="Double Base and Bound" />
+              <Mapping SourceColumn="Segmentation" DataSetColumn="Segmentation" />
+              <Mapping SourceColumn="Simplified Address Mapper" DataSetColumn="Simplified Address Mapper" />
+              <Mapping SourceColumn="PagesPerAddressSpace" DataSetColumn="PagesPerAddressSpace" />
+              <Mapping SourceColumn="AddressSpaces" DataSetColumn="AddressSpaces" />
+            </Mappings>
+            <Sources />
+          </TableAdapter>
+        </Tables>
+        <Sources />
+      </DataSource>
+    </xs:appinfo>
+  </xs:annotation>
+  <xs:element name="Database3DataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true" msprop:EnableTableAdapterManager="True" msprop:Generator_DataSetName="Database3DataSet" msprop:Generator_UserDSName="Database3DataSet">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="MemoryManagement" msprop:Generator_TableClassName="MemoryManagementDataTable" msprop:Generator_TableVarName="tableMemoryManagement" msprop:Generator_TablePropName="MemoryManagement" msprop:Generator_RowDeletingName="MemoryManagementRowDeleting" msprop:Generator_RowChangingName="MemoryManagementRowChanging" msprop:Generator_RowEvHandlerName="MemoryManagementRowChangeEventHandler" msprop:Generator_RowDeletedName="MemoryManagementRowDeleted" msprop:Generator_UserTableName="MemoryManagement" msprop:Generator_RowChangedName="MemoryManagementRowChanged" msprop:Generator_RowEvArgName="MemoryManagementRowChangeEvent" msprop:Generator_RowClassName="MemoryManagementRow">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Sv39" msprop:Generator_ColumnVarNameInTable="columnSv39" msprop:Generator_ColumnPropNameInRow="Sv39" msprop:Generator_ColumnPropNameInTable="Sv39Column" msprop:Generator_UserColumnName="Sv39" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Sv48" msprop:Generator_ColumnVarNameInTable="columnSv48" msprop:Generator_ColumnPropNameInRow="Sv48" msprop:Generator_ColumnPropNameInTable="Sv48Column" msprop:Generator_UserColumnName="Sv48" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Sv32" msprop:Generator_ColumnVarNameInTable="columnSv32" msprop:Generator_ColumnPropNameInRow="Sv32" msprop:Generator_ColumnPropNameInTable="Sv32Column" msprop:Generator_UserColumnName="Sv32" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Bank_x0020_Selector" msprop:Generator_ColumnVarNameInTable="columnBank_Selector" msprop:Generator_ColumnPropNameInRow="Bank_Selector" msprop:Generator_ColumnPropNameInTable="Bank_SelectorColumn" msprop:Generator_UserColumnName="Bank Selector" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Single_x0020_Base_x0020_and_x0020_Bound" msprop:Generator_ColumnVarNameInTable="columnSingle_Base_and_Bound" msprop:Generator_ColumnPropNameInRow="Single_Base_and_Bound" msprop:Generator_ColumnPropNameInTable="Single_Base_and_BoundColumn" msprop:Generator_UserColumnName="Single Base and Bound" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Double_x0020_Base_x0020_and_x0020_Bound" msprop:Generator_ColumnVarNameInTable="columnDouble_Base_and_Bound" msprop:Generator_ColumnPropNameInRow="Double_Base_and_Bound" msprop:Generator_ColumnPropNameInTable="Double_Base_and_BoundColumn" msprop:Generator_UserColumnName="Double Base and Bound" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Segmentation" msprop:Generator_ColumnVarNameInTable="columnSegmentation" msprop:Generator_ColumnPropNameInRow="Segmentation" msprop:Generator_ColumnPropNameInTable="SegmentationColumn" msprop:Generator_UserColumnName="Segmentation" type="xs:boolean" minOccurs="0" />
+              <xs:element name="Simplified_x0020_Address_x0020_Mapper" msprop:Generator_ColumnVarNameInTable="columnSimplified_Address_Mapper" msprop:Generator_ColumnPropNameInRow="Simplified_Address_Mapper" msprop:Generator_ColumnPropNameInTable="Simplified_Address_MapperColumn" msprop:Generator_UserColumnName="Simplified Address Mapper" type="xs:boolean" minOccurs="0" />
+              <xs:element name="PagesPerAddressSpace" msprop:Generator_ColumnVarNameInTable="columnPagesPerAddressSpace" msprop:Generator_ColumnPropNameInRow="PagesPerAddressSpace" msprop:Generator_ColumnPropNameInTable="PagesPerAddressSpaceColumn" msprop:Generator_UserColumnName="PagesPerAddressSpace" type="xs:int" minOccurs="0" />
+              <xs:element name="AddressSpaces" msprop:Generator_ColumnVarNameInTable="columnAddressSpaces" msprop:Generator_ColumnPropNameInRow="AddressSpaces" msprop:Generator_ColumnPropNameInTable="AddressSpacesColumn" msprop:Generator_UserColumnName="AddressSpaces" type="xs:int" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

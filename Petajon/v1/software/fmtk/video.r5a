@@ -86,13 +86,14 @@ VideoInit:
 	ret
 
 VideoClearScreen:
+;	csrrs	$x0,#$300,#1				; interrupts on
 	ldi		$t0,#56*29
-	ldi		$t1,DispAttr
+	ldo		$t1,DispAttr
 	or		$t1,$t1,#' '
-	ldi		$t2,#$FFD00000
+	mVideoGetPtr
 .0001:
-	sto		$t1,[$t2]	
-	add		$t2,$t2,#8
+	sto		$t1,[$v0]	
+	add		$v0,$v0,#8
 	sub		$t0,$t0,#1
 	bgt		$t0,$x0,.0001
 	ret
@@ -118,31 +119,45 @@ UpdateCursorPos:
 	ret
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;		a3 = character to display
 ;------------------------------------------------------------------------------
 
 VideoPutChar:
-	sub		$sp,$sp,#8
+	sub		$sp,$sp,#16
 	sto		$ra,[$sp]
+	sto		$s1,8[$sp]
 	ldi		$t0,#CR
-	beq		$a0,$t0,.doCR
+	beq		$a3,$t0,.doCR
 	ldi		$t0,#$0A				; line feed
-	beq		$a0,$t0,.doLF
+	beq		$a3,$t0,.doLF
 	ldi		$t0,#$0C				; CTRL-L
-	beq		$a0,$t0,.doCls
-	ldi		$t0,#$FFD00000
+	beq		$a3,$t0,.doCls
 	ldi		$t0,#$91
-	beq		$a0,$t0,.cursorRight
+	beq		$a3,$t0,.cursorRight
+	ldi		$t0,#$93
+	beq		$a3,$t0,.cursorLeft
+	ldi		$t0,#$90
+	beq		$a3,$t0,.cursorUp
+	ldi		$t0,#$92
+	beq		$a3,$t0,.cursorDown
+	ldi		$t0,#BS
+	beq		$a3,$t0,.backspace
+	ldi		$t0,#$99
+	beq		$a3,$t0,.delete
+	mGetVideoPtr
+	mov		$t0,$v0
 	ldbu	$t1,CursorX
-	sll		$t1,$t1,#3
-	add		$t0,$t0,$t1
+	sll		$t1,$t1,#3						; *8 bytes per display cell
+	or		$t0,$t0,$t1						; add in base address
 	ldbu	$t1,CursorY
 	ldi		$t2,#56*8
 	mul		$t1,$t1,$t2
 	add		$t0,$t0,$t1
 	ldo		$t1,DispAttr
-	or		$t1,$t1,$a1
-	sto		$t1,[$t0]
-	ldbu	$t0,CursorX
+	or		$t1,$t1,$a3
+	sto		$t1,[$t0]							; store to screen memory
+	ldbu	$t0,CursorX						; increment cursor position
 	add		$t0,$t0,#1
 	ldi		$t1,#56
 	blt		$t0,$t1,.saveX
@@ -161,23 +176,21 @@ VideoPutChar:
 	add		$t4,$t4,#8
 	sub		$t3,$t3,#1
 	bgt		$t3,$x0,.0001
+.xit:
 	ldo		$ra,[$sp]
-	add		$sp,$sp,#8
+	ldo		$s1,8[$sp]
+	add		$sp,$sp,#16
 	ret
 .saveY:
 	stb		$t2,CursorY
 .saveX:
 	stb		$t0,CursorX
 	call	UpdateCursorPos
-	ldo		$ra,[$sp]
-	add		$sp,$sp,#8
-	ret
+	bra		.xit
 .doCR:
 	stb		$x0,CursorX
 	call	UpdateCursorPos
-	ldo		$ra,[$sp]
-	add		$sp,$sp,#8
-	ret
+	bra		.xit
 .doLF:
 	ldbu	$t0,CursorX
 	bra		.doLF1
@@ -187,15 +200,63 @@ VideoPutChar:
 	ldi		$t1,#55
 	bge		$t0,$t1,.cr1
 	stb		$t0,CursorX
+.cr2:
 	call	UpdateCursorPos
 .cr1:
-	ldo		$ra,[$sp]
-	add		$sp,$sp,#8
-	ret
+	bra		.xit
+.cursorLeft:
+	ldbu	$t0,CursorX
+	sub		$t0,$t0,#1
+	blt		$t0,$x0,.cr1
+	stb		$t0,CursorX
+	bra		.cr2
+.cursorUp:
+	ldbu	$t0,CursorY
+	sub		$t0,$t0,#1
+	blt		$t0,$x0,.cr1
+	stb		$t0,CursorY
+	bra		.cr2
+.cursorDown:
+	ldbu	$t0,CursorY
+	add		$t0,$t0,#1
+	ldi		$t1,#29
+	bge		$t0,$t1,.cr1
+	stb		$t0,CursorY
+	bra		.cr2
 .doCls:
 	call	VideoClearScreen
 	call	VideoHomeCursor
 	bra		.cr1
+.backspace:
+	ldbu	$t0,CursorX
+	beqz	$t0,.cr1
+	sub		$t0,$t0,#1
+	stb		$t0,CursorX
+.del0001:
+	ldi		$s1,#55
+	sub		$s1,$s1,$t0
+	call	UpdateCursorPos
+	ldbu	$t1,CursorY
+	ldi		$t3,#56*8
+	mul		$t1,$t1,$t3
+	sll		$t0,$t0,#3
+	add		$t3,$t1,$t0
+	add		$t3,$t3,#$FFD00000
+	beqz	$s1,.bs0001
+.bs0002:
+	ldo		$t4,8[$t3]
+	sto		$t4,[$t3]
+	add		$t3,$t3,#8
+	sub		$s1,$s1,#1
+	bgt		$s1,.bs0002
+.bs0001:
+	ldo		$t4,DispAttr
+	or		$t4,$t4,#' '
+	sto		$t4,8[$t3]
+	bra		.xit
+.delete:
+	ldbu	$t0,CursorX
+	bra		.del0001	
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------

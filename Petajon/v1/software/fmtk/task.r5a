@@ -37,9 +37,9 @@ OSCallTbl:
 	dh		FMTK_WaitMsg						; 10
 	dh		FMTK_PeekMsg
 	dh		FMTK_StartApp
-	dh		0												; 13
+	dh		FMTK_SaveContext				; 13
 	dh		FMTK_GetCurrentTid
-	dh		DumpReadyQueue
+	dh		DumpReadyList
 	dh		0
 	dh		0
 	dh		0
@@ -163,6 +163,8 @@ SelectTaskToRun:
 	; Pick the first queue to check, occasionally the queue
 	; chosen isn't the highest priority one in order to 
 	; prevent starvation of lower priority tasks.
+.searchQ:
+	csrrc	$x0,#$300,#1				; interrupts off
 	ldbu	$v1,QNDX						; get index into que check table
 	add		$v1,$v1,#1					; increment it, and limit
 	and		$v1,$v1,#31
@@ -179,6 +181,9 @@ SelectTaskToRun:
 	sub		$t2,$t2,#1					;
 	bgt		$t2,$x0,.nxtQ				; go back to check next queue
 	; Here, nothing else is actually ready to run
+	csrrs	$x0,#$300,#1				; interrupts on
+	wfi
+	bra		.searchQ
 	; just go back to what we were doing.
 	mGetCurrentTid
 	ret
@@ -190,7 +195,8 @@ SelectTaskToRun:
 ;	stw		$t3,READYQ[$v1]
 ;	bra		.0001								; and try next queue
 .goodTid:
-	csrrw		$x0,#$181,$v0
+	csrrs	$x0,#$300,#1				; interrupts on
+	csrrw	$x0,#$181,$v0
 	;sll		$t1,$v0,#LOG_TCBSZ
 	;ldw		$t0,TCBNext[$t1]		; update head of ready queue
 	;stw		$t0,READYQ[$v1]
@@ -199,7 +205,12 @@ SelectTaskToRun:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
+FMTK_SaveContext:
+	mGetCurrentTid
+	sll		$s1,$v0,#LOG_TCBSZ
 SaveContext:
+	ldb		$t0,TCBContextSaved[$s1]
+	bnez	$t0,.xit
 	; Save outgoing register set in TCB
 	csrrc	$x0,#CSR_REGSET,#4	; select previous (user) register set for Rs2
 	sto		$x1,8[$s1]
@@ -246,6 +257,9 @@ SaveContext:
 	add		$t1,$t1,#1
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.svseg
+	ldi		$t0,#1
+	stb		$t0,TCBContextSaved[$s1]
+.xit:
 	ret
 
 ;------------------------------------------------------------------------------
@@ -316,10 +330,13 @@ RestoreContext:
 
 SwapContext:
 	beq		$s1,$s2,.noCtxSwitch@
-	; Save outgoing register set in TCB
+	csrrc	$t2,#$300,#1							; interrupts off
 	csrrw	$v0,#CSR_REGSET,$x0				; get register set
 	and		$v1,$v0,#$FFFFFF3F				; set previous to user regset
 	csrrw	$x0,#CSR_REGSET,$v1	
+	ldb		$v1,TCBContextSaved[$s1]
+	bnez	$v1,.savedAlready
+	; Save outgoing register set in TCB
 	csrrc	$x0,#CSR_REGSET,#4				; select previous (user) register set for Rs2
 	sto		$x1,8[$s1]
 	sto		$x2,16[$s1]
@@ -366,6 +383,7 @@ SwapContext:
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.svseg
 
+.savedAlready:
 	; Restore segment register set
 	ldi		$t1,#0
 .rsseg:
@@ -377,7 +395,7 @@ SwapContext:
 	and		$t1,$t1,#15
 	bne		$t1,$x0,.rsseg
 
-	ldo		$x2,TCBepc[$a1]			; restore epc
+	ldo		$x2,TCBepc[$s2]			; restore epc
 	csrrw	$x0,#$341,$x2
 	; Restore incoming registers
 	csrrc	$x0,#CSR_REGSET,#1				; select previous regset for Rd
@@ -412,7 +430,9 @@ SwapContext:
 	ldo		$x29,232[$s2]
 	ldo		$x30,240[$s2]
 	ldo		$x31,248[$s2]
+	stb		$x0,TCBContextSaved[$s2]
 	csrrw	$x0,#CSR_REGSET,$v0				; restore register set selections
+	csrrw	$x0,#$300,$t2							; restore interrupts
 .noCtxSwitch:
 	ret
 
@@ -429,6 +449,16 @@ OSCALL:
 	mov		$a4,$a4
 	mov		$a5,$a5
 	csrrs	$x0,#CSR_REGSET,#2		; get back current registers for all
+	ldi		$t0,#1024
+	bltu	$a0,$t0,.oscall
+	and		$a0,$a0,#31
+	sll		$a0,$a0,#1
+	lhu		$t0,BIOSCallTbl[$a0]
+	beqz	$t0,.zero
+	or		$t0,$t0,#$FFFC0000
+	call	[$t0]									; call the BIOS Function
+	bra		.xit
+.oscall:
 	and		$a0,$a0,#31
 	beqz	$a0,.zero
 	sll		$a0,$a0,#1
@@ -437,9 +467,10 @@ OSCALL:
 	or		$t0,$t0,#$FFFC0000
 	call	[$t0]									; call the OS Function
 .xit:
-	csrrc	$x0,#CVSR_REGSET,#1		; select previous regs for Rd
+	csrrc	$x0,#CSR_REGSET,#1		; select previous regs for Rd
 	mov		$v0,$v0
 	mov		$v1,$v1
+	csrrs	$x0,#CSR_REGSET,#1		; select current regs for Rd
 	eret
 .zero:
 	ldi		$v0,#E_BadCallno
@@ -511,23 +542,27 @@ FMTK_Sleep:
 	; from a WaitMsg so a return status of E_Ok is also set.
 	and		$x2,$t2,#TS_MSGRDY
 	beqz	$x2,.noMsg
+	ldi		$t0,#$10000						; mprv bit
 	ldo		$a0,160[$s2]					; user a2 (x20)
 	beqz	$a0,.0002
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD1[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]							; store to user space
+	csrrc	$x0,#$300,$t0					; clear mprv
 .0002:
 	ldo		$a0,168[$s2]
 	beqz	$a0,.0003
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD2[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]
+	csrrc	$x0,#$300,$t0					; set mprv
 .0003:
 	ldo		$a0,176[$s2]
 	beqz	$a0,.0004
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD3[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]
+	csrrc	$x0,#$300,$t0					; set mprv
 .0004:
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sto		$x2,128[$s2]					; in v0
@@ -542,11 +577,12 @@ FMTK_Sleep:
 	; might have occurred that didn't switch the context. So, the task status
 	; is checked to see if it's ready yet. If not the wait continues.
 	; What's really wanted is a wait for scheduler task interrupt.
-.wait:
-	wfi
-	ldbu	$t2,TCBStatus[$s1]
-	and		$t2,$t2,#TS_READY
-	beqz	$t2,.wait
+	call	SwapContext
+;.wait:
+;	wfi
+;	ldbu	$t2,TCBStatus[$s1]
+;	and		$t2,$t2,#TS_READY
+;	beqz	$t2,.wait
 
 	; As above, we want to minimize the impact of the OS on the tasks scheduled
 	; time. So we set the start time as late as possible.
@@ -562,7 +598,12 @@ FMTK_Sleep:
 ;------------------------------------------------------------------------------
 
 FMTK_SchedulerIRQ:
-	csrrs	$x0,#$300,#1				; enable ints
+	csrrs	$v0,#$792,#1					; check and set semaphore
+	and		$v0,$v0,#1
+	beqz	$v0,.doSchedule				; do scheduling only if semaphore clear
+	ret
+.doSchedule:
+	csrrs	$x0,#$300,#1					; enable ints
 	mGetCurrentTid
 	sll		$s1,$v0,#LOG_TCBSZ		; compute pointer to TCB
 	csrrw	$t2,#$701,$x0					; get time
@@ -615,7 +656,27 @@ FMTK_SchedulerIRQ:
 
 	; The ready list was just updated, there could be new tasks
 	; ready to run. Will switch to target memory map.
-	call	SelectTaskToRun
+.searchQ:
+	ldbu	$v1,QNDX						; get index into que check table
+	add		$v1,$v1,#1					; increment it, and limit
+	and		$v1,$v1,#31
+	stb		$v1,QNDX						; store back
+	ldbu	$v1,qToChk[$v1]			; assume this will be valid
+	ldi		$t2,#4							; 4 queues to check
+.nxtQ:
+	getrdy	$v0,$v1
+;	ldw		$v0,READYQ[$v1]			; check queue to see if contains any
+	bge		$v0,$x0,.dq					; yes, go dequeue
+	add		$v1,$v1,#1					; no, advance to next queue
+	and		$v1,$v1,#3					; 4 max
+	sub		$t2,$t2,#1					;
+	bgt		$t2,$x0,.nxtQ				; go back to check next queue
+	; Here, nothing else is actually ready to run
+	; just go back to what we were doing.
+	mGetCurrentTid
+.dq:
+.goodTid:
+	csrrw	$x0,#$181,$v0
 
 	sll		$s2,$v0,#LOG_TCBSZ	; s2 = pointer to incoming TCB
 	lbu		$x2,TCBStatus[$s2]	; x2 = incoming status
@@ -638,23 +699,27 @@ FMTK_SchedulerIRQ:
 	bra		.noMsg
 	and		$x2,$t2,#TS_MSGRDY
 	beq		$x2,$x0,.noMsg
+	ldi		$t0,#$10000						; mprv bit
 	ldo		$a0,160[$s2]					; user a2 (x20)
 	beq		$a0,$x0,.0002
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD1[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]
+	csrrc	$x0,#$300,$t0					; set mprv
 .0002:
 	ldo		$a0,168[$s2]
 	beq		$a0,$x0,.0003
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD2[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]
+	csrrc	$x0,#$300,$t0					; set mprv
 .0003:
 	ldo		$a0,176[$s2]
 	beq		$a0,$x0,.0004
-	call	VirtToPhys
 	ldo		$x2,TCBMsgD3[$s2]
-	sto		$x2,[$v0]
+	csrrs	$x0,#$300,$t0					; set mprv
+	sto		$x2,[$a0]
+	csrrc	$x0,#$300,$t0					; set mprv
 .0004:
 	ldi		$x2,#E_Ok						; setup to return E_Ok
 	sto		$x2,128[$s2]				; in v0
@@ -670,6 +735,7 @@ FMTK_SchedulerIRQ:
 	add		$sp,$sp,#8
 	csrrw	$t2,#$701,$x0					; get low time
 	sto		$t2,TCBStartTime[$s2]
+	csrrc	$x0,#$792,#1				; clear scheduling semaphore
 	ret
 
 ;------------------------------------------------------------------------------
@@ -705,6 +771,8 @@ FMTK_StartTask:
 	call	Alloc
 	stb		$v0,$4320
 	bnez	$v0,.err
+	mov		$a0,$v1
+	call	PutHexWord
 	ldi		$t0,#TS_READY
 	stb		$t0,TCBStatus[$s1]
 	ldi		$t0,#2					; normal execution priority
@@ -729,6 +797,8 @@ FMTK_StartTask:
 	sto		$t0,TCBsegs+112[$s1]
 	sto		$t0,TCBsegs+120[$s1]
 	sto		$x0,TCBVideoMem[$s1]
+	ldi		$t0,#$FFD00000
+	sto		$t0,TCBpVideo[$s1]
 	srl		$a0,$s1,#LOG_TCBSZ	; need the tid again
 	csrrc	$x0,#$300,#1				; disable ints
 	call	InsertIntoReadyList
@@ -792,4 +862,18 @@ FMTK_KillTask:
 	add		$sp,$sp,#8
 	ret
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FMTK_AllocVideoBuf:
+	mGetCurrentTid
+	mov		$a0,$v0
+	ldi		$a1,#1			; request 1 byte to get 1 page (64kB)
+	call	Alloc
+	bnez	$v0,.err
+	sll		$s1,$a0,#LOG_TCBSZ
+	sto		$v1,TCBVidMem[$s1]
+	sto		$v1,TCBpVideo[$s1]
+.err:
+	ret
 	

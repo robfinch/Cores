@@ -161,7 +161,7 @@ Alloc:
 	add			$s3,$s3,#1				; next bucket
 	sub			$s2,$s2,#1
 	bgt			$s2,$x0,.0001
-	sll			$v1,$s1,#LOG_PGSZ	; v0 = virtual address of allocated mem.
+	sll			$v1,$s1,#LOG_PGSZ	; v1 = virtual address of allocated mem.
 	ldi			$v0,#E_Ok
 	bra			.xit
 .noRun:

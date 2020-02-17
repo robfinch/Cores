@@ -74,13 +74,15 @@
 `define PFI			32'h10300073
 `define CS_ILLEGALINST	2
 
+`define LOG_PGSZ	16
+
 `include "../fpu/fpConfig.sv"
 
 module petajon_wb(rst_i, hartid_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, 
 	cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i
 	);
 {+RV32I}
-parameter WID = 64;
+parameter WID = 32;
 {-RV32I}
 {+RV64I}
 parameter WID = 64;
@@ -126,6 +128,9 @@ reg [WID-1:0] ia, ib, ic;
 reg [FPWID-1:0] fa, fb, fc;
 reg [WID-1:0] imm, res;
 reg [WID-1:0] displacement;				// branch displacement
+{+SBB}
+reg [WID-1:0] mbase, mbound;
+{-SBB}
 // Decoding
 wire [6:0] opcode = ir[6:0];
 wire [2:0] funct3 = ir[14:12];
@@ -141,9 +146,9 @@ reg wrpagemap;
 //wire [12:0] pagemap_ndx;
 //wire [8:0] pagemapoa, pagemapo;
 //wire [12:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
-wire [18:0] pagemap_ndx;
+wire [17:0] pagemap_ndx;
 wire [12:0] pagemapoa, pagemapo;
-wire [18:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[21:16],irfob[12:0]};
+wire [17:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[21:16],irfob[11:0]};
 PagemapRam pagemap (
   .clka(clk_g),
   .ena(1'b1),
@@ -190,8 +195,9 @@ Timeouter utmo1
 	.done_o(to_done)
 );
 reg insrdy, rmvrdy, getrdy;
-wire rdy_done;
-wire [4:0] rdy_out;
+reg [6:0] iof_cmd;
+wire rdy_done, iof_done;
+wire [6:0] rdy_out, iof_out;
 ReadyList url1
 (
 	.rst_i(rst_i),
@@ -199,10 +205,19 @@ ReadyList url1
 	.insert_i(insrdy),
 	.remove_i(rmvrdy),
 	.get_i(getrdy),
-	.tid_i(ia[3:0]),
+	.tid_i(ia[5:0]),
 	.priority_i(ib[2:0]),
 	.tid_o(rdy_out),
 	.done_o(rdy_done)
+);
+IOFocusList uiof1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_g),
+	.cmd_i(iof_done ? iof_cmd : 7'd0),
+	.tid_i(ia[5:0]),
+	.tid_o(iof_out),
+	.done_o(iof_done)
 );
 
 {+F}
@@ -222,11 +237,11 @@ wire [FPWID-1:0] frfoa = fregfile[Rs1];
 wire [FPWID-1:0] frfob = fregfile[Rs2];
 wire [FPWID-1:0] frfoc = fregfile[Rs3];
 {-F}
-always @(posedge clk_i)
+always @(posedge clk_g)
 if (wrirf && state==WRITEBACK)
 	iregfile[{Dregset,Rd}] <= res[WID-1:0];
 {+F}
-always @(posedge clk_i)
+always @(posedge clk_g)
 if (wrfrf && state==WRITEBACK)
 	fregfile[Rd] <= res;
 {-F}
@@ -240,13 +255,16 @@ wire clr_wc_time_irq;
 reg [5:0] wc_time_irq_clr;
 reg wfi;
 reg set_wfi;
-reg [AMSB:0] mepc;
+reg [1:0] edepth;
+reg [AMSB:0] mepc [0:3];
 reg [31:0] mtimecmp;
 reg [63:0] instret;	// instructions completed.
 reg [31:0] mcpuid = 32'b100000_00_00000000_00010001_00100001;
 reg [31:0] mimpid = 32'h01108000;
 reg [63:0] mcause;
 reg [31:0] mstatus;
+wire ie = mstatus[0];
+wire mprv = mstatus[16];
 reg [AMSB:0] mtvec = 32'hFFFC0000;
 reg [31:0] mtdeleg = 32'h0;
 reg [31:0] mie;
@@ -260,7 +278,7 @@ assign mip[3] = msip;
 assign mip[2:0] = 3'b0;
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
-wire ie = mstatus[0];
+reg [WID-1:0] msema;
 
 function [7:0] fnSelect;
 input [6:0] op6;
@@ -376,6 +394,7 @@ parameter MEMORY_WRITE1a = 5'd26;
 parameter MEMORY_WRITE1b = 5'd27;
 parameter MEMORY_WRITE2a = 5'd28;
 parameter MEMORY_WRITE2b = 5'd29;
+parameter IFETCH3 = 5'd30;
 
 wire ld = state==EXECUTE;
 
@@ -561,7 +580,7 @@ else begin
 {+WFI}
 	if (set_wfi)
 		wfi <= 1'b1;
-	if (|irq_i|pe_nmi)
+	if (irq_i|pe_nmi)
 		wfi <= 1'b0;
 {-WFI}
 end
@@ -569,7 +588,7 @@ end
 BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
 delay2 #(1) udly1 (.clk(clk_g), .ce(1'b1), .i(lcyc), .o(cyc_o));
-assign pagemap_ndx = {ASID,ladr[28:16]};
+assign pagemap_ndx = {ASID,ladr[27:16]};
 
 always @(posedge clk_g)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -581,7 +600,10 @@ always @(posedge clk_g)
 if (rst_i) begin
 	state <= IFETCH;
 	pc <= RSTPC;
-	mepc <= 32'hFFFC0200;
+	mepc[0] <= 32'hFFFC0200;
+	mepc[1] <= 32'hFFFC0200;
+	mepc[2] <= 32'hFFFC0200;
+	mepc[3] <= 32'hFFFC0200;
 	mtvec <= 32'hFFFC0000;
 	MachineMode <= 1'b1;
 	wrirf <= 1'b0;
@@ -619,6 +641,9 @@ if (rst_i) begin
 	insrdy <= 1'b0;
 	rmvrdy <= 1'b0;
 	getrdy <= 1'b0;
+	edepth <= 2'd1;
+	iof_cmd <= 7'd0;
+	msema <= 64'd0;
 end
 else begin
 decto <= 1'b0;
@@ -636,14 +661,15 @@ palloc <= 1'b0;
 pfree <= 1'b0;
 pfreeall <= 1'b0;
 
-if (MachineMode)
+if (mprv ? mstatus[5:4]==2'b11 : MachineMode)
 	adr_o <= ladr;
 else begin
-	if (ladr[31:24]==8'hFF)
+	if (ladr[AWID-1:AWID-8]==8'hFF)
 		adr_o <= ladr;
 	else
-		adr_o <= {pagemapo,ladr[15:0]};
+		adr_o <= {pagemapo,ladr[`LOG_PGSZ-1:0]};
 end
+
 
 case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -657,31 +683,28 @@ IFETCH:
 		ipc <= pc;
 		wrirf <= 1'b0;
 		wrfrf <= 1'b0;
-		vpa_o <= HIGH;
-		lcyc <= HIGH;
-		stb_o <= HIGH;
-		sel_o <= 4'hF;
-		tPC();
 		state <= IFETCH2;
 		if (regset[5:4]!=2'd3) begin
 			if (nmif) begin
 				nmif <= 1'b0;
 				lcyc <= LOW;
-				mcause[63] <= 1'b1;
+				mcause[WID-1] <= 1'b1;
 				mcause[7:0] <= 8'd254;
 				MachineMode <= 1'b1;
-				mepc <= pc;
 				pc <= mtvec + 8'hFC;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
 				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
 				state <= IFETCH;
 			end
 	 		else if (irq_i & ie) begin
 				lcyc <= LOW;
-				mcause[63] <= 1'b1;
+				mcause[WID-1] <= 1'b1;
 				mcause[7:0] <= cause_i;
 				MachineMode <= 1'b1;
-				mepc <= pc;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
 				pc <= mtvec + {mstatus[2:1],6'h00};
 				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
@@ -689,10 +712,11 @@ IFETCH:
 			end
 			else if (mip[7] & mie[7] & ie) begin
 				lcyc <= LOW;
-				mcause[63] <= 1'b1;
+				mcause[WID-1] <= 1'b1;
 				mcause[7:0] <= 8'h01;	// timer IRQ
 				MachineMode <= 1'b1;
-				mepc <= pc;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
 				pc <= mtvec + {mstatus[2:1],6'h00};
 				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
@@ -700,22 +724,71 @@ IFETCH:
 			end
 			else if (mip[3] & mie[3] & ie) begin
 				lcyc <= LOW;
-				mcause[63] <= 1'b1;
+				mcause[WID-1] <= 1'b1;
 				mcause[7:0] <= 8'h02;	// software IRQ
 				MachineMode <= 1'b1;
-				mepc <= pc;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
 				pc <= mtvec + {mstatus[2:1],6'h00};
 				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
 				state <= IFETCH;
 			end
-			else
-				pc <= pc + 3'd4;
+			else begin
+				tPC();
+			end
 		end
-		else
-			pc <= pc + 3'd4;
+		else begin
+			tPC();
+		end			
 	end
 IFETCH2:
+	begin
+		state <= IFETCH3;
+		vpa_o <= HIGH;
+		lcyc <= HIGH;
+		stb_o <= HIGH;
+		sel_o <= 8'hFF;
+{+IAF}
+		if (!MachineMode && pc[AWID-1:AWID-8]!=8'hFF) begin
+			if ((!sregfile[{2'b11,pc[AWID-1:AWID-2]}][0]) || pagemapo==12'h000) begin
+				vpa_o <= LOW;
+				lcyc <= LOW;
+				stb_o <= LOW;
+				sel_o <= 8'h00;
+				mbadaddr <= pc;
+				MachineMode <= 1'b1;
+				mcause <= 8'h01;	// instruction access fault
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
+				pc <= mtvec + {mstatus[2:1],6'h00};
+				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
+				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+				state <= IFETCH;
+			end
+		end
+{-IAF}
+{+SBB}
+		if (!MachineMode && pc[AWID-1:AWID-8]!=8'hFF) begin
+			if (pc >= mbound) begin
+				vpa_o <= LOW;
+				lcyc <= LOW;
+				stb_o <= LOW;
+				sel_o <= 8'h00;
+				mbadaddr <= pc;
+				MachineMode <= 1'b1;
+				mcause <= 8'h01;	// instruction access fault
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
+				pc <= mtvec + {mstatus[2:1],6'h00};
+				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
+				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+				state <= IFETCH;
+			end
+		end
+{-SBB}
+	end
+IFETCH3:
 	if (ack_i) begin
 		vpa_o <= LOW;
 		lcyc <= LOW;
@@ -723,6 +796,7 @@ IFETCH2:
 		sel_o <= 4'h0;
 		tPC();
 		ir <= adr_o[2] ? dat_i[63:32] : dat_i[31:0];
+		pc <= pc + 3'd4;
 		state <= DECODE;
 	end
 
@@ -736,10 +810,11 @@ DECODE:
 		state <= RFETCH;
 {+PFI}
 		if (ir==`PFI && irq_i != 4'h0) begin
-			mcause[31] <= 1'b1;
-			mcause[3:0] <= irq_i;
+			mcause[WID-1] <= 1'b1;
+			mcause[7:0] <= cause_i;
 			MachineMode <= 1'b1;
-			mepc <= ipc;
+			mepc[edepth] <= ipc;
+			edepth <= edepth + 2'd1;
 			pc <= mtvec + {mstatus[2:1],6'h00};
 			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 			state <= IFETCH;
@@ -828,11 +903,11 @@ DECODE:
 			begin
 				case(funct3)
 				3'd0:	imm <= {{WID-12{ir[31]}},ir[31:20]};
-				3'd1: imm <= ir[24:20];
+				3'd1: imm <= WID==64 ? ir[25:20] : ir[24:20];
 				3'd2:	imm <= {{WID-12{ir[31]}},ir[31:20]};
 				3'd3: imm <= {{WID-12{ir[31]}},ir[31:20]};
 				3'd4: imm <= {{WID-12{ir[31]}},ir[31:20]};
-				3'd5: imm <= ir[24:20];
+				3'd5: imm <= WID==64 ? ir[25:20] : ir[24:20];
 				3'd6: imm <= {{WID-12{ir[31]}},ir[31:20]};
 				3'd7: imm <= {{WID-12{ir[31]}},ir[31:20]};
 				endcase
@@ -884,6 +959,11 @@ RFETCH:
 				fa <= Rs1==5'd0 ? {FPWID{1'd0}} : irfoa;
 			default:	fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
 			endcase
+		7'd115:
+			case(funct3)
+			3'd5,3'd6,3'd7:	ia <= {59'd0,ir[19:15]};
+			default:	;
+			endcase
 		default:	;
 		endcase
 		fb <= Rs2==5'd0 ? {FPWID{1'd0}} : frfob;
@@ -904,7 +984,7 @@ EXECUTE:
 		state <= WRITEBACK;
 		case(opcode)
 		`LUI:	begin res <= imm; end
-		`AUIPC:	begin res <= {ipc[31:12],12'd0} + imm; end
+		`AUIPC:	begin res <= ipc + imm; end
 		7'd13:
 			case(funct3)
 			3'd0:
@@ -970,6 +1050,12 @@ EXECUTE:
 				7'd14:
 					begin
 						getrdy <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd16,7'd17,7'd18,7'd19:
+					begin
+						iof_cmd <= funct7;
 						state <= TMO;
 						illegal_insn <= 1'b0;
 					end
@@ -1074,7 +1160,7 @@ EXECUTE:
 			3'd0:	begin res <= ia + imm; illegal_insn <= 1'b0; end
 			3'd1:
 				case(funct7)
-				7'd0:	begin res <= ia << imm[4:0]; illegal_insn <= 1'b0; end
+				7'd0:	begin res <= ia << imm[5:0]; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			3'd2:	begin res <= $signed(ia) < $signed(imm); illegal_insn <= 1'b0; end
@@ -1086,9 +1172,9 @@ EXECUTE:
 				7'd16:
 					begin
 						if (ia[WID-1])
-							res <= (ia >> imm[4:0]) | ~({WID{1'b1}} >> imm[4:0]);
+							res <= (ia >> imm[5:0]) | ~({WID{1'b1}} >> imm[5:0]);
 						else
-							res <= ia >> imm[4:0];
+							res <= ia >> imm[5:0];
 						illegal_insn <= 1'b0;
 					end
 				endcase
@@ -1265,10 +1351,27 @@ EXECUTE:
 					begin
 						MachineMode <= 1'b1;
 						pc <= mtvec + {mstatus[2:1],6'h00};
-						mepc <= pc;
+						mepc[edepth] <= pc;
+						edepth <= edepth + 2'd1;
 						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 						mcause <= 4'h3;
 						regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+						if (regset[0]==1'b0)
+							Dregset <= regset[5:4];
+						else
+							Dregset <= regset[5:4] + 2'd1;
+						if (regset[1]==1'b0)
+							Rs1regset <= regset[5:4];
+						else
+							Rs1regset <= regset[5:4] + 2'd1;
+						if (regset[2]==1'b0)
+							Rs2regset <= regset[5:4];
+						else
+							Rs2regset <= regset[5:4] + 2'd1;
+						if (regset[3]==1'b0)
+							Rs3regset <= regset[5:4];
+						else
+							Rs3regset <= regset[5:4] + 2'd1;
 						illegal_insn <= 1'b0;
 						state <= IFETCH;
 						instret <= instret + 2'd1;
@@ -1278,33 +1381,67 @@ EXECUTE:
 					begin
 						MachineMode <= 1'b1;
 						pc <= mtvec + {mstatus[2:1],6'h00};
-						mepc <= pc;
+						mepc[edepth] <= pc;
+						edepth <= edepth + 2'd1;
 						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 						mcause <= 4'h8 + mstatus[2:1];
 						regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+						if (regset[0]==1'b0)
+							Dregset <= regset[5:4];
+						else
+							Dregset <= regset[5:4] + 2'd1;
+						if (regset[1]==1'b0)
+							Rs1regset <= regset[5:4];
+						else
+							Rs1regset <= regset[5:4] + 2'd1;
+						if (regset[2]==1'b0)
+							Rs2regset <= regset[5:4];
+						else
+							Rs2regset <= regset[5:4] + 2'd1;
+						if (regset[3]==1'b0)
+							Rs3regset <= regset[5:4];
+						else
+							Rs3regset <= regset[5:4] + 2'd1;
 						illegal_insn <= 1'b0;
 						state <= IFETCH;
 						instret <= instret + 2'd1;
 					end
+				// The other half of ERET is in WRITEBACK stage
 				`ERET:
 					if (MachineMode) begin
-						MachineMode <= 1'b0;
-						pc <= mepc;
+						edepth <= edepth - 2'd1;
 						mstatus[5:0] <= {2'b00,1'b1,mstatus[5:3]};
 						regset <= {2'b00,regset[25:6],regset[3:0]};
+						if (regset[0]==1'b0)
+							Dregset <= regset[9:8];
+						else
+							Dregset <= regset[7:6];
+						if (regset[1]==1'b0)
+							Rs1regset <= regset[9:8];
+						else
+							Rs1regset <= regset[7:6];
+						if (regset[2]==1'b0)
+							Rs2regset <= regset[9:8];
+						else
+							Rs2regset <= regset[7:6];
+						if (regset[3]==1'b0)
+							Rs3regset <= regset[9:8];
+						else
+							Rs3regset <= regset[7:6];
 						illegal_insn <= 1'b0;
-						state <= IFETCH;
-						instret <= instret + 2'd1;
 					end
 {+WFI}					
 				`WFI:
-					set_wfi <= 1'b1;
+					begin
+						set_wfi <= 1'b1;
+						illegal_insn <= 1'b0;
+					end
 {-WFI}					
 				default:
 					begin
 					case(funct3)
 					3'd1,3'd2,3'd3,3'd5,3'd6,3'd7:
-						casez({funct7,Rs2})
+						casez(ir[31:20])
 						12'h001:	begin res <= fscsr[4:0]; illegal_insn <= 1'b0; end
 						12'h002:	begin res <= rm; illegal_insn <= 1'b0; end
 						12'h003:	begin res <= fscsr; illegal_insn <= 1'b0; end
@@ -1315,11 +1452,17 @@ EXECUTE:
 						12'h304:	begin res <= mie; illegal_insn <= 1'b0; end
 						12'h321:	begin res <= mtimecmp; wc_time_irq_clr <= 6'h3F; illegal_insn <= 1'b0; end
 						12'h340:	begin res <= mscratch; illegal_insn <= 1'b0; end
-						12'h341:	begin res <= mepc; illegal_insn <= 1'b0; end
+						12'h341:	begin res <= mepc[0]; illegal_insn <= 1'b0; end
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
+{+SBB}						
+						12'h380:	begin res <= mbase; illegal_insn <= 1'b0; end
+						12'h381:	begin res <= mbound; illegal_insn <= 1'b0; end
+{-SBB}
 						12'h790:	begin res <= regset; illegal_insn <= 1'b0; end
+						12'h791:	begin res <= mepc[edepth-2'd1]; illegal_insn <= 1'b0; end
+						12'h792:	begin res <= msema; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[63: 0]; illegal_insn <= 1'b0; end
 //						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
 						12'hC01,12'h701,12'hB01:	begin res <= wc_times[63: 0]; illegal_insn <= 1'b0; end
@@ -1331,10 +1474,6 @@ EXECUTE:
 						12'hF10:	begin res <= hartid_i; illegal_insn <= 1'b0; end
 						default:	;
 						endcase
-					default:	;
-					endcase
-					case(funct3)
-					3'd5,3'd6,3'd7:	ia <= {27'd0,Rs1};
 					default:	;
 					endcase
 					end
@@ -1352,14 +1491,25 @@ PAM:
 		state <= WRITEBACK;
 	end
 TMO:
-	if (to_done&rdy_done) begin
-		illegal_insn <= 1'b0;
-		case({getto,getrdy})
-		2'b10:	res <= to_out;
-		2'b01:	res <= {{59{rdy_out[4]}},rdy_out};
-		default:	res <= {48'd0,zl_out};
-		endcase
-		state <= WRITEBACK;
+	begin
+		getto <= 1'b0;
+		setto <= 1'b0;
+		insrdy <= 1'b0;
+		rmvrdy <= 1'b0;
+		getrdy <= 1'b0;
+		iof_cmd <= 7'd0;
+		if (to_done&rdy_done&iof_done) begin
+			illegal_insn <= 1'b0;
+			case(funct7)
+			7'd9:		res <= to_out;
+			7'd10:	res <= zl_out;
+			7'd14:	res <= {{57{rdy_out[6]}},rdy_out};
+			7'd18:	res <= {{57{iof_out[6]}},iof_out};
+			7'd19:	res <= {{57{iof_out[6]}},iof_out};
+			default:	res <= 64'd0;
+			endcase
+			state <= WRITEBACK;
+		end
 	end
 {+M}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1427,11 +1577,65 @@ MUL2:
 // Wait for operation to complete.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 MEMORY:
-	state <= MEMORY1a;
+	begin
+		state <= MEMORY1a;
+	end
 MEMORY1a:
 	begin
 		stb_o <= HIGH;
 		state <= MEMORY1b;
+{+LSAF}
+		if (!MachineMode && ea[AWID-1:AWID-8]!=8'hFF) begin
+			if ((!sregfile[segsel][1] & we_o) || pagemapo==12'h000) begin
+				mcause <= 8'h07;	// store access fault
+				mbadaddr <= ea;
+				MachineMode <= 1'b1;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
+				pc <= mtvec + {mstatus[2:1],6'h00};
+				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
+				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+				lcyc <= LOW;
+				stb_o <= LOW;
+				we_o <= LOW;
+				state <= IFETCH;
+			end
+			else if ((!sregfile[segsel][2] & !we_o) || pagemapo==12'h000) begin
+				mcause <= 8'h05;	// load access fault
+				state <= IFETCH;
+				mbadaddr <= ea;
+				MachineMode <= 1'b1;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
+				pc <= mtvec + {mstatus[2:1],6'h00};
+				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
+				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+				lcyc <= LOW;
+				stb_o <= LOW;
+				we_o <= LOW;
+				state <= IFETCH;
+			end
+		end
+{-LSAF}
+{+SBB}
+		if (!MachineMode && ea[AWID-1:AWID-8]!=8'hFF) begin
+			if (ea >= mbound) begin
+				mcause <= we_o ? 8'h07 : 8'h05;	// store / load access fault
+				state <= IFETCH;
+				mbadaddr <= ea;
+				MachineMode <= 1'b1;
+				mepc[edepth] <= pc;
+				edepth <= edepth + 2'd1;
+				pc <= mtvec + {mstatus[2:1],6'h00};
+				mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
+				regset <= {regset[25:4],regset[5:4]+2'd1,regset[3:0]};
+				lcyc <= LOW;
+				stb_o <= LOW;
+				we_o <= LOW;
+				state <= IFETCH;
+			end
+		end
+{-SBB}
 	end
 MEMORY1b:
 	if (ack_i) begin
@@ -1791,15 +1995,11 @@ FLOAT:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 WRITEBACK:
 	begin
-		getto <= 1'b0;
-		setto <= 1'b0;
-		insrdy <= 1'b0;
-		rmvrdy <= 1'b0;
-		getrdy <= 1'b0;
 		if (illegal_insn) begin
 			MachineMode <= 1'b1;
 			pc <= mtvec + {mstatus[2:1],6'h00};
-			mepc <= ipc;
+			mepc[edepth] <= ipc;
+			edepth <= edepth + 2'd1;
 			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
 			mcause <= 4'h2;
 			illegal_insn <= 1'b0;
@@ -1820,10 +2020,18 @@ WRITEBACK:
 			endcase
 		end
 		if (!illegal_insn && opcode==7'd115) begin
+			case(ir)
+			`ERET:
+				if (MachineMode) begin
+					MachineMode <= mstatus[2:1]!=2'b00;
+					pc <= mepc[edepth];
+				end
+			default:	;
+			endcase
 			case(funct3)
 			3'd1,3'd5:
 				if (Rs1!=5'd0)
-				casez({funct7,Rs2})
+				case(ir[31:20])
 {+F}
 				12'h001:	begin
 										fnx <= ia[0];
@@ -1848,36 +2056,42 @@ WRITEBACK:
 				12'h304:	begin if (MachineMode) mie <= ia; end
 				12'h321:	begin if (MachineMode) mtimecmp <= ia; end
 				12'h340:	begin if (MachineMode) mscratch <= ia; end
-				12'h341:	begin if (MachineMode) mepc <= ia; end
+				12'h341:	begin if (MachineMode) mepc[0] <= ia; end
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
+{+SBB}
+				12'h380:	begin if (MachineMode) mbase <= ia; end
+				12'h381:	begin if (MachineMode) mbound <= ia; end
+{-SBB}
 				12'h790:	begin 
 										if (MachineMode) begin
-											regset <= ia[3:0];
+											regset <= ia;
 											if (ia[0]==1'b0)
-												Dregset <= regset[7:6];
+												Dregset <= ia[7:6];
 											else
-												Dregset <= regset[5:4];
+												Dregset <= ia[5:4];
 											if (ia[1]==1'b0)
-												Rs1regset <= regset[7:6];
+												Rs1regset <= ia[7:6];
 											else
-												Rs1regset <= regset[5:4];
+												Rs1regset <= ia[5:4];
 											if (ia[2]==1'b0)
-												Rs2regset <= regset[7:6];
+												Rs2regset <= ia[7:6];
 											else
-												Rs2regset <= regset[5:4];
+												Rs2regset <= ia[5:4];
 											if (ia[3]==1'b0)
-												Rs3regset <= regset[7:6];
+												Rs3regset <= ia[7:6];
 											else
-												Rs3regset <= regset[5:4];
+												Rs3regset <= ia[5:4];
 										end
 									end
+				12'h791:	begin if (MachineMode) mepc[edepth-2'd1] <= ia; end
+				12'h792:	begin if (MachineMode) msema <= ia; end
 				default:	;
 				endcase
 {+F}
 			3'd2,3'd6:
-				case({funct7,Rs2})
+				case(ir[31:20])
 				12'h001:	begin
 										if (ia[0]) fnx <= 1'b1;
 										if (ia[1]) fuf <= 1'b1;
@@ -1894,13 +2108,33 @@ WRITEBACK:
 										if (ia[4]) fnv <= 1'b1;
 										rm <= rm | ia[7:5];
 									end
+				12'h300:	if (MachineMode) mstatus <= mstatus | ia;
 				12'h304:	if (MachineMode) mie <= mie | ia;
 				12'h344:	if (MachineMode) msip <= msip | ia[3];
-				12'h800:	if (MachineMode) regset <= regset | ia[3:0];
+				12'h790:	if (MachineMode) begin
+										regset <= regset | ia;
+										if ((regset[0] | ia[0])==1'b0)
+											Dregset <= regset[7:6] | ia[7:6];
+										else
+											Dregset <= regset[5:4] | ia[5:4];
+										if ((regset[1] | ia[1])==1'b0)
+											Rs1regset <= regset[7:6] | ia[7:6];
+										else
+											Rs1regset <= regset[5:4] | ia[5:4];
+										if ((regset[2] | ia[2])==1'b0)
+											Rs2regset <= regset[7:6] | ia[7:6];
+										else
+											Rs2regset <= regset[5:4] | ia[5:4];
+										if ((regset[3] | ia[3])==1'b0)
+											Rs3regset <= regset[7:6] | ia[7:6];
+										else
+											Rs3regset <= regset[5:4] | ia[5:4];
+									end
+				12'h792:	if (MachineMode) msema <= msema | ia;
 				default: ;
 				endcase
 			3'd3,3'd7:
-				case({funct7,Rs2})
+				case(ir[31:20])
 				12'h001:	begin
 										if (ia[0]) fnx <= 1'b0;
 										if (ia[1]) fuf <= 1'b0;
@@ -1917,9 +2151,29 @@ WRITEBACK:
 										if (ia[4]) fnv <= 1'b0;
 										rm <= rm & ~ia[7:5];
 									end
+				12'h300:	if (MachineMode) mstatus <= mstatus & ~ia;
 				12'h304:	if (MachineMode) mie <= mie & ~ia;
 				12'h344:	if (MachineMode) msip <= msip & ~ia[3];
-				12'h800:	if (MachineMode) regset <= regset & ~ia[3:0];
+				12'h790:	if (MachineMode) begin
+										regset <= regset & ~ia;
+										if ((regset[0] & ~ia[0])==1'b0)
+											Dregset <= regset[7:6] & ~ia[7:6];
+										else
+											Dregset <= regset[5:4] & ~ia[5:4];
+										if ((regset[1] & ~ia[1])==1'b0)
+											Rs1regset <= regset[7:6] & ~ia[7:6];
+										else
+											Rs1regset <= regset[5:4] & ~ia[5:4];
+										if ((regset[2] & ~ia[2])==1'b0)
+											Rs2regset <= regset[7:6] & ~ia[7:6];
+										else
+											Rs2regset <= regset[5:4] & ~ia[5:4];
+										if ((regset[3] & ~ia[3])==1'b0)
+											Rs3regset <= regset[7:6] & ~ia[7:6];
+										else
+											Rs3regset <= regset[5:4] & ~ia[5:4];
+									end
+				12'h792:	if (MachineMode) msema <= msema & ~ia;
 				default: ;
 				endcase
 {-F}
@@ -1934,19 +2188,27 @@ end
 
 task tEA;
 begin
-	if (MachineMode || ea[31:24]==8'hFF)
+	if ((mprv ? mstatus[5:4]==2'b11 : MachineMode) || ea[AWID-1:AWID-8]==8'hFF)
 		ladr <= ea;
-	else
-		ladr <= ea[27:0] + {sregfile[segsel][WID-1:4],16'd0};
+	else begin
+		ladr <= ea[AWID-5:0] + {sregfile[segsel][WID-1:4],{`LOG_PGSZ{1'b0}}};
+{+SBB}
+		ladr <= ea + mbase;
+{-SBB}
+	end
 end
 endtask
 
 task tPC;
 begin
-	if (MachineMode || pc[31:24]==8'hFF)
+	if (MachineMode || pc[AWID-1:AWID-8]==8'hFF)
 		ladr <= pc;
-	else
-		ladr <= pc[29:0] + {sregfile[{2'b11,pc[31:30]}][WID-1:4],16'd0};
+	else begin
+		ladr <= pc[AWID-3:0] + {sregfile[{2'b11,pc[AWID-1:AWID-2]}][WID-1:4],{`LOG_PGSZ{1'b0}}};
+{+SBB}
+		ladr <= pc + mbase;
+{-SBB}
+	end
 end
 endtask
 

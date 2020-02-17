@@ -96,16 +96,17 @@ ViaInit:
 
 ViaIRQ:
 	; Was it the VIA that caused the interrupt?
-	ldi		$t1,VIA
+	ldi		$t1,#VIA
 	ldb		$t0,VIA_IFR[$t1]
 	bge		$t0,$x0,.0003				; no
 	ldi		$t0,#1							; select timer 3 access
 	stb		$t0,VIA_PCR+1[$t1]
 	ldt		$t0,VIA_T1CL[$t1]		; yes, clear interrupt
-	ldt		$t0,milliseconds
+	ldo		$t0,milliseconds
 	add		$t0,$t0,#30
-	stt		$t0,milliseconds
+	sto		$t0,milliseconds
 	stt		$t0,switchflag
 	call	FMTK_SchedulerIRQ
 .0003:
+	csrrc	$x0,#$792,#2			; clear IRQ semaphore
 	eret

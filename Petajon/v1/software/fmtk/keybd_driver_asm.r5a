@@ -41,7 +41,7 @@ KeybdFuncTbl:
 	dco		_KeybdPeekScancode	; Peek char direct
 	dco		0							; input status
 	dco		0							; Put char
-	dco		0							; reserved
+	dco		_KeybdSendByte	; reserved
 	dco		0							; set position
 	dco		0							; read block
 	dco		0							; write block
@@ -378,6 +378,38 @@ KeybdIRQ:
 	ldi		$a4,#-1
 	call	FMTK_SendMsg
 .notKbd:
+	csrrc	$x0,#$792,#2			; clear IRQ semaphore
 	eret
 
-	
+; Return -1 if there is a scancode available in the buffer.
+
+_KeybdGetBufferStatus:
+	mGetCurrentTid
+	sll		$s1,$v0,#LOG_TCBSZ
+	csrrc	$s2,#$300,#1						; disable interrupts
+	ldbu	$t0,TCBKbdHead[$s1]
+	ldbu	$t1,TCBKbdTail[$s1]
+	csrrw	$x0,#$300,$s2						; restore interrupts
+	beq		$t0,$t1,.empty
+	ldi		$v0,#-1
+	ret
+.empty:
+	ldi		$v0,#0
+	ret
+
+_KeybdGetBufferedScancode:	
+	mGetCurrentTid
+	sll		$s1,$v0,#LOG_TCBSZ
+	ldi		$v0,#0									; $v0 = scancode
+	csrrc	$s2,#$300,#1						; disable interrupts
+	ldbu	$t0,TCBKbdHead[$s1]
+	ldbu	$t1,TCBKbdTail[$s1]
+	beq		$t0,$t1,.empty					; return 0 if empty
+	add		$t0,$t1,$s1							; calc pointer to buffer entry
+	ldbu	$v0,TCBKbdBuf[$t0]			; get buffer entry
+	add		$t1,$t1,#1							; increment tail pointer
+	and		$t1,$t1,#31
+	stb		$t1,TCBKbdTail[$s1]			; store tail pointer
+.empty:
+	csrrw	$x0,#$300,$s2						; restore interrupts
+	ret

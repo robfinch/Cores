@@ -2,7 +2,7 @@
 	; PS2 scan codes to ascii conversion tables.
 	;--------------------------------------------------------------------------
 	;
-	align	16
+	align	8
 _unshiftedScanCodes:
 	.byte	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
 	.byte	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e

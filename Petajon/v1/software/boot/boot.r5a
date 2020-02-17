@@ -89,15 +89,17 @@ UserStart:
 UserStart2:
 	ldi		$a0,#60000000				; 3s in 50ns intervals
 	call	_MicroDelay
-	call	VideoClearScreen
-	call	VideoHomeCursor
+	ldi		$a0,#$400						; clear screen
+	ecall
+	ldi		$a0,#$401						; home cursor
+	ecall
 	ldi		$a0,#14							; Get current tid
 	ecall
 	mov		$a1,$v1
 	ldi		$a0,#24							; RequestIOFocus
 	ecall
 ;	ldi		$sp,#$1FFF7FF8			; setup user mode stack pointer
-	ldi		$sp,#$AFFFFFFC
+;	ldi		$sp,#$AFFFFFFC
 	ldi		$t0,#$04						; turn on the LED
 	stt		$t0,VIA+VIA_PARAW
 	ldi		$t2,#16							; send an XON just in case
@@ -108,6 +110,18 @@ UserStart2:
 ;	bnez	$t2,.0004
 .0002:
 	ldi		$a0,#msgStart				; spit out a startup message
+	ldi		$t0,#$FFD00000
+	ldo		$t1,datAttr
+.0005:
+	ldbu	$a1,[$a0]
+	add		$a0,$a0,#1
+	beqz	$a1,.0004
+	or		$a1,$a1,$t1
+	sto		$a1,[$t0]
+	add		$t0,$t0,#8
+	bra		.0005
+.0004:
+	ldi		$a0,#msgStart
 	call	PutString
 ;		ldi		a0,#1
 ;		ldi		a1,#24000
@@ -124,6 +138,11 @@ UserStart2:
 	call	SerialPutChar
 	bra		.0003
 
+	align	8
+datAttr:
+	dco		$FFFF001F0000
+	
+	align	8
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
@@ -157,15 +176,23 @@ Getch:
 ;------------------------------------------------------------------------------
 
 Putch:
-	sub		$sp,$sp,#40
+	sub		$sp,$sp,#88
 	sto		$ra,[$sp]
 	sto		$v0,8[$sp]
 	sto		$a3,16[$sp]
 	sto		$v1,24[$sp]
 	sto		$a1,32[$sp]
+	sto		$t0,40[$sp]
+	sto		$t1,48[$sp]
+	sto		$t2,56[$sp]
+	sto		$t3,64[$sp]
+	sto		$t4,72[$sp]
+	sto		$t5,80[$sp]
 	mov		$a3,$a0
 ;	call	SerialPutChar
-	call	VideoPutChar
+;	call	VideoPutChar
+	ldi		$a0,#$402
+	ecall
 ;	ldi		$a1,#5							; serial port = 5
 ;	call	fputc
 ;	ldi		$a1,#2							; video = 2
@@ -175,7 +202,13 @@ Putch:
 	ldo		$a3,16[$sp]
 	ldo		$v1,24[$sp]
 	ldo		$a1,32[$sp]
-	add		$sp,$sp,#40
+	ldo		$t0,40[$sp]
+	ldo		$t1,48[$sp]
+	ldo		$t2,56[$sp]
+	ldo		$t3,64[$sp]
+	ldo		$t4,72[$sp]
+	ldo		$t5,80[$sp]
+	add		$sp,$sp,#88
 	ret
 
 ;------------------------------------------------------------------------------
@@ -598,7 +631,7 @@ PutString:
 	sto		$a0,8[$sp]				; and argument
 	mov		$t1,$a0						; t1 = pointer to string
 .0001:
-	lb		$a0,[$t1]
+	ldbu	$a0,[$t1]
 	add		$t1,$t1,#1				; advance pointer to next byte
 	beqz	$a0,.done			; branch if done
 	call	Putch							; output character
@@ -637,23 +670,48 @@ _MicroDelay:
 	code
 	align	4
 IRQRout:
-	csrrw	$t0,#$780,$x0			; get register set
+	csrrs	$t0,#CSR_REGSET,#15	; get regset,  ensure current regset is selected for all
+	srl		$t0,$t0,#4
+	and		$t0,$t0,#3
 	sll		$t0,$t0,#10				; 1k stack area
 	ldi		$sp,#$20000000-8	; setup machine mode stack pointer (top of ram)
 	sub		$sp,$sp,$t0				; set stack pointer for register set
 	csrrw	$t0,#$342,$x0			; get cause code
 	blt		$t0,$x0,.isIRQ		; irq or ecall?
+	ldi		$t1,#8
+	bltu	$t0,$t1,.cause0to7
+	ldi		$t1,#11
+	bgtu	$t0,$t1,.cause12plus
 	jmp		OSCALL						; goto operating system call dispatcher
 .isIRQ:
-	and		$t0,$t0,#31				; interrupting device # is low order 5 bits of cause code
-	sll		$t0,$t0,#8				; 256 bytes per device func table
-	add		$t0,$t0,#DVF_Base+22*8	; load IRQ routine vector from device func table
-	ldo		$t0,[$t0]
-	beq		$t0,$x0,.noIRQ		; make sure there's an address to go to
-	jmp		[$t0]							; jump to the IRQ routine
-.noIRQ:
+	ldo		$v0,$FFD00000+440	; Display IRQ live indicator
+	add		$v0,$v0,#1
+	sto		$v0,$FFD00000+440
+	csrrs	$v1,#$792,#2			; check and set interrupt semaphore
+	and		$v1,$v1,#2
+	beqz	$v1,.doIRQ
 	eret
-
+.doIRQ:
+	and		$t1,$t0,#31				; interrupting device # is low order 5 bits of cause code
+	sll		$t1,$t1,#8				; 256 bytes per device func table
+	add		$t1,$t1,#DVF_Base+22*8	; load IRQ routine vector from device func table
+	ldo		$t1,[$t1]
+	beq		$t1,$x0,.noIRQ		; make sure there's an address to go to
+	jmp		[$t1]							; call to the IRQ routine
+.noIRQ:
+	; For now, clear all interrupt sources
+	; Otherwise the system will hang on an unknown interrupt.
+	stt		$t0,VIA+VIA_PARAW
+	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	ldt		$t0,VIA+VIA_T1CL		; clear interrupt
+	csrrc	$x0,#$792,#2			; clear interrupt semaphore
+	eret
+.cause0to7:
+.cause12plus:
+	csrrc	$x0,#$300,#1			; disable ints
+	wfi
+	bra		.cause0to7				; and loop
+	
 ;------------------------------------------------------------------------------
 ; Message strings
 ;------------------------------------------------------------------------------
@@ -675,6 +733,7 @@ msgTaskStart:
 		db		" task started."
 msgCRLF:
 		db		13,10,0
+		align		8
 flt50:
 	dw	0x00000000,0x00000000,0x00000000,0x40049000
 flt20:
@@ -682,8 +741,11 @@ flt20:
 flt10:
 	dw	0x00000000,0x00000000,0x00000000,0x40024000
 
+		align		8
+
 .include "fltToString.r5a"
-.include "cs01Mem.r5a"
+.include "../bios/bios.r5a"
+.include "../bios/mem.r5a"
 .include "../fmtk/pic.r5a"
 .include "../fmtk/serial.r5a"
 .include "../fmtk/via.r5a"

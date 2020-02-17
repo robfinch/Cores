@@ -44,9 +44,9 @@ CTRLX	EQU	0x18
 XON		EQU	0x11
 XOFF	EQU	0x13
 
-FILENAME	EQU		0x6C0
-FILEBUF		EQU		0x07F600
-OSSP		EQU		0x700
+FILENAME	EQU		0x3F6C0
+FILEBUF		EQU		0x03F600
+OSSP		EQU		0x30000
 TXTUNF		EQU		OSSP+4
 VARBGN		EQU		TXTUNF+4
 VAREND		EQU		VARBGN+4
@@ -75,9 +75,9 @@ IRQFlag		EQU		CursorFlash+4
 ;
 ;THRD_AREA	dw	0x04000000	; threading switch area 0x04000000-0x40FFFFF
 ;bitmap dw	0x00100000	; bitmap graphics memory 0x04100000-0x417FFFF
-TXTBGN		EQU		0x001800	;TXT ;beginning of program memory
-ENDMEM		EQU		0x008000	; end of available memory
-STACKOFFS	EQU		0x07FFFC	; stack offset
+TXTBGN		EQU		0x031800	;TXT ;beginning of program memory
+ENDMEM		EQU		0x03FFFC	; end of available memory
+STACKOFFS	EQU		0xAFFFC000	; stack offset
 
 
 		code

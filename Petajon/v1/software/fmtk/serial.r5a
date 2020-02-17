@@ -334,32 +334,33 @@ SerialIRQ:
 .nxtByte:
 	and		$t0,$a0,#$08				; bit 3 = rx full
 	beq		$t0,$x0,.notRxInt
-	lw		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
-	lbu		$t2,SerHeadRcv			; get buffer indexes
-	lbu		$t3,SerTailRcv
+	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	ldbu	$t2,SerHeadRcv			; get buffer indexes
+	ldbu	$t3,SerTailRcv
 	add		$t3,$t3,#1					; see if buffer full
 	and		$t3,$t3,#255
 	beq		$t2,$t3,.rxFull
-	sb		$t3,SerTailRcv			; update tail pointer
+	stb		$t3,SerTailRcv			; update tail pointer
 	sub		$t3,$t3,#1
 	and		$t2,$t3,#255
-	sb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
-	lb		$v0,SerRcvXoff			; check if xoff already sent
+	stb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
+	ldb		$v0,SerRcvXoff			; check if xoff already sent
 	bne		$v0,$x0,.0001
 	call	SerialRcvCount			; if more than 240 chars in buffer
 	slt		$v0,$v0,#240				; send an XOFF
 	bne		$v0,$x0,.0001
 	ldi		$a0,#XOFF
-	sb		$x0,SerRcvXon				; clear XON status
-	sb		$a0,SerRcvXoff			; set XOFF status
-	sb		UART+UART_TRB
+	stb		$x0,SerRcvXon				; clear XON status
+	stb		$a0,SerRcvXoff			; set XOFF status
+	stb		UART+UART_TRB
 .0001:
-	lw		$a0,UART+UART_STAT	; check the status for another byte
+	ldt		$a0,UART+UART_STAT	; check the status for another byte
 	bra		.nxtByte
 ;	ldi		$a0,#$0B						; dtr,rts active, rxint disabled, no parity
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
+	csrrc	$x0,#$792,#2			; clear IRQ semaphore
 	eret
 	
 nmeSerial:
