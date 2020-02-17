@@ -593,9 +593,9 @@ void Function::GenReturn(Statement *stmt)
 		initstack();
 		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
 		if (isFloat)
-			ap = cg.GenerateExpression(stmt->exp, am_fpreg, sizeOfFP);
+			ap = stmt->exp->Generate(am_fpreg, sizeOfFP);
 		else
-			ap = cg.GenerateExpression(stmt->exp, am_reg | am_imm, sizeOfWord);
+			ap = stmt->exp->Generate(am_reg | am_imm, sizeOfWord);
 		GenerateMonadic(op_hint, 0, MakeImmediate(2));
 		if (ap->mode == am_imm)
 			GenerateDiadic(op_ldi, 0, makereg(regV0), ap);

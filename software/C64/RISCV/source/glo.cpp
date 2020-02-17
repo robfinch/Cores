@@ -115,6 +115,7 @@ SYM             *lasthead = (SYM *)NULL;
 Float128		*quadtab = nullptr;
 struct slit     *strtab = (struct slit *)NULL;
 struct clit		*casetab = (struct clit *)NULL;
+int longlit_ndx = 0;
 int             lc_static = 0;
 int             lc_auto = 0;
 int				lc_thread = 0;

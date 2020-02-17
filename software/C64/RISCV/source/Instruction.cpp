@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,7 +49,9 @@ bool Instruction::IsFlowControl()
 		opcode == op_call ||
 		opcode == op_bra ||
 		opcode == op_beq ||
+		opcode == op_beqz ||
 		opcode == op_bne ||
+		opcode == op_bnez ||
 		opcode == op_blt ||
 		opcode == op_ble ||
 		opcode == op_bgt ||
@@ -58,14 +60,6 @@ bool Instruction::IsFlowControl()
 		opcode == op_bleu ||
 		opcode == op_bgtu ||
 		opcode == op_bgeu ||
-		opcode == op_beqi ||
-		opcode == op_bnei ||
-		opcode == op_bbs ||
-		opcode == op_bbc ||
-		opcode == op_bnand ||
-		opcode == op_bnor ||
-		//opcode == op_ibne ||
-		//opcode == op_dbnz ||
 		opcode == op_bchk
 		)
 		return (true);
@@ -78,12 +72,11 @@ bool Instruction::IsLoad()
 		return (false);
 	if (opcode == op_ldb
 		|| opcode == op_ldw
-		|| opcode == op_ldp
-		|| opcode == op_ldd
+		|| opcode == op_ldt
+		|| opcode == op_ldo
 		|| opcode == op_ldbu
 		|| opcode == op_ldwu
-		|| opcode == op_ldpu
-		|| opcode == op_lddr
+		|| opcode == op_ldtu
 		|| opcode == op_lf
 		|| opcode == op_lfd
 		|| opcode == op_lft
@@ -98,11 +91,10 @@ bool Instruction::IsIntegerLoad()
 		return (false);
 	if (opcode == op_ldb
 		|| opcode == op_ldw
-		|| opcode == op_ldp
-		|| opcode == op_ldd
+		|| opcode == op_ldt
+		|| opcode == op_ldo
 		|| opcode == op_ldbu
 		|| opcode == op_ldwu
-		|| opcode == op_ldpu
 		|| opcode == op_lddr
 		)
 		return (true);
@@ -115,13 +107,12 @@ bool Instruction::IsStore()
 		return (false);
 	if (opcode == op_stb
 		|| opcode == op_stw
-		|| opcode == op_stp
-		|| opcode == op_std
+		|| opcode == op_stt
+		|| opcode == op_sto
 		|| opcode == op_stdc
 		|| opcode == op_sf
 		|| opcode == op_sfd
 		|| opcode == op_sft
-		|| opcode == op_push
 		)
 		return (true);
 	return (false);

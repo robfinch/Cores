@@ -28,7 +28,7 @@
 static void emitAlignedCode(int cd);
 static void process_shifti(int oc, int funct3, int funct7);
 static void ProcessEOL(int opt);
-
+extern void process_dco();
 extern int first_rodata;
 extern int first_data;
 extern int first_bss;
@@ -678,9 +678,9 @@ static void process_rrop(int oc, int funct3, int funct7)
 		case tk_eor:	process_riop(0x13, 0x04, funct7); break;
 		case tk_slt:	process_riop(0x13, 0x02, funct7); break;
 		case tk_sltu:	process_riop(0x13, 0x03, funct7); break;
-		case tk_sll: process_shifti(oc, funct3, funct7); break;
-		case tk_srl: process_shifti(oc, funct3, funct7); break;
-		case tk_sra: process_shifti(oc, funct3, funct7 - 0x10); break;
+		case tk_sll: process_shifti(0x13, funct3, funct7); break;
+		case tk_srl: process_shifti(0x13, funct3, funct7); break;
+		case tk_sra: process_shifti(0x13, funct3, funct7 - 0x10); break;
 		default:
         printf("rrop: syntax error\n");
     }
@@ -720,11 +720,25 @@ static void process_palloc(int funct7)
 	int Rs1, Rt;
 
 	Rs1 = Rt = getRegisterX();
-	if (funct7 == 1)
+	if (funct7 == 5 || funct7 == 13)
 		Rt = 0;
 	else
 		Rs1 = 0;
-	emit_insn(FN7(funct7) | FN3(1) | RS1(Rs1) | RD(Rt) | 13, 1);
+	emit_insn(FN7(funct7) | FN3(0) | RS1(Rs1) | RD(Rt) | 13, 1);
+	prevToken();
+	ScanToEOL();
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void process_pfree(int funct7)
+{
+	int Rs1, Rt;
+
+	Rs1 = getRegisterX();
+	Rt = 0;
+	emit_insn(FN7(funct7) | FN3(0) | RS1(Rs1) | RD(Rt) | 13, 1);
 	prevToken();
 	ScanToEOL();
 }
@@ -1124,6 +1138,36 @@ static void process_bcc(int funct3)
   );
 }
 
+static void process_beqz(int funct3)
+{
+	int Ra, Rb, Rn;
+	int64_t val;
+	int64_t disp;
+
+	Ra = getRegisterX();
+	Rb = 0;
+	need(',');
+	NextToken();
+	if (funct3 < 0) {
+		Rn = Ra;
+		Ra = Rb;
+		Rb = Rn;
+		funct3 = -funct3;
+	}
+	val = expr();
+	disp = val - code_address;
+	emit_insn(
+		(((disp & 0x1000) >> 12) << 31) |
+		(((disp & 0x7E0) >> 5) << 25) |
+		(((disp & 0x1E) >> 1) << 8) |
+		(((disp & 0x800) >> 11) << 7) |
+		(Rb << 20) |
+		(Ra << 15) |
+		(funct3 << 12) |
+		0x63, 0
+	);
+}
+
 // ---------------------------------------------------------------------------
 // bra label
 // ---------------------------------------------------------------------------
@@ -1302,6 +1346,54 @@ static void process_ldi()
 	emit_insn(((val & 0xFFFLL) << 20LL)| FN3(6) | RS1(0) | RD(Rt) | 0x13,!expand_flag);  // ORI
 }
 
+static void process_lea()
+{
+	int Ra;
+	int Rt;
+	char *p;
+	int64_t disp;
+	int fixup = 5;
+
+	p = inptr;
+	Rt = getRegisterX();
+	if (Rt < 0) {
+		printf("Expecting a target register.\r\n");
+		//        printf("Line:%.60s\r\n",p);
+		ScanToEOL();
+		inptr -= 2;
+		return;
+	}
+	expect(',');
+	mem_operand(&disp, &Ra);
+	if (Ra < 0) Ra = 0;
+	if (!IsNBit(disp,12)) {
+		if (disp & 0x800)
+			emit_insn(((disp + 0x1000) & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
+		else
+			emit_insn((disp & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
+		emit_insn(((disp & 0xfff) << 20) | RD(12) | RS1(12) | FN3(0) | 0x13, 1);	// ADDI
+		emit_insn(FN7(0) | RD(Rt) | RS1(12) | RS2(Ra) | FN3(0) | 0x33, 1);	// ADD
+		//emit_insn(RS1(12) | FN3(func3) | RD(Rt) | oc, !expand_flag);
+		return;
+	}
+	/*
+	if ((disp < -2048 || disp > 2047)) {
+		 if (OPTX32) {
+			emit_insn((0x800 << 20)|(Ra << 15)|(func3<<12)|(Rt<<7)|oc,1);
+			emit_insn(disp,0);
+		 }
+		 else if (OPT64) {
+			emit_insn(((disp&0x800) << 20)|(Ra << 15)|(func3<<12)|(Rt<<7)|0x3F,!expand_flag);
+			emit_insn((disp&0xFFFFF000)|oc,0);
+		 }
+	}
+	//else
+	*/
+	emit_insn(((disp & 0xFFF) << 20) | RS1(Ra) | FN3(0) | RD(Rt) | 19, !expand_flag);	// ADDI
+	ScanToEOL();
+}
+
+
 // ----------------------------------------------------------------------------
 // lw r1,disp[r2]
 // lw r1,[r2+r3]
@@ -1391,11 +1483,52 @@ static void process_mov(int oc)
 {
 	int Ra;
 	int Rt;
-     
+	int rgd, rgs;
+	char *p;
+	char ch;
+    
+	SkipSpaces();
+	p = inptr;
+	rgd = inptr[0];
+	if (inptr[1] != ':') {
+		inptr = p;
+		rgd = -1;
+	}
+	else
+		inptr += 2;
+	switch (rgd) {
+	case 'M': case 'm': rgd = 3; break;
+	case 'H': case 'h': rgd = 2; break;
+	case 'S': case 's': rgd = 1; break;
+	case 'U': case 'u': rgd = 0; break;
+	}
 	Rt = getRegisterX();
 	need(',');
+	SkipSpaces();
+	p = inptr;
+	rgs = inptr[0];
+	if (inptr[1] != ':') {
+		inptr = p;
+		rgs = -1;
+	}
+	else
+		inptr += 2;
+	switch (rgs) {
+	case 'M': case 'm': rgs = 3; break;
+	case 'H': case 'h': rgs = 2; break;
+	case 'S': case 's': rgs = 1; break;
+	case 'U': case 'u': rgs = 0; break;
+	}
 	Ra = getRegisterX();
-	emit_insn(RD(Rt)|RS2(0)|RS1(Ra)|FN3(6)|51,1);	// OR Rd,Ra,R0
+	if (rgs == -1 && rgd == -1)
+		emit_insn(RD(Rt) | RS2(0) | RS1(Ra) | FN3(6) | 51, 1);	// OR Rd,Ra,R0
+	else {
+		if (rgd == -1)
+			rgd = 0;
+		if (rgs == -1)
+			rgs = 0;
+		emit_insn(FN7(2) | RD(Rt) | RS2((rgs << 2) | rgd) | RS1(Ra) | FN3(0) | 13, 1);
+	}
 	prevToken();
 	ScanToEOL();
 }
@@ -1422,6 +1555,27 @@ static void process_rts(int oc)
 }
 
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_setto(int oc, int func3, int func7)
+{
+	int Rs2;
+	int Rs1;
+
+	Rs1 = getRegisterX();
+	need(',');
+	Rs2 = getRegisterX();
+	emit_insn(
+		FN7(func7) |
+		FN3(func3) |
+		RS2(Rs2) |
+		RS1(Rs1) |
+		RD(0) |
+		oc, 1
+	);
+}
+
+// ----------------------------------------------------------------------------
 // srli r1,r2,#5
 // ----------------------------------------------------------------------------
 
@@ -1438,6 +1592,39 @@ static void process_shifti(int oc, int funct3, int funct7)
 	NextToken();
 	val = expr();
 	emit_insn(FN7(funct7) | ((val & 0x1F) << 20) | RS1(Ra) | FN3(funct3) | RD(Rt) | oc,1);
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_getto(int oc, int func3, int func7)
+{
+	int Rd;
+	int Rs1;
+
+	Rd = getRegisterX();
+	need(',');
+	Rs1 = getRegisterX();
+	emit_insn(
+		FN7(func7) |
+		FN3(func3) |
+		RS1(Rs1) |
+		RD(Rd) |
+		oc, 1
+	);
+}
+
+static void process_getzl(int oc, int func3, int func7)
+{
+	int Rd;
+
+	Rd = getRegisterX();
+	emit_insn(
+		FN7(func7) |
+		FN3(func3) |
+		RD(Rd) |
+		oc, 1
+	);
 }
 
 // ----------------------------------------------------------------------------
@@ -1900,7 +2087,8 @@ void Friscv_processMaster()
         case tk_and:  process_rrop(0x33,0x07,0x00); break;
         case tk_andi:  process_addi(7); break;
         case tk_beq: process_bcc(0); break;
-        case tk_bge: process_bcc(5); break;
+				case tk_beqz: process_beqz(0); break;
+				case tk_bge: process_bcc(5); break;
         case tk_bgeu: process_bcc(7); break;
 				case tk_bgt: process_bcc(-4); break;
 				case tk_bgtu: process_bcc(-6); break;
@@ -1908,8 +2096,10 @@ void Friscv_processMaster()
 				case tk_bleu: process_bcc(-7); break;
 				case tk_blt: process_bcc(4); break;
         case tk_bltu: process_bcc(6); break;
-        case tk_bne: process_bcc(1); break;
-        case tk_bra: process_bra(0); break;
+				case tk_bltz: process_beqz(4); break;
+				case tk_bne: process_bcc(1); break;
+				case tk_bnez: process_beqz(1); break;
+				case tk_bra: process_bra(0); break;
         case tk_bsr: process_bra(0x56); break;
         case tk_bss:
             if (first_bss) {
@@ -1943,7 +2133,10 @@ void Friscv_processMaster()
             break;
         case tk_db:  process_db(); break;
         case tk_dc:  process_dc(); break;
+				case tk_dd:  process_dd(); break;
 				case tk_dcb:  process_db(); break;
+				case tk_dco:  process_dco(); break;
+				case tk_decto: emit_insn(0x1600000D,1); break;
 				case tk_dh:  process_dh(); break;
 				case tk_div: process_rrop(0x33, 0x04, 0x01); break;
 				case tk_divu: process_rrop(0x33, 0x05, 0x01); break;
@@ -1981,48 +2174,60 @@ void Friscv_processMaster()
 				case tk_fsw:	process_store(39, 2); break;
 				case tk_ftx: process_fpstat(0x75); break;
         case tk_gran: process_gran(0x14); break;
+				case tk_getrdy: process_getto(13, 0, 14); break;
+				case tk_getto: process_getto(13, 0, 9); break;
+				case tk_getzl: process_getzl(13, 0, 10); break;
 				case tk_if:		pif1 = inptr - 2; doif(); break;
 				case tk_ifdef:		pif1 = inptr - 5; doifdef(); break;
+				case tk_insiof: process_pfree(16); break;
+				case tk_insrdy: process_setto(13, 0, 12); break;
 				case tk_jal: process_jal(); break;
         case tk_jmp: process_jal(); break;
         case tk_lb:  process_load(0x03,0); break;
 				case tk_ldb:  process_load(0x03, 0); break;
 				case tk_lbu: process_load(0x03,4); break;
 				case tk_ldbu: process_load(0x03, 4); break;
-				case tk_ld: process_ldi(); break;
+//				case tk_ld: process_ldi(); break;
         case tk_ldi: process_ldi(); break;
         case tk_lh:  process_load(0x03,1); break;
         case tk_lhu: process_load(0x03,5); break;
+				case tk_ldo: process_load(0x03, 3); break;
 				case tk_ldw:  process_load(0x03, 1); break;
 				case tk_ldwu: process_load(0x03, 5); break;
+				case tk_lea: process_lea(); break;
 					//        case tk_lui: process_lui(); break;
 				case tk_lr:  process_loadr(0x2f, 0x02, 0x02); break;
 				case tk_lw:  process_load(0x03,2); break;
 				case tk_ldt:  process_load(0x03, 2); break;
 				case tk_macro:	process_macro(); break;
 				case tk_mfspr: process_mfspr(0x49); break;
-				case tk_mfu: process_umove(13, 2); break;
+				//case tk_mfu: process_umove(13, 2); break;
         case tk_mov: process_mov(0x04); break;
         case tk_mtspr: process_mtspr(0x48); break;
-				case tk_mtu: process_umove(13, 3); break;
+				//case tk_mtu: process_umove(13, 3); break;
 				case tk_mul: process_rrop(0x33,0x00,0x01); break;
 				case tk_mvmap: process_rrop(13, 0x00, 0x01); break;
 				case tk_mvseg: process_rrop(13, 0x00, 0x00); break;
 				case tk_neg: process_rop(0x05); break;
-        case tk_nop: emit_insn(0xEAEAEAEAEA,1); break;
+        case tk_nop: emit_insn(0x00000013,1); break;
         case tk_not: process_rop(0x07); break;
+				case tk_nxtiof: process_getzl(13, 0, 18); break;
         case tk_or:  process_rrop(0x33,0x06,0x00); break;
         case tk_ori: process_addi(6); break;
         case tk_org: process_org(); break;
-				case tk_palloc: process_palloc(0); break;
-				case tk_pfree: process_palloc(1); break;
+				case tk_palloc: process_palloc(4); break;
+				case tk_pfi: emit_insn(0x10300073, 1); break;
+				case tk_pfree: process_pfree(5); break;
 				case tk_php: emit_insn(0x3200000001,1); break;
         case tk_plp: emit_insn(0x3300000001,1); break;
         case tk_plus: expand_flag = 1; break;
-        case tk_public: process_public(); break;
+				case tk_prviof: process_getzl(13, 0, 19); break;
+				case tk_public: process_public(); break;
 				case tk_rem: process_rrop(0x33, 0x06, 0x01); break;
 				case tk_remu: process_rrop(0x33, 0x07, 0x01); break;
 				case tk_ret:	emit_insn(0x00008067, 1); break;
+				case tk_rmviof: process_pfree(17); break;
+				case tk_rmvrdy: process_palloc(13); break;
         case tk_rodata:
             if (first_rodata) {
                 while(sections[segment].address & 4095)
@@ -2038,28 +2243,32 @@ void Friscv_processMaster()
         case tk_sb:  process_store(0x23,0); break;
 				case tk_sc:  process_storec(0x2F, 0x02, 0x03); break;
 				case tk_sei: emit_insn(0x3000000001,1); break;
+				case tk_setto: process_setto(13, 0, 8); break;
         case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         case tk_slti:  process_riop(0x13,0x02,0x00); break;
         case tk_sltui:  process_riop(0x13,0x03,0x00); break;
         case tk_sh:  process_store(0x23,1); break;
-				case tk_sll: process_rrop(0x13, 0x01, 0x00); break;
-				case tk_sra: process_rrop(0x13, 0x05, 0x20); break;
-				case tk_srl: process_rrop(0x13, 0x05, 0x00); break;
+				case tk_sll: process_rrop(0x33, 0x01, 0x00); break;
+				case tk_sra: process_rrop(0x33, 0x05, 0x20); break;
+				case tk_srl: process_rrop(0x33, 0x05, 0x00); break;
 				case tk_slli: process_shifti(0x13,0x01,0x00); break;
         case tk_srai: process_shifti(0x13,0x05,0x10); break;
         case tk_srli: process_shifti(0x13,0x05,0x00); break;
 				case tk_stb:  process_store(0x23, 0); break;
+				case tk_stt: process_store(0x23, 2); break;
+				case tk_sto: process_store(0x23, 3); break;
+				case tk_stw:  process_store(0x23, 1); break;
 				case tk_sub:  process_rrop(0x33,0x00,0x20); break;
 //        case tk_sub:  process_sub(); break;
         case tk_sxb: process_rop(0x08); break;
         case tk_sxc: process_rop(0x09); break;
         case tk_sxh: process_rop(0x0A); break;
         case tk_sw:  process_store(0x23,2); break;
-				case tk_stt: process_store(0x23, 2); break;
-				case tk_stw:  process_store(0x23, 1); break;
 				case tk_swap: process_rop(0x03); break;
-        case tk_xor: process_rrop(0x33,0x04,0x00); break;
+				case tk_wai: emit_insn(0x10100073, 1); break;
+				case tk_wfi: emit_insn(0x10100073, 1); break;
+				case tk_xor: process_rrop(0x33,0x04,0x00); break;
         case tk_xori: process_riop(0x13,0x04,0x00); break;
         case tk_id:  process_label(); break;
         case '-': compress_flag = 1; break;

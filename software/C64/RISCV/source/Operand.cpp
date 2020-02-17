@@ -162,6 +162,8 @@ void Operand::MakeLegal(int flags, int size)
 {
 	Operand *ap2, *ap1;
 	int64_t i;
+	int li;
+	char buf[200];
 
 	if (this == nullptr)
 		return;
@@ -190,7 +192,16 @@ void Operand::MakeLegal(int flags, int size)
 					if (offset->i == 0) {
 						mode = am_reg;
 						preg = 0;
+						return;
 					}
+				}
+				if ((offset->i & 0xFFFFFFFF00000000LL) != 0LL && (offset->i & 0xFFFFFFFF00000000LL) != 0xFFFFFFFF00000000LL) {
+					li = longlit(offset->i);
+					ap1 = GetTempRegister();
+					sprintf_s(buf, sizeof(buf), "%s_longlit%d", GetNamespace(), li);
+					this->mode = am_reg;
+					this->preg = ap1->preg;
+					GenerateDiadic(op_ldo, 0, this, cg.MakeStringAsNameConst(buf));
 				}
 				return;
 			}
@@ -327,7 +338,13 @@ void Operand::MakeLegal(int flags, int size)
 		cg.GenLoad(ap2, this, size, size);
 		break;
 	case am_imm:
-		cg.GenLoadConst(this, ap2);
+		if ((offset->i & 0xFFFFFFFF00000000LL) != 0LL && (offset->i & 0xFFFFFFFF00000000LL) != 0xFFFFFFFF00000000LL) {
+			li = longlit(offset->i);
+			sprintf_s(buf, sizeof(buf), "%s_longlit%d", GetNamespace(), li);
+			GenerateDiadic(op_ldo, 0, this, cg.MakeStringAsNameConst(buf));
+		}
+		else
+			cg.GenLoadConst(this, ap2);
 		//GenerateDiadic(op_ldi, 0, ap2, this);
 		break;
 	case am_reg:

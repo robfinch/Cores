@@ -30,6 +30,7 @@ void align(int n);
 void roseg();
 bool renamed = false; 
 int64_t genst_cumulative;
+int64_t longlit_buf[100];
 
 /*      variable initialization         */
 
@@ -127,7 +128,9 @@ Instruction opl[247] =
 { "fdiv.s", op_fsdiv,80,1,false },
 { "fi2d", op_i2d,2,1,false },
 { "fix2flt", op_fix2flt },
+{ "fld", op_lfd,4,1,true, am_fpreg, am_mem,0,0 },
 { "flt2fix",op_flt2fix },
+{ "flw", op_lf, 4, 1, true, am_fpreg, am_mem, 0, 0 },
 { "fmov", op_fmov,1,1 },
 { "fmov.d", op_fdmov,1,1 },
 { "fmul", op_fdmul,10,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
@@ -135,11 +138,13 @@ Instruction opl[247] =
 { "fmul.s", op_fsmul,10,1,false },
 { "fneg", op_fneg,2,1,false,am_fpreg,am_fpreg,0,0 },
 { "fs2d", op_fs2d,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fsd", op_sfd,4,0,true, am_fpreg, am_mem,0,0 },
 { "fsle", op_fsle, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
 { "fslt", op_fslt, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
 { "fsub", op_fdsub,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
 { "fsub", op_fsub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "fsub.s", op_fssub,6,1,false },
+{ "fsw", op_sf, 4, 0, true, am_fpreg, am_mem, 0, 0 },
 { "ftadd", op_ftadd },
 { "ftdiv", op_ftdiv },
 { "ftmul", op_ftmul },
@@ -174,8 +179,6 @@ Instruction opl[247] =
 { "le",op_le },
 { "lea",op_lea,1,1,false,am_reg,am_mem,0,0 },
 { "leu",op_leu },
-{ "lf", op_lf, 4, 1, true, am_fpreg, am_mem, 0, 0 },
-{ "lfd", op_lfd,4,1,true, am_fpreg, am_mem,0,0 },
 { "lft", op_lft,4,1,true, am_fpreg, am_mem,0,0 },
 { "link",op_link,4,1,true },
 { "lm", op_lm },
@@ -225,8 +228,6 @@ Instruction opl[247] =
 { "sei", op_sei,1,0,false,am_reg,0,0,0 },
 { "seq", op_seq,1,1,false,am_reg,am_reg,am_reg|am_i26,0 },
 { "setwb", op_setwb, 1, 0 },
-{ "sf", op_sf, 4, 0, true, am_fpreg, am_mem, 0, 0 },
-{ "sfd", op_sfd,4,0,true, am_fpreg, am_mem,0,0 },
 { "sft", op_sft,4,0,true, am_fpreg, am_mem,0,0 },
 { "sge",op_sge,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
 { "sgeu",op_sgeu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
@@ -296,7 +297,7 @@ Instruction opl[247] =
 };
 
 // op to instruction map
-int op_ins[10000];
+int op_ins[op_last+1];
 
 Instruction *GetInsn(int op)
 {
@@ -683,6 +684,20 @@ void GenerateLabelReference(int n, int64_t offset)
     }
 }
 
+int longlit(__int64 i64)
+{
+	int x;
+
+	for (x = 0; x < longlit_ndx; x++)
+		if (longlit_buf[x] == i64)
+			return (x);
+	longlit_buf[longlit_ndx] = i64;
+	if (longlit_ndx > sizeof(longlit_buf)/sizeof(int64_t))
+		throw new C64PException(ERR_TOOMANYLONGLITS, 9);
+	longlit_ndx++;
+	return (longlit_ndx - 1);
+}
+
 /*
  *      make s a string literal and return it's label number.
  */
@@ -844,9 +859,24 @@ void dumplits()
 	char *cp;
 	int64_t nn;
 	slit *lit;
+	int x;
+	char buf[30];
 
 	dfs.printf("<Dumplits>\n");
 	roseg();
+	if (longlit_ndx) {
+		nl();
+		align(8);
+		nl();
+		for (x = 0; x < longlit_ndx; x++) {
+			ofs.printf("%s_", GetNamespace());
+			ofs.printf("longlit%d:\n", x);
+			ofs.printf("\tdco\t");
+			sprintf_s(buf, sizeof(buf), "%I64X", longlit_buf[x]);
+			ofs.printf(buf);
+			ofs.printf("\n");
+		}
+	}
 	if (casetab) {
 		nl();
 		align(8);

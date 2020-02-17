@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -98,7 +98,8 @@ static char *errtextstr[] = {
 	"E Compiler: stack empty.",
 	"E Compiler: i-graph nodes in wrong order.",
 	"E Cast aggregate should be a constant",
-	"E Unsupported precision."
+	"E Unsupported precision.",
+	"E Compiler limit reached: too many large literal constants."
 };
 
 static char *errtext1000[] =

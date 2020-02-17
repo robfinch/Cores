@@ -8,3 +8,4 @@ void doifndef();
 bool IsNBit128(Int128&, Int128&);
 void process_dcp();
 void process_dcd();
+void process_dco();

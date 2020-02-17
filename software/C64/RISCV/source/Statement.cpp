@@ -1294,7 +1294,7 @@ void Statement::GenerateFor()
 	contlab = nextlabel++;
 	initstack();
 	if (initExpr != NULL)
-		ReleaseTempRegister(cg.GenerateExpression(initExpr, am_all | am_novalue
+		ReleaseTempRegister(initExpr->Generate(am_all | am_novalue
 			, initExpr->GetNaturalSize()));
 	loophead = currentFn->pl.tail;
 	if (!opt_nocgo) {
@@ -1320,7 +1320,7 @@ void Statement::GenerateFor()
 	GenerateLabel(contlab);
 	if (incrExpr != NULL) {
 		initstack();
-		ReleaseTempRegister(cg.GenerateExpression(incrExpr, am_all | am_novalue, incrExpr->GetNaturalSize()));
+		ReleaseTempRegister(incrExpr->Generate(am_all | am_novalue, incrExpr->GetNaturalSize()));
 	}
 	if (opt_nocgo)
 		GenerateMonadic(op_bra, 0, cg.MakeCodeLabel(loop_label));
@@ -1417,7 +1417,7 @@ void Statement::GenerateIf()
 	// Check for bbc optimization
 	if (!opt_nocgo && ep->nodetype == en_and && ep->p[1]->nodetype == en_icon && pwrof2(ep->p[1]->i) >= 0) {
 		size = node->GetNaturalSize();
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+		ap1 = node->p[0]->Generate(am_reg, size);
 		GenerateTriadic(op_bbc, 0, ap1, MakeImmediate(pwrof2(ep->p[1]->i)), MakeDataLabel(lab1));
 		ReleaseTempRegister(ap1);
 	}
@@ -1633,7 +1633,7 @@ void Statement::GenerateLinearSwitch()
 		error(ERR_BAD_SWITCH_EXPR);
 		return;
 	}
-	ap = cg.GenerateExpression(exp, am_reg, exp->GetNaturalSize());
+	ap = exp->Generate(am_reg, exp->GetNaturalSize());
 	//        if( ap->preg != 0 )
 	//                GenerateDiadic(op_mov,0,makereg(1),ap);
 	//		ReleaseTempRegister(ap);
@@ -1790,7 +1790,7 @@ void Statement::GenerateSwitch()
 		qsort(&casetab[0], mm, sizeof(struct scase), casevalcmp);
 		tablabel = caselit(casetab, mm);
 		initstack();
-		ap = cg.GenerateExpression(exp, am_reg, exp->GetNaturalSize());
+		ap = exp->Generate(am_reg, exp->GetNaturalSize());
 		if (!nkd) {
 			ap1 = GetTempRegister();
 			ap2 = GetTempRegister();
@@ -1862,7 +1862,7 @@ void Statement::GenerateTry()
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
-		ap2 = cg.GenerateExpression(node, am_reg | am_mem, node->GetNaturalSize());
+		ap2 = node->Generate(am_reg | am_mem, node->GetNaturalSize());
 		if (ap2->mode == am_reg)
 			GenerateDiadic(op_mov, 0, ap2, makereg(1));
 		else
@@ -1887,7 +1887,7 @@ void Statement::GenerateThrow()
 	if (exp != NULL)
 	{
 		initstack();
-		ap = cg.GenerateExpression(exp, am_all, 8);
+		ap = exp->Generate(am_all, sizeOfWord);
 		if (ap->mode == am_imm)
 			GenerateDiadic(op_ldi, 0, makereg(1), ap);
 		else if (ap->mode != am_reg)
@@ -1949,9 +1949,9 @@ void Statement::GenerateCheck()
 		return;
 	}
 	size = node->GetNaturalSize();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm0, size);
-	ap3 = cg.GenerateExpression(node->p[2], am_reg | am_imm, size);
+	ap1 = node->p[0]->Generate(am_reg, size);
+	ap2 = node->p[1]->Generate(am_reg | am_imm0, size);
+	ap3 = node->p[2]->Generate(am_reg | am_imm, size);
 	if (ap2->mode == am_imm) {
 		ap2->mode = am_reg;
 		ap2->preg = 0;
@@ -1970,7 +1970,7 @@ void Statement::GenerateCompound()
 	while (sp) {
 		if (sp->initexp) {
 			initstack();
-			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, am_all, 8));
+			ReleaseTempRegister(sp->initexp->Generate(am_all, 8));
 		}
 		sp = sp->GetNextPtr();
 	}
@@ -1989,7 +1989,7 @@ void Statement::GenerateFuncBody()
 	while (sp) {
 		if (sp->initexp) {
 			initstack();
-			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, am_all, 8));
+			ReleaseTempRegister(sp->initexp->Generate(am_all, 8));
 		}
 		sp = sp->GetNextPtr();
 	}
@@ -2040,7 +2040,7 @@ void Statement::Generate()
 			break;
 		case st_expr:
 			initstack();
-			ap = cg.GenerateExpression(stmt->exp, am_all | am_novalue,
+			ap = stmt->exp->Generate(am_all | am_novalue,
 				GetNaturalSize(stmt->exp));
 			ReleaseTempRegister(ap);
 			tmpFreeAll();

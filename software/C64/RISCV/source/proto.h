@@ -27,6 +27,7 @@ int roundSize(TYP *tp);
 extern char *rtrim(char *);
 extern int caselit(scase *casetab, int64_t);
 extern int litlist(ENODE *);
+extern int longlit(__int64 i64);
 
 // MemoryManagement.cpp
 void FreeFunction(Function *fn);

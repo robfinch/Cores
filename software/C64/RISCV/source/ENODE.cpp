@@ -1677,7 +1677,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 }
 
 
-Operand *ENODE::GenAssignAdd(int flags, int size, int op)
+Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3, *ap4;
 	int ssize;
@@ -1759,7 +1759,10 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 	return (ap1);
 }
 
-Operand *ENODE::GenAssignLogic(int flags, int size, int op)
+//
+//      generate a *= node.
+//
+Operand *ENODE::GenerateAssignMultiply(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
 	int ssize;
@@ -1772,7 +1775,158 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 		ap3 = GetTempRegister();
 		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
+		ap2 = p[1]->Generate(am_reg | am_imm, size);
+		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		GenStore(ap3, ap1->next, ssize);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1->next);
+		ReleaseTempReg(ap1);
+		ap3->MakeLegal(flags, size);
+		return (ap3);
+	}
+	if (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple) {
+		ap1 = p[0]->Generate(am_fpreg | am_mem, ssize);
+		ap2 = p[1]->Generate(am_fpreg, size);
+		op = op_fmul;
+	}
+	else if (etype == bt_vector) {
+		ap1 = p[0]->Generate(am_reg | am_mem, ssize);
+		ap2 = p[1]->Generate(am_reg, size);
+		op = ap2->type == stdvector.GetIndex() ? op_vmul : op_vmuls;
+	}
+	else {
+		ap1 = p[0]->Generate(am_all & ~am_imm, ssize);
+		ap2 = p[1]->Generate(am_reg | am_imm, size);
+	}
+	if (ap1->mode == am_reg) {
+		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		if (op == op_mulu || op == op_mul) {
+			mr = &regs[ap1->preg];
+			if (mr->assigned)
+				mr->modified = true;
+			mr->assigned = true;
+			mr->isConst = ap1->isConst && ap2->isConst;
+		}
+	}
+	else if (ap1->mode == am_fpreg) {
+		GenerateTriadic(op, ssize == 4 ? 's' : ssize == 8 ? 'd' : ssize == 12 ? 't' : ssize == 16 ? 'q' : 'd', ap1, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, size);
+		return (ap1);
+	}
+	else {
+		GenMemop(op, ap1, ap2, ssize);
+	}
+	ReleaseTempReg(ap2);
+	ap1 = ap1->GenSignExtend(ssize, size, flags);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+/*
+ *      generate /= and %= nodes.
+ */
+Operand *ENODE::GenerateAssignModiv(int flags, int size, int op)
+{
+	Operand *ap1, *ap2, *ap3;
+	int             siz1;
+	int isFP;
+	MachineReg *mr;
+	bool cnst = false;
+
+	siz1 = p[0]->GetNaturalSize();
+	if (p[0]->IsBitfield()) {
+		ap3 = GetTempRegister();
+		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
+		GenerateDiadic(op_mov, 0, ap3, ap1);
+		ap2 = p[1]->Generate(am_reg | am_imm, size);
+		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		GenStore(ap3, ap1->next, siz1);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1->next);
+		ReleaseTempReg(ap1);
+		ap3->MakeLegal(flags, size);
+		return (ap3);
+	}
+	isFP = etype == bt_double || etype == bt_float || etype == bt_triple || etype == bt_quad;
+	if (isFP) {
+		if (op == op_div || op == op_divu)
+			op = op_fdiv;
+		ap1 = p[0]->Generate(am_fpreg, siz1);
+		ap2 = p[1]->Generate(am_fpreg, size);
+		GenerateTriadic(op, siz1 == 4 ? 's' : siz1 == 8 ? 'd' : siz1 == 12 ? 't' : siz1 == 16 ? 'q' : 'd', ap1, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, size);
+		return (ap1);
+		//        else if (op==op_mod || op==op_modu)
+		//           op = op_fdmod;
+	}
+	else {
+		ap1 = GetTempRegister();
+		ap2 = p[0]->Generate(am_all & ~am_imm, siz1);
+	}
+	if (ap2->mode == am_reg && ap2->preg != ap1->preg)
+		GenerateDiadic(op_mov, 0, ap1, ap2);
+	else if (ap2->mode == am_fpreg && ap2->preg != ap1->preg)
+		GenerateDiadic(op_mov, 0, ap1, ap2);
+	else
+		GenLoad(ap1, ap2, siz1, siz1);
+	//GenerateSignExtend(ap1,siz1,2,flags);
+	if (isFP)
+		ap3 = p[1]->Generate(am_fpreg, 8);
+	else {
+		// modu doesn't support immediate mode
+		ap3 = p[1]->Generate(op == op_modu ? am_reg : am_reg | am_imm, 8);
+	}
+	if (op == op_fdiv) {
+		GenerateTriadic(op, siz1 == 4 ? 's' : siz1 == 8 ? 'd' : siz1 == 12 ? 't' : siz1 == 16 ? 'q' : 'd', ap1, ap1, ap3);
+	}
+	else {
+		GenerateTriadic(op, 0, ap1, ap1, ap3);
+		cnst = ap1->isConst && ap3->isConst;
+		mr = &regs[ap1->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = cnst;
+	}
+	ReleaseTempReg(ap3);
+	//GenerateDiadic(op_ext,0,ap1,0);
+	if (ap2->mode == am_reg) {
+		GenerateDiadic(op_mov, 0, ap2, ap1);
+		mr = &regs[ap2->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = cnst;
+	}
+	else if (ap2->mode == am_fpreg)
+		GenerateDiadic(op_mov, 0, ap2, ap1);
+	else
+		GenStore(ap1, ap2, siz1);
+	ReleaseTempReg(ap2);
+	if (!isFP)
+		ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+
+Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
+{
+	Operand *ap1, *ap2, *ap3;
+	int ssize;
+	MachineReg *mr;
+
+	ssize = p[0]->GetNaturalSize();
+	if (ssize > size)
+		size = ssize;
+	if (p[0]->IsBitfield()) {
+		ap3 = GetTempRegister();
+		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
+		GenerateDiadic(op_mov, 0, ap3, ap1);
+		ap2 = p[1]->Generate(am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
 		cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenStore(ap3, ap1->next, ssize);
@@ -1782,9 +1936,9 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
-	ap1 = cg.GenerateExpression(p[0], am_all & ~am_fpreg, ssize);
+	ap1 = p[0]->Generate(am_all & ~am_fpreg, ssize);
 	// Some of the logic operations don't support immediate mode, so we check
-	ap2 = cg.GenerateExpression(p[1], Instruction::Get(op)->amclass3, size);
+	ap2 = p[1]->Generate(Instruction::Get(op)->amclass3, size);
 	if (ap1->mode == am_reg) {
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
 		mr = &regs[ap1->preg];
@@ -1864,6 +2018,559 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	GenerateLabel(lab0);
 	ap1->MakeLegal(flags, 8);
 	ap1->isBool = true;
+	return (ap1);
+}
+
+// autocon and autofcon nodes
+
+Operand *ENODE::GenerateAutocon(int flags, int size, int type)
+{
+	Operand *ap1, *ap2;
+
+	// We always want an address register (GPR) for lea
+	ap1 = GetTempRegister();
+	ap2 = allocOperand();
+	ap2->isPtr = etype == bt_pointer;
+	ap2->mode = am_indx;
+	ap2->preg = regFP;          // frame pointer
+	ap2->offset = this;     /* use as constant node */
+	ap2->type = type;
+	ap1->type = stdint.GetIndex();
+	GenerateDiadic(op_lea, 0, ap1, ap2);
+	ap1->MakeLegal(flags, size);
+	return (ap1);             /* return reg */
+}
+
+
+//
+// General expression evaluation. returns the addressing mode
+// of the result.
+//
+Operand *ENODE::Generate(int flags, int size)
+{
+	ENODE *node = this;
+	Operand *ap1, *ap2, *ap3;
+	int natsize, siz1;
+	int lab0, lab1;
+	static char buf[4][20];
+	static int ndx;
+	static int numDiags = 0;
+
+//	Enter("<GenerateExpression>");
+	if (node == (ENODE *)NULL)
+	{
+		throw new C64PException(ERR_NULLPOINTER, 'G');
+		numDiags++;
+		printf("DIAG - null node in GenerateExpression.\n");
+		if (numDiags > 100)
+			exit(0);
+//		Leave("</GenerateExpression>", 2);
+		return (Operand *)NULL;
+	}
+	//size = node->esize;
+	switch (node->nodetype)
+	{
+	case en_aggregate:
+		ap1 = p[0]->Generate(flags, size);
+		ap2 = allocOperand();
+		ap2->mode = am_ind;
+		ap2->preg = ap1->preg;
+		if (node->tp->IsScalar())
+			GenLoad(ap1, ap2, size, size);
+		else
+			ap1->isPtr = true;
+		goto retpt;
+		//ap1 = allocOperand();
+		//ap1->offset = node;
+		//ap1->type = 9999;
+		goto retpt;
+	case en_fcon:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = am_direct;
+		ap1->offset = node;
+		if (node)
+			DataLabels[node->i] = true;
+		ap1->type = stddouble.GetIndex();
+		// Don't allow the constant to be loaded into an integer register.
+		ap1->MakeLegal(flags & ~am_reg, size);
+//		Leave("</GenerateExpression>", 2);
+		goto retpt;
+		/*
+						ap1 = allocOperand();
+						ap1->mode = am_imm;
+						ap1->offset = node;
+			ap1->isFloat = TRUE;
+						ap1->MakeLegal(flags,size);
+				 Leave("GenExperssion",2);
+						return ap1;
+		*/
+	case en_icon:
+		ap1 = allocOperand();
+		ap1->mode = am_imm;
+		ap1->offset = this;
+		ap1->MakeLegal(flags, size);
+//		Leave("GenExpression", 3);
+		goto retpt;
+
+	case en_labcon:
+		if (use_gp) {
+			ap1 = GetTempRegister();
+			ap2 = allocOperand();
+			ap2->mode = am_indx;
+			switch (segment) {
+			case tlsseg:	ap2->preg = regTP; break;
+			case dataseg:	ap2->preg = regGP; break;
+			default:	ap2->preg = regPP;
+			}
+			ap2->offset = this;     // use as constant node
+			GenerateDiadic(op_lea, 0, ap1, ap2);
+			ap1->MakeLegal(flags, size);
+			goto retpt;
+		}
+		ap1 = allocOperand();
+		ap1->isPtr = IsPtr();
+		/* this code not really necessary, see segments notes
+		if (node->etype==bt_pointer && node->constflag) {
+			ap1->segment = codeseg;
+		}
+		else {
+			ap1->segment = dataseg;
+		}
+		*/
+		ap1->mode = am_imm;
+		ap1->offset = node;
+		ap1->isUnsigned = node->isUnsigned;
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+
+	case en_nacon:
+		if (use_gp) {
+			ap1 = GetTempRegister();
+			ap2 = allocOperand();
+			ap2->mode = am_indx;
+			ap2->preg = regGP;      // global pointer
+			ap2->offset = this;     // use as constant node
+			if (node)
+				DataLabels[i] = true;
+			GenerateDiadic(op_lea, 0, ap1, ap2);
+			ap1->MakeLegal(flags, size);
+			goto retpt;
+		}
+		// fallthru
+	case en_cnacon:
+		ap1 = allocOperand();
+		ap1->isPtr = IsPtr();
+		ap1->mode = am_imm;
+		ap1->offset = this;
+		if (i == 0)
+			i = -1;
+		ap1->isUnsigned = isUnsigned;
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+	case en_clabcon:
+		ap1 = allocOperand();
+		ap1->mode = am_imm;
+		ap1->offset = this;
+		ap1->isUnsigned = isUnsigned;
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+	case en_autocon:
+		ap1 = cg.GenAutocon(node, flags, size, stdint.GetIndex());
+		goto retpt;
+	case en_autofcon:
+		switch (node->tp->type)
+		{
+		case bt_float:
+			ap1 = GenerateAutocon(flags, size, stdflt.GetIndex());
+			goto retpt;
+		case bt_double:
+			ap1 = GenerateAutocon(flags, size, stddouble.GetIndex());
+			goto retpt;
+		case bt_triple:	return GenerateAutocon(flags, size, stdtriple.GetIndex());
+		case bt_quad:	return GenerateAutocon(flags, size, stdquad.GetIndex());
+		case bt_pointer:
+			ap1 = cg.GenAutocon(node, flags, size, stdint.GetIndex());
+			goto retpt;
+		}
+		break;
+	case en_autovcon:	return GenerateAutocon(flags, size, stdvector.GetIndex());
+	case en_autovmcon:	return GenerateAutocon(flags, size, stdvectormask->GetIndex());
+	case en_classcon:
+		ap1 = GetTempRegister();
+		ap2 = allocOperand();
+		ap2->mode = am_indx;
+		ap2->preg = regCLP;     /* frame pointer */
+		ap2->offset = node;     /* use as constant node */
+		GenerateDiadic(op_lea, 0, ap1, ap2);
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+	case en_addrof:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(flags & ~am_fpreg, 8);
+		switch (ap2->mode) {
+		case am_reg:
+			GenerateDiadic(op_mov, 0, ap1, ap2);
+			break;
+		default:
+			GenerateDiadic(op_lea, 0, ap1, ap2);
+		}
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_ref:
+		ap1 = cg.GenerateDereference(node, flags, node->tp->size, !node->isUnsigned);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = node->isUnsigned;
+		goto retpt;
+	case en_fieldref:
+		ap1 = (flags & am_bf_assign) ? cg.GenerateDereference(node, flags & ~am_bf_assign, node->tp->size, !node->isUnsigned)
+			: cg.GenerateBitfieldDereference(node, flags, node->tp->size, !node->isUnsigned);
+		ap1->isUnsigned = node->isUnsigned;
+		goto retpt;
+	case en_regvar:
+	case en_tempref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = am_reg;
+		ap1->preg = node->rg;
+		ap1->tempflag = 0;      /* not a temporary */
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+
+	case en_tempfpref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
+		ap1->preg = node->rg;
+		ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_float:	ap1->type = stdflt.GetIndex(); break;
+			case bt_double:	ap1->type = stddouble.GetIndex(); break;
+			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stddouble.GetIndex();
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+
+	case en_fpregvar:
+		//    case en_fptempref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
+		ap1->preg = node->rg;
+		ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_float:	ap1->type = stdflt.GetIndex(); break;
+			case bt_double:	ap1->type = stddouble.GetIndex(); break;
+			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stddouble.GetIndex();
+		ap1->MakeLegal(flags, size);
+		goto retpt;
+
+	case en_abs:	return node->GenUnary(flags, size, op_abs);
+	case en_uminus:
+		ap1 = node->GenUnary(flags, size, op_neg);
+		goto retpt;
+	case en_compl:
+		ap1 = node->GenUnary(flags, size, op_com);
+		goto retpt;
+	case en_not:
+		ap1 = (node->GenUnary(flags, 8, op_not));
+		goto retpt;
+	case en_add:    ap1 = node->GenBinary(flags, size, op_add); goto retpt;
+	case en_sub:  ap1 = node->GenBinary(flags, size, op_sub); goto retpt;
+	case en_ptrdif:  ap1 = node->GenBinary(flags, size, op_ptrdif); goto retpt;
+	case en_i2d:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_reg, 8);
+		GenerateDiadic(op_itof, 'd', ap1, ap2);
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_i2q:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_reg, 8);
+		GenerateTriadic(op_csrrw, 0, makereg(0), MakeImmediate(0x18), ap2);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateDiadic(op_itof, 'q', ap1, makereg(63));
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_i2t:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_reg, 8);
+		GenerateTriadic(op_csrrw, 0, makereg(0), MakeImmediate(0x18), ap2);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateDiadic(op_itof, 't', ap1, makereg(63));
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_d2i:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_ftoi, 'd', ap1, ap2);
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_q2i:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_ftoi, 'q', makereg(63), ap2);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateTriadic(op_csrrw, 0, ap1, MakeImmediate(0x18), makereg(0));
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_t2i:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_ftoi, 't', makereg(63), ap2);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateTriadic(op_csrrw, 0, ap1, MakeImmediate(0x18), makereg(0));
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_s2q:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_fcvtsq, 0, ap1, ap2);
+		ap1->type = stdquad.GetIndex();
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_d2q:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_fcvtdq, 0, ap1, ap2);
+		ap1->type = stdquad.GetIndex();
+		ReleaseTempReg(ap2);
+		goto retpt;
+	case en_t2q:
+		ap1 = GetTempFPRegister();
+		ap2 = node->p[0]->Generate(am_fpreg, 8);
+		GenerateDiadic(op_fcvttq, 0, ap1, ap2);
+		ap1->type = stdquad.GetIndex();
+		ReleaseTempReg(ap2);
+		goto retpt;
+
+	case en_vadd:	  return node->GenBinary(flags, size, op_vadd);
+	case en_vsub:	  return node->GenBinary(flags, size, op_vsub);
+	case en_vmul:	  return node->GenBinary(flags, size, op_vmul);
+	case en_vadds:	  return node->GenBinary(flags, size, op_vadds);
+	case en_vsubs:	  return node->GenBinary(flags, size, op_vsubs);
+	case en_vmuls:	  return node->GenBinary(flags, size, op_vmuls);
+	case en_vex:      return node->GenBinary(flags, size, op_vex);
+	case en_veins:    return node->GenBinary(flags, size, op_veins);
+
+	case en_fadd:	  ap1 = node->GenBinary(flags, size, op_fadd); goto retpt;
+	case en_fsub:	  ap1 = node->GenBinary(flags, size, op_fsub); goto retpt;
+	case en_fmul:	  ap1 = node->GenBinary(flags, size, op_fmul); goto retpt;
+	case en_fdiv:	  ap1 = node->GenBinary(flags, size, op_fdiv); goto retpt;
+
+	case en_fdadd:    return node->GenBinary(flags, size, op_fdadd);
+	case en_fdsub:    return node->GenBinary(flags, size, op_fdsub);
+	case en_fsadd:    return node->GenBinary(flags, size, op_fsadd);
+	case en_fssub:    return node->GenBinary(flags, size, op_fssub);
+	case en_fdmul:    return node->GenMultiply(flags, size, op_fmul);
+	case en_fsmul:    return node->GenMultiply(flags, size, op_fmul);
+	case en_fddiv:    return node->GenMultiply(flags, size, op_fddiv);
+	case en_fsdiv:    return node->GenMultiply(flags, size, op_fsdiv);
+	case en_ftadd:    return node->GenBinary(flags, size, op_ftadd);
+	case en_ftsub:    return node->GenBinary(flags, size, op_ftsub);
+	case en_ftmul:    return node->GenMultiply(flags, size, op_ftmul);
+	case en_ftdiv:    return node->GenMultiply(flags, size, op_ftdiv);
+
+	case en_land:
+		/*
+		lab0 = nextlabel++;
+		lab1 = nextlabel++;
+		GenerateFalseJump(node, lab0, 0);
+		ap1 = GetTempRegister();
+		GenerateDiadic(op_ld, 0, ap1, MakeImmediate(1));
+		GenerateMonadic(op_bra, 0, MakeDataLabel(lab1));
+		GenerateLabel(lab0);
+		GenerateDiadic(op_ld, 0, ap1, MakeImmediate(0));
+		GenerateLabel(lab1);
+		return (ap1);
+		*/
+		ap1 = (node->GenLand(flags, op_and, false));
+		goto retpt;
+	case en_lor:
+		ap1 = (node->GenLand(flags, op_or, false));
+		goto retpt;
+	case en_land_safe:
+		ap1 = (node->GenLand(flags, op_and, true));
+		goto retpt;
+	case en_lor_safe:
+		ap1 = (node->GenLand(flags, op_or, true));
+		goto retpt;
+
+	case en_isnullptr:	ap1 = node->GenUnary(flags, size, op_isnullptr); goto retpt;
+	case en_and:    ap1 = node->GenBinary(flags, size, op_and); goto retpt;
+	case en_or:     ap1 = node->GenBinary(flags, size, op_or); goto retpt;
+	case en_xor:	ap1 = node->GenBinary(flags, size, op_xor); goto retpt;
+	case en_mulf:    ap1 = node->GenMultiply(flags, size, op_mulf); goto retpt;
+	case en_mul:    ap1 = node->GenMultiply(flags, size, op_mul); goto retpt;
+	case en_mulu:   ap1 = node->GenMultiply(flags, size, op_mulu); goto retpt;
+	case en_div:    ap1 = node->GenDivMod(flags, size, op_div); goto retpt;
+	case en_udiv:   ap1 = node->GenDivMod(flags, size, op_divu); goto retpt;
+	case en_mod:    ap1 = node->GenDivMod(flags, size, op_rem); goto retpt;
+	case en_umod:   ap1 = node->GenDivMod(flags, size, op_remu); goto retpt;
+	case en_asl:    ap1 = node->GenShift(flags, size, op_asl); goto retpt;
+	case en_shl:    ap1 = node->GenShift(flags, size, op_sll); goto retpt;
+	case en_shlu:   ap1 = node->GenShift(flags, size, op_sll); goto retpt;
+	case en_asr:	ap1 = node->GenShift(flags, size, op_sra); goto retpt;
+	case en_shr:	ap1 = node->GenShift(flags, size, op_sra); goto retpt;
+	case en_shru:   ap1 = node->GenShift(flags, size, op_srl); goto retpt;
+	case en_rol:   ap1 = node->GenShift(flags, size, op_rol); goto retpt;
+	case en_ror:   ap1 = node->GenShift(flags, size, op_ror); goto retpt;
+		/*
+		case en_asfadd: return GenerateAssignAdd(node,flags,size,op_fadd);
+		case en_asfsub: return GenerateAssignAdd(node,flags,size,op_fsub);
+		case en_asfmul: return GenerateAssignAdd(node,flags,size,op_fmul);
+		case en_asfdiv: return GenerateAssignAdd(node,flags,size,op_fdiv);
+		*/
+	case en_asadd:	ap1 = node->GenerateAssignAdd(flags, size, op_add); goto retpt;
+	case en_assub:  ap1 = node->GenerateAssignAdd(flags, size, op_sub); goto retpt;
+	case en_asand:  ap1 = node->GenerateAssignLogic(flags, size, op_and); goto retpt;
+	case en_asor:   ap1 = node->GenerateAssignLogic(flags, size, op_or); goto retpt;
+	case en_asxor:  ap1 = node->GenerateAssignLogic(flags, size, op_xor); goto retpt;
+	case en_aslsh:  ap1 = (node->GenAssignShift(flags, size, op_stpl)); goto retpt;
+	case en_asrsh:  ap1 = (node->GenAssignShift(flags, size, op_asr)); goto retpt;
+	case en_asrshu: ap1 = (node->GenAssignShift(flags, size, op_stpru)); goto retpt;
+	case en_asmul: ap1 = cg.GenerateAssignMultiply(node, flags, size, op_mul); goto retpt;
+	case en_asmulu: ap1 = cg.GenerateAssignMultiply(node, flags, size, op_mulu); goto retpt;
+	case en_asdiv: ap1 = cg.GenerateAssignModiv(node, flags, size, op_div); goto retpt;
+	case en_asdivu: ap1 = cg.GenerateAssignModiv(node, flags, size, op_divu); goto retpt;
+	case en_asmod: ap1 = cg.GenerateAssignModiv(node, flags, size, op_rem); goto retpt;
+	case en_asmodu: ap1 = cg.GenerateAssignModiv(node, flags, size, op_remu); goto retpt;
+	case en_assign:
+		ap1 = cg.GenerateAssign(node, flags, size);
+		goto retpt;
+
+	case en_chk:
+		return (cg.GenExpr(node));
+
+	case en_eq:     case en_ne:
+	case en_lt:     case en_le:
+	case en_gt:     case en_ge:
+	case en_ult:    case en_ule:
+	case en_ugt:    case en_uge:
+	case en_feq:    case en_fne:
+	case en_flt:    case en_fle:
+	case en_fgt:    case en_fge:
+	case en_veq:    case en_vne:
+	case en_vlt:    case en_vle:
+	case en_vgt:    case en_vge:
+		ap1 = cg.GenExpr(node);
+		ap1->isBool = true;
+		goto retpt;
+
+	case en_cond:
+		ap1 = node->GenHook(flags, size);
+		goto retpt;
+	case en_safe_cond:
+		ap1 = (node->GenSafeHook(flags, size));
+		goto retpt;
+	case en_void:
+		natsize = node->p[0]->GetNaturalSize();
+		ap1 = node->p[0]->Generate(am_all | am_novalue, natsize);
+		ReleaseTempRegister(node->p[1]->Generate(flags, size));
+		ap1->isPtr = node->IsPtr();
+		goto retpt;
+
+	case en_fcall:
+		ap1 = (cg.GenerateFunctionCall(node, flags));
+		goto retpt;
+
+	case en_sxb:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_reg, 1);
+		GenerateDiadic(op_sxb, 0, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, 8);
+		goto retpt;
+	case en_sxc:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_reg, 2);
+		GenerateDiadic(op_sxc, 0, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, 8);
+		goto retpt;
+	case en_sxh:
+		ap1 = GetTempRegister();
+		ap2 = node->p[0]->Generate(am_reg, 4);
+		GenerateDiadic(op_sxh, 0, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, 8);
+		goto retpt;
+	case en_cubw:
+	case en_cubu:
+	case en_cbu:
+		ap1 = node->p[0]->Generate(am_reg, 1);
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(0xff));
+		goto retpt;
+	case en_cucw:
+	case en_cucu:
+	case en_ccu:
+		ap1 = node->p[0]->Generate(am_reg, 2);
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(0xFFFF));
+		//GenerateDiadic(op_zxc,0,ap1,ap1);
+		goto retpt;
+	case en_ccwp:
+		ap1 = node->p[0]->Generate(am_reg, 2);
+		ap1->isPtr = TRUE;
+		GenerateDiadic(op_sxc, 0, ap1, ap1);
+		goto retpt;
+	case en_cucwp:
+		ap1 = node->p[0]->Generate(am_reg, 2);
+		ap1->isPtr = TRUE;	// zxc
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(0xFFFF));
+		goto retpt;
+	case en_cuhw:
+	case en_cuhu:
+	case en_chu:
+		ap1 = node->p[0]->Generate(am_reg, 4);
+		GenerateDiadic(op_zxh, 0, ap1, ap1);
+		goto retpt;
+	case en_cbw:
+		ap1 = node->p[0]->Generate(am_reg, 1);
+		//GenerateDiadic(op_sxb,0,ap1,ap1);
+		GenerateDiadic(op_sxb, 0, ap1, ap1);
+		goto retpt;
+	case en_ccw:
+		ap1 = node->p[0]->Generate(am_reg, 2);
+		GenerateDiadic(op_sxc, 0, ap1, ap1);
+		goto retpt;
+	case en_chw:
+		ap1 = node->p[0]->Generate(am_reg, 4);
+		GenerateDiadic(op_sxh, 0, ap1, ap1);
+		goto retpt;
+	case en_list:
+		ap1 = GetTempRegister();
+		GenerateDiadic(op_lea, 0, ap1, MakeDataLabel(node->i));
+		ap1->isPtr = true;
+		goto retpt;
+	case en_object_list:
+		ap1 = GetTempRegister();
+		GenerateDiadic(op_lea, 0, ap1, MakeIndexed(-8, regFP));
+		ap1->MakeLegal(flags, sizeOfWord);
+		goto retpt;
+	default:
+		printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
+		return 0;
+	}
+	return(0);
+retpt:
+	if (node->pfl) {
+		ReleaseTempRegister(node->pfl->Generate(flags, size));
+	}
 	return (ap1);
 }
 

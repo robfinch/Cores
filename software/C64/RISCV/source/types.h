@@ -584,9 +584,13 @@ public:
 	Operand *GenUnary(int flags, int size, int op);
 	Operand *GenBinary(int flags, int size, int op);
 	Operand *GenAssignShift(int flags, int size, int op);
-	Operand *GenAssignAdd(int flags, int size, int op);
-	Operand *GenAssignLogic(int flags, int size, int op);
+	Operand *GenerateAssignAdd(int flags, int size, int op);
+	Operand *GenerateAssignLogic(int flags, int size, int op);
+	Operand *GenerateAssignMultiply(int flags, int size, int op);
+	Operand *GenerateAssignModiv(int flags, int size, int op);
 	Operand *GenLand(int flags, int op, bool safe);
+	Operand *GenerateAutocon(int flags, int size, int type);
+	Operand *Generate(int flags, int size);
 
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);

@@ -277,7 +277,7 @@ void CSETable::InitializeTempRegs()
 			if (1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
 			{
 				initstack();
-				ap = cg.GenerateExpression(exptr, am_reg | am_imm | am_mem | am_fpreg, exptr->tp->size);
+				ap = exptr->Generate(am_reg | am_imm | am_mem | am_fpreg, exptr->tp->size);
 				ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
 				if (csp->isfp)
 					ap2->type = ap->type;

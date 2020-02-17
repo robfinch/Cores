@@ -110,7 +110,7 @@ extern int maxVL;
 extern MachineReg regs[1024];
 extern int nregs;
 extern int max_reg_in_use;
-extern int op_ins[10000];
+extern int op_ins[op_last+1];
 
 /*
 extern FILE             *input,
@@ -242,6 +242,7 @@ extern int optimized;
 extern short int typ_sp;
 extern FT64CodeGenerator cg;
 extern bool DataLabels[65535];
+extern int longlit_ndx;
 
 // Analyze.c
 extern short int csendx;
@@ -400,7 +401,7 @@ extern Operand *GenerateFunctionCall(ENODE *node, int flags);
 extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
 
-extern Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
+extern Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
 extern Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 extern void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
 

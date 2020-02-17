@@ -500,6 +500,30 @@ void emitWord(int64_t cd)
   }
 }
 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+void emitWyde(int64_t cd)
+{
+	emitByte(cd & 255LL);
+	emitByte((cd >> 8) & 255LL);
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+void emitTetrabyte(int64_t cd)
+{
+	emitWyde(cd & 0xFFFFLL);
+	emitWyde((cd >> 16) & 0xFFFFLL);
+}
+
+void emitOctabyte(int64_t cd)
+{
+	emitTetrabyte(cd & 0xFFFFFFFFLL);
+	emitTetrabyte((cd >> 32) & 0xFFFFFFFFLL);
+}
+
 void emitDecibyte(Int128 cd)
 {
 	emitWord(cd.low);
@@ -1079,6 +1103,63 @@ void process_dw()
         inptr++;
     }
     ScanToEOL();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+void process_dco()
+{
+	int64_t val;
+
+	SkipSpaces();
+	while (token != tk_eol) {
+		SkipSpaces();
+		if (*inptr == '"') {
+			inptr++;
+			while (*inptr != '"') {
+				if (*inptr == '\\') {
+					inptr++;
+					switch (*inptr) {
+					case '\\': emitOctabyte('\\'); inptr++; break;
+					case 'r': emitOctabyte(0x0D); inptr++; break;
+					case 'n': emitOctabyte(0x0A); inptr++; break;
+					case 'b': emitOctabyte('\b'); inptr++; break;
+					case '"': emitOctabyte('"'); inptr++; break;
+					default: inptr++; break;
+					}
+				}
+				else {
+					emitOctabyte(*inptr);
+					inptr++;
+				}
+			}
+			inptr++;
+		}
+		else if (*inptr == '\'') {
+			inptr++;
+			emitOctabyte(*inptr);
+			inptr++;
+			if (*inptr != '\'') {
+				printf("Missing ' in character constant.\r\n");
+			}
+		}
+		else {
+			NextToken();
+			val = expr();
+			// A pointer to an object might be emitted as a data word.
+			if (bGen && lastsym)
+				if (lastsym->segment < 5)
+					sections[segment + 7].AddRel(sections[segment].index, ((int64_t)(lastsym->ord + 1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
+			emitOctabyte(val);
+			prevToken();
+		}
+		SkipSpaces();
+		if (*inptr != ',')
+			break;
+		inptr++;
+	}
+	ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -2739,14 +2820,22 @@ int main(int argc, char *argv[])
                         binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
-            else if (gCpu==5) {
+            else if (gCpu==RISCV) {
+						/*
                 for (kk = 0;kk < binndx; kk+=4) {
                 	u32 = (binfile[kk+3]<<24)|(binfile[kk+2]<<16)|(binfile[kk+1]<<8)|binfile[kk];
                     i64 = (uint64_t)u32;
                     fprintf(vfp, "\trommem[%d] = 32'h%08I64X;\n", 
                         (int)(((start_address+kk)/4)%32768), i64);
                 }
-            }
+								*/
+								for (kk = 0; kk < binndx; kk += 8) {
+									fprintf(vfp, "\trommem[%d] = 64'h%02X%02X%02X%02X%02X%02X%02X%02X;\n",
+										(((0 + kk) / 8) % 16384), 
+										binfile[kk + 7], binfile[kk + 6], binfile[kk + 5], binfile[kk + 4],
+										binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+								}
+						}
 			else if (gCpu=='A') {
                 for (kk = 0; kk < binndx; kk+=16) {
                     fprintf(vfp, "\trommem[%d] = 128'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
