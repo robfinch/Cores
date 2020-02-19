@@ -91,9 +91,9 @@ ALLOC1:
 	begin
 		map <= pam[wordno];
 		// Force pages to always be allocated already
-		// First 32 pages allocated for the OS
+		// First 3 pages allocated for the OS
 		if (wordno==7'd0)
-			map <= 64'h00000007;
+			map[2:0] <= 3'h7;
 		// Force last page allocated for system stack
 		else if (wordno==7'd127)
 			map[63] <= 1'b1;
@@ -109,7 +109,7 @@ ALLOC2:
 			else
 				goto (ALLOC1);
 		end
-		for (n = 0; n < 64; n = n + 1)
+		for (n = 63; n >= 0; n = n - 1)
 			if (map[n]==1'b0)
 				bitno <= n;
 	end

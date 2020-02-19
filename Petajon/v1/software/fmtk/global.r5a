@@ -56,7 +56,11 @@ IOFocusNdx		EQU		$24810
 IOFocusTbl		EQU		$24818
 SwitchIOFocus	EQU		$24820
 hKeybdMbx	equ		$24822
+_KeyState1	equ		$24824
+_KeyState2 equ		$24825
+_KeyLED			equ		$24826
 NPAGES	equ		$24828
+_randStream	equ		$24830
 
 SerRcvBuf		EQU		$25000
 SerXmitBuf	EQU		$25400

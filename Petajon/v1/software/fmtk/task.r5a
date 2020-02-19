@@ -53,10 +53,10 @@ OSCallTbl:
 	dh		FMTK_IO									; 26
 
 qToChk:
-	db	0,0,0,2,0,0,4,2
-	db	0,0,6,2,0,0,4,2
-	db	0,0,0,2,0,0,4,2
-	db	0,0,6,2,0,0,4,2
+	db	0,0,0,1,0,0,2,1
+	db	0,0,3,1,0,0,2,1
+	db	0,0,0,1,0,0,2,1
+	db	0,0,3,1,0,0,2,1
 
 	align	4
 
@@ -119,7 +119,7 @@ FMTKInit:
 ;------------------------------------------------------------------------------
 
 GetCurrentTid:
-	csrrw	$v0,#$181,$x0				; get current pid
+	csrrw	$v0,#$181,$x0				; get current asid
 	and		$v0,$v0,#MAX_TID		; mask off extra bits
 	ret
 
@@ -747,7 +747,7 @@ FMTK_SchedulerIRQ:
 ;		a1 = memory required
 ;		a2 = start pc (usually $100)
 ;	Modifies:
-;		a0 = tid
+;		a0 = mid
 ;	Returns:
 ;		v0 = E_Ok if successful
 ;		v1 = tid of started task if successful
@@ -765,14 +765,16 @@ FMTK_StartTask:
 	call	MapOSPages			; Map OS pages into address space
 	sll		$s1,$a0,#LOG_TCBSZ	; compute TCB address
 	call	AllocStack
+	mov		$s3,$a0
+	mov		$a0,$v0
+	call	PutHexWord
+	mov		$a0,$s3
 	add		$t0,$v1,#$A000FFFC	; set stack pointer
 	sto		$t0,112[$s1]
 	sto		$a2,TCBepc[$s1]	; address task will begin at
 	call	Alloc
 	stb		$v0,$4320
 	bnez	$v0,.err
-	mov		$a0,$v1
-	call	PutHexWord
 	ldi		$t0,#TS_READY
 	stb		$t0,TCBStatus[$s1]
 	ldi		$t0,#2					; normal execution priority
@@ -796,18 +798,24 @@ FMTK_StartTask:
 	sto		$t0,TCBsegs+104[$s1]
 	sto		$t0,TCBsegs+112[$s1]
 	sto		$t0,TCBsegs+120[$s1]
-	sto		$x0,TCBVideoMem[$s1]
+	ldi		$a1,#1
+	call	Alloc
+	sto		$v1,TCBVideoMem[$s1]
 	ldi		$t0,#$FFD00000
 	sto		$t0,TCBpVideo[$s1]
 	srl		$a0,$s1,#LOG_TCBSZ	; need the tid again
 	csrrc	$x0,#$300,#1				; disable ints
 	call	InsertIntoReadyList
 	mov		$v1,$a0
-.err:
+	call	DumpMemmap
 .xit:
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
+.err:
+	nop
+	nop
+	bra		.err
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.

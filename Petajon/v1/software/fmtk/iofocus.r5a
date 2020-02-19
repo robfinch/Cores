@@ -54,7 +54,11 @@ FMTK_HasIOFocus:
 .noSwitch:
 	mGetCurrentTid
 	sll		$v0,$v0,#LOG_TCBSZ
-	ldo		$v1,IOFocusNdx
+	csrrc	$x0,#$300,#1				; disable ints
+	nxtiof	$v1
+	prviof	$v1
+	csrrs	$x0,#$300,#1				
+;	ldo		$v1,IOFocusNdx
 	beq		$v0,$v1,.hasFocus
 	ldi		$v1,#0
 	bra		.xit
@@ -81,11 +85,17 @@ FMTK_HasIOFocus:
 FMTK_SwitchIOFocus:
 	sub		$sp,$sp,#8
 	sto		$ra,[$sp]
-	ldo		$t0,IOFocusNdx			; get focus pointer
-	bltz	$t0,.noFocus				; is it -1?
-	ldo		$t1,IOF_NEXT[$t0]
-	beq		$t1,$t0,.sameFocus
-	bltz	$t1,.noFocus
+	nxtiof	$t0
+	prviof	$t1
+	beq		$t0,$t1,.sameFocus
+	bltz	$t0,.noFocus
+	nxtiof	$t0
+	
+;	ldo		$t0,IOFocusNdx			; get focus pointer
+;	bltz	$t0,.noFocus				; is it -1?
+;	ldo		$t1,IOF_NEXT[$t0]
+;	beq		$t1,$t0,.sameFocus
+;	bltz	$t1,.noFocus
 	csrrs	$x0,#$300,#1				; enable interrupts
 	; swap virtual text screens
 	ldi		$s1,#56*29
@@ -123,7 +133,7 @@ FMTK_SwitchIOFocus:
 	sto		$t1,IOFocusNdx
 .sameFocus:
 .noFocus:
-	ldi		$v0,E_Ok
+	ldi		$v0,#E_Ok
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -138,6 +148,10 @@ FMTK_SwitchIOFocus:
 ;-----------------------------------------------------------------------------
 
 FMTK_RequestIOFocus:
+	insiof	$a1
+	ldi		$v0,#E_Ok
+	ret
+	
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1
 	ldo		$t1,IOFocusTbl			; Is the task already included in the IO focus?
@@ -190,6 +204,17 @@ FMTK_ReleaseIOFocus:
 ;-----------------------------------------------------------------------------
 
 FMTK_ForceReleaseIOFocus:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	rmviof	$v0,$a1
+	beqz	$v0,.noSwitch
+	call	FMTK_SwitchIOFocus
+.noSwitch:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ldi		$v0,#E_Ok
+	ret
+
 	csrrs	$x0,#$300,#1				; enable interrupts
 	ldi		$t0,#1
 	sll		$t0,$t0,$a1

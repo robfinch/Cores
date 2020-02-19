@@ -173,7 +173,10 @@ REMOVE3:
 	begin
 		nxt[ndx] <= nx;			// prev->next = tid->next
 		if (tid_i==head)
-			head <= nx;
+			tid_o <= 7'd1;
+		else
+			tid_o <= 7'd0;
+//			head <= nx;
 		done_o <= 1'b1;
 		in_focuslist[tid_i] <= 1'b0;
 		goto (IDLE);

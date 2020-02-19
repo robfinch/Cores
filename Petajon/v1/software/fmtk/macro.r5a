@@ -102,7 +102,7 @@ macro mPopTimeoutList
 endm
 
 
-macro mVideoGetPtr:
+macro mGetVideoPtr:
 	mGetCurrentTid
 	sll		$v0,$v0,#LOG_TCBSZ
 	ldo		$v0,TCBpVideo[$v0]
@@ -110,7 +110,7 @@ macro mVideoGetPtr:
 endm
 
 macro mDispIRQLive
-     ldo      $v0,$FFD00000+440
-     add     	$v0,$v0,#1
-     sto      $v0,$FFD00000+440
+	ldo      $v0,$FFD00000+440
+	add     	$v0,$v0,#1
+	sto      $v0,$FFD00000+440
 endm

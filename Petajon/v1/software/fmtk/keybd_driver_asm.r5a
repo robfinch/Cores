@@ -413,3 +413,10 @@ _KeybdGetBufferedScancode:
 .empty:
 	csrrw	$x0,#$300,$s2						; restore interrupts
 	ret
+
+; Parameters:
+;		a0 = scancode
+
+_XlatScancode:
+	ret
+	

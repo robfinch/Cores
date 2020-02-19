@@ -36,8 +36,8 @@ MMUInit:
 		ldi		$t4,#MAX_TID		; task id
 .0004:
 		ldi		$t1,#$000				; regno
-		ldi		$t2,#PAGES_PER_TASK	; number of registers to update
-		ldi		$t3,#2					; number of pages pre-allocated
+		ldi		$t2,#PAGES_PER_MAP	; number of registers to update
+		ldi		$t3,#3					; number of pages pre-allocated
 .0001:
 		sll		$s1,$t4,#16			; put tid in place
 		or		$s1,$s1,$t1			; or in page number
@@ -58,7 +58,7 @@ MMUInit:
 		sub		$t0,$t0,#1
 		bge		$t0,$x0,.0006
 		; allocate last page for system stack
-		ldi		$t1,#$1FFF				
+		ldi		$t1,#$FFF				
 		ldi		$t0,#$1FFF
 		mvmap	$x0,$t0,$t1
 
@@ -78,7 +78,7 @@ MMUInit:
 ; Find a run of buckets available for mapping virtual to physical addresses.
 ;
 ; Parameters:
-;		a0 = tid
+;		a0 = mid
 ;		a1 = number of pages required.
 ; Modifies:
 ;		t1,t2,t3,t5
@@ -87,16 +87,17 @@ MMUInit:
 ;------------------------------------------------------------------------------
 
 FindRun:
-	and			$t3,$a0,#$3F			; t3 = tid
+	and			$t3,$a0,#MAX_MID	; t3 = mid
 	sll			$t3,$t3,#16				; shift into usable position
-	ldi			$t1,#0						; t1 = count of consecutive empty buckets
 	mov			$t2,$t3						; t2 = map entry number
-	or			$t2,$t2,#OSPAGES	; start looking at page 32 (others are for OS)
+	or			$t2,$t2,#OSPAGES	; start looking at page 3 (others are for OS)
 	ldi			$t5,#8191					; max number of pages - 1
 	or			$t5,$t5,$t3				; t5 = max in ASID
+.0003:
+	ldi			$t1,#0						; t1 = count of consecutive empty buckets
 .0001:
 	mvmap		$v0,$x0,$t2				; get map entry into v0
-	beq			$v0,$x0,.empty0		; is it empty?
+	beqz		$v0,.empty0				; is it empty?
 	add			$t2,$t2,#1
 	bltu		$t2,$t5,.0001
 .0002:
@@ -110,16 +111,15 @@ FindRun:
 	bgeu		$t1,$a1,.foundEnough
 	add			$t2,$t2,#1				; next bucket
 	mvmap		$v0,$x0,$t2				; get map entry
-	beq			$v0,$x0,.empty1
-	mov			$t1,$x0						; reset counter
-	bra			.0001							; go back and find another run
+	beqz		$v0,.empty1
+	bra			.0003							; go back and find another run
 .foundEnough:
 	mov			$v0,$t3						; v0 = start of run
 	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		a0 = pid
+;		a0 = tid
 ;		a1 = amount of memory to allocate
 ; Modifies:
 ;		a1,t0
@@ -128,6 +128,9 @@ FindRun:
 ;		v0 = E_Ok for success, E_NotAlloc otherwise
 ;------------------------------------------------------------------------------
 ;
+AllocInCurrentAS:
+	mGetCurrentTid
+	mov			$a0,$v0
 Alloc:
 	sub			$sp,$sp,#32
 	sto			$ra,[$sp]
@@ -179,35 +182,43 @@ Alloc:
 ; virtual address ($7FC00).
 ;
 ; Parameters:
-;		a0 = pid to allocate for
+;		a0 = mid to allocate for
 ;	Returns:
 ;		v0 = physical address, 0 if unsuccessful
 ;		v1 = virtual address, not valid unless successful
 ;------------------------------------------------------------------------------
 
 AllocStack:
+	sub			$sp,$sp,#16
+	sto			$ra,[$sp]
+	sto			$a0,8[$sp]
 	sll			$v1,$a0,#16			; 
-	or			$v1,$v1,#PAGES_PER_TASK-1	; last page of memory is for stack
+	or			$v1,$v1,#PAGES_PER_MAP-1	; last page of memory is for stack
 	mvmap		$v0,$x0,$v1			; check if stack already allocated
 	bnez		$v0,.0001
 	palloc	$v0							; allocate a page
-	beq			$v0,$x0,.xit		; success?
+	mov			$a0,$v0
+	call		PutHexHalf
+	ldo			$a0,8[$sp]
+	beqz		$v0,.xit		; success?
 	mvmap		$x0,$v0,$v1
 .0001:
 	and			$v1,$v1,#4095
 	sll			$v0,$v0,#LOG_PGSZ			; convert pages to addresses
 	sll			$v1,$v1,#LOG_PGSZ
 .xit:
+	ldo			$ra,[$sp]
+	add			$sp,$sp,#16
 	ret
 
 ;------------------------------------------------------------------------------
-; This routine will de-allocate all the pages associated with a task including
+; This routine will de-allocate all the pages associated with a map including
 ; the stack.
 ;
 ; Parameters:
-;		a0 = pid to free memory for
+;		a0 = mid to free memory for
 ;	Modifies:
-;		a0,t0,t1,t3,t4
+;		t0,t1,t3,t4
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
@@ -216,10 +227,10 @@ FreeAll:
 	ldi			$t3,#0
 	sll			$t4,$a0,#16
 .nxt:
-	slt			$t1,$t3,#PAGES_PER_TASK		; number of buckets to check
+	slt			$t1,$t3,#PAGES_PER_MAP		; number of buckets to check
 	beqz		$t1,.0001
 	and			$t4,$t4,#$3F0000
-	or			$t4,$t4,$t3			; combine pid and bucket number
+	or			$t4,$t4,$t3			; combine mid and bucket number
 	ldi			$t0,#0					; new page number to set (indicates free)
 	mvmap		$t0,$t0,$t4			; get page mapping and set to zero
 	add			$t3,$t3,#1			; advance to next bucket
@@ -236,7 +247,7 @@ FreeAll:
 ; Convert a virtual address to a physical one
 ;
 ; Parameters:
-;		a0 = task id
+;		a0 = map id
 ;		a1 = virtual address to convert
 ; Modifies:
 ;		t0
@@ -249,7 +260,7 @@ VirtToPhys:
 	bgeu	$a1,$v0,.notMapped
 	srl		$t0,$a1,#LOG_PGSZ		; convert virt to page
 	sll		$v0,$a0,#16
-	or		$v0,$v0,$t0					; and in tid
+	or		$v0,$v0,$t0					; and in mid
 	mvmap	$v0,$x0,$v0					; get the translation
 	sll		$v0,$v0,#LOG_PGSZ		; convert page to address
 	and		$t0,$a1,#$FFFF			; insert LSB's

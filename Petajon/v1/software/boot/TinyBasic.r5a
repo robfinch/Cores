@@ -105,8 +105,9 @@ GOBYE:
 	align	16
 //message "CSTART"
 public CSTART:
+	call	DumpMemmap
 	; First save off the link register and OS sp value
-	sw		$sp,OSSP
+	sto		$sp,OSSP
 	ldi		$sp,#STACKOFFS	; initialize stack pointer
 	ldi		$a0,#14							; Get current tid
 	ecall

@@ -1,4 +1,6 @@
 MAX_TID		EQU		63
+MAX_MID		EQU		63
+MAX_ASID	EQU		63
 NR_TCB		EQU		64
 NR_MBX		EQU		256
 NR_MSG		EQU		2048
@@ -6,4 +8,5 @@ LOG_TCBSZ	EQU		10
 LOG_PGSZ	EQU		16
 PAGESZ		EQU		65536
 PAGES_PER_TASK	EQU		4096	; maximum number of pages per task
+PAGES_PER_MAP		EQU		4096
 OSPAGES		EQU		3			; pages of memory dedicated to OS

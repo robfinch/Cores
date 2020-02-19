@@ -90,7 +90,7 @@ VideoClearScreen:
 	ldi		$t0,#56*29
 	ldo		$t1,DispAttr
 	or		$t1,$t1,#' '
-	mVideoGetPtr
+	mGetVideoPtr
 .0001:
 	sto		$t1,[$v0]	
 	add		$v0,$v0,#8
@@ -257,6 +257,28 @@ VideoPutChar:
 .delete:
 	ldbu	$t0,CursorX
 	bra		.del0001	
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1  = pointer to null terminated string
+;------------------------------------------------------------------------------
+
+VideoPutString:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$t0,#$10000
+.again:
+	csrrs	$x0,#$300,$t0		; set mprv
+	ldbu	$a3,[$a1]				; access using passed in memory space
+	csrrc	$x0,#$300,$t0		; clear mprv
+	add		$a1,$a1,#1
+	beqz	$a3,.done
+	call	VideoPutChar
+	bra		.again
+.done:
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------

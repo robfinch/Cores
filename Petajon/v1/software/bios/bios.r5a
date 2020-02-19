@@ -27,6 +27,7 @@ BIOSCallTbl:
 	dh		BIOS_ClearScreen
 	dh		BIOS_HomeCursor
 	dh		BIOS_VideoPutChar
+	dh		BIOS_VideoPutString
 	
 	align	4
 BIOS_ClearScreen:
@@ -35,6 +36,9 @@ BIOS_HomeCursor:
 	jmp		VideoHomeCursor
 BIOS_VideoPutChar:
 	jmp		VideoPutChar
+BIOS_VideoPutString:
+	jmp		VideoPutString
+
 
 
 
