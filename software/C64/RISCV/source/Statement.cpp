@@ -1415,13 +1415,14 @@ void Statement::GenerateIf()
 	else
 	*/
 	// Check for bbc optimization
-	if (!opt_nocgo && ep->nodetype == en_and && ep->p[1]->nodetype == en_icon && pwrof2(ep->p[1]->i) >= 0) {
-		size = node->GetNaturalSize();
-		ap1 = node->p[0]->Generate(am_reg, size);
-		GenerateTriadic(op_bbc, 0, ap1, MakeImmediate(pwrof2(ep->p[1]->i)), MakeDataLabel(lab1));
-		ReleaseTempRegister(ap1);
-	}
-	else if (!opt_nocgo && ep->nodetype == en_lor_safe) {
+	//if (!opt_nocgo && ep->nodetype == en_and && ep->p[1]->nodetype == en_icon && pwrof2(ep->p[1]->i) >= 0) {
+	//	size = node->GetNaturalSize();
+	//	ap1 = node->p[0]->Generate(am_reg, size);
+	//	GenerateTriadic(op_bbc, 0, ap1, MakeImmediate(pwrof2(ep->p[1]->i)), MakeDataLabel(lab1));
+	//	ReleaseTempRegister(ap1);
+	//}
+	//else
+	if (!opt_nocgo && ep->nodetype == en_lor_safe) {
 		/*
 		OCODE *ip1 = currentFn->pl.tail;
 		OCODE *ip2;

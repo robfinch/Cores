@@ -183,9 +183,10 @@ void initRegStack()
 
 // Spill a register to memory.
 
-void SpillRegister(Operand *ap, int number)
+void SpillRegister(Operand *ap, int number, int gen)
 {
-	GenerateDiadic(op_sto,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	if (gen)
+		GenerateDiadic(op_sto,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
     //reg_stack[reg_stack_ptr].Operand = ap;
     //reg_stack[reg_stack_ptr].f.allocnum = number;
@@ -194,9 +195,10 @@ void SpillRegister(Operand *ap, int number)
     reg_alloc[number].f.isPushed = 'T';
 }
 
-void SpillFPRegister(Operand *ap, int number)
+void SpillFPRegister(Operand *ap, int number, int gen)
 {
-	GenerateDiadic(op_sf,'d',ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	if (gen)
+		GenerateDiadic(op_sf,'d',ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
 	fpreg_stack[fpreg_stack_ptr].Operand = ap;
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
@@ -207,22 +209,24 @@ void SpillFPRegister(Operand *ap, int number)
 
 // Load register from memory.
 
-void LoadRegister(int regno, int number)
+void LoadRegister(int regno, int number, int gen)
 {
 	if (reg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	reg_in_use[regno] = number;
-	GenerateDiadic(op_ldo,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+	if (gen)
+		GenerateDiadic(op_ldo,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
 }
 
-void LoadFPRegister(int regno, int number)
+void LoadFPRegister(int regno, int number, int gen)
 {
 	if (fpreg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	fpreg_in_use[regno] = number;
-	GenerateDiadic(op_lf,'d',makefpreg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
-    fpreg_alloc[number].f.isPushed = 'F';
+	if (gen)
+		GenerateDiadic(op_lf,'d',makefpreg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+  fpreg_alloc[number].f.isPushed = 'F';
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
@@ -297,7 +301,7 @@ Operand *GetTempRegister()
 
 	number = reg_in_use[next_reg];
 	if (number >= 0) {// && number < rap[wrapno]) {
-		SpillRegister(makereg(next_reg),number);
+		SpillRegister(makereg(next_reg),number,1);
 	}
 	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
     reg_in_use[next_reg] = reg_alloc_ptr;
@@ -381,7 +385,7 @@ Operand *GetTempFPRegister()
  
 	number = fpreg_in_use[next_fpreg];
 	if (number >= 0) {
-		SpillFPRegister(fpreg_alloc[number].Operand,number);
+		SpillFPRegister(fpreg_alloc[number].Operand,number,1);
 	}
 //	if (reg_in_use[next_reg] >= 0) {
 //		GenerateTempRegPush(next_reg, am_reg, reg_in_use[next_reg],0);
@@ -484,20 +488,20 @@ void validate(Operand *ap)
     switch (ap->mode) {
 	case am_reg:
 		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->pdeep].f.isPushed == 'T' ) {
-			LoadRegister(ap->preg, (int) ap->pdeep);
+			LoadRegister(ap->preg, (int) ap->pdeep, 1);
 		}
 		break;
 	case am_fpreg:
 		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && fpreg_alloc[ap->deep].f.isPushed == 'T' ) {
-			LoadFPRegister(ap->preg, (int) ap->deep);
+			LoadFPRegister(ap->preg, (int) ap->deep, 1);
 		}
 		break;
     case am_indx2:
 		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
-			LoadRegister(ap->preg, (int) ap->deep);
+			LoadRegister(ap->preg, (int) ap->deep, 1);
 		}
 		if ((ap->sreg >= frg && ap->sreg <= (unsigned)regLastTemp) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
-			LoadRegister(ap->sreg, (int) ap->deep2);
+			LoadRegister(ap->sreg, (int) ap->deep2, 1);
 		}
 		break;
     case am_ind:
@@ -505,7 +509,7 @@ void validate(Operand *ap)
     case am_ainc:
     case am_adec:
 		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
-			LoadRegister(ap->preg, (int) ap->deep);
+			LoadRegister(ap->preg, (int) ap->deep, 1);
 		}
 		break;
     }
@@ -669,7 +673,7 @@ void ReleaseTempVectorRegister()
 // Go through the allocated register list and generate a push instruction to
 // put the register on the stack if it isn't already on the stack.
 
-int TempInvalidate(int *fsp)
+int TempInvalidate(int *fsp, int save)
 {
     int i;
 	int sp;
@@ -689,7 +693,7 @@ int TempInvalidate(int *fsp)
 			mode = reg_alloc[i].Operand->mode;
 			reg_alloc[i].Operand->mode = am_reg;
 			if (!(mask & (1LL << reg_alloc[i].Operand->preg))) {
-				SpillRegister(reg_alloc[i].Operand, i);
+				SpillRegister(reg_alloc[i].Operand, i, save);
 				mask = mask | (1LL << reg_alloc[i].Operand->preg);
 			}
 			reg_alloc[i].Operand->mode = mode;
@@ -713,7 +717,7 @@ int TempInvalidate(int *fsp)
 				// ToDo: fix this line
 				mode = fpreg_alloc[i].Operand->mode;
 				fpreg_alloc[i].Operand->mode = am_fpreg;
-				SpillFPRegister(fpreg_alloc[i].Operand, i);
+				SpillFPRegister(fpreg_alloc[i].Operand, i, save);
 				fpreg_alloc[i].Operand->mode = mode;
     			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].Operand->mode*/am_reg, i, sp);
     			stacked_fpregs[sp].reg = fpreg_alloc[i].reg;
@@ -736,14 +740,14 @@ int TempInvalidate(int *fsp)
 // Pop back any temporary registers that were pushed before the function call.
 // Restore the allocated and in use register lists.
 
-void TempRevalidate(int sp, int fsp)
+void TempRevalidate(int sp, int fsp, int load)
 {
 	int nn;
 	int64_t mask;
 
 	for (nn = fsp-1; nn >= 0; nn--) {
 		if (stacked_fpregs[nn].Operand)
-			LoadFPRegister(stacked_fpregs[nn].Operand->preg, stacked_fpregs[nn].f.allocnum);
+			LoadFPRegister(stacked_fpregs[nn].Operand->preg, stacked_fpregs[nn].f.allocnum, load);
 		//GenerateTempRegPop(stacked_regs[nn].reg, /*stacked_regs[nn].Operand->mode*/am_reg, stacked_regs[nn].f.allocnum,sp-nn-1);
 	}
 	fpreg_alloc_ptr = save_fpreg_alloc_ptr;
@@ -753,7 +757,7 @@ void TempRevalidate(int sp, int fsp)
 	mask = 0;
 	for (nn = sp-1; nn >= 0; nn--) {
 		if (!(mask & (1LL << stacked_regs[nn].Operand->preg)))
-			LoadRegister(stacked_regs[nn].Operand->preg, stacked_regs[nn].f.allocnum);
+			LoadRegister(stacked_regs[nn].Operand->preg, stacked_regs[nn].f.allocnum, load);
 		mask = mask | (1LL << stacked_regs[nn].Operand->preg);
 		//GenerateTempRegPop(stacked_regs[nn].reg, /*stacked_regs[nn].Operand->mode*/am_reg, stacked_regs[nn].f.allocnum,sp-nn-1);
 	}

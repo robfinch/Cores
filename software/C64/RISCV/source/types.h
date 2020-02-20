@@ -753,6 +753,7 @@ public:
 	void OptIndexScale();
 	void OptLdi();
 	void OptLea();
+	void OptPfi();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);

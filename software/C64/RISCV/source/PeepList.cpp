@@ -607,6 +607,7 @@ void PeepList::OptInstructions()
 			case op_mul:	ip->OptMul(); break;
 			case op_mulu:	ip->OptMulu(); break;
 			case op_div:	ip->OptDiv(); break;
+			case op_pfi:	ip->OptPfi(); break;
 			}
 		}
 	}

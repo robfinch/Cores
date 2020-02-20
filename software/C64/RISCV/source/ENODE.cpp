@@ -999,8 +999,8 @@ Operand *ENODE::GenIndex()
 			// Don't need to free ap2 here. It is included in ap1.
 		GenerateHint(8);
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, 8);
-		ap2 = cg.GenerateExpression(p[1], am_reg, 8);
+		ap1 = p[0]->Generate(am_reg, sizeOfWord);
+		ap2 = p[1]->Generate(am_reg, sizeOfWord);
 		if (scale > 1) {
 			GenerateTriadic(op_sll, 0, ap3, ap2, MakeImmediate(scale));
 			GenerateTriadic(op_add, 0, ap3, ap1, ap3);
@@ -1017,10 +1017,10 @@ Operand *ENODE::GenIndex()
 		return (ap3);
 	}
 	GenerateHint(8);
-	ap1 = cg.GenerateExpression(p[0], am_reg | am_imm, 8);
+	ap1 = p[0]->Generate(am_reg | am_imm, sizeOfWord);
 	if (ap1->mode == am_imm)
 	{
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, 8);
+		ap2 = p[1]->Generate(am_reg | am_imm, sizeOfWord);
 		if (ap2->mode == am_reg && ap2->preg==0) {	// value is zero
 			ap1->mode = am_direct;
 			if (ap1->offset)
@@ -1036,9 +1036,10 @@ Operand *ENODE::GenIndex()
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
 		ap2->isUnsigned = ap1->isUnsigned;
+		ReleaseTempRegister(ap1);
 		return (ap2);
 	}
-	ap2 = cg.GenerateExpression(p[1], am_all, 8);   /* get right op */
+	ap2 = p[1]->Generate(am_all, sizeOfWord);   /* get right op */
 	GenerateHint(9);
 	if (ap2->mode == am_imm && ap1->mode == am_reg) /* make am_indx */
 	{
@@ -1068,24 +1069,27 @@ Operand *ENODE::GenIndex()
 		return ap2;
 	}
 	// ap1->mode must be am_reg
-	ap2->MakeLegal( am_reg, 8);
+	ap3 = GetTempRegister();
+	ap2->MakeLegal( am_reg, sizeOfWord);
 	rg1 = ap1->preg;
 	rg2 = ap2->preg;
-	ap3 = GetTempRegister();
 	if (scale > 1) {
-		GenerateTriadic(op_sll, 0, ap3, makereg(rg2), MakeImmediate(scale));
-		GenerateTriadic(op_add, 0, ap3, makereg(rg1), ap3);
+		GenerateTriadic(op_sll, 0, ap3, ap2, MakeImmediate(scale));
+		GenerateTriadic(op_add, 0, ap1, ap1, ap3);
+		ReleaseTempRegister(ap3);
 	}
 	else
-		GenerateTriadic(op_add, 0, ap3, makereg(rg2), makereg(rg1));
+		GenerateTriadic(op_add, 0, ap1, ap2, ap1);
+	ReleaseTempRegister(ap3);
 	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	ap1->mode = am_indx2;            /* make indexed */
+	/*
+	ap1->mode = am_indx2;            // make indexed
 	ap1->sreg = ap2->preg;
 	ap1->deep2 = ap2->deep;
 	ap1->offset = makeinode(en_icon, 0);
 	ap1->scale = scale;
-	return (ap3);                     /* return indexed */
+	*/
+	return (ap1);                     /* return indexed */
 }
 
 
@@ -1114,9 +1118,9 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	// cmovenz integer only
 	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(p[1]->p[0], am_reg | am_fpreg, size);
-		ap3 = cg.GenerateExpression(p[1]->p[1], am_reg | am_fpreg | am_imm, size);
+		ap1 = p[0]->Generate(am_reg, size);
+		ap2 = p[1]->p[0]->Generate(am_reg | am_fpreg, size);
+		ap3 = p[1]->p[1]->Generate(am_reg | am_fpreg | am_imm, size);
 		//if (ap2->mode == am_fpreg || ap3->mode == am_fpreg)
 			goto j1;
 		n1 = currentFn->pl.Count(ip1);
@@ -1136,7 +1140,7 @@ j1:
 		currentFn->pl.tail = ip1;
 		currentFn->pl.tail->fwd = nullptr;
 	}
-	ap2 = cg.GenerateExpression(p[1]->p[1], flags, size);
+	ap2 = p[1]->p[1]->Generate(flags, size);
 	n1 = currentFn->pl.Count(ip1);
 	if (opt_nocgo)
 		n1 = 9999;
@@ -1147,10 +1151,10 @@ j1:
 		currentFn->pl.tail->fwd = nullptr;
 		cg.GenerateFalseJump(p[0], false_label, 0);
 		node = p[1];
-		ap1 = cg.GenerateExpression(node->p[0], flags, size);
+		ap1 = node->p[0]->Generate(flags, size);
 		GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 		GenerateLabel(false_label);
-		ap2 = cg.GenerateExpression(node->p[1], flags, size);
+		ap2 = node->p[1]->Generate(flags, size);
 		if (!IsEqualOperand(ap1, ap2))
 		{
 			GenerateMonadic(op_hint, 0, MakeImmediate(2));
@@ -1202,7 +1206,7 @@ j1:
 	// N1 <= 4
 	cg.GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
-	ap1 = cg.GenerateExpression(node->p[0], flags, size);
+	ap1 = node->p[0]->Generate(flags, size);
 	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	if (!IsEqualOperand(ap1, ap2))
@@ -1286,11 +1290,11 @@ Operand *ENODE::GenHook(int flags, int size)
 	cg.GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
 	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], flags, size);
+	ap1 = node->p[0]->Generate(flags, size);
 	ReleaseTempRegister(ap1);
 	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
-	ap2 = cg.GenerateExpression(node->p[1], flags, size);
+	ap2 = node->p[1]->Generate(flags, size);
 	if (!Operand::IsSameType(ap1, ap2) && !voidResult)
 		error(ERR_MISMATCH);
 	//{
@@ -1350,14 +1354,14 @@ Operand *ENODE::GenShift(int flags, int size, int op)
 	Rs2mode = opl[op_ins[op]].amclass3;
 
 	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(p[0], Rs1mode, size);
-	ap2 = cg.GenerateExpression(p[1], Rs2mode, 8);
-	GenerateTriadic(op, size, ap3, ap1, ap2);
+	ap1 = p[0]->Generate(Rs1mode, size);
+	ap2 = p[1]->Generate(Rs2mode, sizeOfWord);
+	GenerateTriadic(op, 0, ap3, ap1, ap2);
 	// Rotates automatically sign extend
 	if ((op == op_rol || op == op_ror) && ap2->isUnsigned)
 		switch (size) {
-		case 1:	GenerateDiadic(op_zxb, 0, ap3, ap3); break;
-		case 2:	GenerateDiadic(op_zxc, 0, ap3, ap3); break;
+		case 1:	GenerateTriadic(op_and, 0, ap3, ap3, MakeImmediate(0xFF)); break;
+		case 2:	GenerateTriadic(op_and, 0, ap3, ap3, MakeImmediate(0xFFFF)); break;
 		case 4:	GenerateDiadic(op_zxh, 0, ap3, ap3); break;
 		default:;
 		}
@@ -1378,8 +1382,8 @@ Operand *ENODE::GenAssignShift(int flags, int size, int op)
 	Rs2mode = opl[op_ins[op]].amclass3;
 
 	//size = GetNaturalSize(node->p[0]);
-	ap3 = cg.GenerateExpression(p[0], am_all & ~am_imm, size);
-	ap2 = cg.GenerateExpression(p[1], Rs2mode, size);
+	ap3 = p[0]->Generate(am_all & ~am_imm, size);
+	ap2 = p[1]->Generate(Rs2mode, size);
 	if (ap3->mode == am_reg) {
 		GenerateTriadic(op, size, ap3, ap3, ap2);
 		mr = &regs[ap3->preg];
@@ -1422,8 +1426,8 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 	else {
 		ap3 = GetTempRegister();
 	}
-	ap1 = cg.GenerateExpression(p[0], Rs1mode, 8);
-	ap2 = cg.GenerateExpression(p[1], Rs2mode, 8);
+	ap1 = p[0]->Generate(Rs1mode, sizeOfWord);
+	ap2 = p[1]->Generate(Rs2mode, sizeOfWord);
 	if (op == op_fdiv) {
 		// Generate a convert operation ?
 		if (ap1->fpsize() != ap2->fpsize()) {
@@ -1461,15 +1465,15 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 		square = !opt_nocgo;
 	if (op == op_fmul) {
 		ap3 = GetTempFPRegister();
-		ap1 = cg.GenerateExpression(p[0], Rs1mode, size);
+		ap1 = p[0]->Generate(Rs1mode, size);
 		if (!square)
-			ap2 = cg.GenerateExpression(p[1], Rs2mode, size);
+			ap2 = p[1]->Generate(Rs2mode, size);
 	}
 	else {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], Rs1mode, 8);
+		ap1 = p[0]->Generate(Rs1mode, sizeOfWord);
 		if (!square)
-			ap2 = cg.GenerateExpression(p[1], Rs2mode, 8);
+			ap2 = p[1]->Generate(Rs2mode, sizeOfWord);
 	}
 	if (op == op_fmul) {
 		// Generate a convert operation ?
@@ -1509,19 +1513,19 @@ Operand *ENODE::GenUnary(int flags, int size, int op)
 
 	if (IsFloatType()) {
 		ap2 = GetTempFPRegister();
-		ap = cg.GenerateExpression(p[0], Rs1mode, size);
+		ap = p[0]->Generate(Rs1mode, size);
 		if (op == op_neg)
 			op = op_fneg;
 		GenerateDiadic(op, fsize(), ap2, ap);
 	}
 	else if (IsVectorType()) {
 		ap2 = GetTempVectorRegister();
-		ap = cg.GenerateExpression(p[0], am_vreg, size);
+		ap = p[0]->Generate(am_vreg, size);
 		GenerateDiadic(op, 0, ap2, ap);
 	}
 	else {
 		ap2 = GetTempRegister();
-		ap = cg.GenerateExpression(p[0], Rs1mode, size);
+		ap = p[0]->Generate(Rs1mode, size);
 		GenerateHint(3);
 		GenerateDiadic(op, 0, ap2, ap);
 	}
@@ -1546,9 +1550,9 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 		ap3 = GetTempFPRegister();
 		if (IsEqual(p[0], p[1]))
 			dup = !opt_nocgo;
-		ap1 = cg.GenerateExpression(p[0], am_fpreg, size);
+		ap1 = p[0]->Generate(am_fpreg, size);
 		if (!dup)
-			ap2 = cg.GenerateExpression(p[1], am_fpreg, size);
+			ap2 = p[1]->Generate(am_fpreg, size);
 		// Generate a convert operation ?
 		if (!dup) {
 			if (ap1->fpsize() != ap2->fpsize()) {
@@ -1564,21 +1568,21 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 	}
 	else if (op == op_vex) {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(p[1], am_reg, size);
+		ap1 = p[0]->Generate(am_reg, size);
+		ap2 = p[1]->Generate(am_reg, size);
 		GenerateTriadic(op, 0, ap3, ap1, ap2);
 	}
 	else if (IsVectorType()) {
 		ap3 = GetTempVectorRegister();
 		if (ENODE::IsEqual(p[0], p[1]) && !opt_nocgo) {
-			ap1 = cg.GenerateExpression(p[0], am_vreg, size);
-			ap2 = cg.GenerateExpression(vmask, am_vmreg, size);
+			ap1 = p[0]->Generate(am_vreg, size);
+			ap2 = vmask->Generate(am_vmreg, size);
 			Generate4adic(op, 0, ap3, ap1, ap1, ap2);
 		}
 		else {
-			ap1 = cg.GenerateExpression(p[0], am_vreg, size);
-			ap2 = cg.GenerateExpression(p[1], am_vreg, size);
-			ap4 = cg.GenerateExpression(vmask, am_vmreg, size);
+			ap1 = p[0]->Generate(am_vreg, size);
+			ap2 = p[1]->Generate(am_vreg, size);
+			ap4 = vmask->Generate(am_vmreg, size);
 			Generate4adic(op, 0, ap3, ap1, ap2, ap4);
 			ReleaseTempReg(ap4);
 		}
@@ -1595,16 +1599,16 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 			if (op == op_sub || op == op_ptrdif)
 				GenerateDiadic(op_mov, 0, ap3, makereg(0));
 			else {
-				ap1 = cg.GenerateExpression(p[0], am_reg, size);
+				ap1 = p[0]->Generate(am_reg, size);
 				GenerateTriadic(op, 0, ap3, ap1, ap1);
 			}
 		}
 		else {
-			ap1 = cg.GenerateExpression(p[0], Rs1mode, size);
+			ap1 = p[0]->Generate(Rs1mode, size);
 			// modu/ptrdif does not have an immediate mode
-			ap2 = cg.GenerateExpression(p[1], Rs2mode, size);
+			ap2 = p[1]->Generate(Rs2mode, size);
 			if (Instruction::Get(op)->amclass4) {	// op_ptrdif
-				ap4 = cg.GenerateExpression(p[4], Instruction::Get(op)->amclass4, size);
+				ap4 = p[4]->Generate(Instruction::Get(op)->amclass4, size);
 				Generate4adic(op, 0, ap3, ap1, ap2, ap4);
 			}
 			else {
@@ -1694,7 +1698,7 @@ Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
 		//		GenerateDiadic(op_mov, 0, ap3, ap1);
 		//ap1 = cg.GenerateExpression(p[0], am_reg | am_mem, size);
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
+		ap2 = p[1]->Generate(am_reg | am_imm, size);
 		if (ap1->mode == am_reg) {
 			GenerateTriadic(op, 0, ap1, ap1, ap2);
 			cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
@@ -1713,24 +1717,24 @@ Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 		return (ap3);
 	}
 	if (IsFloatType()) {
-		ap1 = cg.GenerateExpression(p[0], am_fpreg | am_mem, ssize);
-		ap2 = cg.GenerateExpression(p[1], am_fpreg, size);
+		ap1 = p[0]->Generate(am_fpreg | am_mem, ssize);
+		ap2 = p[1]->Generate(am_fpreg, size);
 		if (op == op_add)
 			op = op_fadd;
 		else if (op == op_sub)
 			op = op_fsub;
 	}
 	else if (etype == bt_vector) {
-		ap1 = cg.GenerateExpression(p[0], am_reg | am_mem, ssize);
-		ap2 = cg.GenerateExpression(p[1], am_reg, size);
+		ap1 = p[0]->Generate(am_reg | am_mem, ssize);
+		ap2 = p[1]->Generate(am_reg, size);
 		if (op == op_add)
 			op = op_vadd;
 		else if (op == op_sub)
 			op = op_vsub;
 	}
 	else {
-		ap1 = cg.GenerateExpression(p[0], am_all, ssize);
-		ap2 = cg.GenerateExpression(p[1], Instruction::Get(op)->amclass3, size);
+		ap1 = p[0]->Generate(am_all, ssize);
+		ap2 = p[1]->Generate(Instruction::Get(op)->amclass3, size);
 		intreg = true;
 	}
 	if (ap1->mode == am_reg) {
@@ -1978,7 +1982,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	if (safe) {
 		lab0 = nextlabel++;
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, p[0]->GetNaturalSize());
+		ap1 = p[0]->Generate(am_reg, p[0]->GetNaturalSize());
 		ap4 = GetTempRegister();
 		//if (op == op_and) {
 		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), MakeDataLabel(lab0));
@@ -1990,7 +1994,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 			ReleaseTempReg(ap4);
 			ap4 = ap1;
 		}
-		ap2 = cg.GenerateExpression(p[1], am_reg, p[1]->GetNaturalSize());
+		ap2 = p[1]->Generate(am_reg, p[1]->GetNaturalSize());
 		ap5 = GetTempRegister();
 		if (!ap2->isBool)
 			GenRedor(ap5, ap2);
@@ -2068,6 +2072,7 @@ Operand *ENODE::Generate(int flags, int size)
 		return (Operand *)NULL;
 	}
 	//size = node->esize;
+	GenerateZeradic(op_pfi);
 	switch (node->nodetype)
 	{
 	case en_aggregate:
@@ -2422,7 +2427,7 @@ Operand *ENODE::Generate(int flags, int size)
 	case en_udiv:   ap1 = node->GenDivMod(flags, size, op_divu); goto retpt;
 	case en_mod:    ap1 = node->GenDivMod(flags, size, op_rem); goto retpt;
 	case en_umod:   ap1 = node->GenDivMod(flags, size, op_remu); goto retpt;
-	case en_asl:    ap1 = node->GenShift(flags, size, op_asl); goto retpt;
+	case en_asl:    ap1 = node->GenShift(flags, size, op_sll); goto retpt;
 	case en_shl:    ap1 = node->GenShift(flags, size, op_sll); goto retpt;
 	case en_shlu:   ap1 = node->GenShift(flags, size, op_sll); goto retpt;
 	case en_asr:	ap1 = node->GenShift(flags, size, op_sra); goto retpt;

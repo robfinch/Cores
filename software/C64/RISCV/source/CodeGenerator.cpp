@@ -730,7 +730,7 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 			ap2 = nullptr;
 			if (ep->p[2]==nullptr)
 				break;
-			ap1 = GenerateExpression(ep->p[2],am_reg,thead->tp->size);
+			ap1 = ep->p[2]->Generate(am_reg,thead->tp->size);
 			if (ap1->mode==am_imm) {
 				ap2 = GetTempRegister();
 				GenLoadConst(ap2, ap1);
@@ -926,11 +926,11 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 	//	ap2 = GenerateExpression(node->p[1],am_mem,size);
 	//}
 	//else {
-		ap1 = GenerateExpression(node->p[0], am_reg | am_fpreg | am_mem | am_vreg | am_vmreg, ssize);
+		ap1 = node->p[0]->Generate(am_reg | am_fpreg | am_mem | am_vreg | am_vmreg, ssize);
 		flg = am_all;
 		if (ap1->type == stddouble.GetIndex())
 			flg = am_fpreg;
-		ap2 = GenerateExpression(node->p[1],flg,size);
+		ap2 = node->p[1]->Generate(flg,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    ap2->GenZeroExtend(size,ssize);
 //	}
@@ -1252,13 +1252,11 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 void CodeGenerator::SaveTemporaries(Function *sym, int *sp, int *fsp)
 {
 	if (sym) {
-		if (sym->UsesTemps) {
-			*sp = TempInvalidate(fsp);
+			*sp = TempInvalidate(fsp, sym->UsesTemps);
 			//*fsp = TempFPInvalidate();
-		}
 	}
 	else {
-		*sp = TempInvalidate(fsp);
+		*sp = TempInvalidate(fsp, 1);
 		//*fsp = TempFPInvalidate();
 	}
 }
@@ -1266,14 +1264,12 @@ void CodeGenerator::SaveTemporaries(Function *sym, int *sp, int *fsp)
 void CodeGenerator::RestoreTemporaries(Function *sym, int sp, int fsp)
 {
 	if (sym) {
-		if (sym->UsesTemps) {
-			//TempFPRevalidate(fsp);
-			TempRevalidate(sp, fsp);
-		}
+		//TempFPRevalidate(fsp);
+		TempRevalidate(sp, fsp, sym->UsesTemps);
 	}
 	else {
 		//TempFPRevalidate(fsp);
-		TempRevalidate(sp, fsp);
+		TempRevalidate(sp, fsp, 1);
 	}
 }
 

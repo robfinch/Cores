@@ -45,7 +45,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[247] =
+Instruction opl[248] =
 {   
 { ";", op_rem },
 { ";asm",op_asm,300 },
@@ -210,6 +210,7 @@ Instruction opl[247] =
 { "or",op_or,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "pea", op_pea },
 { "pea",op_pea },
+{ "pfi", op_pfi,1,1,false,0,0,0,0 },
 { "phi", op_phi },
 { "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
 { "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
@@ -354,7 +355,7 @@ char *RegMoniker(int regno)
 	else if (regno >= regFirstTemp && regno <= regLastTemp)
 		sprintf_s(&buf[n][0], 20, "$t%d", regno-regFirstTemp);
 	else if (regno >= regFirstRegvar && regno <= regLastRegvar)
-		sprintf_s(&buf[n][0], 20, "$s%d", regno-regFirstRegvar);
+		sprintf_s(&buf[n][0], 20, "$s%d", regno-regFirstRegvar+1);
 	else {
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);
 	}
@@ -386,7 +387,7 @@ char *RegMoniker2(int regno)
 	else if (regno >= regFirstTemp && regno <= regLastTemp)
 		sprintf_s(&buf[n][0], 20, "$t%d", regno - regFirstTemp);
 	else if (regno >= regFirstRegvar && regno <= regLastRegvar)
-		sprintf_s(&buf[n][0], 20, "$s%d", regno-regFirstRegvar);
+		sprintf_s(&buf[n][0], 20, "$s%d", regno-regFirstRegvar+1);
 	else
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);
 	return &buf[n][0];

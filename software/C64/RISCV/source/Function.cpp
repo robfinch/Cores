@@ -451,28 +451,22 @@ void Function::RestoreRegisterVars()
 void Function::SaveTemporaries(int *sp, int *fsp)
 {
 	if (this) {
-		if (UsesTemps) {
-			*sp = TempInvalidate(fsp);
+		*sp = TempInvalidate(fsp, UsesTemps);
 			//*fsp = TempFPInvalidate();
-		}
 	}
 	else {
-		*sp = TempInvalidate(fsp);
+		*sp = TempInvalidate(fsp, 1);
 		//*fsp = TempFPInvalidate();
 	}
 }
 
 void Function::RestoreTemporaries(int sp, int fsp)
 {
-	if (this) {
-		if (UsesTemps) {
-			//TempFPRevalidate(fsp);
-			TempRevalidate(sp, fsp);
-		}
-	}
+	if (this)
+		TempRevalidate(sp, fsp, UsesTemps);
 	else {
 		//TempFPRevalidate(fsp);
-		TempRevalidate(sp, fsp);
+		TempRevalidate(sp, fsp, 1);
 	}
 }
 

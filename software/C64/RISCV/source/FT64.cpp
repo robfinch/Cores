@@ -32,7 +32,7 @@ extern void scan(Statement *);
 extern void GenerateComment(char *);
 int TempFPInvalidate();
 int TempInvalidate();
-void TempRevalidate(int,int);
+void TempRevalidate(int,int,int);
 void TempFPRevalidate(int);
 void ReleaseTempRegister(Operand *ap);
 Operand *GetTempRegister();
@@ -45,8 +45,8 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	int size;
 	int op;
 
-    lab0 = nextlabel++;
-    lab1 = nextlabel++;
+  lab0 = nextlabel++;
+  lab1 = nextlabel++;
 
 	switch(node->nodetype) {
 	case en_eq:		op = op_seq;	break;
@@ -206,8 +206,8 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	case en_le:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg, size);
+		ap1 = node->p[0]->Generate(am_reg, size);
+		ap2 = node->p[1]->Generate(am_reg, size);
 		//GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
 		GenerateTriadic(op_blt, 0, ap1, ap2, MakeCodeLabel(lab0));
 		GenerateTriadic(op_beq, 0, ap1, ap2, MakeCodeLabel(lab0));
@@ -220,6 +220,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sle,0,ap3,ap3);
 		ap3->isBool = true;
+		GenerateZeradic(op_pfi);
 		return (ap3);
 	case en_gt:
 		size = GetNaturalSize(node);
@@ -817,12 +818,14 @@ static void SaveRegisterSet(SYM *sym)
 	else
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
 			GenerateMonadic(op_push,0,makereg(nn));
+	GenerateZeradic(op_pfi);
 }
 
 static void RestoreRegisterSet(SYM * sym)
 {
 	int nn, mm;
 
+	GenerateZeradic(op_pfi);
 	if (!cpu.SupportsPop) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
@@ -857,6 +860,7 @@ void SaveRegisterVars(CSet *rmask)
 			cnt+=sizeOfWord;
 		}
 	}
+	GenerateZeradic(op_pfi);
 }
 
 void SaveFPRegisterVars(CSet *rmask)
@@ -872,6 +876,7 @@ void SaveFPRegisterVars(CSet *rmask)
 			cnt += sizeOfWord;
 		}
 	}
+	GenerateZeradic(op_pfi);
 }
 
 // Restore registers used as register variables.
@@ -881,6 +886,7 @@ static void RestoreRegisterVars()
 	int cnt2, cnt;
 	int nn;
 
+	GenerateZeradic(op_pfi);
 	if( save_mask->NumMember()) {
 		cnt2 = cnt = save_mask->NumMember()*sizeOfWord;
 		cnt = 0;
@@ -898,6 +904,7 @@ static void RestoreFPRegisterVars()
 	int cnt2, cnt;
 	int nn;
 
+	GenerateZeradic(op_pfi);
 	if( fpsave_mask->NumMember()) {
 		cnt2 = cnt = fpsave_mask->NumMember()*sizeOfWord;
 		cnt = 0;
@@ -940,7 +947,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 		if (ep->tp->IsFloatType())
 			ap = cg.GenerateExpression(ep,am_reg,sizeOfFP);
 		else
-			ap = cg.GenerateExpression(ep,am_reg|am_imm,GetNaturalSize(ep));
+			ap = ep->Generate(am_reg|am_imm,GetNaturalSize(ep));
 	}
 	else if (ep->etype==bt_quad)
 		ap = cg.GenerateExpression(ep,am_reg,sz);
@@ -951,7 +958,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 	else if (ep->etype==bt_float)
 		ap = cg.GenerateExpression(ep,am_reg,sz);
 	else
-		ap = cg.GenerateExpression(ep,am_reg|am_imm,GetNaturalSize(ep));
+		ap = ep->Generate(am_reg|am_imm,GetNaturalSize(ep));
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
@@ -1102,7 +1109,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		ip->fwd->MarkRemove();
 	else
 		ip->fwd->oper3 = MakeImmediate(sum*sizeOfWord);
-	/*
+	
 	if (!sumFloat) {
 		o_supportsPush = cpu.SupportsPush;
 		cpu.SupportsPush = false;
@@ -1117,7 +1124,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		}
 		cpu.SupportsPush = o_supportsPush;
 	}
-	*/
+	
 	if (ta)
 		delete ta;
     return (sum);
@@ -1176,6 +1183,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 
 	sym = nullptr;
 
+	GenerateZeradic(op_pfi);
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon || node->p[0]->nodetype == en_cnacon ) {
 		s = gsearch(*node->p[0]->sp);
@@ -1334,8 +1342,8 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		if (!(flags & am_novalue)) {
 			if (sym->sym->tp->GetBtp()->type != bt_void) {
 				ap = GetTempRegister();
-				GenerateDiadic(op_mov, 0, ap, makereg(1));
-				regs[1].modified = true;
+				GenerateDiadic(op_mov, 0, ap, makereg(regV0));
+				regs[regV0].modified = true;
 			}
 			else
 				ap = makereg(0);
@@ -1347,8 +1355,8 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	else {
 		if (!(flags & am_novalue)) {
 			ap = GetTempRegister();
-			GenerateDiadic(op_mov, 0, ap, makereg(1));
-			regs[1].modified = true;
+			GenerateDiadic(op_mov, 0, ap, makereg(regV0));
+			regs[regV0].modified = true;
 		}
 		else
 			return(makereg(0));

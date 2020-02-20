@@ -126,13 +126,20 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 			*rg2 = 0;
 			return (0);
 		default:
-			if (oper1->mode == am_fpreg) {
-				*rg1 = oper1->preg;
-				*rg2 = 0;
-				return (1);
+			if (oper1) {
+				if (oper1->mode == am_fpreg) {
+					*rg1 = oper1->preg;
+					*rg2 = 0;
+					return (1);
+				}
+				else {
+					*rg1 = oper1->preg;
+					*rg2 = 0;
+					return (0);
+				}
 			}
 			else {
-				*rg1 = oper1->preg;
+				*rg1 = 0;
 				*rg2 = 0;
 				return (0);
 			}
@@ -608,7 +615,7 @@ void OCODE::OptMul()
 	if (shcnt == 64)
 		return;
 	oper3->offset->i = shcnt;
-	opcode = op_asl;
+	opcode = op_sll;
 	optimized++;
 }
 
@@ -1098,11 +1105,15 @@ void OCODE::OptLdi()
 		if (ip->IsFlowControl())
 			return;
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
-					if (ip->oper2->offset->i == oper2->offset->i) {
-						ip->MarkRemove();
-						optimized++;
+			if (ip->oper1) {
+				if (ip->oper1->preg == oper1->preg) {
+					if (ip->opcode == op_ldi) {
+						if (ip->oper2->offset->i == oper2->offset->i) {
+							ip->MarkRemove();
+							optimized++;
+						}
+						else
+							return;
 					}
 					else
 						return;
@@ -1110,8 +1121,6 @@ void OCODE::OptLdi()
 				else
 					return;
 			}
-			else
-				return;
 		}
 	}
 }
@@ -1150,22 +1159,49 @@ void OCODE::OptLea()
 	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
-					if (ip->oper2->offset->i == oper2->offset->i) {
-						ip->MarkRemove();
-						optimized++;
+			if (ip->oper1) {
+				if (ip->oper1->preg == oper1->preg) {
+					if (ip->opcode == op_ldi) {
+						if (ip->oper2->offset->i == oper2->offset->i) {
+							ip->MarkRemove();
+							optimized++;
+						}
+						else
+							return;
 					}
 					else
 						return;
 				}
-				else
-					return;
 			}
 		}
 	}
 }
 
+void OCODE::OptPfi()
+{
+	OCODE *ip;
+	int n;
+	int count;
+
+	ip = fwd;
+	count = 0;
+	for (n = 0; n < 32 && ip; n = n + 1) {
+		if (ip->remove)
+			continue;
+		if (ip->opcode == op_pfi) {
+			if (count < 5) {
+				ip->MarkRemove();
+				optimized++;
+			}
+			else
+				count = 0;
+		}
+		else {
+			count = count + 1;
+		}
+		ip = ip->fwd;
+	}
+}
 
 void OCODE::storeHex(txtoStream& ofs)
 {
@@ -1259,7 +1295,8 @@ void OCODE::store(txtoStream& ofs)
 		b = bb;
 	}
 	if (comment) {
-		ofs.printf("; %s\n", (char *)comment->oper1->offset->sp->c_str());
+		if (comment->oper1->offset)
+			ofs.printf("; %s\n", (char *)comment->oper1->offset->sp->c_str());
 	}
 	if (remove)
 		ofs.printf(";-1");

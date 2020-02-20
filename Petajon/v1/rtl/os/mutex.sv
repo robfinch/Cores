@@ -37,23 +37,23 @@ input cyc0;
 input stb0;
 output ack0;
 input wr0;
-input [10:0] ad0;
-input [7:0] i0;
-output reg [7:0] o0;
+input [7:0] ad0;
+input [63:0] i0;
+output reg [63:0] o0;
 input cs1;
 input cyc1;
 input stb1;
 output ack1;
 input wr1;
-input [10:0] ad1;
-input [7:0] i1;
-output reg [7:0] o1;
+input [7:0] ad1;
+input [63:0] i1;
+output reg [63:0] o1;
 
 wire sel0 = cs0 & cyc0 & stb0;
 wire sel1 = cs1 & cyc1 & stb1;
 
 ack_gen #(
-	.READ_STAGES(2),
+	.READ_STAGES(3),
 	.WRITE_STAGES(0),
 	.REGISTER_OUTPUT(1)
 ) uag0
@@ -66,7 +66,7 @@ ack_gen #(
 );
 
 ack_gen #(
-	.READ_STAGES(2),
+	.READ_STAGES(3),
 	.WRITE_STAGES(0),
 	.REGISTER_OUTPUT(1)
 ) uag1
@@ -83,9 +83,7 @@ reg [3:0] ch;
 reg wr;
 reg [7:0] ad;
 reg [63:0] memi;
-reg [31:0] mem [0:31];
-assign o0 = mem[ad[7:3]];
-assign o1 = mem[ad[7:3]];
+reg [63:0] mem [0:31];
 
 initial begin
 	for (n = 0; n < 32; n = n + 1)
@@ -131,36 +129,36 @@ endcase
 end
 always @(posedge clk)
 begin
-	if (sel0)
+	if (ch==4'd0)
 		wr <= wr0;
-	else if (sel1)
+	else if (ch==4'd1)
 		wr <= wr1;
 	else
 		wr <= 1'b0;
 end
 always @(posedge clk)
 begin
-	if (sel0)
-		ad <= ad0[7:3];
-	else if (sel1)
-		ad <= ad1[7:3];
+	if (ch==4'd0)
+		ad <= ad0;
+	else if (ch==4'd1)
+		ad <= ad1;
 	else
 		ad <= ad;
 end
 always @(posedge clk)
 begin
-	if (sel0)
+	if (ch==4'd0)
 		memi <= i0;
-	else if (sel1)
+	else if (ch==4'd1)
 		memi <= i1;
 	else
 		memi <= memi;
 end
 always @(posedge clk)
 begin
-	if (sel0)
+	if (ch==4'd0)
 		o0 <= mem[ad[7:3]];
-	else if (sel1)
+	else if (ch==4'd1)
 		o1 <= mem[ad[7:3]];
 	else begin
 		o0 <= 32'd0;
