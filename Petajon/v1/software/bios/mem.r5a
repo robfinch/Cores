@@ -29,26 +29,21 @@
 MMUInit:
 		sub		$sp,$sp,#8
 		sto		$ra,[$sp]
-		ldi		$t0,#8189				; set number of available pages (3 pages already allocated)
-		stt		$t0,NPAGES
-		; Free all memory for all tasks			
+		ldi		$t0,#8192				; set number of available pages in system
+		stw		$t0,NPAGES
+		; Free all memory for all maps
 		ldi		$t0,#$00
-		ldi		$t4,#MAX_TID		; task id
+		ldi		$t4,#MAX_MID		; map id
 .0004:
 		ldi		$t1,#$000				; regno
 		ldi		$t2,#PAGES_PER_MAP	; number of registers to update
-		ldi		$t3,#3					; number of pages pre-allocated
 .0001:
-		sll		$s1,$t4,#16			; put tid in place
+		sll		$s1,$t4,#16			; put mid in place
 		or		$s1,$s1,$t1			; or in page number
 		mvmap	$x0,$t0,$s1
-		add		$t0,$t0,#$01
 		add		$t1,$t1,#$01		; increment page number
-		bltu	$t1,$t3,.0003
-		mov		$t0,$x0					; mark pages unallocated
-.0003:
 		sub		$t2,$t2,#1
-		bne		$t2,$x0,.0001
+		bnez	$t2,.0001
 		sub		$t4,$t4,#1
 		bge		$t4,$x0,.0004
 		; Now ensure all pages in PAM are marked free
@@ -57,9 +52,15 @@ MMUInit:
 		pfree	$t0
 		sub		$t0,$t0,#1
 		bge		$t0,$x0,.0006
+		; Allocate three pages for OS data.
+		; These will end up being the first three pages of memory
+		palloc	$x0
+		palloc	$x0
+		palloc	$x0
 		; allocate last page for system stack
 		ldi		$t1,#$FFF				
 		ldi		$t0,#$1FFF
+		palloc	$x0,$t0				; specifically allocate page 8191
 		mvmap	$x0,$t0,$t1
 
 		; Now setup segment registers
@@ -118,8 +119,51 @@ FindRun:
 	ret
 
 ;------------------------------------------------------------------------------
+; Find a run of buckets available for mapping virtual to physical addresses.
+; This search starts at the top of the virtual address space and works its
+; way downwards. This is usually used for allocating stack space.
+;
 ; Parameters:
-;		a0 = tid
+;		a0 = mid
+;		a1 = number of pages required.
+; Modifies:
+;		t1,t2,t3,t5
+; Returns:
+;		v0 = starting bucket number (includes ASID), -1 if no run found
+;------------------------------------------------------------------------------
+
+FindStackRun:
+	and			$t3,$a0,#MAX_MID	; t3 = mid
+	sll			$t3,$t3,#16				; shift into usable position
+	mov			$t2,$t3						; t2 = map entry number
+	or			$t2,$t2,#PAGES_PER_MAP-1	; start looking at last page
+	mov			$t5,$t3						; t5 = min in ASID
+.0003:
+	ldi			$t1,#0						; t1 = count of consecutive empty buckets
+.0001:
+	mvmap		$v0,$x0,$t2				; get map entry into v0
+	beqz		$v0,.empty0				; is it empty?
+	sub			$t2,$t2,#1
+	bgeu		$t2,$t5,.0001
+.0002:
+	ldi			$v0,#-1						; got here so no run was found
+	ret
+.empty0:
+.empty1:
+	bltu		$t2,$t5,.0002
+	add			$t1,$t1,#1
+	bgeu		$t1,$a1,.foundEnough
+	sub			$t2,$t2,#1				; next bucket
+	mvmap		$v0,$x0,$t2				; get map entry
+	beqz		$v0,.empty1
+	bra			.0003							; go back and find another run
+.foundEnough:
+	mov			$v0,$t2						; v0 = start of run
+	ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = mid
 ;		a1 = amount of memory to allocate
 ; Modifies:
 ;		a1,t0
@@ -140,7 +184,7 @@ Alloc:
 	; First check if there are enough pages available in the system.
 	add			$v0,$a1,#PAGESZ-1	; v0 = round memory request
 	srl			$v0,$v0,#LOG_PGSZ	; v0 = convert to pages required
-	ldo			$t0,NPAGES				; check number of pages available
+	ldwu		$t0,NPAGES				; check number of pages available
 	bleu		$v0,$t0,.enough
 .noRun2:
 	ldi			$v1,#0						; not enough, return null
@@ -153,9 +197,9 @@ Alloc:
 	blt			$v0,$x0,.noRun2
 	; Now there are enough pages, and a run available, so allocate
 	mov			$s1,$v0						; s1 = start of run
-	ldo			$s3,NPAGES				; decrease number of pages available in system
+	ldwu		$s3,NPAGES				; decrease number of pages available in system
 	sub			$s3,$s3,$s2
-	sto			$s3,NPAGES
+	stw			$s3,NPAGES
 	mov			$s3,$v0						; s3 = start of run
 .0001:
 	palloc	$v0								; allocate a page (cheat and use hardware)
@@ -178,7 +222,7 @@ Alloc:
 	ret
 
 ;------------------------------------------------------------------------------
-; Allocate the stack page for a task. The stack is located at the highest
+; Allocate the stack page for a map. The stack is located at the highest
 ; virtual address ($7FC00).
 ;
 ; Parameters:
@@ -197,8 +241,8 @@ AllocStack:
 	mvmap		$v0,$x0,$v1			; check if stack already allocated
 	bnez		$v0,.0001
 	palloc	$v0							; allocate a page
-	mov			$a0,$v0
-	call		PutHexHalf
+;	mov			$a0,$v0
+;	call		PutHexHalf
 	ldo			$a0,8[$sp]
 	beqz		$v0,.xit		; success?
 	mvmap		$x0,$v0,$v1
@@ -236,9 +280,9 @@ FreeAll:
 	add			$t3,$t3,#1			; advance to next bucket
 	beqz		$t0,.nxt				; 0 = no map in this bucket
 	pfree		$t0							; free the page
-	ldo			$t0,NPAGES			; update the number of available pages
+	ldwu		$t0,NPAGES			; update the number of available pages
 	add			$t0,$t0,#1
-	sto			$t0,NPAGES
+	stw			$t0,NPAGES
 	bra			.nxt
 .0001:
 	ret

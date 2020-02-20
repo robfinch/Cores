@@ -54,6 +54,8 @@ milliseconds	equ		$14208
 	org		$FFFC0100
 MachineStart:
 	ldi		$sp,#$1FFFBFF8		; setup machine mode stack pointer
+	ldi		$t0,#$FFFC0000
+	csrrw $x0,#$301,$t0			; set tvec
 	; The dram needs a bit of time before it's ready for access. along with
 	; the video screen which also needs some time. So the first thing done is
 	; to delay for about 3 seconds.
@@ -67,16 +69,14 @@ MachineStart:
 	call	VideoInit
 	call	ViaInit
 	call	SerialInit
-	call	_KeybdInit
+;	call	_KeybdInit
 	call	PicInit
 	call	_PRNGInit
 	ldi		$t0,#0
 	csrrw	$x0,#$181,$t0		; set ASID
-	ldi		$t0,#$FFFC0000
-	csrrw $x0,#$301,$t0		; set tvec
 	ldi		$t0,#UserStart
 	csrrw	$x0,#$341,$t0		; set mepc
-	csrrs	$x0,#$300,#8		; enable interrupts (on eret)
+	csrrc	$x0,#$300,#8		; disable interrupts (on eret)
 	eret									; switch to user mode
 UserStart:
 	ldi		$a0,#1
@@ -127,6 +127,7 @@ UserStart2:
 ;	add		$t0,$t0,#8
 ;	bra		.0005
 .0004:
+	pfi
 	ldi		$a0,#$403						; video putstring()
 	ldi		$a1,#msgStart
 	ecall
@@ -134,6 +135,7 @@ UserStart2:
 ;		ldi		a1,#24000
 ;		ldi		a2,#Monitor
 ;		ecall
+	pfi
 	call	DumpReadyList
 	bra		MonEntry
 
@@ -173,6 +175,7 @@ Getch:
 	sto		$a1,16[$sp]
 ;	mWaitForFocus
 ;	call	SerialGetChar
+	pfi
 	ldi		$a0,#0					; don't block
 	call	_DBGGetKey
 	ldo		$ra,[$sp]
@@ -200,6 +203,7 @@ Putch:
 	mov		$a3,$a0
 ;	call	SerialPutChar
 ;	call	VideoPutChar
+	pfi
 	ldi		$a0,#$402
 	ecall
 ;	ldi		$a1,#5							; serial port = 5
@@ -247,6 +251,7 @@ fputc:
 	sto		$a1,32[$sp]
 	sto		$a2,40[$sp]
 ;	mWaitForFocus
+	pfi
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
@@ -276,6 +281,7 @@ MonEntry:
 
 Monitor:
 	ldi		$sp,#$AFFFFFFC
+	pfi
 	csrrc	$x0,#$300,#1
 ;		call	DumpReadyList
 ;		call	DumpTimeoutList
@@ -434,6 +440,7 @@ doMem:
 		ldi		$a0,#CR
 		call	Putch
 		mov		$a0,$s3
+		pfi
 		call	PutHexWord
 		ldi		$a0,#':'
 		call	Putch
@@ -442,6 +449,7 @@ doMem:
 		ldi		$a0,#' '
 		call	Putch
 		ldb		$a0,[$s3]
+		pfi
 		call	PutHexByte
 		add		$s3,$s3,#1
 		sub		$s2,$s2,#1
@@ -473,6 +481,7 @@ FillMem:
 .0001:
 		stb		$v0,[$s3]
 		sub		$s4,$s4,#1
+		pfi
 		bgt		$s4,$x0,.0001
 		jmp		Monitor
 
@@ -490,6 +499,7 @@ SkipSpaces:
 		ret
 .skip1:
 		add		$s1,$s1,#1
+		pfi
 		bra		.skip2
 
 ;------------------------------------------------------------------------------
@@ -500,6 +510,7 @@ GetHexNum:
 		ldi		$v0,#0							; v0 = num
 		sub		$sp,$sp,#8
 		sto		$ra,[$sp]
+		pfi
 		call	SkipSpaces
 .next:
 		lb		$t0,INBUF[$s1]
@@ -516,10 +527,12 @@ GetHexNum:
 		ldi		$t2,#'f'+1
 		blt		$t0,$t2,.isHexLower
 .0001:
+		pfi
 		ldo		$ra,[$sp]
 		add		$sp,$sp,#8
 		ret
 .isHexUpper:
+		pfi
 		sll		$v0,$v0,#4
 		sub		$t0,$t0,#'A'
 		add		$t0,$t0,#10
@@ -527,6 +540,7 @@ GetHexNum:
 		add		$s1,$s1,#1
 		bra		.next
 .isHexLower:
+		pfi
 		sll		$v0,$v0,#4
 		sub		$t0,$t0,#'a'
 		add		$t0,$t0,#10
@@ -534,6 +548,7 @@ GetHexNum:
 		add		$s1,$s1,#1
 		bra		.next
 .isDigit:
+		pfi
 		sll		$v0,$v0,#4
 		sub		$t0,$t0,#'0'
 		or		$v0,$v0,$t0
@@ -606,12 +621,14 @@ PutHexNybble:
 		sto		$a0,8[$sp]
 		and		$a0,$a0,#15		; strip off high order bits
 		ldi		$t0,#10
+		pfi
 		blt		$a0,$t0,.lt10
 		sub		$a0,$a0,#10
 		add		$a0,$a0,#'A'
 		call	Putch
 		bra		.0001
 .lt10:
+		pfi
 		add		$a0,$a0,#'0'
 		call	Putch
 .0001:
@@ -643,6 +660,7 @@ PutString:
 	ldbu	$a0,[$t1]
 	add		$t1,$t1,#1				; advance pointer to next byte
 	beqz	$a0,.done			; branch if done
+	pfi
 	call	Putch							; output character
 	bra		.0001
 .done:
@@ -665,6 +683,7 @@ _MicroDelay:
 	sub		$t4,$t4,$t3
 	srl		$t5,$t4,#17
 	stt		$t5,VIA+VIA_PARAW
+	pfi
 	slt		$t4,$t4,$a0
 	bnez	$t4,.0001
 	ret
@@ -682,7 +701,7 @@ DumpMemmap:
 .again:
 	mvmap		$a0,$x0,$t1
 	sto			$t1,8[$sp]
-	call		PutHexWord
+	call		PutHexHalf
 	ldi			$a0,#CR
 	call		Putch
 	ldi			$a0,#LNFD
@@ -693,7 +712,7 @@ DumpMemmap:
 	bnez		$t0,.again
 	or			$t1,$t1,#$FFF
 	mvmap		$a0,$x0,$t1
-	call		PutHexWord
+	call		PutHexHalf
 	ldi			$a0,#CR
 	call		Putch
 	ldi			$a0,#LNFD
@@ -702,20 +721,6 @@ DumpMemmap:
 	ldo			$v0,16[$sp]
 	add			$sp,$sp,#24
 	ret
-
-;------------------------------------------------------------------------------
-; Initialize PRNG
-;------------------------------------------------------------------------------
-_PRNGInit:
-		stt		$x0,_randStream
-		ldi		$t0,#$FFDC0000
-		stt		$x0,$0C04[$t0]			; select stream #0
-		ldi		$v0,#$88888888
-		stt		$v0,$0C08[$t0]			; set initial m_z
-		ldi		$v0,#$01234567
-		stt		$v0,$0C0C[$t0]			; set initial m_w
-		ret
-
 
 ;------------------------------------------------------------------------------
 ; Exception processing code starts here.
@@ -740,9 +745,9 @@ IRQRout:
 	bgtu	$t0,$t1,.cause12plus
 	jmp		OSCALL						; goto operating system call dispatcher
 .isIRQ:
-	ldo		$v0,$FFD00000+440	; Display IRQ live indicator
+	ldo		$v0,$FFD00000+432	; Display IRQ live indicator
 	add		$v0,$v0,#1
-	sto		$v0,$FFD00000+440
+	sto		$v0,$FFD00000+432
 	csrrs	$v1,#$792,#2			; check and set interrupt semaphore
 	and		$v1,$v1,#2
 	beqz	$v1,.doIRQ
@@ -813,7 +818,7 @@ flt10:
 .include "../fmtk/io.r5a"
 .include "../fmtk/scancodes.r5a"
 .include "../fmtk/keybd_driver_asm.r5a"
-.include "../fmtk/source/drivers/prgn_driver_asm.r5a"
+.include "../fmtk/source/drivers/prng_driver_asm.r5a"
 .include "../fmtk/source/kernel/DBGKeybd.s"
 .include "TinyBasic.r5a"
 .include "SpriteDemo.s"

@@ -93,3 +93,4 @@ E_NoMoreTCBs	=	0x45
 E_NoMem		= 12
 
 CSR_REGSET	equ		$790
+SYS_MUTEX		equ		$FFDBFF00

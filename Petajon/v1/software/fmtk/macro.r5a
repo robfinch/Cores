@@ -114,3 +114,14 @@ macro mDispIRQLive
 	add     	$v0,$v0,#1
 	sto      $v0,$FFD00000+440
 endm
+
+macro mLockSysMutex
+	mGetCurrentTid
+	sll		$v0,$v0,#1
+	or		$v0,$v0,#1
+	ldi		$t0,#$FFDBFF00
+.lock@:
+	sto		$v0,[$t0]
+	ldo		$v1,[$t0]
+	bne		$v0,$v1,.lock@
+endm
