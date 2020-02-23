@@ -71,6 +71,7 @@ ViaInit:
 	sto		$ra,[$sp]
 	ldi		$a0,#15							; VIA device
 	ldi		$a1,#ViaFuncTbl
+	pfi
 	call	CopyDevFuncTbl
 	; Initialize port A low order eight bits as output, the remaining bits as
 	; input.
@@ -78,12 +79,14 @@ ViaInit:
 	ldi		$t0,#$000000FF
 	stt		$t0,VIA_DDRA[$t1]
 	ldi		$t0,#1							; select timer 3 access
+	pfi
 	stb		$t0,VIA_PCR+1[$t1]
 	ldi		$t0,#$1F
 	stb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
 	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
 	stt		$t0,VIA_T1CL[$t1]
 	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
+	pfi
 	ldi		$t0,#$180						; enable timer3 interrupts
 	stt		$t0,VIA_IER[$t1]
 	ldo		$ra,[$sp]
@@ -92,9 +95,12 @@ ViaInit:
 
 
 ;------------------------------------------------------------------------------
+; Only one cpu need reset the VIA timer.
 ;------------------------------------------------------------------------------
 
 ViaIRQ:
+	csrrw	$t1,#$F10,$x0
+	bnez	$t1,.hart20
 	; Was it the VIA that caused the interrupt?
 	ldi		$t1,#VIA
 	ldb		$t0,VIA_IFR[$t1]
@@ -106,6 +112,7 @@ ViaIRQ:
 	add		$t0,$t0,#30
 	sto		$t0,milliseconds
 	stt		$t0,switchflag
+.hart20:
 	call	FMTK_SchedulerIRQ
 .0003:
 	csrrc	$x0,#$792,#2			; clear IRQ semaphore

@@ -75,19 +75,23 @@ SerialInit:
 	sto		$ra,[$sp]
 	ldi		$a0,#5							; serial device
 	ldi		$a1,#SerialFuncTbl
+	pfi
 	call	CopyDevFuncTbl
 	stt		$x0,SerHeadRcv
 	stt		$x0,SerTailRcv
 	stt		$x0,SerHeadXmit
 	stt		$x0,SerTailXmit
+	pfi
 	stb		$x0,SerRcvXon
 	stb		$x0,SerRcvXoff
 	ldi		$t0,#$09						; dtr,rts active, rxint enabled, no parity
 	stt		$t0,UART+8
 	ldi		$t0,#$0006001E			; reset the fifo's
+	pfi
 	stt		$t0,UART+12
 	ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
 	stt		$t0,UART+12
+	pfi
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -160,10 +164,11 @@ SerialGetChar:
 		sto		$ra,[$sp]
 		sto		$v1,8[$sp]
 		sto		$s1,16[$sp]
+		pfi
 		lb		$s1,SerRcvXon				; skip sending XON if already sent
-		csrrc	$s1,#$300,#1				; disable interrupts
 		bne		$s1,$x0,.0002
 		call	SerialRcvCount			; check number of chars in receive buffer
+		pfi
 		slt		$v0,$v0,#8					; less than 8?
 		beq		$v0,$x0,.0002
 		ldi		$v0,#XON						; if <8 send an XON
@@ -171,18 +176,21 @@ SerialGetChar:
 		sb		$v0,SerRcvXon				; flag so we don't send it multiple times
 		sb		$v0,UART+UART_TRB
 .0002:
+		pfi
 		lbu		$v1,SerHeadRcv			; check if anything is in buffer
 		lbu		$v0,SerTailRcv
 		beq		$v0,$v1,.noChars		; no?
 		lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
 		add		$v1,$v1,#1					; update head index
+		pfi
 		sb		$v1,SerHeadRcv				
 		bra		.xit
 .noChars:
 .0001:
+		pfi
 		ldi		$v0,#-1
 .xit
-		csrrw	$x0,#$300,$s1				; restore interrupts
+		pfi
 		ldo		$ra,[$sp]
 		ldo		$v1,8[$sp]
 		ldo		$s1,16[$sp]
@@ -211,7 +219,7 @@ SerialPeekChar:
 	sto		$ra,[$sp]
 	sto		$v1,8[$sp]
 	sto		$s1,16[$sp]
-	csrrc	$s1,#$300,#1				; disable interrupts
+	pfi
 	ldbu	$v1,SerHeadRcv			; check if anything is in buffer
 	ldbu	$v0,SerTailRcv
 	beq		$v0,$v1,.noChars		; no?
@@ -221,7 +229,7 @@ SerialPeekChar:
 .0001:
 	ldi		$v0,#-1
 .xit
-	csrrw	$x0,#$300,$s1				; restore interrupts
+	pfi
 	ldo		$ra,[$sp]
 	ldo		$v1,8[$sp]
 	ldo		$s1,16[$sp]
@@ -248,7 +256,7 @@ SerialPeekCharDirect:
 	sto		$ra,[$sp]
 	sto		$v1,8[$sp]
 	sto		$s1,16[$sp]
-	csrrc	$s1,#$300,#1				; disable interrupts
+	pfi
 	ldb		$v0,UART+UART_STAT
 	and		$v0,$v0,#8					; look for Rx not empty
 	beq		$v0,$x0,.0001
@@ -256,8 +264,8 @@ SerialPeekCharDirect:
 	bra		.xit
 .0001:
 	ldi		$v0,#-1
-.xit
-	csrrw	$x0,#$300,$s1				; restore interrupts
+.xit:
+	pfi
 	ldo		$ra,[$sp]
 	ldo		$v1,8[$sp]
 	ldo		$s1,16[$sp]
@@ -285,11 +293,13 @@ SerialPutChar:
 	sto		$v0,[$sp]
 	sto		$ra,8[$sp]
 	sto		$v1,16[$sp]
+	pfi
 .0002:
 	ldi		$v1,#10
 .0001:
 ;	sub		$v1,$v1,#1
 ;	beq		$v1,$x0,.goSleep
+	pfi
 	ldb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$v0,$v0,#16					; bit #4 of the status reg
 	beqz	$v0,.0001						; branch if transmitter is not empty
@@ -297,15 +307,18 @@ SerialPutChar:
 	ldo		$v0,[$sp]
 	ldo		$ra,8[$sp]
 	ldo		$v1,16[$sp]
+	pfi
 	add		$sp,$sp,#24
 	ret
 .goSleep:
+	pfi
 	sub		$sp,$sp,#16
 	sto		$a0,[$sp]
 	sto		$a1,8[$sp]
 	ldi		$a0,#5							; sleep function
 	ldi		$a1,#1							; 1 tick
 	ecall
+	pfi
 	ldo		$a0,[$sp]
 	ldo		$a1,8[$sp]
 	add		$sp,$sp,#16

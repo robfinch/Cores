@@ -19,7 +19,7 @@ namespace FriscCoreGen
 		string MCap, MCapn;
 		string Fcap, Fcapn;
 		string MMcap, MMcapn;
-		string Memmgnt;
+		string Memmgnt, Memmgntn;
 	
 		public Form1()
 		{
@@ -44,18 +44,17 @@ namespace FriscCoreGen
 
 			for (n = 0; n < lines.Count(); n = n + 1)
 			{
-				for (k = 0; k < lines[n].Length-2; k = k + 1)
-				{
 j1:
-					i = lines[n].IndexOf("%" + varname + "%");
-					if (i >= 0)
-					{
-						lines[n].Remove(i, ln);
-						lines[n].Insert(i, varvalue);
-						goto j1;
-					}
+				i = lines[n].IndexOf("%" + varname + "%");
+				if (i >= 0)
+				{
+					lines[n] = lines[n].Remove(i, ln);
+					lines[n] = lines[n].Insert(i, varvalue);
+					goto j1;
 				}
+				progressBar1.Value = (n * 100 / lines.Count());
 			}
+			progressBar1.Value = 0;
 		}
 		private void FilterPos(string ext)
 		{
@@ -152,11 +151,26 @@ j1:
 		{
 			string[] Mops;
 			char[] cha;
+			string[] var;
+			string val;
+
 			Cursor.Current = Cursors.WaitCursor;
 			if (radioButton1.Checked)
 				lines = System.IO.File.ReadAllLines("../../../../template/Petajon_wb.sv");
 			else if (radioButton2.Checked)
-				lines = System.IO.File.ReadAllLines("../../../../template/Petajon_wb64.sv");
+				lines = System.IO.File.ReadAllLines("../../../../template/Petajon_dba64.sv");
+			if (checkBox11.Checked)
+				FilterPos("WB");
+			else
+				FilterNeg("WB");
+			if (checkBox12.Checked)
+				FilterPos("AXI");
+			else
+				FilterNeg("AXI");
+			if (checkBox13.Checked)
+				FilterPos("S100");
+			else
+				FilterNeg("S100");
 			if (radioButton1.Checked)
 				FilterPos("RV32I");
 			else
@@ -236,6 +250,54 @@ j1:
 				if (op.Length > 0)
 					FilterNeg(op);
 			}
+			Mops = Memmgnt.Split(cha);
+			foreach (string op in Mops)
+			{
+				if (op.Length > 0)
+				{
+					FilterPos(op);
+					if (op.Length > 10)
+					{
+						if ((op.Substring(0, 11) == "PCExclusion") || (op.Substring(0, 11) == "EAExclusion"))
+						{
+							char[] ch1 = new char[1];
+							ch1[0] = '"';
+							val = op.Substring(13);
+							val = val.Trim(ch1);
+							if (val.Length < 1)
+								val = "0";
+							SubVar(op.Substring(0, 11), val);
+						}
+					}
+					else if (op.Length > 4)
+					{
+						if ((op.Substring(0,5)=="ABWID"))
+						{
+							char[] ch1 = new char[1];
+							ch1[0] = '"';
+							val = op.Substring(7);
+							val = val.Trim(ch1);
+							if (val.Length < 1)
+								val = "0";
+							SubVar(op.Substring(0, 5), val);
+						}
+					}
+				}
+			}
+			Mops = Memmgntn.Split(cha);
+			foreach (string op in Mops)
+			{
+				if (op.Length > 0)
+					FilterNeg(op);
+			}
+			val = textBox1.Text;
+			if (val.Length < 1)
+				val = "0";
+			SubVar("ResetAddress", val);
+			val = textBox2.Text;
+			if (val.Length < 1)
+				val = "0";
+			SubVar("MTVEC", val);
 			System.IO.File.WriteAllLines("../../../../product/Petajon.sv", lines);
 			Cursor.Current = Cursors.Default;
 		}
@@ -263,13 +325,6 @@ j1:
 
 		private void checkBox11_CheckedChanged(object sender, EventArgs e)
 		{
-			if (checkBox11.Checked)
-			{
-				frmBank fm = new frmBank();
-				if (fm.ShowDialog() == DialogResult.OK) {
-
-				}
-			}
 		}
 
 		private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
@@ -304,24 +359,40 @@ j1:
 
 		}
 
-		private void button2_Click(object sender, EventArgs e)
+		private void button2_Click_1(object sender, EventArgs e)
 		{
 			frmMemmgnt fm = new frmMemmgnt();
-			if (fm.ShowDialog()==DialogResult.OK)
+			if (fm.ShowDialog() == DialogResult.OK)
 			{
 				Memmgnt = fm.cap;
+				Memmgntn = fm.capn;
 			}
 		}
 
-		private void checkBox19_CheckedChanged(object sender, EventArgs e)
+		private void checkBox23_CheckedChanged(object sender, EventArgs e)
 		{
-			if (checkBox19.Checked)
+			if (checkBox23.Checked)
 			{
 				frmSAM fm = new frmSAM();
 				if (fm.ShowDialog() == DialogResult.OK)
 				{
 				}
 			}
+
+		}
+
+		private void button2_Click(object sender, EventArgs e)
+		{
+			frmMemmgnt fm = new frmMemmgnt();
+			if (fm.ShowDialog()==DialogResult.OK)
+			{
+				Memmgnt = fm.cap;
+				Memmgntn = fm.capn;
+			}
+		}
+
+		private void checkBox19_CheckedChanged(object sender, EventArgs e)
+		{
 		}
 
 		private void radioButton11_CheckedChanged(object sender, EventArgs e)

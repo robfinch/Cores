@@ -52,8 +52,17 @@
 			this.checkBox15 = new System.Windows.Forms.CheckBox();
 			this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
 			this.database3DataSet = new FriscCoreGen.Database3DataSet();
+			this.label6 = new System.Windows.Forms.Label();
+			this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
+			this.numericUpDown2 = new System.Windows.Forms.NumericUpDown();
+			this.label7 = new System.Windows.Forms.Label();
+			this.label8 = new System.Windows.Forms.Label();
+			this.label9 = new System.Windows.Forms.Label();
+			this.textBox1 = new System.Windows.Forms.TextBox();
 			((System.ComponentModel.ISupportInitialize)(this.bindingSource1)).BeginInit();
 			((System.ComponentModel.ISupportInitialize)(this.database3DataSet)).BeginInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown2)).BeginInit();
 			this.SuspendLayout();
 			// 
 			// comboBox1
@@ -139,6 +148,7 @@
 			this.checkBox1.Tag = "BankSelector";
 			this.checkBox1.Text = "Bank Selector";
 			this.checkBox1.UseVisualStyleBackColor = true;
+			this.checkBox1.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
 			// 
 			// checkBox12
 			// 
@@ -196,6 +206,7 @@
 			this.comboBox3.Size = new System.Drawing.Size(86, 21);
 			this.comboBox3.TabIndex = 47;
 			this.comboBox3.Tag = "PagesPerAddressSpace";
+			this.comboBox3.SelectedIndexChanged += new System.EventHandler(this.comboBox3_SelectedIndexChanged);
 			// 
 			// label4
 			// 
@@ -311,11 +322,104 @@
 			this.database3DataSet.DataSetName = "Database3DataSet";
 			this.database3DataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
 			// 
+			// label6
+			// 
+			this.label6.AutoSize = true;
+			this.label6.Location = new System.Drawing.Point(236, 163);
+			this.label6.Name = "label6";
+			this.label6.Size = new System.Drawing.Size(97, 13);
+			this.label6.TabIndex = 57;
+			this.label6.Text = "Address Bus Width";
+			// 
+			// numericUpDown1
+			// 
+			this.numericUpDown1.Location = new System.Drawing.Point(339, 161);
+			this.numericUpDown1.Maximum = new decimal(new int[] {
+            64,
+            0,
+            0,
+            0});
+			this.numericUpDown1.Minimum = new decimal(new int[] {
+            4,
+            0,
+            0,
+            0});
+			this.numericUpDown1.Name = "numericUpDown1";
+			this.numericUpDown1.Size = new System.Drawing.Size(51, 20);
+			this.numericUpDown1.TabIndex = 58;
+			this.numericUpDown1.Tag = "ABWID";
+			this.numericUpDown1.Value = new decimal(new int[] {
+            32,
+            0,
+            0,
+            0});
+			// 
+			// numericUpDown2
+			// 
+			this.numericUpDown2.ImeMode = System.Windows.Forms.ImeMode.NoControl;
+			this.numericUpDown2.Location = new System.Drawing.Point(339, 187);
+			this.numericUpDown2.Maximum = new decimal(new int[] {
+            513,
+            0,
+            0,
+            0});
+			this.numericUpDown2.Name = "numericUpDown2";
+			this.numericUpDown2.Size = new System.Drawing.Size(51, 20);
+			this.numericUpDown2.TabIndex = 59;
+			this.numericUpDown2.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+			this.numericUpDown2.ValueChanged += new System.EventHandler(this.numericUpDown2_ValueChanged);
+			// 
+			// label7
+			// 
+			this.label7.AutoSize = true;
+			this.label7.Location = new System.Drawing.Point(396, 189);
+			this.label7.Name = "label7";
+			this.label7.Size = new System.Drawing.Size(20, 13);
+			this.label7.TabIndex = 60;
+			this.label7.Text = "kB";
+			// 
+			// label8
+			// 
+			this.label8.AutoSize = true;
+			this.label8.Location = new System.Drawing.Point(236, 189);
+			this.label8.Name = "label8";
+			this.label8.Size = new System.Drawing.Size(67, 13);
+			this.label8.TabIndex = 61;
+			this.label8.Text = "Memory Size";
+			// 
+			// label9
+			// 
+			this.label9.AutoSize = true;
+			this.label9.Location = new System.Drawing.Point(236, 219);
+			this.label9.Name = "label9";
+			this.label9.Size = new System.Drawing.Size(55, 13);
+			this.label9.TabIndex = 62;
+			this.label9.Text = "Page Size";
+			// 
+			// textBox1
+			// 
+			this.textBox1.Enabled = false;
+			this.textBox1.Location = new System.Drawing.Point(309, 216);
+			this.textBox1.Name = "textBox1";
+			this.textBox1.Size = new System.Drawing.Size(81, 20);
+			this.textBox1.TabIndex = 63;
+			// 
 			// frmMemmgnt
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(472, 320);
+			this.Controls.Add(this.textBox1);
+			this.Controls.Add(this.label9);
+			this.Controls.Add(this.label8);
+			this.Controls.Add(this.label7);
+			this.Controls.Add(this.numericUpDown2);
+			this.Controls.Add(this.numericUpDown1);
+			this.Controls.Add(this.label6);
 			this.Controls.Add(this.checkBox15);
 			this.Controls.Add(this.checkBox14);
 			this.Controls.Add(this.checkBox2);
@@ -341,6 +445,8 @@
 			this.Text = "Memory Management Features";
 			((System.ComponentModel.ISupportInitialize)(this.bindingSource1)).EndInit();
 			((System.ComponentModel.ISupportInitialize)(this.database3DataSet)).EndInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown2)).EndInit();
 			this.ResumeLayout(false);
 			this.PerformLayout();
 
@@ -371,5 +477,12 @@
 		private System.Windows.Forms.CheckBox checkBox15;
 		private System.Windows.Forms.BindingSource bindingSource1;
 		private Database3DataSet database3DataSet;
+		private System.Windows.Forms.Label label6;
+		private System.Windows.Forms.NumericUpDown numericUpDown1;
+		private System.Windows.Forms.NumericUpDown numericUpDown2;
+		private System.Windows.Forms.Label label7;
+		private System.Windows.Forms.Label label8;
+		private System.Windows.Forms.Label label9;
+		private System.Windows.Forms.TextBox textBox1;
 	}
 }

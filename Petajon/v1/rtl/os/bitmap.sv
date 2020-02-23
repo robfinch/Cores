@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	PAM.sv
+//	bitmap.sv
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -22,20 +22,20 @@
 //                                                                          
 // ============================================================================
 
-module PAM(rst, clk, alloc_i, free_i, freeall_i, pageno_i, pageno_o, done);
+module bitmap(rst, clk, set_i, clear_i, clearall_i, bitno_i, bitno_o, done);
 input rst;
 input clk;
-input alloc_i;
-input free_i;
-input freeall_i;
-input [13:0] pageno_i;
-output reg [13:0] pageno_o;
+input set_i;
+input clear_i;
+input clearall_i;
+input [13:0] bitno_i;
+output reg [13:0] bitno_o;
 output reg done;
 
 integer n;
 reg [63:0] pam [0:255];
 reg [3:0] state;
-reg [6:0] wordno;
+reg [7:0] wordno;
 reg [5:0] bitno;
 reg [63:0] map;
 
@@ -54,36 +54,36 @@ parameter ALLOC0 = 4'd10;
 always @(posedge clk)
 if (rst) begin
 	done <= 1'b0;
-	wordno <= 7'd0;
+	wordno <= 8'd0;
 	state <= RESET;
 end
 else begin
 case (state)
 IDLE:
 	begin
-		if (freeall_i) begin
-			wordno <= 7'd0;
+		if (clearall_i) begin
+			wordno <= 8'd0;
 			done <= 1'b0;
 			goto (RESET);
 		end
-		else if (free_i) begin
-			wordno <= pageno_i[13:6];
-			bitno <= pageno_i[5:0];
+		else if (clear_i) begin
+			wordno <= bitno_i[13:6];
+			bitno <= bitno_i[5:0];
 			done <= 1'b0;
 			goto (FREE1);
 		end
-		else if (alloc_i) begin
-			wordno <= pageno_i[12:6];
-			bitno <= pageno_i[5:0];
+		else if (set_i) begin
+			wordno <= bitno_i[13:6];
+			bitno <= bitno_i[5:0];
 			done <= 1'b0;
-			goto (pageno_i==13'h0 ? ALLOC1 : ALLOC0);
+			goto (bitno_i==14'h0 ? ALLOC1 : ALLOC0);
 		end
 	end
 RESET:
 	begin
 		pam[wordno] <= 64'h0;
 		wordno <= wordno + 2'd1;
-		if (wordno==7'd127) begin
+		if (wordno==8'd255) begin
 			done <= 1'b1;
 			goto (IDLE);
 		end
@@ -104,7 +104,7 @@ ALLOC2:
 		goto (ALLOC3);
 		if (map==64'hFFFFFFFFFFFFFFFF) begin
 			wordno <= wordno + 2'd1;
-			if (wordno==7'd127)
+			if (wordno==8'd127)
 				goto (ALLOC5);
 			else
 				goto (ALLOC1);
@@ -121,13 +121,13 @@ ALLOC3:
 ALLOC4:
 	begin
 		pam[wordno] <= map;
-		pageno_o <= {wordno,bitno};
+		bitno_o <= {wordno,bitno};
 		done <= 1'b1;
 		goto (IDLE);
 	end
 ALLOC5:
 	begin
-		pageno_o <= 13'h000;
+		bitno_o <= 13'h000;
 		done <= 1'b1;
 		goto (IDLE);
 	end

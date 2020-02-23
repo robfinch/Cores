@@ -24,21 +24,23 @@
 ;  0x80    - irq control for irq #0
 ;  0x84    - irq control for irq #1
 ;            bits 0 to 7  = cause code to issue
+;						 bit 8 to 9   = CPU select
 ;            bits 13 to 15 = irq level to issue
 ;            bit 16 = irq enable
 ;            bit 17 = edge sensitivity
 
 PIC				equ		$FFDC0F00
-PIC_CH16	equ		$C0
-PIC_CH28	equ		$F0
-PIC_CH31	equ		$FC
+PIC_CH16	equ		$C0				; UART
+PIC_CH28	equ		$F0				; KBD
+PIC_CH31	equ		$FC				; VIA
 
 PicInit:
 	ldi		$t1,#PIC					; t1 = address of pic
-	ldi		$t0,#$0001E025		; level sensitive cause 37, interrupt enabled
+	ldi		$t0,#$0001E125		; level sensitive cause 37, interrupt enabled
 	stt		$t0,PIC_CH16[$t1]
-	ldi		$t0,#$0001E021		; level sensitive cause 33, interrupt enabled
+	pfi
+	ldi		$t0,#$0001E121		; level sensitive cause 33, interrupt enabled
 	stt		$t0,PIC_CH28[$t1]
-	ldi		$t0,#$0001E02F		; level sensitive cause 47, interrupt enabled
+	ldi		$t0,#$0001E32F		; level sensitive cause 47, interrupt enabled, both CPU's notified
 	stt		$t0,PIC_CH31[$t1]
 	ret

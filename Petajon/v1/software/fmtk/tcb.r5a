@@ -275,15 +275,15 @@ RemoveFromTimeoutList:
 
 AllocTCB:
 	ldi		$t1,#0
-	ldwu	$v1,PIDMAP
+	ldtu	$v1,PIDMAP
 .0001:
 	and		$t0,$v1,#1
 	beqz	$t0,.allocTid
 	srl		$v1,$v1,#1
-	or		$v1,$v1,#$8000
+	or		$v1,$v1,#$80000000
 	add		$t1,$t1,#1
-	and		$t1,$t1,#15
-	bne		$t1,$x0,.0001
+	and		$t1,$t1,#31
+	bnez	$t1,.0001
 ; here no tcbs available
 	ldi		$v0,#E_NoMoreTCBs
 	ret
@@ -297,7 +297,7 @@ AllocTCB:
 	sub		$t1,$t1,#1
 	bnez	$t1,.0002
 .0003:
-	stw		$v1,PIDMAP
+	stt		$v1,PIDMAP
 	mov		$v1,$v0
 	ldi		$v0,#E_Ok
 	ret
@@ -309,9 +309,9 @@ FreeTCB:
 	ldi		$t0,#1
 	sll		$t0,$t0,$a0
 	xor		$t0,$t0,#-1
-	lhu		$t1,PIDMAP
+	ldtu	$t1,PIDMAP
 	and		$t1,$t1,$t0
-	stw		$t1,PIDMAP
+	stt		$t1,PIDMAP
 	ret
 
 ;------------------------------------------------------------------------------
