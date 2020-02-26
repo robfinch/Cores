@@ -271,7 +271,7 @@ char *GetStrConst()
 		NextToken();
 		if (lastst == sconst || lastst==isconst || lastst==asconst) {
 			len = strlen(str) + MAX_STLP1 + 1;
-			nstr = (char *)malloc(len+1);
+			nstr = (char *)malloc(len*2+2);
 			if (nstr == nullptr) {
 				error(ERR_OUT_OF_MEMORY);
 				break;

@@ -131,12 +131,19 @@ static int getRegisterX()
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 14;
+            return (14);
         }
 				if (isdigit(inptr[1]) && inptr[1]!='0') {
 					reg = inptr[1] - '0';
-					if (isIdentChar(inptr[2])) {
-						return -1;
+					if (isdigit(inptr[2])) {
+						reg = reg * 10 + (inptr[2] - '0');
+						if (isIdentChar(inptr[3])) {
+							return (-1);
+						}
+						inptr++;
+					}
+					else if (isIdentChar(inptr[2])) {
+						return (-1);
 					}
 					reg += 3;
 					inptr += 2;
@@ -713,6 +720,7 @@ static void process_mul()
 }
 
 // ---------------------------------------------------------------------------
+// palloc $v0[,$t0]
 // ---------------------------------------------------------------------------
 
 static void process_palloc(int funct7)
@@ -722,8 +730,13 @@ static void process_palloc(int funct7)
 	Rs1 = Rt = getRegisterX();
 	if (funct7 == 5 || funct7 == 13)
 		Rt = 0;
-	else
+	else {
 		Rs1 = 0;
+		if (token == ',') {
+			NextToken();
+			Rs1 = getRegisterX();
+		}
+	}
 	emit_insn(FN7(funct7) | FN3(0) | RS1(Rs1) | RD(Rt) | 13, 1);
 	prevToken();
 	ScanToEOL();
@@ -1625,6 +1638,8 @@ static void process_getzl(int oc, int func3, int func7)
 		RD(Rd) |
 		oc, 1
 	);
+	prevToken();
+	ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -2097,6 +2112,8 @@ void Friscv_processMaster()
 				case tk_blt: process_bcc(4); break;
         case tk_bltu: process_bcc(6); break;
 				case tk_bltz: process_beqz(4); break;
+				case tk_bmc: process_pfree(5); break;
+				case tk_bms: process_palloc(4); break;
 				case tk_bne: process_bcc(1); break;
 				case tk_bnez: process_beqz(1); break;
 				case tk_bra: process_bra(0); break;
@@ -2192,13 +2209,14 @@ void Friscv_processMaster()
         case tk_lh:  process_load(0x03,1); break;
         case tk_lhu: process_load(0x03,5); break;
 				case tk_ldo: process_load(0x03, 3); break;
+				case tk_ldt:  process_load(0x03, 2); break;
+				case tk_ldtu:  process_load(0x03, 6); break;
 				case tk_ldw:  process_load(0x03, 1); break;
 				case tk_ldwu: process_load(0x03, 5); break;
 				case tk_lea: process_lea(); break;
 					//        case tk_lui: process_lui(); break;
 				case tk_lr:  process_loadr(0x2f, 0x02, 0x02); break;
 				case tk_lw:  process_load(0x03,2); break;
-				case tk_ldt:  process_load(0x03, 2); break;
 				case tk_macro:	process_macro(); break;
 				case tk_mfspr: process_mfspr(0x49); break;
 				//case tk_mfu: process_umove(13, 2); break;
@@ -2223,10 +2241,11 @@ void Friscv_processMaster()
         case tk_plus: expand_flag = 1; break;
 				case tk_prviof: process_getzl(13, 0, 19); break;
 				case tk_public: process_public(); break;
+				case tk_qryrdy: process_getto(13, 0, 15); break;
 				case tk_rem: process_rrop(0x33, 0x06, 0x01); break;
 				case tk_remu: process_rrop(0x33, 0x07, 0x01); break;
 				case tk_ret:	emit_insn(0x00008067, 1); break;
-				case tk_rmviof: process_pfree(17); break;
+				case tk_rmviof: process_getto(13, 0, 17); break;
 				case tk_rmvrdy: process_palloc(13); break;
         case tk_rodata:
             if (first_rodata) {

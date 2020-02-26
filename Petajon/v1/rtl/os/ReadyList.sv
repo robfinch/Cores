@@ -21,27 +21,27 @@
 //                                                                          
 // ============================================================================
 //
-module ReadyList(rst_i, clk_i, insert_i, remove_i, get_i, tid_i, priority_i, tid_o, done_o);
+module ReadyList(rst_i, clk_i, insert_i, remove_i, get_i, qry_i, tid_i, priority_i, tid_o, done_o);
 input rst_i;
 input clk_i;
 input insert_i;
 input remove_i;
 input get_i;
+input qry_i;
 input [5:0] tid_i;
 input [2:0] priority_i;
-output reg [6:0] tid_o;
+output reg [15:0] tid_o;
 output reg done_o;
 
-reg [63:0] in_readylist;	// bitmap of tasks in ready list
-reg [5:0] tid [0:63];
-reg [5:0] nxt [0:63];
-reg [5:0] prv [0:63];
+reg [31:0] in_readylist;	// bitmap of tasks in ready list
+reg [6:0] nxt [0:31];
+reg [6:0] prv [0:31];
 reg [5:0] head [0:4];
-reg [6:0] headv;
+reg [5:0] headv;
 reg [5:0] ndx;
 reg [5:0] hd;
-reg [5:0] pv;
-reg [5:0] nx;
+reg [6:0] pv;
+reg [6:0] nx;
 
 reg [3:0] state;
 parameter IDLE = 4'd0;
@@ -53,6 +53,8 @@ parameter INSERT3 = 4'd5;
 parameter REMOVE1 = 4'd6;
 parameter REMOVE2 = 4'd7;
 parameter REMOVE3 = 4'd8;
+parameter QRY1 = 4'd9;
+parameter REMOVE4 = 4'd10;
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -65,7 +67,7 @@ IDLE:
 	begin
 		if (get_i) begin
 			if (!headv[priority_i])
-				tid_o <= 7'h7F;
+				tid_o <= 16'hFFFF;
 			else begin
 				goto (GET1);
 				done_o <= 1'b0;
@@ -95,11 +97,16 @@ IDLE:
 				goto (REMOVE1);
 			end
 		end
+		else if (qry_i) begin
+			ndx <= tid_i;
+			done_o <= 1'b0;
+			goto (QRY1);
+		end
 	end
 GET1:
 	begin
 		head[priority_i] <= nxt[ndx];
-		tid_o <= ndx;
+		tid_o <= {10'd0,ndx};
 		done_o <= 1'b1;
 		goto (IDLE);
 	end
@@ -149,8 +156,22 @@ REMOVE3:
 		nxt[ndx] <= nx;			// prev->next = tid->next
 		if (tid_i==head[priority_i])
 			head[priority_i] <= nx;
-		done_o <= 1'b1;
 		in_readylist[tid_i] <= 1'b0;
+		ndx <= tid_i;
+		goto (REMOVE4);
+	end
+REMOVE4:
+	begin
+		nxt[ndx] <= 7'h7F;
+		prv[ndx] <= 7'h7F;
+		done_o <= 1'b1;
+		goto (IDLE);
+	end
+QRY1:
+	begin
+		tid_o[7:0] <= {nxt[ndx][6],nxt[ndx][6],nxt[ndx]};
+		tid_o[15:8] <= {prv[ndx][6],prv[ndx][6],prv[ndx]};
+		done_o <= 1'b1;
 		goto (IDLE);
 	end
 endcase

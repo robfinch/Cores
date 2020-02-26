@@ -1011,6 +1011,31 @@ int NextToken()
 							tbndx++;
 							return token = tk_bltz;
 						}
+						if ((inptr[1] == 'm' || inptr[1] == 'M') &&
+							(inptr[2] == 'c' || inptr[2] == 'C') &&
+							(inptr[3] == 'a' || inptr[2] == 'A') &&
+							isspace(inptr[4])) {
+							inptr += 4;
+							tokenBuffer[tbndx] = tk_bmca;
+							tbndx++;
+							return token = tk_bmca;
+						}
+						if ((inptr[1] == 'm' || inptr[1] == 'M') &&
+							(inptr[2] == 'c' || inptr[2] == 'C') &&
+							isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_bmc;
+							tbndx++;
+							return token = tk_bmc;
+						}
+						if ((inptr[1] == 'm' || inptr[1] == 'M') &&
+							(inptr[2] == 's' || inptr[2] == 'S') &&
+							isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_bms;
+							tbndx++;
+							return token = tk_bms;
+						}
 					}
 					if ((inptr[1]=='e' || inptr[1]=='E') &&
                 (inptr[2]=='q' || inptr[2]=='Q') &&
@@ -3593,6 +3618,23 @@ int NextToken()
 							}
 						}
 						break;
+
+				// qryrdy
+				case 'q': case 'Q':
+					if (gCpu == RISCV) {
+						if ((inptr[1] == 'r' || inptr[1] == 'R') &&
+							(inptr[2] == 'y' || inptr[2] == 'Y') &&
+							(inptr[3] == 'r' || inptr[3] == 'R') &&
+							(inptr[4] == 'd' || inptr[4] == 'D') &&
+							(inptr[5] == 'y' || inptr[5] == 'Y') &&
+							isspace(inptr[6])) {
+							inptr += 6;
+							tokenBuffer[tbndx] = tk_qryrdy;
+							tbndx++;
+							return (token = tk_qryrdy);
+						}
+					}
+					break;
 
         // ret rem rex rol roli ror rori rtd rte rtf rts rti rtl rodata
         case 'r': case 'R':

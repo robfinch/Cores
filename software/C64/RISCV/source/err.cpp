@@ -114,7 +114,7 @@ char *errtext(int errnum)
 	if (errnum < 1000)
 		return errtextstr[errnum];
 	else
-		return (errtext1000[errnum]);
+		return (errtext1000[errnum-1000]);
 	return "";
 }
 

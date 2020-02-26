@@ -22,19 +22,21 @@
 // ============================================================================
 //
 module Timeouter(rst_i, clk_i, dec_i, set_i, qry_i, tid_i, timeout_i, timeout_o, zeros_o, done_o);
+parameter MAX_TID = 63;
+parameter LOG_MAX_TID = 5;
 input rst_i;
 input clk_i;
 input dec_i;
 input set_i;
 input qry_i;
-input [5:0] tid_i;
+input [LOG_MAX_TID:0] tid_i;
 input [63:0] timeout_i;
 output reg [63:0] timeout_o;
 output reg [63:0] zeros_o;
 output reg done_o;
 
-reg [47:0] tmo [0:63];
-reg [5:0] ndx;
+reg [47:0] tmo [0:MAX_TID];
+reg [LOG_MAX_TID:0] ndx;
 reg [2:0] state;
 parameter IDLE = 3'd0;
 parameter DEC1 = 3'd1;
@@ -43,7 +45,7 @@ parameter QRY1 = 3'd3;
 
 always @(posedge clk_i)
 if (rst_i) begin
-	zeros_o <= 64'hFFFFFFFFFFFFFFFF;
+	zeros_o <= {MAX_TID+1{1'b1}};
 	done_o <= 1'b1;
 	goto (IDLE);
 end
@@ -52,7 +54,7 @@ case(state)
 IDLE:
 	begin
 		if (dec_i) begin
-			ndx <= 6'd0;
+			ndx <= 1'd0;
 			goto (DEC1);
 		end
 		else if (set_i) begin
@@ -75,7 +77,7 @@ DEC1:
 		end
 		else
 			zeros_o[ndx] <= 1'b1;
-		if (ndx==6'd63) begin
+		if (&ndx) begin
 			goto (IDLE);
 		end
 	end

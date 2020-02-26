@@ -1229,7 +1229,6 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		}
 		else {
 			GenerateMonadic(op_call,0,MakeDirect(node->p[0]));
-			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
@@ -1346,11 +1345,11 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 				regs[regV0].modified = true;
 			}
 			else
-				ap = makereg(0);
+				ap = makereg(regZero);
 			ap->isPtr = sym->sym->tp->GetBtp()->type == bt_pointer;
 		}
 		else
-			return(makereg(0));
+			return(makereg(regZero));
 	}
 	else {
 		if (!(flags & am_novalue)) {
@@ -1359,7 +1358,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			regs[regV0].modified = true;
 		}
 		else
-			return(makereg(0));
+			return(makereg(regZero));
 	}
 	return (ap);
 	/*

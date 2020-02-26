@@ -1845,13 +1845,18 @@ void Statement::GenerateTry()
 
 	a = MakeCodeLabel(throwlab);
 	a->mode = am_imm;
-	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
+	//GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
+	ap2 = GetTempRegister();
+	GenerateDiadic(op_ldi, 0, ap2, a);
+	GenerateTriadic(op_csrrw, 0, makereg(regZero), MakeImmediate(CSR_XRA), ap2);
+	ReleaseTempRegister(ap2);
+
 	s1->Generate();
 	GenerateMonadic(op_bra, 0, MakeCodeLabel(lab1));	// branch around catch statements
 	GenerateLabel(throwlab);
 	// Generate catch statements
-	// r1 holds the value to be assigned to the catch variable
-	// r2 holds the type number
+	// $v0 holds the value to be assigned to the catch variable
+	// $v1 holds the type number
 	for (stmt = s2; stmt; stmt = stmt->next) {
 		stmt->GenMixedSource();
 		throwlab = oldthrow;
@@ -1859,54 +1864,60 @@ void Statement::GenerateTry()
 			;
 		else {
 			curlab = nextlabel++;
-			GenerateTriadic(op_bnei, 0, makereg(2), MakeImmediate(stmt->num), MakeCodeLabel(curlab));
+			ap2 = GetTempRegister();
+			GenerateTriadic(op_xor, 0, ap2, makereg(regV1), MakeImmediate(stmt->num));
+			ReleaseTempRegister(ap2);
+			GenerateDiadic(op_bnez, 0, ap2, MakeCodeLabel(curlab));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
 		ap2 = node->Generate(am_reg | am_mem, node->GetNaturalSize());
 		if (ap2->mode == am_reg)
-			GenerateDiadic(op_mov, 0, ap2, makereg(1));
+			GenerateDiadic(op_mov, 0, ap2, makereg(regV0));
 		else
-			GenStore(makereg(1), ap2, GetNaturalSize(node));
+			GenStore(makereg(regV0), ap2, GetNaturalSize(node));
 		ReleaseTempRegister(ap2);
 		//            GenStore(makereg(1),MakeIndexed(sym->value.i,regFP),sym->tp->size);
-		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(24));
+		//GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(24));
 		stmt->s1->Generate();
+		GenerateMonadic(op_bra, 0, MakeCodeLabel(lab1));
 		GenerateLabel(curlab);
 	}
 	GenerateLabel(lab1);
+	// Restore previous exception handler
 	throwlab = oldthrow;
 	a = MakeCodeLabel(throwlab);
 	a->mode = am_imm;
-	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
+	ap2 = GetTempRegister();
+	GenerateDiadic(op_ldi, 0, ap2, a);
+	GenerateTriadic(op_csrrw, 0, makereg(regZero), MakeImmediate(CSR_XRA), ap2);
+	ReleaseTempRegister(ap2);
 }
 
 void Statement::GenerateThrow()
 {
 	Operand *ap;
+	int lab1 = nextlabel++;
+	int lab2 = nextlabel++;
 
 	if (exp != NULL)
 	{
 		initstack();
 		ap = exp->Generate(am_all, sizeOfWord);
 		if (ap->mode == am_imm)
-			GenerateDiadic(op_ldi, 0, makereg(1), ap);
+			GenerateDiadic(op_ldi, 0, makereg(regV0), ap);
 		else if (ap->mode != am_reg)
-			GenerateDiadic(op_ldd, 0, makereg(1), ap);
+			GenerateDiadic(op_ldo, 0, makereg(regV0), ap);
 		else if (ap->preg != 1)
-			GenerateDiadic(op_mov, 0, makereg(1), ap);
+			GenerateDiadic(op_mov, 0, makereg(regV0), ap);
 		ReleaseTempRegister(ap);
 		// If a system exception is desired create an appropriate BRK instruction.
 		if (num == bt_exception) {
-			GenerateDiadic(op_brk, 0, makereg(1), MakeImmediate(1));
+			GenerateDiadic(op_brk, 0, makereg(regV0), MakeImmediate(1));
 			return;
 		}
-		GenerateDiadic(op_ldi, 0, makereg(2), MakeImmediate(num));
-		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(16));
+		GenerateDiadic(op_ldi, 0, makereg(regV1), MakeImmediate(num));
 	}
-	// If there is no catch handler, get lr for return.
-	if (throwlab == retlab)
-		GenerateDiadic(op_ldd, 0, makereg(regLR), MakeIndexed(16,regFP));
 	GenerateMonadic(op_bra, 0, MakeCodeLabel(throwlab));
 }
 

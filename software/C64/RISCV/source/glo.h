@@ -210,6 +210,7 @@ extern std::string *declid;
 extern Compiler compiler;
 extern int64_t genst_cumulative;
 
+extern int catchlab;
 extern int throwlab;
 extern int breaklab;
 extern int contlab;

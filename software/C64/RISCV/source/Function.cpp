@@ -498,25 +498,23 @@ void Function::UnlinkStack()
 
 bool Function::GenDefaultCatch()
 {
-/*
-	GenerateLabel(throwlab);
-	if (IsLeaf) {
-		if (DoesThrow) {
-			GenerateDiadic(op_ldd, 0, makereg(regLR), MakeIndexed(2 * sizeOfWord, regFP));		// load throw return address from stack into LR
-			GenerateDiadic(op_std, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
-																									//GenerateDiadic(op_spt,0,makereg(0),MakeIndexed(3 * sizeOfWord, regFP));
-																									//			GenerateDiadic(op_bra,0,MakeDataLabel(retlab),NULL);				// goto regular return cleanup code
+	if (exceptions) {
+		if (IsLeaf) {
+			if (DoesThrow) {
+				GenerateLabel(throwlab);
+				GenerateDiadic(op_mov, 0, makereg(regLR), makereg(regXLR));
+				GenerateMonadic(op_bra, 0, MakeCodeLabel(retlab));	// goto regular return cleanup code
+				return (true);
+			}
+		}
+		else {
+			GenerateLabel(throwlab);
+			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(2 * sizeOfWord, regFP));	// load throw return address from stack into LR
+			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regFP));	// and store it back
+			GenerateMonadic(op_bra, 0, MakeCodeLabel(retlab));	// goto regular return cleanup code
 			return (true);
 		}
 	}
-	else {
-		GenerateDiadic(op_ldd, 0, makereg(regLR), MakeIndexed(2 * sizeOfWord, regFP));		// load throw return address from stack into LR
-		GenerateDiadic(op_std, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
-																								//GenerateDiadic(op_spt, 0, makereg(0), MakeIndexed(3 * sizeOfWord, regFP));
-																								//		GenerateDiadic(op_bra,0,MakeDataLabel(retlab),NULL);				// goto regular return cleanup code
-		return (true);
-	}
-*/
 	return (false);
 }
 
@@ -524,7 +522,7 @@ bool Function::GenDefaultCatch()
 // For a leaf routine don't bother to store the link register.
 void Function::SetupReturnBlock()
 {
-	Operand *ap;
+	Operand *ap, *ap2;
 	int n;
 
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
@@ -538,18 +536,18 @@ void Function::SetupReturnBlock()
 	if (exceptions) {
 		if (DoesThrow) {
 			n = 1;
-			cg.GenStore(makereg(regXLR), MakeIndexed(2 * sizeOfWord, regSP), sizeOfWord);
+			ap = GetTempRegister();
+			GenerateTriadic(op_csrrw, 0, ap, MakeImmediate(CSR_XRA), makereg(regZero));
+			cg.GenStore(ap, MakeIndexed(2 * sizeOfWord, regSP), sizeOfWord);
+			ReleaseTempRegister(ap);
+			//cg.GenStore(makereg(regXLR), MakeIndexed(2 * sizeOfWord, regSP), sizeOfWord);
+			//cg.GenStore(makereg(regZero), MakeIndexed(2 * sizeOfWord, regSP), sizeOfWord);
 			//GenerateDiadic(op_std, 0, makereg(regXLR), MakeIndexed(2 * sizeOfWord, regSP));
 		}
 	}
 	if (!IsLeaf) {
 		n |= 2;
-		cg.GenStore(makereg(regLR), MakeIndexed(3 * sizeOfWord, regSP), sizeOfWord);
-		//GenerateDiadic(op_std, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regSP));
-	}
-	if (exceptions) {
-		if (DoesThrow)
-			GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(3 * sizeOfWord));
+		GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regSP));
 	}
 	/*
 	switch (n) {
@@ -562,8 +560,12 @@ void Function::SetupReturnBlock()
 	retlab = nextlabel++;
 	ap = MakeDataLabel(retlab);
 	ap->mode = am_imm;
-	if (exceptions && DoesThrow)
-		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
+	if (exceptions && DoesThrow) {
+		ap2 = GetTempRegister();
+		GenerateDiadic(op_ldi, 0, ap2, MakeCodeLabel(throwlab));
+		GenerateTriadic(op_csrrw, 0, makereg(regZero), MakeImmediate(CSR_XRA), ap2);
+		ReleaseTempRegister(ap2);
+	}
 	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(stkspace));
 	spAdjust = pl.tail;
@@ -580,6 +582,7 @@ void Function::GenReturn(Statement *stmt)
 	int toAdd;
 	SYM *p;
 	bool isFloat;
+	int lab1 = nextlabel++;
 
 	// Generate the return expression and force the result into r1.
 	if (stmt != NULL && stmt->exp != NULL)
@@ -662,7 +665,6 @@ void Function::GenReturn(Statement *stmt)
 		return;
 	}
 	retGenerated = true;
-	GenerateLabel(throwlab);
 	GenerateLabel(retlab);
 	rcode = pl.tail;
 
@@ -758,6 +760,11 @@ void Function::GenReturn(Statement *stmt)
 	GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
 	if (!IsInline)
 		GenerateZeradic(op_ret);
+	else if (exceptions)
+		GenerateMonadic(op_bra, 0, MakeCodeLabel(lab1));
+	GenDefaultCatch();
+	if (IsInline && exceptions)
+		GenerateLabel(lab1);
 }
 
 

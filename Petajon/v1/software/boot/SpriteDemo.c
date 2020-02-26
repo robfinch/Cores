@@ -6,6 +6,8 @@
 // across function calls. This makes the code smaller and faster.
 // This is not usually safe to do unless the function was coded
 // entirely in assembler where it is known no temporaries are in use.
+extern int *Alloc(register int mid, register int amount);
+extern int VirtToPhys(register int mid, register int *vadr);
 extern int GetRand(register int stream) __attribute__(__no_temps);
 extern int randStream;
 
@@ -23,13 +25,13 @@ void EnableSprite(int spriteno)
 	unsigned int *pSPRCTRL = SPRCTRL;
 	pSPRCTRL[0x180] = pSPRCTRL[0x180] | (1 << spriteno);
 }
-/*
+
 void EnableSprites(int sprites)
 {
 	unsigned int *pSPRCTRL = SPRCTRL;
-	pSPRCTRL[0x140] = pSPRCTRL[0x140] | sprites;
+	pSPRCTRL[0x180] = pSPRCTRL[0x180] | sprites;
 }
-*/
+
 void RandomizeSpriteColors()
 {
 	int colorno;
@@ -72,7 +74,7 @@ void SpriteDemo()
 	int x,y;
 
 	unsigned int *pSprite = &SPRCTRL[0x100];
-	unsigned int *pImages = (unsigned int *)0x1E000000;
+	unsigned int *pImages = (unsigned int *)Alloc(0,65536);//0x1E000000;
 	int n;
 	
 	randStream = 0;
@@ -86,7 +88,7 @@ void SpriteDemo()
 //	LEDS(6);
 	x = 256; y = 64;
 	for (spriteno = 0; spriteno < 64; spriteno++) {
-		pSprite[spriteno*2] = (int)&pImages[spriteno * 128];
+		pSprite[spriteno*2] = VirtToPhys(0,&pImages[spriteno * 128]);
 //		pSprite[spriteno*2+1] = 32*60;
 		xpos[spriteno] = x;
 		ypos[spriteno] = y;

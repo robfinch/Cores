@@ -258,6 +258,9 @@ parameter AXI_MEMORY_WRITE2 = 6'd36;
 parameter AXI_MEMORY_WRITE3 = 6'd37;
 parameter AXI_MEMORY_WRITE4 = 6'd38;
 parameter MEMORY1c = 6'd39;
+parameter REGFETCH3 = 6'd40;
+parameter REGFETCH4 = 6'd41;
+parameter REGFETCH5 = 6'd42;
 
 // Non visible registers
 reg [31:0] ir;			// instruction register
@@ -363,8 +366,8 @@ bitmap upam1 (
 );
 {-PGMAP}
 reg decto, setto, getto;
-wire [31:0] to_out;
-wire [15:0] zl_out;
+wire [63:0] to_out;
+wire [63:0] zl_out;
 wire to_done;
 Timeouter utmo1
 (
@@ -373,16 +376,17 @@ Timeouter utmo1
 	.dec_i(decto),
 	.set_i(setto),
 	.qry_i(getto),
-	.tid_i(ia[3:0]),
+	.tid_i(ia[5:0]),
 	.timeout_i(ib),
 	.timeout_o(to_out),
 	.zeros_o(zl_out),
 	.done_o(to_done)
 );
-reg insrdy, rmvrdy, getrdy;
+reg insrdy, rmvrdy, getrdy, qryrdy;
 reg [6:0] iof_cmd;
 wire rdy_done, iof_done;
-wire [6:0] rdy_out, iof_out;
+wire [15:0] rdy_out;
+wire [6:0] iof_out;
 ReadyList url1
 (
 	.rst_i(rst_i),
@@ -390,6 +394,7 @@ ReadyList url1
 	.insert_i(insrdy),
 	.remove_i(rmvrdy),
 	.get_i(getrdy),
+	.qry_i(qryrdy),
 	.tid_i(ia[5:0]),
 	.priority_i(ib[2:0]),
 	.tid_o(rdy_out),
@@ -459,6 +464,7 @@ reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 reg [WID-1:0] msema;
 reg [AMSB:0] htvec = 32'hFFFC0000;
+reg [AMSB:0] xra;
 
 function [7:0] fnSelect;
 input [6:0] op6;
@@ -859,6 +865,7 @@ if (rst_i) begin
 	insrdy <= 1'b0;
 	rmvrdy <= 1'b0;
 	getrdy <= 1'b0;
+	qryrdy <= 1'b0;
 	edepth <= 2'd1;
 	iof_cmd <= 7'd0;
 	msema <= 64'd0;
@@ -1148,6 +1155,7 @@ DECODE:
 						7'd9:	wrirf <= 1'b1;
 						7'd10:	wrirf <= 1'b1;
 						7'd14:	wrirf <= 1'b1;
+						7'd15:	wrirf <= 1'b1;
 						7'd18:	wrirf <= 1'b1;
 						7'd19:	wrirf <= 1'b1;
 						default:	;
@@ -1226,6 +1234,15 @@ REGFETCH2:
 				fa <= irfoa;
 			default:	fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
 			endcase
+		7'd13:
+			case(funct3)
+			3'd0:
+				case(funct7)
+				7'd1:	state <= REGFETCH3;
+				default:	;
+				endcase
+			default:	;
+			endcase
 		7'd115:
 			case(funct3)
 			3'd5,3'd6,3'd7:	ia <= {59'd0,ir[19:15]};
@@ -1239,6 +1256,9 @@ REGFETCH2:
 {-FMA}
 {-F}
 	end
+REGFETCH3:	state <= REGFETCH4;
+REGFETCH4:	state <= REGFETCH5;
+REGFETCH5:	state <= EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute stage
@@ -1254,9 +1274,9 @@ EXECUTE:
 				case(funct7)
 				7'd0:	begin res <= sregfile[ib[3:0]]; illegal_insn <= 1'b0; end
 {+PGMAP}
-				7'd1:	begin res <= pagemapoa; if (|Rs1) wrpagemap <= 1'b1; illegal_insn <= 1'b0; end
+				7'd1:	begin res <= {51'd0,pagemapoa}; if (|Rs1) wrpagemap <= 1'b1; illegal_insn <= 1'b0; end
 {-PGMAP}
-				7'd2:	begin res <= ia; illegal_insn <= 1'b0; end
+				//7'd2:	begin res <= ia; illegal_insn <= 1'b0; end
 				7'd4:	
 					begin
 						bm_set <= 1'b1;
@@ -1313,6 +1333,12 @@ EXECUTE:
 				7'd14:
 					begin
 						getrdy <= 1'b1;
+						state <= TMO;
+						illegal_insn <= 1'b0;
+					end
+				7'd15:
+					begin
+						qryrdy <= 1'b1;
 						state <= TMO;
 						illegal_insn <= 1'b0;
 					end
@@ -1721,6 +1747,7 @@ EXECUTE:
 						12'h790:	begin res <= regset; illegal_insn <= 1'b0; end
 						12'h791:	begin res <= mepc[edepth-2'd1]; illegal_insn <= 1'b0; end
 						12'h792:	begin res <= msema; illegal_insn <= 1'b0; end
+						12'h793:	begin res <= xra; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[63: 0]; illegal_insn <= 1'b0; end
 						12'hC02:	begin res <= instret[63: 0]; illegal_insn <= 1'b0; end
 						12'hC01:	begin res <= wc_times; illegal_insn <= 1'b0; end
@@ -1728,7 +1755,7 @@ EXECUTE:
 						12'hE01:	if (ol > 2'b01) begin res <= wc_times; illegal_insn <= 1'b0; end
 						12'hF00:	if (ol > 2'b10) begin res <= mcpuid; illegal_insn <= 1'b0; end	// cpu description
 						12'hF01:	if (ol > 2'b10) begin res <= mimpid; illegal_insn <= 1'b0; end // implmentation id
-						12'hF10:	if (ol > 2'b10) begin res <= {hartid_i[WID-1:5],ol > 2'b00 ? regset[9:5] : regset[14:10]}; illegal_insn <= 1'b0; end
+						12'hF10:	begin res <= {hartid_i[WID-1:5],ol > 2'b00 ? regset[9:5] : regset[14:10]}; illegal_insn <= 1'b0; end
 						default:	;
 						endcase
 					default:	;
@@ -1755,13 +1782,15 @@ TMO:
 		insrdy <= 1'b0;
 		rmvrdy <= 1'b0;
 		getrdy <= 1'b0;
+		qryrdy <= 1'b0;
 		iof_cmd <= 7'd0;
 		if (to_done&rdy_done&iof_done) begin
 			illegal_insn <= 1'b0;
 			case(funct7)
 			7'd9:		res <= to_out;
 			7'd10:	res <= zl_out;
-			7'd14:	res <= {{57{rdy_out[6]}},rdy_out};
+			7'd14:	res <= {{48{rdy_out[15]}},rdy_out};
+			7'd15:	res <= {{48{rdy_out[15]}},rdy_out};
 			7'd18:	res <= {{57{iof_out[6]}},iof_out};
 			7'd19:	res <= {{57{iof_out[6]}},iof_out};
 			default:	res <= 64'd0;
@@ -2412,7 +2441,7 @@ WRITEBACK:
 				case(funct7)
 				7'd0:		sregfile[ib[3:0]] <= ia;
 {+PGMAP}				
-				7'd1:		wrpagemap <= 1'b1;
+				7'd1:		begin res <= {51'd0,pagemapoa}; wrpagemap <= 1'b1; end
 {-PGMAP}
 				default:	;
 				endcase
@@ -2472,6 +2501,7 @@ WRITEBACK:
 									end
 				12'h791:	begin if (ol > 2'b10) mepc[edepth-2'd1] <= ia; end
 				12'h792:	begin if (ol > 2'b10) msema <= ia; end
+				12'h793:	begin if (ol > 2'b10) xra <= ia; end
 				default:	;
 				endcase
 {+F}

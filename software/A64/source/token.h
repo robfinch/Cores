@@ -88,7 +88,10 @@ enum {
      tk_bltu,
 	 tk_bltui,
 	 tk_bltz,
+	 tk_bmc,
+	 tk_bmca,
      tk_bmi,
+		 tk_bms,
 		 tk_bnand,
      tk_bne,
 	 tk_bnei,
@@ -378,6 +381,7 @@ enum {
 		 tk_ptrdif,
      tk_public,
      tk_push,
+			tk_qryrdy,
      tk_rconst,//320
 	 tk_redor,
 			 tk_reg,

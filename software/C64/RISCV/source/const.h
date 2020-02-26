@@ -400,5 +400,6 @@ enum e_hint {
 #define RC_ALL	7
 
 #define MAX_PARMS		20
+#define CSR_XRA		0x793
 
 #endif
