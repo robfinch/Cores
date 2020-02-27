@@ -1,0 +1,234 @@
+ETH					equ		$FFDC2000
+ETH_MODER		equ		0x00
+ETH_INT_SRC	equ		0x04
+ETH_INT_MASK	equ		0x08
+ETH_IPGT		equ		0x0C
+ETH_IPGR1		equ		0x10
+ETH_IPGR2		equ		0x14
+ETH_PACKETLEN	equ		0x18
+ETH_COLLCONF	equ		0x1C
+ETH_TX_BD_NUM	equ		0x20
+ETH_CNTRLMODER	equ		0x24
+ETH_MIIMODER	equ		0x28
+ETH_MIICOMMAND	equ	0x2C
+ETH_MIIADDRESS	equ	0x30
+ETH_MIITX_DATA	equ	0x34
+ETH_MIIRX_DATA	equ	0x38
+ETH_MIISTATUS		equ	0x3C
+ETH_MACADDR0		equ	0x40
+ETH_MACADDR1		equ	0x44
+ETH_HASH0			equ		0x48
+ETH_HASH1			equ		0x4C
+ETH_TXCTRL		equ		0x50
+
+EEPROM		equ		$FFDC0E10
+EEPROM_PRERlo		equ		0x00
+EEPROM_PRERhi		equ		0x01
+EEPROM_CTR			equ		0x02
+EEPROM_TXR			equ		0x03
+EEPROM_RXR			equ		0x03
+EEPROM_CR				equ		0x04
+EEPROM_SR				equ		0x04
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	code
+	align	8
+EepromFuncTbl:
+	dco		0							; no operation
+	dco		0							; setup
+	dco		0							; initialize
+	dco		0							; status
+	dco		0							; media check
+	dco		0							; build BPB
+	dco		0							; open
+	dco		0							; close
+	dco		0							; get char
+	dco		0							; SerialPeekChar
+	dco		0							; get char direct
+	dco		0							; peek char direct
+	dco		0							; input status
+	dco		0							; PutChar
+	dco		0							; reserved
+	dco		0							; set position
+	dco		0							; read block
+	dco		0							; write block
+	dco		0							; verify block
+	dco		0							; output status
+	dco		0							; flush input
+	dco		0							; flush output
+	dco		EepromIRQ			; IRQ routine
+	dco		0							; Is removable
+	dco		0							; ioctrl read
+	dco		0							; ioctrl write
+	dco		0							; output until busy
+	dco		0							; 27
+	dco		0
+	dco		0
+	dco		0
+	dco		0							; 31
+
+
+EthInit:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$t0,#ETH
+	ldi		$t1,#$0000A400	
+	stt		$t1,ETH_MODER[$t0]
+	ldi		$t1,#$FF								; enable all interrupts
+	stt		$t1,ETH_INT_MASK[$t0]
+	ldi		$t1,#$15								; recommended for full duplex
+	stt		$t1,ETH_IPGT[$t0]	
+	ldi		$t1,#20									; host clock divisor (to get 1 MHz)
+	stt		$t1,ETH_MIIMODER[$t0]	
+	call	SetMacAddress
+
+EthIRQ:
+	ldi		$t0,#ETH
+	ldtu	$t1,ETH_INT_SRC[$t0]		; find out what caused interrupt
+	stt		$t1,ETH_INT_SRC[$t0]		; clear interrupt
+
+	
+SetMacAddress:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$t2,EEPROM
+	ldi		$t1,#39									; divide host clock by 40 (500kHz 5x 100kHz clock)
+	stb		$t1,EEPROM_PRERlo[$t2]
+	stb		$x0,EEPROM_PRERhi[$t2]
+	ldi		$t1,#$C0								; enable core and interrupt = C0
+	stb		$t1,EEPROM_CTR[$t2]
+	ldi		$a0,#$AE
+	call	eepromWrSta							; address 1010111b, write cycle
+	ldi		$a0,#$FA								; address to read from
+	call	eepromWr
+	ldi		$a0,#$AF								; address 1010111b, read cycle
+	call	eepromWrSta
+	call	eepromRd
+	mov		$t3,$v0									; first byte of MAC
+	call	eepromRd
+	sll		$t3,$t3,#8
+	or		$t3,$t3,$v0							; byte 2
+	stt		$t3,ETH_MACADDR1[$t0]
+	call	eepromRd								; byte 3
+	mov		$t4,$v0									
+	call	eepromRd								; byte 4
+	sll		$t4,$t4,#8
+	or		$t4,$t4,$v0
+	call	eepromRd								; byte 5
+	sll		$t4,$t4,#8
+	or		$t4,$t4,$v0			
+	call	eepromRdStoNack					; byte 6
+	sll		$t4,$t4,#8
+	or		$t4,$t4,$v0
+	stt		$t4,ETH_MACADDR0[$t0]
+	ldi		$a0,msgMac
+	call	PutString
+	mov		$a0,$t3
+	call	PutHexHalf
+	mov		$a0,$t4
+	call	PutHexWord
+	; Turn off I2C
+	stb		$x0,EEPROM_CTR[$t2]
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+msgMac:
+	dcb		13,10,"MAC: ",0
+	
+	align	4
+;------------------------------------------------------------------------------
+; Initialize Eeprom.
+;
+; Modifies:
+;		$t0
+;------------------------------------------------------------------------------
+
+EepromInit:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#29							; device number
+	ldi		$a1,#EepromFuncTbl
+	pfi
+	call	CopyDevFuncTbl
+	mGetCurrentTid
+	ldi		$a0,#6							; AllocMbx()
+	mov		$a1,$v0
+	ldi		$a2,#hEepromMbx
+	ecall
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+eepromWrStoNack:								; STO + WR + Nack
+	ldi		$t1,#$58
+	bra		eepromWr1
+eepromWrSta:
+	ldi		$t1,#$90								; STA + WR
+	bra		eepromWr1
+eepromWr:
+	ldi		$t1,#$10								; WR
+eepromWr1:
+	ldi		$t2,EEPROM
+	stb		$a0,EEPROM_TXR[$t2]
+	stb		$t1,EEPROM_CR[$t2]
+;.waitTip:
+;	ldb		$t1,EEPROM_SR[$t2]
+;	and		$t1,$t1,#2
+;	bnez	$t1,.waitTip
+	ldi		$a0,#10
+	ldwu	$a1,hEepromMbx
+	ldi		$a2,#0
+	ldi		$a3,#0
+	ldi		$a4,#0
+	ldi		$a5,#$7FFFFFFF
+	ecall
+.waitRxack:
+	ldb		$t1,EEPROM_SR[$t2]
+	blt		$t1,$x0,.waitRxack
+	ret
+
+eepromRdStoNack:
+	ldi		$t1,#$68
+	bra		eepromRd1
+eepromRdSta:							
+	ldi		$t1,#$A0								; A0 = RD + STA
+	bra		eepromRd1
+eepromRd:
+	ldi		$t1,#$20								; 20 = RD 
+eepromRd1:
+	ldi		$t2,EEPROM
+	stb		$t1,EEPROM_CR[$t2]
+;.waitTip:
+	ldi		$a0,#10
+	ldwu	$a1,hEepromMbx
+	ldi		$a2,#0
+	ldi		$a3,#0
+	ldi		$a4,#0
+	ldi		$a5,#$7FFFFFFF
+	ecall
+;	ldb		$t1,EEPROM_SR[$t2]
+;	and		$t1,$t1,#2
+;	bnez	$t1,.waitTip
+.waitRxack:
+	ldb		$t1,EEPROM_SR[$t2]
+	blt		$t1,$x0,.waitRxack
+	ldbu	$v0,EEPROM_RXR[$t2]
+	ret
+
+EepromIRQ:
+	ldi		$t1,#1									; clear IRQ bit
+	ldi		$t2,EEPROM
+	stb		$t1,EEPROM_CR[$t2]
+	ldi		$a0,#9									; SendMsg()
+	ldwu	$a1,hEepromMbx
+	ldi		$a2,#-1
+	ldi		$a3,#-1
+	ldi		$a4,#-1
+	ecall
+	csrrc	$x0,#$792,#2						; clear IRQ semaphore
+	eret
+	

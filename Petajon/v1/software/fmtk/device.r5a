@@ -110,7 +110,7 @@ DRSP_DONE			EQU		1
 ;26
 ;27
 ;28		Audio						PSG1	(OS built-in)
-;29
+;29		Eeprom
 ;30   Random Number		PRNG
 ;31		Debug						DBG
 

@@ -31,8 +31,11 @@ endm
 
 ; Look at the asid register for task id
 macro mGetCurrentTid
-	csrrw	v0,#$181,x0
-	and		v0,v0,#MAX_TID
+	csrrw	$v0,#$181,$x0
+;	csrrw	$v1,#$F10,$x0
+;	and		$v1,$v1,#$FFFFFF80
+;	and		$v0,$v0,#31
+;	or		$v0,$v0,$v1
 endm
 
 macro	mHasFocus

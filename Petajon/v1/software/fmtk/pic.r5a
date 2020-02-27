@@ -31,6 +31,7 @@
 
 PIC				equ		$FFDC0F00
 PIC_CH16	equ		$C0				; UART
+PIC_CH27	equ		$EC
 PIC_CH28	equ		$F0				; KBD
 PIC_CH31	equ		$FC				; VIA
 
@@ -39,6 +40,8 @@ PicInit:
 	ldi		$t0,#$0001E125		; level sensitive cause 37, interrupt enabled
 	stt		$t0,PIC_CH16[$t1]
 	pfi
+	ldi		$t0,#$0001E13D		; level sensitive cause 29, interrupt enabled
+	stt		$t0,PIC_CH27[$t1]
 	ldi		$t0,#$0001E121		; level sensitive cause 33, interrupt enabled
 	stt		$t0,PIC_CH28[$t1]
 	ldi		$t0,#$0001E32F		; level sensitive cause 47, interrupt enabled, both CPU's notified

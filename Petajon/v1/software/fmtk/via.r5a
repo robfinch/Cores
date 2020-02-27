@@ -96,10 +96,13 @@ ViaInit:
 
 ;------------------------------------------------------------------------------
 ; Only one cpu need reset the VIA timer.
+; Both cpus are notified of a VIA timer interrupt in order to allow the
+; scheduler to run for both cpus.
 ;------------------------------------------------------------------------------
 
 ViaIRQ:
 	csrrw	$t1,#$F10,$x0
+	and		$t1,$t1,#$20
 	bnez	$t1,.hart20
 	; Was it the VIA that caused the interrupt?
 	ldi		$t1,#VIA

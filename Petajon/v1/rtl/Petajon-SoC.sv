@@ -31,7 +31,8 @@
 `define SPRITE_CONTROLLER	1'b1
 //`define SDC_CONTROLLER 1'b1
 //`define GPU_GRID	1'b1
-//`define RANDOM_GEN	1'b1
+`define RANDOM_GEN	1'b1
+`define ETHMAC	1'b1
 
 module PetajonSoC(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
     kclk, kd, uart_txd, uart_rxd,
@@ -42,6 +43,10 @@ module PetajonSoC(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu,
     sd_cmd, sd_dat, sd_clk, sd_cd, sd_reset,
     pti_clk, pti_rxf, pti_txe, pti_rd, pti_wr, pti_siwu, pti_oe, pti_dat, spien,
     oled_sdin, oled_sclk, oled_dc, oled_res, oled_vbat, oled_vdd
+`ifdef ETHMAC
+		, eth_mdio, eth_mdc, eth_txclk, eth_txd, eth_txctl, eth_rxclk, eth_rxd, eth_rxctl, eth_int_b, eth_rst_b,
+`endif
+		eeprom_clk, eeprom_data,
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
     ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
@@ -104,6 +109,20 @@ output oled_dc;
 output oled_res;
 output oled_vbat;
 output oled_vdd;
+`ifdef ETHMAC
+inout eth_mdio;
+output eth_mdc;
+output eth_txclk;
+output [3:0] eth_txd;
+output eth_txctl;
+input eth_rxclk;
+input [3:0] eth_rxd;
+input eth_rxctl;
+input eth_int_b;
+output eth_rst_b;
+`endif
+inout eeprom_clk;
+inout eeprom_data;
 `ifndef SIM
 output [0:0] ddr3_ck_p;
 output [0:0] ddr3_ck_n;
@@ -135,8 +154,8 @@ output [0:0] ddr3_odt;
 wire rst;
 wire xrst = ~cpu_resetn;
 wire clk12;
-wire clk10, clk14, clk20, clk40, clk60, clk80, clk100, clk200;
-wire cpu_clk = clk40;
+wire clk10, clk14, clk20, clk25, clk40, clk60, clk80, clk100, clk200;
+wire cpu_clk = clk20;
 wire cpu_clk2x = clk40;
 wire cpu_clk4x = clk80;
 wire mem_ui_clk;
@@ -153,9 +172,19 @@ wire we;
 wire [15:0] sel;
 (* mark_debug = "true" *)
 wire [31:0] adr;
-reg [63:0] dati = 128'd0;
+reg [63:0] dati = 64'd0;
 wire [63:0] dato;
 wire sr,cr,rb;
+// CPU2 connectors
+wire cyc2;
+wire stb2;
+reg ack2;
+wire we2;
+wire [15:0] sel2;
+wire [31:0] adr2;
+reg [63:0] dati2 = 64'd0;
+wire [63:0] dato2;
+wire sr2, cr2, rb2;
 
 wire [31:0] tc1_rgb;
 wire tc1_ack;
@@ -163,13 +192,16 @@ wire [63:0] tc1_dato;
 wire ack_scr;
 (* mark_debug = "true" *)
 wire ack_br;
-wire [63:0] scr_dato, br_dato;
+wire ack_br2;
+wire [63:0] scr_dato, br_dato, br_dato2;
 wire br_bok, scr_bok;
 wire rnd_ack;
 wire [31:0] rnd_dato;
 (* mark_debug="true" *)
 wire dram_ack;
 wire [63:0] dram_dato;
+wire dram_ack2;
+wire [63:0] dram_dato2;
 wire avic_ack;
 wire [63:0] avic_dato;
 wire [31:0] avic_rgb;
@@ -210,6 +242,7 @@ wire [5:0] fctr;
 wire ack_1761;
 
 wire ack_bridge1;
+wire ack_bridge1a;
 wire br1_cyc;
 wire br1_stb;
 reg br1_ack = 1'b0;
@@ -219,6 +252,7 @@ wire [3:0] br1_sel32;
 wire [31:0] br1_adr;
 wire [31:0] br1_adr32;
 wire [63:0] br1_cdato;
+wire [63:0] br1_cdato2;
 wire br1_s2_ack;
 wire [63:0] br1_s2_cdato;
 wire [63:0] br1_dato;
@@ -227,6 +261,7 @@ wire [7:0] br1_dat8;
 reg [63:0] br1_dati = 64'd0;
 
 wire ack_bridge2;
+wire ack_bridge2a;
 wire br2_cyc;
 wire br2_stb;
 reg br2_ack = 1'b0;
@@ -236,12 +271,14 @@ wire [3:0] br2_sel32;
 wire [31:0] br2_adr;
 wire [31:0] br2_adr32;
 wire [63:0] br2_cdato;
+wire [63:0] br2_cdato2;
 wire [63:0] br2_dato;
 wire [31:0] br2_dat32;
 wire [7:0] br2_dat8;
 reg [63:0] br2_dati = 64'd0;
 
 wire ack_bridge3;
+wire ack_bridge3a;
 wire br3_cyc;
 wire br3_stb;
 reg br3_ack = 1'b0;
@@ -251,6 +288,7 @@ wire [3:0] br3_sel32;
 wire [31:0] br3_adr;
 wire [31:0] br3_adr32;
 wire [63:0] br3_cdato;
+wire [63:0] br3_cdato2;
 wire [63:0] br3_dato;
 wire [31:0] br3_dat32;
 wire [7:0] br3_dat8;
@@ -335,6 +373,12 @@ wire [31:0] pa_o;
 wire [31:0] pa_i;
 wire ack_pic;
 wire [31:0] pic_dato;
+wire ack_sema;
+wire [7:0] sema_dato;
+wire ack_mut;
+wire [63:0] mut_dato;
+wire eth_ack;
+wire [31:0] eth_cdato;
 
 // -----------------------------------------------------------------------------
 // Input debouncing
@@ -361,6 +405,7 @@ NexysVideoClkgen ucg1
   .clk20(clk20),		// cpu
 //  .clk10(clk10),
   .clk14(clk14),		// 16x baud clock
+  .clk25(clk25),
   // Status and control signals
   .reset(xrst), 
   .locked(locked),       // output locked
@@ -443,11 +488,17 @@ OLED uoled1
 // -----------------------------------------------------------------------------
 (* mark_debug="true" *)
 wire cs_dram = adr[31:29]==3'h0;		// Main memory 512MB
+wire cs_dram2 = adr2[31:29]==3'h0;		// Main memory 512MB
 reg cs_br;
+reg cs_br2;
 always @*
 	cs_br <= adr[31:16]==16'hFFFC		// Boot rom 192k
 				|| adr[31:16]==16'hFFFD
 				|| adr[31:16]==16'hFFFE;
+always @*
+	cs_br2 <= adr2[31:16]==16'hFFFC		// Boot rom 192k
+				|| adr2[31:16]==16'hFFFD
+				|| adr2[31:16]==16'hFFFE;
 wire cs_scr = adr[31:22]==10'b1111_1111_01;	// Scratchpad memory 64k
 // No need to check for the $FFD in the top 12 address bits as these are 
 // detected in the I/O bridges.
@@ -455,12 +506,14 @@ wire cs_tc1 = br1_adr[19:16]==4'h0	// FFD0xxxx Text Controller 128k
 					||  br1_adr[19:16]==4'h1;
 wire cs_spr = br1_adr[19:12]==8'hAD;	// FFDADxxx	Sprite Controller
 wire cs_bmp = br1_adr[19:12]==8'hC5;	//          Bitmap Controller
-wire cs_pic = br1_adr[19:8]==8'hC0F;
+wire cs_pic = br1_adr[19:8]==12'hC0F;
+wire cs_sema = br1_adr[19:12]==8'hB0;
+wire cs_mut = br1_adr[19:8]==12'hBFF;
 //wire cs_bmp = 1'b0;
 //wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_avic = 1'b0;									// defunct: audio / video controller
 wire cs_gfx00 = br1_adr[19:12]==8'hD8;		// orsoc graphics accelerator
-wire cs_rnd = br2_adr[19:4]==16'hC0C0;		// PRNG random number generator
+wire cs_rnd = br2_adr[19:8]==12'hC0C;		// PRNG random number generator
 wire cs_via = br3_adr[19:8]==12'hC06;		// LEDS,buttons,switches
 wire cs_kbd  = br2_adr[19:4]==16'hC000;		// keyboard controller
 wire cs_aud  = br2_adr[19:8]==12'h510;		// audio controller
@@ -472,11 +525,13 @@ wire cs_imem = br2_adr[19:12]==8'hC8 		// instruction memory for grid computer
 						|| br2_adr[19:12]==8'hCA
 						|| br2_adr[19:12]==8'hCB
 						;
+wire cs_eth = br2_adr[19:12]==8'hC2;
 wire cs_rtc = br3_adr[19:4]==16'hC020;		// real-time clock chip
 wire cs_spi = br3_adr[19:8]==12'hC05;			// spi controller
 wire cs_sdc = br3_adr[19:8]==12'hC0B;			// sdc controller
 wire cs_pti = br3_adr[19:8]==12'hC12;			// parallel transfer interface
 wire cs_uart = br3_adr[19:4]==16'hC0A0;
+wire cs_eeprom = br3_adr[19:4]==16'hC0E1;
 
 //wire cs_gfx00 = gbr1_adr[31:12]==20'hFFDD8 && gbr1_cyc && gbr1_stb;
 wire cs_gfx01 = gbr1_adr[19:12]==8'hD9 && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
@@ -617,6 +672,7 @@ assign green = spr_rgbo[15:8];
 assign blue = spr_rgbo[7:0];
 `endif
 
+wire vb_irq;
 `ifdef BMP_CONTROLLER
 rtfBitmapController5 #(.MDW(BMPW)) ubmc1
 (
@@ -649,6 +705,7 @@ rtfBitmapController5 #(.MDW(BMPW)) ubmc1
 	.hctr_o(hctr),
 	.vctr_o(vctr),
 	.fctr_o(fctr),
+	.vblank_o(vb_irq),
 	.zrgb_o(bmp_rgb),
 	.xonoff_i(sw[2])
 );
@@ -661,6 +718,7 @@ assign bmp_we = 1'b0;
 assign bmp_sel = 8'h00;
 assign bmp_adr = 32'h0;
 assign bmp_dato = 64'h0;
+assgin vb_irq = 1'b0;
 `endif
 
 `ifdef SPRITE_CONTROLLER
@@ -774,12 +832,21 @@ end
 assign pa_i = {11'h0,btnc,btnu,btnd,btnl,btnr,8'h00,sw};
 
 reg ack1 = 1'b0;
+reg ack1a = 1'b0;
+reg ack2b = 1'b0;
 assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack;
+wire ack2a = ack_bridge1a|ack_bridge2a|ack_bridge3a|ack_br2|dram_ack2;
 //assign ack = ack_br;
 always @(posedge cpu_clk)
-	ack1 <= ack;
+	ack1a <= ack;
 always @(posedge cpu_clk)
-casez({ack_br,ack_scr,ack_bridge1,ack_bridge2,dram_ack,ack_bridge3})
+	ack1 <= ack1a & ack;
+always @(posedge cpu_clk)
+	ack2b <= ack2a;
+always @(posedge cpu_clk)
+	ack2 <= ack2b & ack2a;
+always @(posedge cpu_clk)
+casez({ack_br,ack_scr,ack_bridge1,ack_bridge2,cs_dram,ack_bridge3})
 6'b1?????: dati <= br_dato;
 6'b01????: dati <= scr_dato;
 6'b001???: dati <= br1_cdato;
@@ -788,31 +855,49 @@ casez({ack_br,ack_scr,ack_bridge1,ack_bridge2,dram_ack,ack_bridge3})
 6'b000001: dati <= br3_cdato;
 default:   dati <= dati;
 endcase
-
-wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack|gfx00_cack|ack_pic;
 always @(posedge cpu_clk)
-	br1_ack <= br1_ack1;
+casez({ack_br2,ack_bridge1a,ack_bridge2a,cs_dram2,ack_bridge3a})
+5'b1????: dati2 <= br_dato2;
+5'b01???: dati2 <= br1_cdato2;
+5'b001??: dati2 <= br2_cdato2;
+5'b0001?: dati2 <= dram_dato2;
+5'b00001: dati2 <= br3_cdato2;
+default:  dati2 <= dati2;
+endcase
+
+wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack|gfx00_cack|ack_pic|ack_sema|ack_mut;
+reg br1_ack1a;
+always @(posedge cpu_clk)
+	br1_ack1a <= br1_ack1;
+always @(posedge cpu_clk)
+	br1_ack <= br1_ack1a & br1_ack1;
 
 always @(posedge cpu_clk)
-casez({tc1_ack,spr_ack,bmp_ack,avic_ack,gfx00_cack,ack_pic})
-6'b1?????:	br1_dati <= tc1_dato;
-6'b01????:	br1_dati <= spr_dato;
-6'b001???:	br1_dati <= bmp_cdato;
-6'b0001??:	br1_dati <= avic_dato;
-6'b00001?:	br1_dati <= gfx00_cdato;
-6'b000001:	br1_dati <= {2{pic_dato}};
+casez({tc1_ack,spr_ack,bmp_ack,avic_ack,gfx00_cack,ack_pic,ack_sema,ack_mut})
+8'b1???????:	br1_dati <= tc1_dato;
+8'b01??????:	br1_dati <= spr_dato;
+8'b001?????:	br1_dati <= bmp_cdato;
+8'b0001????:	br1_dati <= avic_dato;
+8'b00001???:	br1_dati <= gfx00_cdato;
+8'b000001??:	br1_dati <= {2{pic_dato}};
+8'b0000001?:	br1_dati <= {8{sema_dato}};
+8'b00000001:	br1_dati <= mut_dato;
 default:	br1_dati <= br1_dati;
 endcase
 
-wire br2_ack1 = rnd_ack|kbd_ack|ack_1761|aud_ack|cs_cmdc|cs_grid|cs_imem;
+wire br2_ack1 = rnd_ack|kbd_ack|ack_1761|aud_ack|cs_cmdc|cs_grid|cs_imem|eth_ack;
+reg br2_ack1a;
 always @(posedge cpu_clk)
-	br2_ack <= br2_ack1;
+	br2_ack1a <= br2_ack1;
+always @(posedge cpu_clk)
+	br2_ack <= br2_ack1a & br2_ack1;
 
 always @(posedge cpu_clk)
-casez({rnd_ack,kbd_ack,aud_ack})
-3'b1??:	br2_dati <= {2{rnd_dato}};	// 32 bits reflected twice
-3'b01?:	br2_dati <= {8{kbd_dato}};	// 8 bits reflect 8 times
-3'b001:	br2_dati <= aud_cdato;			// 64 bit peripheral
+casez({cs_rnd,cs_kbd,aud_ack,cs_eth})
+4'b1???:	br2_dati <= {2{rnd_dato}};	// 32 bits reflected twice
+4'b01??:	br2_dati <= {8{kbd_dato}};	// 8 bits reflect 8 times
+4'b001?:	br2_dati <= aud_cdato;			// 64 bit peripheral
+4'b0001:	br2_dati <= {2{eth_cdato}};
 default:	br2_dati <= br2_dati;
 endcase
 
@@ -829,6 +914,7 @@ IOBridge64 u_video_bridge
 (
 	.rst_i(rst),
 	.clk_i(cpu_clk),
+
 	.s1_cyc_i(cyc),
 	.s1_stb_i(stb),
 	.s1_ack_o(ack_bridge1),
@@ -838,6 +924,15 @@ IOBridge64 u_video_bridge
 	.s1_dat_i(dato),
 	.s1_dat_o(br1_cdato),
 
+	.s2_cyc_i(cyc2),
+	.s2_stb_i(stb2),
+	.s2_ack_o(ack_bridge1a),
+	.s2_sel_i(sel2),
+	.s2_we_i(we2),
+	.s2_adr_i(adr2),
+	.s2_dat_i(dato2),
+	.s2_dat_o(br1_cdato2),
+/*
 	.s2_cyc_i(grid_cyc),
 	.s2_stb_i(grid_stb),
 	.s2_ack_o(ack_s2_bridge1),
@@ -846,7 +941,7 @@ IOBridge64 u_video_bridge
 	.s2_adr_i(grid_adr),
 	.s2_dat_i({4{grid_dato}}),
 	.s2_dat_o(br1_s2_cdato),
-
+*/
 	.m_cyc_o(br1_cyc),
 	.m_stb_o(br1_stb),
 	.m_ack_i(br1_ack),
@@ -864,6 +959,7 @@ IOBridge64 u_bridge2
 (
 	.rst_i(rst),
 	.clk_i(cpu_clk),
+
 	.s1_cyc_i(cyc),
 	.s1_stb_i(stb),
 	.s1_ack_o(ack_bridge2),
@@ -872,6 +968,15 @@ IOBridge64 u_bridge2
 	.s1_adr_i(adr),
 	.s1_dat_i(dato),
 	.s1_dat_o(br2_cdato),
+
+	.s2_cyc_i(cyc2),
+	.s2_stb_i(stb2),
+	.s2_ack_o(ack_bridge2a),
+	.s2_sel_i(sel2),
+	.s2_we_i(we2),
+	.s2_adr_i(adr2),
+	.s2_dat_i(dato2),
+	.s2_dat_o(br2_cdato2),
 
 	.m_cyc_o(br2_cyc),
 	.m_stb_o(br2_stb),
@@ -897,7 +1002,7 @@ random	uprg1
 	.stb_i(br2_stb),
 	.ack_o(rnd_ack),
 	.we_i(br2_we),
-	.adr_i(br2_adr32[3:0]),
+	.adr_i(br2_adr32[4:1]),
 	.dat_i(br2_dat32),
 	.dat_o(rnd_dato)
 );
@@ -1051,6 +1156,84 @@ mainmem_sim umm1
 );
 `endif
 
+wire eth_irq;
+wire eth_cyc, eth_stb;
+wire eth_acki;
+wire eth_we;
+wire [3:0] eth_sel;
+wire [31:0] eth_adr;
+wire [31:0] eth_dato;
+wire [31:0] eth_dati;
+wire eth_md_o, eth_md_i;
+wire eth_mdoe;
+
+ethmac umac1
+(
+  // WISHBONE common
+  .wb_clk_i(cpu_clk),
+  .wb_rst_i(rst),
+
+  // WISHBONE slave
+  .wb_cyc_i(br2_cyc),
+  .wb_stb_i(br2_stb),
+  .wb_we_i(br2_we),
+  .wb_ack_o(eth_ack),
+  .wb_err_o(), 
+  .wb_sel_i(br2_sel32),
+  .wb_adr_i(br2_adr32),
+  .wb_dat_i(br2_dato32),
+  .wb_dat_o(eth_cdato), 
+
+  // WISHBONE master
+  .m_wb_cti_o(),
+  .m_wb_bte_o(), 
+  .m_wb_cyc_o(eth_cyc), 
+  .m_wb_stb_o(eth_stb),
+  .m_wb_ack_i(eth_acki),
+  .m_wb_we_o(eth_we), 
+  .m_wb_sel_o(eth_sel),
+  .m_wb_adr_o(eth_adr),
+  .m_wb_dat_i(eth_dati),
+  .m_wb_dat_o(eth_dato),
+  .m_wb_err_i(), 
+
+  //TX
+  .mtx_clk_pad_i(clk25),
+  .mtxd_pad_o(eth_txd),
+  .mtxen_pad_o(eth_txctl),
+  .mtxerr_pad_o(),
+
+  //RX
+  .mrx_clk_pad_i(eth_rxclk),
+  .mrxd_pad_i(eth_rxd),
+  .mrxdv_pad_i(eth_rxctl),
+  .mrxerr_pad_i(1'b0),
+  .mcoll_pad_i(1'b0),
+  .mcrs_pad_i(1'b0),
+  
+  // MIIM
+  .mdc_pad_o(eth_mdc),
+  .md_pad_i(eth_md_i),
+  .md_pad_o(eth_md_o),
+  .md_padoe_o(eth_mdoe),
+
+  .int_o(eth_irq)
+
+  // Bist
+`ifdef ETH_BIST
+  ,
+  // debug chain signals
+  mbist_si_i,       // bist scan serial in
+  mbist_so_o,       // bist scan serial out
+  mbist_ctrl_i        // bist chain shift control
+`endif
+
+);
+assign eth_md_i = eth_mdio;
+assign eth_mdio = eth_mdoe ? eth_md_o : 1'bz;
+assign eth_txclk = clk25;
+assign eth_rst_b = ~rst;
+
 `ifndef SIM
 wire mem_ui_rst;
 wire calib_complete;
@@ -1113,7 +1296,7 @@ mig_7series_1 uddr3
 	.init_calib_complete(calib_complete)
 );
 
-mpmc7 #(.C0W(BMPW), .C6W(128), .C7W(64)) umc1
+mpmc8 #(.C0W(BMPW), .C1W(64), .C6W(128), .C7W(64), .C8W(128)) umc1
 (
 	.rst_i(rst),
 	.clk40MHz(clk40),
@@ -1139,6 +1322,28 @@ mpmc7 #(.C0W(BMPW), .C6W(128), .C7W(64)) umc1
 	.dati0(bmp_dato),
 	.dato0(bmp_dati),
 
+	// CPU2
+	.cs1(cs_dram2),
+	.cyc1(cyc2),
+	.stb1(stb2),
+	.ack1(dram_ack2),
+	.we1(we2),
+	.sel1(sel2),
+	.adr1(adr2),
+	.dati1(dato2),
+	.dato1(dram_dato2),
+	.sr1(sr2),
+	.cr1(cr2),
+	.rb1(rb2),
+	
+	.cyc2(eth_cyc),
+	.stb2(eth_stb),
+	.ack2(eth_acki),
+	.we2(eth_we),
+	.sel2(eth_sel),
+	.adr2(eth_adr),
+	.dati2(eth_dato),
+	.dato2(eth_dati),
 /*
 cs1, cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
 cyc2, stb2, ack2, we2, sel2, adr2, dati2, dato2,
@@ -1193,6 +1398,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.dati6(pti_dato),
 	.dato6(pti_dati),
 
+	// CPU1
 	.cs7(cs_dram),
 	.cyc7(cyc),
 	.stb7(stb),
@@ -1205,6 +1411,15 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.sr7(sr),
 	.cr7(cr),
 	.rb7(rb),
+
+	.cyc2(pti_cyc),
+	.stb2(pti_stb),
+	.ack2(pti_acki),
+	.we2(pti_we),
+	.sel2(pti_sel),
+	.adr2(pti_adr),
+	.dati2(pti_dato),
+	.dato2(pti_dati),
 
 	// MIG memory interface
 	.rstn(rstn),
@@ -1229,6 +1444,51 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.ch()
 );
 `endif
+
+mutex umut1
+(
+	.rst(rst),
+	.clk(cpu_clk),
+
+	.cs0(cs_mut),
+	.cyc0(br1_cyc),
+	.stb0(br1_stb),
+	.ack0(ack_mut),
+	.wr0(br1_we),
+	.ad0(br1_adr),
+	.i0(br1_dato),
+	.o0(mut_dato),
+
+	.cs1(1'b0),
+	.cyc1(1'b0),
+	.stb1(1'b0),
+	.ack1(),
+	.wr1(1'b0),
+	.ad1(8'h00),
+	.i1(64'h0),
+	.o1()
+);
+
+semamem usema1
+(
+	.rst(rst),
+	.clk(cpu_clk),
+	.cs0(cs_sema),
+	.cyc0(br1_cyc),
+	.stb0(br1_stb),
+	.ack0(ack_sema),
+	.wr0(br1_we),
+	.ad0(br1_adr32[10:0]),
+	.i0(br1_dat8),
+	.o0(sema_dato),
+
+	.cs1(1'b0),
+	.cyc1(1'b0),
+	.stb1(1'b0),
+	.wr1(1'b0),
+	.ad1(11'h0),
+	.i1(8'h00)
+);
 
 
 scratchmem uscr1
@@ -1272,6 +1532,19 @@ bootrom #(64) ubr1
 //assign br_bok = 1'b0;
 //assign ack_br = 1'b0;
 //assign br_dato = 128'd0;
+bootrom #(64) ubr2
+(
+	.rst_i(rst),
+  .clk_i(cpu_clk),
+  .cti_i(3'b000),
+  .bok_o(),
+  .cs_i(cs_br2),
+  .cyc_i(cyc2),
+  .stb_i(stb2),
+  .ack_o(ack_br2),
+  .adr_i(adr2[17:0]),
+  .dat_o(br_dato2)
+);
 
 (* mark_debug="true" *)
 wire err;
@@ -1287,7 +1560,8 @@ BusError ube1
 );
 
 wire [7:0] cause;
-wire [2:0] pic_irq;
+wire [2:0] pic_irq, pic_irq2;
+wire eeprom_irq;
 
 Petajon_pic upic1
 (
@@ -1305,15 +1579,15 @@ Petajon_pic upic1
 	.i1(1'b0),
 	.i2(1'b0),
 	.i3(1'b0),
-	.i4(1'b0),
+	.i4(eth_irq),
 	.i5(1'b0),
 	.i6(1'b0),
 	.i7(1'b0),
-	.i8(1'b0),
+	.i8(vb_irq),
 	.i9(1'b0),
 	.i10(1'b0),
 	.i11(1'b0),
-	.i12(1'b0),
+	.i12(~eth_int_b),	// eth_int_b is active low
 	.i13(1'b0),
 	.i14(1'b0),
 	.i15(1'b0),
@@ -1326,82 +1600,94 @@ Petajon_pic upic1
 	.i22(1'b0),
 	.i23(1'b0),
 	.i24(1'b0),
-	.i25(1'b0),
-	.i26(1'b0),
-	.i27(1'b0),
+	.i25(pti_dirq),
+	.i26(pti_sirq),
+	.i27(eeprom_irq),
 	.i28(kbd_irq),
 	.i29(1'b0),
 	.i30(1'b0),
 	.i31(via_irq),
 	.irqo(pic_irq),
+	.irqo2(pic_irq2),
 	.nmii(1'b0),		// nmi input connected to nmi requester
 	.nmio(),	// normally connected to the nmi of cpu
 	.causeo(cause)
 );
 //parameter pIOAddress = 32'hFFDC_0F00;
 
-petajon_wb ucpu1
+wire [3:0] ARID, AWID;
+wire [3:0] ARID2, AWID2;
+
+Petajon_dba64 ucpu1
 (
-  .hartid_i(64'h1),
+  .hartid_i(64'h0),
   .rst_i(rst),
   .clk_i(cpu_clk),
  
- // .clk2x_i(cpu_clk2x),
-//  .clk4x_i(cpu_clk4x),
   .wc_clk_i(clk20),
- /*
-  .i1(1'b0),
-  .i2(1'b0),
-  .i3(1'b0),
-  .i4(1'b0),
-  .i5(1'b0),
-  .i6(1'b0),
-  .i7(1'b0),
-  .i8(1'b0),
-  .i9(1'b0),
-  .i10(1'b0),
-  .i11(1'b0),
-  .i12(1'b0),
-  .i13(1'b0),
-  .i14(1'b0),
-  .i15(1'b0),
-  .i16(1'b0),
-  .i17(1'b0),
-  .i18(1'b0),
-  .i19(1'b0),
-  .i20(1'b0),
-  .i21(1'b0),
-  .i22(1'b0),
-  .i23(1'b0),
-  .i24(1'b0),
-  .i25(1'b0),
-  .i26(1'b0),
-  .i27(1'b0),
-  .i28(kbd_irq),
-  .irq_o(),
-  .cti_o(cti),
-  .bok_i(br_bok),
-*/
-//	.irq_i(uart_irq|via_irq),
-//	.cause_i(uart_irq ? 8'd37 : via_irq ? 8'd47 : 8'd00),
 	.irq_i(|pic_irq),
 	.cause_i(cause),
   .cyc_o(cyc),
-  .stb_o(stb),
+  .wb_stb_o(stb),
   .ack_i(ack1),
 //  .err_i(err),
-  .we_o(we),
-  .sel_o(sel),
-  .adr_o(adr),
-  .dat_o(dato),
-  .dat_i(dati),
+  .wb_we_o(we),
+  .wb_sel_o(sel),
+  .wb_adr_o(adr),
+  .wb_dat_o(dato),
+  .wb_dat_i(dati),
   .sr_o(sr),
   .cr_o(cr),
-  .rb_i(rb)
+  .rb_i(rb),
+  .AWID(AWID),
+  .AWREADY(1'b1),
+  .WREADY(1'b1),
+  .BID(AWID),
+  .BVALID(1'b1),
+  .ARREADY(1'b1),
+  .ARID(ARID),
+  .RVALID(1'b1),
+  .RREADY(),
+  .RID(ARID),
+  .RDATA(dati)
+);
+
+Petajon_dba64 ucpu2
+(
+  .hartid_i(64'h20),
+  .rst_i(rst),
+  .clk_i(cpu_clk),
+ 
+  .wc_clk_i(clk20),
+	.irq_i(|pic_irq2),
+	.cause_i(cause),
+  .cyc_o(cyc2),
+  .wb_stb_o(stb2),
+  .ack_i(ack2),
+//  .err_i(err),
+  .wb_we_o(we2),
+  .wb_sel_o(sel2),
+  .wb_adr_o(adr2),
+  .wb_dat_o(dato2),
+  .wb_dat_i(dati2),
+  .sr_o(sr2),
+  .cr_o(cr2),
+  .rb_i(rb2),
+  .AWID(AWID2),
+  .AWREADY(1'b1),
+  .WREADY(1'b1),
+  .BID(AWID2),
+  .BVALID(1'b1),
+  .ARREADY(1'b1),
+  .ARID(ARID2),
+  .RVALID(1'b1),
+  .RREADY(),
+  .RID(ARID2),
+  .RDATA(dati2)
 );
 
 ila_0 uila1 (
-	.clk(cpu_clk), // input wire clk
+	.clk(clk40), // input wire clk
 
 //	.trig_in(btnu_db),// input wire trig_in 
 //	.trig_in_ack(),// output wire trig_in_ack 
@@ -1410,8 +1696,17 @@ ila_0 uila1 (
 	.probe1(ucpu1.ir), // input wire [7:0]  probe1 
 	.probe2(adr),
 	.probe3(dati), // input wire [0:0]  probe2 
-	.probe4(cs_via),
-	.probe5(via_ack) // input wire [0:0]  probe4
+	.probe4(cs_eeprom),
+	.probe5(eeprom_ack), // input wire [0:0]  probe4
+	.probe6(|pic_irq),
+	.probe7(br3_stb),
+	.probe8(ucpu1.ladr),
+	.probe9(uart_irq),
+	.probe10(kbd_irq),
+	.probe11(via_irq),
+	.probe12({ucpu1.mcause[63],ucpu1.mcause[7:0]}),
+	.probe13(ucpu1.mstatus[11:0]),
+	.probe14(dato)
 );
 
 /*
@@ -1462,14 +1757,14 @@ IOBridge64 u_bridge3
 	.s1_dat_i(dato),
 	.s1_dat_o(br3_cdato),
 
-	.s2_cyc_i(1'b0),
-	.s2_stb_i(1'b0),
-	.s2_ack_o(),
-	.s2_sel_i(16'h0),
-	.s2_we_i(1'b0),
-	.s2_adr_i(32'h0),
-	.s2_dat_i(128'h0),
-	.s2_dat_o(),
+	.s2_cyc_i(cyc2),
+	.s2_stb_i(stb2),
+	.s2_ack_o(ack_bridge3a),
+	.s2_sel_i(sel2),
+	.s2_we_i(we2),
+	.s2_adr_i(adr2),
+	.s2_dat_i(dato2),
+	.s2_dat_o(br3_cdato2),
 
 	.m_cyc_o(br3_cyc),
 	.m_stb_o(br3_stb),
@@ -1485,24 +1780,58 @@ IOBridge64 u_bridge3
 	.m_dat8_o(br3_dat8)
 );
 
-wire br3_ack1 = rtc_ack|spi_ack|sdc_ack|pti_ack|uart_ack|via_ack;
+wire br3_ack1 = rtc_ack|spi_ack|sdc_ack|pti_ack|uart_ack|via_ack|eeprom_ack;
+reg br3_ack1a;
 always @(posedge cpu_clk)
-	br3_ack <= br3_ack1;
+	br3_ack1a <= br3_ack1;
+always @(posedge cpu_clk)
+	br3_ack <= br3_ack1a & br3_ack1;
 
 //wire [8:0] uart_rd_data_count;
 //wire uart_tx_fifo_full;
+wire [7:0] eeprom_cdato;
 
 always @(posedge cpu_clk)
-casez({rtc_ack,spi_ack,sdc_ack,pti_ack,uart_ack,via_ack})
-6'b1?????:	br3_dati <= {8{rtc_cdato}};
-6'b01????:	br3_dati <= {8{spi_dato}};
-6'b001???:	br3_dati <= {2{sdc_cdato}};
-6'b0001??:	br3_dati <= {8{pti_cdato}};
-6'b00001?:	br3_dati <= {2{uart_dato}};
-6'b000001:	br3_dati <= {2{via_dato}};
+casez({rtc_ack,spi_ack,sdc_ack,cs_pti,cs_uart,cs_via,cs_eeprom})
+7'b1??????:	br3_dati <= {8{rtc_cdato}};
+7'b01?????:	br3_dati <= {8{spi_dato}};
+7'b001????:	br3_dati <= {2{sdc_cdato}};
+7'b0001???:	br3_dati <= {8{pti_cdato}};
+7'b00001??:	br3_dati <= {2{uart_dato}};
+7'b000001?:	br3_dati <= {2{via_dato}};
+7'b0000001:	br3_dati <= {8{eeprom_cdato}};
 default:	br3_dati <= br3_dati;
 endcase
 
+wire eeprom_clko, eeprom_datao;
+wire eeprom_clk_en,eeprom_data_en;
+wire eeprom_clki;
+wire [7:0] eeprom_dati;
+assign eeprom_clk = eeprom_clk_en ? 1'bz : eeprom_clko;
+assign eeprom_data = eeprom_data_en ? 1'bz : eeprom_datao;
+assign eeprom_clki = eeprom_clk_en ? eeprom_clk : 1'b1;
+assign eeprom_dati = eeprom_data_en ? eeprom_data : 1'b1;
+
+i2c_master_top ui2c1
+(
+	.wb_clk_i(cpu_clk),
+	.wb_rst_i(rst),
+	.cs_i(cs_eeprom),
+	.wb_adr_i(br3_adr32[2:0]),
+	.wb_dat_i(br3_dat8),
+	.wb_dat_o(eeprom_cdato),
+	.wb_we_i(br3_we),
+	.wb_stb_i(br3_stb),
+	.wb_cyc_i(br3_cyc),
+	.wb_ack_o(eeprom_ack),
+	.wb_inta_o(eeprom_irq),
+	.scl_pad_i(eeprom_clki),
+	.scl_pad_o(eeprom_clko),
+	.scl_padoen_o(eeprom_clk_en),
+	.sda_pad_i(eeprom_datai),
+	.sda_pad_o(eeprom_datao),
+	.sda_padoen_o(eeprom_data_en)
+);
 /*
 wire rtc_clko, rtc_datao;
 wire rtc_clk_en,rtc_data_en;
@@ -1634,8 +1963,9 @@ assign sdc_sel = 4'h0;
 assign sdc_adr = 32'd0;
 assign sdc_dato = 32'd0;
 `endif
+*/
 
-nvio_pti upti1(
+Petajon_pti upti1(
 	.rst_i(rst),
 	.clk_i(pti_clk),
 	.rxf_ni(pti_rxf),
@@ -1646,10 +1976,11 @@ nvio_pti upti1(
   .siwu_no(pti_siwu),
 	.oe_no(pti_oe),
 	.dat_io(pti_dat),
+
 	.cs_i(cs_pti),
 	.w_clk_i(cpu_clk),
-	.sirq_o(),
-	.dirq_o(),
+	.sirq_o(pti_sirq),
+	.dirq_o(pti_dirq),
 	.s_cyc_i(br3_cyc),
 	.s_stb_i(br3_stb),
 	.s_ack_o(pti_ack),
@@ -1658,6 +1989,7 @@ nvio_pti upti1(
 	.s_adr_i(br3_adr[7:0]),
 	.s_dat_i(br3_dato),
 	.s_dat_o(pti_cdato),
+
 	.m_cyc_o(pti_cyc),
 	.m_stb_o(pti_stb),
 	.m_ack_i(pti_acki),
@@ -1668,7 +2000,6 @@ nvio_pti upti1(
 	.m_dat_o(pti_dato)
 );
 
-*/
 // -----------------------------------------------------------------------------
 // clock divider
 // Used to pulse width modulate (PWM) the led signals to reduce the brightness.

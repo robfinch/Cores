@@ -61,6 +61,7 @@ _KeyState2 equ		$24825
 _KeyLED			equ		$24826
 NPAGES	equ		$24828
 _randStream	equ		$24830
+hEepromMbx	equ		$24838
 
 SerRcvBuf		EQU		$25000
 SerXmitBuf	EQU		$25400

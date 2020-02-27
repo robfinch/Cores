@@ -117,7 +117,7 @@ case(state)
 IDLE:
   if (~m_ack_i) begin
     // Filter requests to the I/O address range
-    if (s1_cyc_i && s1_adr_i[31:20]==12'hFFD) begin
+    if (s1_cyc_i && s1_stb_i && s1_adr_i[31:20]==12'hFFD) begin
     	which <= 1'b0;
       m_cyc_o <= 1'b1;
       m_stb_o <= 1'b1;
@@ -162,7 +162,7 @@ IDLE:
 			endcase
 			m_dat_o <= s1_dat_i[63:0];
     end
-    else if (s2_cyc_i && s2_adr_i[31:20]==12'hFFD) begin
+    else if (s2_cyc_i && s2_stb_i && s2_adr_i[31:20]==12'hFFD) begin
     	which <= 1'b1;
       m_cyc_o <= 1'b1;
       m_stb_o <= 1'b1;

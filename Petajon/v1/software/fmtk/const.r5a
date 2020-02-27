@@ -29,6 +29,7 @@ TCBepc			EQU		$280
 TCBStatus		EQU		$288
 TCBPriority	EQU		$289
 TCBContextSaved	EQU		$28A
+TCBAffinity	EQU		$28B
 TCBWaitMbx	EQU		$28C
 TCBStackBot	EQU		$290
 TCBMsgD1		EQU		$298
@@ -51,6 +52,7 @@ TCBKbdBuf		EQU		$308
 TCBResource	EQU		$328
 TCBVideoMem	EQU		$330
 TCBpVideo		EQU		$338
+TCBxra			EQU		$340
 
 TS_NONE			EQU		0
 TS_READY		EQU		1
@@ -64,6 +66,7 @@ TS_RUNNING	EQU		128
 ; error codes
 E_Ok		=		0x00
 E_Arg		=		0x01
+E_Busy	= 	0x02
 E_BadMbx	=		0x04
 E_QueFull	=		0x05
 E_NoThread	=		0x06

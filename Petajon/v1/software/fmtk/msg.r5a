@@ -104,6 +104,8 @@ FMTK_AllocMbx:
 	mov		$s6,$v0
 	sll		$v0,$v0,#1
 	or		$v0,$v0,#1
+	ldo		$v1,SYS_MUTEX
+	beq		$v0,$v1,AlreadyLocked
 .lock:
 	pfi
 	sto		$v0,SYS_MUTEX
@@ -137,6 +139,12 @@ FMTK_AllocMbx:
 	; Unlock system mutex
 	sll		$t0,$s6,#1
 	sto		$t0,SYS_MUTEX
+	sto		$t0,SYS_MUTEX
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+AlreadyLocked:
+	ldi		$v0,#E_Busy
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -160,6 +168,8 @@ FMTK_FreeMbx:
 	mov		$s7,$v0
 	sll		$v0,$v0,#1
 	or		$v0,$v0,#1
+	ldo		$v1,SYS_MUTEX
+	beq		$v0,$v1,AlreadyLocked
 .lock:
 	pfi
 	sto		$v0,SYS_MUTEX
@@ -198,6 +208,7 @@ FMTK_FreeMbx:
 	; Unlock system mutex
 	sll		$t0,$s7,#1
 	sto		$t0,SYS_MUTEX
+	sto		$t0,SYS_MUTEX
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -233,6 +244,8 @@ FMTK_SendMsg:
 	mov		$s6,$v0
 	sll		$v0,$v0,#1
 	or		$v0,$v0,#1
+	ldo		$v1,SYS_MUTEX
+	beq		$v0,$v1,AlreadyLocked
 .lock:
 	pfi
 	sto		$v0,SYS_MUTEX
@@ -304,6 +317,7 @@ FMTK_SendMsg:
 	; Unlock system mutex
 	sll		$t0,$s6,#1
 	sto		$t0,SYS_MUTEX
+	sto		$t0,SYS_MUTEX
 	pfi
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
@@ -325,16 +339,16 @@ FMTK_SendMsg:
 FMTK_PeekMsg:
 	sub		$sp,$sp,#8
 	sto		$ra,[$sp]
-	sub		$sp,$sp,#8
-	sto		$ra,[$sp]
 	slt		$t0,$a1,#32
 	pfi
-	beq		$t0,$x0,.badMbx
+	beqz	$t0,.badMbx
 	; Lock system mutex
 	mGetCurrentTid
 	mov		$s6,$v0
 	sll		$v0,$v0,#1
 	or		$v0,$v0,#1
+	ldo		$v1,SYS_MUTEX
+	beq		$v0,$v1,AlreadyLocked
 .lock:
 	pfi
 	sto		$v0,SYS_MUTEX
@@ -388,6 +402,7 @@ FMTK_PeekMsg:
 	; Unlock system mutex
 	sll		$t0,$s6,#1
 	sto		$t0,SYS_MUTEX
+	sto		$t0,SYS_MUTEX
 	ldo		$ra,[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -421,6 +436,8 @@ FMTK_WaitMsg:
 	mov		$s6,$v0
 	sll		$v0,$v0,#1
 	or		$v0,$v0,#1
+	ldo		$v1,SYS_MUTEX
+	beq		$v0,$v1,AlreadyLocked
 .lock:
 	pfi
 	sto		$v0,SYS_MUTEX
@@ -445,6 +462,7 @@ FMTK_WaitMsg:
 	mov		$a1,$a5
 	; Unlock system mutex
 	sll		$t0,$s6,#1
+	sto		$t0,SYS_MUTEX
 	sto		$t0,SYS_MUTEX
 	; Continue by switching tasks
 	call		FMTK_Sleep
