@@ -65,19 +65,20 @@
 			this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
 			this.linkLabel3 = new System.Windows.Forms.LinkLabel();
 			this.groupBox5 = new System.Windows.Forms.GroupBox();
+			this.comboBox1 = new System.Windows.Forms.ComboBox();
+			this.checkBox13 = new System.Windows.Forms.CheckBox();
+			this.checkBox12 = new System.Windows.Forms.CheckBox();
+			this.checkBox11 = new System.Windows.Forms.CheckBox();
 			this.checkBox24 = new System.Windows.Forms.CheckBox();
 			this.checkBox25 = new System.Windows.Forms.CheckBox();
 			this.progressBar1 = new System.Windows.Forms.ProgressBar();
 			this.checkBox23 = new System.Windows.Forms.CheckBox();
 			this.button2 = new System.Windows.Forms.Button();
-			this.checkBox11 = new System.Windows.Forms.CheckBox();
-			this.checkBox12 = new System.Windows.Forms.CheckBox();
-			this.checkBox13 = new System.Windows.Forms.CheckBox();
-			this.comboBox1 = new System.Windows.Forms.ComboBox();
 			this.label1 = new System.Windows.Forms.Label();
 			this.textBox1 = new System.Windows.Forms.TextBox();
 			this.label2 = new System.Windows.Forms.Label();
 			this.textBox2 = new System.Windows.Forms.TextBox();
+			this.button3 = new System.Windows.Forms.Button();
 			this.groupBox1.SuspendLayout();
 			this.groupBox2.SuspendLayout();
 			this.Caching.SuspendLayout();
@@ -488,6 +489,47 @@
 			this.groupBox5.TabStop = false;
 			this.groupBox5.Text = "Bus Standard";
 			// 
+			// comboBox1
+			// 
+			this.comboBox1.FormattingEnabled = true;
+			this.comboBox1.Location = new System.Drawing.Point(110, 28);
+			this.comboBox1.Name = "comboBox1";
+			this.comboBox1.Size = new System.Drawing.Size(84, 21);
+			this.comboBox1.TabIndex = 6;
+			this.comboBox1.Text = "1";
+			// 
+			// checkBox13
+			// 
+			this.checkBox13.AutoSize = true;
+			this.checkBox13.Location = new System.Drawing.Point(19, 76);
+			this.checkBox13.Name = "checkBox13";
+			this.checkBox13.Size = new System.Drawing.Size(51, 17);
+			this.checkBox13.TabIndex = 5;
+			this.checkBox13.Text = "S100";
+			this.checkBox13.UseVisualStyleBackColor = true;
+			// 
+			// checkBox12
+			// 
+			this.checkBox12.AutoSize = true;
+			this.checkBox12.Location = new System.Drawing.Point(19, 53);
+			this.checkBox12.Name = "checkBox12";
+			this.checkBox12.Size = new System.Drawing.Size(84, 17);
+			this.checkBox12.TabIndex = 4;
+			this.checkBox12.Text = "AMBA / AXI";
+			this.checkBox12.UseVisualStyleBackColor = true;
+			// 
+			// checkBox11
+			// 
+			this.checkBox11.AutoSize = true;
+			this.checkBox11.Checked = true;
+			this.checkBox11.CheckState = System.Windows.Forms.CheckState.Checked;
+			this.checkBox11.Location = new System.Drawing.Point(19, 30);
+			this.checkBox11.Name = "checkBox11";
+			this.checkBox11.Size = new System.Drawing.Size(85, 17);
+			this.checkBox11.TabIndex = 3;
+			this.checkBox11.Text = "WISHBONE";
+			this.checkBox11.UseVisualStyleBackColor = true;
+			// 
 			// checkBox24
 			// 
 			this.checkBox24.AutoSize = true;
@@ -544,47 +586,6 @@
 			this.button2.UseVisualStyleBackColor = true;
 			this.button2.Click += new System.EventHandler(this.button2_Click_1);
 			// 
-			// checkBox11
-			// 
-			this.checkBox11.AutoSize = true;
-			this.checkBox11.Checked = true;
-			this.checkBox11.CheckState = System.Windows.Forms.CheckState.Checked;
-			this.checkBox11.Location = new System.Drawing.Point(19, 30);
-			this.checkBox11.Name = "checkBox11";
-			this.checkBox11.Size = new System.Drawing.Size(85, 17);
-			this.checkBox11.TabIndex = 3;
-			this.checkBox11.Text = "WISHBONE";
-			this.checkBox11.UseVisualStyleBackColor = true;
-			// 
-			// checkBox12
-			// 
-			this.checkBox12.AutoSize = true;
-			this.checkBox12.Location = new System.Drawing.Point(19, 53);
-			this.checkBox12.Name = "checkBox12";
-			this.checkBox12.Size = new System.Drawing.Size(84, 17);
-			this.checkBox12.TabIndex = 4;
-			this.checkBox12.Text = "AMBA / AXI";
-			this.checkBox12.UseVisualStyleBackColor = true;
-			// 
-			// checkBox13
-			// 
-			this.checkBox13.AutoSize = true;
-			this.checkBox13.Location = new System.Drawing.Point(19, 76);
-			this.checkBox13.Name = "checkBox13";
-			this.checkBox13.Size = new System.Drawing.Size(51, 17);
-			this.checkBox13.TabIndex = 5;
-			this.checkBox13.Text = "S100";
-			this.checkBox13.UseVisualStyleBackColor = true;
-			// 
-			// comboBox1
-			// 
-			this.comboBox1.FormattingEnabled = true;
-			this.comboBox1.Location = new System.Drawing.Point(110, 28);
-			this.comboBox1.Name = "comboBox1";
-			this.comboBox1.Size = new System.Drawing.Size(84, 21);
-			this.comboBox1.TabIndex = 6;
-			this.comboBox1.Text = "1";
-			// 
 			// label1
 			// 
 			this.label1.AutoSize = true;
@@ -621,11 +622,22 @@
 			this.textBox2.Tag = "MTVEC";
 			this.textBox2.Text = "32\'hFFFC0000";
 			// 
+			// button3
+			// 
+			this.button3.Location = new System.Drawing.Point(489, 97);
+			this.button3.Name = "button3";
+			this.button3.Size = new System.Drawing.Size(123, 23);
+			this.button3.TabIndex = 54;
+			this.button3.Text = "ICache";
+			this.button3.UseVisualStyleBackColor = true;
+			this.button3.Click += new System.EventHandler(this.button3_Click);
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(703, 477);
+			this.Controls.Add(this.button3);
 			this.Controls.Add(this.textBox2);
 			this.Controls.Add(this.label2);
 			this.Controls.Add(this.textBox1);
@@ -715,6 +727,7 @@
 		private System.Windows.Forms.TextBox textBox1;
 		private System.Windows.Forms.Label label2;
 		private System.Windows.Forms.TextBox textBox2;
+		private System.Windows.Forms.Button button3;
 	}
 }
 

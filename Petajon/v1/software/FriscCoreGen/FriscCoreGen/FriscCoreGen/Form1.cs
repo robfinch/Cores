@@ -381,6 +381,15 @@ j1:
 
 		}
 
+		private void button3_Click(object sender, EventArgs e)
+		{
+			frmCache fm = new frmCache();
+			if (fm.ShowDialog() == DialogResult.OK)
+			{
+
+			}
+		}
+
 		private void button2_Click(object sender, EventArgs e)
 		{
 			frmMemmgnt fm = new frmMemmgnt();

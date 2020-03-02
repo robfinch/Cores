@@ -12,6 +12,9 @@ namespace FriscCoreGen
 {
 	public partial class frmCache : Form
 	{
+		int ways;
+		string L1ICacheCmpNWay;
+
 		public frmCache()
 		{
 			InitializeComponent();
@@ -19,7 +22,126 @@ namespace FriscCoreGen
 
 		private void button3_Click(object sender, EventArgs e)
 		{
-
+			int nn;
+			int l2;
+			string pfx;
+			string ab;
+			int ls;
+			ways = Convert.ToInt16(comboBox3.Text);
+			L1ICacheCmpNWay = "L1_icache_cmpNway(rst, clk, nxt, wr, invline, invall, adr, lineno,";
+			if (radioButton4.Checked)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "nxt_lineno,";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + " hit, missadr);\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "parameter AMSB = " + numericUpDown1.Value + ";\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "parameter pLines = " + comboBox2.Text + ";\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "localparam pLNMSB = $clog2(" + comboBox2.Text + ");\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input rst;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input clk;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input nxt;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input wr;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input invline;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input invall;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "input [AMSB:0] adr;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "output reg [pLNMSB:0] lineno;\r\n";
+			if (radioButton4.Checked)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "output reg [pLNMSB:0] nxt_lineno;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "output reg hit;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "output reg [AMSB:0] missadr;\r\n\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "reg [AMSB:0] radr;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "(* ram_style=\"distributed\" *);\r\n";
+			for (nn = 0; nn < ways; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "reg [AMSB-5:0] mem" + nn.ToString() + " [0:pLines/" + ways.ToString() + "-1];\r\n";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "reg [pLines/" + ways.ToString() + "-1:0] mem" + nn.ToString() + "v;\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "integer n;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "intial begin\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  for (n = 0; n < pLines/" + ways.ToString() + "; n = n + 1) begin\r\n";
+			for (nn = 0; nn < ways; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    mem" + nn.ToString() + "[n] = 0;\r\n";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    mem" + nn.ToString() + "v[n] = 0;\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n\r\n";
+			if (radioButton4.Checked)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "wire [AMSB:0] nxt_adr = adr + 9'd" + comboBox1.Text + ";\r\n\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "wire [21:0] lfsro\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "reg [pLNMSB:0] wlineno;";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "always @(posedge clk)\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "if (rst)";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  wlineno <= 1'd0;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "else begin\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) begin\r\n";
+			pfx = "";
+			switch(ways)
+			{
+				case 1:	break;
+				case 2: pfx = "1'd";  L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[0])\r\n"; break;
+				case 4: pfx = "2'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[1:0])\r\n"; break;
+				case 8: pfx = "3'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[2:0])\r\n"; break;
+				case 16: pfx = "4'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[3:0])\r\n"; break;
+				case 32: pfx = "5'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[4:0])\r\n"; break;
+			}
+			ls = Convert.ToInt16(comboBox1.Text);
+			if (ls > 64)
+				ab = "7";
+			else if (ls > 32)
+				ab = "6";
+			else if (ls > 16)
+				ab = "5";
+			else if (ls > 8)
+				ab = "4";
+			else if (ls > 4)
+				ab = "3";
+			else if (ls > 2)
+				ab = "2";
+			else
+				ab = "1";
+			for (nn = 0; nn < ways; nn++ )
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    " + pfx + nn.ToString() + ":	begin  mem" + nn.ToString() + "[adr[pMSB:"+ab+ "]] <= adr[AMSB:" + ab + "];  wlineno <= {" + pfx + nn.ToString() + ",adr[pMSB:" + ab + "]}; end\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "    endcase\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "always @(posedge clk)\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "if (rst) begin\r\n";
+			for (nn = 0; nn < ways; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  mem" + nn.ToString() + "v <= 1'd0;\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "else begin\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (invall) begin\r\n";
+			for (nn = 0; nn < ways; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    mem" + nn.ToString() + "v <= 1'd0;\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  else if (invline) begin\r\n";
+			for (nn = 0; nn < ways; nn++)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    if (hit" + nn.ToString() + ") mem" + nn.ToString() + "v[adr[pMSB:"+ab+"]] <= 1'b0;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  else if (wr) begin\r\n";
+			switch (ways)
+			{
+				case 1: break;
+				case 2: pfx = "1'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[0])\r\n"; break;
+				case 4: pfx = "2'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[1:0])\r\n"; break;
+				case 8: pfx = "3'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[2:0])\r\n"; break;
+				case 16: pfx = "4'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[3:0])\r\n"; break;
+				case 32: pfx = "5'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "    case(lfsro[4:0])\r\n"; break;
+			}
+			for (nn = 0; nn < ways; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    " + pfx + nn.ToString() + ":	begin  mem" + nn.ToString() + "v[adr[pMSB:" + ab + "]] <= 1'b1; end\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "    endcase\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n\r\n";
+			textBox1.Text = L1ICacheCmpNWay;
 		}
 	}
 }
