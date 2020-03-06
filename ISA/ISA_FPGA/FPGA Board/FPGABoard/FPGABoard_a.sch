@@ -1,0 +1,1456 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr C 22000 17000
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L 74xx:74LS245 U1
+U 1 1 5E5EF188
+P 5600 2100
+F 0 "U1" H 5600 3081 50  0000 C CNN
+F 1 "74LVC245" H 5600 2990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 5600 2100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 5600 2100 50  0001 C CNN
+	1    5600 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U2
+U 1 1 5E5F042B
+P 7600 2100
+F 0 "U2" H 7600 3081 50  0000 C CNN
+F 1 "74LVC245" H 7600 2990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 2100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 2100 50  0001 C CNN
+	1    7600 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U3
+U 1 1 5E5F1CDB
+P 5600 4200
+F 0 "U3" H 5600 5181 50  0000 C CNN
+F 1 "74LVC245" H 5600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 5600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 5600 4200 50  0001 C CNN
+	1    5600 4200
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U4
+U 1 1 5E5F2EF2
+P 7600 4200
+F 0 "U4" H 7600 5181 50  0000 C CNN
+F 1 "74LVC245" H 7600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 4200 50  0001 C CNN
+	1    7600 4200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5100 1600 4800 1600
+Wire Wire Line
+	5100 1700 4800 1700
+Wire Wire Line
+	5100 1800 4800 1800
+Wire Wire Line
+	5100 1900 4800 1900
+Wire Wire Line
+	5100 2000 4800 2000
+Wire Wire Line
+	5100 2100 4800 2100
+Wire Wire Line
+	5100 2200 4800 2200
+Wire Wire Line
+	5100 2300 4800 2300
+Wire Wire Line
+	5100 2500 4800 2500
+Wire Wire Line
+	5100 2600 4800 2600
+Wire Wire Line
+	6100 1600 6450 1600
+Wire Wire Line
+	6100 1700 6450 1700
+Wire Wire Line
+	6100 1800 6450 1800
+Wire Wire Line
+	6100 1900 6450 1900
+Wire Wire Line
+	6100 2000 6450 2000
+Wire Wire Line
+	6100 2100 6450 2100
+Wire Wire Line
+	6100 2200 6450 2200
+Wire Wire Line
+	6100 2300 6450 2300
+$Comp
+L 74xx:74LS245 U5
+U 1 1 5E6026A8
+P 9600 4200
+F 0 "U5" H 9600 5181 50  0000 C CNN
+F 1 "74LVC245" H 9600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 9600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 9600 4200 50  0001 C CNN
+	1    9600 4200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5100 3700 4700 3700
+Wire Wire Line
+	5100 3800 4700 3800
+Wire Wire Line
+	5100 3900 4700 3900
+Wire Wire Line
+	5100 4000 4700 4000
+Wire Wire Line
+	5100 4100 4700 4100
+Wire Wire Line
+	5100 4200 4700 4200
+Wire Wire Line
+	5100 4300 4700 4300
+Wire Wire Line
+	5100 4400 4700 4400
+Wire Wire Line
+	6100 3700 6450 3700
+Wire Wire Line
+	6100 3800 6450 3800
+Wire Wire Line
+	6100 3900 6450 3900
+Wire Wire Line
+	6100 4000 6450 4000
+Wire Wire Line
+	6100 4100 6450 4100
+Wire Wire Line
+	6100 4200 6450 4200
+Wire Wire Line
+	6100 4300 6450 4300
+Wire Wire Line
+	6100 4400 6450 4400
+Wire Wire Line
+	7100 3700 6750 3700
+Wire Wire Line
+	7100 3800 6750 3800
+Wire Wire Line
+	7100 3900 6750 3900
+Wire Wire Line
+	7100 4000 6750 4000
+Wire Wire Line
+	7100 4100 6750 4100
+Wire Wire Line
+	7100 4200 6750 4200
+Wire Wire Line
+	7100 4300 6750 4300
+Wire Wire Line
+	7100 4400 6750 4400
+Wire Wire Line
+	8100 3700 8450 3700
+Wire Wire Line
+	8100 3800 8450 3800
+Wire Wire Line
+	8100 3900 8450 3900
+Wire Wire Line
+	8100 4000 8450 4000
+Wire Wire Line
+	8100 4100 8450 4100
+Wire Wire Line
+	8100 4200 8450 4200
+Wire Wire Line
+	8100 4300 8450 4300
+Wire Wire Line
+	8100 4400 8450 4400
+Text Label 4900 1600 0    50   ~ 0
+FD0
+Text Label 4900 1700 0    50   ~ 0
+FD1
+Text Label 4900 1800 0    50   ~ 0
+FD2
+Text Label 4900 1900 0    50   ~ 0
+FD3
+Text Label 4900 2000 0    50   ~ 0
+FD4
+Text Label 4900 2100 0    50   ~ 0
+FD5
+Text Label 4900 2200 0    50   ~ 0
+FD6
+Text Label 4900 2300 0    50   ~ 0
+FD7
+Wire Wire Line
+	7100 1600 6750 1600
+Wire Wire Line
+	7100 1700 6750 1700
+Wire Wire Line
+	6750 1800 7100 1800
+Wire Wire Line
+	7100 1900 6750 1900
+Wire Wire Line
+	7100 2000 6750 2000
+Wire Wire Line
+	7100 2100 6750 2100
+Wire Wire Line
+	7100 2200 6750 2200
+Wire Wire Line
+	7100 2300 6750 2300
+$Comp
+L VGA_V11-cache:S100_MALE P1
+U 1 1 5E93B5C5
+P 19200 6350
+F 0 "P1" H 19578 6414 60  0000 L CNN
+F 1 "S100_MALE" H 19578 6308 60  0000 L CNN
+F 2 "" H 19200 6350 60  0000 C CNN
+F 3 "" H 19200 6350 60  0000 C CNN
+	1    19200 6350
+	1    0    0    -1  
+$EndComp
+Text Label 6200 3700 0    50   ~ 0
+A0
+Text Label 6200 3800 0    50   ~ 0
+A1
+Text Label 6200 3900 0    50   ~ 0
+A2
+Text Label 6200 4000 0    50   ~ 0
+A3
+Text Label 6200 4100 0    50   ~ 0
+A4
+Text Label 6200 4200 0    50   ~ 0
+A5
+Text Label 6200 4300 0    50   ~ 0
+A6
+Text Label 6200 4400 0    50   ~ 0
+A7
+Text Label 8200 3700 0    50   ~ 0
+A8
+Text Label 8200 3800 0    50   ~ 0
+A9
+Text Label 8200 3900 0    50   ~ 0
+A10
+Text Label 8200 4000 0    50   ~ 0
+A11
+Text Label 8200 4100 0    50   ~ 0
+A12
+Text Label 8200 4200 0    50   ~ 0
+A13
+Text Label 8200 4300 0    50   ~ 0
+A14
+Text Label 8200 4400 0    50   ~ 0
+A15
+Wire Wire Line
+	10100 3700 10450 3700
+Wire Wire Line
+	10100 3800 10450 3800
+Wire Wire Line
+	10100 3900 10450 3900
+Wire Wire Line
+	10100 4000 10450 4000
+Wire Wire Line
+	10100 4100 10450 4100
+Wire Wire Line
+	10100 4200 10450 4200
+Wire Wire Line
+	10100 4300 10450 4300
+Wire Wire Line
+	10100 4400 10450 4400
+Wire Wire Line
+	9100 3700 8750 3700
+Wire Wire Line
+	9100 3800 8750 3800
+Wire Wire Line
+	9100 3900 8750 3900
+Wire Wire Line
+	9100 4000 8750 4000
+Wire Wire Line
+	9100 4100 8750 4100
+Wire Wire Line
+	9100 4200 8750 4200
+Wire Wire Line
+	9100 4300 8750 4300
+Wire Wire Line
+	9100 4400 8750 4400
+Text Label 10200 3700 0    50   ~ 0
+A16
+Text Label 10200 3800 0    50   ~ 0
+A17
+Text Label 10200 3900 0    50   ~ 0
+A18
+Text Label 10200 4000 0    50   ~ 0
+A19
+Text Label 10200 4100 0    50   ~ 0
+A20
+Text Label 10200 4200 0    50   ~ 0
+A21
+Text Label 10200 4300 0    50   ~ 0
+A22
+Text Label 10200 4400 0    50   ~ 0
+A23
+Text Label 4850 3700 0    50   ~ 0
+FA0
+Text Label 4850 3800 0    50   ~ 0
+FA1
+Text Label 4850 3900 0    50   ~ 0
+FA2
+Text Label 4850 4000 0    50   ~ 0
+FA3
+Text Label 4850 4100 0    50   ~ 0
+FA4
+Text Label 4850 4200 0    50   ~ 0
+FA5
+Text Label 4850 4300 0    50   ~ 0
+FA6
+Text Label 4850 4400 0    50   ~ 0
+FA7
+Text Label 6900 3700 0    50   ~ 0
+FA8
+Text Label 6900 3800 0    50   ~ 0
+FA9
+Text Label 6900 3900 0    50   ~ 0
+FA10
+Text Label 6900 4000 0    50   ~ 0
+FA11
+Text Label 6900 4100 0    50   ~ 0
+FA12
+Text Label 6900 4200 0    50   ~ 0
+FA13
+Text Label 6900 4300 0    50   ~ 0
+FA14
+Text Label 6900 4400 0    50   ~ 0
+FA15
+Text Label 8850 3700 0    50   ~ 0
+FA16
+Text Label 8850 3800 0    50   ~ 0
+FA17
+Text Label 8850 3900 0    50   ~ 0
+FA18
+Text Label 8850 4000 0    50   ~ 0
+FA19
+Text Label 8850 4100 0    50   ~ 0
+FA20
+Text Label 8850 4200 0    50   ~ 0
+FA21
+Text Label 8850 4300 0    50   ~ 0
+FA22
+Text Label 8850 4400 0    50   ~ 0
+FA23
+Wire Wire Line
+	8100 1600 8550 1600
+Wire Wire Line
+	8100 1700 8550 1700
+Wire Wire Line
+	8100 1800 8550 1800
+Wire Wire Line
+	8100 1900 8550 1900
+Wire Wire Line
+	8100 2000 8550 2000
+Wire Wire Line
+	8100 2200 8550 2200
+Wire Wire Line
+	8100 2100 8550 2100
+Wire Wire Line
+	8100 2300 8550 2300
+Wire Wire Line
+	18550 2800 18100 2800
+Wire Wire Line
+	18550 2900 18100 2900
+Wire Wire Line
+	18550 3000 18100 3000
+Wire Wire Line
+	18100 4200 18550 4200
+Wire Wire Line
+	18550 4300 18100 4300
+Wire Wire Line
+	18550 4400 18100 4400
+Wire Wire Line
+	18550 4500 18100 4500
+Wire Wire Line
+	18550 4600 18100 4600
+Wire Wire Line
+	18550 4700 18100 4700
+Wire Wire Line
+	18050 7400 18550 7400
+Wire Wire Line
+	18550 7500 18050 7500
+Wire Wire Line
+	18550 7600 18050 7600
+Wire Wire Line
+	18550 7700 18050 7700
+Wire Wire Line
+	18550 9200 18050 9200
+Wire Wire Line
+	18550 9300 18050 9300
+Wire Wire Line
+	18550 9400 18050 9400
+Wire Wire Line
+	18550 9500 18050 9500
+Wire Wire Line
+	18550 9600 18050 9600
+Wire Wire Line
+	18550 9700 18050 9700
+Wire Wire Line
+	18550 9800 18050 9800
+Wire Wire Line
+	18550 9900 18050 9900
+Wire Wire Line
+	18550 10000 18050 10000
+Text Label 18200 2800 0    50   ~ 0
+A18
+Text Label 18200 2900 0    50   ~ 0
+A16
+Text Label 18200 3000 0    50   ~ 0
+A17
+Text Label 18250 4200 0    50   ~ 0
+A5
+Text Label 18250 4300 0    50   ~ 0
+A4
+Text Label 18250 4400 0    50   ~ 0
+A3
+Text Label 18250 4500 0    50   ~ 0
+A15
+Text Label 18250 4600 0    50   ~ 0
+A12
+Text Label 18250 4700 0    50   ~ 0
+A9
+Text Label 18200 7400 0    50   ~ 0
+A20
+Text Label 18200 7500 0    50   ~ 0
+A21
+Text Label 18200 7600 0    50   ~ 0
+A22
+Text Label 18200 7700 0    50   ~ 0
+A23
+Text Label 18200 9200 0    50   ~ 0
+A0
+Text Label 18200 9300 0    50   ~ 0
+A1
+Text Label 18200 9400 0    50   ~ 0
+A2
+Text Label 18200 9500 0    50   ~ 0
+A6
+Text Label 18200 9600 0    50   ~ 0
+A7
+Text Label 18200 9700 0    50   ~ 0
+A8
+Text Label 18200 9800 0    50   ~ 0
+A13
+Text Label 18200 9900 0    50   ~ 0
+A14
+Text Label 18200 10000 0    50   ~ 0
+A11
+Text Label 6200 1600 0    50   ~ 0
+DO0
+Text Label 6200 1700 0    50   ~ 0
+DO1
+Text Label 6200 1800 0    50   ~ 0
+DO2
+Text Label 6200 1900 0    50   ~ 0
+DO3
+Text Label 6200 2000 0    50   ~ 0
+DO4
+Text Label 6200 2100 0    50   ~ 0
+DO5
+Text Label 6200 2200 0    50   ~ 0
+DO6
+Text Label 6200 2300 0    50   ~ 0
+DO7
+Text Label 6850 1600 0    50   ~ 0
+FD8
+Text Label 6850 1700 0    50   ~ 0
+FD9
+Text Label 6850 1800 0    50   ~ 0
+FD10
+Text Label 6850 1900 0    50   ~ 0
+FD11
+Text Label 6850 2000 0    50   ~ 0
+FD12
+Text Label 6850 2100 0    50   ~ 0
+FD13
+Text Label 6850 2200 0    50   ~ 0
+FD14
+Text Label 6850 2300 0    50   ~ 0
+FD15
+Text Label 8250 1600 0    50   ~ 0
+DI0
+Text Label 8250 1700 0    50   ~ 0
+DI1
+Text Label 8250 1800 0    50   ~ 0
+DI2
+Text Label 8250 1900 0    50   ~ 0
+DI3
+Text Label 8250 2000 0    50   ~ 0
+DI4
+Text Label 8250 2100 0    50   ~ 0
+DI5
+Text Label 8250 2200 0    50   ~ 0
+DI6
+Text Label 8250 2300 0    50   ~ 0
+DI7
+Wire Wire Line
+	18550 4800 18100 4800
+Wire Wire Line
+	18550 4900 18100 4900
+Wire Wire Line
+	18550 5100 18100 5100
+Wire Wire Line
+	18550 5200 18100 5200
+Wire Wire Line
+	18550 5000 18100 5000
+Wire Wire Line
+	18550 5300 18100 5300
+Wire Wire Line
+	18550 5400 18100 5400
+Wire Wire Line
+	18550 5500 18100 5500
+Wire Wire Line
+	18550 5600 18100 5600
+Wire Wire Line
+	18550 7200 18050 7200
+Wire Wire Line
+	18050 10100 18550 10100
+Wire Wire Line
+	18550 10200 18050 10200
+Wire Wire Line
+	18550 10300 18050 10300
+Wire Wire Line
+	18550 10400 18050 10400
+Wire Wire Line
+	18550 10500 18050 10500
+Wire Wire Line
+	18550 10600 18050 10600
+Wire Wire Line
+	18550 10700 18050 10700
+Wire Wire Line
+	18550 10800 18050 10800
+Text Label 18200 7200 0    50   ~ 0
+A19
+Text Label 18250 5000 0    50   ~ 0
+A10
+Text Label 18250 4800 0    50   ~ 0
+DO1
+Text Label 18250 4900 0    50   ~ 0
+DO0
+Text Label 18250 5100 0    50   ~ 0
+DO4
+Text Label 18250 5200 0    50   ~ 0
+DO5
+Text Label 18250 5300 0    50   ~ 0
+D06
+Text Label 18200 10100 0    50   ~ 0
+DO2
+Text Label 18200 10200 0    50   ~ 0
+DO3
+Text Label 18200 10300 0    50   ~ 0
+DO7
+Text Label 18200 10400 0    50   ~ 0
+DI4
+Text Label 18200 10500 0    50   ~ 0
+DI5
+Text Label 18200 10600 0    50   ~ 0
+DI6
+Text Label 18200 10700 0    50   ~ 0
+DI1
+Text Label 18200 10800 0    50   ~ 0
+DI0
+Text Label 18250 5400 0    50   ~ 0
+DI2
+Text Label 18250 5500 0    50   ~ 0
+DI3
+Text Label 18250 5600 0    50   ~ 0
+DI7
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5EA9CBD1
+P 13600 2150
+F 0 "U?" H 13600 3131 50  0000 C CNN
+F 1 "74LVC245" H 13600 3040 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 13600 2150 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 13600 2150 50  0001 C CNN
+	1    13600 2150
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	13100 1650 12750 1650
+Wire Wire Line
+	13100 1750 12750 1750
+Wire Wire Line
+	12750 1850 13100 1850
+Wire Wire Line
+	13100 1950 12750 1950
+Wire Wire Line
+	13100 2050 12750 2050
+Wire Wire Line
+	13100 2150 12750 2150
+Wire Wire Line
+	13100 2250 12750 2250
+Wire Wire Line
+	13100 2350 12750 2350
+Wire Wire Line
+	14100 1650 14550 1650
+Wire Wire Line
+	14100 1750 14550 1750
+Wire Wire Line
+	14100 1850 14550 1850
+Wire Wire Line
+	14100 1950 14550 1950
+Wire Wire Line
+	14100 2050 14550 2050
+Wire Wire Line
+	14100 2250 14550 2250
+Wire Wire Line
+	14100 2150 14550 2150
+Wire Wire Line
+	14100 2350 14550 2350
+Text Label 12850 1650 0    50   ~ 0
+FsM1
+Text Label 12850 1750 0    50   ~ 0
+FsOUT
+Text Label 12850 1850 0    50   ~ 0
+FsINP
+Text Label 12850 1950 0    50   ~ 0
+FsMEMR
+Text Label 12850 2050 0    50   ~ 0
+FsHLTA
+Text Label 12850 2150 0    50   ~ 0
+FsXTRQ*
+Text Label 12850 2350 0    50   ~ 0
+FsWO*
+Text Label 14250 1650 0    50   ~ 0
+sM1
+Text Label 14250 1750 0    50   ~ 0
+sOUT
+Text Label 14250 1850 0    50   ~ 0
+sINP
+Text Label 14250 1950 0    50   ~ 0
+sMEMR
+Text Label 14250 2050 0    50   ~ 0
+sHLTA
+Text Label 14250 2150 0    50   ~ 0
+sXTRQ*
+Text Label 14250 2350 0    50   ~ 0
+sWO*
+Wire Wire Line
+	18550 5700 18100 5700
+Wire Wire Line
+	18550 5800 18100 5800
+Wire Wire Line
+	18550 5900 18100 5900
+Wire Wire Line
+	18550 6000 18100 6000
+Wire Wire Line
+	18550 6100 18100 6100
+Wire Wire Line
+	18550 7100 18050 7100
+Wire Wire Line
+	18550 10900 18050 10900
+Wire Wire Line
+	18550 11000 18050 11000
+Text Label 18200 10900 0    50   ~ 0
+sINTA
+Text Label 18200 11000 0    50   ~ 0
+sWO*
+Text Label 18200 7100 0    50   ~ 0
+sXTRQ*
+Text Label 18250 6100 0    50   ~ 0
+sHLTA
+Text Label 18250 6000 0    50   ~ 0
+sMEMR
+Text Label 18250 5900 0    50   ~ 0
+sINP
+Text Label 18250 5800 0    50   ~ 0
+sOUT
+Text Label 18250 5700 0    50   ~ 0
+sM1
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5EAF657C
+P 8700 6800
+F 0 "U?" H 8700 7781 50  0000 C CNN
+F 1 "74LVC245" H 8700 7690 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 8700 6800 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 8700 6800 50  0001 C CNN
+	1    8700 6800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9200 6300 9550 6300
+Wire Wire Line
+	9200 6400 9550 6400
+Wire Wire Line
+	9200 6500 9550 6500
+Wire Wire Line
+	9200 6600 9550 6600
+Wire Wire Line
+	9200 6700 9550 6700
+Wire Wire Line
+	9200 6800 9550 6800
+Wire Wire Line
+	9200 6900 9550 6900
+Wire Wire Line
+	9200 7000 9550 7000
+Wire Wire Line
+	8200 6300 7850 6300
+Wire Wire Line
+	8200 6400 7850 6400
+Wire Wire Line
+	8200 6500 7850 6500
+Wire Wire Line
+	8200 6600 7850 6600
+Wire Wire Line
+	8200 6700 7850 6700
+Wire Wire Line
+	8200 6800 7850 6800
+Wire Wire Line
+	8200 6900 7850 6900
+Wire Wire Line
+	8200 7000 7850 7000
+Wire Wire Line
+	8200 7200 7850 7200
+Text Label 7950 6300 0    50   ~ 0
+POC*
+Text Label 7950 6400 0    50   ~ 0
+ERROR*
+Text Label 7950 6500 0    50   ~ 0
+RESET*
+Text Label 7950 6900 0    50   ~ 0
+SIXTN*
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5E5FEBD8
+P 10650 2050
+F 0 "U?" H 10650 3031 50  0000 C CNN
+F 1 "74LVC245" H 10650 2940 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 10650 2050 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 10650 2050 50  0001 C CNN
+	1    10650 2050
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	11150 1550 11500 1550
+Wire Wire Line
+	11150 1650 11500 1650
+Wire Wire Line
+	11150 1750 11500 1750
+Wire Wire Line
+	11150 1850 11500 1850
+Wire Wire Line
+	11150 1950 11500 1950
+Wire Wire Line
+	11150 2050 11500 2050
+Wire Wire Line
+	11150 2150 11500 2150
+Wire Wire Line
+	11150 2250 11500 2250
+Wire Wire Line
+	10150 1550 9800 1550
+Wire Wire Line
+	10150 1650 9800 1650
+Wire Wire Line
+	10150 1750 9800 1750
+Wire Wire Line
+	10150 1850 9800 1850
+Wire Wire Line
+	10150 1950 9800 1950
+Wire Wire Line
+	10150 2050 9800 2050
+Wire Wire Line
+	10150 2150 9800 2150
+Wire Wire Line
+	10150 2250 9800 2250
+Text Label 11250 1550 0    50   ~ 0
+pDBIN
+Text Label 11250 1650 0    50   ~ 0
+pWR*
+Text Label 11250 1750 0    50   ~ 0
+pSYNC
+Text Label 11250 1950 0    50   ~ 0
+pSTVAL*
+Text Label 11250 2050 0    50   ~ 0
+pHDLA
+Wire Wire Line
+	10150 2450 9800 2450
+Text Label 9900 1550 0    50   ~ 0
+FpDBIN
+Text Label 9900 1650 0    50   ~ 0
+FpWR*
+Text Label 9900 1750 0    50   ~ 0
+FpSYNC
+Text Label 9900 1950 0    50   ~ 0
+FpSTVAL*
+Text Label 9900 2050 0    50   ~ 0
+FpHDLA
+Text Label 9850 2450 0    50   ~ 0
+FMASTER
+Wire Wire Line
+	13100 2550 12750 2550
+Text Label 8800 4600 0    50   ~ 0
+FMASAD
+Text Label 6800 4600 0    50   ~ 0
+FMASAD
+Text Label 4800 4600 0    50   ~ 0
+FMASAD
+Wire Wire Line
+	10150 2550 9800 2550
+Wire Wire Line
+	13100 2650 12750 2650
+Wire Wire Line
+	9100 4700 8750 4700
+Wire Wire Line
+	7100 4700 6750 4700
+Wire Wire Line
+	5100 4700 4700 4700
+Text Label 12800 2550 0    50   ~ 0
+FMASTER
+Text Label 9850 2550 0    50   ~ 0
+FCDSB*
+Text Label 12800 2650 0    50   ~ 0
+FSDSB*
+Text Label 8800 4700 0    50   ~ 0
+FADSB*
+Text Label 6800 4700 0    50   ~ 0
+FADSB*
+Text Label 4800 4700 0    50   ~ 0
+FADSB*
+Text Label 5600 5000 0    50   ~ 0
+GND
+Text Label 7600 5000 0    50   ~ 0
+GND
+Text Label 9600 5000 0    50   ~ 0
+GND
+Text Label 5600 2900 0    50   ~ 0
+GND
+Text Label 7600 2900 0    50   ~ 0
+GND
+Text Label 13600 2950 0    50   ~ 0
+GND
+Text Label 5600 1300 0    50   ~ 0
+VCC33
+Text Label 7600 1300 0    50   ~ 0
+VCC33
+Text Label 13600 1350 0    50   ~ 0
+VCC33
+Text Label 5600 3400 0    50   ~ 0
+VCC33
+Text Label 7600 3400 0    50   ~ 0
+VCC33
+Text Label 9600 3400 0    50   ~ 0
+VCC33
+Text Label 10650 1250 0    50   ~ 0
+VCC33
+Text Label 8700 6000 0    50   ~ 0
+VCC33
+Wire Wire Line
+	8750 4700 8750 5100
+Wire Wire Line
+	8750 5100 6750 5100
+Wire Wire Line
+	6750 5100 6750 4700
+Wire Wire Line
+	6750 5100 4700 5100
+Wire Wire Line
+	4700 5100 4700 4700
+Connection ~ 6750 5100
+Wire Wire Line
+	8650 4600 8650 5200
+Wire Wire Line
+	8650 5200 6650 5200
+Wire Wire Line
+	6650 5200 6650 4600
+Wire Wire Line
+	6650 4600 7100 4600
+Wire Wire Line
+	8650 4600 9100 4600
+Wire Wire Line
+	6650 5200 4600 5200
+Wire Wire Line
+	4600 5200 4600 4600
+Wire Wire Line
+	4600 4600 5100 4600
+Connection ~ 6650 5200
+Wire Wire Line
+	7100 2500 6750 2500
+Wire Wire Line
+	7100 2600 6750 2600
+Text Label 6800 2500 0    50   ~ 0
+FD815DIR
+Text Label 4850 2500 0    50   ~ 0
+FD07DIR
+Text Label 4850 2600 0    50   ~ 0
+F07EN*
+Text Label 6800 2600 0    50   ~ 0
+F815EN*
+Text Label 12850 2250 0    50   ~ 0
+FMWRT
+Text Label 14250 2250 0    50   ~ 0
+MWRT
+Text Label 10650 2850 0    50   ~ 0
+GND
+Text Label 8700 7600 0    50   ~ 0
+GND
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5E7C0740
+P 7600 11750
+F 0 "U?" H 7600 12731 50  0000 C CNN
+F 1 "74LVC245" H 7600 12640 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 11750 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 11750 50  0001 C CNN
+	1    7600 11750
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7100 11250 6750 11250
+Wire Wire Line
+	7100 11350 6750 11350
+Wire Wire Line
+	7100 11450 6750 11450
+Wire Wire Line
+	7100 11550 6750 11550
+Wire Wire Line
+	7100 11650 6750 11650
+Wire Wire Line
+	7100 11750 6750 11750
+Wire Wire Line
+	7100 11850 6750 11850
+Wire Wire Line
+	7100 11950 6750 11950
+Text Label 7600 10950 0    50   ~ 0
+VCC33
+Text Label 7600 12550 0    50   ~ 0
+GND
+Wire Wire Line
+	7100 12250 7100 12500
+Text Label 7100 12500 0    50   ~ 0
+GND
+Wire Wire Line
+	18550 9100 18050 9100
+Wire Wire Line
+	18550 9000 18050 9000
+Wire Wire Line
+	18550 8900 18050 8900
+Wire Wire Line
+	18550 3800 18100 3800
+Wire Wire Line
+	18550 3900 18100 3900
+Text Label 18200 3800 0    50   ~ 0
+pSTVAL*
+Text Label 18200 3900 0    50   ~ 0
+pHDLA
+Text Label 18200 8900 0    50   ~ 0
+pSYNC
+Text Label 18200 9000 0    50   ~ 0
+pWR*
+Text Label 18200 9100 0    50   ~ 0
+pDBIN
+$Comp
+L 74xx:74LS07 U?
+U 1 1 5E9F9D58
+P 10150 9800
+F 0 "U?" H 10150 10117 50  0000 C CNN
+F 1 "74LS07" H 10150 10026 50  0000 C CNN
+F 2 "" H 10150 9800 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10150 9800 50  0001 C CNN
+	1    10150 9800
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 3 1 5E9FC20C
+P 10100 11000
+F 0 "U?" H 10100 11317 50  0000 C CNN
+F 1 "74LS07" H 10100 11226 50  0000 C CNN
+F 2 "" H 10100 11000 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10100 11000 50  0001 C CNN
+	3    10100 11000
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 4 1 5E9FCDDE
+P 10100 11600
+F 0 "U?" H 10100 11917 50  0000 C CNN
+F 1 "74LS07" H 10100 11826 50  0000 C CNN
+F 2 "" H 10100 11600 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10100 11600 50  0001 C CNN
+	4    10100 11600
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 2 1 5E9FE2C4
+P 10150 10400
+F 0 "U?" H 10150 10717 50  0000 C CNN
+F 1 "74LS07" H 10150 10626 50  0000 C CNN
+F 2 "" H 10150 10400 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10150 10400 50  0001 C CNN
+	2    10150 10400
+	1    0    0    -1  
+$EndComp
+$Comp
+L VGA_V11-cache:RR9 RR?
+U 1 1 5EB93123
+P 11250 9150
+F 0 "RR?" V 11178 8651 70  0000 R CNN
+F 1 "1k" V 11057 8651 70  0000 R CNN
+F 2 "" H 11250 9150 60  0000 C CNN
+F 3 "" H 11250 9150 60  0000 C CNN
+	1    11250 9150
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	10750 9500 10350 9500
+Wire Wire Line
+	10450 9800 10850 9800
+Wire Wire Line
+	10850 9800 10850 9500
+Wire Wire Line
+	10450 10400 10950 10400
+Wire Wire Line
+	10950 10400 10950 9500
+Wire Wire Line
+	11050 9500 11050 11000
+Wire Wire Line
+	11050 11000 10400 11000
+Wire Wire Line
+	11150 9500 11150 11600
+Wire Wire Line
+	11150 11600 10400 11600
+Connection ~ 10850 9800
+Connection ~ 10950 10400
+Connection ~ 11050 11000
+Connection ~ 11150 11600
+Text Label 10400 9500 0    50   ~ 0
+VCC5
+Text Label 6800 11250 0    50   ~ 0
+FSDSBO*
+Text Label 6800 11350 0    50   ~ 0
+FCDSBO*
+Text Label 6800 11450 0    50   ~ 0
+FADSBO*
+Text Label 6800 11550 0    50   ~ 0
+FDODSBO*
+Connection ~ 10400 11600
+Wire Wire Line
+	10400 11600 10350 11600
+$Comp
+L 74xx:74LS07 U?
+U 5 1 5E652A6F
+P 10100 12200
+F 0 "U?" H 10100 12517 50  0000 C CNN
+F 1 "74LS07" H 10100 12426 50  0000 C CNN
+F 2 "" H 10100 12200 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10100 12200 50  0001 C CNN
+	5    10100 12200
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 6 1 5E653CF2
+P 10150 12800
+F 0 "U?" H 10150 13117 50  0000 C CNN
+F 1 "74LS07" H 10150 13026 50  0000 C CNN
+F 2 "" H 10150 12800 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10150 12800 50  0001 C CNN
+	6    10150 12800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	11250 9500 11250 12200
+Wire Wire Line
+	11250 12200 10400 12200
+Connection ~ 11250 12200
+Wire Wire Line
+	11350 12800 10450 12800
+Connection ~ 11350 12800
+Wire Wire Line
+	11350 9500 11350 12800
+Wire Wire Line
+	18550 3100 18100 3100
+Wire Wire Line
+	18550 3200 18100 3200
+Wire Wire Line
+	18550 3500 18100 3500
+Wire Wire Line
+	18550 3600 18100 3600
+Wire Wire Line
+	18550 1600 18100 1600
+Wire Wire Line
+	18550 8100 18050 8100
+Wire Wire Line
+	18550 8500 18050 8500
+Text Label 18200 8500 0    50   ~ 0
+RDY
+Text Label 18200 8100 0    50   ~ 0
+MWRT
+Text Label 18200 1600 0    50   ~ 0
+XRDY
+Text Label 6800 11650 0    50   ~ 0
+FXRDYO
+Text Label 6800 11750 0    50   ~ 0
+FRDYO
+Wire Wire Line
+	8600 11250 8600 9800
+Wire Wire Line
+	8100 11250 8600 11250
+Wire Wire Line
+	8600 9800 9850 9800
+Wire Wire Line
+	8650 11350 8650 10400
+Wire Wire Line
+	8100 11350 8650 11350
+Wire Wire Line
+	8650 10400 9850 10400
+Wire Wire Line
+	8700 11450 8700 11000
+Wire Wire Line
+	8100 11450 8700 11450
+Wire Wire Line
+	8700 11000 9800 11000
+Wire Wire Line
+	9200 11550 9150 11600
+Wire Wire Line
+	9150 11600 9800 11600
+Wire Wire Line
+	8100 11550 9200 11550
+Wire Wire Line
+	9250 11650 9250 12200
+Wire Wire Line
+	8100 11650 9250 11650
+Wire Wire Line
+	9250 12200 9800 12200
+Wire Wire Line
+	9200 12800 9200 11750
+Wire Wire Line
+	8100 11750 9200 11750
+Wire Wire Line
+	9200 12800 9850 12800
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5EA43AB5
+P 7600 13800
+F 0 "U?" H 7600 14781 50  0000 C CNN
+F 1 "74LVC245" H 7600 14690 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 13800 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 13800 50  0001 C CNN
+	1    7600 13800
+	1    0    0    -1  
+$EndComp
+Text Label 7600 13000 0    50   ~ 0
+VCC33
+Text Label 7600 14600 0    50   ~ 0
+GND
+Text Label 7100 14550 0    50   ~ 0
+GND
+Wire Wire Line
+	7100 14300 7100 14550
+Wire Wire Line
+	8100 13300 8500 13300
+Wire Wire Line
+	8100 13400 8500 13400
+Wire Wire Line
+	8100 13500 8500 13500
+Wire Wire Line
+	8100 13600 8500 13600
+Wire Wire Line
+	8100 13700 8500 13700
+Wire Wire Line
+	8100 13800 8500 13800
+Wire Wire Line
+	7100 13300 6750 13300
+Wire Wire Line
+	7100 13400 6750 13400
+Wire Wire Line
+	7100 13500 6750 13500
+Wire Wire Line
+	7100 13600 6750 13600
+Wire Wire Line
+	7100 13700 6750 13700
+Wire Wire Line
+	7100 13800 6750 13800
+Wire Wire Line
+	7100 13900 6750 13900
+Wire Wire Line
+	7100 12150 6750 12150
+Text Label 6800 12150 0    50   ~ 0
+VCC33
+Wire Wire Line
+	7100 14200 7100 14300
+Connection ~ 7100 14300
+Text Label 8200 13300 0    50   ~ 0
+SDSB*
+Text Label 8200 13400 0    50   ~ 0
+CDSB*
+Text Label 8200 13500 0    50   ~ 0
+ADSB*
+Text Label 8200 13600 0    50   ~ 0
+DODSB*
+Text Label 8200 13700 0    50   ~ 0
+XRDY
+Text Label 8200 13800 0    50   ~ 0
+RDY
+Text Label 6800 13300 0    50   ~ 0
+FSDSBI*
+Text Label 6800 13400 0    50   ~ 0
+FCDSBI*
+Text Label 6800 13500 0    50   ~ 0
+FADSBI*
+Text Label 6800 13600 0    50   ~ 0
+FDODSBI*
+Text Label 6800 13700 0    50   ~ 0
+FXRDYI
+Text Label 6800 13800 0    50   ~ 0
+FRDYI
+$Comp
+L 4xxx:4066 U?
+U 1 1 5EDA1102
+P 12600 9800
+F 0 "U?" H 12600 9627 50  0000 C CNN
+F 1 "4066" H 12600 9536 50  0000 C CNN
+F 2 "" H 12600 9800 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 12600 9800 50  0001 C CNN
+	1    12600 9800
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 1 1 5EDA3692
+P 14850 12200
+F 0 "U?" H 14850 12027 50  0000 C CNN
+F 1 "4066" H 14850 11936 50  0000 C CNN
+F 2 "" H 14850 12200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 14850 12200 50  0001 C CNN
+	1    14850 12200
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 2 1 5EDA55D3
+P 13200 10400
+F 0 "U?" H 13200 10227 50  0000 C CNN
+F 1 "4066" H 13200 10136 50  0000 C CNN
+F 2 "" H 13200 10400 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 13200 10400 50  0001 C CNN
+	2    13200 10400
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 3 1 5EDA6999
+P 13750 11000
+F 0 "U?" H 13750 10827 50  0000 C CNN
+F 1 "4066" H 13750 10736 50  0000 C CNN
+F 2 "" H 13750 11000 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 13750 11000 50  0001 C CNN
+	3    13750 11000
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 4 1 5EDA7FE9
+P 14350 11600
+F 0 "U?" H 14350 11427 50  0000 C CNN
+F 1 "4066" H 14350 11336 50  0000 C CNN
+F 2 "" H 14350 11600 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 14350 11600 50  0001 C CNN
+	4    14350 11600
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 2 1 5EDA98BF
+P 15300 12800
+F 0 "U?" H 15300 12627 50  0000 C CNN
+F 1 "4066" H 15300 12536 50  0000 C CNN
+F 2 "" H 15300 12800 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 15300 12800 50  0001 C CNN
+	2    15300 12800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10850 9800 12300 9800
+Wire Wire Line
+	10950 10400 12900 10400
+Wire Wire Line
+	11050 11000 13450 11000
+Wire Wire Line
+	11150 11600 14050 11600
+Wire Wire Line
+	11250 12200 14550 12200
+Wire Wire Line
+	11350 12800 15000 12800
+Wire Wire Line
+	15600 12800 16150 12800
+Wire Wire Line
+	12600 9500 12600 9350
+Wire Wire Line
+	13200 10100 13200 9350
+Wire Wire Line
+	13750 10700 13750 9350
+Wire Wire Line
+	13750 9350 13200 9350
+Connection ~ 13200 9350
+Wire Wire Line
+	13500 10400 15900 10400
+Wire Wire Line
+	12900 9800 15900 9800
+Wire Wire Line
+	14050 11000 15900 11000
+Wire Wire Line
+	14650 11600 15900 11600
+Wire Wire Line
+	15150 12200 15950 12200
+Wire Wire Line
+	14350 11300 14350 9350
+Wire Wire Line
+	14350 9350 13750 9350
+Connection ~ 13750 9350
+Wire Wire Line
+	14850 11900 14850 9350
+Wire Wire Line
+	14850 9350 14350 9350
+Connection ~ 14350 9350
+Wire Wire Line
+	15300 12500 15300 9350
+Wire Wire Line
+	15300 9350 14850 9350
+Connection ~ 14850 9350
+Text Label 12700 9350 0    50   ~ 0
+FMASTER*
+Text Label 15500 9800 0    50   ~ 0
+SDSB*
+Text Label 15550 10400 0    50   ~ 0
+CDSB*
+Text Label 15550 11000 0    50   ~ 0
+ADSB*
+Text Label 15550 11600 0    50   ~ 0
+DODSB*
+Text Label 15550 12200 0    50   ~ 0
+XRDY
+Text Label 15750 12800 0    50   ~ 0
+RDY
+$Comp
+L 74xx:74LS07 U?
+U 1 1 5F2AC92E
+P 10150 13400
+F 0 "U?" H 10150 13717 50  0000 C CNN
+F 1 "74LS07" H 10150 13626 50  0000 C CNN
+F 2 "" H 10150 13400 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10150 13400 50  0001 C CNN
+	1    10150 13400
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 2 1 5F2ADB10
+P 10200 14000
+F 0 "U?" H 10200 14317 50  0000 C CNN
+F 1 "74LS07" H 10200 14226 50  0000 C CNN
+F 2 "" H 10200 14000 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 10200 14000 50  0001 C CNN
+	2    10200 14000
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9850 13400 9100 13400
+Wire Wire Line
+	9100 13400 9100 11850
+Wire Wire Line
+	8100 11850 9100 11850
+Wire Wire Line
+	9000 14000 9900 14000
+Wire Wire Line
+	8100 11950 9000 11950
+Wire Wire Line
+	9000 11950 9000 14000
+Wire Wire Line
+	11450 13400 10450 13400
+Wire Wire Line
+	11450 9500 11450 13400
+Wire Wire Line
+	11550 9500 11550 14000
+Wire Wire Line
+	11550 14000 10500 14000
+$Comp
+L 4xxx:4066 U?
+U 3 1 5F3723EF
+P 12150 13350
+F 0 "U?" H 12150 13177 50  0000 C CNN
+F 1 "4066" H 12150 13086 50  0000 C CNN
+F 2 "" H 12150 13350 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 12150 13350 50  0001 C CNN
+	3    12150 13350
+	1    0    0    -1  
+$EndComp
+$Comp
+L 4xxx:4066 U?
+U 4 1 5F373295
+P 12600 14000
+F 0 "U?" H 12600 13827 50  0000 C CNN
+F 1 "4066" H 12600 13736 50  0000 C CNN
+F 2 "" H 12600 14000 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/cd4066b.pdf" H 12600 14000 50  0001 C CNN
+	4    12600 14000
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	11450 13400 11850 13400
+Wire Wire Line
+	11850 13400 11850 13350
+Connection ~ 11450 13400
+Wire Wire Line
+	11550 14000 12300 14000
+Connection ~ 11550 14000
+Wire Wire Line
+	12450 13350 15950 13350
+Wire Wire Line
+	12900 14000 16000 14000
+Wire Wire Line
+	12150 12950 12150 9350
+Wire Wire Line
+	12150 9350 12600 9350
+Connection ~ 12600 9350
+Wire Wire Line
+	12600 9350 13200 9350
+Wire Wire Line
+	12600 13700 12600 12950
+Wire Wire Line
+	12150 12950 12600 12950
+Wire Wire Line
+	12150 13050 12150 12950
+Connection ~ 12150 12950
+Text Label 15550 13350 0    50   ~ 0
+HOLD*
+Text Label 15700 14000 0    50   ~ 0
+INT*
+Text Label 6800 11850 0    50   ~ 0
+FHOLDO*
+Text Label 6800 11950 0    50   ~ 0
+FINTO*
+Wire Wire Line
+	8100 13900 8500 13900
+Wire Wire Line
+	8100 14000 8500 14000
+Wire Wire Line
+	7100 14000 6750 14000
+Text Label 8200 13900 0    50   ~ 0
+HOLD*
+Text Label 8200 14000 0    50   ~ 0
+INT*
+Text Label 6800 13900 0    50   ~ 0
+FHOLDI*
+Text Label 6800 14000 0    50   ~ 0
+FINTI*
+Wire Wire Line
+	18550 8700 18050 8700
+Wire Wire Line
+	18550 8600 18050 8600
+Text Label 18200 8600 0    50   ~ 0
+INT*
+Text Label 18200 8700 0    50   ~ 0
+HOLD*
+$EndSCHEMATC

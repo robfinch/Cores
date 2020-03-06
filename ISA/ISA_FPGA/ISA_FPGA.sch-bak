@@ -1,7 +1,7 @@
 EESchema Schematic File Version 4
 EELAYER 30 0
 EELAYER END
-$Descr B 17000 11000
+$Descr E 44000 34000
 encoding utf-8
 Sheet 1 1
 Title ""
@@ -1747,9 +1747,9 @@ $Comp
 L VGA~V11-cache:CONN_5X2 P1
 U 1 1 6082559F
 P 1550 5000
-F 0 "P1" H 1550 5443 60  0000 C CNN
-F 1 "CONN_5X2" H 1550 5345 50  0000 C CNN
-F 2 "" H 1550 5000 60  0000 C CNN
+F 0 "P1" H 1550 5549 60  0000 C CNN
+F 1 "CONN_5X2" H 1550 5451 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical" H 1550 5352 60  0000 C CNN
 F 3 "" H 1550 5000 60  0000 C CNN
 	1    1550 5000
 	1    0    0    -1  
