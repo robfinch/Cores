@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "VGA V11-cache")(type Legacy)(uri "${KIPRJMOD}/VGA V11-cache.lib")(options "")(descr ""))
+  (lib (name mini_din_6)(type Legacy)(uri ${KIPRJMOD}/mini_din_6.lib)(options "")(descr ""))
+)
