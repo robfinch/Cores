@@ -258,19 +258,19 @@ A18
 Text Label 3850 2500 0    50   ~ 0
 A19
 Text Label 3850 5300 0    50   ~ 0
-A20
-Text Label 3850 5200 0    50   ~ 0
-A21
-Text Label 3850 5100 0    50   ~ 0
-A22
-Text Label 3850 5000 0    50   ~ 0
-A23
-Text Label 3850 4900 0    50   ~ 0
 A24
-Text Label 3850 4800 0    50   ~ 0
+Text Label 3850 5200 0    50   ~ 0
 A25
-Text Label 3850 4700 0    50   ~ 0
+Text Label 3850 5100 0    50   ~ 0
 A26
+Text Label 3850 5000 0    50   ~ 0
+A20
+Text Label 3850 4900 0    50   ~ 0
+A21
+Text Label 3850 4800 0    50   ~ 0
+A22
+Text Label 3850 4700 0    50   ~ 0
+A23
 Text Label 5350 1500 0    50   ~ 0
 A1
 Text Label 5350 1600 0    50   ~ 0
@@ -445,9 +445,9 @@ Wire Wire Line
 Wire Wire Line
 	3700 4600 4100 4600
 Text Label 3850 4400 0    50   ~ 0
-SEL0
+A0
 Text Label 3850 4600 0    50   ~ 0
-SEL1
+SBHE
 Text Label 3850 5500 0    50   ~ 0
 WR*
 Text Label 2000 4100 0    50   ~ 0
@@ -477,7 +477,7 @@ GND
 Text Label 2050 1600 0    50   ~ 0
 VCC
 Text Label 12150 1800 0    50   ~ 0
-SEL1
+SBHE
 $Comp
 L 74xx:74LS245 U5
 U 1 1 5E751E88
@@ -589,9 +589,9 @@ D6
 Text Label 5350 4200 0    50   ~ 0
 D7
 Text Label 5350 4400 0    50   ~ 0
-FWR
+RD*
 Text Label 7600 4400 0    50   ~ 0
-FWR
+RD*
 Text Label 7600 4200 0    50   ~ 0
 D8
 Text Label 7600 4100 0    50   ~ 0
@@ -646,28 +646,6 @@ Text Label 8400 4800 0    50   ~ 0
 GND
 Text Label 6150 4800 0    50   ~ 0
 GND
-$Comp
-L VGA~V11-cache:CONN_30X2 U7
-U 1 1 5E8F9530
-P 6550 5800
-F 0 "U7" H 6550 5936 50  0000 C CNN
-F 1 "CONN_30X2" H 6550 5845 50  0000 C CNN
-F 2 "Connector_PinSocket_2.54mm:PinSocket_2x30_P2.54mm_Vertical" H 6550 5800 50  0001 C CNN
-F 3 "" H 6550 5800 50  0001 C CNN
-	1    6550 5800
-	1    0    0    -1  
-$EndComp
-$Comp
-L VGA~V11-cache:CONN_30X2 U8
-U 1 1 5E8FAEE6
-P 8550 5800
-F 0 "U8" H 8550 5936 50  0000 C CNN
-F 1 "CONN_30X2" H 8550 5845 50  0000 C CNN
-F 2 "Connector_PinSocket_2.54mm:PinSocket_2x30_P2.54mm_Vertical" H 8550 5800 50  0001 C CNN
-F 3 "" H 8550 5800 50  0001 C CNN
-	1    8550 5800
-	1    0    0    -1  
-$EndComp
 Wire Wire Line
 	6150 8700 5750 8700
 Wire Wire Line
@@ -847,7 +825,7 @@ FA25
 Text Label 13550 1600 0    50   ~ 0
 FA26
 Text Label 13550 1800 0    50   ~ 0
-FSEL1
+FSBHE
 Text Label 6800 3500 0    50   ~ 0
 FD0
 Text Label 6800 3600 0    50   ~ 0
@@ -1473,9 +1451,9 @@ Wire Wire Line
 	14850 9000 14650 9000
 Connection ~ 14850 9000
 Text Label 5350 1400 0    50   ~ 0
-SEL0
+A0
 Text Label 6800 1400 0    50   ~ 0
-FSEL0
+FA0
 Text Label 5300 2300 0    50   ~ 0
 VCC33
 Text Label 7600 2300 0    50   ~ 0
@@ -1492,49 +1470,6 @@ Text Label 9850 2400 0    50   ~ 0
 GND
 Text Label 12100 2400 0    50   ~ 0
 GND
-$Comp
-L VGA~V11-cache:DIL14 P2
-U 1 1 60201AA4
-P 10500 7300
-F 0 "P2" H 10500 7928 60  0000 C CNN
-F 1 "14.31818MHz" V 10500 7300 50  0000 C CNN
-F 2 "Package_DIP:DIP-14_W7.62mm_Socket" H 10500 7731 60  0000 C CNN
-F 3 "" H 10500 7300 60  0000 C CNN
-	1    10500 7300
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	10850 7000 11000 7000
-Wire Wire Line
-	11000 7000 11000 6950
-Wire Wire Line
-	10150 7300 10150 7400
-Connection ~ 10150 7400
-Wire Wire Line
-	10150 7400 10150 7500
-Connection ~ 10150 7500
-Wire Wire Line
-	10150 7500 10150 7600
-Connection ~ 10150 7600
-Wire Wire Line
-	10150 7600 10150 7700
-Text Label 10150 7700 0    50   ~ 0
-GND
-Wire Wire Line
-	10850 7300 10850 7400
-Wire Wire Line
-	10850 7700 11050 7700
-Connection ~ 10850 7400
-Wire Wire Line
-	10850 7400 10850 7500
-Connection ~ 10850 7500
-Wire Wire Line
-	10850 7500 10850 7600
-Connection ~ 10850 7600
-Wire Wire Line
-	10850 7600 10850 7700
-Text Label 11000 6950 0    50   ~ 0
-VCC
 Text Label 12150 1700 0    50   ~ 0
 ALE
 Text Label 13550 1700 0    50   ~ 0
@@ -1552,89 +1487,13 @@ Wire Wire Line
 Wire Wire Line
 	8950 6700 9300 6700
 Text Label 9050 6600 0    50   ~ 0
-FWR
+FWR*
 Wire Wire Line
 	8950 6800 9300 6800
 Text Label 9050 6800 0    50   ~ 0
 FDBE*
-$Comp
-L 74xx:74HCT04 U9
-U 1 1 60328353
-P 10400 3550
-F 0 "U9" H 10400 3867 50  0000 C CNN
-F 1 "74LVC06" H 10400 3776 50  0000 C CNN
-F 2 "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" H 10400 3550 50  0001 C CNN
-F 3 "https://assets.nexperia.com/documents/data-sheet/74HC_HCT04.pdf" H 10400 3550 50  0001 C CNN
-	1    10400 3550
-	1    0    0    -1  
-$EndComp
-$Comp
-L 74xx:74HCT04 U9
-U 2 1 6032A32E
-P 11350 7700
-F 0 "U9" H 11350 8017 50  0000 C CNN
-F 1 "74LVC06" H 11350 7926 50  0000 C CNN
-F 2 "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" H 11350 7700 50  0001 C CNN
-F 3 "https://assets.nexperia.com/documents/data-sheet/74HC_HCT04.pdf" H 11350 7700 50  0001 C CNN
-	2    11350 7700
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	11650 7700 12000 7700
-Text Label 11750 7700 0    50   ~ 0
-OSC
-Wire Wire Line
-	10100 3550 9750 3550
-Wire Wire Line
-	10700 3550 10750 3550
-Text Label 9850 3550 0    50   ~ 0
-WR*
-Text Label 10850 3550 0    50   ~ 0
-FWR
-Wire Wire Line
-	2300 4300 1950 4300
-Text Label 2000 4300 0    50   ~ 0
-OSC
-$Comp
-L VGA~V11-cache:R R19
-U 1 1 604A95FC
-P 11100 3300
-F 0 "R19" V 11345 3300 40  0000 C CNN
-F 1 "2k2" V 11269 3300 40  0000 C CNN
-F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 11201 3300 30  0000 C CNN
-F 3 "" H 11100 3300 30  0000 C CNN
-	1    11100 3300
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA~V11-cache:R R22
-U 1 1 604AA342
-P 11950 7500
-F 0 "R22" V 12195 7500 40  0000 C CNN
-F 1 "2k2" V 12119 7500 40  0000 C CNN
-F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 12051 7500 30  0000 C CNN
-F 3 "" H 11950 7500 30  0000 C CNN
-	1    11950 7500
-	0    -1   -1   0   
-$EndComp
-Wire Wire Line
-	11350 3300 11650 3300
-Wire Wire Line
-	10850 3300 10750 3300
-Wire Wire Line
-	10750 3300 10750 3550
-Connection ~ 10750 3550
-Wire Wire Line
-	10750 3550 11200 3550
-Wire Wire Line
-	11700 7500 11650 7500
-Wire Wire Line
-	11650 7500 11650 7700
-Connection ~ 11650 7700
-Wire Wire Line
-	12200 7500 12450 7500
-Text Label 12250 7500 0    50   ~ 0
-VCC
+Text Label 900  4300 0    50   ~ 0
+14M318Hz
 Text Label 3850 2300 0    50   ~ 0
 RDY
 $Comp
@@ -1672,8 +1531,6 @@ Wire Wire Line
 	10750 4150 11300 4150
 Wire Wire Line
 	11350 3900 11650 3900
-Text Label 11400 3300 0    50   ~ 0
-VCC33
 Text Label 11450 3900 0    50   ~ 0
 VCC
 Text Label 10900 4150 0    50   ~ 0
@@ -1682,10 +1539,6 @@ Text Label 9850 4150 0    50   ~ 0
 RDY*
 Text Label 9050 6700 0    50   ~ 0
 RDY*
-Wire Wire Line
-	2300 4600 1950 4600
-Text Label 2000 4600 0    50   ~ 0
-CYC
 Wire Wire Line
 	2300 2300 1950 2300
 Text Label 2050 2300 0    50   ~ 0
@@ -1747,7 +1600,7 @@ U 1 1 6082559F
 P 1550 5000
 F 0 "P1" H 1550 5549 60  0000 C CNN
 F 1 "CONN_5X2" H 1550 5451 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical" H 1550 5352 60  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical" H 1550 5352 60  0001 C CNN
 F 3 "" H 1550 5000 60  0000 C CNN
 	1    1550 5000
 	1    0    0    -1  
@@ -1775,138 +1628,138 @@ IRQ
 $Comp
 L VGA~V11-cache:CP1 C2
 U 1 1 608C352F
-P 11600 12550
-F 0 "C2" H 11733 12649 50  0000 L CNN
-F 1 "0.1" H 11733 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 11733 12459 60  0001 L CNN
-F 3 "" H 11600 12550 60  0000 C CNN
-	1    11600 12550
+P 13600 15650
+F 0 "C2" H 13733 15749 50  0000 L CNN
+F 1 "0.1" H 13733 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 13733 15559 60  0001 L CNN
+F 3 "" H 13600 15650 60  0000 C CNN
+	1    13600 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C3
 U 1 1 608C447A
-P 12050 12550
-F 0 "C3" H 12183 12649 50  0000 L CNN
-F 1 "0.1" H 12183 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 12183 12459 60  0000 L CNN
-F 3 "" H 12050 12550 60  0000 C CNN
-	1    12050 12550
+P 14050 15650
+F 0 "C3" H 14183 15749 50  0000 L CNN
+F 1 "0.1" H 14183 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 14183 15559 60  0000 L CNN
+F 3 "" H 14050 15650 60  0000 C CNN
+	1    14050 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C4
 U 1 1 608C4FB5
-P 12500 12550
-F 0 "C4" H 12633 12649 50  0000 L CNN
-F 1 "0.1" H 12633 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 12633 12459 60  0001 L CNN
-F 3 "" H 12500 12550 60  0000 C CNN
-	1    12500 12550
+P 14500 15650
+F 0 "C4" H 14633 15749 50  0000 L CNN
+F 1 "0.1" H 14633 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 14633 15559 60  0001 L CNN
+F 3 "" H 14500 15650 60  0000 C CNN
+	1    14500 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C5
 U 1 1 608C59B4
-P 12950 12550
-F 0 "C5" H 13083 12649 50  0000 L CNN
-F 1 "0.1" H 13083 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 13083 12459 60  0001 L CNN
-F 3 "" H 12950 12550 60  0000 C CNN
-	1    12950 12550
+P 14950 15650
+F 0 "C5" H 15083 15749 50  0000 L CNN
+F 1 "0.1" H 15083 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 15083 15559 60  0001 L CNN
+F 3 "" H 14950 15650 60  0000 C CNN
+	1    14950 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C6
 U 1 1 608C6AA0
-P 13400 12550
-F 0 "C6" H 13533 12649 50  0000 L CNN
-F 1 "0.1" H 13533 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 13533 12459 60  0001 L CNN
-F 3 "" H 13400 12550 60  0000 C CNN
-	1    13400 12550
+P 15400 15650
+F 0 "C6" H 15533 15749 50  0000 L CNN
+F 1 "0.1" H 15533 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 15533 15559 60  0001 L CNN
+F 3 "" H 15400 15650 60  0000 C CNN
+	1    15400 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C7
 U 1 1 608C7787
-P 13850 12550
-F 0 "C7" H 13983 12649 50  0000 L CNN
-F 1 "0.1" H 13983 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 13983 12459 60  0001 L CNN
-F 3 "" H 13850 12550 60  0000 C CNN
-	1    13850 12550
+P 15850 15650
+F 0 "C7" H 15983 15749 50  0000 L CNN
+F 1 "0.1" H 15983 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 15983 15559 60  0001 L CNN
+F 3 "" H 15850 15650 60  0000 C CNN
+	1    15850 15650
 	1    0    0    -1  
 $EndComp
 $Comp
 L VGA~V11-cache:CP1 C1
 U 1 1 608C84A6
-P 11150 12550
-F 0 "C1" H 11283 12649 50  0000 L CNN
-F 1 "0.1" H 11283 12558 50  0000 L CNN
-F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 11283 12459 60  0001 L CNN
-F 3 "" H 11150 12550 60  0000 C CNN
-	1    11150 12550
+P 13150 15650
+F 0 "C1" H 13283 15749 50  0000 L CNN
+F 1 "0.1" H 13283 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 13283 15559 60  0001 L CNN
+F 3 "" H 13150 15650 60  0000 C CNN
+	1    13150 15650
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	11150 12350 11600 12350
-Connection ~ 11600 12350
+	13150 15450 13600 15450
+Connection ~ 13600 15450
 Wire Wire Line
-	11600 12350 12050 12350
-Connection ~ 12050 12350
+	13600 15450 14050 15450
+Connection ~ 14050 15450
 Wire Wire Line
-	12050 12350 12500 12350
-Connection ~ 12500 12350
+	14050 15450 14500 15450
+Connection ~ 14500 15450
 Wire Wire Line
-	12500 12350 12700 12350
-Connection ~ 12950 12350
+	14500 15450 14700 15450
+Connection ~ 14950 15450
 Wire Wire Line
-	12950 12350 13400 12350
-Connection ~ 13400 12350
+	14950 15450 15400 15450
+Connection ~ 15400 15450
 Wire Wire Line
-	13400 12350 13850 12350
+	15400 15450 15850 15450
 Wire Wire Line
-	11150 12750 11600 12750
-Connection ~ 11600 12750
+	13150 15850 13600 15850
+Connection ~ 13600 15850
 Wire Wire Line
-	11600 12750 12050 12750
-Connection ~ 12050 12750
+	13600 15850 14050 15850
+Connection ~ 14050 15850
 Wire Wire Line
-	12050 12750 12500 12750
-Connection ~ 12500 12750
+	14050 15850 14500 15850
+Connection ~ 14500 15850
 Wire Wire Line
-	12500 12750 12700 12750
-Connection ~ 12950 12750
+	14500 15850 14700 15850
+Connection ~ 14950 15850
 Wire Wire Line
-	12950 12750 13400 12750
-Connection ~ 13400 12750
+	14950 15850 15400 15850
+Connection ~ 15400 15850
 Wire Wire Line
-	13400 12750 13850 12750
+	15400 15850 15850 15850
 Wire Wire Line
-	12700 12750 12700 12900
-Connection ~ 12700 12750
+	14700 15850 14700 16000
+Connection ~ 14700 15850
 Wire Wire Line
-	12700 12750 12950 12750
+	14700 15850 14950 15850
 Wire Wire Line
-	12700 12350 12700 12150
-Connection ~ 12700 12350
+	14700 15450 14700 15250
+Connection ~ 14700 15450
 Wire Wire Line
-	12700 12350 12950 12350
-Text Label 12700 12150 0    50   ~ 0
+	14700 15450 14950 15450
+Text Label 14700 15250 0    50   ~ 0
 VCC33
-Text Label 12700 12900 0    50   ~ 0
+Text Label 14700 16000 0    50   ~ 0
 GND
 $Comp
 L FPGA-Board-rescue:CONN_6 P?
 U 1 1 5EEEC22A
 P 8050 10750
 AR Path="/5EEFC0AE/5EEEC22A" Ref="P?"  Part="1" 
-AR Path="/5EEEC22A" Ref="P?"  Part="1" 
+AR Path="/5EEEC22A" Ref="P5"  Part="1" 
 AR Path="/5EE5298B/5EEEC22A" Ref="P?"  Part="1" 
-F 0 "P?" V 8000 10750 60  0000 C CNN
+F 0 "P5" V 8000 10750 60  0000 C CNN
 F 1 "CONN_6" V 8100 10750 60  0000 C CNN
-F 2 "~" H 8050 10750 60  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_1x06_P2.54mm_Vertical" H 8050 10750 60  0001 C CNN
 F 3 "~" H 8050 10750 60  0000 C CNN
 	1    8050 10750
 	0    -1   -1   0   
@@ -1916,11 +1769,11 @@ L FPGA-Board-rescue:CONN_2X2 P?
 U 1 1 5EEEC230
 P 8150 11850
 AR Path="/5EEFC0AE/5EEEC230" Ref="P?"  Part="1" 
-AR Path="/5EEEC230" Ref="P?"  Part="1" 
+AR Path="/5EEEC230" Ref="P6"  Part="1" 
 AR Path="/5EE5298B/5EEEC230" Ref="P?"  Part="1" 
-F 0 "P?" V 8200 12050 50  0000 C CNN
+F 0 "P6" V 8200 12050 50  0000 C CNN
 F 1 "CONN_2X2" H 8160 11720 40  0000 C CNN
-F 2 "~" H 8150 11850 60  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_2x02_P2.54mm_Vertical" H 8150 11850 60  0001 C CNN
 F 3 "~" H 8150 11850 60  0000 C CNN
 	1    8150 11850
 	0    -1   -1   0   
@@ -1930,11 +1783,11 @@ L FPGA-Board-rescue:R R?
 U 1 1 5EEEC236
 P 7750 12350
 AR Path="/5EEFC0AE/5EEEC236" Ref="R?"  Part="1" 
-AR Path="/5EEEC236" Ref="R?"  Part="1" 
+AR Path="/5EEEC236" Ref="R50"  Part="1" 
 AR Path="/5EE5298B/5EEEC236" Ref="R?"  Part="1" 
-F 0 "R?" V 7830 12350 40  0000 C CNN
+F 0 "R50" V 7830 12350 40  0000 C CNN
 F 1 "10K" V 7757 12351 40  0000 C CNN
-F 2 "~" V 7680 12350 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 7680 12350 30  0000 C CNN
 F 3 "~" H 7750 12350 30  0000 C CNN
 	1    7750 12350
 	0    -1   -1   0   
@@ -1944,11 +1797,11 @@ L FPGA-Board-rescue:C C?
 U 1 1 5EEEC23C
 P 8550 11600
 AR Path="/5EEFC0AE/5EEEC23C" Ref="C?"  Part="1" 
-AR Path="/5EEEC23C" Ref="C?"  Part="1" 
+AR Path="/5EEEC23C" Ref="C8"  Part="1" 
 AR Path="/5EE5298B/5EEEC23C" Ref="C?"  Part="1" 
-F 0 "C?" H 8550 11700 40  0000 L CNN
+F 0 "C8" H 8550 11700 40  0000 L CNN
 F 1 "0.1" H 8556 11515 40  0000 L CNN
-F 2 "~" H 8588 11450 30  0000 C CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 8588 11450 30  0001 C CNN
 F 3 "~" H 8550 11600 60  0000 C CNN
 	1    8550 11600
 	1    0    0    -1  
@@ -1960,9 +1813,9 @@ L FPGA-Board-rescue:GND #PWR?
 U 1 1 5EEEC243
 P 7800 11200
 AR Path="/5EEFC0AE/5EEEC243" Ref="#PWR?"  Part="1" 
-AR Path="/5EEEC243" Ref="#PWR?"  Part="1" 
+AR Path="/5EEEC243" Ref="#PWR0101"  Part="1" 
 AR Path="/5EE5298B/5EEEC243" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 7800 11200 30  0001 C CNN
+F 0 "#PWR0101" H 7800 11200 30  0001 C CNN
 F 1 "GND" H 7800 11130 30  0001 C CNN
 F 2 "" H 7800 11200 60  0000 C CNN
 F 3 "" H 7800 11200 60  0000 C CNN
@@ -1977,11 +1830,11 @@ L FPGA-Board-rescue:CONN_7 P?
 U 1 1 5EEEC24B
 P 8450 10150
 AR Path="/5EEFC0AE/5EEEC24B" Ref="P?"  Part="1" 
-AR Path="/5EEEC24B" Ref="P?"  Part="1" 
+AR Path="/5EEEC24B" Ref="P7"  Part="1" 
 AR Path="/5EE5298B/5EEEC24B" Ref="P?"  Part="1" 
-F 0 "P?" V 8420 10150 60  0000 C CNN
+F 0 "P7" V 8420 10150 60  0000 C CNN
 F 1 "CONN_7" V 8520 10150 60  0000 C CNN
-F 2 "~" H 8450 10150 60  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_1x07_P2.54mm_Vertical" H 8450 10150 60  0001 C CNN
 F 3 "~" H 8450 10150 60  0000 C CNN
 	1    8450 10150
 	-1   0    0    1   
@@ -1991,11 +1844,11 @@ L FPGA-Board-rescue:CONN_7 P?
 U 1 1 5EEEC251
 P 7500 10150
 AR Path="/5EEFC0AE/5EEEC251" Ref="P?"  Part="1" 
-AR Path="/5EEEC251" Ref="P?"  Part="1" 
+AR Path="/5EEEC251" Ref="P4"  Part="1" 
 AR Path="/5EE5298B/5EEEC251" Ref="P?"  Part="1" 
-F 0 "P?" V 7470 10150 60  0000 C CNN
+F 0 "P4" V 7470 10150 60  0000 C CNN
 F 1 "CONN_7" V 7570 10150 60  0000 C CNN
-F 2 "~" H 7500 10150 60  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_1x07_P2.54mm_Vertical" H 7500 10150 60  0001 C CNN
 F 3 "~" H 7500 10150 60  0000 C CNN
 	1    7500 10150
 	1    0    0    -1  
@@ -2005,9 +1858,9 @@ L FPGA-Board-rescue:GND #PWR?
 U 1 1 5EEEC257
 P 8850 9450
 AR Path="/5EEFC0AE/5EEEC257" Ref="#PWR?"  Part="1" 
-AR Path="/5EEEC257" Ref="#PWR?"  Part="1" 
+AR Path="/5EEEC257" Ref="#PWR0102"  Part="1" 
 AR Path="/5EE5298B/5EEEC257" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 8850 9450 30  0001 C CNN
+F 0 "#PWR0102" H 8850 9450 30  0001 C CNN
 F 1 "GND" H 8850 9380 30  0001 C CNN
 F 2 "" H 8850 9450 60  0000 C CNN
 F 3 "" H 8850 9450 60  0000 C CNN
@@ -2019,9 +1872,9 @@ L FPGA-Board-rescue:VCC #PWR?
 U 1 1 5EEEC25D
 P 9100 9400
 AR Path="/5EEFC0AE/5EEEC25D" Ref="#PWR?"  Part="1" 
-AR Path="/5EEEC25D" Ref="#PWR?"  Part="1" 
+AR Path="/5EEEC25D" Ref="#PWR0103"  Part="1" 
 AR Path="/5EE5298B/5EEEC25D" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 9100 9500 30  0001 C CNN
+F 0 "#PWR0103" H 9100 9500 30  0001 C CNN
 F 1 "VCC" H 9100 9500 30  0000 C CNN
 F 2 "" H 9100 9400 60  0000 C CNN
 F 3 "" H 9100 9400 60  0000 C CNN
@@ -2045,11 +1898,11 @@ L FPGA-Board-rescue:CONN_2 P?
 U 1 1 5EEEC26F
 P 9600 9550
 AR Path="/5EEFC0AE/5EEEC26F" Ref="P?"  Part="1" 
-AR Path="/5EEEC26F" Ref="P?"  Part="1" 
+AR Path="/5EEEC26F" Ref="P8"  Part="1" 
 AR Path="/5EE5298B/5EEEC26F" Ref="P?"  Part="1" 
-F 0 "P?" V 9550 9550 40  0000 C CNN
+F 0 "P8" V 9550 9550 40  0000 C CNN
 F 1 "CONN_2" V 9650 9550 40  0000 C CNN
-F 2 "~" H 9600 9550 60  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical" H 9600 9550 60  0001 C CNN
 F 3 "~" H 9600 9550 60  0000 C CNN
 	1    9600 9550
 	1    0    0    -1  
@@ -2139,131 +1992,85 @@ Text Label 7200 12350 0    50   ~ 0
 FRX
 Text Label 7250 12500 0    50   ~ 0
 FTX
-Text Label 13950 11400 0    60   ~ 0
+Text Label 9000 15850 0    60   ~ 0
 GND
-Text Label 14050 10750 0    60   ~ 0
+Text Label 9100 15200 0    60   ~ 0
 VCC
 $Comp
 L FPGA-Board-rescue:GND #PWR?
 U 1 1 5EFB7F71
-P 14450 11550
+P 9500 16000
 AR Path="/5EEFC0AE/5EFB7F71" Ref="#PWR?"  Part="1" 
-AR Path="/5EFB7F71" Ref="#PWR?"  Part="1" 
+AR Path="/5EFB7F71" Ref="#PWR0104"  Part="1" 
 AR Path="/5EE5298B/5EFB7F71" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 14450 11550 30  0001 C CNN
-F 1 "GND" H 14450 11480 30  0001 C CNN
-F 2 "" H 14450 11550 60  0000 C CNN
-F 3 "" H 14450 11550 60  0000 C CNN
-	1    14450 11550
+F 0 "#PWR0104" H 9500 16000 30  0001 C CNN
+F 1 "GND" H 9500 15930 30  0001 C CNN
+F 2 "" H 9500 16000 60  0000 C CNN
+F 3 "" H 9500 16000 60  0000 C CNN
+	1    9500 16000
 	1    0    0    -1  
 $EndComp
-Text Label 15500 10550 2    60   ~ 0
+Text Label 10550 15000 2    60   ~ 0
 VCC33
-$Comp
-L FPGA-Board-rescue:PWR_FLAG #FLG?
-U 1 1 5EFB7F78
-P 14500 10650
-AR Path="/5EEFC0AE/5EFB7F78" Ref="#FLG?"  Part="1" 
-AR Path="/5EFB7F78" Ref="#FLG?"  Part="1" 
-AR Path="/5EE5298B/5EFB7F78" Ref="#FLG?"  Part="1" 
-F 0 "#FLG?" H 14500 10745 30  0001 C CNN
-F 1 "PWR_FLAG" H 14500 10830 30  0000 C CNN
-F 2 "" H 14500 10650 60  0000 C CNN
-F 3 "" H 14500 10650 60  0000 C CNN
-	1    14500 10650
-	1    0    0    -1  
-$EndComp
 $Comp
 L FPGA-Board-rescue:7805 U?
 U 1 1 5EFB7F7E
-P 15050 11050
+P 10100 15500
 AR Path="/5EEFC0AE/5EFB7F7E" Ref="U?"  Part="1" 
-AR Path="/5EFB7F7E" Ref="U?"  Part="1" 
+AR Path="/5EFB7F7E" Ref="U14"  Part="1" 
 AR Path="/5EE5298B/5EFB7F7E" Ref="U?"  Part="1" 
-F 0 "U?" H 15050 11350 60  0000 C CNN
-F 1 "LM3940" H 15050 11250 60  0000 C CNN
-F 2 "~" H 15050 11050 60  0000 C CNN
-F 3 "~" H 15050 11050 60  0000 C CNN
-	1    15050 11050
-	1    0    0    -1  
-$EndComp
-$Comp
-L FPGA-Board-rescue:PWR_FLAG #FLG?
-U 1 1 5EFB7F84
-P 15900 10800
-AR Path="/5EEFC0AE/5EFB7F84" Ref="#FLG?"  Part="1" 
-AR Path="/5EFB7F84" Ref="#FLG?"  Part="1" 
-AR Path="/5EE5298B/5EFB7F84" Ref="#FLG?"  Part="1" 
-F 0 "#FLG?" H 15900 10895 30  0001 C CNN
-F 1 "PWR_FLAG" H 15900 10980 30  0000 C CNN
-F 2 "" H 15900 10800 60  0000 C CNN
-F 3 "" H 15900 10800 60  0000 C CNN
-	1    15900 10800
+F 0 "U14" H 10100 15800 60  0000 C CNN
+F 1 "LM3940" H 10100 15700 60  0000 C CNN
+F 2 "Package_TO_SOT_THT:LMxx" H 10100 15500 60  0000 C CNN
+F 3 "~" H 10100 15500 60  0000 C CNN
+	1    10100 15500
 	1    0    0    -1  
 $EndComp
 $Comp
 L FPGA-Board-rescue:CAPAPOL C?
 U 1 1 5EFB7F8A
-P 15700 11200
+P 10750 15650
 AR Path="/5EEFC0AE/5EFB7F8A" Ref="C?"  Part="1" 
-AR Path="/5EFB7F8A" Ref="C?"  Part="1" 
+AR Path="/5EFB7F8A" Ref="C9"  Part="1" 
 AR Path="/5EE5298B/5EFB7F8A" Ref="C?"  Part="1" 
-F 0 "C?" H 15750 11300 40  0000 L CNN
-F 1 "10uF" H 15750 11100 40  0000 L CNN
-F 2 "~" H 15800 11050 30  0000 C CNN
-F 3 "~" H 15700 11200 300 0000 C CNN
-	1    15700 11200
+F 0 "C9" H 10800 15750 40  0000 L CNN
+F 1 "10uF" H 10800 15550 40  0000 L CNN
+F 2 "Capacitor_THT:CP_Radial_D7.5mm_P2.50mm" H 10850 15500 30  0000 C CNN
+F 3 "~" H 10750 15650 300 0000 C CNN
+	1    10750 15650
 	1    0    0    -1  
 $EndComp
-Connection ~ 15600 11000
 Wire Wire Line
-	15600 11000 15600 10900
+	9500 15850 9500 16000
 Wire Wire Line
-	15600 10900 15900 10900
+	10500 15450 10550 15450
 Wire Wire Line
-	15900 10900 15900 10800
+	8650 15450 9100 15450
+Connection ~ 10100 15850
+Connection ~ 10550 15450
 Wire Wire Line
-	14450 11400 14450 11550
+	10550 15000 10550 15450
 Wire Wire Line
-	15450 11000 15500 11000
+	10100 15850 10100 15750
+Connection ~ 9100 15450
 Wire Wire Line
-	13600 11000 14050 11000
-Connection ~ 14500 11000
+	9100 15200 9100 15450
+Connection ~ 9500 15850
 Wire Wire Line
-	14500 11000 14500 10650
-Connection ~ 15050 11400
-Connection ~ 15500 11000
+	10100 15850 10750 15850
 Wire Wire Line
-	15500 10550 15500 11000
+	8650 15850 9500 15850
 Wire Wire Line
-	15050 11400 15050 11300
-Connection ~ 14050 11000
-Wire Wire Line
-	14050 10750 14050 11000
-Connection ~ 14450 11400
-Wire Wire Line
-	15600 11000 15700 11000
-Wire Wire Line
-	14500 11000 14650 11000
-Wire Wire Line
-	15050 11400 15700 11400
-Wire Wire Line
-	15500 11000 15600 11000
-Wire Wire Line
-	14050 11000 14500 11000
-Wire Wire Line
-	13600 11400 14450 11400
-Wire Wire Line
-	14450 11400 15050 11400
+	9500 15850 10100 15850
 $Comp
 L VGA_V11-cache:CONN_6x2 U?
 U 1 1 5F00E3A6
 P 3450 9600
 AR Path="/5EE5298B/5F00E3A6" Ref="U?"  Part="1" 
-AR Path="/5F00E3A6" Ref="U?"  Part="1" 
-F 0 "U?" H 3450 9736 50  0000 C CNN
+AR Path="/5F00E3A6" Ref="U11"  Part="1" 
+F 0 "U11" H 3450 9736 50  0000 C CNN
 F 1 "CONN_6x2" H 3450 9645 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Horizontal" H 3450 9600 50  0001 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x06_P2.54mm_Horizontal" H 3450 9600 50  0001 C CNN
 F 3 "" H 3450 9600 50  0001 C CNN
 	1    3450 9600
 	1    0    0    -1  
@@ -2273,10 +2080,10 @@ L VGA_V11-cache:CONN_6x2 U?
 U 1 1 5F00E3AC
 P 3450 11600
 AR Path="/5EE5298B/5F00E3AC" Ref="U?"  Part="1" 
-AR Path="/5F00E3AC" Ref="U?"  Part="1" 
-F 0 "U?" H 3450 11736 50  0000 C CNN
+AR Path="/5F00E3AC" Ref="U12"  Part="1" 
+F 0 "U12" H 3450 11736 50  0000 C CNN
 F 1 "CONN_6x2" H 3450 11645 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Horizontal" H 3450 11600 50  0001 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x06_P2.54mm_Horizontal" H 3450 11600 50  0001 C CNN
 F 3 "" H 3450 11600 50  0001 C CNN
 	1    3450 11600
 	1    0    0    -1  
@@ -2342,10 +2149,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3DE
 P 4950 9700
 AR Path="/5EE5298B/5F00E3DE" Ref="R?"  Part="1" 
-AR Path="/5F00E3DE" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 9700 40  0000 C CNN
+AR Path="/5F00E3DE" Ref="R39"  Part="1" 
+F 0 "R39" V 5135 9700 40  0000 C CNN
 F 1 "200" V 5059 9700 40  0000 C CNN
-F 2 "" V 4880 9700 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 4880 9700 30  0001 C CNN
 F 3 "" H 4950 9700 30  0000 C CNN
 	1    4950 9700
 	0    -1   -1   0   
@@ -2355,10 +2162,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3E4
 P 4950 10000
 AR Path="/5EE5298B/5F00E3E4" Ref="R?"  Part="1" 
-AR Path="/5F00E3E4" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 10000 40  0000 C CNN
+AR Path="/5F00E3E4" Ref="R40"  Part="1" 
+F 0 "R40" V 5135 10000 40  0000 C CNN
 F 1 "200" V 5059 10000 40  0000 C CNN
-F 2 "" V 4880 10000 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 4880 10000 30  0001 C CNN
 F 3 "" H 4950 10000 30  0000 C CNN
 	1    4950 10000
 	0    -1   -1   0   
@@ -2368,10 +2175,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3EA
 P 4950 10300
 AR Path="/5EE5298B/5F00E3EA" Ref="R?"  Part="1" 
-AR Path="/5F00E3EA" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 10300 40  0000 C CNN
+AR Path="/5F00E3EA" Ref="R41"  Part="1" 
+F 0 "R41" V 5135 10300 40  0000 C CNN
 F 1 "200" V 5059 10300 40  0000 C CNN
-F 2 "" V 4880 10300 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 4880 10300 30  0001 C CNN
 F 3 "" H 4950 10300 30  0000 C CNN
 	1    4950 10300
 	0    -1   -1   0   
@@ -2381,10 +2188,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3F0
 P 4950 9400
 AR Path="/5EE5298B/5F00E3F0" Ref="R?"  Part="1" 
-AR Path="/5F00E3F0" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 9400 40  0000 C CNN
+AR Path="/5F00E3F0" Ref="R38"  Part="1" 
+F 0 "R38" V 5135 9400 40  0000 C CNN
 F 1 "200" V 5059 9400 40  0000 C CNN
-F 2 "" V 4880 9400 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 4880 9400 30  0001 C CNN
 F 3 "" H 4950 9400 30  0000 C CNN
 	1    4950 9400
 	0    -1   -1   0   
@@ -2394,10 +2201,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3F6
 P 2050 9750
 AR Path="/5EE5298B/5F00E3F6" Ref="R?"  Part="1" 
-AR Path="/5F00E3F6" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 9750 40  0000 C CNN
+AR Path="/5F00E3F6" Ref="R24"  Part="1" 
+F 0 "R24" V 2235 9750 40  0000 C CNN
 F 1 "200" V 2159 9750 40  0000 C CNN
-F 2 "" V 1980 9750 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1980 9750 30  0001 C CNN
 F 3 "" H 2050 9750 30  0000 C CNN
 	1    2050 9750
 	0    -1   -1   0   
@@ -2407,10 +2214,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E3FC
 P 2050 10050
 AR Path="/5EE5298B/5F00E3FC" Ref="R?"  Part="1" 
-AR Path="/5F00E3FC" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 10050 40  0000 C CNN
+AR Path="/5F00E3FC" Ref="R25"  Part="1" 
+F 0 "R25" V 2235 10050 40  0000 C CNN
 F 1 "200" V 2159 10050 40  0000 C CNN
-F 2 "" V 1980 10050 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1980 10050 30  0001 C CNN
 F 3 "" H 2050 10050 30  0000 C CNN
 	1    2050 10050
 	0    -1   -1   0   
@@ -2420,10 +2227,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E402
 P 2050 10350
 AR Path="/5EE5298B/5F00E402" Ref="R?"  Part="1" 
-AR Path="/5F00E402" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 10350 40  0000 C CNN
+AR Path="/5F00E402" Ref="R26"  Part="1" 
+F 0 "R26" V 2235 10350 40  0000 C CNN
 F 1 "200" V 2159 10350 40  0000 C CNN
-F 2 "" V 1980 10350 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1980 10350 30  0001 C CNN
 F 3 "" H 2050 10350 30  0000 C CNN
 	1    2050 10350
 	0    -1   -1   0   
@@ -2433,10 +2240,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E408
 P 2050 9450
 AR Path="/5EE5298B/5F00E408" Ref="R?"  Part="1" 
-AR Path="/5F00E408" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 9450 40  0000 C CNN
+AR Path="/5F00E408" Ref="R23"  Part="1" 
+F 0 "R23" V 2235 9450 40  0000 C CNN
 F 1 "200" V 2159 9450 40  0000 C CNN
-F 2 "" V 1980 9450 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 1980 9450 30  0001 C CNN
 F 3 "" H 2050 9450 30  0000 C CNN
 	1    2050 9450
 	0    -1   -1   0   
@@ -2446,10 +2253,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E40E
 P 2100 11750
 AR Path="/5EE5298B/5F00E40E" Ref="R?"  Part="1" 
-AR Path="/5F00E40E" Ref="R?"  Part="1" 
-F 0 "R?" V 2285 11750 40  0000 C CNN
+AR Path="/5F00E40E" Ref="R32"  Part="1" 
+F 0 "R32" V 2285 11750 40  0000 C CNN
 F 1 "200" V 2209 11750 40  0000 C CNN
-F 2 "" V 2030 11750 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2030 11750 30  0001 C CNN
 F 3 "" H 2100 11750 30  0000 C CNN
 	1    2100 11750
 	0    -1   -1   0   
@@ -2459,10 +2266,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E414
 P 2100 12050
 AR Path="/5EE5298B/5F00E414" Ref="R?"  Part="1" 
-AR Path="/5F00E414" Ref="R?"  Part="1" 
-F 0 "R?" V 2285 12050 40  0000 C CNN
+AR Path="/5F00E414" Ref="R33"  Part="1" 
+F 0 "R33" V 2285 12050 40  0000 C CNN
 F 1 "200" V 2209 12050 40  0000 C CNN
-F 2 "" V 2030 12050 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2030 12050 30  0001 C CNN
 F 3 "" H 2100 12050 30  0000 C CNN
 	1    2100 12050
 	0    -1   -1   0   
@@ -2472,10 +2279,10 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E41A
 P 2100 12350
 AR Path="/5EE5298B/5F00E41A" Ref="R?"  Part="1" 
-AR Path="/5F00E41A" Ref="R?"  Part="1" 
-F 0 "R?" V 2285 12350 40  0000 C CNN
+AR Path="/5F00E41A" Ref="R34"  Part="1" 
+F 0 "R34" V 2285 12350 40  0000 C CNN
 F 1 "200" V 2209 12350 40  0000 C CNN
-F 2 "" V 2030 12350 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2030 12350 30  0001 C CNN
 F 3 "" H 2100 12350 30  0000 C CNN
 	1    2100 12350
 	0    -1   -1   0   
@@ -2485,64 +2292,12 @@ L VGA_V11-cache:R R?
 U 1 1 5F00E420
 P 2100 11450
 AR Path="/5EE5298B/5F00E420" Ref="R?"  Part="1" 
-AR Path="/5F00E420" Ref="R?"  Part="1" 
-F 0 "R?" V 2285 11450 40  0000 C CNN
+AR Path="/5F00E420" Ref="R31"  Part="1" 
+F 0 "R31" V 2285 11450 40  0000 C CNN
 F 1 "200" V 2209 11450 40  0000 C CNN
-F 2 "" V 2030 11450 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 2030 11450 30  0001 C CNN
 F 3 "" H 2100 11450 30  0000 C CNN
 	1    2100 11450
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 5F00E426
-P 5000 11750
-AR Path="/5EE5298B/5F00E426" Ref="R?"  Part="1" 
-AR Path="/5F00E426" Ref="R?"  Part="1" 
-F 0 "R?" V 5185 11750 40  0000 C CNN
-F 1 "200" V 5109 11750 40  0000 C CNN
-F 2 "" V 4930 11750 30  0000 C CNN
-F 3 "" H 5000 11750 30  0000 C CNN
-	1    5000 11750
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 5F00E42C
-P 5000 12050
-AR Path="/5EE5298B/5F00E42C" Ref="R?"  Part="1" 
-AR Path="/5F00E42C" Ref="R?"  Part="1" 
-F 0 "R?" V 5185 12050 40  0000 C CNN
-F 1 "200" V 5109 12050 40  0000 C CNN
-F 2 "" V 4930 12050 30  0000 C CNN
-F 3 "" H 5000 12050 30  0000 C CNN
-	1    5000 12050
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 5F00E432
-P 5000 12350
-AR Path="/5EE5298B/5F00E432" Ref="R?"  Part="1" 
-AR Path="/5F00E432" Ref="R?"  Part="1" 
-F 0 "R?" V 5185 12350 40  0000 C CNN
-F 1 "200" V 5109 12350 40  0000 C CNN
-F 2 "" V 4930 12350 30  0000 C CNN
-F 3 "" H 5000 12350 30  0000 C CNN
-	1    5000 12350
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 5F00E438
-P 5000 11450
-AR Path="/5EE5298B/5F00E438" Ref="R?"  Part="1" 
-AR Path="/5F00E438" Ref="R?"  Part="1" 
-F 0 "R?" V 5185 11450 40  0000 C CNN
-F 1 "200" V 5109 11450 40  0000 C CNN
-F 2 "" V 4930 11450 30  0000 C CNN
-F 3 "" H 5000 11450 30  0000 C CNN
-	1    5000 11450
 	0    -1   -1   0   
 $EndComp
 Wire Wire Line
@@ -2566,23 +2321,13 @@ Wire Wire Line
 Wire Wire Line
 	4200 10300 4250 10300
 Wire Wire Line
-	4750 11450 4700 11450
-Wire Wire Line
 	4150 11450 4150 11700
-Wire Wire Line
-	4750 11750 4500 11750
 Wire Wire Line
 	4250 11750 4250 11800
 Wire Wire Line
 	3850 11800 4250 11800
 Wire Wire Line
-	4750 12050 4300 12050
-Wire Wire Line
-	4300 12050 4300 11900
-Wire Wire Line
 	3850 11900 4300 11900
-Wire Wire Line
-	4750 12350 4150 12350
 Wire Wire Line
 	4150 12350 4150 12000
 Wire Wire Line
@@ -2593,14 +2338,6 @@ Wire Wire Line
 	5200 10000 5700 10000
 Wire Wire Line
 	5200 10300 5700 10300
-Wire Wire Line
-	5250 11450 5750 11450
-Wire Wire Line
-	5250 11750 5750 11750
-Wire Wire Line
-	5250 12050 5750 12050
-Wire Wire Line
-	5250 12350 5750 12350
 Wire Wire Line
 	2300 9450 2700 9450
 Wire Wire Line
@@ -2681,14 +2418,6 @@ Text Label 5300 10000 0    50   ~ 0
 PMODA6
 Text Label 5300 10300 0    50   ~ 0
 PMODA7
-Text Label 5350 11450 0    50   ~ 0
-PMODB4
-Text Label 5350 11750 0    50   ~ 0
-PMODB5
-Text Label 5350 12050 0    50   ~ 0
-PMODB6
-Text Label 5400 12350 0    50   ~ 0
-PMODB7
 Wire Wire Line
 	6150 6000 5700 6000
 Wire Wire Line
@@ -2739,8 +2468,8 @@ Text Label 5800 7000 0    50   ~ 0
 PMODB2
 Text Label 5800 7200 0    50   ~ 0
 PMODB3
-Text Label 5800 7400 0    50   ~ 0
-PMODB4
+Text Label 5750 7400 0    50   ~ 0
+FMEMCS16
 Wire Wire Line
 	6150 7400 5700 7400
 Wire Wire Line
@@ -2754,11 +2483,11 @@ Wire Wire Line
 Wire Wire Line
 	6150 7900 5700 7900
 Text Label 5800 7500 0    50   ~ 0
-PMODB5
+F8M18Hz
 Text Label 5800 7600 0    50   ~ 0
-PMODB6
+F14M318Hz
 Text Label 5800 7700 0    50   ~ 0
-PMODB7
+CFG4
 Wire Wire Line
 	8950 7000 9300 7000
 Text Notes 7700 6400 0    50   ~ 0
@@ -2789,24 +2518,8 @@ Wire Wire Line
 	6150 8500 5700 8500
 Wire Wire Line
 	6150 8600 5700 8600
-Text Label 5800 7800 0    50   ~ 0
-PMODC0
-Text Label 5800 7900 0    50   ~ 0
-PMODC1
-Text Label 5800 8100 0    50   ~ 0
-PMODC2
-Text Label 5800 8300 0    50   ~ 0
-PMODC3
-Text Label 5800 8400 0    50   ~ 0
-PMODC4
-Text Label 5800 8500 0    50   ~ 0
-PMODC5
-Text Label 5800 8600 0    50   ~ 0
-PMODC6
 Wire Wire Line
 	6950 8600 7350 8600
-Text Label 7050 8600 0    50   ~ 0
-PMODC7
 Text Label 8000 6400 0    50   ~ 0
 ANA0
 Text Label 7000 7100 0    50   ~ 0
@@ -2814,10 +2527,10 @@ ANA1
 Text Label 5700 7100 0    50   ~ 0
 ANA2
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D2
 U 1 1 609372F4
 P 2300 10650
-F 0 "D?" V 2254 10729 50  0000 L CNN
+F 0 "D2" V 2254 10729 50  0000 L CNN
 F 1 "ZPDxx" V 2345 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2300 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2300 10650 50  0001 C CNN
@@ -2825,10 +2538,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2300 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D5
 U 1 1 60937DF0
 P 2500 10650
-F 0 "D?" V 2454 10729 50  0000 L CNN
+F 0 "D5" V 2454 10729 50  0000 L CNN
 F 1 "ZPDxx" V 2545 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2500 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2500 10650 50  0001 C CNN
@@ -2836,10 +2549,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2500 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D8
 U 1 1 60A19C34
 P 2700 10650
-F 0 "D?" V 2654 10729 50  0000 L CNN
+F 0 "D8" V 2654 10729 50  0000 L CNN
 F 1 "ZPDxx" V 2745 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2700 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2700 10650 50  0001 C CNN
@@ -2847,10 +2560,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2700 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D11
 U 1 1 60A19C3A
 P 2900 10650
-F 0 "D?" V 2854 10729 50  0000 L CNN
+F 0 "D11" V 2854 10729 50  0000 L CNN
 F 1 "ZPDxx" V 2945 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2900 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2900 10650 50  0001 C CNN
@@ -2858,10 +2571,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2900 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D16
 U 1 1 60AF7CB2
 P 4050 10650
-F 0 "D?" V 4004 10729 50  0000 L CNN
+F 0 "D16" V 4004 10729 50  0000 L CNN
 F 1 "ZPDxx" V 4095 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4050 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4050 10650 50  0001 C CNN
@@ -2869,10 +2582,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4050 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D19
 U 1 1 60AF7CB8
 P 4250 10650
-F 0 "D?" V 4204 10729 50  0000 L CNN
+F 0 "D19" V 4204 10729 50  0000 L CNN
 F 1 "ZPDxx" V 4295 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4250 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4250 10650 50  0001 C CNN
@@ -2880,10 +2593,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4250 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D22
 U 1 1 60AF7CBE
 P 4450 10650
-F 0 "D?" V 4404 10729 50  0000 L CNN
+F 0 "D22" V 4404 10729 50  0000 L CNN
 F 1 "ZPDxx" V 4495 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4450 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4450 10650 50  0001 C CNN
@@ -2891,10 +2604,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4450 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D25
 U 1 1 60AF7CC4
 P 4650 10650
-F 0 "D?" V 4604 10729 50  0000 L CNN
+F 0 "D25" V 4604 10729 50  0000 L CNN
 F 1 "ZPDxx" V 4695 10729 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4650 10475 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4650 10650 50  0001 C CNN
@@ -2902,10 +2615,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4650 10650 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D18
 U 1 1 60B681E8
 P 4100 12750
-F 0 "D?" V 4054 12829 50  0000 L CNN
+F 0 "D18" V 4054 12829 50  0000 L CNN
 F 1 "ZPDxx" V 4145 12829 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4100 12575 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4100 12750 50  0001 C CNN
@@ -2913,10 +2626,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4100 12750 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D21
 U 1 1 60B681EE
 P 4300 12750
-F 0 "D?" V 4254 12829 50  0000 L CNN
+F 0 "D21" V 4254 12829 50  0000 L CNN
 F 1 "ZPDxx" V 4345 12829 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4300 12575 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4300 12750 50  0001 C CNN
@@ -2924,10 +2637,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4300 12750 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D24
 U 1 1 60B681F4
 P 4500 12750
-F 0 "D?" V 4454 12829 50  0000 L CNN
+F 0 "D24" V 4454 12829 50  0000 L CNN
 F 1 "ZPDxx" V 4545 12829 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4500 12575 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4500 12750 50  0001 C CNN
@@ -2935,10 +2648,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4500 12750 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D27
 U 1 1 60B681FA
 P 4700 12750
-F 0 "D?" V 4654 12829 50  0000 L CNN
+F 0 "D27" V 4654 12829 50  0000 L CNN
 F 1 "ZPDxx" V 4745 12829 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4700 12575 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4700 12750 50  0001 C CNN
@@ -2946,10 +2659,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4700 12750 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D3
 U 1 1 60BD6F68
 P 2300 12800
-F 0 "D?" V 2254 12879 50  0000 L CNN
+F 0 "D3" V 2254 12879 50  0000 L CNN
 F 1 "ZPDxx" V 2345 12879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2300 12625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2300 12800 50  0001 C CNN
@@ -2957,10 +2670,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2300 12800 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D6
 U 1 1 60BD6F6E
 P 2500 12800
-F 0 "D?" V 2454 12879 50  0000 L CNN
+F 0 "D6" V 2454 12879 50  0000 L CNN
 F 1 "ZPDxx" V 2545 12879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2500 12625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2500 12800 50  0001 C CNN
@@ -2968,10 +2681,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2500 12800 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D9
 U 1 1 60BD6F74
 P 2700 12800
-F 0 "D?" V 2654 12879 50  0000 L CNN
+F 0 "D9" V 2654 12879 50  0000 L CNN
 F 1 "ZPDxx" V 2745 12879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2700 12625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2700 12800 50  0001 C CNN
@@ -2979,10 +2692,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2700 12800 5
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D12
 U 1 1 60BD6F7A
 P 2900 12800
-F 0 "D?" V 2854 12879 50  0000 L CNN
+F 0 "D12" V 2854 12879 50  0000 L CNN
 F 1 "ZPDxx" V 2945 12879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2900 12625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2900 12800 50  0001 C CNN
@@ -3066,10 +2779,10 @@ Connection ~ 4650 9400
 Wire Wire Line
 	4650 9400 4700 9400
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0105
 U 1 1 611D65CB
 P 2600 10800
-F 0 "#PWR?" H 2600 10550 50  0001 C CNN
+F 0 "#PWR0105" H 2600 10550 50  0001 C CNN
 F 1 "GND" H 2605 10627 50  0000 C CNN
 F 2 "" H 2600 10800 50  0001 C CNN
 F 3 "" H 2600 10800 50  0001 C CNN
@@ -3080,10 +2793,10 @@ Connection ~ 2600 10800
 Wire Wire Line
 	2600 10800 2700 10800
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0106
 U 1 1 611D74BF
 P 4350 10800
-F 0 "#PWR?" H 4350 10550 50  0001 C CNN
+F 0 "#PWR0106" H 4350 10550 50  0001 C CNN
 F 1 "GND" H 4355 10627 50  0000 C CNN
 F 2 "" H 4350 10800 50  0001 C CNN
 F 3 "" H 4350 10800 50  0001 C CNN
@@ -3094,10 +2807,10 @@ Connection ~ 4350 10800
 Wire Wire Line
 	4350 10800 4450 10800
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0107
 U 1 1 611D8D4A
 P 4400 12900
-F 0 "#PWR?" H 4400 12650 50  0001 C CNN
+F 0 "#PWR0107" H 4400 12650 50  0001 C CNN
 F 1 "GND" H 4405 12727 50  0000 C CNN
 F 2 "" H 4400 12900 50  0001 C CNN
 F 3 "" H 4400 12900 50  0001 C CNN
@@ -3108,10 +2821,10 @@ Connection ~ 4400 12900
 Wire Wire Line
 	4400 12900 4500 12900
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0108
 U 1 1 611D9E4C
 P 2600 12950
-F 0 "#PWR?" H 2600 12700 50  0001 C CNN
+F 0 "#PWR0108" H 2600 12700 50  0001 C CNN
 F 1 "GND" H 2605 12777 50  0000 C CNN
 F 2 "" H 2600 12950 50  0001 C CNN
 F 3 "" H 2600 12950 50  0001 C CNN
@@ -3147,416 +2860,21 @@ Wire Wire Line
 	4100 12600 4100 12350
 Wire Wire Line
 	4100 12350 4150 12350
-Connection ~ 4150 12350
-Wire Wire Line
-	4300 12600 4300 12050
-Connection ~ 4300 12050
 Wire Wire Line
 	4500 12600 4500 11750
-Connection ~ 4500 11750
 Wire Wire Line
 	4500 11750 4250 11750
 Wire Wire Line
 	4700 12600 4700 11450
-Connection ~ 4700 11450
 Wire Wire Line
 	4700 11450 4150 11450
 $Comp
-L VGA_V11-cache:CONN_6x2 U?
-U 1 1 6167522F
-P 3400 13750
-AR Path="/5EE5298B/6167522F" Ref="U?"  Part="1" 
-AR Path="/6167522F" Ref="U?"  Part="1" 
-F 0 "U?" H 3400 13886 50  0000 C CNN
-F 1 "CONN_6x2" H 3400 13795 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Horizontal" H 3400 13750 50  0001 C CNN
-F 3 "" H 3400 13750 50  0001 C CNN
-	1    3400 13750
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	3800 14350 3800 14500
-Wire Wire Line
-	3800 14500 3000 14500
-Wire Wire Line
-	3000 14350 3000 14500
-Wire Wire Line
-	3000 14250 2900 14250
-Wire Wire Line
-	2900 14250 2900 14600
-Wire Wire Line
-	2900 14600 3900 14600
-Wire Wire Line
-	3900 14600 3900 14250
-Wire Wire Line
-	3900 14250 3800 14250
-Wire Wire Line
-	3800 13850 4100 13850
-Wire Wire Line
-	3800 14150 4100 14150
-Wire Wire Line
-	3000 14150 2700 14150
-Wire Wire Line
-	3000 13850 2850 13850
-Text Label 3500 14500 0    50   ~ 0
-VCC33
-Text Label 3800 14250 0    50   ~ 0
-GND
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 61675243
-P 2050 13900
-AR Path="/5EE5298B/61675243" Ref="R?"  Part="1" 
-AR Path="/61675243" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 13900 40  0000 C CNN
-F 1 "200" V 2159 13900 40  0000 C CNN
-F 2 "" V 1980 13900 30  0000 C CNN
-F 3 "" H 2050 13900 30  0000 C CNN
-	1    2050 13900
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 61675249
-P 2050 14200
-AR Path="/5EE5298B/61675249" Ref="R?"  Part="1" 
-AR Path="/61675249" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 14200 40  0000 C CNN
-F 1 "200" V 2159 14200 40  0000 C CNN
-F 2 "" V 1980 14200 30  0000 C CNN
-F 3 "" H 2050 14200 30  0000 C CNN
-	1    2050 14200
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 6167524F
-P 2050 14500
-AR Path="/5EE5298B/6167524F" Ref="R?"  Part="1" 
-AR Path="/6167524F" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 14500 40  0000 C CNN
-F 1 "200" V 2159 14500 40  0000 C CNN
-F 2 "" V 1980 14500 30  0000 C CNN
-F 3 "" H 2050 14500 30  0000 C CNN
-	1    2050 14500
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 61675255
-P 2050 13600
-AR Path="/5EE5298B/61675255" Ref="R?"  Part="1" 
-AR Path="/61675255" Ref="R?"  Part="1" 
-F 0 "R?" V 2235 13600 40  0000 C CNN
-F 1 "200" V 2159 13600 40  0000 C CNN
-F 2 "" V 1980 13600 30  0000 C CNN
-F 3 "" H 2050 13600 30  0000 C CNN
-	1    2050 13600
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 6167525B
-P 4950 13900
-AR Path="/5EE5298B/6167525B" Ref="R?"  Part="1" 
-AR Path="/6167525B" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 13900 40  0000 C CNN
-F 1 "200" V 5059 13900 40  0000 C CNN
-F 2 "" V 4880 13900 30  0000 C CNN
-F 3 "" H 4950 13900 30  0000 C CNN
-	1    4950 13900
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 61675261
-P 4950 14200
-AR Path="/5EE5298B/61675261" Ref="R?"  Part="1" 
-AR Path="/61675261" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 14200 40  0000 C CNN
-F 1 "200" V 5059 14200 40  0000 C CNN
-F 2 "" V 4880 14200 30  0000 C CNN
-F 3 "" H 4950 14200 30  0000 C CNN
-	1    4950 14200
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 61675267
-P 4950 14500
-AR Path="/5EE5298B/61675267" Ref="R?"  Part="1" 
-AR Path="/61675267" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 14500 40  0000 C CNN
-F 1 "200" V 5059 14500 40  0000 C CNN
-F 2 "" V 4880 14500 30  0000 C CNN
-F 3 "" H 4950 14500 30  0000 C CNN
-	1    4950 14500
-	0    -1   -1   0   
-$EndComp
-$Comp
-L VGA_V11-cache:R R?
-U 1 1 6167526D
-P 4950 13600
-AR Path="/5EE5298B/6167526D" Ref="R?"  Part="1" 
-AR Path="/6167526D" Ref="R?"  Part="1" 
-F 0 "R?" V 5135 13600 40  0000 C CNN
-F 1 "200" V 5059 13600 40  0000 C CNN
-F 2 "" V 4880 13600 30  0000 C CNN
-F 3 "" H 4950 13600 30  0000 C CNN
-	1    4950 13600
-	0    -1   -1   0   
-$EndComp
-Wire Wire Line
-	4700 13600 4650 13600
-Wire Wire Line
-	4100 13600 4100 13850
-Wire Wire Line
-	4700 13900 4450 13900
-Wire Wire Line
-	4200 13900 4200 13950
-Wire Wire Line
-	3800 13950 4200 13950
-Wire Wire Line
-	4700 14200 4250 14200
-Wire Wire Line
-	4250 14200 4250 14050
-Wire Wire Line
-	3800 14050 4250 14050
-Wire Wire Line
-	4700 14500 4100 14500
-Wire Wire Line
-	4100 14500 4100 14150
-Wire Wire Line
-	5200 13600 5700 13600
-Wire Wire Line
-	5200 13900 5700 13900
-Wire Wire Line
-	5200 14200 5700 14200
-Wire Wire Line
-	5200 14500 5700 14500
-Wire Wire Line
-	2700 13850 2700 13600
-Wire Wire Line
-	2700 13600 2300 13600
-Wire Wire Line
-	2550 13950 2550 13900
-Wire Wire Line
-	2550 13900 2300 13900
-Wire Wire Line
-	2550 13950 2650 13950
-Wire Wire Line
-	2500 14050 2500 14200
-Wire Wire Line
-	2500 14200 2450 14200
-Wire Wire Line
-	2500 14050 3000 14050
-Wire Wire Line
-	2700 14150 2700 14500
-Wire Wire Line
-	2700 14500 2300 14500
-Wire Wire Line
-	1800 13600 1450 13600
-Wire Wire Line
-	1800 13900 1450 13900
-Wire Wire Line
-	1800 14200 1450 14200
-Wire Wire Line
-	1800 14500 1450 14500
-Text Label 1500 13600 0    50   ~ 0
-PMODC0
-Text Label 1500 13900 0    50   ~ 0
-PMODC1
-Text Label 1500 14200 0    50   ~ 0
-PMODC2
-Text Label 1500 14500 0    50   ~ 0
-PMODC3
-Text Label 5300 13600 0    50   ~ 0
-PMODC4
-Text Label 5300 13900 0    50   ~ 0
-PMODC5
-Text Label 5300 14200 0    50   ~ 0
-PMODC6
-Text Label 5350 14500 0    50   ~ 0
-PMODC7
-$Comp
-L Diode:ZPDxx D?
-U 1 1 61675297
-P 4050 14900
-F 0 "D?" V 4004 14979 50  0000 L CNN
-F 1 "ZPDxx" V 4095 14979 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4050 14725 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4050 14900 50  0001 C CNN
-	1    4050 14900
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 6167529D
-P 4250 14900
-F 0 "D?" V 4204 14979 50  0000 L CNN
-F 1 "ZPDxx" V 4295 14979 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4250 14725 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4250 14900 50  0001 C CNN
-	1    4250 14900
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752A3
-P 4450 14900
-F 0 "D?" V 4404 14979 50  0000 L CNN
-F 1 "ZPDxx" V 4495 14979 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4450 14725 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4450 14900 50  0001 C CNN
-	1    4450 14900
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752A9
-P 4650 14900
-F 0 "D?" V 4604 14979 50  0000 L CNN
-F 1 "ZPDxx" V 4695 14979 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 4650 14725 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 4650 14900 50  0001 C CNN
-	1    4650 14900
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752AF
-P 2250 14950
-F 0 "D?" V 2204 15029 50  0000 L CNN
-F 1 "ZPDxx" V 2295 15029 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2250 14775 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2250 14950 50  0001 C CNN
-	1    2250 14950
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752B5
-P 2450 14950
-F 0 "D?" V 2404 15029 50  0000 L CNN
-F 1 "ZPDxx" V 2495 15029 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2450 14775 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2450 14950 50  0001 C CNN
-	1    2450 14950
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752BB
-P 2650 14950
-F 0 "D?" V 2604 15029 50  0000 L CNN
-F 1 "ZPDxx" V 2695 15029 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2650 14775 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2650 14950 50  0001 C CNN
-	1    2650 14950
-	0    1    1    0   
-$EndComp
-$Comp
-L Diode:ZPDxx D?
-U 1 1 616752C1
-P 2850 14950
-F 0 "D?" V 2804 15029 50  0000 L CNN
-F 1 "ZPDxx" V 2895 15029 50  0000 L CNN
-F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 2850 14775 50  0001 C CNN
-F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 2850 14950 50  0001 C CNN
-	1    2850 14950
-	0    1    1    0   
-$EndComp
-Wire Wire Line
-	2250 15100 2450 15100
-Connection ~ 2450 15100
-Wire Wire Line
-	2450 15100 2550 15100
-Connection ~ 2650 15100
-Wire Wire Line
-	2650 15100 2850 15100
-Wire Wire Line
-	4050 15050 4250 15050
-Connection ~ 4250 15050
-Wire Wire Line
-	4250 15050 4350 15050
-Connection ~ 4450 15050
-Wire Wire Line
-	4450 15050 4650 15050
-$Comp
-L power:GND #PWR?
-U 1 1 616752D1
-P 4350 15050
-F 0 "#PWR?" H 4350 14800 50  0001 C CNN
-F 1 "GND" H 4355 14877 50  0000 C CNN
-F 2 "" H 4350 15050 50  0001 C CNN
-F 3 "" H 4350 15050 50  0001 C CNN
-	1    4350 15050
-	1    0    0    -1  
-$EndComp
-Connection ~ 4350 15050
-Wire Wire Line
-	4350 15050 4450 15050
-$Comp
-L power:GND #PWR?
-U 1 1 616752D9
-P 2550 15100
-F 0 "#PWR?" H 2550 14850 50  0001 C CNN
-F 1 "GND" H 2555 14927 50  0000 C CNN
-F 2 "" H 2550 15100 50  0001 C CNN
-F 3 "" H 2550 15100 50  0001 C CNN
-	1    2550 15100
-	1    0    0    -1  
-$EndComp
-Connection ~ 2550 15100
-Wire Wire Line
-	2550 15100 2650 15100
-Wire Wire Line
-	2250 14700 2250 14800
-Wire Wire Line
-	2250 14700 2300 14700
-Wire Wire Line
-	2300 14700 2300 14500
-Connection ~ 2300 14500
-Wire Wire Line
-	2450 14800 2450 14200
-Connection ~ 2450 14200
-Wire Wire Line
-	2450 14200 2300 14200
-Wire Wire Line
-	2650 14800 2650 13950
-Connection ~ 2650 13950
-Wire Wire Line
-	2650 13950 3000 13950
-Wire Wire Line
-	2850 14800 2850 13850
-Connection ~ 2850 13850
-Wire Wire Line
-	2850 13850 2700 13850
-Wire Wire Line
-	4050 14750 4050 14500
-Wire Wire Line
-	4050 14500 4100 14500
-Connection ~ 4100 14500
-Wire Wire Line
-	4250 14750 4250 14200
-Connection ~ 4250 14200
-Wire Wire Line
-	4450 14750 4450 13900
-Connection ~ 4450 13900
-Wire Wire Line
-	4450 13900 4200 13900
-Wire Wire Line
-	4650 14750 4650 13600
-Connection ~ 4650 13600
-Wire Wire Line
-	4650 13600 4100 13600
-$Comp
-L VGA~V11-cache:CONN_5X2 P?
+L VGA~V11-cache:CONN_5X2 P3
 U 1 1 61720AAA
 P 2550 8050
-F 0 "P?" H 2550 8493 60  0000 C CNN
+F 0 "P3" H 2550 8493 60  0000 C CNN
 F 1 "CONN_5X2" H 2550 8395 50  0000 C CNN
-F 2 "" H 2550 8050 60  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical" H 2550 8050 60  0001 C CNN
 F 3 "" H 2550 8050 60  0000 C CNN
 	1    2550 8050
 	1    0    0    -1  
@@ -3566,10 +2884,10 @@ L VGA_V11-cache:R R?
 U 1 1 617230BF
 P 3550 7700
 AR Path="/5EE5298B/617230BF" Ref="R?"  Part="1" 
-AR Path="/617230BF" Ref="R?"  Part="1" 
-F 0 "R?" V 3735 7700 40  0000 C CNN
+AR Path="/617230BF" Ref="R35"  Part="1" 
+F 0 "R35" V 3735 7700 40  0000 C CNN
 F 1 "100" V 3659 7700 40  0000 C CNN
-F 2 "" V 3480 7700 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 3480 7700 30  0001 C CNN
 F 3 "" H 3550 7700 30  0000 C CNN
 	1    3550 7700
 	0    -1   -1   0   
@@ -3579,10 +2897,10 @@ L VGA_V11-cache:R R?
 U 1 1 61725DE4
 P 3550 8050
 AR Path="/5EE5298B/61725DE4" Ref="R?"  Part="1" 
-AR Path="/61725DE4" Ref="R?"  Part="1" 
-F 0 "R?" V 3735 8050 40  0000 C CNN
+AR Path="/61725DE4" Ref="R36"  Part="1" 
+F 0 "R36" V 3735 8050 40  0000 C CNN
 F 1 "100" V 3659 8050 40  0000 C CNN
-F 2 "" V 3480 8050 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 3480 8050 30  0001 C CNN
 F 3 "" H 3550 8050 30  0000 C CNN
 	1    3550 8050
 	0    -1   -1   0   
@@ -3592,10 +2910,10 @@ L VGA_V11-cache:R R?
 U 1 1 6172726F
 P 3550 8400
 AR Path="/5EE5298B/6172726F" Ref="R?"  Part="1" 
-AR Path="/6172726F" Ref="R?"  Part="1" 
-F 0 "R?" V 3735 8400 40  0000 C CNN
+AR Path="/6172726F" Ref="R37"  Part="1" 
+F 0 "R37" V 3735 8400 40  0000 C CNN
 F 1 "100" V 3659 8400 40  0000 C CNN
-F 2 "" V 3480 8400 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 3480 8400 30  0001 C CNN
 F 3 "" H 3550 8400 30  0000 C CNN
 	1    3550 8400
 	0    -1   -1   0   
@@ -3631,10 +2949,10 @@ Connection ~ 2150 8250
 Wire Wire Line
 	2150 8250 2150 8400
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D13
 U 1 1 61BC4E48
 P 3000 8800
-F 0 "D?" V 2954 8879 50  0000 L CNN
+F 0 "D13" V 2954 8879 50  0000 L CNN
 F 1 "ZPDxx" V 3045 8879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 3000 8625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 3000 8800 50  0001 C CNN
@@ -3642,10 +2960,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 3000 8800 50
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D14
 U 1 1 61BC4E4E
 P 3200 8800
-F 0 "D?" V 3154 8879 50  0000 L CNN
+F 0 "D14" V 3154 8879 50  0000 L CNN
 F 1 "ZPDxx" V 3245 8879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 3200 8625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 3200 8800 50  0001 C CNN
@@ -3653,10 +2971,10 @@ F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 3200 8800 50
 	0    1    1    0   
 $EndComp
 $Comp
-L Diode:ZPDxx D?
+L Diode:ZPDxx D15
 U 1 1 61BC4E54
 P 3400 8800
-F 0 "D?" V 3354 8879 50  0000 L CNN
+F 0 "D15" V 3354 8879 50  0000 L CNN
 F 1 "ZPDxx" V 3445 8879 50  0000 L CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 3400 8625 50  0001 C CNN
 F 3 "http://diotec.com/tl_files/diotec/files/pdf/datasheets/zpd1" H 3400 8800 50  0001 C CNN
@@ -3671,10 +2989,10 @@ Wire Wire Line
 Wire Wire Line
 	3400 8650 3300 8650
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0111
 U 1 1 61BC4E6A
 P 3300 8950
-F 0 "#PWR?" H 3300 8700 50  0001 C CNN
+F 0 "#PWR0111" H 3300 8700 50  0001 C CNN
 F 1 "GND" H 3305 8777 50  0000 C CNN
 F 2 "" H 3300 8950 50  0001 C CNN
 F 3 "" H 3300 8950 50  0001 C CNN
@@ -3698,10 +3016,10 @@ Connection ~ 3000 8400
 Wire Wire Line
 	3000 8400 2950 8400
 $Comp
-L power:GND #PWR?
+L power:GND #PWR0112
 U 1 1 62134349
 P 2150 8400
-F 0 "#PWR?" H 2150 8150 50  0001 C CNN
+F 0 "#PWR0112" H 2150 8150 50  0001 C CNN
 F 1 "GND" H 2155 8227 50  0000 C CNN
 F 2 "" H 2150 8400 50  0001 C CNN
 F 3 "" H 2150 8400 50  0001 C CNN
@@ -3735,10 +3053,10 @@ L VGA_V11-cache:R R?
 U 1 1 62402839
 P 11150 10350
 AR Path="/5EE5298B/62402839" Ref="R?"  Part="1" 
-AR Path="/62402839" Ref="R?"  Part="1" 
-F 0 "R?" V 11335 10350 40  0000 C CNN
+AR Path="/62402839" Ref="R52"  Part="1" 
+F 0 "R52" V 11335 10350 40  0000 C CNN
 F 1 "100" V 11259 10350 40  0000 C CNN
-F 2 "" V 11080 10350 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 11080 10350 30  0001 C CNN
 F 3 "" H 11150 10350 30  0000 C CNN
 	1    11150 10350
 	0    -1   -1   0   
@@ -3748,10 +3066,10 @@ L VGA_V11-cache:R R?
 U 1 1 6240283F
 P 11150 10650
 AR Path="/5EE5298B/6240283F" Ref="R?"  Part="1" 
-AR Path="/6240283F" Ref="R?"  Part="1" 
-F 0 "R?" V 11335 10650 40  0000 C CNN
+AR Path="/6240283F" Ref="R53"  Part="1" 
+F 0 "R53" V 11335 10650 40  0000 C CNN
 F 1 "100" V 11259 10650 40  0000 C CNN
-F 2 "" V 11080 10650 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 11080 10650 30  0001 C CNN
 F 3 "" H 11150 10650 30  0000 C CNN
 	1    11150 10650
 	0    -1   -1   0   
@@ -3761,10 +3079,10 @@ L VGA_V11-cache:R R?
 U 1 1 62402845
 P 11150 10950
 AR Path="/5EE5298B/62402845" Ref="R?"  Part="1" 
-AR Path="/62402845" Ref="R?"  Part="1" 
-F 0 "R?" V 11335 10950 40  0000 C CNN
+AR Path="/62402845" Ref="R54"  Part="1" 
+F 0 "R54" V 11335 10950 40  0000 C CNN
 F 1 "100" V 11259 10950 40  0000 C CNN
-F 2 "" V 11080 10950 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 11080 10950 30  0001 C CNN
 F 3 "" H 11150 10950 30  0000 C CNN
 	1    11150 10950
 	0    -1   -1   0   
@@ -3774,10 +3092,10 @@ L VGA_V11-cache:R R?
 U 1 1 6240284B
 P 11150 10050
 AR Path="/5EE5298B/6240284B" Ref="R?"  Part="1" 
-AR Path="/6240284B" Ref="R?"  Part="1" 
-F 0 "R?" V 11335 10050 40  0000 C CNN
+AR Path="/6240284B" Ref="R51"  Part="1" 
+F 0 "R51" V 11335 10050 40  0000 C CNN
 F 1 "100" V 11259 10050 40  0000 C CNN
-F 2 "" V 11080 10050 30  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 11080 10050 30  0001 C CNN
 F 3 "" H 11150 10050 30  0000 C CNN
 	1    11150 10050
 	0    -1   -1   0   
@@ -3799,10 +3117,10 @@ Wire Wire Line
 Wire Wire Line
 	11400 10950 11700 10950
 $Comp
-L VGA~V11-cache:LED D?
+L VGA~V11-cache:LED D28
 U 1 1 62BBACB3
 P 11900 10050
-F 0 "D?" H 11900 10265 50  0000 C CNN
+F 0 "D28" H 11900 10265 50  0000 C CNN
 F 1 "LED" H 11900 10174 50  0000 C CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 11900 10181 60  0001 C CNN
 F 3 "" H 11900 10050 60  0000 C CNN
@@ -3810,10 +3128,10 @@ F 3 "" H 11900 10050 60  0000 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L VGA~V11-cache:LED D?
+L VGA~V11-cache:LED D29
 U 1 1 62BBC016
 P 11900 10350
-F 0 "D?" H 11900 10565 50  0000 C CNN
+F 0 "D29" H 11900 10565 50  0000 C CNN
 F 1 "LED" H 11900 10474 50  0000 C CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 11900 10481 60  0001 C CNN
 F 3 "" H 11900 10350 60  0000 C CNN
@@ -3821,10 +3139,10 @@ F 3 "" H 11900 10350 60  0000 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L VGA~V11-cache:LED D?
+L VGA~V11-cache:LED D30
 U 1 1 62BBDF78
 P 11900 10650
-F 0 "D?" H 11900 10865 50  0000 C CNN
+F 0 "D30" H 11900 10865 50  0000 C CNN
 F 1 "LED" H 11900 10774 50  0000 C CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 11900 10781 60  0001 C CNN
 F 3 "" H 11900 10650 60  0000 C CNN
@@ -3832,10 +3150,10 @@ F 3 "" H 11900 10650 60  0000 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L VGA~V11-cache:LED D?
+L VGA~V11-cache:LED D31
 U 1 1 62BBE37D
 P 11900 10950
-F 0 "D?" H 11900 11165 50  0000 C CNN
+F 0 "D31" H 11900 11165 50  0000 C CNN
 F 1 "LED" H 11900 11074 50  0000 C CNN
 F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 11900 10950 60  0001 C CNN
 F 3 "" H 11900 10950 60  0000 C CNN
@@ -3864,9 +3182,9 @@ L FPGA-Board-rescue:GND #PWR?
 U 1 1 62E9AFC5
 P 12350 11200
 AR Path="/5EEFC0AE/62E9AFC5" Ref="#PWR?"  Part="1" 
-AR Path="/62E9AFC5" Ref="#PWR?"  Part="1" 
+AR Path="/62E9AFC5" Ref="#PWR0113"  Part="1" 
 AR Path="/5EE5298B/62E9AFC5" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 12350 11200 30  0001 C CNN
+F 0 "#PWR0113" H 12350 11200 30  0001 C CNN
 F 1 "GND" H 12350 11130 30  0001 C CNN
 F 2 "" H 12350 11200 60  0000 C CNN
 F 3 "" H 12350 11200 60  0000 C CNN
@@ -3876,10 +3194,10 @@ $EndComp
 Wire Wire Line
 	12350 10950 12350 11200
 $Comp
-L VGA~V11-cache:RR9 RR?
+L VGA~V11-cache:RR9 RR1
 U 1 1 62F516D5
 P 8100 13300
-F 0 "RR?" V 8028 12802 70  0000 R CNN
+F 0 "RR1" V 8028 12802 70  0000 R CNN
 F 1 "10k" V 7907 12802 70  0000 R CNN
 F 2 "Resistor_THT:R_Array_SIP10" V 7846 12801 60  0001 R CNN
 F 3 "" H 8100 13300 60  0000 C CNN
@@ -3887,12 +3205,12 @@ F 3 "" H 8100 13300 60  0000 C CNN
 	0    -1   -1   0   
 $EndComp
 $Comp
-L VGA~V11-cache:CONN_6x2 U?
+L VGA~V11-cache:CONN_6x2 U13
 U 1 1 6300AF7B
 P 9200 13800
-F 0 "U?" H 9200 13936 50  0000 C CNN
+F 0 "U13" H 9200 13936 50  0000 C CNN
 F 1 "CONN_6x2" H 9200 13845 50  0000 C CNN
-F 2 "" H 9200 13800 50  0001 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Vertical" H 9200 13800 50  0001 C CNN
 F 3 "" H 9200 13800 50  0001 C CNN
 	1    9200 13800
 	1    0    0    -1  
@@ -3907,8 +3225,6 @@ Wire Wire Line
 	8800 14200 8000 14200
 Wire Wire Line
 	8800 14300 8100 14300
-Wire Wire Line
-	8800 14400 8200 14400
 Wire Wire Line
 	9600 13900 9600 14000
 Connection ~ 9600 14000
@@ -3931,9 +3247,9 @@ L FPGA-Board-rescue:GND #PWR?
 U 1 1 6352066E
 P 9600 14550
 AR Path="/5EEFC0AE/6352066E" Ref="#PWR?"  Part="1" 
-AR Path="/6352066E" Ref="#PWR?"  Part="1" 
+AR Path="/6352066E" Ref="#PWR0114"  Part="1" 
 AR Path="/5EE5298B/6352066E" Ref="#PWR?"  Part="1" 
-F 0 "#PWR?" H 9600 14550 30  0001 C CNN
+F 0 "#PWR0114" H 9600 14550 30  0001 C CNN
 F 1 "GND" H 9600 14480 30  0001 C CNN
 F 2 "" H 9600 14550 60  0000 C CNN
 F 3 "" H 9600 14550 60  0000 C CNN
@@ -3968,11 +3284,6 @@ Connection ~ 8100 14300
 Wire Wire Line
 	8100 14300 7400 14300
 Wire Wire Line
-	8200 13650 8200 14400
-Connection ~ 8200 14400
-Wire Wire Line
-	8200 14400 7400 14400
-Wire Wire Line
 	7600 13650 7250 13650
 Text Label 7300 13650 0    50   ~ 0
 VCC33
@@ -3988,16 +3299,550 @@ Wire Wire Line
 	8950 7100 9300 7100
 Wire Wire Line
 	8950 7200 9300 7200
-Text Label 7050 8200 0    50   ~ 0
-CFG0
-Text Label 7050 8300 0    50   ~ 0
-CFG1
-Text Label 7050 8400 0    50   ~ 0
-CFG2
-Text Label 7050 8500 0    50   ~ 0
+Text Label 7450 14200 0    50   ~ 0
 CFG3
-Text Label 9050 7100 0    50   ~ 0
+Text Label 7450 14300 0    50   ~ 0
 CFG4
+Text Label 10650 10050 0    50   ~ 0
+LED0
+Text Label 10650 10350 0    50   ~ 0
+LED1
+Text Label 10650 10650 0    50   ~ 0
+LED2
+Text Label 10650 10950 0    50   ~ 0
+LED3
+Text Label 9050 7000 0    50   ~ 0
+FTX
+Text Label 9050 7100 0    50   ~ 0
+FRX
+Wire Wire Line
+	2300 1500 1950 1500
+Text Label 2000 1500 0    50   ~ 0
+RESET
+Wire Wire Line
+	2300 1900 1950 1900
+Wire Wire Line
+	2300 2900 1950 2900
+Wire Wire Line
+	2300 3100 1950 3100
+Wire Wire Line
+	2300 2800 1950 2800
+Wire Wire Line
+	2300 3000 1950 3000
+Wire Wire Line
+	2300 3900 1900 3900
+Wire Wire Line
+	1950 5300 2300 5300
+Wire Wire Line
+	2300 5400 1950 5400
+Wire Wire Line
+	2300 5500 1950 5500
+Wire Wire Line
+	2300 5600 1950 5600
+Wire Wire Line
+	2300 5700 1950 5700
+Wire Wire Line
+	2300 5800 1950 5800
+Wire Wire Line
+	1950 5900 2300 5900
+Wire Wire Line
+	2300 6000 1950 6000
+Text Label 2000 6000 0    50   ~ 0
+MRQ7
+Text Label 2000 5900 0    50   ~ 0
+MAK7*
+Text Label 2000 5800 0    50   ~ 0
+MRQ6
+Text Label 2000 5700 0    50   ~ 0
+MAK6*
+Text Label 2000 5600 0    50   ~ 0
+MRQ5
+Text Label 2000 5500 0    50   ~ 0
+MAK5*
+Text Label 2000 5400 0    50   ~ 0
+MRQ0
+Text Label 2000 5300 0    50   ~ 0
+MAK0*
+Text Label 2000 3900 0    50   ~ 0
+MAK2*
+Text Label 2000 3100 0    50   ~ 0
+MRQ1
+Text Label 2000 3000 0    50   ~ 0
+MAK1*
+Text Label 2000 2900 0    50   ~ 0
+MRQ3
+Text Label 2000 2800 0    50   ~ 0
+MAK3*
+Text Label 2000 1900 0    50   ~ 0
+MRQ2
+Text Label 16250 10600 0    50   ~ 0
+MRQ7
+Text Label 16250 10700 0    50   ~ 0
+MRQ6
+Text Label 16250 10800 0    50   ~ 0
+MRQ5
+Text Label 16250 10900 0    50   ~ 0
+MRQ3
+Text Label 16250 11000 0    50   ~ 0
+MRQ2
+Text Label 16250 11100 0    50   ~ 0
+MRQ1
+Text Label 16250 11200 0    50   ~ 0
+MRQ0
+$Comp
+L 74xx:74LS574 U17
+U 1 1 6A7FF944
+P 19300 11100
+F 0 "U17" H 19300 12081 50  0000 C CNN
+F 1 "74LVC574" H 19300 11990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 19300 11100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS574" H 19300 11100 50  0001 C CNN
+	1    19300 11100
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	18400 10600 18600 10600
+Wire Wire Line
+	18400 10700 18800 10700
+Wire Wire Line
+	18400 10800 18800 10800
+Wire Wire Line
+	18400 10900 18800 10900
+Wire Wire Line
+	18400 11000 18800 11000
+Wire Wire Line
+	18400 11100 18800 11100
+Wire Wire Line
+	18400 11200 18800 11200
+Wire Wire Line
+	18400 11300 18800 11300
+Wire Wire Line
+	18800 11600 18800 11850
+Wire Wire Line
+	18800 11500 18550 11500
+Text Label 19350 10300 0    50   ~ 0
+VCC33
+Wire Wire Line
+	19800 10600 19900 10600
+Wire Wire Line
+	19800 10700 20250 10700
+Wire Wire Line
+	19800 10800 20250 10800
+Wire Wire Line
+	19800 10900 20250 10900
+Wire Wire Line
+	19800 11100 20250 11100
+Wire Wire Line
+	19800 11200 20250 11200
+Wire Wire Line
+	19800 11300 20250 11300
+Text Label 19950 10700 0    50   ~ 0
+MAK0*
+Text Label 19950 10800 0    50   ~ 0
+MAK1*
+Text Label 19950 10900 0    50   ~ 0
+MAK2*
+Text Label 19950 11000 0    50   ~ 0
+MAK3*
+Text Label 19950 11100 0    50   ~ 0
+MAK5*
+Text Label 19950 11200 0    50   ~ 0
+MAK6*
+Text Label 19950 11300 0    50   ~ 0
+MAK7*
+Wire Wire Line
+	16850 10600 17400 10600
+Wire Wire Line
+	16850 10700 17400 10700
+Wire Wire Line
+	16850 10800 17400 10800
+Text Label 17900 10300 0    50   ~ 0
+VCC33
+Wire Wire Line
+	14900 10600 14450 10600
+Wire Wire Line
+	14900 10700 14450 10700
+Wire Wire Line
+	14900 10800 14450 10800
+Wire Wire Line
+	14900 10900 14450 10900
+Wire Wire Line
+	14900 11000 14450 11000
+Wire Wire Line
+	14900 11100 14450 11100
+Wire Wire Line
+	14900 11200 14450 11200
+Text Label 15400 10300 0    50   ~ 0
+VCC33
+Text Label 18600 11500 0    50   ~ 0
+ALE
+Text Label 12100 12250 0    50   ~ 0
+VCC33
+$Comp
+L 74xx:74LS06 U9
+U 7 1 6A7FF9BD
+P 12100 13050
+F 0 "U9" H 12330 13096 50  0000 L CNN
+F 1 "74LVC06" H 12330 13005 50  0000 L CNN
+F 2 "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" H 12100 13050 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS06" H 12100 13050 50  0001 C CNN
+	7    12100 13050
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	12100 12250 12100 12550
+Text Label 12100 13550 0    50   ~ 0
+GND
+Wire Wire Line
+	19800 11000 20250 11000
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 6A7FF9C9
+P 19300 9800
+AR Path="/5EE5298B/6A7FF9C9" Ref="R?"  Part="1" 
+AR Path="/6A7FF9C9" Ref="R28"  Part="1" 
+F 0 "R28" V 19485 9800 40  0000 C CNN
+F 1 "100" V 19409 9800 40  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 19230 9800 30  0001 C CNN
+F 3 "" H 19300 9800 30  0000 C CNN
+	1    19300 9800
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	19550 9800 19850 9800
+$Comp
+L VGA~V11-cache:LED D1
+U 1 1 6A7FF9D1
+P 20050 9800
+F 0 "D1" H 20050 10015 50  0000 C CNN
+F 1 "LED" H 20050 9924 50  0000 C CNN
+F 2 "Diode_THT:D_DO-35_SOD27_P10.16mm_Horizontal" H 20050 9931 60  0001 C CNN
+F 3 "" H 20050 9800 60  0000 C CNN
+	1    20050 9800
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	20250 9800 20500 9800
+Text Label 18800 9800 0    50   ~ 0
+LED4
+$Comp
+L FPGA-Board-rescue:GND #PWR?
+U 1 1 6A7FF9D9
+P 20500 10200
+AR Path="/5EEFC0AE/6A7FF9D9" Ref="#PWR?"  Part="1" 
+AR Path="/6A7FF9D9" Ref="#PWR0109"  Part="1" 
+AR Path="/5EE5298B/6A7FF9D9" Ref="#PWR?"  Part="1" 
+F 0 "#PWR0109" H 20500 10200 30  0001 C CNN
+F 1 "GND" H 20500 10130 30  0001 C CNN
+F 2 "" H 20500 10200 60  0000 C CNN
+F 3 "" H 20500 10200 60  0000 C CNN
+	1    20500 10200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	20500 9800 20500 10200
+Text Label 14900 11700 0    50   ~ 0
+GND
+Wire Wire Line
+	15900 10600 16550 10600
+Wire Wire Line
+	15900 10700 16550 10700
+Wire Wire Line
+	15900 10800 16550 10800
+Wire Wire Line
+	15900 10900 16550 10900
+Wire Wire Line
+	15900 11000 16550 11000
+Wire Wire Line
+	15900 11100 16550 11100
+Wire Wire Line
+	15900 11200 16550 11200
+Text Label 14550 10600 0    50   ~ 0
+FMRQ7
+Text Label 14550 10700 0    50   ~ 0
+FMRQ6
+Text Label 14550 10800 0    50   ~ 0
+FMRQ5
+Text Label 14550 10900 0    50   ~ 0
+FMRQ3
+Text Label 14550 11000 0    50   ~ 0
+FMRQ2
+Text Label 14550 11100 0    50   ~ 0
+FMRQ1
+Text Label 14550 11200 0    50   ~ 0
+FMRQ0
+Text Label 16950 10600 0    50   ~ 0
+MS0
+Text Label 16950 10700 0    50   ~ 0
+MS1
+Text Label 16950 10800 0    50   ~ 0
+MS2
+Text Label 5800 7800 0    50   ~ 0
+FMRQ0
+Text Label 5800 7900 0    50   ~ 0
+FMRQ1
+Text Label 5800 8100 0    50   ~ 0
+FMRQ2
+Text Label 5800 8300 0    50   ~ 0
+FMRQ3
+Text Label 5800 8400 0    50   ~ 0
+FMRQ5
+Text Label 5800 8500 0    50   ~ 0
+FMRQ6
+Text Label 5800 8600 0    50   ~ 0
+FMRQ7
+Text Label 7050 8300 0    50   ~ 0
+MS0
+Text Label 7050 8400 0    50   ~ 0
+MS1
+Text Label 7050 8500 0    50   ~ 0
+MS2
+Wire Wire Line
+	18600 9800 18600 10600
+Wire Wire Line
+	18600 9800 19050 9800
+Connection ~ 18600 10600
+Wire Wire Line
+	18600 10600 18800 10600
+Text Label 18800 11850 0    50   ~ 0
+MOE*
+Wire Wire Line
+	8800 14400 8200 14400
+Text Label 7450 14400 0    50   ~ 0
+MOE*
+Wire Wire Line
+	8200 13650 8200 14400
+Connection ~ 8200 14400
+Wire Wire Line
+	8200 14400 7400 14400
 Text Label 9050 7200 0    50   ~ 0
-CFG5
+FSBHE
+Text Label 7050 8200 0    50   ~ 0
+CFG3
+$Comp
+L 74xx:74LS138 U15
+U 1 1 6FE6AFCB
+P 17900 10900
+F 0 "U15" H 17900 11681 50  0000 C CNN
+F 1 "74LVC138" H 17900 11590 50  0000 C CNN
+F 2 "Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm" H 17900 10900 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS138" H 17900 10900 50  0001 C CNN
+	1    17900 10900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	17400 11200 17400 11300
+Connection ~ 17400 11300
+Wire Wire Line
+	17400 11300 17400 11600
+$Comp
+L FPGA~Board-rescue:GND #PWR0110
+U 1 1 705EAC65
+P 17900 11600
+F 0 "#PWR0110" H 17900 11600 30  0001 C CNN
+F 1 "GND" H 17900 11530 30  0001 C CNN
+F 2 "" H 17900 11600 60  0000 C CNN
+F 3 "" H 17900 11600 60  0000 C CNN
+	1    17900 11600
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA~Board-rescue:GND #PWR0115
+U 1 1 705EBAF9
+P 19300 11900
+F 0 "#PWR0115" H 19300 11900 30  0001 C CNN
+F 1 "GND" H 19300 11830 30  0001 C CNN
+F 2 "" H 19300 11900 60  0000 C CNN
+F 3 "" H 19300 11900 60  0000 C CNN
+	1    19300 11900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	14900 11600 14900 11700
+Wire Wire Line
+	14900 11500 14900 11600
+Connection ~ 14900 11600
+$Comp
+L 74xx:74LS245 U10
+U 1 1 6A7FF97A
+P 15400 11100
+F 0 "U10" H 15400 12081 50  0000 C CNN
+F 1 "74LVC245" H 15400 11990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 15400 11100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 15400 11100 50  0001 C CNN
+	1    15400 11100
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA~Board-rescue:GND #PWR0116
+U 1 1 7076DB6B
+P 15400 11900
+F 0 "#PWR0116" H 15400 11900 30  0001 C CNN
+F 1 "GND" H 15400 11830 30  0001 C CNN
+F 2 "" H 15400 11900 60  0000 C CNN
+F 3 "" H 15400 11900 60  0000 C CNN
+	1    15400 11900
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	17400 11100 17100 11100
+Text Label 17150 11100 0    50   ~ 0
+VCC33
+Text Label 7450 14100 0    50   ~ 0
+CFG2
+Text Label 7050 8600 0    50   ~ 0
+CFG2
+$Comp
+L VGA~V11-cache:CONN_32X2 U8
+U 1 1 5E94FA29
+P 8550 5600
+F 0 "U8" H 8350 5736 50  0000 C CNN
+F 1 "CONN_32X2" H 8350 5645 50  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x32_P2.54mm_Vertical" H 8550 5600 50  0001 C CNN
+F 3 "" H 8550 5600 50  0001 C CNN
+	1    8550 5600
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	10500 8350 11100 8350
+$Comp
+L 74xx:74HCT04 U9
+U 5 1 5E96397E
+P 11400 8350
+F 0 "U9" H 11400 8667 50  0000 C CNN
+F 1 "74LVC06" H 11400 8576 50  0000 C CNN
+F 2 "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm" H 11400 8350 50  0001 C CNN
+F 3 "https://assets.nexperia.com/documents/data-sheet/74HC_HCT04.pdf" H 11400 8350 50  0001 C CNN
+	5    11400 8350
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	11700 8350 12050 8350
+Text Label 11800 8350 0    50   ~ 0
+MEMCS16*
+$Comp
+L VGA~V11-cache:R R19
+U 1 1 5E963986
+P 12000 8150
+F 0 "R19" V 12245 8150 40  0000 C CNN
+F 1 "2k2" V 12169 8150 40  0000 C CNN
+F 2 "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal" V 12101 8150 30  0000 C CNN
+F 3 "" H 12000 8150 30  0000 C CNN
+	1    12000 8150
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	11750 8150 11700 8150
+Wire Wire Line
+	11700 8150 11700 8350
+Connection ~ 11700 8350
+Wire Wire Line
+	12250 8150 12500 8150
+Text Label 12300 8150 0    50   ~ 0
+VCC
+Text Label 10650 8350 0    50   ~ 0
+FMEMCS16
+Wire Wire Line
+	1850 4600 2300 4600
+Text Label 1850 4600 0    50   ~ 0
+MEMCS16*
+$Comp
+L VGA~V11-cache:CONN_32X2 U7
+U 1 1 5E7C9F7E
+P 6550 5600
+F 0 "U7" H 6350 5736 50  0000 C CNN
+F 1 "CONN_32X2" H 6350 5645 50  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x32_P2.54mm_Vertical" H 6550 5600 50  0001 C CNN
+F 3 "" H 6550 5600 50  0001 C CNN
+	1    6550 5600
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4300 11900 4300 12600
+Wire Wire Line
+	2300 3300 1950 3300
+Text Label 1000 3300 0    50   ~ 0
+8M18Hz
+Wire Wire Line
+	1850 4300 2300 4300
+$Comp
+L Device:Jumper JP2
+U 1 1 5F883235
+P 1650 3300
+F 0 "JP2" H 1650 3564 50  0000 C CNN
+F 1 "Jumper" H 1650 3473 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical" H 1650 3300 50  0001 C CNN
+F 3 "~" H 1650 3300 50  0001 C CNN
+	1    1650 3300
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:Jumper JP1
+U 1 1 5F8845A2
+P 1550 4300
+F 0 "JP1" H 1550 4564 50  0000 C CNN
+F 1 "Jumper" H 1550 4473 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical" H 1550 4300 50  0001 C CNN
+F 3 "~" H 1550 4300 50  0001 C CNN
+	1    1550 4300
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1350 3300 950  3300
+Wire Wire Line
+	1250 4300 850  4300
+Text Label 13550 1900 0    50   ~ 0
+8MH18Hz
+Text Label 13550 2000 0    50   ~ 0
+14M318Hz
+Text Label 12150 1900 0    50   ~ 0
+F8M18Hz
+Text Label 12150 2000 0    50   ~ 0
+F14M318Hz
+Text Label 3850 5400 0    50   ~ 0
+RD*
+Text Label 12150 2100 0    50   ~ 0
+WR*
+Text Label 13550 2100 0    50   ~ 0
+FWR*
+$Comp
+L VGA~V11-cache:CP1 C11
+U 1 1 60ED0F4D
+P 12750 15650
+F 0 "C11" H 12883 15749 50  0000 L CNN
+F 1 "0.1" H 12883 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 12883 15559 60  0001 L CNN
+F 3 "" H 12750 15650 60  0000 C CNN
+	1    12750 15650
+	1    0    0    -1  
+$EndComp
+$Comp
+L VGA~V11-cache:CP1 C10
+U 1 1 60F8B11A
+P 12350 15650
+F 0 "C10" H 12483 15749 50  0000 L CNN
+F 1 "0.1" H 12483 15658 50  0000 L CNN
+F 2 "Capacitor_THT:C_Disc_D3.0mm_W1.6mm_P2.50mm" H 12483 15559 60  0001 L CNN
+F 3 "" H 12350 15650 60  0000 C CNN
+	1    12350 15650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	13150 15450 12750 15450
+Connection ~ 13150 15450
+Connection ~ 12750 15450
+Wire Wire Line
+	12750 15450 12350 15450
+Wire Wire Line
+	13150 15850 12750 15850
+Connection ~ 13150 15850
+Connection ~ 12750 15850
+Wire Wire Line
+	12750 15850 12350 15850
+Text Label 17400 11600 0    50   ~ 0
+GND
+Wire Wire Line
+	10550 15450 10750 15450
+Wire Wire Line
+	9100 15450 9700 15450
 $EndSCHEMATC
