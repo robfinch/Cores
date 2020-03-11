@@ -156,9 +156,9 @@ j1:
 
 			Cursor.Current = Cursors.WaitCursor;
 			if (radioButton1.Checked)
-				lines = System.IO.File.ReadAllLines("../../../../template/Petajon_wb.sv");
+				lines = System.IO.File.ReadAllLines("../../../../template/Petajon.sv");
 			else if (radioButton2.Checked)
-				lines = System.IO.File.ReadAllLines("../../../../template/Petajon_dba64.sv");
+				lines = System.IO.File.ReadAllLines("../../../../template/Petajon.sv");
 			if (checkBox11.Checked)
 				FilterPos("WB");
 			else

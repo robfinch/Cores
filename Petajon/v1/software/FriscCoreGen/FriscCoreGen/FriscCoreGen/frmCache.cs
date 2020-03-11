@@ -141,6 +141,70 @@ namespace FriscCoreGen
 			L1ICacheCmpNWay = L1ICacheCmpNWay + "    endcase\r\n";
 			L1ICacheCmpNWay = L1ICacheCmpNWay + "  end\r\n";
 			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n\r\n";
+			for (nn = 0; nn < ways; nn++)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "wire hit"+nn.ToString() + " = mem" + nn.ToString() + "[adr[pMSB:" + ab + "]] & mem" + nn.ToString() + "v[adr[pMSB:" + ab + "]];\r\n";
+			if (radioButton4.Checked)
+				for (nn = 0; nn < ways; nn++)
+					L1ICacheCmpNWay = L1ICacheCmpNWay + "wire hit" + nn.ToString() + "n = mem" + nn.ToString() + "[nxt_adr[pMSB:" + ab + "]] & mem" + nn.ToString() + "v[nxt_adr[pMSB:" + ab + "]];\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "always @*\r\n";
+			if (radioButton4.Checked)
+			{
+				int wa = Convert.ToInt16(comboBox1.Text) - Convert.ToInt16(numericUpDown2.Value) - 1;
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "if (adr[" + Convert.ToString(Convert.ToInt16(ab)-1) + ":0] > 9'd" + wa.ToString() + ") begin\r\n";
+				switch(ways)
+				{
+					case 1: break;
+					case 2: pfx = "1'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[0],adr[pMSB:" + ab + "]};\r\n"; break;
+					case 4: pfx = "2'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[1:0],adr[pMSB:" + ab + "]};\r\n"; break;
+					case 8: pfx = "3'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[2:0],adr[pMSB:" + ab + "]};\r\n"; break;
+					case 16: pfx = "4'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[3:0],adr[pMSB:" + ab + "]};\r\n"; break;
+					case 32: pfx = "5'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[4:0],adr[pMSB:" + ab + "]};\r\n"; break;
+				}
+				for (nn = 0; nn < ways - 1; nn++)
+				{
+					L1ICacheCmpNWay = L1ICacheCmpNWay + "  else if (hit" + nn.ToString() + ") lineno = {" + pfx + nn.ToString() + ",adr[pMSB:" + ab + "]};\r\n";
+				}
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  else lineno = {" + pfx + nn.ToString() + ",adr[pMSB:" + ab + "]};\r\n";
+				nn = 0;
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (hit" + nn.ToString() + "n) nxt_lineno = {" + pfx + nn.ToString() + ",nxt_adr[pMSB:" + ab + "]};\r\n";
+				for (nn = 1; nn < ways - 1; nn++)
+				{
+					L1ICacheCmpNWay = L1ICacheCmpNWay + "  else if (hit" + nn.ToString() + "n) nxt_lineno = {" + pfx + nn.ToString() + ",nxt_adr[pMSB:" + ab + "]};\r\n";
+				}
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  else nxt_lineno = {" + pfx + nn.ToString() + ",nxt_adr[pMSB:" + ab + "]};\r\n";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  hit = \r\n";
+				for (nn = 0; nn < ways-1; nn++)
+				{
+					L1ICacheCmpNWay = L1ICacheCmpNWay + "    (hit"+nn.ToString() + " & hit" +nn.ToString() + "n) |\r\n";
+				}
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "    (hit" + nn.ToString() + " & hit" + nn.ToString() + "n);\r\n";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  missadr = (";
+				for (nn = 0; nn < ways-1; nn++)
+					L1ICacheCmpNWay = L1ICacheCmpNWay + "hit" + nn.ToString() + "|";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "hit" + nn.ToString() + ") ? nxt_adr : adr;\r\n";
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "end else\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "begin\r\n";
+			switch (ways)
+			{
+				case 1: break;
+				case 2: pfx = "1'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[0],adr[pMSB:" + ab + "]};\r\n"; break;
+				case 4: pfx = "2'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[1:0],adr[pMSB:" + ab + "]};\r\n"; break;
+				case 8: pfx = "3'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[2:0],adr[pMSB:" + ab + "]};\r\n"; break;
+				case 16: pfx = "4'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[3:0],adr[pMSB:" + ab + "]};\r\n"; break;
+				case 32: pfx = "5'd"; L1ICacheCmpNWay = L1ICacheCmpNWay + "  if (wr) lineno = {lfsro[4:0],adr[pMSB:" + ab + "]};\r\n"; break;
+			}
+			for (nn = 0; nn < ways - 1; nn++)
+			{
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "  else if (hit" + nn.ToString() + ") lineno = {" + pfx + nn.ToString() + ",adr[pMSB:" + ab + "]};\r\n";
+			}
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  else lineno = {" + pfx + nn.ToString() + ",adr[pMSB:" + ab + "]};\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "  hit = ";
+			for (nn = 0; nn < ways - 1; nn++)
+				L1ICacheCmpNWay = L1ICacheCmpNWay + "hit" + nn.ToString() + "|";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "hit" + nn.ToString() + ";\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "missadr = adr;\r\n";
+			L1ICacheCmpNWay = L1ICacheCmpNWay + "end\r\n";
 			textBox1.Text = L1ICacheCmpNWay;
 		}
 	}

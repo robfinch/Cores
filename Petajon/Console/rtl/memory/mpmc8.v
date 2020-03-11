@@ -657,12 +657,23 @@ always @(posedge mem_ui_clk)
 				1'd0:	wmask1 <= {8'hFF,~sel1xx};
 				1'd1: wmask1 <= {~sel1xx,8'hFF};
 				endcase
-			else
+			else if (C1W==32)
 				case(adr1xx[3:2])
 				2'd0:	wmask1 <= {12'hFFF,~sel1xx};
 				2'd1:	wmask1 <= {8'hFF,~sel1xx,4'hF};
 				2'd2:	wmask1 <= {4'hF,~sel1xx,8'hFF};
 				2'd3: wmask1 <= {~sel1xx,12'hFFF};
+				endcase
+			else
+				case(adr1xx[3:1])
+				3'd0:	wmask1 <= {14'h3FFF,~sel1xx};
+				3'd1:	wmask1 <= {12'hFFF,~sel1xx,2'b11};
+				3'd2:	wmask1 <= {10'h3FF,~sel1xx,4'hF};
+				3'd3:	wmask1 <= {8'hFF,~sel1xx,6'h3F};
+				3'd4:	wmask1 <= {6'h3F,~sel1xx,8'hFF};
+				3'd5:	wmask1 <= {4'hF,~sel1xx,10'h3FF};
+				3'd6:	wmask1 <= {2'b11,~sel1xx,12'hFFF};
+				3'd7:	wmask1 <= {~sel1xx,14'h3FFF};
 				endcase
 		end
 		else
@@ -921,12 +932,23 @@ always @(posedge clk40MHz)
 		1'd0:	dato1 <= ch1_rd_data[adr1xx[4]][63:0];
 		1'd1:	dato1 <= ch1_rd_data[adr1xx[4]][127:64];
 		endcase
-	else
+	else if (C1W==32)
 		case(adr1xx[3:2])
 		2'd0:	dato1 <= ch1_rd_data[adr1xx[4]][31:0];
 		2'd1:	dato1 <= ch1_rd_data[adr1xx[4]][63:32];
 		2'd2:	dato1 <= ch1_rd_data[adr1xx[4]][95:64];
 		2'd3:	dato1 <= ch1_rd_data[adr1xx[4]][127:96];
+		endcase
+	else
+		case(adr1xx[3:1])
+		3'd0:	dato1 <= ch1_rd_data[adr1xx[4]][15:0];
+		3'd1:	dato1 <= ch1_rd_data[adr1xx[4]][31:16];
+		3'd2:	dato1 <= ch1_rd_data[adr1xx[4]][47:32];
+		3'd3:	dato1 <= ch1_rd_data[adr1xx[4]][63:48];
+		3'd4:	dato1 <= ch1_rd_data[adr1xx[4]][79:64];
+		3'd5:	dato1 <= ch1_rd_data[adr1xx[4]][95:80];
+		3'd6:	dato1 <= ch1_rd_data[adr1xx[4]][111:96];
+		3'd7:	dato1 <= ch1_rd_data[adr1xx[4]][127:112];
 		endcase
 always @(posedge clk40MHz)
 	if (C2W==128)

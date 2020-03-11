@@ -64,12 +64,15 @@
 			this.label11 = new System.Windows.Forms.Label();
 			this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
 			this.textBox1 = new System.Windows.Forms.TextBox();
+			this.numericUpDown2 = new System.Windows.Forms.NumericUpDown();
+			this.label12 = new System.Windows.Forms.Label();
 			this.groupBox2.SuspendLayout();
 			this.groupBox1.SuspendLayout();
 			this.groupBox3.SuspendLayout();
 			this.groupBox4.SuspendLayout();
 			this.groupBox5.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown2)).BeginInit();
 			this.SuspendLayout();
 			// 
 			// groupBox2
@@ -105,9 +108,9 @@
 			this.groupBox1.Controls.Add(this.label5);
 			this.groupBox1.Controls.Add(this.radioButton2);
 			this.groupBox1.Controls.Add(this.radioButton1);
-			this.groupBox1.Location = new System.Drawing.Point(24, 164);
+			this.groupBox1.Location = new System.Drawing.Point(16, 114);
 			this.groupBox1.Name = "groupBox1";
-			this.groupBox1.Size = new System.Drawing.Size(200, 100);
+			this.groupBox1.Size = new System.Drawing.Size(208, 100);
 			this.groupBox1.TabIndex = 18;
 			this.groupBox1.TabStop = false;
 			this.groupBox1.Text = "Cache Load Port";
@@ -172,18 +175,20 @@
 			// 
 			// comboBox3
 			// 
+			this.comboBox3.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
 			this.comboBox3.FormattingEnabled = true;
 			this.comboBox3.Items.AddRange(new object[] {
             "4",
             "8",
             "2",
-            "1"});
+            "1",
+            "16",
+            "32"});
 			this.comboBox3.Location = new System.Drawing.Point(111, 80);
 			this.comboBox3.Name = "comboBox3";
 			this.comboBox3.Size = new System.Drawing.Size(56, 21);
 			this.comboBox3.TabIndex = 16;
 			this.comboBox3.Tag = "L1IAssociativity";
-			this.comboBox3.Text = "4";
 			// 
 			// label2
 			// 
@@ -393,11 +398,13 @@
 			// 
 			// groupBox4
 			// 
+			this.groupBox4.Controls.Add(this.label12);
+			this.groupBox4.Controls.Add(this.numericUpDown2);
 			this.groupBox4.Controls.Add(this.radioButton4);
 			this.groupBox4.Controls.Add(this.radioButton3);
-			this.groupBox4.Location = new System.Drawing.Point(24, 270);
+			this.groupBox4.Location = new System.Drawing.Point(16, 220);
 			this.groupBox4.Name = "groupBox4";
-			this.groupBox4.Size = new System.Drawing.Size(200, 61);
+			this.groupBox4.Size = new System.Drawing.Size(208, 90);
 			this.groupBox4.TabIndex = 20;
 			this.groupBox4.TabStop = false;
 			this.groupBox4.Text = "Output";
@@ -509,6 +516,37 @@
 			this.textBox1.TabIndex = 23;
 			this.textBox1.WordWrap = false;
 			// 
+			// numericUpDown2
+			// 
+			this.numericUpDown2.Location = new System.Drawing.Point(139, 61);
+			this.numericUpDown2.Maximum = new decimal(new int[] {
+            16,
+            0,
+            0,
+            0});
+			this.numericUpDown2.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+			this.numericUpDown2.Name = "numericUpDown2";
+			this.numericUpDown2.Size = new System.Drawing.Size(55, 20);
+			this.numericUpDown2.TabIndex = 2;
+			this.numericUpDown2.Value = new decimal(new int[] {
+            4,
+            0,
+            0,
+            0});
+			// 
+			// label12
+			// 
+			this.label12.AutoSize = true;
+			this.label12.Location = new System.Drawing.Point(10, 63);
+			this.label12.Name = "label12";
+			this.label12.Size = new System.Drawing.Size(123, 13);
+			this.label12.TabIndex = 3;
+			this.label12.Text = "Max Instr. Length (bytes)";
+			// 
 			// frmCache
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -536,6 +574,7 @@
 			this.groupBox5.ResumeLayout(false);
 			this.groupBox5.PerformLayout();
 			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).EndInit();
+			((System.ComponentModel.ISupportInitialize)(this.numericUpDown2)).EndInit();
 			this.ResumeLayout(false);
 			this.PerformLayout();
 
@@ -579,5 +618,7 @@
 		private System.Windows.Forms.Label label11;
 		private System.Windows.Forms.NumericUpDown numericUpDown1;
 		private System.Windows.Forms.TextBox textBox1;
+		private System.Windows.Forms.Label label12;
+		private System.Windows.Forms.NumericUpDown numericUpDown2;
 	}
 }

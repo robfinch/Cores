@@ -1,10 +1,15 @@
+`define TEXT_CONTROLLER	1'b1
 `define BMP_CONTROLLER	1'b1
+`define SPRITE_CONTROLLER	1'b1
 
 module Petajon_SoM(sys_rst, sys_clk_i, clk8, clk14,
-	tg_compare_error, led_1, init_calib_complete,
-	FA, FD, FSBHE, FALE,
+	led_1, /*init_calib_complete,*/
+	FAD, FSEL, FALE, FRD, FBEN, FCDIR, FBDIR, FRDYN, RDYN, FMRQ, MS, FINT, FINTA,
 	KBDDAT, KBDCLK, MSEDAT, MSECLK,
-	RED, GREEN, BLUE, HS, VS,
+	AUD,
+	HCLKN, HCLKP, HD0N, HD0P, HD1N, HD1P, HD2N, HD2P,
+	FTCLK0N, FTCLK0P, FTDAT0N, FTDAT0P, FTDAT1N, FTDAT1P, FTDAT2N, FTDAT2P,
+	FDIOWN, FDIORN, FCS1FXN, FCS3FXN, DRDYN, DDIR, DBENN, RESETN,
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
     ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
@@ -14,13 +19,26 @@ input sys_rst;
 input sys_clk_i;
 output clk8;
 output clk14;
-output reg tg_compare_error;
 output reg led_1;
-output init_calib_complete;
-input [26:0] FA;
-inout [15:0] FD;
-input FSBHE;
-input FALE;
+//output init_calib_complete;
+inout [31:0] FAD;
+tri [31:0] FAD;
+inout [3:0] FSEL;
+tri [3:0] FSEL;
+inout FALE;
+tri FALE;
+inout FRD;
+tri FRD;
+output FBEN;
+reg FBEN;
+output reg FCDIR;
+output reg FBDIR;
+input FRDYN;
+output reg RDYN;
+input [6:0] FMRQ;
+output [2:0] MS;
+output FINTA;
+input FINT;
 inout KBDDAT;
 tri KBDDAT;
 inout KBDCLK;
@@ -29,11 +47,31 @@ inout MSEDAT;
 tri MSEDAT;
 inout MSECLK;
 tri MSECLK;
-output [3:0] RED;
-output [3:0] GREEN;
-output [3:0] BLUE;
-output HS;
-output VS;
+output AUD;
+output HCLKN;
+output HCLKP;
+output HD0N;
+output HD0P;
+output HD1N;
+output HD1P;
+output HD2N;
+output HD2P;
+output FTCLK0N;
+output FTCLK0P;
+output FTDAT0N;
+output FTDAT0P;
+output FTDAT1N;
+output FTDAT1P;
+output FTDAT2N;
+output FTDAT2P;
+output FDIOWN;
+output FDIORN;
+output FCS1FXN;
+output FCS3FXN;
+input DRDYN;
+output DDIR;
+output DBENN;
+input RESETN;
 
 `ifndef SIM
 output [0:0] ddr3_ck_p;
@@ -52,9 +90,38 @@ output [1:0] ddr3_dm;
 output [0:0] ddr3_odt;
 `endif
 
+parameter LOW = 1'b0;
+parameter HIGH = 1'b1;
+
+reg xcs;
+reg xcyc;
+reg xstb;
+reg xack;
+reg xwe;
+reg [3:0] xsel;
+reg [31:0] xadr;
+reg [31:0] xdati;
+reg [31:0] xdatil;
+reg [31:0] FIRQ;
+parameter C7W = 32;
+wire [2:0] cti;
+wire cyc;
+wire stb, ack;
+wire we;
+wire [3:0] sel;
+wire [31:0] adr;
+reg [31:0] dati = 32'd0;
+wire [31:0] dato;
+wire sr,cr,rb;
+
+wire br_ack;
+wire [31:0] br_dato;
+wire ack_scr;
+wire [31:0] scr_dato;
+
 parameter BMPW = 128;
 wire bmp_ack;
-wire [63:0] bmp_cdato;
+wire [31:0] bmp_cdato;
 wire bmp_cyc;
 wire bmp_stb;
 wire bmp_acki;
@@ -68,22 +135,70 @@ wire [11:0] hctr, vctr;
 wire [5:0] fctr;
 wire hSync, vSync;
 
+wire spr_ack;
+wire [63:0] spr_dato;
+wire spr_cyc;
+wire spr_stb;
+wire spr_acki;
+wire spr_we;
+wire [7:0] spr_sel;
+wire [31:0] spr_adr;
+wire [63:0] spr_dati;
+wire [31:0] spr_rgbo;
+wire [5:0] spr_spriteno;
+
+wire [15:0] aud0, aud1, aud2, aud3;
+wire [15:0] audi;
+wire aud_cyc;
+wire aud_stb;
+wire aud_acki;
+wire aud_we;
+wire [1:0] aud_sel;
+wire [31:0] aud_adr;
+wire [15:0] aud_dati;
+wire [15:0] aud_dato;
+wire aud_ack;
+wire [31:0] aud_cdato;
+
 wire br1_cyc;
 wire br1_stb;
 reg br1_ack = 1'b0;
 wire br1_we;
-wire [7:0] br1_sel;
-wire [3:0] br1_sel32;
+wire [3:0] br1_sel;
 wire [31:0] br1_adr;
-wire [31:0] br1_adr32;
-wire [63:0] br1_cdato;
-wire [63:0] br1_cdato2;
+wire [31:0] br1_cdato;
+wire [31:0] br1_cdato2;
 wire br1_s2_ack;
-wire [63:0] br1_s2_cdato;
-wire [63:0] br1_dato;
-wire [31:0] br1_dat32;
+wire [31:0] br1_s2_cdato;
+wire [31:0] br1_dato;
 wire [7:0] br1_dat8;
-reg [63:0] br1_dati = 64'd0;
+reg [31:0] br1_dati = 32'd0;
+
+wire ack_bridge2;
+wire ack_bridge2a;
+wire br2_cyc;
+wire br2_stb;
+reg br2_ack = 1'b0;
+wire br2_we;
+wire [3:0] br2_sel;
+wire [31:0] br2_adr;
+wire [31:0] br2_adr32;
+wire [31:0] br2_cdato;
+wire [31:0] br2_cdato2;
+wire [31:0] br2_dato;
+wire [7:0] br2_dat8;
+reg [31:0] br2_dati = 32'd0;
+
+wire br3_cyc;
+wire br3_stb;
+reg br3_ack = 1'b0;
+wire br3_we;
+wire [3:0] br3_sel;
+wire [31:0] br3_adr;
+wire [31:0] br3_cdato;
+wire [31:0] br3_dato;
+wire [7:0] br3_dat8;
+reg [31:0] br3_dati = 32'd0;
 
 `ifndef SIM
 wire mem_ui_rst;
@@ -104,34 +219,385 @@ wire mem_wdf_rdy;
 wire [3:0] dram_state;
 `endif
 
-wire clk40, clk100, clk200;
+wire kbd_ack;
+wire [7:0] kbd_dato;
+wire kbd_irq;
+wire mse_ack;
+wire [7:0] mse_dato;
+wire mse_irq;
+wire rnd_ack;
+wire [31:0] rnd_dato;
+
+wire ack_pic;
+wire [31:0] pic_dato;
+wire ack_sema;
+wire [7:0] sema_dato;
+wire ack_mut;
+wire [63:0] mut_dato;
+wire pmc_ack;
+wire [31:0] pmc_dato;
+wire uart_ack;
+wire [31:0] uart_dato;
+
+wire dram_ack1;
+
+wire clk40, clk80, clk100, clk200, clk320;
 wire cpu_clk = clk40;
 wire rst, rstn;
+wire [7:0] red, green, blue;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Clock generation.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Petajon_clkgen ucg1
 (
+//	.clk320(clk320),
   .clk200(clk200),
   .clk100(clk100),
   .clk40(clk40),
+  .clk14(clk14),			// 14.31818...
+  .clk8(clk8),				// 8.1818181...
   .reset(sys_rst),
   .locked(locked),
   .clk_in1(sys_clk_i)
 );
 
-Petajon_clkgen2 ucg2
+assign rst = !locked;
+
+Petajon_clkgen3 ucg3
 (
-  .clk14(clk14),			// 14.31818...
-  .clk8(clk8),				// 8.1818181...
+	.clk320(clk320),
+  .clk64(clk64),
   .reset(sys_rst),
   .locked(),
-  .clk_in1(sys_clk_i)
+  .clk_in1(clk100)
 );
 
-assign rst = !locked;
-assign rstn = locked;
+
+rgb2dvi #(
+	.kGenerateSerialClk(1'b0),
+	.kClkPrimitive("MMCM"),
+	.kClkRange(3),
+	.kRstActiveHigh(1'b1)
+)
+ur2d1 
+(
+	.TMDS_Clk_p(HCLKP),
+	.TMDS_Clk_n(HCLKN),
+	.TMDS_Data_p({HD2P,HD1P,HD0P}),
+	.TMDS_Data_n({HD2N,HD1N,HD0N}),
+	.aRst(rst),
+	.aRst_n(~rst),
+	.vid_pData({red,blue,green}),
+	.vid_pVDE(~blank),
+	.vid_pHSync(hSync),    // hSync is neg going for 1366x768
+	.vid_pVSync(vSync),
+	.PixelClk(clk40),
+	.SerialClk(clk200)
+);
+
+
+reg [23:0] packet;
+rgb2dvi #(
+	.kGenerateSerialClk(1'b0),
+	.kClkPrimitive("MMCM"),
+	.kClkRange(2),
+	.kRstActiveHigh(1'b1)
+)
+ur2d2 
+(
+	.TMDS_Clk_p(FTCLK0P),
+	.TMDS_Clk_n(FTCLK0N),
+	.TMDS_Data_p({FTDAT2P,FTDAT1P,FTDAT0P}),
+	.TMDS_Data_n({FTDAT2N,FTDAT1N,FTDAT0N}),
+	.aRst(rst),
+	.aRst_n(~rst),
+	.vid_pData(packet),
+	.vid_pVDE(1'b1),
+	.vid_pHSync(1'b0),
+	.vid_pVSync(1'b0),
+	.PixelClk(clk64),
+	.SerialClk(clk320)
+);
+
+reg [3:0] cnt64;
+reg [5:0] state64;
+parameter IDLE = 5'd0;
+parameter ST1 = 5'd1;
+parameter ST2 = 5'd2;
+parameter ST3 = 5'd3;
+parameter ST4 = 5'd4;
+parameter ST5 = 5'd5;
+parameter ST6 = 5'd6;
+always @(posedge clk64)
+begin
+case(state64)
+IDLE:
+	begin
+		packet <= 24'hFFFFFF;
+		if (cyc & stb) begin
+			packet <= {3'b000,adr[31:11]};
+			state64 <= we ? ST2 : ST6;
+		end
+	end
+ST2:
+	begin
+		packet <= {3'b001,adr[10:0],dato[31:22]};
+		state64 <= ST3;
+	end
+ST3:
+	begin
+		packet <= {3'b010,dato[21:1]};
+		state64 <= ST4;
+	end
+ST4:
+	begin
+		packet <= {3'b011,dato[0],sel[3:0],16'hAAAA};
+		state64 <= ST5;
+	end
+ST5:
+	begin
+		packet <= 24'hFFFFFF;
+		state64 <= IDLE;
+	end
+ST6:
+	begin
+		packet <= {3'b100,adr[10:0],sel[3:0],6'h35};
+	end
+default:	state64 <= IDLE;
+endcase
+end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Address decode
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg cs_br;
+wire cs_dram = adr[31:29]==3'h0;		// Main memory 512MB
+always @*
+	cs_br <= adr[31:16]==16'hFFFC		// Boot rom 192k
+				|| adr[31:16]==16'hFFFD
+				|| adr[31:16]==16'hFFFE;
+
+wire cs_scr = adr[31:22]==10'b1111_1111_01;	// Scratchpad memory 64k
+// No need to check for the $FFD in the top 12 address bits as these are 
+// detected in the I/O bridges.
+wire cs_tc1 = br1_adr[19:16]==4'h0	// FFD0xxxx Text Controller 128k
+					||  br1_adr[19:16]==4'h1;
+wire cs_spr = br1_adr[19:12]==8'hAD;	// FFDADxxx	Sprite Controller
+wire cs_bmp = br1_adr[19:12]==8'hC5;	//          Bitmap Controller
+wire cs_pic = br1_adr[19:8]==12'hC0F;
+wire cs_sema = br1_adr[19:12]==8'hB0;
+wire cs_mut = br1_adr[19:8]==12'hBFF;
+
+wire cs_rnd = br2_adr[19:8]==12'hC0C;		// PRNG random number generator
+wire cs_kbd  = br2_adr[19:4]==16'hC000;		// keyboard controller
+wire cs_mse  = br2_adr[19:4]==16'hC001;		// mouse controller
+wire cs_aud  = br2_adr[19:8]==12'h510;		// audio controller
+wire cs_pmc = br2_adr[19:4]==16'hC00F;
+wire cs_uart = br2_adr[19:4]==16'hC0A0;
+
+wire cs_bridge1 = (cs_tc1 | cs_spr | cs_bmp | cs_pic | cs_sema | cs_mut);
+wire cs_bridge2 = (cs_rnd | cs_kbd | cs_mse | cs_aud | cs_uart);
+wire cs_bridge3 = 1'b0;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Bus bridge.
+// Connect the internal and external busses.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+wire master = MS==3'd7;
+reg [4:0] state;
+parameter tALEw = 6'd4;
+parameter tCMDw = 6'd4;
+
+reg [31:0] FADO;
+reg FALEO;
+reg [3:0] FSELO;
+reg FRDO;
+wire bus_idle = state==IDLE && !(cyc & stb & master & xaccess);
+reg [5:0] cnt;
+wire cntdone = cnt[5];
+wire xaccess = |adr[31:28] && adr[31:24]!=8'hFF;
+always @(posedge clk80)
+if (rst) begin
+	xack <= LOW;
+	FADO <= 32'h0;
+	FALEO <= LOW;
+	FSELO <= 4'h0;
+	FBEN <= HIGH;		// Disable buffers
+	FCDIR <= HIGH;	// Set direction to input
+	FBDIR <= HIGH;
+	FRDO <= HIGH;
+	cnt <= 6'd0;
+end
+else
+case(state)
+IDLE:
+	if (cyc & stb & master & xaccess) begin
+		FBEN <= LOW;		// Enable buffers
+		FADO <= adr;		// Place address
+		FSELO <= sel;
+		FCDIR <= LOW;	// Set direction to output
+		FBDIR <= LOW;
+		FRDO <= ~we;
+		cnt <= tALEw;
+		state <= ST1;
+	end
+ST1:
+	begin
+		cnt <= cnt - 2'd1;
+		FALEO <= HIGH;
+		if (cntdone) begin
+			FALEO <= LOW;
+			state <= ST2;
+		end
+	end
+ST2:
+	begin
+		FADO <= ~FADO;
+		state <= ST3;
+	end
+ST3:
+	begin
+		FADO <= dato;
+		// If it's a read cycle switch buffer direction.
+		if (~we)
+			FBDIR <= HIGH;
+		state <= ST4;
+		cnt <= tCMDw;
+	end
+ST4:
+	begin
+		if (~FRDYN)
+			cnt <= cnt - 2'd1;
+		if (cntdone) begin
+			xack <= HIGH;
+			FBDIR <= LOW;
+			xdatil <= FAD;
+			state <= ST5;
+		end
+	end	
+ST5:
+	begin
+		FBEN <= HIGH;	// Disable buffers.
+		state <= ST6;
+		if (~(cyc & stb)) begin
+			xack <= LOW;
+			FCDIR <= HIGH;	// Set drivers back to input
+			FBDIR <= HIGH;
+			state <= IDLE;
+		end
+	end
+default:	state <= IDLE;
+endcase
+
+assign FAD = FBDIR ? 32'bz : FADO;
+assign FALE = FCDIR ? 1'bz : FALEO;
+assign FSEL = FCDIR ? 4'bz : FSELO;
+assign FRD = FCDIR ? 1'bz : FRDO;
+
+always @(posedge clk80)
+	if (~master & FALE) begin
+		xadr <= FAD;
+		xcs <= ~|FAD[31:28];
+	end
+always @(posedge clk80)
+	if (~FALE)
+		xdati <= FAD;
+always @(posedge clk80)
+	if (~master)
+		xsel <= FSEL;
+	else
+		xsel <= 4'h0;
+always @(posedge clk80)
+	if (~master)
+		xwe <= ~FRD;
+	else
+		xwe <= LOW;
+always @(posedge clk80)
+	if (~master & FALE) begin
+		xcyc <= HIGH;
+		xstb <= HIGH;
+	end
+	else if (dram_ack1) begin
+		xcyc <= LOW;
+		xstb <= LOW;
+	end
+// ToDo: ready line
+
+always @(posedge clk80)
+	if (FINTA)
+		FIRQ <= FAD;
+
+Petajon_pmc upmc1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cs_i(cs_pmc),
+	.cyc_i(br2_cyc),
+	.stb_i(br2_stb),
+	.ack_o(pmc_ack),
+	.wr_i(br2_we),
+	.adr_i(br2_adr[3:0]),
+	.dat_i(br2_dato),
+	.dat_o(pmc_dato),
+	.ref_clk_i(clk80),
+	.bus_idle(bus_idle),
+	.m0(FMRQ[0]),
+	.m1(FMRQ[1]),
+	.m2(FMRQ[2]),
+	.m3(FMRQ[3]),
+	.m4(FMRQ[4]),
+	.m5(FMRQ[5]),
+	.m6(FMRQ[6]),
+	.m7(1'b0),
+	.a0(),
+	.a1(),
+	.a2(),
+	.a3(),
+	.a4(),
+	.a5(),
+	.a6(),
+	.a7(),
+	.ms(MS)
+);
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+`ifdef TEXT_CONTROLLER
+TextController32 #(.num(1)) tc1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cs_i(cs_tc1),
+	.cti_i(cti),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
+	.ack_o(tc1_ack),
+	.wr_i(br1_we),
+	.sel_i(br1_sel),
+	.adr_i(br1_adr[16:0]),
+	.dat_i(br1_dato),
+	.dat_o(tc1_dato),
+	.lp_i(),
+	.dot_clk_i(clk40),
+	.hsync_i(hSync),
+	.vsync_i(vSync),
+	.blank_i(blank),
+	.border_i(border),
+	.zrgb_i(bmp_rgb),
+	.zrgb_o(tc1_rgb),
+	.xonoff_i(1'b1)
+);
+//assign red = spr_rgbo[23:16];
+//assign green = spr_rgbo[15:8];
+//assign blue = spr_rgbo[7:0];
+`endif
 
 `ifdef BMP_CONTROLLER
-rtfBitmapController5 #(.MDW(BMPW)) ubmc1
+BitmapController32 #(.MDW(BMPW)) ubmc1
 (
 	.rst_i(rst),
 	.s_clk_i(cpu_clk),
@@ -177,14 +643,220 @@ assign bmp_adr = 32'h0;
 assign bmp_dato = 64'h0;
 assign vb_irq = 1'b0;
 `endif
+
+`ifdef SPRITE_CONTROLLER
+SpriteController32 usc2
+(
+	.clk_i(cpu_clk),
+	.cs_i(cs_spr),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
+	.ack_o(spr_ack),
+	.we_i(br1_we),
+	.sel_i(br1_sel),
+	.adr_i(br1_adr[11:0]),
+	.dat_i(br1_dato),
+	.dat_o(spr_dato),
+	.m_clk_i(clk40),
+	.m_cyc_o(spr_cyc),
+	.m_stb_o(spr_stb),
+	.m_ack_i(spr_acki),
+	.m_sel_o(spr_sel),
+	.m_adr_o(spr_adr),
+	.m_dat_i(spr_dati),
+	.m_spriteno_o(spr_spriteno),
+	.dot_clk_i(clk40),
+	.hsync_i(hSync),
+	.vsync_i(vSync),
+	.border_i(border),
+	.zrgb_i(tc1_rgb),
+	.zrgb_o(spr_rgbo),
+	.test(1'b0)
+);
+`else
+assign spr_ack = 1'b0;
+assign spr_dato = 64'd0;
+assign spr_cyc = 1'b0;
+assign spr_stb = 1'b0;
+assign spr_sel = 1'b0;
+assign spr_adr = 1'b0;
+assign spr_spriteno = 1'b0;
+`endif
+
 assign HS = hSync;
 assign VS = vSync;
-assign RED = bmp_rgb[23:20];
-assign GREEN = bmp_rgb[15:12];
-assign BLUE = bmp_rgb[7:4];
+assign RED = spr_rgbo[23:20];
+assign GREEN = spr_rgbo[15:12];
+assign BLUE = spr_rgbo[7:4];
+
+wire ack_bridge3, ack_br;
+reg ack1 = 1'b0;
+reg ack1a = 1'b0;
+assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xack;
+//assign ack = ack_br;
+always @(posedge cpu_clk)
+	ack1a <= ack;
+always @(posedge cpu_clk)
+	ack1 <= ack1a & ack;
+always @(posedge cpu_clk)
+casez({cs_br,cs_scr,cs_bridge1,cs_bridge2,cs_dram,cs_bridge3,xaccess})
+7'b1??????: dati <= br_dato;
+7'b01?????: dati <= scr_dato;
+7'b001????: dati <= br1_cdato;
+7'b0001???: dati <= br2_cdato;
+7'b00001??: dati <= dram_dato;
+7'b000001?: dati <= br3_cdato;
+7'b0000001:	dati <= xdatil;
+default:   dati <= dati;
+endcase
+
+wire br1_ack1 = tc1_ack|bmp_ack;
+reg br1_ack1a;
+always @(posedge cpu_clk)
+	br1_ack1a <= br1_ack1;
+always @(posedge cpu_clk)
+	br1_ack <= br1_ack1a & br1_ack1;
+
+always @(posedge cpu_clk)
+casez({cs_tc1,cs_spr,cs_bmp,cs_pic,cs_sema,cs_mut})
+6'b1?????:	br1_dati <= tc1_dato;
+6'b01????:	br1_dati <= spr_dato;
+6'b001???:	br1_dati <= bmp_cdato;
+6'b0001??:	br1_dati <= {2{pic_dato}};
+6'b00001?:	br1_dati <= {8{sema_dato}};
+6'b000001:	br1_dati <= mut_dato;
+default:	br1_dati <= br1_dati;
+endcase
+
+wire br2_ack1 = rnd_ack|kbd_ack|aud_ack|pmc_ack|uart_ack;
+reg br2_ack1a;
+always @(posedge cpu_clk)
+	br2_ack1a <= br2_ack1;
+always @(posedge cpu_clk)
+	br2_ack <= br2_ack1a & br2_ack1;
+
+always @(posedge cpu_clk)
+casez({cs_rnd,cs_kbd,aud_ack,cs_pmc,cs_uart})
+5'b1????:	br2_dati <= {2{rnd_dato}};	// 32 bits reflected twice
+5'b01???:	br2_dati <= {8{kbd_dato}};	// 8 bits reflect 8 times
+5'b001??:	br2_dati <= aud_cdato;			// 64 bit peripheral
+5'b0001?:	br2_dati <= pmc_dato;
+5'b00001:	br2_dati <= uart_dato;
+default:	br2_dati <= br2_dati;
+endcase
+
+
+IOBridge32 u_video_bridge
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+
+	.s1_cyc_i(cyc),
+	.s1_stb_i(stb),
+	.s1_ack_o(ack_bridge1),
+	.s1_sel_i(sel),
+	.s1_we_i(we),
+	.s1_adr_i(adr),
+	.s1_dat_i(dato),
+	.s1_dat_o(br1_cdato),
+
+	.s2_cyc_i(1'b0),
+	.s2_stb_i(1'b0),
+	.s2_ack_o(ack_bridge1a),
+	.s2_sel_i(xsel),
+	.s2_we_i(xwe),
+	.s2_adr_i(xadr),
+	.s2_dat_i(xdati),
+	.s2_dat_o(),
+
+	.m_cyc_o(br1_cyc),
+	.m_stb_o(br1_stb),
+	.m_ack_i(br1_ack),
+	.m_we_o(br1_we),
+	.m_sel_o(br1_sel),
+	.m_adr_o(br1_adr),
+	.m_dat_i(br1_dati),
+	.m_dat_o(br1_dato)
+);
+
+IOBridge32 u_bridge2
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+
+	.s1_cyc_i(cyc),
+	.s1_stb_i(stb),
+	.s1_ack_o(ack_bridge2),
+	.s1_sel_i(sel),
+	.s1_we_i(we),
+	.s1_adr_i(adr),
+	.s1_dat_i(dato),
+	.s1_dat_o(br2_cdato),
+
+	.s2_cyc_i(1'b0),
+	.s2_stb_i(1'b0),
+	.s2_ack_o(),
+	.s2_sel_i(4'h0),
+	.s2_we_i(1'b0),
+	.s2_adr_i(32'h0),
+	.s2_dat_i(32'h0),
+	.s2_dat_o(),
+
+	.m_cyc_o(br2_cyc),
+	.m_stb_o(br2_stb),
+	.m_ack_i(br2_ack),
+	.m_we_o(br2_we),
+	.m_sel_o(br2_sel),
+	.m_adr_o(br2_adr),
+	.m_dat_i(br2_dati),
+	.m_dat_o(br2_dato),
+	.m_dat8_o(br2_dat8)
+);
+
+
+PS2kbd u_kybd1
+(
+	// WISHBONE/SoC bus interface 
+	.rst_i(rst),
+	.clk_i(cpu_clk),	// system clock
+	.cs_i(cs_kbd),
+  .cyc_i(br2_cyc),
+  .stb_i(br2_stb),
+  .ack_o(kbd_ack),
+  .we_i(br2_we),
+  .adr_i(br2_adr[3:0]),
+  .dat_i(br2_dat8),
+  .dat_o(kbd_dato),
+  .kclk(KBDCLK),
+  .kd(KBDDAT),
+	.db(),
+	//-------------
+  .irq(kbd_irq)
+);
+
+PS2kbd u_mse1
+(
+	// WISHBONE/SoC bus interface 
+	.rst_i(rst),
+	.clk_i(cpu_clk),	// system clock
+	.cs_i(cs_mse),
+  .cyc_i(br2_cyc),
+  .stb_i(br2_stb),
+  .ack_o(mse_ack),
+  .we_i(br2_we),
+  .adr_i(br2_adr[3:0]),
+  .dat_i(br2_dat8),
+  .dat_o(mse_dato),
+  .kclk(MSECLK),
+  .kd(MSEDAT),
+	.db(),
+	//-------------
+  .irq(mse_irq)
+);
+
 
 `ifndef SIM
-mig_7series_0 uddr3
+mig_7series_1 uddr3
 (
 	.ddr3_dq(ddr3_dq),
 	.ddr3_dqs_p(ddr3_dqs_p),
@@ -201,8 +873,8 @@ mig_7series_0 uddr3
 	.ddr3_odt(ddr3_odt),
 	.ddr3_reset_n(ddr3_reset_n),
 	// Inputs
-	.sys_clk_i(clk200),
-//    .clk_ref_i(clk200),
+	.sys_clk_i(clk320),
+    .clk_ref_i(clk200),
 	.sys_rst(rstn),
 	// user interface signals
 	.app_addr(mem_addr),
@@ -229,7 +901,7 @@ mig_7series_0 uddr3
 );
 `endif
 
-mpmc8 #(.C0W(BMPW), .C1W(64), .C6W(128), .C7W(64), .C8W(128), .C9W(64)) umc1
+mpmc8 #(.C0W(BMPW), .C1W(16), .C6W(128), .C7W(64), .C8W(128), .C9W(64)) umc1
 (
 	.tmr_i(1'b1),
 	.rst_i(rst),
@@ -256,20 +928,18 @@ mpmc8 #(.C0W(BMPW), .C1W(64), .C6W(128), .C7W(64), .C8W(128), .C9W(64)) umc1
 	.dato0(bmp_dati),
 
 	// CPU2
-/*
-	.cs1(cs_dram2),
-	.cyc1(cyc2),
-	.stb1(stb2),
-	.ack1(dram_ack2),
-	.we1(we2),
-	.sel1(sel2),
-	.adr1(adr2),
-	.dati1(dato2),
-	.dato1(dram_dato2),
-	.sr1(sr2),
-	.cr1(cr2),
-	.rb1(rb2),
-*/
+	.cs1(xcs),
+	.cyc1(xcyc),
+	.stb1(xstb),
+	.ack1(dram_ack1),
+	.we1(xwe),
+	.sel1(xsel),
+	.adr1(xadr[27:0]),
+	.dati1(xdati),
+	.dato1(xdato),
+	.sr1(1'b0),
+	.cr1(1'b0),
+	.rb1(),
 /*	
 	.cyc2(eth_cyc),
 	.stb2(eth_stb),
@@ -319,14 +989,14 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.dati4({2{grid_dato}}),
 	.dato4(grid_dram_dati1),
 `endif
-/*
+
 	.cyc5(spr_cyc),
 	.stb5(spr_stb),
 	.ack5(spr_acki),
 	.adr5(spr_adr),
 	.dato5(spr_dati),
 	.spriteno(spr_spriteno),
-*/
+
 	.cyc6(1'b0),
 	.stb6(1'b0),
 	.ack6(),
@@ -335,7 +1005,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.adr6(32'd0),
 	.dati6(128'd0),
 	.dato6(),
-/*
+
 	// CPU1
 	.cs7(cs_dram),
 	.cyc7(cyc),
@@ -349,7 +1019,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.sr7(sr),
 	.cr7(cr),
 	.rb7(rb),
-*/
+
 /*
 	.cyc8(pti_cyc),
 	.stb8(pti_stb),
@@ -399,6 +1069,149 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.ch()
 );
 
-assign init_calib_complete = calib_complete;
+bootrom #(64) ubr1
+(
+	.rst_i(rst),
+  .clk_i(cpu_clk),
+
+  .cti_i(3'b000),
+  .bok_o(br_bok),
+  .cs_i(cs_br),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_br),
+  .adr_i(adr[17:0]),
+  .dat_o(br_dato),
+  
+  .cti1_i(3'b000),
+  .bok1_o(),
+  .cs1_i(1'b0),
+  .cyc1_i(1'b0),
+  .stb1_i(1'b0),
+  .ack1_o(),
+  .adr1_i(18'h0),
+  .dat1_o()
+);
+
+
+wire [7:0] cause;
+wire [2:0] pic_irq;
+
+Petajon_pic upic1
+(
+	.rst_i(rst),		// reset
+	.clk_i(cpu_clk),		// system clock
+	.cs_i(cs_pic),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
+	.ack_o(ack_pic),
+	.wr_i(br1_we),
+	.adr_i(br1_adr[7:0]),
+	.dat_i(br1_dat),
+	.dat_o(pic_dato),
+	.vol_o(),
+	.i1(FIRQ[0]),
+	.i2(FIRQ[1]),
+	.i3(FIRQ[2]),
+	.i4(FIRQ[3]),	// eth_irq
+	.i5(FIRQ[4]),
+	.i6(FIRQ[5]),
+	.i7(FIRQ[6]),
+	.i8(vb_irq),
+	.i9(FIRQ[7]),
+	.i10(FIRQ[8]),
+	.i11(FIRQ[9]),
+	.i12(1'b0),	// eth_int_b is active low
+	.i13(FIRQ[10]),
+	.i14(1'b0),
+	.i15(1'b0),
+	.i16(uart_irq),
+	.i17(1'b0),
+	.i18(1'b0),
+	.i19(1'b0),
+	.i20(1'b0),
+	.i21(1'b0),
+	.i22(1'b0),
+	.i23(1'b0),
+	.i24(1'b0),
+	.i25(pti_dirq),
+	.i26(pti_sirq),
+	.i27(mse_irq),
+	.i28(kbd_irq),
+	.i29(1'b0),	// rtc_irq
+	.i30(1'b0),
+	.i31(via_irq),
+	.irqo(pic_irq),
+	.irqo2(),
+	.nmii(1'b0),		// nmi input connected to nmi requester
+	.nmio(),	// normally connected to the nmi of cpu
+	.causeo(cause)
+);
+
+wire [3:0] ARID, AWID;
+
+Petajon ucpu1
+(
+  .hartid_i(32'h0),
+  .rst_i(rst),
+  .clk_i(cpu_clk),
+ 
+  .wc_clk_i(clk20),
+	.irq_i(|pic_irq),
+	.cause_i(cause),
+  .cyc_o(cyc),
+  .wb_stb_o(stb),
+  .ack_i(ack1),
+//  .err_i(err),
+  .wb_we_o(we),
+  .wb_sel_o(sel),
+  .wb_adr_o(adr),
+  .wb_dat_o(dato),
+  .wb_dat_i(dati),
+  .sr_o(sr),
+  .cr_o(cr),
+  .rb_i(rb),
+  .AWID(AWID),
+  .AWREADY(1'b1),
+  .WREADY(1'b1),
+  .BID(AWID),
+  .BVALID(1'b1),
+  .ARREADY(1'b1),
+  .ARID(ARID),
+  .RVALID(1'b1),
+  .RREADY(),
+  .RID(ARID),
+  .RDATA(dati)
+);
+
+uart6551 uuart1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cs_i(cs_uart),
+	.irq_o(uart_irq),
+	.cyc_i(br2_cyc),
+	.stb_i(br2_stb),
+	.ack_o(uart_ack),
+	.we_i(br2_we),
+	.sel_i(br2_sel),
+	.adr_i(br2_adr[3:2]),
+	.dat_i(br2_dat),
+	.dat_o(uart_dato),
+	.cts_ni(1'b0),
+	.rts_no(),
+	.dsr_ni(1'b0),
+	.dcd_ni(1'b0),
+	.dtr_no(),
+	.ri_ni(1'b1),
+	.rxd_i(uart_rxd),
+	.txd_o(uart_txd),
+	.data_present(),
+	.rxDRQ_o(),
+	.txDRQ_o(),
+	.xclk_i(clk14),
+	.RxC_i(1'b0)
+);
+
 
 endmodule
