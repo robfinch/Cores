@@ -1,14 +1,44 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	Petajon-SoM.v
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//
+// ============================================================================
+//
 `define TEXT_CONTROLLER	1'b1
 `define BMP_CONTROLLER	1'b1
 `define SPRITE_CONTROLLER	1'b1
+`define RANDOM_GEN	1'b1
 
 module Petajon_SoM(sys_rst, sys_clk_i, clk8, clk14,
 	led_1, /*init_calib_complete,*/
 	FAD, FSEL, FALE, FRD, FBEN, FCDIR, FBDIR, FRDYN, RDYN, FMRQ, MS, FINT, FINTA,
 	KBDDAT, KBDCLK, MSEDAT, MSECLK,
-	AUD,
+	AUD, uart_rxd, uart_txd, randi,
 	HCLKN, HCLKP, HD0N, HD0P, HD1N, HD1P, HD2N, HD2P,
-	FTCLK0N, FTCLK0P, FTDAT0N, FTDAT0P, FTDAT1N, FTDAT1P, FTDAT2N, FTDAT2P,
+	FTCLKN, FTCLKP, FTDAT0N, FTDAT0P, FTDAT1N, FTDAT1P, FTDAT2N, FTDAT2P, FTDAT3N, FTDAT3P,
+	FTDAT4N, FTDAT4P, FTDAT5N, FTDAT5P, FTDAT6N, FTDAT6P, FTDAT7N, FTDAT7P, FTDAT8N, FTDAT8P, 
+	FTDAT9N, FTDAT9P, FTDAT10N, FTDAT10P, 
+	FRCLKN, FRCLKP, FRDAT0N, FRDAT0P, FRDAT1N, FRDAT1P, FRDAT2N, FRDAT2P, FRDAT3N, FRDAT3P, 
+	FRDAT4N, FRDAT4P, FRDAT5N, FRDAT5P, FRDAT6N, FRDAT6P, FRDAT7N, FRDAT7P, FRDAT8N, FRDAT8P, 
+	FRDAT9N, FRDAT9P, FRDAT10N, FRDAT10P, 
 	FDIOWN, FDIORN, FCS1FXN, FCS3FXN, DRDYN, DDIR, DBENN, RESETN,
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
@@ -21,10 +51,8 @@ output clk8;
 output clk14;
 output reg led_1;
 //output init_calib_complete;
-inout [31:0] FAD;
-tri [31:0] FAD;
-inout [3:0] FSEL;
-tri [3:0] FSEL;
+inout [7:0] FAD;
+tri [7:0] FAD;
 inout FALE;
 tri FALE;
 inout FRD;
@@ -48,6 +76,9 @@ tri MSEDAT;
 inout MSECLK;
 tri MSECLK;
 output AUD;
+input uart_rxd;
+output uart_txd;
+input randi;
 output HCLKN;
 output HCLKP;
 output HD0N;
@@ -56,14 +87,56 @@ output HD1N;
 output HD1P;
 output HD2N;
 output HD2P;
-output FTCLK0N;
-output FTCLK0P;
+output FTCLKN;
+output FTCLKP;
 output FTDAT0N;
 output FTDAT0P;
 output FTDAT1N;
 output FTDAT1P;
 output FTDAT2N;
 output FTDAT2P;
+output FTDAT3N;
+output FTDAT3P;
+output FTDAT4N;
+output FTDAT4P;
+output FTDAT5N;
+output FTDAT5P;
+output FTDAT6N;
+output FTDAT6P;
+output FTDAT7N;
+output FTDAT7P;
+output FTDAT8N;
+output FTDAT8P;
+output FTDAT9N;
+output FTDAT9P;
+output FTDAT10N;
+output FTDAT10P;
+input FRCLKN;
+input FRCLKP;
+input FRDAT0N;
+input FRDAT0P;
+input FRDAT1N;
+input FRDAT1P;
+input FRDAT2N;
+input FRDAT2P;
+input FRDAT2N;
+input FRDAT2P;
+input FRDAT3N;
+input FRDAT3P;
+input FRDAT4N;
+input FRDAT4P;
+input FRDAT5N;
+input FRDAT5P;
+input FRDAT6N;
+input FRDAT6P;
+input FRDAT7N;
+input FRDAT7P;
+input FRDAT8N;
+input FRDAT8P;
+input FRDAT9N;
+input FRDAT9P;
+input FRDAT10N;
+input FRDAT10P;
 output FDIOWN;
 output FDIORN;
 output FCS1FXN;
@@ -113,6 +186,11 @@ wire [31:0] adr;
 reg [31:0] dati = 32'd0;
 wire [31:0] dato;
 wire sr,cr,rb;
+wire pclk;
+reg pack;
+reg [31:0] pbus_dati;
+wire [131:0] packeti;
+reg [131:0] packetir;
 
 wire br_ack;
 wire [31:0] br_dato;
@@ -238,10 +316,11 @@ wire pmc_ack;
 wire [31:0] pmc_dato;
 wire uart_ack;
 wire [31:0] uart_dato;
+wire [31:0] randnum;
 
 wire dram_ack1;
 
-wire clk40, clk80, clk100, clk200, clk320;
+wire clk40, clk71, clk80, clk100, clk200, clk500;
 wire cpu_clk = clk40;
 wire rst, rstn;
 wire [7:0] red, green, blue;
@@ -250,9 +329,12 @@ wire [7:0] red, green, blue;
 // Clock generation.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+wire bsys_clk;
+BUFGCE uclkb1 (.CE(1'b1), .I(sys_clk_i), .O(bsys_clk));
+
+
 Petajon_clkgen ucg1
 (
-//	.clk320(clk320),
   .clk200(clk200),
   .clk100(clk100),
   .clk40(clk40),
@@ -260,18 +342,18 @@ Petajon_clkgen ucg1
   .clk8(clk8),				// 8.1818181...
   .reset(sys_rst),
   .locked(locked),
-  .clk_in1(sys_clk_i)
+  .clk_in1(bsys_clk)
 );
 
 assign rst = !locked;
 
 Petajon_clkgen3 ucg3
 (
-	.clk320(clk320),
-  .clk64(clk64),
+	.clk320(clk500),
+  .clk64(clk71),
   .reset(sys_rst),
   .locked(),
-  .clk_in1(clk100)
+  .clk_in1(bsys_clk)
 );
 
 
@@ -298,8 +380,8 @@ ur2d1
 );
 
 
-reg [23:0] packet;
-rgb2dvi #(
+reg [131:0] packet;
+OPCBusTransmitter #(
 	.kGenerateSerialClk(1'b0),
 	.kClkPrimitive("MMCM"),
 	.kClkRange(2),
@@ -307,19 +389,67 @@ rgb2dvi #(
 )
 ur2d2 
 (
-	.TMDS_Clk_p(FTCLK0P),
-	.TMDS_Clk_n(FTCLK0N),
-	.TMDS_Data_p({FTDAT2P,FTDAT1P,FTDAT0P}),
-	.TMDS_Data_n({FTDAT2N,FTDAT1N,FTDAT0N}),
+	.TMDS_Clk_p(FTCLKP),
+	.TMDS_Clk_n(FTCLKN),
+	.TMDS_Data_p({FTDAT10P,FTDAT9P,FTDAT8P,FTDAT7P,FTDAT6P,FTDAT5P,FTDAT4P,FTDAT3P,FTDAT2P,FTDAT1P,FTDAT0P}),
+	.TMDS_Data_n({FTDAT10N,FTDAT9N,FTDAT8N,FTDAT7N,FTDAT6N,FTDAT5N,FTDAT4N,FTDAT3N,FTDAT2N,FTDAT1N,FTDAT0N}),
 	.aRst(rst),
 	.aRst_n(~rst),
 	.vid_pData(packet),
 	.vid_pVDE(1'b1),
 	.vid_pHSync(1'b0),
 	.vid_pVSync(1'b0),
-	.PixelClk(clk64),
-	.SerialClk(clk320)
+	.PixelClk(clk71),
+	.SerialClk(clk500)
 );
+
+OPCBusReceiver #
+(
+	.kEmulateDDC(1'b0),	// : boolean := true; --will emulate a DDC EEPROM with basic EDID, if set to yes 
+	.kRstActiveHigh(1'b1),	// : boolean := true; --true, if active-high; false, if active-low
+	.kAddBUFG(1'b1),	// : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
+	.kClkRange(2),// : natural := 2;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+	.kEdidFileName("900p_edid.txt"),//;  -- Select EDID file to use
+	//-- 7-series specific
+	.kIDLY_TapValuePs(78),// : natural := 78; --delay in ps per tap
+	.kIDLY_TapWidth(7)// : natural := 5
+) // number of bits for IDELAYE2 tap counter   
+udvirgb1
+(
+	// -- DVI 1.0 TMDS video interface
+	.TMDS_Clk_p(FRCLKP),	// : in std_logic;
+	.TMDS_Clk_n(FRCLKN),	// : in std_logic;
+	.TMDS_Data_p({FRDAT10P,FRDAT9P,FRDAT8P,FRDAT7P,FRDAT6P,FRDAT5P,FRDAT4P,FRDAT3P,FRDAT2P,FRDAT1P,FRDAT0P}),// : in std_logic_vector(2 downto 0);
+	.TMDS_Data_n({FRDAT10N,FRDAT9N,FRDAT8N,FRDAT7N,FRDAT6N,FRDAT5N,FRDAT4N,FRDAT3N,FRDAT2N,FRDAT1N,FRDAT0N}),// : in std_logic_vector(2 downto 0);
+
+	//-- Auxiliary signals 
+	.RefClk(clk200),// : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
+	.aRst(rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+	.aRst_n(~rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+
+	//-- Video out
+	.vid_pData(packeti),// : out std_logic_vector(23 downto 0);
+	.vid_pVDE(),	// : out std_logic;
+	.vid_pHSync(),	// : out std_logic;
+	.vid_pVSync(),	// : out std_logic;
+
+	.PixelClk(pclk),	// : out std_logic; --pixel-clock recovered from the DVI interface
+
+	.SerialClk(),	// : out std_logic; -- advanced use only; 5x PixelClk
+	.aPixelClkLckd(),// : out std_logic; -- advanced use only; PixelClk and SerialClk stable
+
+	//-- Optional DDC port
+	.DDC_SDA_I(1'b1),// : in std_logic;
+	.DDC_SDA_O(),// : out std_logic;
+	.DDC_SDA_T(),// : out std_logic;
+	.DDC_SCL_I(1'b1),// : in std_logic;
+	.DDC_SCL_O(),// : out std_logic; 
+	.DDC_SCL_T(),// : out std_logic;
+
+	.pRst(rst),	// : in std_logic; -- synchronous reset; will restart locking procedure
+	.pRst_n(~rst)	// : in std_logic -- synchronous reset; will restart locking procedure
+);
+
 
 reg [3:0] cnt64;
 reg [5:0] state64;
@@ -330,30 +460,30 @@ parameter ST3 = 5'd3;
 parameter ST4 = 5'd4;
 parameter ST5 = 5'd5;
 parameter ST6 = 5'd6;
-always @(posedge clk64)
+always @(posedge clk71)
 begin
 case(state64)
 IDLE:
 	begin
 		packet <= 24'hFFFFFF;
-		if (cyc & stb) begin
-			packet <= {3'b000,adr[31:11]};
+		if (cyc & stb & master & cs_pbus) begin
+			packet <= {4'h0,adr[31:12]};
 			state64 <= we ? ST2 : ST6;
 		end
 	end
 ST2:
 	begin
-		packet <= {3'b001,adr[10:0],dato[31:22]};
+		packet <= {4'h1,adr[11:0],dato[31:24]};
 		state64 <= ST3;
 	end
 ST3:
 	begin
-		packet <= {3'b010,dato[21:1]};
+		packet <= {4'h2,dato[23:4]};
 		state64 <= ST4;
 	end
 ST4:
 	begin
-		packet <= {3'b011,dato[0],sel[3:0],16'hAAAA};
+		packet <= {4'h3,dato[3:0],sel[3:0],12'hAAA};
 		state64 <= ST5;
 	end
 ST5:
@@ -363,7 +493,7 @@ ST5:
 	end
 ST6:
 	begin
-		packet <= {3'b100,adr[10:0],sel[3:0],6'h35};
+		packet <= {4'h4,adr[11:0],sel[3:0],4'h5};
 	end
 default:	state64 <= IDLE;
 endcase
@@ -378,7 +508,8 @@ always @*
 	cs_br <= adr[31:16]==16'hFFFC		// Boot rom 192k
 				|| adr[31:16]==16'hFFFD
 				|| adr[31:16]==16'hFFFE;
-
+wire cs_xbus = adr[31:28]==4'd1;			// external parallel
+wire cs_pbus = |adr[31:28] && adr[31:24]!=8'hFF && !cs_xbus;	// external serial bus
 wire cs_scr = adr[31:22]==10'b1111_1111_01;	// Scratchpad memory 64k
 // No need to check for the $FFD in the top 12 address bits as these are 
 // detected in the I/O bridges.
@@ -390,6 +521,7 @@ wire cs_pic = br1_adr[19:8]==12'hC0F;
 wire cs_sema = br1_adr[19:12]==8'hB0;
 wire cs_mut = br1_adr[19:8]==12'hBFF;
 
+wire cs_grnd = br2_adr[19:4]==12'hC0BF;	// RNG random number (low speed)
 wire cs_rnd = br2_adr[19:8]==12'hC0C;		// PRNG random number generator
 wire cs_kbd  = br2_adr[19:4]==16'hC000;		// keyboard controller
 wire cs_mse  = br2_adr[19:4]==16'hC001;		// mouse controller
@@ -398,7 +530,7 @@ wire cs_pmc = br2_adr[19:4]==16'hC00F;
 wire cs_uart = br2_adr[19:4]==16'hC0A0;
 
 wire cs_bridge1 = (cs_tc1 | cs_spr | cs_bmp | cs_pic | cs_sema | cs_mut);
-wire cs_bridge2 = (cs_rnd | cs_kbd | cs_mse | cs_aud | cs_uart);
+wire cs_bridge2 = (cs_rnd | cs_kbd | cs_mse | cs_aud | cs_uart | cs_grnd);
 wire cs_bridge3 = 1'b0;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -415,10 +547,9 @@ reg [31:0] FADO;
 reg FALEO;
 reg [3:0] FSELO;
 reg FRDO;
-wire bus_idle = state==IDLE && !(cyc & stb & master & xaccess);
+wire bus_idle = state==IDLE && !(cyc & stb & master & cs_xbus);
 reg [5:0] cnt;
 wire cntdone = cnt[5];
-wire xaccess = |adr[31:28] && adr[31:24]!=8'hFF;
 always @(posedge clk80)
 if (rst) begin
 	xack <= LOW;
@@ -434,7 +565,7 @@ end
 else
 case(state)
 IDLE:
-	if (cyc & stb & master & xaccess) begin
+	if (cyc & stb & master & cs_xbus) begin
 		FBEN <= LOW;		// Enable buffers
 		FADO <= adr;		// Place address
 		FSELO <= sel;
@@ -455,7 +586,6 @@ ST1:
 	end
 ST2:
 	begin
-		FADO <= ~FADO;
 		state <= ST3;
 	end
 ST3:
@@ -529,6 +659,23 @@ always @(posedge clk80)
 always @(posedge clk80)
 	if (FINTA)
 		FIRQ <= FAD;
+
+always @(posedge clk71)
+begin
+	packetir <= packeti;	// register across clock domain
+case(packetir[23:21])
+4'hF:	;		// all ones = IDLE
+4'h5:	pbus_dati[31:12] <= packetir[19:0];
+4'h6:
+	begin
+		pbus_dati[11:0] <= packetir[19:8];
+		pack <= 1'b1;
+	end
+endcase
+if (~(cyc & stb & master & cs_pbus))
+	pack <= 1'b0;
+end
+
 
 Petajon_pmc upmc1
 (
@@ -692,21 +839,22 @@ assign BLUE = spr_rgbo[7:4];
 wire ack_bridge3, ack_br;
 reg ack1 = 1'b0;
 reg ack1a = 1'b0;
-assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xack;
+assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xack|pack;
 //assign ack = ack_br;
 always @(posedge cpu_clk)
 	ack1a <= ack;
 always @(posedge cpu_clk)
 	ack1 <= ack1a & ack;
 always @(posedge cpu_clk)
-casez({cs_br,cs_scr,cs_bridge1,cs_bridge2,cs_dram,cs_bridge3,xaccess})
-7'b1??????: dati <= br_dato;
-7'b01?????: dati <= scr_dato;
-7'b001????: dati <= br1_cdato;
-7'b0001???: dati <= br2_cdato;
-7'b00001??: dati <= dram_dato;
-7'b000001?: dati <= br3_cdato;
-7'b0000001:	dati <= xdatil;
+casez({cs_br,cs_scr,cs_bridge1,cs_bridge2,cs_dram,cs_bridge3,cs_xbus,cs_pbus})
+8'b1???????: dati <= br_dato;
+8'b01??????: dati <= scr_dato;
+8'b001?????: dati <= br1_cdato;
+8'b0001????: dati <= br2_cdato;
+8'b00001???: dati <= dram_dato;
+8'b000001??: dati <= br3_cdato;
+8'b0000001?:	dati <= xdatil;
+8'b00000001:	dati <= pbus_dati;
 default:   dati <= dati;
 endcase
 
@@ -728,7 +876,7 @@ casez({cs_tc1,cs_spr,cs_bmp,cs_pic,cs_sema,cs_mut})
 default:	br1_dati <= br1_dati;
 endcase
 
-wire br2_ack1 = rnd_ack|kbd_ack|aud_ack|pmc_ack|uart_ack;
+wire br2_ack1 = rnd_ack|kbd_ack|aud_ack|pmc_ack|uart_ack|cs_grnd;
 reg br2_ack1a;
 always @(posedge cpu_clk)
 	br2_ack1a <= br2_ack1;
@@ -736,12 +884,13 @@ always @(posedge cpu_clk)
 	br2_ack <= br2_ack1a & br2_ack1;
 
 always @(posedge cpu_clk)
-casez({cs_rnd,cs_kbd,aud_ack,cs_pmc,cs_uart})
-5'b1????:	br2_dati <= {2{rnd_dato}};	// 32 bits reflected twice
-5'b01???:	br2_dati <= {8{kbd_dato}};	// 8 bits reflect 8 times
-5'b001??:	br2_dati <= aud_cdato;			// 64 bit peripheral
-5'b0001?:	br2_dati <= pmc_dato;
-5'b00001:	br2_dati <= uart_dato;
+casez({cs_rnd,cs_kbd,aud_ack,cs_pmc,cs_uart,cs_grnd})
+6'b1?????:	br2_dati <= rnd_dato;	// 32 bits reflected twice
+6'b01????:	br2_dati <= {4{kbd_dato}};	// 8 bits reflect 8 times
+6'b001???:	br2_dati <= aud_cdato;			// 64 bit peripheral
+6'b0001??:	br2_dati <= pmc_dato;
+6'b00001?:	br2_dati <= uart_dato;
+6'b000001:	br2_dati <= randnum;
 default:	br2_dati <= br2_dati;
 endcase
 
@@ -854,6 +1003,26 @@ PS2kbd u_mse1
   .irq(mse_irq)
 );
 
+GetRand ugr1(clk100, randi, randnum);
+
+`ifdef RANDOM_GEN
+random	uprg1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cs_i(cs_rnd),
+	.cyc_i(br2_cyc),
+	.stb_i(br2_stb),
+	.ack_o(rnd_ack),
+	.we_i(br2_we),
+	.adr_i(br2_adr[4:1]),
+	.dat_i(br2_dat),
+	.dat_o(rnd_dato)
+);
+`else
+assign rnd_ack = 1'b0;
+assign rnd_dato = 1'b0;
+`endif
 
 `ifndef SIM
 mig_7series_1 uddr3
@@ -1069,7 +1238,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.ch()
 );
 
-bootrom #(64) ubr1
+bootrom #(32) ubr1
 (
 	.rst_i(rst),
   .clk_i(cpu_clk),
