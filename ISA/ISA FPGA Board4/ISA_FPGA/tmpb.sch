@@ -1,0 +1,2999 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr C 22000 17000
+encoding utf-8
+Sheet 1 2
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L 74xx:74LS245 U1
+U 1 1 5E5EF188
+P 5600 2100
+F 0 "U1" H 5600 3081 50  0000 C CNN
+F 1 "74LVC245" H 5600 2990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 5600 2100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 5600 2100 50  0001 C CNN
+	1    5600 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U2
+U 1 1 5E5F042B
+P 7600 2100
+F 0 "U2" H 7600 3081 50  0000 C CNN
+F 1 "74LVC245" H 7600 2990 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 2100 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 2100 50  0001 C CNN
+	1    7600 2100
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U3
+U 1 1 5E5F1CDB
+P 5600 4200
+F 0 "U3" H 5600 5181 50  0000 C CNN
+F 1 "74LVC245" H 5600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 5600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 5600 4200 50  0001 C CNN
+	1    5600 4200
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS245 U4
+U 1 1 5E5F2EF2
+P 7600 4200
+F 0 "U4" H 7600 5181 50  0000 C CNN
+F 1 "74LVC245" H 7600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 7600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 7600 4200 50  0001 C CNN
+	1    7600 4200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5100 1600 4800 1600
+Wire Wire Line
+	5100 1700 4800 1700
+Wire Wire Line
+	5100 1800 4800 1800
+Wire Wire Line
+	5100 1900 4800 1900
+Wire Wire Line
+	5100 2000 4800 2000
+Wire Wire Line
+	5100 2100 4800 2100
+Wire Wire Line
+	5100 2200 4800 2200
+Wire Wire Line
+	5100 2300 4800 2300
+Wire Wire Line
+	5100 2500 4800 2500
+Wire Wire Line
+	5100 2600 4800 2600
+Wire Wire Line
+	6100 1600 6450 1600
+Wire Wire Line
+	6100 1700 6450 1700
+Wire Wire Line
+	6100 1800 6450 1800
+Wire Wire Line
+	6100 1900 6450 1900
+Wire Wire Line
+	6100 2000 6450 2000
+Wire Wire Line
+	6100 2100 6450 2100
+Wire Wire Line
+	6100 2200 6450 2200
+Wire Wire Line
+	6100 2300 6450 2300
+$Comp
+L 74xx:74LS245 U5
+U 1 1 5E6026A8
+P 9600 4200
+F 0 "U5" H 9600 5181 50  0000 C CNN
+F 1 "74LVC245" H 9600 5090 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 9600 4200 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 9600 4200 50  0001 C CNN
+	1    9600 4200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5100 3700 4700 3700
+Wire Wire Line
+	5100 3800 4700 3800
+Wire Wire Line
+	5100 3900 4700 3900
+Wire Wire Line
+	5100 4000 4700 4000
+Wire Wire Line
+	5100 4100 4700 4100
+Wire Wire Line
+	5100 4200 4700 4200
+Wire Wire Line
+	5100 4300 4700 4300
+Wire Wire Line
+	5100 4400 4700 4400
+Wire Wire Line
+	6100 3700 6450 3700
+Wire Wire Line
+	6100 3800 6450 3800
+Wire Wire Line
+	6100 3900 6450 3900
+Wire Wire Line
+	6100 4000 6450 4000
+Wire Wire Line
+	6100 4100 6450 4100
+Wire Wire Line
+	6100 4200 6450 4200
+Wire Wire Line
+	6100 4300 6450 4300
+Wire Wire Line
+	6100 4400 6450 4400
+Wire Wire Line
+	7100 3700 6750 3700
+Wire Wire Line
+	7100 3800 6750 3800
+Wire Wire Line
+	7100 3900 6750 3900
+Wire Wire Line
+	7100 4000 6750 4000
+Wire Wire Line
+	7100 4100 6750 4100
+Wire Wire Line
+	7100 4200 6750 4200
+Wire Wire Line
+	7100 4300 6750 4300
+Wire Wire Line
+	7100 4400 6750 4400
+Wire Wire Line
+	8100 3700 8450 3700
+Wire Wire Line
+	8100 3800 8450 3800
+Wire Wire Line
+	8100 3900 8450 3900
+Wire Wire Line
+	8100 4000 8450 4000
+Wire Wire Line
+	8100 4100 8450 4100
+Wire Wire Line
+	8100 4200 8450 4200
+Wire Wire Line
+	8100 4300 8450 4300
+Wire Wire Line
+	8100 4400 8450 4400
+Text Label 4900 1600 0    50   ~ 0
+FD0
+Text Label 4900 1700 0    50   ~ 0
+FD1
+Text Label 4900 1800 0    50   ~ 0
+FD2
+Text Label 4900 1900 0    50   ~ 0
+FD3
+Text Label 4900 2000 0    50   ~ 0
+FD4
+Text Label 4900 2100 0    50   ~ 0
+FD5
+Text Label 4900 2200 0    50   ~ 0
+FD6
+Text Label 4900 2300 0    50   ~ 0
+FD7
+Wire Wire Line
+	7100 1600 6750 1600
+Wire Wire Line
+	7100 1700 6750 1700
+Wire Wire Line
+	6750 1800 7100 1800
+Wire Wire Line
+	7100 1900 6750 1900
+Wire Wire Line
+	7100 2000 6750 2000
+Wire Wire Line
+	7100 2100 6750 2100
+Wire Wire Line
+	7100 2200 6750 2200
+Wire Wire Line
+	7100 2300 6750 2300
+$Comp
+L VGA_V11-cache:S100_MALE P1
+U 1 1 5E93B5C5
+P 19200 6350
+F 0 "P1" H 19578 6414 60  0000 L CNN
+F 1 "S100_MALE" H 19578 6308 60  0000 L CNN
+F 2 "" H 19200 6350 60  0000 C CNN
+F 3 "" H 19200 6350 60  0000 C CNN
+	1    19200 6350
+	1    0    0    -1  
+$EndComp
+Text Label 6200 3700 0    50   ~ 0
+A0
+Text Label 6200 3800 0    50   ~ 0
+A1
+Text Label 6200 3900 0    50   ~ 0
+A2
+Text Label 6200 4000 0    50   ~ 0
+A3
+Text Label 6200 4100 0    50   ~ 0
+A4
+Text Label 6200 4200 0    50   ~ 0
+A5
+Text Label 6200 4300 0    50   ~ 0
+A6
+Text Label 6200 4400 0    50   ~ 0
+A7
+Text Label 8200 3700 0    50   ~ 0
+A8
+Text Label 8200 3800 0    50   ~ 0
+A9
+Text Label 8200 3900 0    50   ~ 0
+A10
+Text Label 8200 4000 0    50   ~ 0
+A11
+Text Label 8200 4100 0    50   ~ 0
+A12
+Text Label 8200 4200 0    50   ~ 0
+A13
+Text Label 8200 4300 0    50   ~ 0
+A14
+Text Label 8200 4400 0    50   ~ 0
+A15
+Wire Wire Line
+	10100 3700 10450 3700
+Wire Wire Line
+	10100 3800 10450 3800
+Wire Wire Line
+	10100 3900 10450 3900
+Wire Wire Line
+	10100 4000 10450 4000
+Wire Wire Line
+	10100 4100 10450 4100
+Wire Wire Line
+	10100 4200 10450 4200
+Wire Wire Line
+	10100 4300 10450 4300
+Wire Wire Line
+	10100 4400 10450 4400
+Wire Wire Line
+	9100 3700 8750 3700
+Wire Wire Line
+	9100 3800 8750 3800
+Wire Wire Line
+	9100 3900 8750 3900
+Wire Wire Line
+	9100 4000 8750 4000
+Wire Wire Line
+	9100 4100 8750 4100
+Wire Wire Line
+	9100 4200 8750 4200
+Wire Wire Line
+	9100 4300 8750 4300
+Wire Wire Line
+	9100 4400 8750 4400
+Text Label 10200 3700 0    50   ~ 0
+A16
+Text Label 10200 3800 0    50   ~ 0
+A17
+Text Label 10200 3900 0    50   ~ 0
+A18
+Text Label 10200 4000 0    50   ~ 0
+A19
+Text Label 10200 4100 0    50   ~ 0
+A20
+Text Label 10200 4200 0    50   ~ 0
+A21
+Text Label 10200 4300 0    50   ~ 0
+A22
+Text Label 10200 4400 0    50   ~ 0
+A23
+Text Label 4850 3700 0    50   ~ 0
+FA0
+Text Label 4850 3800 0    50   ~ 0
+FA1
+Text Label 4850 3900 0    50   ~ 0
+FA2
+Text Label 4850 4000 0    50   ~ 0
+FA3
+Text Label 4850 4100 0    50   ~ 0
+FA4
+Text Label 4850 4200 0    50   ~ 0
+FA5
+Text Label 4850 4300 0    50   ~ 0
+FA6
+Text Label 4850 4400 0    50   ~ 0
+FA7
+Text Label 6900 3700 0    50   ~ 0
+FA8
+Text Label 6900 3800 0    50   ~ 0
+FA9
+Text Label 6900 3900 0    50   ~ 0
+FA10
+Text Label 6900 4000 0    50   ~ 0
+FA11
+Text Label 6900 4100 0    50   ~ 0
+FA12
+Text Label 6900 4200 0    50   ~ 0
+FA13
+Text Label 6900 4300 0    50   ~ 0
+FA14
+Text Label 6900 4400 0    50   ~ 0
+FA15
+Text Label 8850 3700 0    50   ~ 0
+FA16
+Text Label 8850 3800 0    50   ~ 0
+FA17
+Text Label 8850 3900 0    50   ~ 0
+FA18
+Text Label 8850 4000 0    50   ~ 0
+FA19
+Text Label 8850 4100 0    50   ~ 0
+FA20
+Text Label 8850 4200 0    50   ~ 0
+FA21
+Text Label 8850 4300 0    50   ~ 0
+FA22
+Text Label 8850 4400 0    50   ~ 0
+FA23
+Wire Wire Line
+	8100 1600 8550 1600
+Wire Wire Line
+	8100 1700 8550 1700
+Wire Wire Line
+	8100 1800 8550 1800
+Wire Wire Line
+	8100 1900 8550 1900
+Wire Wire Line
+	8100 2000 8550 2000
+Wire Wire Line
+	8100 2200 8550 2200
+Wire Wire Line
+	8100 2100 8550 2100
+Wire Wire Line
+	8100 2300 8550 2300
+Wire Wire Line
+	18550 2800 18100 2800
+Wire Wire Line
+	18550 2900 18100 2900
+Wire Wire Line
+	18550 3000 18100 3000
+Wire Wire Line
+	18100 4200 18550 4200
+Wire Wire Line
+	18550 4300 18100 4300
+Wire Wire Line
+	18550 4400 18100 4400
+Wire Wire Line
+	18550 4500 18100 4500
+Wire Wire Line
+	18550 4600 18100 4600
+Wire Wire Line
+	18550 4700 18100 4700
+Wire Wire Line
+	18050 7400 18550 7400
+Wire Wire Line
+	18550 7500 18050 7500
+Wire Wire Line
+	18550 7600 18050 7600
+Wire Wire Line
+	18550 7700 18050 7700
+Wire Wire Line
+	18550 9200 18050 9200
+Wire Wire Line
+	18550 9300 18050 9300
+Wire Wire Line
+	18550 9400 18050 9400
+Wire Wire Line
+	18550 9500 18050 9500
+Wire Wire Line
+	18550 9600 18050 9600
+Wire Wire Line
+	18550 9700 18050 9700
+Wire Wire Line
+	18550 9800 18050 9800
+Wire Wire Line
+	18550 9900 18050 9900
+Wire Wire Line
+	18550 10000 18050 10000
+Text Label 18200 2800 0    50   ~ 0
+A18
+Text Label 18200 2900 0    50   ~ 0
+A16
+Text Label 18200 3000 0    50   ~ 0
+A17
+Text Label 18250 4200 0    50   ~ 0
+A5
+Text Label 18250 4300 0    50   ~ 0
+A4
+Text Label 18250 4400 0    50   ~ 0
+A3
+Text Label 18250 4500 0    50   ~ 0
+A15
+Text Label 18250 4600 0    50   ~ 0
+A12
+Text Label 18250 4700 0    50   ~ 0
+A9
+Text Label 18200 7400 0    50   ~ 0
+A20
+Text Label 18200 7500 0    50   ~ 0
+A21
+Text Label 18200 7600 0    50   ~ 0
+A22
+Text Label 18200 7700 0    50   ~ 0
+A23
+Text Label 18200 9200 0    50   ~ 0
+A0
+Text Label 18200 9300 0    50   ~ 0
+A1
+Text Label 18200 9400 0    50   ~ 0
+A2
+Text Label 18200 9500 0    50   ~ 0
+A6
+Text Label 18200 9600 0    50   ~ 0
+A7
+Text Label 18200 9700 0    50   ~ 0
+A8
+Text Label 18200 9800 0    50   ~ 0
+A13
+Text Label 18200 9900 0    50   ~ 0
+A14
+Text Label 18200 10000 0    50   ~ 0
+A11
+Text Label 6200 1600 0    50   ~ 0
+DO0
+Text Label 6200 1700 0    50   ~ 0
+DO1
+Text Label 6200 1800 0    50   ~ 0
+DO2
+Text Label 6200 1900 0    50   ~ 0
+DO3
+Text Label 6200 2000 0    50   ~ 0
+DO4
+Text Label 6200 2100 0    50   ~ 0
+DO5
+Text Label 6200 2200 0    50   ~ 0
+DO6
+Text Label 6200 2300 0    50   ~ 0
+DO7
+Text Label 6850 1600 0    50   ~ 0
+FD8
+Text Label 6850 1700 0    50   ~ 0
+FD9
+Text Label 6850 1800 0    50   ~ 0
+FD10
+Text Label 6850 1900 0    50   ~ 0
+FD11
+Text Label 6850 2000 0    50   ~ 0
+FD12
+Text Label 6850 2100 0    50   ~ 0
+FD13
+Text Label 6850 2200 0    50   ~ 0
+FD14
+Text Label 6850 2300 0    50   ~ 0
+FD15
+Text Label 8250 1600 0    50   ~ 0
+DI0
+Text Label 8250 1700 0    50   ~ 0
+DI1
+Text Label 8250 1800 0    50   ~ 0
+DI2
+Text Label 8250 1900 0    50   ~ 0
+DI3
+Text Label 8250 2000 0    50   ~ 0
+DI4
+Text Label 8250 2100 0    50   ~ 0
+DI5
+Text Label 8250 2200 0    50   ~ 0
+DI6
+Text Label 8250 2300 0    50   ~ 0
+DI7
+Wire Wire Line
+	18550 4800 18100 4800
+Wire Wire Line
+	18550 4900 18100 4900
+Wire Wire Line
+	18550 5100 18100 5100
+Wire Wire Line
+	18550 5200 18100 5200
+Wire Wire Line
+	18550 5000 18100 5000
+Wire Wire Line
+	18550 5300 18100 5300
+Wire Wire Line
+	18550 5400 18100 5400
+Wire Wire Line
+	18550 5500 18100 5500
+Wire Wire Line
+	18550 5600 18100 5600
+Wire Wire Line
+	18550 7200 18050 7200
+Wire Wire Line
+	18050 10100 18550 10100
+Wire Wire Line
+	18550 10200 18050 10200
+Wire Wire Line
+	18550 10300 18050 10300
+Wire Wire Line
+	18550 10400 18050 10400
+Wire Wire Line
+	18550 10500 18050 10500
+Wire Wire Line
+	18550 10600 18050 10600
+Wire Wire Line
+	18550 10700 18050 10700
+Wire Wire Line
+	18550 10800 18050 10800
+Text Label 18200 7200 0    50   ~ 0
+A19
+Text Label 18250 5000 0    50   ~ 0
+A10
+Text Label 18250 4800 0    50   ~ 0
+DO1
+Text Label 18250 4900 0    50   ~ 0
+DO0
+Text Label 18250 5100 0    50   ~ 0
+DO4
+Text Label 18250 5200 0    50   ~ 0
+DO5
+Text Label 18250 5300 0    50   ~ 0
+D06
+Text Label 18200 10100 0    50   ~ 0
+DO2
+Text Label 18200 10200 0    50   ~ 0
+DO3
+Text Label 18200 10300 0    50   ~ 0
+DO7
+Text Label 18200 10400 0    50   ~ 0
+DI4
+Text Label 18200 10500 0    50   ~ 0
+DI5
+Text Label 18200 10600 0    50   ~ 0
+DI6
+Text Label 18200 10700 0    50   ~ 0
+DI1
+Text Label 18200 10800 0    50   ~ 0
+DI0
+Text Label 18250 5400 0    50   ~ 0
+DI2
+Text Label 18250 5500 0    50   ~ 0
+DI3
+Text Label 18250 5600 0    50   ~ 0
+DI7
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5EA9CBD1
+P 13600 2150
+F 0 "U?" H 13600 3131 50  0000 C CNN
+F 1 "74LVC245" H 13600 3040 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 13600 2150 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 13600 2150 50  0001 C CNN
+	1    13600 2150
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	13100 1650 12750 1650
+Wire Wire Line
+	13100 1750 12750 1750
+Wire Wire Line
+	12750 1850 13100 1850
+Wire Wire Line
+	13100 1950 12750 1950
+Wire Wire Line
+	13100 2050 12750 2050
+Wire Wire Line
+	13100 2150 12750 2150
+Wire Wire Line
+	13100 2250 12750 2250
+Wire Wire Line
+	13100 2350 12750 2350
+Wire Wire Line
+	14100 1650 14550 1650
+Wire Wire Line
+	14100 1750 14550 1750
+Wire Wire Line
+	14100 1850 14550 1850
+Wire Wire Line
+	14100 1950 14550 1950
+Wire Wire Line
+	14100 2050 14550 2050
+Wire Wire Line
+	14100 2250 14550 2250
+Wire Wire Line
+	14100 2150 14550 2150
+Wire Wire Line
+	14100 2350 14550 2350
+Text Label 12850 1650 0    50   ~ 0
+FsM1
+Text Label 12850 1750 0    50   ~ 0
+FsOUT
+Text Label 12850 1850 0    50   ~ 0
+FsINP
+Text Label 12850 1950 0    50   ~ 0
+FsMEMR
+Text Label 12850 2150 0    50   ~ 0
+FsXTRQ*
+Text Label 12850 2350 0    50   ~ 0
+FsWO*
+Text Label 14250 1650 0    50   ~ 0
+sM1
+Text Label 14250 1750 0    50   ~ 0
+sOUT
+Text Label 14250 1850 0    50   ~ 0
+sINP
+Text Label 14250 1950 0    50   ~ 0
+sMEMR
+Text Label 14250 2150 0    50   ~ 0
+sXTRQ*
+Text Label 14250 2350 0    50   ~ 0
+sWO*
+Wire Wire Line
+	18550 5800 18100 5800
+Wire Wire Line
+	18550 5900 18100 5900
+Wire Wire Line
+	18550 6000 18100 6000
+Wire Wire Line
+	18550 7100 18050 7100
+Wire Wire Line
+	18550 11000 18050 11000
+Text Label 18200 11000 0    50   ~ 0
+sWO*
+Text Label 18200 7100 0    50   ~ 0
+sXTRQ*
+Text Label 18250 6000 0    50   ~ 0
+sMEMR
+Text Label 18250 5900 0    50   ~ 0
+sINP
+Text Label 18250 5800 0    50   ~ 0
+sOUT
+$Comp
+L 74xx:74LS245 U?
+U 1 1 5E5FEBD8
+P 10650 2050
+F 0 "U?" H 10650 3031 50  0000 C CNN
+F 1 "74LVC245" H 10650 2940 50  0000 C CNN
+F 2 "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm" H 10650 2050 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/sn74LS245" H 10650 2050 50  0001 C CNN
+	1    10650 2050
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	11150 1550 11500 1550
+Wire Wire Line
+	11150 1650 11500 1650
+Wire Wire Line
+	11150 1750 11500 1750
+Wire Wire Line
+	11150 1850 11500 1850
+Wire Wire Line
+	11150 1950 11500 1950
+Wire Wire Line
+	11150 2050 11500 2050
+Wire Wire Line
+	11150 2150 11500 2150
+Wire Wire Line
+	11150 2250 11500 2250
+Wire Wire Line
+	10150 1550 9800 1550
+Wire Wire Line
+	10150 1650 9800 1650
+Wire Wire Line
+	10150 1750 9800 1750
+Wire Wire Line
+	10150 1850 9800 1850
+Wire Wire Line
+	10150 1950 9800 1950
+Wire Wire Line
+	10150 2050 9800 2050
+Wire Wire Line
+	10150 2150 9800 2150
+Wire Wire Line
+	10150 2250 9800 2250
+Text Label 11250 1550 0    50   ~ 0
+pDBIN
+Text Label 11250 1650 0    50   ~ 0
+pWR*
+Text Label 11250 1750 0    50   ~ 0
+pSYNC
+Text Label 11250 1950 0    50   ~ 0
+pSTVAL*
+Wire Wire Line
+	10150 2450 9800 2450
+Text Label 9900 1550 0    50   ~ 0
+FpDBIN
+Text Label 9900 1650 0    50   ~ 0
+FpWR*
+Text Label 9900 1750 0    50   ~ 0
+FpSYNC
+Text Label 9900 1950 0    50   ~ 0
+FpSTVAL*
+Wire Wire Line
+	13100 2550 12750 2550
+Wire Wire Line
+	10150 2550 9800 2550
+Wire Wire Line
+	13100 2650 12750 2650
+Wire Wire Line
+	9100 4700 8750 4700
+Wire Wire Line
+	7100 4700 6750 4700
+Wire Wire Line
+	5100 4700 4700 4700
+Text Label 5600 5000 0    50   ~ 0
+GND
+Text Label 7600 5000 0    50   ~ 0
+GND
+Text Label 9600 5000 0    50   ~ 0
+GND
+Text Label 5600 2900 0    50   ~ 0
+GND
+Text Label 7600 2900 0    50   ~ 0
+GND
+Text Label 13600 2950 0    50   ~ 0
+GND
+Text Label 5600 1300 0    50   ~ 0
+VCC33
+Text Label 7600 1300 0    50   ~ 0
+VCC33
+Text Label 13600 1350 0    50   ~ 0
+VCC33
+Text Label 5600 3400 0    50   ~ 0
+VCC33
+Text Label 7600 3400 0    50   ~ 0
+VCC33
+Text Label 9600 3400 0    50   ~ 0
+VCC33
+Text Label 10650 1250 0    50   ~ 0
+VCC33
+Wire Wire Line
+	8750 4700 8750 5100
+Wire Wire Line
+	8750 5100 6750 5100
+Wire Wire Line
+	6750 5100 6750 4700
+Wire Wire Line
+	6750 5100 4700 5100
+Wire Wire Line
+	4700 5100 4700 4700
+Connection ~ 6750 5100
+Wire Wire Line
+	8650 4600 8650 5200
+Wire Wire Line
+	8650 5200 6650 5200
+Wire Wire Line
+	6650 5200 6650 4600
+Wire Wire Line
+	6650 4600 7100 4600
+Wire Wire Line
+	8650 4600 9100 4600
+Wire Wire Line
+	6650 5200 4600 5200
+Wire Wire Line
+	4600 5200 4600 4600
+Wire Wire Line
+	4600 4600 5100 4600
+Connection ~ 6650 5200
+Wire Wire Line
+	7100 2500 6750 2500
+Wire Wire Line
+	7100 2600 6750 2600
+Text Label 6800 2500 0    50   ~ 0
+FD815DIR
+Text Label 4850 2500 0    50   ~ 0
+FD07DIR
+Text Label 4850 2600 0    50   ~ 0
+F07EN*
+Text Label 6800 2600 0    50   ~ 0
+F815EN*
+Text Label 12850 2250 0    50   ~ 0
+FMWRT
+Text Label 14250 2250 0    50   ~ 0
+MWRT
+Text Label 10650 2850 0    50   ~ 0
+GND
+Wire Wire Line
+	18550 9100 18050 9100
+Wire Wire Line
+	18550 9000 18050 9000
+Wire Wire Line
+	18550 3800 18100 3800
+Text Label 18200 3800 0    50   ~ 0
+pSTVAL*
+Text Label 18200 9000 0    50   ~ 0
+pWR*
+Text Label 18200 9100 0    50   ~ 0
+pDBIN
+$Comp
+L 74xx:74LS07 U?
+U 1 1 5E9F9D58
+P 12750 4400
+F 0 "U?" H 12750 4717 50  0000 C CNN
+F 1 "74LS07" H 12750 4626 50  0000 C CNN
+F 2 "" H 12750 4400 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 12750 4400 50  0001 C CNN
+	1    12750 4400
+	1    0    0    -1  
+$EndComp
+$Comp
+L 74xx:74LS07 U?
+U 2 1 5E9FE2C4
+P 12750 5000
+F 0 "U?" H 12750 5317 50  0000 C CNN
+F 1 "74LS07" H 12750 5226 50  0000 C CNN
+F 2 "" H 12750 5000 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 12750 5000 50  0001 C CNN
+	2    12750 5000
+	1    0    0    -1  
+$EndComp
+$Comp
+L VGA_V11-cache:RR9 RR2
+U 1 1 5EB93123
+P 13850 3750
+F 0 "RR2" V 13778 3251 70  0000 R CNN
+F 1 "1k" V 13657 3251 70  0000 R CNN
+F 2 "" H 13850 3750 60  0000 C CNN
+F 3 "" H 13850 3750 60  0000 C CNN
+	1    13850 3750
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	13350 4100 12950 4100
+Wire Wire Line
+	13050 4400 13450 4400
+Wire Wire Line
+	13450 4400 13450 4100
+Wire Wire Line
+	13050 5000 13550 5000
+Wire Wire Line
+	13550 5000 13550 4100
+Text Label 13000 4100 0    50   ~ 0
+VCC5
+Wire Wire Line
+	18550 1600 18100 1600
+Wire Wire Line
+	18550 8100 18050 8100
+Wire Wire Line
+	18550 8500 18050 8500
+Text Label 18200 8500 0    50   ~ 0
+RDY
+Text Label 18200 8100 0    50   ~ 0
+MWRT
+Text Label 18200 1600 0    50   ~ 0
+XRDY
+Wire Wire Line
+	11750 4400 12450 4400
+Wire Wire Line
+	11750 5000 12450 5000
+Wire Wire Line
+	8750 5100 8750 5200
+Wire Wire Line
+	8750 5200 8650 5200
+Connection ~ 8750 5100
+Connection ~ 8650 5200
+Text Label 8350 5200 0    50   ~ 0
+GND
+Wire Wire Line
+	9800 2450 9800 2550
+Connection ~ 9800 2550
+Wire Wire Line
+	9800 2550 9800 2750
+Text Label 9800 2750 0    50   ~ 0
+GND
+Wire Wire Line
+	12750 2550 12750 2650
+Connection ~ 12750 2650
+Wire Wire Line
+	12750 2650 12750 2900
+Text Label 12750 2900 0    50   ~ 0
+GND
+Text Label 11900 4400 0    50   ~ 0
+FXRDY
+Text Label 11900 5000 0    50   ~ 0
+FRDY
+Wire Wire Line
+	13450 4400 15200 4400
+Connection ~ 13450 4400
+Wire Wire Line
+	13550 5000 15200 5000
+Connection ~ 13550 5000
+Text Label 14850 4400 0    50   ~ 0
+XRDY
+Text Label 14900 5000 0    50   ~ 0
+RDY
+Wire Wire Line
+	18550 8200 18050 8200
+Text Label 18200 8200 0    50   ~ 0
+ALE
+Text Label 11250 2150 0    50   ~ 0
+ALE
+Text Label 9900 2150 0    50   ~ 0
+FALE
+Wire Wire Line
+	18550 8400 18050 8400
+Text Label 18200 8400 0    50   ~ 0
+ALEC
+Text Label 11250 2250 0    50   ~ 0
+ALEC
+Text Label 9900 2250 0    50   ~ 0
+FALEC
+$Comp
+L 74xx:74LS07 U?
+U 3 1 5EBD3E39
+P 12750 5550
+F 0 "U?" H 12750 5867 50  0000 C CNN
+F 1 "74LS07" H 12750 5776 50  0000 C CNN
+F 2 "" H 12750 5550 50  0001 C CNN
+F 3 "www.ti.com/lit/ds/symlink/sn74ls07.pdf" H 12750 5550 50  0001 C CNN
+	3    12750 5550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	13650 5550 13650 4100
+Wire Wire Line
+	13050 5550 13650 5550
+Wire Wire Line
+	13650 5550 15200 5550
+Connection ~ 13650 5550
+Wire Wire Line
+	12450 5550 11750 5550
+Text Label 14850 5550 0    50   ~ 0
+SIXTN*
+Text Label 11900 5550 0    50   ~ 0
+FSIXTN*
+Wire Wire Line
+	18550 7300 18050 7300
+Text Label 18200 7300 0    50   ~ 0
+SIXTN*
+$Comp
+L VGA_V11-cache:CONN_8X2 P2
+U 1 1 5EC372FF
+P 2700 2050
+F 0 "P2" H 2700 2643 60  0000 C CNN
+F 1 "CONN_8X2" H 2700 2545 50  0000 C CNN
+F 2 "" H 2700 2050 60  0000 C CNN
+F 3 "" H 2700 2050 60  0000 C CNN
+	1    2700 2050
+	1    0    0    -1  
+$EndComp
+$Comp
+L VGA_V11-cache:RR9 RR1
+U 1 1 5EC38088
+P 1750 1050
+F 0 "RR1" V 1678 552 70  0000 R CNN
+F 1 "10k" V 1557 552 70  0000 R CNN
+F 2 "" H 1750 1050 60  0000 C CNN
+F 3 "" H 1750 1050 60  0000 C CNN
+	1    1750 1050
+	0    -1   -1   0   
+$EndComp
+Text Label 950  1400 0    50   ~ 0
+VCC33
+Wire Wire Line
+	1250 1400 950  1400
+Wire Wire Line
+	2050 1400 2050 1700
+Wire Wire Line
+	1950 1800 1950 1400
+Wire Wire Line
+	1850 1400 1850 1900
+Wire Wire Line
+	1750 2000 1750 1400
+Wire Wire Line
+	1650 1400 1650 2100
+Wire Wire Line
+	1550 2200 1550 1400
+Wire Wire Line
+	1450 1400 1450 2300
+Wire Wire Line
+	1350 2400 1350 1400
+Wire Wire Line
+	2050 1700 950  1700
+Connection ~ 2050 1700
+Wire Wire Line
+	1950 1800 950  1800
+Connection ~ 1950 1800
+Wire Wire Line
+	1850 1900 950  1900
+Connection ~ 1850 1900
+Wire Wire Line
+	1750 2000 950  2000
+Connection ~ 1750 2000
+Wire Wire Line
+	1650 2100 950  2100
+Connection ~ 1650 2100
+Wire Wire Line
+	1550 2200 950  2200
+Connection ~ 1550 2200
+Wire Wire Line
+	1450 2300 950  2300
+Connection ~ 1450 2300
+Wire Wire Line
+	1350 2400 950  2400
+Connection ~ 1350 2400
+Wire Wire Line
+	2050 1700 2300 1700
+Wire Wire Line
+	1950 1800 2300 1800
+Wire Wire Line
+	1850 1900 2300 1900
+Wire Wire Line
+	1750 2000 2300 2000
+Wire Wire Line
+	1650 2100 2300 2100
+Wire Wire Line
+	1550 2200 2300 2200
+Wire Wire Line
+	1450 2300 2300 2300
+Wire Wire Line
+	1350 2400 2300 2400
+Wire Wire Line
+	3100 1700 3100 1800
+Connection ~ 3100 1800
+Wire Wire Line
+	3100 1800 3100 1900
+Connection ~ 3100 1900
+Wire Wire Line
+	3100 1900 3100 2000
+Connection ~ 3100 2000
+Wire Wire Line
+	3100 2000 3100 2100
+Connection ~ 3100 2100
+Wire Wire Line
+	3100 2100 3100 2200
+Connection ~ 3100 2200
+Wire Wire Line
+	3100 2200 3100 2300
+Connection ~ 3100 2300
+Wire Wire Line
+	3100 2300 3100 2400
+Connection ~ 3100 2400
+Wire Wire Line
+	3100 2400 3100 2550
+Text Label 3100 2550 0    50   ~ 0
+GND
+Text Label 1000 1700 0    50   ~ 0
+FCFG0
+Text Label 1000 1800 0    50   ~ 0
+FCFG1
+Text Label 1000 1900 0    50   ~ 0
+FCFG2
+Text Label 1000 2000 0    50   ~ 0
+FCFG3
+Text Label 1000 2100 0    50   ~ 0
+FCFG4
+Text Label 1000 2200 0    50   ~ 0
+FCFG5
+Text Label 1000 2300 0    50   ~ 0
+FCFG6
+Text Label 1000 2400 0    50   ~ 0
+FCFG7
+$Comp
+L VGA_V11-cache:DE15 J?
+U 1 1 5EE5B11D
+P 1950 4000
+F 0 "J?" H 1950 4810 70  0000 C CNN
+F 1 "DE15" H 1950 4689 70  0000 C CNN
+F 2 "" H 1950 4000 60  0000 C CNN
+F 3 "" H 1950 4000 60  0000 C CNN
+	1    1950 4000
+	1    0    0    -1  
+$EndComp
+$Sheet
+S 1400 13550 2400 1600
+U 5EEFC0AE
+F0 "Sheet5EEFC0AD" 50
+F1 "tmp.sch" 50
+$EndSheet
+Text Notes 15250 10550 0    60   ~ 0
+Card Ejector Mounting Holes
+$Comp
+L FPGA-Board-rescue:CONN_1 P2_EJ?
+U 1 1 5EF13EEE
+P 15800 10700
+AR Path="/5EEFC0AE/5EF13EEE" Ref="P2_EJ?"  Part="1" 
+AR Path="/5EF13EEE" Ref="P2_EJ?"  Part="1" 
+F 0 "P2_EJ?" H 15950 10700 40  0000 C CNN
+F 1 "CONN_1" H 15750 10740 30  0001 C CNN
+F 2 "1pin" H 15800 10700 60  0001 C CNN
+F 3 "" H 15800 10700 60  0001 C CNN
+	1    15800 10700
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:CONN_1 P1_EJ?
+U 1 1 5EF13EF4
+P 15800 10600
+AR Path="/5EEFC0AE/5EF13EF4" Ref="P1_EJ?"  Part="1" 
+AR Path="/5EF13EF4" Ref="P1_EJ?"  Part="1" 
+F 0 "P1_EJ?" H 15950 10600 40  0000 C CNN
+F 1 "CONN_1" H 15750 10640 30  0001 C CNN
+F 2 "1pin" H 15800 10600 60  0001 C CNN
+F 3 "" H 15800 10600 60  0001 C CNN
+	1    15800 10600
+	1    0    0    -1  
+$EndComp
+NoConn ~ 15650 10700
+NoConn ~ 15650 10600
+Text Label 14700 12050 0    60   ~ 0
+GND
+Text Label 14800 11400 0    60   ~ 0
+VCC
+Text Label 13250 11650 0    60   ~ 0
++8V
+$Comp
+L FPGA-Board-rescue:CP C?
+U 1 1 5EF13EFF
+P 14350 11850
+AR Path="/5EEFC0AE/5EF13EFF" Ref="C?"  Part="1" 
+AR Path="/5EF13EFF" Ref="C?"  Part="1" 
+F 0 "C?" H 14400 11950 50  0000 L CNN
+F 1 "10 uF" H 14400 11750 50  0000 L CNN
+F 2 "C1V5" H 14350 11850 60  0001 C CNN
+F 3 "" H 14350 11850 60  0001 C CNN
+	1    14350 11850
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:CP C?
+U 1 1 5EF13F05
+P 13550 11850
+AR Path="/5EEFC0AE/5EF13F05" Ref="C?"  Part="1" 
+AR Path="/5EF13F05" Ref="C?"  Part="1" 
+F 0 "C?" H 13600 11950 50  0000 L CNN
+F 1 "33 uF (25V)" H 12950 11850 50  0000 L CNN
+F 2 "C1V5" H 13550 11850 60  0001 C CNN
+F 3 "" H 13550 11850 60  0001 C CNN
+	1    13550 11850
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:LM7805 U?
+U 1 1 5EF13F0B
+P 13950 11700
+AR Path="/5EEFC0AE/5EF13F0B" Ref="U?"  Part="1" 
+AR Path="/5EF13F0B" Ref="U?"  Part="1" 
+F 0 "U?" H 13900 12000 60  0000 C CNN
+F 1 "LM7805" H 13950 11900 60  0000 C CNN
+F 2 "LM78XX" H 13950 11700 60  0001 C CNN
+F 3 "" H 13950 11700 60  0001 C CNN
+	1    13950 11700
+	1    0    0    -1  
+$EndComp
+Text Notes 12900 10300 0    60   ~ 0
+Palolu 5Volt  Regulators\n(Optional)
+$Comp
+L FPGA-Board-rescue:CONN_5 P?
+U 1 1 5EF13F12
+P 13950 10800
+AR Path="/5EEFC0AE/5EF13F12" Ref="P?"  Part="1" 
+AR Path="/5EF13F12" Ref="P?"  Part="1" 
+F 0 "P?" V 13900 10800 50  0000 C CNN
+F 1 "CONN_5" V 14000 10800 50  0000 C CNN
+F 2 "~" H 13950 10800 60  0000 C CNN
+F 3 "~" H 13950 10800 60  0000 C CNN
+	1    13950 10800
+	0    -1   -1   0   
+$EndComp
+NoConn ~ 13750 11200
+$Comp
+L FPGA-Board-rescue:GND #PWR?
+U 1 1 5EF13F19
+P 15200 12200
+AR Path="/5EEFC0AE/5EF13F19" Ref="#PWR?"  Part="1" 
+AR Path="/5EF13F19" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 15200 12200 30  0001 C CNN
+F 1 "GND" H 15200 12130 30  0001 C CNN
+F 2 "" H 15200 12200 60  0000 C CNN
+F 3 "" H 15200 12200 60  0000 C CNN
+	1    15200 12200
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:PWR_FLAG #FLG?
+U 1 1 5EF13F1F
+P 12700 12000
+AR Path="/5EEFC0AE/5EF13F1F" Ref="#FLG?"  Part="1" 
+AR Path="/5EF13F1F" Ref="#FLG?"  Part="1" 
+F 0 "#FLG?" H 12700 12270 30  0001 C CNN
+F 1 "PWR_FLAG" H 12700 12230 30  0000 C CNN
+F 2 "" H 12700 12000 60  0001 C CNN
+F 3 "" H 12700 12000 60  0001 C CNN
+	1    12700 12000
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:PWR_FLAG #FLG?
+U 1 1 5EF13F25
+P 13200 11650
+AR Path="/5EEFC0AE/5EF13F25" Ref="#FLG?"  Part="1" 
+AR Path="/5EF13F25" Ref="#FLG?"  Part="1" 
+F 0 "#FLG?" H 13200 11920 30  0001 C CNN
+F 1 "PWR_FLAG" H 13200 11880 30  0000 C CNN
+F 2 "" H 13200 11650 60  0001 C CNN
+F 3 "" H 13200 11650 60  0001 C CNN
+	1    13200 11650
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F2B
+P 13500 12900
+AR Path="/5EEFC0AE/5EF13F2B" Ref="C?"  Part="1" 
+AR Path="/5EF13F2B" Ref="C?"  Part="1" 
+F 0 "C?" H 13550 13000 50  0000 L CNN
+F 1 "0.1 uF" H 13550 12800 50  0000 L CNN
+F 2 "C2" H 13500 12900 60  0001 C CNN
+F 3 "" H 13500 12900 60  0001 C CNN
+	1    13500 12900
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F31
+P 14850 12900
+AR Path="/5EEFC0AE/5EF13F31" Ref="C?"  Part="1" 
+AR Path="/5EF13F31" Ref="C?"  Part="1" 
+F 0 "C?" H 14900 13000 50  0000 L CNN
+F 1 "0.1 uF" H 14900 12800 50  0000 L CNN
+F 2 "C2" H 14850 12900 60  0001 C CNN
+F 3 "" H 14850 12900 60  0001 C CNN
+	1    14850 12900
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F37
+P 13950 12900
+AR Path="/5EEFC0AE/5EF13F37" Ref="C?"  Part="1" 
+AR Path="/5EF13F37" Ref="C?"  Part="1" 
+F 0 "C?" H 14000 13000 50  0000 L CNN
+F 1 "0.1 uF" H 14000 12800 50  0000 L CNN
+F 2 "C2" H 13950 12900 60  0001 C CNN
+F 3 "" H 13950 12900 60  0001 C CNN
+	1    13950 12900
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F3D
+P 14400 12900
+AR Path="/5EEFC0AE/5EF13F3D" Ref="C?"  Part="1" 
+AR Path="/5EF13F3D" Ref="C?"  Part="1" 
+F 0 "C?" H 14450 13000 50  0000 L CNN
+F 1 "0.1 uF" H 14450 12800 50  0000 L CNN
+F 2 "C2" H 14400 12900 60  0001 C CNN
+F 3 "" H 14400 12900 60  0001 C CNN
+	1    14400 12900
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F43
+P 16200 12900
+AR Path="/5EEFC0AE/5EF13F43" Ref="C?"  Part="1" 
+AR Path="/5EF13F43" Ref="C?"  Part="1" 
+F 0 "C?" H 16250 13000 50  0000 L CNN
+F 1 "0.1 uF" H 16250 12800 50  0000 L CNN
+F 2 "C2" H 16200 12900 60  0001 C CNN
+F 3 "" H 16200 12900 60  0001 C CNN
+	1    16200 12900
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F49
+P 16600 12900
+AR Path="/5EEFC0AE/5EF13F49" Ref="C?"  Part="1" 
+AR Path="/5EF13F49" Ref="C?"  Part="1" 
+F 0 "C?" H 16650 13000 50  0000 L CNN
+F 1 "0.1 uF" H 16650 12800 50  0000 L CNN
+F 2 "C2" H 16600 12900 60  0001 C CNN
+F 3 "" H 16600 12900 60  0001 C CNN
+	1    16600 12900
+	1    0    0    -1  
+$EndComp
+Text Label 16250 11200 2    60   ~ 0
+VCC33
+$Comp
+L FPGA-Board-rescue:PWR_FLAG #FLG?
+U 1 1 5EF13F50
+P 15250 11300
+AR Path="/5EEFC0AE/5EF13F50" Ref="#FLG?"  Part="1" 
+AR Path="/5EF13F50" Ref="#FLG?"  Part="1" 
+F 0 "#FLG?" H 15250 11395 30  0001 C CNN
+F 1 "PWR_FLAG" H 15250 11480 30  0000 C CNN
+F 2 "" H 15250 11300 60  0000 C CNN
+F 3 "" H 15250 11300 60  0000 C CNN
+	1    15250 11300
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:7805 U?
+U 1 1 5EF13F56
+P 15800 11700
+AR Path="/5EEFC0AE/5EF13F56" Ref="U?"  Part="1" 
+AR Path="/5EF13F56" Ref="U?"  Part="1" 
+F 0 "U?" H 15800 12000 60  0000 C CNN
+F 1 "LM3940" H 15800 11900 60  0000 C CNN
+F 2 "~" H 15800 11700 60  0000 C CNN
+F 3 "~" H 15800 11700 60  0000 C CNN
+	1    15800 11700
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:GND #PWR?
+U 1 1 5EF13F5C
+P 13750 13250
+AR Path="/5EEFC0AE/5EF13F5C" Ref="#PWR?"  Part="1" 
+AR Path="/5EF13F5C" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 13750 13250 30  0001 C CNN
+F 1 "GND" H 13750 13180 30  0001 C CNN
+F 2 "" H 13750 13250 60  0000 C CNN
+F 3 "" H 13750 13250 60  0000 C CNN
+	1    13750 13250
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:PWR_FLAG #FLG?
+U 1 1 5EF13F62
+P 16650 11450
+AR Path="/5EEFC0AE/5EF13F62" Ref="#FLG?"  Part="1" 
+AR Path="/5EF13F62" Ref="#FLG?"  Part="1" 
+F 0 "#FLG?" H 16650 11545 30  0001 C CNN
+F 1 "PWR_FLAG" H 16650 11630 30  0000 C CNN
+F 2 "" H 16650 11450 60  0000 C CNN
+F 3 "" H 16650 11450 60  0000 C CNN
+	1    16650 11450
+	1    0    0    -1  
+$EndComp
+Text Label 12750 12500 0    60   ~ 0
+VCC33
+$Comp
+L FPGA-Board-rescue:CONN_5 P?
+U 1 1 5EF13F69
+P 12600 10800
+AR Path="/5EEFC0AE/5EF13F69" Ref="P?"  Part="1" 
+AR Path="/5EF13F69" Ref="P?"  Part="1" 
+F 0 "P?" V 12550 10800 50  0000 C CNN
+F 1 "CONN_5" V 12650 10800 50  0000 C CNN
+F 2 "~" H 12600 10800 60  0000 C CNN
+F 3 "~" H 12600 10800 60  0000 C CNN
+	1    12600 10800
+	0    -1   -1   0   
+$EndComp
+Text Notes 12350 10600 0    60   ~ 0
+Palolu \nD24V22F5
+NoConn ~ 12500 11200
+NoConn ~ 12400 11200
+Text Notes 13700 10600 0    60   ~ 0
+Palolu \nD24V25F5
+$Comp
+L FPGA-Board-rescue:CAPAPOL C?
+U 1 1 5EF13F73
+P 16450 11850
+AR Path="/5EEFC0AE/5EF13F73" Ref="C?"  Part="1" 
+AR Path="/5EF13F73" Ref="C?"  Part="1" 
+F 0 "C?" H 16500 11950 40  0000 L CNN
+F 1 "10uF" H 16500 11750 40  0000 L CNN
+F 2 "~" H 16550 11700 30  0000 C CNN
+F 3 "~" H 16450 11850 300 0000 C CNN
+	1    16450 11850
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 5EF13F79
+P 15300 12900
+AR Path="/5EEFC0AE/5EF13F79" Ref="C?"  Part="1" 
+AR Path="/5EF13F79" Ref="C?"  Part="1" 
+F 0 "C?" H 15350 13000 50  0000 L CNN
+F 1 "0.1 uF" H 15350 12800 50  0000 L CNN
+F 2 "C2" H 15300 12900 60  0001 C CNN
+F 3 "" H 15300 12900 60  0001 C CNN
+	1    15300 12900
+	1    0    0    -1  
+$EndComp
+Connection ~ 14300 11200
+Wire Wire Line
+	14300 10600 14300 11200
+Wire Wire Line
+	13200 10600 14300 10600
+Wire Wire Line
+	13200 11250 13200 10600
+Wire Wire Line
+	12800 11250 13200 11250
+Wire Wire Line
+	12800 11200 12800 11250
+Connection ~ 12850 12050
+Wire Wire Line
+	12850 12050 12850 11400
+Wire Wire Line
+	12850 11400 12700 11400
+Wire Wire Line
+	12700 11400 12700 11200
+Connection ~ 12600 11650
+Wire Wire Line
+	12600 11200 12600 11650
+Connection ~ 16350 11650
+Wire Wire Line
+	16350 11650 16350 11550
+Wire Wire Line
+	16350 11550 16650 11550
+Wire Wire Line
+	16650 11550 16650 11450
+Connection ~ 13750 13100
+Wire Wire Line
+	13750 13100 13750 13250
+Wire Wire Line
+	15200 12050 15200 12200
+Connection ~ 12750 12700
+Wire Wire Line
+	12750 12500 12750 12700
+Wire Wire Line
+	16200 11650 16250 11650
+Wire Wire Line
+	14350 11650 14800 11650
+Connection ~ 15250 11650
+Wire Wire Line
+	15250 11650 15250 11300
+Connection ~ 15800 12050
+Connection ~ 16250 11650
+Wire Wire Line
+	16250 11200 16250 11650
+Wire Wire Line
+	15800 12050 15800 11950
+Connection ~ 14800 11650
+Wire Wire Line
+	14800 11400 14800 11650
+Connection ~ 14850 13100
+Connection ~ 15300 13100
+Connection ~ 15300 12700
+Connection ~ 14850 12700
+Connection ~ 13500 13100
+Connection ~ 13950 13100
+Connection ~ 14400 13100
+Connection ~ 14400 12700
+Connection ~ 13950 12700
+Connection ~ 13500 12700
+Wire Wire Line
+	12600 12700 12750 12700
+Wire Wire Line
+	13950 12050 13950 11950
+Wire Wire Line
+	12450 11650 12600 11650
+Connection ~ 13950 12050
+Connection ~ 14350 12050
+Connection ~ 13550 11650
+Connection ~ 14350 11650
+Wire Wire Line
+	13850 11300 13850 11200
+Wire Wire Line
+	13550 11300 13850 11300
+Wire Wire Line
+	13550 11650 13550 11300
+Wire Wire Line
+	14050 11200 13950 11200
+Wire Wire Line
+	14050 11350 14050 11200
+Wire Wire Line
+	14200 11350 14050 11350
+Wire Wire Line
+	14200 12050 14200 11350
+Connection ~ 14200 12050
+Wire Wire Line
+	14150 11200 14300 11200
+Wire Wire Line
+	14350 11200 14350 11650
+Connection ~ 13200 11650
+Connection ~ 13550 12050
+Wire Wire Line
+	12700 12000 12700 12050
+Connection ~ 12700 12050
+Connection ~ 16200 12700
+Connection ~ 16600 12700
+Connection ~ 16600 13100
+Connection ~ 16200 13100
+Connection ~ 15200 12050
+Wire Wire Line
+	12450 12050 12700 12050
+Wire Wire Line
+	14300 11200 14350 11200
+Wire Wire Line
+	12850 12050 13550 12050
+Wire Wire Line
+	12600 11650 13200 11650
+Wire Wire Line
+	16350 11650 16450 11650
+Wire Wire Line
+	13750 13100 13950 13100
+Wire Wire Line
+	15250 11650 15400 11650
+Wire Wire Line
+	15800 12050 16450 12050
+Wire Wire Line
+	16250 11650 16350 11650
+Wire Wire Line
+	14800 11650 15250 11650
+Wire Wire Line
+	14850 13100 15300 13100
+Wire Wire Line
+	14850 12700 15300 12700
+Wire Wire Line
+	13500 13100 13750 13100
+Wire Wire Line
+	13950 13100 14400 13100
+Wire Wire Line
+	14400 13100 14850 13100
+Wire Wire Line
+	14400 12700 14850 12700
+Wire Wire Line
+	13950 12700 14400 12700
+Wire Wire Line
+	13500 12700 13950 12700
+Wire Wire Line
+	13950 12050 14200 12050
+Wire Wire Line
+	14350 12050 15200 12050
+Wire Wire Line
+	14200 12050 14350 12050
+Wire Wire Line
+	13200 11650 13550 11650
+Wire Wire Line
+	13550 12050 13950 12050
+Wire Wire Line
+	12700 12050 12850 12050
+Wire Wire Line
+	16200 12700 16600 12700
+Wire Wire Line
+	16200 13100 16600 13100
+Wire Wire Line
+	15200 12050 15800 12050
+Wire Wire Line
+	12600 13100 13500 13100
+Wire Wire Line
+	16600 13100 17400 13100
+Wire Wire Line
+	16600 12700 17400 12700
+Wire Wire Line
+	12750 12700 13500 12700
+Wire Wire Line
+	15300 13100 16200 13100
+Wire Wire Line
+	15300 12700 16200 12700
+Connection ~ 14050 11200
+Wire Wire Line
+	18050 11300 18550 11300
+Wire Wire Line
+	18550 6300 18100 6300
+Text Label 18200 6300 0    50   ~ 0
+GND
+Text Label 18200 11300 0    50   ~ 0
+GND
+Wire Wire Line
+	18550 6400 18100 6400
+Wire Wire Line
+	18550 1400 18100 1400
+Text Label 18200 6400 0    50   ~ 0
++8V
+Text Label 18200 1400 0    50   ~ 0
++8V
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F08E5F6
+P 1650 5250
+F 0 "R?" V 1835 5250 40  0000 C CNN
+F 1 "510" V 1759 5250 40  0000 C CNN
+F 2 "" V 1580 5250 30  0000 C CNN
+F 3 "" H 1650 5250 30  0000 C CNN
+	1    1650 5250
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F08F18B
+P 1650 5550
+F 0 "R?" V 1835 5550 40  0000 C CNN
+F 1 "1k" V 1759 5550 40  0000 C CNN
+F 2 "" V 1580 5550 30  0000 C CNN
+F 3 "" H 1650 5550 30  0000 C CNN
+	1    1650 5550
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F08FE61
+P 1650 5850
+F 0 "R?" V 1835 5850 40  0000 C CNN
+F 1 "2k" V 1759 5850 40  0000 C CNN
+F 2 "" V 1580 5850 30  0000 C CNN
+F 3 "" H 1650 5850 30  0000 C CNN
+	1    1650 5850
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F090F5E
+P 1650 6150
+F 0 "R?" V 1835 6150 40  0000 C CNN
+F 1 "4k" V 1759 6150 40  0000 C CNN
+F 2 "" V 1580 6150 30  0000 C CNN
+F 3 "" H 1650 6150 30  0000 C CNN
+	1    1650 6150
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1400 6150 1250 6150
+Wire Wire Line
+	1250 6150 1250 5850
+Wire Wire Line
+	1250 4400 1450 4400
+Wire Wire Line
+	1400 5250 1250 5250
+Connection ~ 1250 5250
+Wire Wire Line
+	1250 5250 1250 4400
+Wire Wire Line
+	1400 5550 1250 5550
+Connection ~ 1250 5550
+Wire Wire Line
+	1250 5550 1250 5250
+Wire Wire Line
+	1400 5850 1250 5850
+Connection ~ 1250 5850
+Wire Wire Line
+	1250 5850 1250 5550
+Wire Wire Line
+	1900 5250 2300 5250
+Wire Wire Line
+	1900 5550 2300 5550
+Wire Wire Line
+	1900 5850 2300 5850
+Wire Wire Line
+	1900 6150 2300 6150
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F2E8EBE
+P 1500 6500
+F 0 "R?" V 1685 6500 40  0000 C CNN
+F 1 "510" V 1609 6500 40  0000 C CNN
+F 2 "" V 1430 6500 30  0000 C CNN
+F 3 "" H 1500 6500 30  0000 C CNN
+	1    1500 6500
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F2E8EC4
+P 1500 6800
+F 0 "R?" V 1685 6800 40  0000 C CNN
+F 1 "1k" V 1609 6800 40  0000 C CNN
+F 2 "" V 1430 6800 30  0000 C CNN
+F 3 "" H 1500 6800 30  0000 C CNN
+	1    1500 6800
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F2E8ECA
+P 1500 7100
+F 0 "R?" V 1685 7100 40  0000 C CNN
+F 1 "2k" V 1609 7100 40  0000 C CNN
+F 2 "" V 1430 7100 30  0000 C CNN
+F 3 "" H 1500 7100 30  0000 C CNN
+	1    1500 7100
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F2E8ED0
+P 1500 7400
+F 0 "R?" V 1685 7400 40  0000 C CNN
+F 1 "4k" V 1609 7400 40  0000 C CNN
+F 2 "" V 1430 7400 30  0000 C CNN
+F 3 "" H 1500 7400 30  0000 C CNN
+	1    1500 7400
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1250 7400 1100 7400
+Wire Wire Line
+	1100 7400 1100 7100
+Wire Wire Line
+	1250 6500 1100 6500
+Connection ~ 1100 6500
+Wire Wire Line
+	1250 6800 1100 6800
+Connection ~ 1100 6800
+Wire Wire Line
+	1100 6800 1100 6500
+Wire Wire Line
+	1250 7100 1100 7100
+Connection ~ 1100 7100
+Wire Wire Line
+	1100 7100 1100 6800
+Wire Wire Line
+	1750 6500 2150 6500
+Wire Wire Line
+	1750 6800 2150 6800
+Wire Wire Line
+	1750 7100 2150 7100
+Wire Wire Line
+	1750 7400 2150 7400
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F314479
+P 1350 7750
+F 0 "R?" V 1535 7750 40  0000 C CNN
+F 1 "510" V 1459 7750 40  0000 C CNN
+F 2 "" V 1280 7750 30  0000 C CNN
+F 3 "" H 1350 7750 30  0000 C CNN
+	1    1350 7750
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F31447F
+P 1350 8050
+F 0 "R?" V 1535 8050 40  0000 C CNN
+F 1 "1k" V 1459 8050 40  0000 C CNN
+F 2 "" V 1280 8050 30  0000 C CNN
+F 3 "" H 1350 8050 30  0000 C CNN
+	1    1350 8050
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F314485
+P 1350 8350
+F 0 "R?" V 1535 8350 40  0000 C CNN
+F 1 "2k" V 1459 8350 40  0000 C CNN
+F 2 "" V 1280 8350 30  0000 C CNN
+F 3 "" H 1350 8350 30  0000 C CNN
+	1    1350 8350
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F31448B
+P 1350 8650
+F 0 "R?" V 1535 8650 40  0000 C CNN
+F 1 "4k" V 1459 8650 40  0000 C CNN
+F 2 "" V 1280 8650 30  0000 C CNN
+F 3 "" H 1350 8650 30  0000 C CNN
+	1    1350 8650
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	1100 8650 950  8650
+Wire Wire Line
+	950  8650 950  8350
+Wire Wire Line
+	1100 7750 950  7750
+Connection ~ 950  7750
+Wire Wire Line
+	950  7750 950  6900
+Wire Wire Line
+	1100 8050 950  8050
+Connection ~ 950  8050
+Wire Wire Line
+	950  8050 950  7750
+Wire Wire Line
+	1100 8350 950  8350
+Connection ~ 950  8350
+Wire Wire Line
+	950  8350 950  8050
+Wire Wire Line
+	1600 7750 2000 7750
+Wire Wire Line
+	1600 8050 2000 8050
+Wire Wire Line
+	1600 8350 2000 8350
+Wire Wire Line
+	1600 8650 2000 8650
+Wire Wire Line
+	1100 4200 1450 4200
+Wire Wire Line
+	1100 4200 1100 6500
+Wire Wire Line
+	950  6850 950  4000
+Wire Wire Line
+	950  4000 1450 4000
+Wire Wire Line
+	1450 4500 1350 4500
+Wire Wire Line
+	1350 4500 1350 4300
+Wire Wire Line
+	1350 3700 1450 3700
+Wire Wire Line
+	1450 4100 1350 4100
+Connection ~ 1350 4100
+Wire Wire Line
+	1350 4100 1350 3700
+Wire Wire Line
+	1450 4300 1350 4300
+Connection ~ 1350 4300
+Wire Wire Line
+	1350 4300 1350 4100
+Wire Wire Line
+	1450 3600 1350 3600
+Wire Wire Line
+	1350 3600 1350 3700
+Connection ~ 1350 3700
+Wire Wire Line
+	1350 3600 1050 3600
+Connection ~ 1350 3600
+Text Label 1100 3600 0    50   ~ 0
+GND
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F497F0F
+P 2950 3750
+F 0 "R?" V 3135 3750 40  0000 C CNN
+F 1 "100" V 3059 3750 40  0000 C CNN
+F 2 "" V 2880 3750 30  0000 C CNN
+F 3 "" H 2950 3750 30  0000 C CNN
+	1    2950 3750
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5F499857
+P 2950 4050
+F 0 "R?" V 3135 4050 40  0000 C CNN
+F 1 "100" V 3059 4050 40  0000 C CNN
+F 2 "" V 2880 4050 30  0000 C CNN
+F 3 "" H 2950 4050 30  0000 C CNN
+	1    2950 4050
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	2550 3750 2550 3800
+Wire Wire Line
+	2550 3800 2450 3800
+Wire Wire Line
+	2550 3750 2700 3750
+Wire Wire Line
+	2700 4050 2550 4050
+Wire Wire Line
+	2550 4050 2550 4000
+Wire Wire Line
+	2550 4000 2450 4000
+Wire Wire Line
+	3200 3750 3650 3750
+Wire Wire Line
+	3200 4050 3650 4050
+Text Label 3300 3750 0    50   ~ 0
+FVS
+Text Label 3300 4050 0    50   ~ 0
+FHS
+Text Label 1950 5250 0    50   ~ 0
+FRED3
+Text Label 1950 5550 0    50   ~ 0
+FRED2
+Text Label 1950 5850 0    50   ~ 0
+FRED1
+Text Label 1950 6150 0    50   ~ 0
+FRED0
+Text Label 1800 6500 0    50   ~ 0
+FGRN3
+Text Label 1800 6800 0    50   ~ 0
+FGRN2
+Text Label 1800 7100 0    50   ~ 0
+FGRN1
+Text Label 1800 7400 0    50   ~ 0
+FGRN0
+Text Label 1650 7750 0    50   ~ 0
+FBLU3
+Text Label 1650 8050 0    50   ~ 0
+FBLU2
+Text Label 1650 8350 0    50   ~ 0
+FLBU1
+Text Label 1650 8650 0    50   ~ 0
+FBLU0
+$Comp
+L Connector_Generic:Conn_2Rows-59Pins J?
+U 1 1 5F619626
+P 6900 7950
+F 0 "J?" H 6950 9567 50  0000 C CNN
+F 1 "Conn_2Rows-59Pins" H 6950 9476 50  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x30_P2.54mm_Vertical" H 6900 7950 50  0001 C CNN
+F 3 "~" H 6900 7950 50  0001 C CNN
+	1    6900 7950
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6700 9450 6300 9450
+Wire Wire Line
+	6700 9350 6300 9350
+Wire Wire Line
+	7200 9350 7600 9350
+Text Label 6400 9350 0    50   ~ 0
+GND
+Text Label 7350 9350 0    50   ~ 0
+GND
+Text Label 6400 9450 0    50   ~ 0
+VCC
+Wire Wire Line
+	6700 6650 6300 6650
+Wire Wire Line
+	6700 6750 6300 6750
+Wire Wire Line
+	6700 6850 6300 6850
+Wire Wire Line
+	6700 6950 6300 6950
+Wire Wire Line
+	6700 7050 6300 7050
+Wire Wire Line
+	6700 7150 6300 7150
+Wire Wire Line
+	6700 7250 6300 7250
+Wire Wire Line
+	6700 7350 6300 7350
+Wire Wire Line
+	6700 7450 6300 7450
+Wire Wire Line
+	6700 7550 6300 7550
+Wire Wire Line
+	6700 7650 6300 7650
+Wire Wire Line
+	6700 7750 6300 7750
+Text Label 6350 6650 0    50   ~ 0
+FRED3
+Text Label 6350 6750 0    50   ~ 0
+FRED2
+Text Label 6350 6850 0    50   ~ 0
+FRED1
+Text Label 6350 6950 0    50   ~ 0
+FRED0
+Text Label 6350 7050 0    50   ~ 0
+FGRN3
+Text Label 6350 7150 0    50   ~ 0
+FGRN2
+Text Label 6350 7250 0    50   ~ 0
+FGRN1
+Text Label 6350 7350 0    50   ~ 0
+FGRN0
+Text Label 6350 7450 0    50   ~ 0
+FBLU3
+Text Label 6350 7550 0    50   ~ 0
+FBLU2
+Text Label 6350 7650 0    50   ~ 0
+FBLU1
+Text Label 6350 7750 0    50   ~ 0
+FBLU0
+Wire Wire Line
+	6700 7850 6300 7850
+Wire Wire Line
+	6700 8050 6300 8050
+Text Label 6350 7850 0    50   ~ 0
+FVS
+Text Label 6350 8050 0    50   ~ 0
+FHS
+Wire Wire Line
+	6700 6550 6300 6550
+Wire Wire Line
+	7200 6550 7600 6550
+Text Label 6350 6550 0    50   ~ 0
+GND
+Text Label 7350 6550 0    50   ~ 0
+GND
+Wire Wire Line
+	7200 6650 7600 6650
+Wire Wire Line
+	7200 6750 7600 6750
+Wire Wire Line
+	7200 6850 7600 6850
+Wire Wire Line
+	7200 7050 7600 7050
+Wire Wire Line
+	7200 7150 7600 7150
+Wire Wire Line
+	7200 7250 7600 7250
+Wire Wire Line
+	7200 7350 7600 7350
+Wire Wire Line
+	7200 7450 7600 7450
+Wire Wire Line
+	7200 7550 7600 7550
+Wire Wire Line
+	7200 7650 7600 7650
+Wire Wire Line
+	7200 7750 7600 7750
+Wire Wire Line
+	7200 7850 7600 7850
+Text Label 7250 6650 0    50   ~ 0
+FSIXTN*
+Text Label 7250 6750 0    50   ~ 0
+FXRDY
+Text Label 7250 6850 0    50   ~ 0
+FRDY
+Text Label 7250 7050 0    50   ~ 0
+FpDBIN
+Text Label 7250 7150 0    50   ~ 0
+FpWR*
+Text Label 7250 7250 0    50   ~ 0
+FpSTVAL*
+Text Label 7250 7350 0    50   ~ 0
+FpSYNC
+Text Label 7250 7450 0    50   ~ 0
+FsM1
+Text Label 7250 7550 0    50   ~ 0
+FsOUT
+Text Label 7250 7650 0    50   ~ 0
+FsINP
+Text Label 7250 7750 0    50   ~ 0
+FsMEMR
+Text Label 7250 7850 0    50   ~ 0
+FMWRT
+Text Label 7250 7950 0    50   ~ 0
+FsWO*
+Wire Wire Line
+	7200 7950 7600 7950
+Wire Wire Line
+	7200 8050 7600 8050
+Text Label 7250 8050 0    50   ~ 0
+FCFG0
+$Comp
+L FPGA-Board-rescue:CONN_6 P?
+U 1 1 6160BAF9
+P 8150 12600
+AR Path="/5EEFC0AE/6160BAF9" Ref="P?"  Part="1" 
+AR Path="/6160BAF9" Ref="P?"  Part="1" 
+F 0 "P?" V 8100 12600 60  0000 C CNN
+F 1 "CONN_6" V 8200 12600 60  0000 C CNN
+F 2 "~" H 8150 12600 60  0000 C CNN
+F 3 "~" H 8150 12600 60  0000 C CNN
+	1    8150 12600
+	0    -1   -1   0   
+$EndComp
+$Comp
+L FPGA-Board-rescue:CONN_2X2 P?
+U 1 1 6160BAFF
+P 8250 13700
+AR Path="/5EEFC0AE/6160BAFF" Ref="P?"  Part="1" 
+AR Path="/6160BAFF" Ref="P?"  Part="1" 
+F 0 "P?" V 8300 13900 50  0000 C CNN
+F 1 "CONN_2X2" H 8260 13570 40  0000 C CNN
+F 2 "~" H 8250 13700 60  0000 C CNN
+F 3 "~" H 8250 13700 60  0000 C CNN
+	1    8250 13700
+	0    -1   -1   0   
+$EndComp
+$Comp
+L FPGA-Board-rescue:R R?
+U 1 1 6160BB05
+P 7850 14200
+AR Path="/5EEFC0AE/6160BB05" Ref="R?"  Part="1" 
+AR Path="/6160BB05" Ref="R?"  Part="1" 
+F 0 "R?" V 7930 14200 40  0000 C CNN
+F 1 "10K" V 7857 14201 40  0000 C CNN
+F 2 "~" V 7780 14200 30  0000 C CNN
+F 3 "~" H 7850 14200 30  0000 C CNN
+	1    7850 14200
+	0    -1   -1   0   
+$EndComp
+$Comp
+L FPGA-Board-rescue:C C?
+U 1 1 6160BB0B
+P 8650 13450
+AR Path="/5EEFC0AE/6160BB0B" Ref="C?"  Part="1" 
+AR Path="/6160BB0B" Ref="C?"  Part="1" 
+F 0 "C?" H 8650 13550 40  0000 L CNN
+F 1 "0.1" H 8656 13365 40  0000 L CNN
+F 2 "~" H 8688 13300 30  0000 C CNN
+F 3 "~" H 8650 13450 60  0000 C CNN
+	1    8650 13450
+	1    0    0    -1  
+$EndComp
+Text Label 8450 14100 0    60   ~ 0
+328_RESET*
+$Comp
+L FPGA-Board-rescue:GND #PWR?
+U 1 1 6160BB12
+P 7900 13050
+AR Path="/5EEFC0AE/6160BB12" Ref="#PWR?"  Part="1" 
+AR Path="/6160BB12" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 7900 13050 30  0001 C CNN
+F 1 "GND" H 7900 12980 30  0001 C CNN
+F 2 "" H 7900 13050 60  0000 C CNN
+F 3 "" H 7900 13050 60  0000 C CNN
+	1    7900 13050
+	1    0    0    -1  
+$EndComp
+Text Notes 7800 11900 0    60   ~ 0
+SparkFun\nFT231x\nSerial->USB
+NoConn ~ 8000 12950
+$Comp
+L FPGA-Board-rescue:CONN_7 P?
+U 1 1 6160BB1A
+P 8550 12000
+AR Path="/5EEFC0AE/6160BB1A" Ref="P?"  Part="1" 
+AR Path="/6160BB1A" Ref="P?"  Part="1" 
+F 0 "P?" V 8520 12000 60  0000 C CNN
+F 1 "CONN_7" V 8620 12000 60  0000 C CNN
+F 2 "~" H 8550 12000 60  0000 C CNN
+F 3 "~" H 8550 12000 60  0000 C CNN
+	1    8550 12000
+	-1   0    0    1   
+$EndComp
+$Comp
+L FPGA-Board-rescue:CONN_7 P?
+U 1 1 6160BB20
+P 7600 12000
+AR Path="/5EEFC0AE/6160BB20" Ref="P?"  Part="1" 
+AR Path="/6160BB20" Ref="P?"  Part="1" 
+F 0 "P?" V 7570 12000 60  0000 C CNN
+F 1 "CONN_7" V 7670 12000 60  0000 C CNN
+F 2 "~" H 7600 12000 60  0000 C CNN
+F 3 "~" H 7600 12000 60  0000 C CNN
+	1    7600 12000
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:GND #PWR?
+U 1 1 6160BB26
+P 8950 11300
+AR Path="/5EEFC0AE/6160BB26" Ref="#PWR?"  Part="1" 
+AR Path="/6160BB26" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 8950 11300 30  0001 C CNN
+F 1 "GND" H 8950 11230 30  0001 C CNN
+F 2 "" H 8950 11300 60  0000 C CNN
+F 3 "" H 8950 11300 60  0000 C CNN
+	1    8950 11300
+	1    0    0    -1  
+$EndComp
+$Comp
+L FPGA-Board-rescue:VCC #PWR?
+U 1 1 6160BB2C
+P 9200 11250
+AR Path="/5EEFC0AE/6160BB2C" Ref="#PWR?"  Part="1" 
+AR Path="/6160BB2C" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 9200 11350 30  0001 C CNN
+F 1 "VCC" H 9200 11350 30  0000 C CNN
+F 2 "" H 9200 11250 60  0000 C CNN
+F 3 "" H 9200 11250 60  0000 C CNN
+	1    9200 11250
+	1    0    0    -1  
+$EndComp
+NoConn ~ 8900 11900
+NoConn ~ 8900 12000
+NoConn ~ 8900 12100
+NoConn ~ 8900 12200
+NoConn ~ 8900 12300
+NoConn ~ 7250 12300
+NoConn ~ 7250 12200
+NoConn ~ 7250 12100
+NoConn ~ 7250 12000
+NoConn ~ 7250 11900
+NoConn ~ 7250 11800
+NoConn ~ 7250 11700
+$Comp
+L FPGA-Board-rescue:CONN_2 P?
+U 1 1 6160BB3E
+P 9700 11400
+AR Path="/5EEFC0AE/6160BB3E" Ref="P?"  Part="1" 
+AR Path="/6160BB3E" Ref="P?"  Part="1" 
+F 0 "P?" V 9650 11400 40  0000 C CNN
+F 1 "CONN_2" V 9750 11400 40  0000 C CNN
+F 2 "~" H 9700 11400 60  0000 C CNN
+F 3 "~" H 9700 11400 60  0000 C CNN
+	1    9700 11400
+	1    0    0    -1  
+$EndComp
+Text Notes 9850 11350 0    60   ~ 0
+Normally Open\n(USB supplies 5V)
+Wire Wire Line
+	8200 14100 8200 14200
+Wire Wire Line
+	8200 14200 8100 14200
+Wire Wire Line
+	7250 14200 7600 14200
+Wire Wire Line
+	8300 14100 8300 14350
+Wire Wire Line
+	8300 14350 7250 14350
+Wire Wire Line
+	8400 12950 8400 13050
+Wire Wire Line
+	8400 13050 8650 13050
+Wire Wire Line
+	8650 13050 8650 13250
+Wire Wire Line
+	8650 13650 8650 13950
+Wire Wire Line
+	8650 13950 8400 13950
+Wire Wire Line
+	8400 13950 8400 14100
+Wire Wire Line
+	8400 14100 8450 14100
+Wire Wire Line
+	8100 13150 8100 12950
+Wire Wire Line
+	7900 13050 7900 12950
+Wire Notes Line
+	7850 12550 7500 12550
+Wire Notes Line
+	7500 12550 7500 11500
+Wire Notes Line
+	7500 11500 8650 11500
+Wire Notes Line
+	8650 11500 8650 12550
+Wire Notes Line
+	8650 12550 8450 12550
+Wire Wire Line
+	9050 11550 9350 11550
+Wire Wire Line
+	9050 11550 9050 11800
+Wire Wire Line
+	9050 11800 8900 11800
+Wire Wire Line
+	8950 11300 8950 11250
+Wire Wire Line
+	8950 11250 9050 11250
+Wire Wire Line
+	9050 11250 9050 11450
+Wire Wire Line
+	9050 11450 8900 11450
+Wire Wire Line
+	8900 11450 8900 11700
+Wire Wire Line
+	9050 13150 8100 13150
+Connection ~ 9050 11800
+Wire Wire Line
+	9350 11550 9350 11500
+Wire Wire Line
+	9200 11250 9200 11300
+Wire Wire Line
+	9200 11300 9350 11300
+Wire Wire Line
+	8300 12950 8300 13100
+Wire Wire Line
+	8300 13100 8200 13100
+Wire Wire Line
+	8200 13100 8200 13300
+Wire Wire Line
+	8200 12950 8200 13000
+Wire Wire Line
+	8200 13000 8350 13000
+Wire Wire Line
+	8350 13000 8350 13300
+Wire Wire Line
+	8350 13300 8300 13300
+Wire Wire Line
+	9050 11800 9050 13150
+Text Label 7300 14200 0    50   ~ 0
+FRX
+Text Label 7350 14350 0    50   ~ 0
+FTX
+Wire Wire Line
+	7200 9150 7600 9150
+Wire Wire Line
+	7200 9250 7600 9250
+Text Label 7350 9150 0    50   ~ 0
+FTX
+Text Label 7350 9250 0    50   ~ 0
+FRX
+Text Label 9050 6550 0    50   ~ 0
+GND
+Text Label 8050 6550 0    50   ~ 0
+GND
+Wire Wire Line
+	7950 6550 8400 6550
+Text Label 8050 9250 0    50   ~ 0
+FsXTRQ*
+Text Label 8050 9150 0    50   ~ 0
+FALEC
+Text Label 8050 9050 0    50   ~ 0
+FALE
+Wire Wire Line
+	8400 9250 7950 9250
+Wire Wire Line
+	8400 9150 7950 9150
+Wire Wire Line
+	8400 9050 7950 9050
+Text Label 9050 7250 0    50   ~ 0
+FCFG7
+Text Label 9050 7150 0    50   ~ 0
+FCFG6
+Text Label 9050 7050 0    50   ~ 0
+FCFG5
+Text Label 9050 6950 0    50   ~ 0
+FCFG4
+Text Label 9050 6850 0    50   ~ 0
+FCFG3
+Text Label 9050 6750 0    50   ~ 0
+FCFG2
+Text Label 9050 6650 0    50   ~ 0
+FCFG1
+Wire Wire Line
+	8900 6550 9400 6550
+Wire Wire Line
+	8900 6650 9400 6650
+Wire Wire Line
+	8900 6750 9400 6750
+Wire Wire Line
+	8900 6850 9400 6850
+Wire Wire Line
+	8900 6950 9400 6950
+Wire Wire Line
+	8900 7050 9400 7050
+Wire Wire Line
+	8900 7150 9400 7150
+Wire Wire Line
+	8900 7250 9400 7250
+Text Label 9000 9250 0    50   ~ 0
+F815EN*
+Text Label 9000 9150 0    50   ~ 0
+F07EN*
+Text Label 9000 9050 0    50   ~ 0
+FD815DIR
+Text Label 9000 8950 0    50   ~ 0
+FD07DIR
+Wire Wire Line
+	8900 9250 9400 9250
+Wire Wire Line
+	8900 9150 9400 9150
+Wire Wire Line
+	8900 9050 9400 9050
+Wire Wire Line
+	8900 8950 9400 8950
+Text Label 9150 8850 0    50   ~ 0
+FD15
+Text Label 9150 8750 0    50   ~ 0
+FD14
+Text Label 9150 8650 0    50   ~ 0
+FD13
+Text Label 9150 8550 0    50   ~ 0
+FD12
+Text Label 9150 8450 0    50   ~ 0
+FD11
+Text Label 9150 8350 0    50   ~ 0
+FD10
+Text Label 9150 8250 0    50   ~ 0
+FD9
+Text Label 9150 8150 0    50   ~ 0
+FD8
+Text Label 9150 8050 0    50   ~ 0
+FD7
+Text Label 9150 7950 0    50   ~ 0
+FD6
+Text Label 9150 7850 0    50   ~ 0
+FD5
+Text Label 9150 7750 0    50   ~ 0
+FD4
+Text Label 9150 7650 0    50   ~ 0
+FD3
+Text Label 9150 7550 0    50   ~ 0
+FD2
+Text Label 9150 7450 0    50   ~ 0
+FD1
+Text Label 9150 7350 0    50   ~ 0
+FD0
+Text Label 8050 8950 0    50   ~ 0
+FA23
+Text Label 8050 8850 0    50   ~ 0
+FA22
+Text Label 8050 8750 0    50   ~ 0
+FA21
+Text Label 8050 8650 0    50   ~ 0
+FA20
+Text Label 8050 8550 0    50   ~ 0
+FA19
+Text Label 8050 8450 0    50   ~ 0
+FA18
+Text Label 8050 8350 0    50   ~ 0
+FA17
+Text Label 8050 8250 0    50   ~ 0
+FA16
+Text Label 8050 8150 0    50   ~ 0
+FA15
+Text Label 8050 8050 0    50   ~ 0
+FA14
+Text Label 8050 7950 0    50   ~ 0
+FA13
+Text Label 8050 7850 0    50   ~ 0
+FA12
+Text Label 8050 7750 0    50   ~ 0
+FA11
+Text Label 8050 7650 0    50   ~ 0
+FA10
+Text Label 8050 7550 0    50   ~ 0
+FA9
+Text Label 8050 7450 0    50   ~ 0
+FA8
+Text Label 8050 7350 0    50   ~ 0
+FA7
+Text Label 8050 7250 0    50   ~ 0
+FA6
+Text Label 8050 7150 0    50   ~ 0
+FA5
+Text Label 8050 7050 0    50   ~ 0
+FA4
+Text Label 8050 6950 0    50   ~ 0
+FA3
+Text Label 8050 6850 0    50   ~ 0
+FA2
+Text Label 8050 6750 0    50   ~ 0
+FA1
+Text Label 8050 6650 0    50   ~ 0
+FA0
+Wire Wire Line
+	8900 7350 9400 7350
+Wire Wire Line
+	8900 7450 9400 7450
+Wire Wire Line
+	8900 7550 9400 7550
+Wire Wire Line
+	8900 7650 9400 7650
+Wire Wire Line
+	8900 7750 9400 7750
+Wire Wire Line
+	8900 7850 9400 7850
+Wire Wire Line
+	8900 7950 9400 7950
+Wire Wire Line
+	8900 8050 9400 8050
+Wire Wire Line
+	8900 8150 9400 8150
+Wire Wire Line
+	8900 8250 9400 8250
+Wire Wire Line
+	8900 8350 9400 8350
+Wire Wire Line
+	8900 8450 9400 8450
+Wire Wire Line
+	8900 8550 9400 8550
+Wire Wire Line
+	8900 8650 9400 8650
+Wire Wire Line
+	8900 8750 9400 8750
+Wire Wire Line
+	8900 8850 9400 8850
+Wire Wire Line
+	8400 8950 7950 8950
+Wire Wire Line
+	8400 8850 7950 8850
+Wire Wire Line
+	8400 8750 7950 8750
+Wire Wire Line
+	8400 8650 7950 8650
+Wire Wire Line
+	8400 8550 7950 8550
+Wire Wire Line
+	8400 8450 7950 8450
+Wire Wire Line
+	8400 8350 7950 8350
+Wire Wire Line
+	8400 8250 7950 8250
+Wire Wire Line
+	8400 8150 7950 8150
+Wire Wire Line
+	8400 8050 7950 8050
+Wire Wire Line
+	8400 7950 7950 7950
+Wire Wire Line
+	8400 7850 7950 7850
+Wire Wire Line
+	8400 7750 7950 7750
+Wire Wire Line
+	8400 7650 7950 7650
+Wire Wire Line
+	8400 7550 7950 7550
+Wire Wire Line
+	8400 7450 7950 7450
+Wire Wire Line
+	8400 7350 7950 7350
+Wire Wire Line
+	8400 7250 7950 7250
+Wire Wire Line
+	8400 7150 7950 7150
+Wire Wire Line
+	8400 7050 7950 7050
+Wire Wire Line
+	8400 6950 7950 6950
+Wire Wire Line
+	8400 6850 7950 6850
+Wire Wire Line
+	8400 6750 7950 6750
+Wire Wire Line
+	8400 6650 7950 6650
+Text Label 8100 9450 0    50   ~ 0
+VCC
+Text Label 9150 9350 0    50   ~ 0
+GND
+Text Label 8100 9350 0    50   ~ 0
+GND
+Wire Wire Line
+	8900 9350 9500 9350
+Wire Wire Line
+	8400 9350 7950 9350
+Wire Wire Line
+	8400 9450 7950 9450
+$Comp
+L Connector_Generic:Conn_2Rows-59Pins J?
+U 1 1 5F61CB0A
+P 8600 7950
+F 0 "J?" H 8650 9567 50  0000 C CNN
+F 1 "Conn_2Rows-59Pins" H 8650 9476 50  0000 C CNN
+F 2 "Connector_PinSocket_2.54mm:PinSocket_2x30_P2.54mm_Vertical" H 8600 7950 50  0001 C CNN
+F 3 "~" H 8600 7950 50  0001 C CNN
+	1    8600 7950
+	1    0    0    -1  
+$EndComp
+Wire Notes Line
+	5950 6150 9750 6150
+Wire Notes Line
+	9750 6150 9750 9900
+Wire Notes Line
+	9750 9900 5950 9900
+Wire Notes Line
+	5950 6150 5950 9900
+Text Notes 7400 9850 0    50   ~ 0
+QMTECH XC7A100T
+Wire Wire Line
+	18550 8800 18050 8800
+Wire Wire Line
+	18550 6700 18050 6700
+Text Label 18100 6700 0    50   ~ 0
+SLAVE_CLR*
+Wire Wire Line
+	7200 8150 7600 8150
+Text Label 7250 8150 0    50   ~ 0
+SLAVE_CLR*
+Wire Wire Line
+	7200 8250 7600 8250
+Wire Wire Line
+	7200 8350 7600 8350
+Wire Wire Line
+	7200 8450 7600 8450
+Wire Wire Line
+	7200 8550 7600 8550
+Wire Wire Line
+	7200 8650 7600 8650
+Wire Wire Line
+	7200 8750 7600 8750
+Wire Wire Line
+	7200 8850 7600 8850
+Wire Wire Line
+	7200 8950 7600 8950
+Wire Wire Line
+	7200 9050 7600 9050
+Text Label 7250 8350 0    50   ~ 0
+FPMODA0
+Text Label 7250 8450 0    50   ~ 0
+FPMODA1
+Text Label 7250 8550 0    50   ~ 0
+FPMODA2
+Text Label 7250 8650 0    50   ~ 0
+FPMODA3
+Text Label 7250 8750 0    50   ~ 0
+FPMODA4
+Text Label 7250 8850 0    50   ~ 0
+FPMODA5
+Text Label 7250 8950 0    50   ~ 0
+FPMODA6
+Text Label 7250 9050 0    50   ~ 0
+FPMODA7
+Wire Wire Line
+	6700 8150 6300 8150
+Wire Wire Line
+	6700 8250 6300 8250
+Wire Wire Line
+	6700 8350 6300 8350
+Wire Wire Line
+	6700 8450 6300 8450
+Wire Wire Line
+	6700 8550 6300 8550
+Wire Wire Line
+	6700 8750 6300 8750
+Wire Wire Line
+	6700 8950 6300 8950
+Wire Wire Line
+	6700 9050 6300 9050
+Wire Wire Line
+	6700 9150 6300 9150
+Wire Wire Line
+	6700 9250 6300 9250
+Text Label 6300 8150 0    50   ~ 0
+FPMODB0
+Text Label 6300 8250 0    50   ~ 0
+FPMODB1
+Text Label 6300 8350 0    50   ~ 0
+FPMODB2
+Text Label 6300 8450 0    50   ~ 0
+FPMODB3
+Text Label 6300 8550 0    50   ~ 0
+FPMODB4
+Text Label 6300 8750 0    50   ~ 0
+FPMODB5
+Text Label 6300 8950 0    50   ~ 0
+FPMODB6
+Text Label 6300 9050 0    50   ~ 0
+FPMODB7
+$Comp
+L VGA_V11-cache:CONN_6x2 U?
+U 1 1 6267F447
+P 2400 9350
+F 0 "U?" H 2400 9486 50  0000 C CNN
+F 1 "CONN_6x2" H 2400 9395 50  0000 C CNN
+F 2 "" H 2400 9350 50  0001 C CNN
+F 3 "" H 2400 9350 50  0001 C CNN
+	1    2400 9350
+	1    0    0    -1  
+$EndComp
+$Comp
+L VGA_V11-cache:CONN_6x2 U?
+U 1 1 62680634
+P 2350 10550
+F 0 "U?" H 2350 10686 50  0000 C CNN
+F 1 "CONN_6x2" H 2350 10595 50  0000 C CNN
+F 2 "" H 2350 10550 50  0001 C CNN
+F 3 "" H 2350 10550 50  0001 C CNN
+	1    2350 10550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2000 9950 2000 10050
+Wire Wire Line
+	2000 10050 2800 10050
+Wire Wire Line
+	2800 10050 2800 9950
+Wire Wire Line
+	2800 9850 2900 9850
+Wire Wire Line
+	2900 9850 2900 10150
+Wire Wire Line
+	2900 10150 1900 10150
+Wire Wire Line
+	1900 10150 1900 9850
+Wire Wire Line
+	1900 9850 2000 9850
+Wire Wire Line
+	2750 11150 2750 11300
+Wire Wire Line
+	2750 11300 1950 11300
+Wire Wire Line
+	1950 11150 1950 11300
+Wire Wire Line
+	1950 11050 1850 11050
+Wire Wire Line
+	1850 11050 1850 11400
+Wire Wire Line
+	1850 11400 2850 11400
+Wire Wire Line
+	2850 11400 2850 11050
+Wire Wire Line
+	2850 11050 2750 11050
+Wire Wire Line
+	2750 10650 3050 10650
+Wire Wire Line
+	2750 10950 3050 10950
+Wire Wire Line
+	1950 10950 1650 10950
+Wire Wire Line
+	1950 10650 1650 10650
+Wire Wire Line
+	2800 9750 3150 9750
+Wire Wire Line
+	2800 9450 3150 9450
+Wire Wire Line
+	2000 9750 1650 9750
+Wire Wire Line
+	2000 9450 1650 9450
+Text Label 1700 9450 0    50   ~ 0
+FPMODA0
+Text Label 1700 9550 0    50   ~ 0
+FPMODA1
+Text Label 1700 9650 0    50   ~ 0
+FPMODA2
+Text Label 1700 9750 0    50   ~ 0
+FPMODA3
+Text Label 2750 9450 0    50   ~ 0
+FPMODA4
+Text Label 2750 9550 0    50   ~ 0
+FPMODA5
+Text Label 2750 9650 0    50   ~ 0
+FPMODA6
+Text Label 2750 9750 0    50   ~ 0
+FPMODA7
+Text Label 2800 9850 0    50   ~ 0
+GND
+Text Label 2550 10050 0    50   ~ 0
+VCC33
+Text Label 2450 11300 0    50   ~ 0
+VCC33
+Text Label 2750 11050 0    50   ~ 0
+GND
+Text Label 1700 10650 0    50   ~ 0
+FPMODB0
+Text Label 1700 10750 0    50   ~ 0
+FPMODB1
+Text Label 1700 10850 0    50   ~ 0
+FPMODB2
+Text Label 1700 10950 0    50   ~ 0
+FPMODB3
+Text Label 2700 10650 0    50   ~ 0
+FPMODB4
+Text Label 2700 10750 0    50   ~ 0
+FPMODB5
+Text Label 2700 10850 0    50   ~ 0
+FPMODB6
+Text Label 2700 10950 0    50   ~ 0
+FPMODB7
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E693F74
+P 3900 9450
+F 0 "R?" V 4085 9450 40  0000 C CNN
+F 1 "200" V 4009 9450 40  0000 C CNN
+F 2 "" V 3830 9450 30  0000 C CNN
+F 3 "" H 3900 9450 30  0000 C CNN
+	1    3900 9450
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E696F20
+P 3900 9750
+F 0 "R?" V 4085 9750 40  0000 C CNN
+F 1 "200" V 4009 9750 40  0000 C CNN
+F 2 "" V 3830 9750 30  0000 C CNN
+F 3 "" H 3900 9750 30  0000 C CNN
+	1    3900 9750
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E697ECA
+P 3900 10050
+F 0 "R?" V 4085 10050 40  0000 C CNN
+F 1 "200" V 4009 10050 40  0000 C CNN
+F 2 "" V 3830 10050 30  0000 C CNN
+F 3 "" H 3900 10050 30  0000 C CNN
+	1    3900 10050
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E699015
+P 3900 9150
+F 0 "R?" V 4085 9150 40  0000 C CNN
+F 1 "200" V 4009 9150 40  0000 C CNN
+F 2 "" V 3830 9150 30  0000 C CNN
+F 3 "" H 3900 9150 30  0000 C CNN
+	1    3900 9150
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E6A09BD
+P 1000 9500
+F 0 "R?" V 1185 9500 40  0000 C CNN
+F 1 "200" V 1109 9500 40  0000 C CNN
+F 2 "" V 930 9500 30  0000 C CNN
+F 3 "" H 1000 9500 30  0000 C CNN
+	1    1000 9500
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E6A09C3
+P 1000 9800
+F 0 "R?" V 1185 9800 40  0000 C CNN
+F 1 "200" V 1109 9800 40  0000 C CNN
+F 2 "" V 930 9800 30  0000 C CNN
+F 3 "" H 1000 9800 30  0000 C CNN
+	1    1000 9800
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E6A09C9
+P 1000 10100
+F 0 "R?" V 1185 10100 40  0000 C CNN
+F 1 "200" V 1109 10100 40  0000 C CNN
+F 2 "" V 930 10100 30  0000 C CNN
+F 3 "" H 1000 10100 30  0000 C CNN
+	1    1000 10100
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E6A09CF
+P 1000 9200
+F 0 "R?" V 1185 9200 40  0000 C CNN
+F 1 "200" V 1109 9200 40  0000 C CNN
+F 2 "" V 930 9200 30  0000 C CNN
+F 3 "" H 1000 9200 30  0000 C CNN
+	1    1000 9200
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E71DAE8
+P 1000 10700
+F 0 "R?" V 1185 10700 40  0000 C CNN
+F 1 "200" V 1109 10700 40  0000 C CNN
+F 2 "" V 930 10700 30  0000 C CNN
+F 3 "" H 1000 10700 30  0000 C CNN
+	1    1000 10700
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E71DAEE
+P 1000 11000
+F 0 "R?" V 1185 11000 40  0000 C CNN
+F 1 "200" V 1109 11000 40  0000 C CNN
+F 2 "" V 930 11000 30  0000 C CNN
+F 3 "" H 1000 11000 30  0000 C CNN
+	1    1000 11000
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E71DAF4
+P 1000 11300
+F 0 "R?" V 1185 11300 40  0000 C CNN
+F 1 "200" V 1109 11300 40  0000 C CNN
+F 2 "" V 930 11300 30  0000 C CNN
+F 3 "" H 1000 11300 30  0000 C CNN
+	1    1000 11300
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E71DAFA
+P 1000 10400
+F 0 "R?" V 1185 10400 40  0000 C CNN
+F 1 "200" V 1109 10400 40  0000 C CNN
+F 2 "" V 930 10400 30  0000 C CNN
+F 3 "" H 1000 10400 30  0000 C CNN
+	1    1000 10400
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E79BA7B
+P 3900 10700
+F 0 "R?" V 4085 10700 40  0000 C CNN
+F 1 "200" V 4009 10700 40  0000 C CNN
+F 2 "" V 3830 10700 30  0000 C CNN
+F 3 "" H 3900 10700 30  0000 C CNN
+	1    3900 10700
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E79BA81
+P 3900 11000
+F 0 "R?" V 4085 11000 40  0000 C CNN
+F 1 "200" V 4009 11000 40  0000 C CNN
+F 2 "" V 3830 11000 30  0000 C CNN
+F 3 "" H 3900 11000 30  0000 C CNN
+	1    3900 11000
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E79BA87
+P 3900 11300
+F 0 "R?" V 4085 11300 40  0000 C CNN
+F 1 "200" V 4009 11300 40  0000 C CNN
+F 2 "" V 3830 11300 30  0000 C CNN
+F 3 "" H 3900 11300 30  0000 C CNN
+	1    3900 11300
+	0    -1   -1   0   
+$EndComp
+$Comp
+L VGA_V11-cache:R R?
+U 1 1 5E79BA8D
+P 3900 10400
+F 0 "R?" V 4085 10400 40  0000 C CNN
+F 1 "200" V 4009 10400 40  0000 C CNN
+F 2 "" V 3830 10400 30  0000 C CNN
+F 3 "" H 3900 10400 30  0000 C CNN
+	1    3900 10400
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	3150 9450 3150 9150
+Wire Wire Line
+	3150 9150 3650 9150
+Wire Wire Line
+	3650 9450 3200 9450
+Wire Wire Line
+	3200 9450 3200 9550
+Wire Wire Line
+	2800 9550 3200 9550
+Wire Wire Line
+	3650 9750 3400 9750
+Wire Wire Line
+	3400 9750 3400 9650
+Wire Wire Line
+	2800 9650 3400 9650
+Wire Wire Line
+	3150 10050 3150 9750
+Wire Wire Line
+	3150 10050 3650 10050
+Wire Wire Line
+	3650 10400 3050 10400
+Wire Wire Line
+	3050 10400 3050 10650
+Wire Wire Line
+	3650 10700 3150 10700
+Wire Wire Line
+	3150 10700 3150 10750
+Wire Wire Line
+	2750 10750 3150 10750
+Wire Wire Line
+	3650 11000 3200 11000
+Wire Wire Line
+	3200 11000 3200 10850
+Wire Wire Line
+	2750 10850 3200 10850
+Wire Wire Line
+	3650 11300 3050 11300
+Wire Wire Line
+	3050 11300 3050 10950
+Wire Wire Line
+	4150 9150 4650 9150
+Wire Wire Line
+	4150 9450 4650 9450
+Wire Wire Line
+	4150 9750 4650 9750
+Wire Wire Line
+	4150 10050 4650 10050
+Wire Wire Line
+	4150 10400 4650 10400
+Wire Wire Line
+	4150 10700 4650 10700
+Wire Wire Line
+	4150 11000 4650 11000
+Wire Wire Line
+	4150 11300 4650 11300
+Wire Wire Line
+	1250 9200 1650 9200
+Wire Wire Line
+	1650 9200 1650 9450
+Wire Wire Line
+	1250 9500 1500 9500
+Wire Wire Line
+	1500 9500 1500 9550
+Wire Wire Line
+	1500 9550 2000 9550
+Wire Wire Line
+	1500 9650 1500 9800
+Wire Wire Line
+	1500 9800 1250 9800
+Wire Wire Line
+	1500 9650 2000 9650
+Wire Wire Line
+	1650 9750 1650 10100
+Wire Wire Line
+	1650 10100 1250 10100
+Wire Wire Line
+	1650 10650 1650 10400
+Wire Wire Line
+	1650 10400 1250 10400
+Wire Wire Line
+	1500 10750 1500 10700
+Wire Wire Line
+	1500 10700 1250 10700
+Wire Wire Line
+	1500 10750 1950 10750
+Wire Wire Line
+	1450 10850 1450 11000
+Wire Wire Line
+	1450 11000 1250 11000
+Wire Wire Line
+	1450 10850 1950 10850
+Wire Wire Line
+	1650 10950 1650 11300
+Wire Wire Line
+	1650 11300 1250 11300
+$EndSCHEMATC

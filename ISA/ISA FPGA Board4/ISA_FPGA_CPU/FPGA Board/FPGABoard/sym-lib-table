@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name VGA_V11-cache)(type Legacy)(uri "${KIPRJMOD}/VGA V11-cache.lib")(options "")(descr ""))
+  (lib (name "FPGA Board-rescue")(type Legacy)(uri "${KIPRJMOD}/FPGA Board-rescue.lib")(options "")(descr ""))
+  (lib (name FPGA-Board-rescue)(type Legacy)(uri "D:/Projects/KiCad/FPGA Board V2.1b/FPGA Board-rescue.lib")(options "")(descr ""))
+)
