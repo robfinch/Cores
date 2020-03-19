@@ -84,7 +84,7 @@ input err_i;
 output we_o;
 output [7:0] sel_o;
 output [51:0] adr_o;
-output reg [103:0] dat_o;
+output [103:0] dat_o;
 input [103:0] dat_i;
 output sr_o;
 output cr_o;
@@ -132,14 +132,15 @@ Key [7:0] keys;
 
 //always @(posedge clk_i)
 //	cyc_o <= cyc;
-always @(posedge clk_i)
-	stb_o <= stb;
+//always @(posedge clk_i)
+//	stb_o <= stb;
 //always @(posedge clk_i)
 //	we_o <= we;
 //always @(posedge clk_i)
 //	adr_o <= adr;
-always @(posedge clk_i)
-	dat_o <= dato;
+//always @(posedge clk_i)
+//	dat_o <= dato;
+assign dat_o = dato;
 
 wire cs_pit  = adr[51:8]==44'hFFFFFFFDC11;
 wire cs_pit2 = adr[51:8]==44'hFFFFFFFDC12;
@@ -343,7 +344,7 @@ default:  dati <= dati;
 endcase
 
 always @(posedge clk_i)
-	ack <= ack_i|pic_ack|pit_ack|crd_ack|ipt_ack;
+	ack <= ack_i|pic_ack|pit_ack|crd_ack;
 
 Gambit ucpu1
 (
@@ -353,6 +354,7 @@ Gambit ucpu1
   .clk2x_i(clk2x_i),
   .clk4x_i(clk4x_i),
   .tm_clk_i(tm_clk_i),
+  .nmi_i(1'b0),
   .irq_i(irq),
 //  .cause_i(cause),
   .cti_o(cti),

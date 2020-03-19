@@ -86,6 +86,7 @@ case(opcode)
 `BRANCH1:	len <= 3'd2;
 `ISOP:		len <= 3'd4;
 `STPGRP:	len <= 3'd1;
+`LDI:			len <= 3'd5;
 default:	len <= 3'd1;	// unimplemented instruction
 endcase
 endmodule

@@ -26,11 +26,10 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module opcmux(rst,nmi,irq,roi,freeze,ico,o);
+module opcmux(rst,nmi,irq,freeze,ico,o);
 input rst;
 input nmi;
 input [2:0] irq;
-input roi;
 input freeze;
 input Instruction ico;
 output Instruction o;
@@ -39,16 +38,16 @@ output Instruction o;
 always @*
 case(freeze)
 1'b1:
-	casez({rst,nmi,roi,|irq})
-	4'b1???:	o = {39'h0,4'h0,`RST,`BRKGRP};
-	4'b01??:	o = {39'h0,4'h0,`NMI,`BRKGRP};
-	4'b001?:	o = {39'h0,4'h1,`NMI,`BRKGRP};
-	4'b0001:	o = {39'h0,1'b0,irq,`IRQ,`BRKGRP};
+	casez({rst,nmi,|irq})
+	3'b1??:	o = {52'h0,4'h0,`RST,`BRKGRP};
+	3'b01?:	o = {52'h0,4'h0,`NMI,`BRKGRP};
+	3'b001:	o = {52'h0,1'b0,irq,`IRQ,`BRKGRP};
 	// The following shouldn't happen (pc frozen without interrupt present).
 	// It's a hardware error. Just do reset.
-	default:	o = {39'h0,4'h0,`RST,`BRKGRP};
+	default:	o = {52'h0,4'h0,`RST,`BRKGRP};
 	endcase
-default:	o = ico;
+default:	
+	o = ico;
 endcase
 
 endmodule

@@ -159,6 +159,8 @@ if (rst_i) begin
 	stb_o <= LOW;
 	we_o <= LOW;
 	sel_o <= 8'h00;
+	adr_o <= 52'd0;
+	dat_o <= 104'd0;
 	wb_has_bus <= FALSE;
 	wb_v <= 1'b0;
 	wb_ptr <= 1'd0;

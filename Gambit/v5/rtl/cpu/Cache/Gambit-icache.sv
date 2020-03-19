@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,7 +37,7 @@
 module L1_icache_mem(clk, wr, lineno, nxt_lineno, i, f, o);
 parameter pLines = 128;
 parameter pLineWidth = 416;
-localparam pLNMSB = pLines==128 ? 6 : 5;
+localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
@@ -105,7 +105,7 @@ endmodule
 module L1_icache_pdmem(clk, wr, lineno, nxt_lineno, i, o);
 parameter pLines = 128;
 parameter pLineWidth = 256;
-localparam pLNMSB = pLines==128 ? 6 : 5;
+localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
@@ -192,7 +192,7 @@ endmodule
 module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, nxt_lineno, hit, missadr);
 parameter pLines = 128;
 parameter AMSB = 51;
-localparam pLNMSB = pLines==128 ? 6 : 5;
+localparam pLNMSB = $clog2(pLines)-1;
 localparam pMSB = pLines==128 ? 8 : 7;
 input rst;
 input clk;
@@ -292,7 +292,7 @@ wire hit1n = mem1[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem1v[nxt_adr[pMSB:5]];
 wire hit2n = mem2[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem2v[nxt_adr[pMSB:5]];
 wire hit3n = mem3[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem3v[nxt_adr[pMSB:5]];
 always @*
-if (adr[4:0] > 5'd27) begin
+if (adr[4:0] > 5'd22) begin
   if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
   else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
   else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
@@ -314,7 +314,7 @@ else begin
 end
 
 always @*
-if (adr[4:0] > 5'd27)
+if (adr[4:0] > 5'd22)
 	missadr = (hit0|hit1|hit2|hit3) ? {nxt_adr[AMSB:5],5'h0} : {adr[AMSB:5],5'h0};
 else
 	missadr = {adr[AMSB:5],5'h0};
@@ -337,8 +337,8 @@ input wr;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
 input [418:0] i;
-output reg [1023:0] o;
-output reg [511:0] pdo;
+output reg [175:0] o;
+output reg [87:0] pdo;
 output reg [2:0] fault;
 output hit;
 input invall;

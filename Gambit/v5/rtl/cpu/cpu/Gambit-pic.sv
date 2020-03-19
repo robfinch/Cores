@@ -49,10 +49,6 @@
 //			this register enables the interrupt indicated
 //			by the low order five bits of the input data
 //
-//	0x10	- write only
-//			this register indicates which interrupt inputs are
-// 			edge sensitive
-//
 //  0x14	- write only
 //			This register resets the edge sense circuitry
 //			indicated by the low order five bits of the input data.
@@ -60,6 +56,14 @@
 //  0x18  - write only
 //      This register triggers the interrupt indicated by the low
 //      order five bits of the input data.
+//
+//	0x20	- write only
+//			this register indicates which interrupt inputs are
+// 			edge sensitive
+//
+//	0x24	- write only
+//			this register indicates which interrupt inputs are
+// 			edge sensitive
 //
 //  0x80    - irq control for irq #0
 //  0x84    - irq control for irq #1
@@ -100,16 +104,19 @@ reg [4:0] irqenc;
 wire [31:0] i = {   i31,i30,i29,i28,i27,i26,i25,i24,i23,i22,i21,i20,i19,i18,i17,i16,
                     i15,i14,i13,i12,i11,i10,i9,i8,i7,i6,i5,i4,i3,i2,i1,nmii};
 reg [31:0] ib;
-reg [31:0] iedge;
+reg [31:0] ipedge;
+reg [31:0] inedge;
 reg [31:0] rste;
-reg [31:0] es;
+reg [31:0] esL;
+reg [31:0] esH;
 reg [3:0] irq [0:31];
 reg [7:0] cause [0:31];
 integer n;
 
 initial begin
 	ie <= 32'h0;	
-	es <= 32'hFFFFFFFF;
+	esL <= 64'h0;
+	esH <= 64'h0;
 	rste <= 32'h0;
 	for (n = 0; n < 32; n = n + 1) begin
 		cause[n] <= 8'h00;
@@ -133,6 +140,8 @@ always @(posedge clk)
 		ie <= 32'h0;
 		rste <= 32'h0;
 		trig <= 32'h0;
+		esL <= 32'h0;
+		esH <= 32'h0;
 	end
 	else begin
 		rste <= 32'h0;
@@ -146,15 +155,18 @@ always @(posedge clk)
 				end
 			6'd2,6'd3:
 				ie[dat_i[4:0]] <= adr_i[2];
-			6'd4:	es <= dat_i[31:0];
+			6'd4:	;
 			6'd5:	rste[dat_i[4:0]] <= 1'b1;
 			6'd6:	trig[dat_i[4:0]] <= 1'b1;
+			6'd8:	esL <= dat_i[31:0];
+			6'd9:	esH <= dat_i[31:0];
 			6'b1?????:
 			     begin
 			     	 cause[adr_i[6:2]] <= dat_i[12:0];
 			         irq[adr_i[6:2]] <= dat_i[15:13];
 			         ie[adr_i[6:2]] <= dat_i[16];
-			         es[adr_i[6:2]] <= dat_i[17];
+			         esL[adr_i[6:2]] <= dat_i[17];
+			         esH[adr_i[6:2]] <= dat_i[18];
 			     end
 			endcase
 		end
@@ -168,7 +180,7 @@ begin
 	if (cs)
 		casez (adr_i[7:2])
 		6'd0:	dat_o <= cause[irqenc];
-		6'b1?????: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],irq[adr_i[6:2]],cause[adr_i[6:2]]};
+		6'b1?????: dat_o <= {esH[adr_i[6:2]],esL[adr_i[6:2]],ie[adr_i[6:2]],irq[adr_i[6:2]],cause[adr_i[6:2]]};
 		default:	dat_o <= ie;
 		endcase
 	else
@@ -185,9 +197,18 @@ begin
 	for (n = 1; n < 32; n = n + 1)
 	begin
 		ib[n] <= i[n];
-		if (trig[n]) iedge[n] <= 1'b1;
-		if (i[n] & !ib[n]) iedge[n] <= 1'b1;
-		if (rste[n]) iedge[n] <= 1'b0;
+		if (trig[n]) begin
+			if (esL[n])
+				ipedge[n] <= 1'b1;
+			if (esH[n])
+				inedge[n] <= 1'b1;
+		end
+		if (i[n] & !ib[n]) ipedge[n] <= 1'b1;
+		if (!i[n] & ib[n]) inedge[n] <= 1'b1;
+		if (rste[n]) begin
+			ipedge[n] <= 1'b0;
+			inedge[n] <= 1'b0;
+		end
 	end
 end
 
@@ -198,7 +219,12 @@ always @(posedge clk)
 begin
 	irqenc <= 5'd0;
 	for (n = 31; n > 0; n = n - 1)
-		if ((es[n] ? iedge[n] : i[n])) irqenc <= n;
+		case({esH[n],esL[n]})
+		2'b00:	if (i[n]) irqenc <= n;
+		2'b01:	if (ipedge[n]) irqenc <= n;
+		2'b10:	if (inedge[n]) irqenc <= n;
+		2'b11:	if (ipedge[n]|inedge[n]) irqenc <= n;
+		endcase
 end
 
 endmodule

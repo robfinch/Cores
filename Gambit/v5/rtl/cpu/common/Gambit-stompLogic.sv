@@ -23,6 +23,7 @@
 // ============================================================================
 //
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 module stompLogic(rst, clk, ce, branchmiss, misssn, iq_sn, iq_stomp);
 input rst;
@@ -30,7 +31,7 @@ input clk;
 input ce;
 input branchmiss;
 input [`SNBITS] misssn;
-input [`SNBITS] iq_sn [0:`IQ_ENTRIES-1];
+input Seqnum [`IQ_ENTRIES-1:0] iq_sn;
 output reg [`IQ_ENTRIES-1:0] iq_stomp;
 parameter TRUE = 1'b1;
 

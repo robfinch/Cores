@@ -26,7 +26,7 @@
 `include "..\inc\Gambit-types.sv"
 
 module programCounter(rst, clk, ce,
-	q1, q2, q1bx, insnx, freezepc, 
+	q1, q2, q1bx, insnx, freezepc,
 	branchmiss, misspc, len1, len2, len3,
 	jc, jcl, rts, br, wai, take_branch,
 	btgt, pc, pcd, pc_chg, branch_pc, 

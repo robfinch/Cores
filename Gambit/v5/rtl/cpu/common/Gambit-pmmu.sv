@@ -9,7 +9,7 @@
 //  - 64 bit CPU paged memory management unit
 //	- 512 entry TLB, 8 way associative
 //  - variable page table depth
-//	- address short-cutting for larger page sizes (8MB)
+//	- address short-cutting for larger page sizes (4MB)
 //  - hardware clearing of access bit
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -46,14 +46,14 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [37:0] vpageno;
-	logic [13:0] pad14;
-	logic [37:0] ppageno;
+	logic [38:0] vpageno;
+	logic [12:0] pad14;
+	logic [38:0] ppageno;
 	logic D;
 	logic U;
 	logic A;
-	logic [7:0] pad8;
-	logic [1:0] typ;
+	logic [6:0] pad7;
+	logic [1:0] T;
 	logic P;
 } PDE;
 
@@ -67,6 +67,11 @@ typedef struct packed
 	logic U;
 	logic S;							// shortcut
 	Access [5:0] ac;			// one for each operating level
+} PTEX;
+
+typedef struct packed
+{
+	PTEX	ptex;
 	PDE		pde;
 } PTE;
 
@@ -77,21 +82,26 @@ parameter
 	pAssociativity = 8,		// number of ways (parallel compares)
 	pTLB_size = 64,
 	S_WAIT_MISS = 0,
-	S_WR_PTL0 = 1,
-	S_WR_PTL0H = 2,
-	S_RD_PTL0 = 3,
-	S_RD_PTL0H = 4,
-	S_RD_PTL1 = 5,
-	S_RD_PTL1H = 6,
-	S_RD_PTL2 = 7,
-	S_RD_PTL3 = 8,
-	S_RD_PTL3_ACK = 9,
-	S_WR_TLB_ENTRYL = 10,
-	S_WR_TLB_ENTRYH = 11,
-	S_RD_PTL = 12,
-	S_WR_PTL = 13,
-	S_AGE = 14,
-	S_COUNT = 15
+	S_WR_PTE0 = 1,
+	S_WR_PTE0H = 2,
+	S_RD_PTE0 = 3,
+	S_RD_PTE0H = 4,
+	S_WR_PTE1 = 5,
+	S_WR_PTE1H = 6,
+	S_RD_PTE1 = 7,
+	S_RD_PTE1H = 8,
+	S_RD_PDE2 = 9,
+	S_RD_PDE3 = 10,
+	S_RD_PDE4 = 11,
+	S_RD_PDE5 = 12,
+	S_RD_PDE6 = 13,
+	S_WR_TLB_ENTRYL = 14,
+	S_WR_TLB_ENTRYH = 15,
+	S_RD_SETUP = 16,
+	S_WR_SETUP = 17,
+	S_AGE = 18,
+	S_COUNT = 19,
+	S_RD_PTL_START = 20
 )
 (
 // syscon
@@ -108,8 +118,8 @@ input      ack_i,		// acknowledge from memory system
 output reg we_o,		// write enable output
 output reg [7:0] sel_o,	// lane selects (always all active)
 output reg [AMSB:0] padr_o,
-input      PDE dat_i,	// data input from memory
-output 		 PDE dat_o,	// data to memory
+input      PTE dat_i,	// data input from memory
+output 		 PTE dat_o,	// data to memory
 
 // Translation request / control
 input invalidate,		// invalidate a specific entry
@@ -119,7 +129,6 @@ input [7:0] asid_i,
 output reg page_fault,
 input Key [7:0] keys,
 
-input [7:0] asid_i,
 input [7:0] pl_i,
 input [2:0] ol_i,		// operating level
 input icl_i,				// instruction cache load
@@ -156,16 +165,16 @@ reg c_o;
 reg a_o;
 reg [2:0] nnx;
 PTE pte;			// holding place for data
-reg [AMSB-4:0] pte_adr;
-reg [AMSB:0] clock_adr;
-reg [3:0] state;
-reg [3:0] stkstate;
+reg [AMSB:0] pte_adr;
+reg [80:0] clock_adr;
+reg [4:0] state;
+reg [4:0] stkstate;
 reg [2:0] cnt;	// tlb replacement counter
 reg [2:0] whichSet;		// which set to update
 reg dbit;				// temp dirty bit
 reg miss;
 reg proc;
-reg [51:0] miss_adr;
+reg [80:0] miss_adr;
 wire pta_changed;
 //assign ack_o = !miss||page_fault;
 wire pgen = pta[11];
@@ -176,8 +185,8 @@ wire [1:0] tlb_T [pAssociativity-1:0];
 wire tlb_A [pAssociativity-1:0];
 wire tlb_U1 [pAssociativity-1:0];
 wire [pAssociativity-1:0] tlb_D;
-wire [51:20] tlb_ppageno [pAssociativity-1:0];
-wire [51:20] tlb_vpageno [pAssociativity-1:0];
+wire [51:19] tlb_ppageno [pAssociativity-1:0];
+wire [51:19] tlb_vpageno [pAssociativity-1:0];
 Access tlb_access0 [pAssociativity-1:0];
 Access tlb_access1 [pAssociativity-1:0];
 Access tlb_access2 [pAssociativity-1:0];
@@ -225,8 +234,8 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.P),
 			.o(tlb_P[g])
 		);
@@ -235,8 +244,8 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.T),
 			.o(tlb_T[g])
 		);
@@ -245,8 +254,8 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.A),
 			.o(tlb_A[g])
 		);
@@ -255,8 +264,8 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.U),
 			.o(tlb_U1[g])
 		);
@@ -265,28 +274,28 @@ generate
 			.clk(clk_i),
 			.ce(wr_tlb?whichSet==g:nnx==g),
 			.we(wr_tlb||state==S_WAIT_MISS && wr && !miss && cyc_i),
-			.wa(wr_tlb?miss_adr[19:14]:vadr_i[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(wr_tlb?miss_adr[18:13]:vadr_i[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(!wr_tlb),
 			.o(tlb_D[g])
 		);
-		ram_ar1w1r #(38,pTLB_size) utlbPadr
+		ram_ar1w1r #(39,pTLB_size) utlbPadr
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.ppageno),
 			.o(tlb_ppageno[g])
 		);
-		ram_ar1w1r #(38,pTLB_size) tlbVadr
+		ram_ar1w1r #(39,pTLB_size) tlbVadr
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte.pde.vpageno),
 			.o(tlb_vpageno[g])
 		);
@@ -295,9 +304,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[0]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[0]),
 			.o(tlb_access0[g])
 		);
 		ram_ar1w1r #(4,pTLB_size) utlbAccess1
@@ -305,9 +314,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[1]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[1]),
 			.o(tlb_access1[g])
 		);
 		ram_ar1w1r #(4,pTLB_size) utlbAccess2
@@ -315,9 +324,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[2]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[2]),
 			.o(tlb_access2[g])
 		);
 		ram_ar1w1r #(4,pTLB_size) utlbAccess3
@@ -325,9 +334,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[3]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[3]),
 			.o(tlb_access3[g])
 		);
 		ram_ar1w1r #(4,pTLB_size) utlbAccess4
@@ -335,9 +344,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[4]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[4]),
 			.o(tlb_access4[g])
 		);
 		ram_ar1w1r #(4,pTLB_size) utlbAccess5
@@ -345,9 +354,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.ac[5]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.ac[5]),
 			.o(tlb_access5[g])
 		);
 		ram_ar1w1r #(1,pTLB_size) utlbS
@@ -355,9 +364,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.S),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.S),
 			.o(tlb_S[g])
 		);
 		ram_ar1w1r #(1,pTLB_size) utlbU2
@@ -365,9 +374,9 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
-			.i(pte.U),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte.ptex.U),
 			.o(tlb_U2[g])
 		);
 		ram_ar1w1r #(13,pTLB_size) tlbPL
@@ -375,9 +384,9 @@ generate
       .clk(clk_i),
       .ce(whichSet==g),
       .we(wr_tlb),
-      .wa(miss_adr[19:14]),
-      .ra(vadr_i[19:14]),
-      .i(pte.pl),
+      .wa(miss_adr[18:13]),
+      .ra(vadr_i[18:13]),
+      .i(pte.ptex.pl),
       .o(tlb_pl[g])
     );
 		ram_ar1w1r #(13,pTLB_size) utlbSC
@@ -385,9 +394,9 @@ generate
       .clk(clk_i),
       .ce(whichSet==g),
       .we(wr_tlb),
-      .wa(miss_adr[19:14]),
-      .ra(vadr_i[19:14]),
-      .i(pte.sc),
+      .wa(miss_adr[18:13]),
+      .ra(vadr_i[18:13]),
+      .i(pte.ptex.sc),
       .o(tlb_sc[g])
     );
 		ram_ar1w1r #(13,pTLB_size) utlbPK
@@ -395,9 +404,9 @@ generate
       .clk(clk_i),
       .ce(whichSet==g),
       .we(wr_tlb),
-      .wa(miss_adr[19:14]),
-      .ra(vadr_i[19:14]),
-      .i(pte.pk),
+      .wa(miss_adr[18:13]),
+      .ra(vadr_i[18:13]),
+      .i(pte.ptex.pk),
       .o(tlb_pk[g])
     );
 		ram_ar1w2r #(26,pTLB_size) utlbRefCount
@@ -405,10 +414,10 @@ generate
 			.clk(clk_i),
 			.ce(wr_tlb?whichSet==g:tlb_ra[8:6]==g),
 			.we(wr_tlb||state==S_COUNT||state==S_AGE),
-			.wa(wr_tlb?miss_adr[19:14]:tlb_ra[5:0]),
-			.ra0(vadr_i[19:14]),
+			.wa(wr_tlb?miss_adr[18:13]:tlb_ra[5:0]),
+			.ra0(vadr_i[18:13]),
 			.ra1(tlb_ra),
-			.i(pte.rc),
+			.i(pte.ptex.rc),
 			.o0(tlb_rc[g]),
 			.o1(tlb_rc1[g])
 		);
@@ -418,8 +427,8 @@ generate
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
-			.wa(miss_adr[19:14]),
-			.ra(vadr_i[19:14]),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
 			.i(pte_adr),
 			.o(tlb_pte_adr[g])
 		);
@@ -478,12 +487,6 @@ if (rst_i) begin
 end
 else begin
 
-	cyc_o <= cyc_i & v_o & ~pv_o;
-	stb_o <= stb_i & v_o & ~pv_o;
-	we_o <= we_i & v_o & ~pv_o & w_o;
-	sel_o <= sel_i & {8{~pv_o}};
-	dat_o <= vdat_i;
-
 	wr_tlb <= 1'b0;
 
 	// page fault pulses
@@ -500,8 +503,8 @@ else begin
 	// handle invalidate command
 	if (invalidate)
 		for (nn = 0; nn < pAssociativity; nn = nn + 1)
-			if (vadr_i[51:20]==tlb_vpageno[nn])
-				tlb_v[{nn,vadr_i[19:14]}] <= 1'b0;
+			if (vadr_i[51:19]==tlb_vpageno[nn])
+				tlb_v[{nn,vadr_i[18:13]}] <= 1'b0;
 
 	case (state)	// synopsys full_case parallel_case
 
@@ -526,7 +529,7 @@ else begin
 				for (nn = 0; nn < pAssociativity; nn = nn + 1)
 					if (!tlb_v[nn]) begin
 						whichSet <= nn;
-						goto(S_RD_PTL3);
+						goto(S_RD_PTL_START);
 					end
 					else begin
 						tlb2pte(nn,0,0);
@@ -534,103 +537,89 @@ else begin
 						goto(S_WR_TLB_ENTRYL);
 					end
 			end
-			// If there's a write cycle, check to see if the
-			// dirty bit is set. If the dirty bit hasn't been
-			// set yet, then set it and write the dirty status
-			// to memory.
-			else if (cyc_i && we_i && !tlb_D[nnx]) begin
-				ack_o <= 1'b0;
-				whichSet <= nnx;
-				goto(S_RD_PTL3);
-			end
-			else if (age_tick_r) begin
-				age_tick_r <= 1'b0;
-				miss_adr <= {tlb_ua + 3'd1,13'd0};
-				tlb_ra <= tlb_ua + 3'd1;
-				tlb_ua <= tlb_ua + 3'd1;
-				goto(S_AGE);
-			end
-			else begin
-				tlb_ra <= {nnx,vadr_i[19:14]};
-				goto(S_COUNT);
+			else if (ol_i != 3'b000) begin
+				// If there's a write cycle, check to see if the
+				// dirty bit is set. If the dirty bit hasn't been
+				// set yet, then set it and write the dirty status
+				// to memory.
+				if (cyc_i && we_i && !tlb_D[nnx]) begin
+					ack_o <= 1'b0;
+					whichSet <= nnx;
+					goto(S_RD_PTL_START);
+				end
+				else if (age_tick_r) begin
+					age_tick_r <= 1'b0;
+					miss_adr <= {tlb_ua + 3'd1,13'd0};
+					tlb_ra <= tlb_ua + 3'd1;
+					tlb_ua <= tlb_ua + 3'd1;
+					goto(S_AGE);
+				end
+				else begin
+					tlb_ra <= {nnx,vadr_i[18:13]};
+					goto(S_COUNT);
+				end
 			end
 		end
 
 	S_WR_TLB_ENTRYL:
 		begin
 			tmpadr <= {pte_adr[AMSB:4],4'h0};
-			dat_o <= pte[103:0];
-			call(S_WR_PTL,S_WR_TLB_ENTRYH);
+			dat_o <= pte.pde;
+			call(S_WR_SETUP,S_WR_TLB_ENTRYH);
 		end
 	S_WR_TLB_ENTRYH:
 		if (ack_i) begin
 			tmpadr <= {pte_adr[AMSB:4],4'h8};
-			dat_o <= pte[207:104];
-			call(S_WR_PTL,S_RD_PTL3);
+			dat_o <= pte.ptex;
+			call(S_WR_SETUP,S_RD_PTL_START);
 		end
 
-	S_RD_PTL3:
+	S_RD_PTL_START:
 		if (~ack_i & ~cyc_o) begin
-			tlb_ra <= {whichSet,miss_adr[19:14]};
-			tlb_wa <= {whichSet,miss_adr[19:14]};
+			tlb_ra <= {whichSet,miss_adr[18:13]};
+			tlb_wa <= {whichSet,miss_adr[18:13]};
 			cyc_o <= 1'b1;
 			stb_o <= 1'b1;
-			sel_o <= 8'hFF;
+			sel_o <= 16'hFFFF;
 			lock_o <= 1'b0;
 			we_o  <= 1'b0;
-			case(pta[9:8])
-			2'd0:	state <= S_RD_PTL0;
-			2'd1:	state <= S_RD_PTL1;
-			2'd2:	state <= S_RD_PTL2;
-			2'd3:	state <= S_RD_PTL3_ACK;
+			case(pta[10:8])
+			3'd0:	state <= S_RD_PTE0;
+			3'd1:	state <= S_RD_PTE1;
+			3'd2:	state <= S_RD_PDE2;
+			3'd3:	state <= S_RD_PDE3;
+			3'd4:	state <= S_RD_PDE4;
+			3'd5:	state <= S_RD_PDE5;
+			3'd6:	state <= S_RD_PDE6;
 			default:	;
 			endcase
 			// Set page table address for lookup
-			case(pta[9:8])
-			2'b00:	padr_o <= {pta[51:14],miss_adr[23:14],4'h0};	// 8MB translations
-			2'b01:	padr_o <= {pta[51:14],miss_adr[34:24],3'h0};	// 8GB translations
-			2'b10:	padr_o <= {pta[51:14],miss_adr[45:35],3'h0};	// 8TB translations
-			2'b11:	padr_o <= {pta[51:14],asid_i[4:0],miss_adr[51:46],3'h0};	// 8XB translations
+			case(pta[10:8])
+			3'd0:	padr_o <= {pta[51:14],miss_adr[21:13],4'h0};	// 4MB translations
+			3'd1:	padr_o <= {pta[51:14],miss_adr[30:22],4'h0};	// 2GB translations
+			3'd2:	padr_o <= {pta[51:14],miss_adr[40:31],3'h0};	// 4TB translations
+			3'd3:	padr_o <= {pta[51:14],miss_adr[50:41],3'h0};	// 128XB translations
+			3'd4: padr_o <= {pta[51:14],miss_adr[60:51],3'h0};	// 128XB translations
+			3'd5: padr_o <= {pta[51:14],miss_adr[70:61],3'h0};	// 128XB translations
+			3'd6: padr_o <= {pta[51:14],miss_adr[80:71],3'h0};	// 128XB translations
 			default:	;
 			endcase
 		end
-	// Wait for ack from system
-	// Setup to access page table
-	// If app uses a page directory, now address the page table
-	S_RD_PTL3_ACK:
-		if (ack_i) begin
-			nack();
-			if (dat_i.P) begin	// pte valid bit
-				tmpadr <= {dat_i.pageno,miss_adr[45:35],3'h0};
-				call(S_RD_PTL,S_RD_PTL2);
-			end
-			else begin
-				if (clock) begin
-					clock_adr[51:46] <= clock_adr[51:46] + 3'h1;
-					clock_adr[45:0] <= 45'h0;
-					goto (S_WAIT_MISS);
-				end
-				else
-		  	  raise_page_fault();
-				// not a valid translation
-				// OS messed up ?
-			end
-		end
 
 	// Wait for ack from system
 	// Setup to access page table
 	// If app uses a page directory, now address the page table
-	S_RD_PTL2:
+	S_RD_PDE6:
 		if (ack_i) begin
 			nack();
-			if (|dat_i[2:0]) begin	// pte valid bit
-				tmpadr <= {dat_i.pageno,miss_adr[34:24],3'b0};
-				call(S_RD_PTL,S_RD_PTL1);
+			if (|dat_i.pde.T) begin	// pte valid bit
+				tmpadr <= {dat_i.pde.ppageno,miss_adr[70:61],3'b0};
+				call(S_RD_SETUP,S_RD_PDE5);
 			end
 			else begin
 				if (clock) begin
-					clock_adr[51:35] <= clock_adr[51:35] + 3'h1;
-					clock_adr[34:0] <= 35'h0;
+					clock_adr[80:71] <= clock_adr[80:71] + 3'h1;
+					clock_adr[70:0] <= 71'h0;
 					goto (S_WAIT_MISS);
 				end
 				else
@@ -641,31 +630,150 @@ else begin
 	// Wait for ack from system
 	// Setup to access page table
 	// If app uses a page directory, now address the page table
-	S_RD_PTL1:
+	S_RD_PDE5:
 		if (ack_i) begin
 			nack();
-			if (dat_i.P) begin	// pte valid bit
-		    // Shortcut 8MiB page ?
-		    if (dat_i.S) begin
-	        pte <= dat_i;
-    			dat_o <= dat_i|{dbit,2'b00,~clock,4'b0};
-    			dat_o.A <= ~clock;
-					call(S_WR_PTL,S_WR_PTL0);
-		    end
-		    else begin
-			    tmpadr <= {dat_i.pageno,miss_adr[23:14],4'b0};
-					call(S_RD_PTL,S_RD_PTL0);
-				end
+			if (|dat_i.pde.T) begin	// pte valid bit
+				tmpadr <= {dat_i.pde.ppageno,miss_adr[60:51],3'b0};
+				call(S_RD_SETUP,S_RD_PDE4);
 			end
 			else begin
 				if (clock) begin
-					clock_adr[51:24] <= clock_adr[51:24] + 4'h1;
-					clock_adr[23:0] <= 24'h0;
+					clock_adr[80:61] <= clock_adr[80:61] + 3'h1;
+					clock_adr[60:0] <= 61'h0;
 					goto (S_WAIT_MISS);
 				end
 				else
 		  	  raise_page_fault();
 		  end
+		end
+
+	// Wait for ack from system
+	// Setup to access page table
+	// If app uses a page directory, now address the page table
+	S_RD_PDE4:
+		if (ack_i) begin
+			nack();
+			if (|dat_i.pde.T) begin	// pte valid bit
+				tmpadr <= {dat_i.pde.ppageno,miss_adr[50:41],3'b0};
+				call(S_RD_SETUP,S_RD_PDE3);
+			end
+			else begin
+				if (clock) begin
+					clock_adr[80:51] <= clock_adr[80:51] + 3'h1;
+					clock_adr[50:0] <= 51'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
+		end
+
+	// Wait for ack from system
+	// Setup to access page table
+	// If app uses a page directory, now address the page table
+	S_RD_PDE3:
+		if (ack_i) begin
+			nack();
+			if (|dat_i.pde.T) begin	// pte valid bit
+				tmpadr <= {dat_i.pde.ppageno,miss_adr[40:31],3'b0};
+				call(S_RD_SETUP,S_RD_PDE2);
+			end
+			else begin
+				if (clock) begin
+					clock_adr[80:41] <= clock_adr[80:41] + 3'h1;
+					clock_adr[40:0] <= 51'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
+		end
+
+	// Wait for ack from system
+	// Setup to access page table
+	// If app uses a page directory, now address the page table
+	S_RD_PDE2:
+		if (ack_i) begin
+			nack();
+			if (|dat_i.pde.T) begin	// pte valid bit
+				tmpadr <= {dat_i.pde.ppageno,miss_adr[30:22],4'b0};
+				call(S_RD_SETUP,S_RD_PTE1);
+			end
+			else begin
+				if (clock) begin
+					clock_adr[80:31] <= clock_adr[80:31] + 3'h1;
+					clock_adr[30:0] <= 31'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
+		end
+
+	// Wait for ack from system
+	// Setup to access page table
+	// If app uses a page directory, now address the page table
+	S_RD_PTE1:
+		if (ack_i) begin
+			nack();
+			pte.pde <= dat_i;
+			if (|dat_i.pde.T) begin	// pte valid bit
+		    tmpadr <= tmpadr + 3'd8;
+				call(S_RD_SETUP,S_RD_PTE1H);
+			end
+			else begin
+				if (clock) begin
+					clock_adr[80:22] <= clock_adr[80:22] + 4'h1;
+					clock_adr[21:0] <= 22'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
+		end
+
+	// Wait for ack from system
+	// Setup to access page table
+	// If app uses a page directory, now address the page table
+	S_RD_PTE1H:
+		if (ack_i) begin
+			nack();
+			pte.ptex <= dat_i;
+			if (pte.ptex.S) begin
+				wr_tlb <= 1'b1;
+				pte_adr <= {padr_o[AMSB:4],4'h0};
+				tmpadr <= {tmpadr[AMSB:4],4'h0};
+				dat_o <= pte.pde;
+				// If the tlb entry is already marked dirty don't bother with updating
+				// the pte in memory. Only write on a new dirty status.
+				if (tlb_D[tlb_ra[8:6]])
+					goto(S_WAIT_MISS);
+				else
+					call(S_WR_SETUP,S_WR_PTE1);
+			end
+			else begin
+	    	tmpadr <= {dat_i.pde.ppageno,miss_adr[21:13],4'b0};
+				call(S_RD_SETUP,S_RD_PTE0);
+			end
+		end
+
+	S_WR_PTE1:
+		if (ack_i) begin
+			nack();
+			tmpadr <= {tmpadr[AMSB:4],4'h8};
+			dat_o <= pte.ptex;
+			call(S_WR_SETUP,S_WR_PTE1H);
+		end
+
+	S_WR_PTE1H:
+		if (ack_i) begin
+			wr_tlb <= 1'b1;
+			nack();
+			tlb_v[tlb_wa] <= pte.pde.P;
+			if (~pte.pde.P)
+		    raise_page_fault();
+			goto(S_WAIT_MISS);
 		end
 
 	//---------------------------------------------------
@@ -673,46 +781,47 @@ else begin
 	// read then write of a PTE
 	//---------------------------------------------------
 	// Perform a read cycle of page table level 0 entry
-	S_RD_PTL0:
+	S_RD_PTE0:
   	// The tlb has been updated so the page must have been accessed
     // set the accessed bit for the page table entry
     // Also set dirty bit if a write access.
 		if (ack_i) begin
 			nack();
-			tmpadr <= {padr_o[AMSB:4],4'h8};
+			tmpadr <= {tmpadr[AMSB:4],4'h8};
 			pte.pde <= dat_i;
 			pte.pde.D = dbit;
-			call(S_RD_PTL,S_RD_PTL0H);
+			call(S_RD_SETUP,S_RD_PTE0H);
 		end
 
-	S_RD_PTL0H:
+	S_RD_PTE0H:
   	// The tlb has been updated so the page must have been accessed
     // set the accessed bit for the page table entry
     // Also set dirty bit if a write access.
 		if (ack_i) begin
 			nack();
 			wr_tlb <= 1'b1;
-			pte_adr <= {padr_o[AMSB:4],4'h0};
-			tmpadr <= {padr_o[AMSB:4],4'h0};
+			pte_adr <= {tmpadr[AMSB:4],4'h0};
+			tmpadr <= {tmpadr[AMSB:4],4'h0};
 			dat_o <= pte.pde;
-			pte[207:104] <= dat_i;
+			pte.ptex <= dat_i;
 			// If the tlb entry is already marked dirty don't bother with updating
 			// the pte in memory. Only write on a new dirty status.
-			if (tlb_D[tlb_ra[8:6]])
+			if (tlb_D[tlb_ra[8:6]]) begin
 				goto(S_WAIT_MISS);
+			end
 			else
-				call(S_WR_PTL,S_WR_PTL0);
+				call(S_WR_SETUP,S_WR_PTE0);
 		end
 
-	S_WR_PTL0:
+	S_WR_PTE0:
 		if (ack_i) begin
 			nack();
-			tmpadr <= {padr_o[AMSB:4],4'h8};
-			dat_o <= pte[207:104];
-			call(S_WR_PTL,S_WR_PTL0H);
+			tmpadr <= {tmpadr[AMSB:4],4'h8};
+			dat_o <= pte.ptex;
+			call(S_WR_SETUP,S_WR_PTE0H);
 		end
 
-	S_WR_PTL0H:
+	S_WR_PTE0H:
 		if (ack_i) begin
 			wr_tlb <= 1'b1;
 			nack();
@@ -747,11 +856,11 @@ else begin
 	//---------------------------------------------------
 	// Subroutine: initiate read cycle
 	//---------------------------------------------------
-	S_RD_PTL:
+	S_RD_SETUP:
 		if (~ack_i & ~cyc_o) begin
 			cyc_o <= 1'b1;
 			stb_o <= 1'b1;
-			sel_o <= 8'hFF;
+			sel_o <= 16'hFFFF;
 			lock_o <= 1'b0;
 			we_o  <= 1'b0;
 			padr_o <= tmpadr;
@@ -761,11 +870,11 @@ else begin
 	//---------------------------------------------------
 	// Subroutine: initiate write cycle
 	//---------------------------------------------------
-	S_WR_PTL:
+	S_WR_SETUP:
 		if (~ack_i & ~cyc_o) begin
 			cyc_o <= 1'b1;
 			stb_o <= 1'b1;
-			sel_o <= 8'hFF;
+			sel_o <= 16'hFFFF;
 			lock_o <= 1'b0;
 			we_o  <= 1'b1;
 			padr_o <= tmpadr;
@@ -834,6 +943,12 @@ endtask
 // Perform address translation.
 task xlat;
 begin
+	cyc_o <= cyc_i & v_o & ~pv_o;
+	stb_o <= stb_i & v_o & ~pv_o;
+	we_o <= we_i & v_o & ~pv_o & w_o;
+	sel_o <= sel_i & {8{~pv_o}};
+	dat_o <= vdat_i;
+
 	miss <= 1;
 	nnx <= pAssociativity;
 	a_o <= 1;
@@ -862,11 +977,8 @@ begin
 		end
 		else
 		for (nn = 0; nn < pAssociativity; nn = nn + 1)
-			if (tlb_v[{nn,vadr_i[19:14]}] && vadr_i[51:20]==tlb_vpageno[nn]) begin
-			    if (tlb_S[nn])
-				    padr_o[51:14] <= {tlb_ppageno[nn][51:24],vadr_i[23:14]};
-			    else
-				    padr_o[51:14] <= tlb_ppageno[nn];
+			if (tlb_v[{nn,vadr_i[18:13]}] && vadr_i[51:19]==tlb_vpageno[nn]) begin
+		    padr_o[51:13] <= tlb_ppageno[nn];
 				miss <= 1'b0;
 				nnx <= nn;
 				a_o <= tlb_A[nn];

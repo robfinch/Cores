@@ -23,6 +23,7 @@
 //
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-config.sv"
+`include "..\inc\Gambit-types.sv"
 
 // Return address stack predictor is updated during the fetch stage on the 
 // assumption that previous flow controls (branches) predicted correctly.
@@ -47,18 +48,19 @@ input [QSLOTS-1:0] queuedOn;
 input [QSLOTS-1:0] jal;
 input [6:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] ret;
-input [AMSB:0] pc;
+input Address pc;
 input [2:0] len1;
 input [2:0] len2;
 input [2:0] stompedRets;
 input stompedRet;
-output [AMSB:0] ra;
+output Address ra;
 
 parameter RSTPC = 52'hFFFFFFFFE0000;
 integer n;
 reg [AMSB:0] ras [0:DEPTH-1];
 reg [3:0] rasp;
-assign ra = ras[rasp];
+always @(posedge clk)
+	ra <= ras[rasp];
 
 wire slot0_mod = queuedOn[0] && (jal[0] && Rd[0]!=7'd96) || (ret[0]);
 wire slot1_mod = queuedOn[1] && (jal[1] && Rd[1]!=7'd96) || (ret[1]);
