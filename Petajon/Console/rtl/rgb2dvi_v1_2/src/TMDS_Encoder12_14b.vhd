@@ -88,8 +88,8 @@ signal n1d_1, n1q_m_2, n0q_m_2, n1q_m_1 : unsigned(3 downto 0); --range 0-8
 signal dc_bias_2, cnt_t_3, cnt_t_2 : signed(4 downto 0) := "00000"; --range -8 - +8 + sign
 signal pC0_1, pC1_1, pVde_1, pC0_2, pC1_2, pVde_2 : std_logic;
 signal cond_not_balanced_2, cond_balanced_2 : std_logic;
-signal pDataPopCnt : std_logic_vector(3 downto 0);
-signal q_m_1_PopCnt : std_logic_vector(3 downto 0);
+signal pDataPopCnt : unsigned(3 downto 0);
+signal q_m_1_PopCnt : unsigned(3 downto 0);
 	
 begin
 	
@@ -112,7 +112,7 @@ begin
 	if Rising_Edge(PixelClk) then
 		pVde_1 <= pVde;
 
-		n1d_1 <= to_unsigned(pDataPopCnt,4);
+		n1d_1 <= pDataPopCnt(3 downto 0);
 		pDataOut_1 <= pDataOut; --insert data into the pipeline;
 		pC0_1 <= pC0; --insert control into the pipeline;
 		pC1_1 <= pC1;
@@ -137,7 +137,7 @@ q_m_xnor_1(12) <= '0';
 q_m_1 <= q_m_xnor_1 when n1d_1 > 6 or (n1d_1 = 6 and pDataOut_1(0) = '0') else
          q_m_xor_1;
 
-n1q_m_1 <= to_unsigned(q_m_1_PopCnt,4);
+n1q_m_1 <= q_m_1_PopCnt(3 downto 0);
 		
 ----------------------------------------------------------------------------------
 -- Pipeline stage 2, balance DC
@@ -160,10 +160,10 @@ cond_not_balanced_2 <=  '1' when (cnt_t_3 > 0 and n1q_m_2 > 6) or -- too many 1'
 									 (cnt_t_3 < 0 and n1q_m_2 < 6) else -- too many 0's
                         '0';
 
-control_token_2 <= 	kCtlTkn0 when pC1_2 = '0' and pC0_2 = '0' else
-                     kCtlTkn1 when pC1_2 = '0' and pC0_2 = '1' else
-                     kCtlTkn2 when pC1_2 = '1' and pC0_2 = '0' else
-                     kCtlTkn3;
+control_token_2 <= 	kCtlTkn0a when pC1_2 = '0' and pC0_2 = '0' else
+                     kCtlTkn1a when pC1_2 = '0' and pC0_2 = '1' else
+                     kCtlTkn2a when pC1_2 = '1' and pC0_2 = '0' else
+                     kCtlTkn3a;
 							
 q_out_2 <=  control_token_2												when pVde_2 = '0' else	--control period
 			   not q_m_2(12) & q_m_2(12) & not q_m_2(11 downto 0)    when cond_balanced_2 = '1' and q_m_2(8) = '0' else

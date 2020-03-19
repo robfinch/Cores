@@ -67,7 +67,7 @@ entity TMDS_Decoder12_14b is
       kTimeoutMs : natural := 50; --what is the maximum time interval for a blank to be detected
       kRefClkFrqMHz : natural := 200; --what is the RefClk frequency
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
-      kIDLY_TapWidth : natural := 7); --number of bits for IDELAYE2 tap counter
+      kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter
    Port (
       PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
       SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
@@ -85,8 +85,8 @@ entity TMDS_Decoder12_14b is
       pVde : out std_logic;
       
       -- Channel bonding (three data channels in total)
-      pOtherChVld : in std_logic_vector(9 downto 0);
-      pOtherChRdy : in std_logic_vector(9 downto 0);
+      pOtherChVld : in std_logic_vector(1 downto 0);
+      pOtherChRdy : in std_logic_vector(1 downto 0);
       pMeVld : out std_logic;
       pMeRdy : out std_logic;
       
@@ -179,7 +179,7 @@ SyncBaseRst: entity work.SyncBase
       oOut => rTimeoutRst);
         
 -- Phase alignment controller to lock onto data stream
-PhaseAlignX: entity work.PhaseAlign 
+PhaseAlignX: entity work.PhaseAlign12_14b 
    generic map (
       kUseFastAlgorithm => false,   
       kCtlTknCount => kCtlTknCount,
@@ -238,7 +238,7 @@ begin
 end process BitslipDelay;
    
 -- Channel de-skew (bonding)
-ChannelBondX: entity work.ChannelBond
+ChannelBondX: entity work.ChannelBond12_14b
    port map (
       PixelClk => PixelClk,
       pDataInRaw => pDataInRaw,
@@ -259,7 +259,7 @@ TMDS_Decode: process (PixelClk)
 begin
    if Rising_Edge(PixelClk) then
       if (pMeRdy_int = '1' and pOtherChRdy = "11") then
-         pDataIn <= x"00"; --added for VGA-compatibility (blank pixel needed during blanking)
+         pDataIn <= x"000"; --added for VGA-compatibility (blank pixel needed during blanking)
          
          case (pDataInBnd) is
             --Control tokens decode straight to C0, C1 values
@@ -295,7 +295,7 @@ begin
          pC0 <= '0';
          pC1 <= '0';
          pVde <= '0';
-         pDataIn <= x"00";
+         pDataIn <= x"000";
       end if;
    end if;
 end process;

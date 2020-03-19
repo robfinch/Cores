@@ -74,13 +74,13 @@ entity OPCBusReceiver is
       kEdidFileName : string := "900p_edid.txt";  -- Select EDID file to use
       -- 7-series specific
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
-      kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter   
+      kIDLY_TapWidth : natural := 7); --number of bits for IDELAYE2 tap counter   
    Port (
       -- DVI 1.0 TMDS video interface
       TMDS_Clk_p : in std_logic;
       TMDS_Clk_n : in std_logic;
-      TMDS_Data_p : in std_logic_vector(10 downto 0);
-      TMDS_Data_n : in std_logic_vector(10 downto 0);
+      TMDS_Data_p : in std_logic_vector(2 downto 0);
+      TMDS_Data_n : in std_logic_vector(2 downto 0);
       
       -- Auxiliary signals 
       RefClk : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
@@ -88,7 +88,7 @@ entity OPCBusReceiver is
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
       -- Video out
-      vid_pData : out std_logic_vector(131 downto 0);
+      vid_pData : out std_logic_vector(35 downto 0);
       vid_pVDE : out std_logic;
       vid_pHSync : out std_logic;
       vid_pVSync : out std_logic;
@@ -112,16 +112,16 @@ entity OPCBusReceiver is
 end OPCBusReceiver;
 
 architecture Behavioral of OPCBusReceiver is
-type dataIn_t is array (10 downto 0) of std_logic_vector(11 downto 0);
-type eyeSize_t is array (10 downto 0) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
+type dataIn_t is array (2 downto 0) of std_logic_vector(11 downto 0);
+type eyeSize_t is array (2 downto 0) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
 signal aLocked, SerialClk_int, PixelClk_int, pLockLostRst: std_logic;
-signal pRdy, pVld, pDE, pAlignErr, pC0, pC1 : std_logic_vector(10 downto 0);
+signal pRdy, pVld, pDE, pAlignErr, pC0, pC1 : std_logic_vector(2 downto 0);
 signal pDataIn : dataIn_t;
 signal pEyeSize : eyeSize_t;
 
 signal aRst_int, pRst_int : std_logic;
 
-signal pData : std_logic_vector(131 downto 0);
+signal pData : std_logic_vector(35 downto 0);
 signal pVDE, pHSync, pVSync : std_logic;
 
 begin
@@ -164,7 +164,7 @@ LockLostReset: entity work.ResetBridge
       oRst => pLockLostRst);
          
 -- Three data channel decoders
-DataDecoders: for iCh in 10 downto 0 generate
+DataDecoders: for iCh in 2 downto 0 generate
    DecoderX: entity work.TMDS_Decoder12_14b
       generic map (
          kCtlTknCount => kMinTknCntForBlank, --how many subsequent control tokens make a valid blank detection (DVI spec)
@@ -180,8 +180,8 @@ DataDecoders: for iCh in 10 downto 0 generate
          pRst                    => pRst_int,
          sDataIn_p               => TMDS_Data_p(iCh),                           
          sDataIn_n               => TMDS_Data_n(iCh),                                       
-         pOtherChRdy(9 downto 0) => pRdy((iCh+1) mod 11) & pRdy((iCh+2) mod 11) & pRdy((iCh+3) mod 11) & pRdy((iCh+4) mod 11) & pRdy((iCh+5) mod 11) & pRdy((iCh+6) mod 11) & pRdy((iCh+7) mod 11) & pRdy((iCh+8) mod 11) & pRdy((iCh+9) mod 11) & pRdy((iCh+10) mod 11), -- tie channels together for channel de-skew
-         pOtherChVld(9 downto 0) => pVld((iCh+1) mod 11) & pVld((iCh+2) mod 11) & pVld((iCh+3) mod 11) & pVld((iCh+4) mod 11) & pVld((iCh+5) mod 11) & pVld((iCh+6) mod 11) & pVld((iCh+7) mod 11) & pVld((iCh+8) mod 11) & pVld((iCh+9) mod 11) & pVld((iCh+10) mod 11), -- tie channels together for channel de-skew
+         pOtherChRdy(1 downto 0) => pRdy((iCh+1) mod 3) & pRdy((iCh+2) mod 3), -- tie channels together for channel de-skew
+         pOtherChVld(1 downto 0) => pVld((iCh+1) mod 3) & pVld((iCh+2) mod 3), -- tie channels together for channel de-skew
    
          pAlignErr               => pAlignErr(iCh),             
          pC0                     => pC0(iCh),
@@ -200,14 +200,6 @@ end generate DataDecoders;
 pData(11 downto 0) <= pDataIn(0); -- blue is channel 0
 pData(23 downto 12) <= pDataIn(1); -- green is channel 1
 pData(35 downto 24) <= pDataIn(2); -- red is channel 2
-pData(47 downto 36) <= pDataIn(3);
-pData(59 downto 48) <= pDataIn(4);
-pData(71 downto 60) <= pDataIn(5);
-pData(83 downto 72) <= pDataIn(6);
-pData(95 downto 84) <= pDataIn(7);
-pData(107 downto 96) <= pDataIn(8);
-pData(119 downto 108) <= pDataIn(9);
-pData(131 downto 120) <= pDataIn(10);
 pHSync <= pC0(0); -- channel 0 carries control signals too
 pVSync <= pC1(0); -- channel 0 carries control signals too
 pVDE <= pDE(0); -- since channels are aligned, all of them are either active or blanking at once
@@ -221,7 +213,7 @@ aPixelClkLckd <= aLocked;
 -- re-registered here.
 ----------------------------------------------------------------------------------
 GenerateBUFG: if kAddBUFG generate
-   ResyncToBUFG_X: entity work.ResyncToBUFG
+   ResyncToBUFG_X: entity work.ResyncToBUFG12_14b
       port map (
          -- Video in
          piData => pData,

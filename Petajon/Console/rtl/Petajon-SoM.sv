@@ -29,7 +29,7 @@
 
 module Petajon_SoM(sys_rst, sys_clk_i, clk8, clk14,
 	led_1, /*init_calib_complete,*/
-	FAD, FSEL, FALE, FRD, FBEN, FCDIR, FBDIR, FRDYN, RDYN, FMRQ, MS, FINT, FINTA,
+	FAD, FALE, FRD, FBEN, FCDIR, FBDIR, FRDYN, RDYN, FMRQ, MS, FINT, FINTA,
 	KBDDAT, KBDCLK, MSEDAT, MSECLK,
 	AUD, uart_rxd, uart_txd, randi,
 	HCLKN, HCLKP, HD0N, HD0P, HD1N, HD1P, HD2N, HD2P,
@@ -119,8 +119,6 @@ input FRDAT1N;
 input FRDAT1P;
 input FRDAT2N;
 input FRDAT2P;
-input FRDAT2N;
-input FRDAT2P;
 input FRDAT3N;
 input FRDAT3P;
 input FRDAT4N;
@@ -166,6 +164,7 @@ output [0:0] ddr3_odt;
 parameter LOW = 1'b0;
 parameter HIGH = 1'b1;
 
+reg [1:0] active_ch;
 reg xcs;
 reg xcyc;
 reg xstb;
@@ -189,8 +188,8 @@ wire sr,cr,rb;
 wire pclk;
 reg pack;
 reg [31:0] pbus_dati;
-wire [131:0] packeti;
-reg [131:0] packetir;
+wire [35:0] packeti0, packeti1, packeti2;
+reg [35:0] packetir0, packetir1, packetir2;
 
 wire br_ack;
 wire [31:0] br_dato;
@@ -349,8 +348,8 @@ assign rst = !locked;
 
 Petajon_clkgen3 ucg3
 (
-	.clk320(clk500),
-  .clk64(clk71),
+	.clk500(clk500),
+  .clk71(clk71),
   .reset(sys_rst),
   .locked(),
   .clk_in1(bsys_clk)
@@ -380,22 +379,68 @@ ur2d1
 );
 
 
-reg [131:0] packet;
+reg [35:0] packet0;
 OPCBusTransmitter #(
 	.kGenerateSerialClk(1'b0),
 	.kClkPrimitive("MMCM"),
 	.kClkRange(2),
 	.kRstActiveHigh(1'b1)
 )
-ur2d2 
+uopct1
 (
 	.TMDS_Clk_p(FTCLKP),
 	.TMDS_Clk_n(FTCLKN),
-	.TMDS_Data_p({FTDAT10P,FTDAT9P,FTDAT8P,FTDAT7P,FTDAT6P,FTDAT5P,FTDAT4P,FTDAT3P,FTDAT2P,FTDAT1P,FTDAT0P}),
-	.TMDS_Data_n({FTDAT10N,FTDAT9N,FTDAT8N,FTDAT7N,FTDAT6N,FTDAT5N,FTDAT4N,FTDAT3N,FTDAT2N,FTDAT1N,FTDAT0N}),
+	.TMDS_Data_p({FTDAT2P,FTDAT1P,FTDAT0P}),
+	.TMDS_Data_n({FTDAT2N,FTDAT1N,FTDAT0N}),
 	.aRst(rst),
 	.aRst_n(~rst),
-	.vid_pData(packet),
+	.vid_pData(packet0),
+	.vid_pVDE(1'b1),
+	.vid_pHSync(1'b0),
+	.vid_pVSync(1'b0),
+	.PixelClk(clk71),
+	.SerialClk(clk500)
+);
+
+reg [35:0] packet1;
+OPCBusTransmitter #(
+	.kGenerateSerialClk(1'b0),
+	.kClkPrimitive("MMCM"),
+	.kClkRange(2),
+	.kRstActiveHigh(1'b1)
+)
+uopct2
+(
+	.TMDS_Clk_p(FTDAT3P),
+	.TMDS_Clk_n(FTDAT3N),
+	.TMDS_Data_p({FTDAT6P,FTDAT5P,FTDAT4P}),
+	.TMDS_Data_n({FTDAT6N,FTDAT5N,FTDAT4N}),
+	.aRst(rst),
+	.aRst_n(~rst),
+	.vid_pData(packet0),
+	.vid_pVDE(1'b1),
+	.vid_pHSync(1'b0),
+	.vid_pVSync(1'b0),
+	.PixelClk(clk71),
+	.SerialClk(clk500)
+);
+
+reg [35:0] packet2;
+OPCBusTransmitter #(
+	.kGenerateSerialClk(1'b0),
+	.kClkPrimitive("MMCM"),
+	.kClkRange(2),
+	.kRstActiveHigh(1'b1)
+)
+uopct3
+(
+	.TMDS_Clk_p(FTDAT7P),
+	.TMDS_Clk_n(FTDAT7N),
+	.TMDS_Data_p({FTDAT10P,FTDAT9P,FTDAT8P}),
+	.TMDS_Data_n({FTDAT10N,FTDAT9N,FTDAT8N}),
+	.aRst(rst),
+	.aRst_n(~rst),
+	.vid_pData(packet0),
 	.vid_pVDE(1'b1),
 	.vid_pHSync(1'b0),
 	.vid_pVSync(1'b0),
@@ -412,15 +457,15 @@ OPCBusReceiver #
 	.kEdidFileName("900p_edid.txt"),//;  -- Select EDID file to use
 	//-- 7-series specific
 	.kIDLY_TapValuePs(78),// : natural := 78; --delay in ps per tap
-	.kIDLY_TapWidth(7)// : natural := 5
+	.kIDLY_TapWidth(5)// : natural := 5
 ) // number of bits for IDELAYE2 tap counter   
-udvirgb1
+uopcr1
 (
 	// -- DVI 1.0 TMDS video interface
 	.TMDS_Clk_p(FRCLKP),	// : in std_logic;
 	.TMDS_Clk_n(FRCLKN),	// : in std_logic;
-	.TMDS_Data_p({FRDAT10P,FRDAT9P,FRDAT8P,FRDAT7P,FRDAT6P,FRDAT5P,FRDAT4P,FRDAT3P,FRDAT2P,FRDAT1P,FRDAT0P}),// : in std_logic_vector(2 downto 0);
-	.TMDS_Data_n({FRDAT10N,FRDAT9N,FRDAT8N,FRDAT7N,FRDAT6N,FRDAT5N,FRDAT4N,FRDAT3N,FRDAT2N,FRDAT1N,FRDAT0N}),// : in std_logic_vector(2 downto 0);
+	.TMDS_Data_p({FRDAT2P,FRDAT1P,FRDAT0P}),// : in std_logic_vector(2 downto 0);
+	.TMDS_Data_n({FRDAT2N,FRDAT1N,FRDAT0N}),// : in std_logic_vector(2 downto 0);
 
 	//-- Auxiliary signals 
 	.RefClk(clk200),// : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
@@ -428,7 +473,103 @@ udvirgb1
 	.aRst_n(~rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
 
 	//-- Video out
-	.vid_pData(packeti),// : out std_logic_vector(23 downto 0);
+	.vid_pData(packeti0),// : out std_logic_vector(23 downto 0);
+	.vid_pVDE(),	// : out std_logic;
+	.vid_pHSync(),	// : out std_logic;
+	.vid_pVSync(),	// : out std_logic;
+
+	.PixelClk(pclk),	// : out std_logic; --pixel-clock recovered from the DVI interface
+
+	.SerialClk(),	// : out std_logic; -- advanced use only; 5x PixelClk
+	.aPixelClkLckd(),// : out std_logic; -- advanced use only; PixelClk and SerialClk stable
+
+	//-- Optional DDC port
+	.DDC_SDA_I(1'b1),// : in std_logic;
+	.DDC_SDA_O(),// : out std_logic;
+	.DDC_SDA_T(),// : out std_logic;
+	.DDC_SCL_I(1'b1),// : in std_logic;
+	.DDC_SCL_O(),// : out std_logic; 
+	.DDC_SCL_T(),// : out std_logic;
+
+	.pRst(rst),	// : in std_logic; -- synchronous reset; will restart locking procedure
+	.pRst_n(~rst)	// : in std_logic -- synchronous reset; will restart locking procedure
+);
+
+
+OPCBusReceiver #
+(
+	.kEmulateDDC(1'b0),	// : boolean := true; --will emulate a DDC EEPROM with basic EDID, if set to yes 
+	.kRstActiveHigh(1'b1),	// : boolean := true; --true, if active-high; false, if active-low
+	.kAddBUFG(1'b1),	// : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
+	.kClkRange(2),// : natural := 2;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+	.kEdidFileName("900p_edid.txt"),//;  -- Select EDID file to use
+	//-- 7-series specific
+	.kIDLY_TapValuePs(78),// : natural := 78; --delay in ps per tap
+	.kIDLY_TapWidth(5)// : natural := 5
+) // number of bits for IDELAYE2 tap counter   
+uopcr2
+(
+	// -- DVI 1.0 TMDS video interface
+	.TMDS_Clk_p(FRDAT3P),	// : in std_logic;
+	.TMDS_Clk_n(FRDAT3N),	// : in std_logic;
+	.TMDS_Data_p({FRDAT6P,FRDAT5P,FRDAT4P}),// : in std_logic_vector(2 downto 0);
+	.TMDS_Data_n({FRDAT6N,FRDAT5N,FRDAT4N}),// : in std_logic_vector(2 downto 0);
+
+	//-- Auxiliary signals 
+	.RefClk(clk200),// : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
+	.aRst(rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+	.aRst_n(~rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+
+	//-- Video out
+	.vid_pData(packeti1),// : out std_logic_vector(23 downto 0);
+	.vid_pVDE(),	// : out std_logic;
+	.vid_pHSync(),	// : out std_logic;
+	.vid_pVSync(),	// : out std_logic;
+
+	.PixelClk(pclk),	// : out std_logic; --pixel-clock recovered from the DVI interface
+
+	.SerialClk(),	// : out std_logic; -- advanced use only; 5x PixelClk
+	.aPixelClkLckd(),// : out std_logic; -- advanced use only; PixelClk and SerialClk stable
+
+	//-- Optional DDC port
+	.DDC_SDA_I(1'b1),// : in std_logic;
+	.DDC_SDA_O(),// : out std_logic;
+	.DDC_SDA_T(),// : out std_logic;
+	.DDC_SCL_I(1'b1),// : in std_logic;
+	.DDC_SCL_O(),// : out std_logic; 
+	.DDC_SCL_T(),// : out std_logic;
+
+	.pRst(rst),	// : in std_logic; -- synchronous reset; will restart locking procedure
+	.pRst_n(~rst)	// : in std_logic -- synchronous reset; will restart locking procedure
+);
+
+
+OPCBusReceiver #
+(
+	.kEmulateDDC(1'b0),	// : boolean := true; --will emulate a DDC EEPROM with basic EDID, if set to yes 
+	.kRstActiveHigh(1'b1),	// : boolean := true; --true, if active-high; false, if active-low
+	.kAddBUFG(1'b1),	// : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
+	.kClkRange(2),// : natural := 2;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+	.kEdidFileName("900p_edid.txt"),//;  -- Select EDID file to use
+	//-- 7-series specific
+	.kIDLY_TapValuePs(78),// : natural := 78; --delay in ps per tap
+	.kIDLY_TapWidth(5)// : natural := 5
+) // number of bits for IDELAYE2 tap counter   
+uopcr3
+(
+	// -- DVI 1.0 TMDS video interface
+	.TMDS_Clk_p(FRDAT7P),	// : in std_logic;
+	.TMDS_Clk_n(FRDAT7N),	// : in std_logic;
+	.TMDS_Data_p({FRDAT10P,FRDAT9P,FRDAT8P}),// : in std_logic_vector(2 downto 0);
+	.TMDS_Data_n({FRDAT10N,FRDAT9N,FRDAT8N}),// : in std_logic_vector(2 downto 0);
+
+	//-- Auxiliary signals 
+	.RefClk(clk200),// : in std_logic; --200 MHz reference clock for IDELAYCTRL, reset, lock monitoring etc.
+	.aRst(rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+	.aRst_n(~rst),	// : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
+
+	//-- Video out
+	.vid_pData(packeti2),// : out std_logic_vector(23 downto 0);
 	.vid_pVDE(),	// : out std_logic;
 	.vid_pHSync(),	// : out std_logic;
 	.vid_pVSync(),	// : out std_logic;
@@ -465,35 +606,35 @@ begin
 case(state64)
 IDLE:
 	begin
-		packet <= 24'hFFFFFF;
+		packet0 <= 24'hFFFFFF;
 		if (cyc & stb & master & cs_pbus) begin
-			packet <= {4'h0,adr[31:12]};
+			packet0 <= {4'h0,adr[31:12]};
 			state64 <= we ? ST2 : ST6;
 		end
 	end
 ST2:
 	begin
-		packet <= {4'h1,adr[11:0],dato[31:24]};
+		packet0 <= {4'h1,adr[11:0],dato[31:24]};
 		state64 <= ST3;
 	end
 ST3:
 	begin
-		packet <= {4'h2,dato[23:4]};
+		packet0 <= {4'h2,dato[23:4]};
 		state64 <= ST4;
 	end
 ST4:
 	begin
-		packet <= {4'h3,dato[3:0],sel[3:0],12'hAAA};
+		packet0 <= {4'h3,dato[3:0],sel[3:0],12'hAAA};
 		state64 <= ST5;
 	end
 ST5:
 	begin
-		packet <= 24'hFFFFFF;
+		packet0 <= 24'hFFFFFF;
 		state64 <= IDLE;
 	end
 ST6:
 	begin
-		packet <= {4'h4,adr[11:0],sel[3:0],4'h5};
+		packet0 <= {4'h4,adr[11:0],sel[3:0],4'h5};
 	end
 default:	state64 <= IDLE;
 endcase
@@ -630,7 +771,7 @@ assign FRD = FCDIR ? 1'bz : FRDO;
 always @(posedge clk80)
 	if (~master & FALE) begin
 		xadr <= FAD;
-		xcs <= ~|FAD[31:28];
+		xcs <= 1'b0;
 	end
 always @(posedge clk80)
 	if (~FALE)
@@ -662,20 +803,51 @@ always @(posedge clk80)
 
 always @(posedge clk71)
 begin
-	packetir <= packeti;	// register across clock domain
-case(packetir[23:21])
-4'hF:	;		// all ones = IDLE
-4'h5:	pbus_dati[31:12] <= packetir[19:0];
-4'h6:
+	packetir0 <= packeti0;	// register across clock domain
+	packetir1 <= packeti1;	// register across clock domain
+	packetir2 <= packeti2;	// register across clock domain
+case(active_ch)
+2'd0:
 	begin
-		pbus_dati[11:0] <= packetir[19:8];
-		pack <= 1'b1;
+	case(packetir0[35:32])
+	4'hF:	;		// all ones = IDLE
+	4'h5:
+		begin
+			pbus_dati[31:0] <= packetir0[31:0];
+			pack <= 1'b1;
+		end
+	endcase
+	if (~(cyc & stb & master & cs_pbus))
+		pack <= 1'b0;
+	end
+2'd1:
+	begin
+	case(packetir1[35:32])
+	4'hF:	;		// all ones = IDLE
+	4'h5:
+		begin
+			pbus_dati[31:0] <= packetir1[31:0];
+			pack <= 1'b1;
+		end
+	endcase
+	if (~(cyc & stb & master & cs_pbus))
+		pack <= 1'b0;
+	end
+2'd2:
+	begin
+	case(packetir2[35:32])
+	4'hF:	;		// all ones = IDLE
+	4'h5:
+		begin
+			pbus_dati[31:0] <= packetir2[31:0];
+			pack <= 1'b1;
+		end
+	endcase
+	if (~(cyc & stb & master & cs_pbus))
+		pack <= 1'b0;
 	end
 endcase
-if (~(cyc & stb & master & cs_pbus))
-	pack <= 1'b0;
 end
-
 
 Petajon_pmc upmc1
 (

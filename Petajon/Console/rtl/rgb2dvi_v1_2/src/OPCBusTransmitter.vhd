@@ -71,15 +71,15 @@ entity OPCBusTransmitter is
       -- DVI 1.0 TMDS video interface
       TMDS_Clk_p : out std_logic;
       TMDS_Clk_n : out std_logic;
-      TMDS_Data_p : out std_logic_vector(10 downto 0);
-      TMDS_Data_n : out std_logic_vector(10 downto 0);
+      TMDS_Data_p : out std_logic_vector(2 downto 0);
+      TMDS_Data_n : out std_logic_vector(2 downto 0);
       
       -- Auxiliary signals 
       aRst : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
       -- Video in
-      vid_pData : in std_logic_vector(131 downto 0);
+      vid_pData : in std_logic_vector(35 downto 0);
       vid_pVDE : in std_logic;
       vid_pHSync : in std_logic;
       vid_pVSync : in std_logic;
@@ -90,11 +90,11 @@ entity OPCBusTransmitter is
 end OPCBusTransmitter;
 
 architecture Behavioral of OPCBusTransmitter is
-type dataOut_t is array (10 downto 0) of std_logic_vector(11 downto 0);
-type dataOutRaw_t is array (10 downto 0) of std_logic_vector(13 downto 0);
+type dataOut_t is array (2 downto 0) of std_logic_vector(11 downto 0);
+type dataOutRaw_t is array (2 downto 0) of std_logic_vector(13 downto 0);
 signal pDataOut : dataOut_t;
 signal pDataOutRaw : dataOutRaw_t;
-signal pVde, pC0, pC1 : std_logic_vector(10 downto 0);
+signal pVde, pC0, pC1 : std_logic_vector(2 downto 0);
 signal aRst_int, aPixelClkLckd : std_logic;
 signal PixelClkIO, SerialClkIO, aRstLck, pRstLck : std_logic;
 begin
@@ -154,7 +154,7 @@ ClockSerializer: entity work.OutputSERDES
       pDataOut => "11111110000000",
       aRst => pRstLck);
 
-DataEncoders: for i in 0 to 10 generate
+DataEncoders: for i in 0 to 2 generate
    DataEncoder: entity work.TMDS_Encoder12_14b
       port map (
          PixelClk => PixelClk,
@@ -185,18 +185,10 @@ end generate DataEncoders;
 pDataOut(0) <= vid_pData(11 downto 0); -- blue is channel 0
 pDataOut(1) <= vid_pData(23 downto 12); -- green is channel 1
 pDataOut(2) <= vid_pData(35 downto 24); -- red is channel 2
-pDataOut(3) <= vid_pData(47 downto 36);
-pDataOut(4) <= vid_pData(59 downto 48);
-pDataOut(5) <= vid_pData(71 downto 60);
-pDataOut(6) <= vid_pData(83 downto 72);
-pDataOut(7) <= vid_pData(95 downto 84);
-pDataOut(8) <= vid_pData(107 downto 96);
-pDataOut(9) <= vid_pData(119 downto 108);
-pDataOut(9) <= vid_pData(131 downto 120);
 pC0(2 downto 1) <= (others => '0'); -- default is low for control signals
 pC1(2 downto 1) <= (others => '0'); -- default is low for control signals
 pC0(0) <= vid_pHSync; -- channel 0 carries control signals too
 pC1(0) <= vid_pVSync; -- channel 0 carries control signals too
-pVde <= vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE & vid_pVDE; -- all of them are either active or blanking at once
+pVde <= vid_pVDE & vid_pVDE & vid_pVDE; -- all of them are either active or blanking at once
 
 end Behavioral;

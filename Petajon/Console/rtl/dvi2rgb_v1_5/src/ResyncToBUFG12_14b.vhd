@@ -1,12 +1,12 @@
 -------------------------------------------------------------------------------
 --
--- File: DVI_Constants.vhd
+-- File: ResyncToBUFG12_14b.vhd
 -- Author: Elod Gyorgy
 -- Original Project: HDMI input on 7-series Xilinx FPGA
--- Date: 8 October 2014
+-- Date: 7 July 2015
 --
 -------------------------------------------------------------------------------
--- (c) 2014 Copyright Digilent Incorporated
+-- (c) 2015 Copyright Digilent Incorporated
 -- All Rights Reserved
 -- 
 -- This program is free software; distributed under the terms of BSD 3-clause 
@@ -38,9 +38,13 @@
 -------------------------------------------------------------------------------
 --
 -- Purpose:
--- This package defines constants/parameters taken from the DVI specs.
+-- This module inserts a BUFG on the PixelClk path so that the pixel bus can be
+-- routed globally on the device. It also synchronizes data to the new BUFG
+-- clock. 
 --  
 -------------------------------------------------------------------------------
+
+
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -51,25 +55,48 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+library UNISIM;
+use UNISIM.VComponents.all;
 
-package DVI_Constants is
-   -- DVI Control Tokens
-   constant kCtlTkn0 : std_logic_vector(9 downto 0) := "1101010100";
-   constant kCtlTkn1 : std_logic_vector(9 downto 0) := "0010101011";
-   constant kCtlTkn2 : std_logic_vector(9 downto 0) := "0101010100";
-   constant kCtlTkn3 : std_logic_vector(9 downto 0) := "1010101011";
-   
-   -- DVI Control Tokens
-   constant kCtlTkn0a : std_logic_vector(13 downto 0) := "11010101010100";
-   constant kCtlTkn1a : std_logic_vector(13 downto 0) := "00101010101011";
-   constant kCtlTkn2a : std_logic_vector(13 downto 0) := "01010101010100";
-   constant kCtlTkn3a : std_logic_vector(13 downto 0) := "10101010101011";
+entity ResyncToBUFG12_14b is
+   Port (
+      -- Video in
+      piData : in std_logic_vector(35 downto 0);
+      piVDE : in std_logic;
+      piHSync : in std_logic;
+      piVSync : in std_logic;
+      PixelClkIn : in std_logic;
+      -- Video out
+      poData : out std_logic_vector(35 downto 0);
+      poVDE : out std_logic;
+      poHSync : out std_logic;
+      poVSync : out std_logic;
+      PixelClkOut : out std_logic
+   );
+end ResyncToBUFG12_14b;
 
-   constant kMinTknCntForBlank : natural := 128; --tB
-   constant kBlankTimeoutMs : natural := 50;
-end DVI_Constants;
+architecture Behavioral of ResyncToBUFG12_14b is
 
-package body DVI_Constants is 
-end DVI_Constants;
+signal PixelClkInt : std_logic;
+
+begin
+-- Insert BUFG on clock path
+InstBUFG: BUFG
+   port map (
+      O => PixelClkInt, -- 1-bit output: Clock output
+      I => PixelClkIn  -- 1-bit input: Clock input
+   );
+PixelClkOut <= PixelClkInt;
+
+-- Try simple registering
+RegisterData: process(PixelClkInt)
+begin
+   if Rising_Edge(PixelClkInt) then
+      poData <= piData;
+      poVDE <= piVDE;
+      poHSync <= piHSync;
+      poVSync <= piVSync; 
+   end if;
+end process RegisterData;
+
+end Behavioral;
