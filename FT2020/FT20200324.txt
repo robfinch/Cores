@@ -1,0 +1,27 @@
+// 16 true/false predicate registers, predicate 0 is always true
+// 32 integer registers
+// 24-bit code addressing / 32 bit data addressing
+//
+// {RR}:	pppp 00010 ttttt aaaaa bbbbb oooooooo
+// ADD:		pppp 00010 ttttt aaaaa bbbbb 00000100
+// SUB:		pppp 00010 ttttt aaaaa bbbbb 00000101
+// AND:		pppp 00010 ttttt aaaaa bbbbb 00001000
+// OR:		pppp 00010 ttttt aaaaa bbbbb 00001001
+// XOR:		pppp 00010 ttttt aaaaa bbbbb 00001010
+// MUL:		pppp 00010 ttttt aaaaa bbbbb 00001011
+// SHL:		pppp 00010 ttttt aaaaa bbbbb 00010000
+// SHR:		pppp 00010 ttttt aaaaa bbbbb 00010001
+// ASR:		pppp 00010 ttttt aaaaa bbbbb 00010010
+// RET:		pppp 00010 00000 ----- ----- 10000000
+// NOP:		pppp 00010 00000 ----- ----- 11101010
+// Cxx:		pppp 00010 -PPPP aaaaa bbbbb 1111oooo
+// ADDi:	pppp 00100 ttttt aaaaa nnnnnnnnnnnnn
+// ANDi:	pppp 01000 ttttt aaaaa nnnnnnnnnnnnn
+// ORi:		pppp 01001 ttttt aaaaa nnnnnnnnnnnnn
+// XORi:	pppp 01010 ttttt aaaaa nnnnnnnnnnnnn
+// LD:		pppp 10000 ttttt aaaaa nnnnnnnnnnnnn
+// ST:		pppp 10001 sssss aaaaa nnnnnnnnnnnnn
+// ADDIS:	pppp 1001n ttttt nnnnnnnnnnnnnnnnnn
+// JMP:		pppp 10111 l aaaaaaaaaaaaaaaaaaaaaa
+// Cxxi:	pppp 11ooo oPPPP aaaaa nnnnnnnnnnnnn
+// A ton of compares including a generate carry into predicate register
