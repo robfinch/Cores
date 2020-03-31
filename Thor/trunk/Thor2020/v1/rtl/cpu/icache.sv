@@ -33,7 +33,7 @@
 
 module L1_icache_mem(clk, wr, lineno, i, f, o, fo);
 parameter pLines = 64;
-localparam pLNMSB = $clog2(pLines);
+localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
@@ -79,7 +79,7 @@ endmodule
 module L1_icache_cmptagNway(rst, clk, nxt, wr, invline, invall, adr, lineno, hit, missadr);
 parameter pLines = 64;
 parameter AMSB = 31;
-localparam pLNMSB = $clog2(pLines);
+localparam pLNMSB = $clog2(pLines)-1;
 localparam pMSB = pLines==128 ? 10 : 9;
 input rst;
 input clk;

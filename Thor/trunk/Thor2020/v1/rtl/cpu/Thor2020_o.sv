@@ -22,60 +22,40 @@
 // ============================================================================
 
 `include "..\inc\Thor2020-config.sv"
-`include "..\inc\Thor2020-const.sv"
 `include "..\inc\Thor2020-types.sv"
-`include "..\fpu\fpConfig.sv"
 
 module Thor2020(rst,clk,hartid,
   iicl_o,icti_o,ibte_o,icyc_o,istb_o,iack_i,isel_o,iadr_o,idat_i,
   cyc_o,stb_o,ack_i,we_o,sel_o,adr_o,dat_o,dat_i);
 parameter WID=64;
-parameter FPWID=80;
 parameter AMSB = `AMSB;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter RSTIP = 64'hFFFFFFFFFFFC0000;
-`include "..\fpu\fpSize.sv"
 input rst; input clk; input [WID-1:0] hartid;
 output iicl_o; output [2:0] icti_o; output [1:0] ibte_o; output reg icyc_o; output reg istb_o; input iack_i; output [15:0] isel_o;
 output reg [AMSB:0] iadr_o; input [127:0] idat_i;
 output reg cyc_o; output reg stb_o; input ack_i; output reg we_o; output reg [7:0] sel_o; output tAddress adr_o; output tData dat_o; input tData dat_i;
-parameter RR=7'd2,R2=7'd2,ADDI = 7'd4,CMPI=7'd6,ANDI=7'd8,ORI=7'd9,XORI=7'd10,ADD=7'd4,SUB=7'd5,CMP=7'b0100???,AND=7'd8,
+parameter RR=7'd2,R2=7'd2,ADDI = 7'd4,CMPI=7'd6,ANDI=7'd8,ORI=7'd9,XORI=7'd10,ADD=7'd4,SUB=7'd5,CMP=7'd6,AND=7'd8,
 OR=7'd9,XOR=7'd10,ANDCM=7'd11,NAND=7'd12,NOR=7'd13,XNOR=7'd14,ORCM=7'd15;
 parameter ADDIS=7'd30,ANDIS=7'd16,ORIS=7'd17,XORIS=7'd18;
-parameter LD=7'b101????,LDD=7'h53,ST=7'b110????,STB=7'h60,STH=7'h61,STW=7'h62,STD=7'h63;
-parameter JMP_CTOP=7'd73,JMP_CEXIT=7'd74,JMP_WTOP=7'd75,JMP_WEXIT=7'd76,LOOP=7'd76,JMP=7'd72,JML=7'd79,LDI=7'd77;
+parameter LD=7'b101????,LDD=7'h53,ST=7'b110????,STB=7'h60,STH=7'h61,STW=7'h62,STD=7'h63,LOOP=7'd77,JMP=7'd78,JML=7'd79,LDI=7'd77;
 parameter RET=7'd79,NOP=8'b11101010,SHL=7'd16,SHR=7'd17,ASR=7'd18,SHLI=7'd20,SHRI=7'd21,ASRI=7'd22,MFSPR=7'd32,MTSPR=7'd33;
 parameter MUL=7'd24,MULU=7'd25,DIV=7'd26,DIVU=7'd27;
-parameter CEQ=7'd40,CNE=7'd41,CLT=7'd32,CGE=7'd33,CLE=7'd34,CGT=7'd35,CLTU=7'd36,CGEU=7'd37,CLEU=7'd38,CGTU=7'd39;
+parameter CEQ=4'd0,CNE=4'd1,CLT=4'd4,CGE=4'd5,CLE=4'd6,CGT=4'd7,CLTU=4'd8,CGEU=4'd9,CLEU=4'd10,CGTU=4'd11,CADC=4'd12,COFL=4'd13,COD=4'd14;
 parameter NOP_INSN = 32'b000_00000_00000_00000_000000_1110_1010;
-parameter FMADD=7'd112,FMSUB=7'd113,FNMADD=7'd114,FNMSUB=7'd115;
 reg [1:0] ol = 2'b11;
 reg [3:0] state;
 parameter ST_FETCH=4'd1,ST_RUN = 4'd2,ST_LD0=4'd3,ST_LD1=4'd4,ST_LD2=4'd5,ST_ST=4'd6,ST_MULDIV=4'd7,ST_ST2=4'd11,ST_ST3=4'd12;
-parameter ST_LD0A=4'd8,ST_LD1A=4'd9,ST_LD2A=4'd10,ST_FMADD=4'd13;
+parameter ST_LD0A=4'd8,ST_LD1A=4'd9,ST_LD2A=4'd10;
 reg [127:0] ir;
 reg [31:0] ip;
 wire [40:0] ir0 = ir[40:0]; wire [40:0] ir1 = ir[81:41]; wire [40:0] ir2 = ir[122:82]; wire [2:0] irb = ir[125:123];
-wire [6:0] opcode0 = ir0[40:34]; wire [6:0] opcode1 = ir1[40:34]; wire [6:0] opcode2 = ir2[40:34];
-wire [6:0] funct70 = ir0[33:27]; wire [6:0] funct71 = ir1[33:27]; wire [6:0] funct72 = ir2[33:27];
-wire [5:0] Ra0 = ir0[`cRA]; wire [5:0] Rb0 = ir0[`cRB]; wire [5:0] Rc0 = ir0[`cRC]; wire [5:0] Rt0 = ir0[`cRT];
-wire [5:0] Ra1 = ir1[`cRA]; wire [5:0] Rb1 = ir1[`cRB]; wire [5:0] Rc2 = ir1[`cRC]; wire [5:0] Rt1 = ir1[`cRT];
-wire [5:0] Ra2 = ir2[`cRA]; wire [5:0] Rb2 = ir2[`cRB]; wire [5:0] Rc1 = ir2[`cRC]; wire [5:0] Rt2 = ir2[`cRT];
+wire [6:0] opcode0 = ir0[14:8]; wire [6:0] opcode1 = ir1[14:8]; wire [6:0] opcode2 = ir2[14:8];
+wire [6:0] funct70 = ir0[40:34]; wire [6:0] funct71 = ir1[40:34]; wire [6:0] funct72 = ir2[40:34];
 wire isFloat0 = opcode0 >= 7'd112 && opcode0 <= 7'd121;
 wire isFloat1 = opcode1 >= 7'd112 && opcode1 <= 7'd121;
 wire isFloat2 = opcode2 >= 7'd112 && opcode2 <= 7'd121;
-wire [6:0] fltfunc0 = ir0[30:24];
-wire [6:0] fltfunc1 = ir1[30:24];
-wire [6:0] fltfunc2 = ir2[30:24];
-wire fmadd0 = opcode0==FMADD; wire fmsub0 = opcode0==FMSUB;
-wire fnmadd0 = opcode0==FNMADD; wire fnmsub0 = opcode0==FNMSUB;
-wire fmadd1 = opcode1==FMADD; wire fmsub1 = opcode1==FMSUB;
-wire fnmadd1 = opcode1==FNMADD; wire fnmsub1 = opcode1==FNMSUB;
-wire fcvt0 = opcode0==`cFLOAT2 && fltfunc0==`cFCVT;
-wire fcvt1 = opcode1==`cFLOAT2 && fltfunc1==`cFCVT;
-wire ftrunc0 = opcode0==`cFLOAT2 && fltfunc0==`cFTRUNC;
-wire ftrunc1 = opcode1==`cFLOAT2 && fltfunc1==`cFTRUNC;
 reg [2:0] ex;
 wire ldstL = state==ST_ST3;
 reg ld0, ld1, ld2;
@@ -85,9 +65,6 @@ reg vcyc, vstb, lcyc, lstb;
 reg [7:0] vsel;
 tAddress ad, la, va;
 tData dati, dato;
-wire po0;
-wire po1;
-wire po2;
 integer n;
 
 wire clkg = clk;
@@ -150,15 +127,12 @@ wire [127:0] ROM_dat, L1_dat, L2_dat;
 wire L1_ihit, L2_ihit, L2_ihita;
 wire L2_ld, L2_nxt;
 wire [2:0] L2_cnt;
-wire ic_idle;
 wire ivcyc, ivstb;
 reg ilcyc, ilstb;
 tAddress L1_adr, L2_adr;
 tAddress missadr;
 tAddress ivadr, iladr;
 assign L2_ihit = isROM|L2_ihita;
-
-wire ihit = L1_ihit & ic_idle;
 
 L1_icache uic1
 (
@@ -201,7 +175,7 @@ ICController uicc1 (
   .missadr(missadr),
   .hit(L1_ihit),
   .bstate(5'd0),  // BIDLE
-  .idle(ic_idle),
+  .idle(),
 	.invline(invline),
 	.invlineAddr(),
 	.icl_ctr(),
@@ -244,11 +218,11 @@ bootrom ubr1 (
   .rst(rst),
   .clk(clkg),
   .cs(1'b1),
-  .adr0(L1_adr[17:0]),
+  .adr0(L1_adr[13:4]),
   .o0(ROM_dat),
-  .adr1(18'h0),
+  .adr1(),
   .o1(),
-  .adr2(18'h0),
+  .adr2(),
   .o2()
 );
 
@@ -454,60 +428,72 @@ wire cntdone0;
 wire cntdone1;
 wire cntdone2;
 
-muldivCnt umdc1 (rst, clk, state, po0, opcode0, funct70, fltfunc0, cnt0, cntdone0);
-muldivCnt umdc2 (rst, clk, state, po1, opcode1, funct71, fltfunc1, cnt1, cntdone1);
-muldivCnt umdc3 (rst, clk, state, po2, opcode2, funct72, fltfunc2, cnt2, cntdone2);
+muldivCnt umdc1 (rst, clk, state, p0, opcode0, funct70, cnt0, cntdone0);
+muldivCnt umdc2 (rst, clk, state, p1, opcode1, funct71, cnt1, cntdone1);
+muldivCnt umdc3 (rst, clk, state, p2, opcode2, funct72, cnt2, cntdone2);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Predicate logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-reg [63:0] p;                   // predicate register file
-reg [1:0] prfwr0, prfwr1, prfwr2;
-reg prfwrw0, prfwrw1, prfwrw2;
-reg pres0, pres1, pres2;  // predicate result busses
-reg [63:0] presw0, presw1, presw2;
+reg [1:0] p [0:15];             // predicate register file
+reg prfwr0, prfwr1, prfwr2, prfwrw0, prfwrw1, prfwrw2;
+reg prfwr0a, prfwr1a, prfwr2a;
+reg [1:0] pres0, pres1, pres2;  // predicate result busses
+reg [1:0] pres0a, pres1a, pres2a;  // predicate result busses
+reg [31:0] presw0, presw1, presw2;
+wire po0;
+wire po1;
+wire po2;
+
+function fnPcnd;
+input [2:0] cnd;
+input [1:0] p;
+begin
+	case(cnd)
+	3'd0:	fnPcnd = p==2'b10;
+	3'd1:	fnPcnd = 1'b1;
+	3'd2:	fnPcnd = p==2'b00;
+	3'd3:	fnPcnd = p!=2'b00;
+	3'd4:	fnPcnd = p==2'b00 || p==2'b11;
+	3'd5:	fnPcnd = p==2'b01;
+	3'd6:	fnPcnd = p==2'b00 || p==2'b01;
+	3'd7:	fnPcnd = p==2'b11;
+	endcase
+end
+endfunction
 
 always @(posedge clkg)
 if (rst) begin
-	for (n = 0; n < 64; n = n + 1)
-		p[n] <= 1'b0;
-	p[0] <= 1'b1;
+	for (n = 0; n < 32; n = n + 1)
+		p[n] <= 2'b00;
 end
 else begin
-  case(prfwr0)
-  2'b01: p[ir0[11:6]] <= pres0;
-`ifdef SLOW
-  2'b10: p[ir0[11:6]] <= p[ir0[11:6]] | pres0;
-  2'b11: p[ir0[11:6]] <= p[ir0[11:6]] & pres0;
-`endif
-  default:  ;
-  endcase
-  case(prfwr1)
-  2'b01: p[ir1[11:6]] <= pres1;
-`ifdef SLOW
-  2'b10: p[ir1[11:6]] <= p[ir1[11:6]] | pres1;
-  2'b11: p[ir1[11:6]] <= p[ir1[11:6]] & pres1;
-`endif
-  default:  ;
-  endcase
-  case(prfwr2)
-  2'b01: p[ir2[11:6]] <= pres2;
-`ifdef SLOW
-  2'b10: p[ir2[11:6]] <= p[ir2[11:6]] | pres2;
-  2'b11: p[ir2[11:6]] <= p[ir2[11:6]] & pres2;
-`endif
-  default:  ;
-  endcase
+	if (prfwr0) p[ir0[11:6]] <= pres0;
+	if (prfwr1) p[ir1[11:6]] <= pres1;
+	if (prfwr2) p[ir2[11:6]] <= pres2;
 	if (prfwrw2) begin
-	  for (n = 1; n < 64; n = n + 1)
-	    p[n] <= presw2[n];
+	    p[1] <= presw2[3:2];
+	    p[2] <= presw2[5:4];
+	    p[3] <= presw2[7:6];
+	    p[4] <= presw2[9:8];
+	    p[5] <= presw2[11:10];
+	    p[6] <= presw2[13:12];
+	    p[7] <= presw2[15:14];
+	    p[8] <= presw2[17:16];
+	    p[9] <= presw2[19:18];
+	    p[10] <= presw2[21:20];
+	    p[11] <= presw2[23:22];
+	    p[12] <= presw2[25:24];
+	    p[13] <= presw2[27:26];
+	    p[14] <= presw2[29:28];
+	    p[15] <= presw2[31:30];
 	end
-	p[0] <= 1'b1;
+	p[0] <= 2'b01;
 end
-assign po0 = p[ir0[5:0]];
-assign po1 = p[ir1[5:0]] && opcode0 != LDI && opcode0 != JML;
-assign po2 = p[ir2[5:0]];
+assign po0 = fnPcnd(ir0[2:0],p[ir0[6:3]]);
+assign po1 = fnPcnd(ir1[2:0],p[ir1[6:3]]) && ir0[40:34] != LDI && ir0[40:34] != JML;
+assign po2 = fnPcnd(ir2[2:0],p[ir2[6:3]]);
 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -530,10 +516,8 @@ always @(posedge clkg)
 if (rst)
   expatx <= 9'b000_000_000;
 else begin
-  if (state==ST_RUN && ihit && nexpatx==9'd0)
+  if (state==ST_RUN && nexpatx==9'd0)
   	expatx <= expats;
-  else
-    expatx <= expatx << 2'd3;
 end
 
 
@@ -544,12 +528,6 @@ end
 reg [WID-1:0] regfile [0:63];
 reg rfwr0,rfwr1,rfwr2;
 reg [WID-1:0] res0, res1, res2;
-`ifdef SIM
-initial begin
-  for (n = 0; n < 64; n = n + 1)
-    regfile[n] = 0;
-end
-`endif
 always @(posedge clkg)
 begin
 	if (rfwr0) regfile[Rt0] <= res0;
@@ -557,57 +535,18 @@ begin
 	if (rfwr2) regfile[Rt2] <= res2;
 end
 
-reg [FPWID-1:0] fpregfile [0:63];
-reg fprfwr0,fprfwr1,fprfwr2;
-reg [FPWID-1:0] fpres0, fpres1, fpres2;
-always @(posedge clkg)
-begin
-	if (fprfwr0) fpregfile[Rt0] <= fpres0;
-	if (fprfwr1) fpregfile[Rt1] <= fpres1;
-	if (fprfwr2) fpregfile[Rt2] <= fpres2;
-end
-
-
-reg [WID-1:0] a0, fpa0;
-reg [WID-1:0] b0, fpb0;
-reg [WID-1:0] c0, fpc0;
-reg [WID-1:0] s0, fps0;
-reg [WID-1:0] a1, fpa1;
-reg [WID-1:0] b1, fpb1;
-reg [WID-1:0] c1, fpc1;
-reg [WID-1:0] s1, fps1;
-reg [WID-1:0] a2, fpa2;
-reg [WID-1:0] b2, fpb2;
-reg [WID-1:0] c2, fpc2;
-reg [WID-1:0] s2, fps2;
-assign a0 = Ra0==6'd0 ? 64'd0 : regfile[Ra0];
-assign b0 = Rb0==6'd0 ? 64'd0 : regfile[Rb0];
-assign s0 = Rt0==6'd0 ? 64'd0 : regfile[Rt0];
-assign a1 = Ra1==6'd0 ? 64'd0 : regfile[Ra1];
-assign b1 = Rb1==6'd0 ? 64'd0 : regfile[Rb1];
-assign s1 = Rt1==6'd0 ? 64'd0 : regfile[Rt1];
-assign a2 = Ra2==6'd0 ? 64'd0 : regfile[Ra2];
-assign b2 = Rb2==6'd0 ? 64'd0 : regfile[Rb2];
-assign s2 = Rt2==6'd0 ? 64'd0 : regfile[Rt2];
-`ifdef SLOW
-assign c0 = Rc0==6'd0 ? 64'd0 : regfile[Rc0];
-assign c1 = Rc1==6'd0 ? 64'd0 : regfile[Rc1];
-assign c2 = Rc2==6'd0 ? 64'd0 : regfile[Rc2];
-
-assign fpa0 = Ra0==6'd0 ? 80'd0 : fpregfile[Ra0];
-assign fpb0 = Rb0==6'd0 ? 80'd0 : fpregfile[Rb0];
-assign fps0 = Rt0==6'd0 ? 80'd0 : fpregfile[Rt0];
-assign fpa1 = Ra1==6'd0 ? 80'd0 : fpregfile[Ra1];
-assign fpb1 = Rb1==6'd0 ? 80'd0 : fpregfile[Rb1];
-assign fps1 = Rt1==6'd0 ? 80'd0 : fpregfile[Rt1];
-assign fpa2 = Ra2==6'd0 ? 80'd0 : fpregfile[Ra2];
-assign fpb2 = Rb2==6'd0 ? 80'd0 : fpregfile[Rb2];
-assign fps2 = Rt2==6'd0 ? 80'd0 : fpregfile[Rt2];
-
-assign fpc0 = Rc0==6'd0 ? 80'd0 : fpregfile[Rc0];
-assign fpc1 = Rc1==6'd0 ? 80'd0 : fpregfile[Rc1];
-assign fpc2 = Rc2==6'd0 ? 80'd0 : fpregfile[Rc2];
-`endif
+wire [5:0] Ra0 = ir0[18:13]; wire [5:0] Rb0 = ir0[24:19]; wire [5:0] Rt0 = ir0[12:7];
+wire [5:0] Ra1 = ir1[18:13]; wire [5:0] Rb1 = ir1[24:19]; wire [5:0] Rt1 = ir1[12:7];
+wire [5:0] Ra2 = ir2[18:13]; wire [5:0] Rb2 = ir2[24:19]; wire [5:0] Rt2 = ir2[12:7];
+wire [WID-1:0] a0 = Ra0==6'd0 ? 64'd0 : regfile[Ra0];
+wire [WID-1:0] b0 = Rb0==6'd0 ? 64'd0 : regfile[Rb0];
+wire [WID-1:0] s0 = Rt0==6'd0 ? 64'd0 : regfile[Rt0];
+wire [WID-1:0] a1 = Ra1==6'd0 ? 64'd0 : regfile[Ra1];
+wire [WID-1:0] b1 = Rb1==6'd0 ? 64'd0 : regfile[Rb1];
+wire [WID-1:0] s1 = Rt1==6'd0 ? 64'd0 : regfile[Rt1];
+wire [WID-1:0] a2 = Ra2==6'd0 ? 64'd0 : regfile[Ra2];
+wire [WID-1:0] b2 = Rb2==6'd0 ? 64'd0 : regfile[Rb2];
+wire [WID-1:0] s2 = Rt2==6'd0 ? 64'd0 : regfile[Rt2];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Loop counter.
@@ -622,22 +561,19 @@ else
 `endif
 begin
   if (state==ST_RUN) begin
-    if (expatx[8])
+    if (expatx[8] & po2)
       case(opcode2)
       LOOP: if (lc != 64'd0) lc <= lc - 2'd1;
-      JMP_CTOP: if (po0 && lc != 64'd0) lc <= lc - 2'd1;
       default:  ;
       endcase
-    if (expatx[7])
+    if (expatx[7] & po1)
       case(opcode1)
       LOOP: if (lc != 64'd0) lc <= lc - 2'd1;
-      JMP_CTOP: if (po1 && lc != 64'd0) lc <= lc - 2'd1;
       default:  ;
       endcase
-    if (expatx[6])
+    if (expatx[6] & po0)
       case(opcode0)
       LOOP: if (lc != 64'd0) lc <= lc - 2'd1;
-      JMP_CTOP: if (po2 && lc != 64'd0) lc <= lc - 2'd1;
       default:  ;
       endcase
     // Instructions are evaluated in order so that the last MTSPR takes
@@ -645,8 +581,8 @@ begin
     if (expatx[6] & po0)
   	  case(opcode0)
   	  R2:
-  	    case(funct70)
-  	    MTSPR:  if (ir0[`cSPR]==12'h017) lc <= s0;
+  	    case(ir0[40:34])
+  	    MTSPR:  if (ir0[32:21]==12'h017) lc <= s0;
   	    default : ;
   	    endcase
     	default:  ;
@@ -654,8 +590,8 @@ begin
     if (expatx[7] & po1)
   	  case(opcode1)
   	  R2:
-  	    case(funct71)
-  	    MTSPR:  if (ir1[`cSPR]==12'h017) lc <= s1;
+  	    case(ir1[40:34])
+  	    MTSPR:  if (ir1[32:21]==12'h017) lc <= s1;
   	    default : ;
   	    endcase
     	default:  ;
@@ -663,8 +599,8 @@ begin
     if (expatx[8] & po2)
   	  case(opcode2)
   	  R2:
-  	    case(funct72)
-  	    MTSPR:  if (ir2[`cSPR]==12'h017) lc <= s2;
+  	    case(ir2[40:34])
+  	    MTSPR:  if (ir2[32:24]==12'h017) lc <= s2;
   	    default : ;
   	    endcase
     	default:  ;
@@ -675,16 +611,6 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Link Register
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-function fnIpPlus5;
-input [AMSB:0] p;
-case(p[3:0])
-4'h0: fnIpPlus5 = {p[AMSB:4],4'h5};
-4'h5: fnIpPlus5 = {p[AMSB:4],4'hA};
-4'hA: fnIpPlus5 = {p[AMSB:4]+2'd1,4'h0};
-default:  ;
-endcase
-endfunction
 
 reg [AMSB:0] lr [0:7];
 
@@ -700,24 +626,24 @@ end else
 begin
   if (state==ST_RUN) begin
     // Note instructions are evaluated in reverse order so that the first
-    // branch encountered takes precedence.
-    if (expatx[8])
+    // branch encountered takes precednce.
+    if (expatx[8] & po2)
   	  case(opcode2)
-  	  LOOP: if (lc!=64'd0) lr[ir2[14:12]] <= fnIpPlus5(ip);
-  	  JMP:  if (po2) lr[ir2[17:15]] <= fnIpPlus5(ip);
+  	  LOOP: if (lc!=64'd0) lr[ir2[17:15]] <= ip + 5'd16;
+  	  JMP:  lr[ir2[17:15]] <= ip + 5'd16;
     	default:  ;
       endcase
-    if (expatx[7])
+    if (expatx[7] & po1)
   	  case(opcode1)
-  	  LOOP: if (lc!=64'd0) lr[ir1[14:12]] <= fnIpPlus5(ip);
-  	  JMP:  if (po1) lr[ir1[17:15]] <= fnIpPlus5(ip);
+  	  LOOP: if (lc!=64'd0) lr[ir1[17:15]] <= ip + 5'd16;
+  	  JMP:  lr[ir1[17:15]] <= ip + 5'd16;
     	default:  ;
       endcase
-    if (expatx[6])
+    if (expatx[6] & po0)
   	  case(opcode0)
-  	  LOOP: if (lc!=64'd0) lr[ir0[14:12]] <= fnIpPlus5(ip);
-  	  JMP:  if (po0) lr[ir0[17:15]] <= fnIpPlus5(ip);
-  	  JML:  if (po0) lr[ir0[17:15]] <= {ip[AMSB:4],4'hA};  // JML is aligned at 128-bit boundary
+  	  LOOP: if (lc!=64'd0) lr[ir0[17:15]] <= ip + 5'd16;
+  	  JMP:  lr[ir0[17:15]] <= ip + 5'd16;
+  	  JML:  lr[ir0[17:15]] <= ip + 5'd16;
     	default:  ;
       endcase
 
@@ -726,8 +652,8 @@ begin
     if (expatx[6] & po0)
   	  case(opcode0)
   	  R2:
-  	    case(funct70)
-  	    MTSPR:  if (ir0[23:15]==9'b000_000_100) lr[ir0[14:12]] <= s0;
+  	    case(ir0[40:34])
+  	    MTSPR:  if (ir0[32:24]==9'b000_000_100) lr[ir0[23:21]] <= s0;
   	    default : ;
   	    endcase
     	default:  ;
@@ -735,8 +661,8 @@ begin
     if (expatx[7] & po1)
   	  case(opcode1)
   	  R2:
-  	    case(funct71)
-  	    MTSPR:  if (ir1[23:15]==9'b000_000_100) lr[ir1[14:12]] <= s1;
+  	    case(ir1[40:34])
+  	    MTSPR:  if (ir1[32:24]==9'b000_000_100) lr[ir1[23:21]] <= s1;
   	    default : ;
   	    endcase
     	default:  ;
@@ -744,8 +670,8 @@ begin
     if (expatx[8] & po2)
   	  case(opcode2)
   	  R2:
-  	    case(funct72)
-  	    MTSPR:  if (ir2[23:15]==9'b000_000_100) lr[ir2[14:12]] <= s2;
+  	    case(ir2[40:34])
+  	    MTSPR:  if (ir2[32:24]==9'b000_000_100) lr[ir2[23:21]] <= s2;
   	    default : ;
   	    endcase
     	default:  ;
@@ -758,54 +684,48 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg [AMSB:0] ip;
-reg [AMSB:0] brdisp0;
-reg [AMSB:0] brdisp1;
-reg [AMSB:0] brdisp2;
-assign brdisp0 = {{40{ir0[33]}},ir0[33:12],ir0[13:12]};
-assign brdisp1 = {{40{ir1[33]}},ir1[33:12],ir1[13:12]};
-assign brdisp2 = {{40{ir2[33]}},ir2[33:12],ir2[13:12]};
 
 always @(posedge clkg)
 if (rst)
   ip <= 64'hFFFFFFFFFFFC0000;
 else begin
-  if (state==ST_RUN && ihit) begin
+  if (state==ST_RUN) begin
   	if (nexpatx==9'd0) begin
   		ip[31:4] <= ip[31:4] + 28'd1;
   		ip[3:0] <= 4'h0;
   	end
-  	if (expatx[8])
+  	if (expatx[8] & po2)
   	  case(opcode2)
   	  R2:
   	    case(funct72)
-    		RET:	if (po2) ip <= lr[ir2[20:18]] + ir2[32:21];
+    		RET:	ip <= lr[ir2[20:18]] + ir2[32:21];
   	    default: ;
   	    endcase
-  	  LOOP: if (lc != 64'd0) ip <= brdisp2 + lr[ir2[17:15]];
-  	  JMP:  if (po2) ip <= brdisp2 + lr[ir2[17:15]];
+  	  LOOP: if (lc != 64'd0) ip <= {{41{ir2[40]}},ir2[40:21],ir2[0],ir2[21],ir2[0]} + lr[ir2[20:18]];
+  	  JMP:  ip <= {{41{ir2[40]}},ir2[40:21],ir2[0],ir2[21],ir2[0]} + lr[ir2[20:18]];
     	default:  ;
       endcase
-  	if (expatx[7])
+  	if (expatx[7] & po1)
   	  case(opcode1)
   	  R2:
   	    case(funct71)
-    		RET:	if (po1) ip <= lr[ir1[20:18]] + ir1[32:21];
+    		RET:	ip <= lr[ir1[20:18]] + ir1[32:21];
   	    default: ;
   	    endcase
-  	  LOOP: if (lc != 64'd0) ip <= brdisp1 + lr[ir1[17:15]];
-  	  JMP:  if (po1) ip <= brdisp1 + lr[ir1[17:15]];
+  	  LOOP: if (lc != 64'd0) ip <= {{41{ir1[40]}},ir1[40:21],ir1[0],ir1[21],ir1[0]} + lr[ir1[20:18]];
+  	  JMP:  ip <= {{41{ir1[40]}},ir1[40:21],ir1[0],ir1[21],ir1[0]} + lr[ir1[20:18]];
     	default:  ;
       endcase
-  	if (expatx[6])
+  	if (expatx[6] & po0)
   	  case(opcode0)
   	  R2:
   	    case(funct70)
-    		RET:	if (po0) ip <= lr[ir0[20:18]] + ir0[32:21];
+    		RET:	ip <= lr[ir0[20:18]] + ir0[32:21];
   	    default: ;
   	    endcase
-  	  LOOP: if (lc != 64'd0) ip <= brdisp0 + lr[ir0[17:15]];
-  	  JMP:  if (po0) ip <= brdisp0 + lr[ir0[17:15]];
-    	JML:  if (po0) ip <= {ir1,brdisp0[23:0]} + lr[ir0[17:15]];
+  	  LOOP: if (lc != 64'd0) ip <= {{41{ir0[40]}},ir0[40:21],ir0[0],ir0[21],ir0[0]} + lr[ir0[20:18]];
+  	  JMP:  ip <= {{41{ir0[40]}},ir0[40:21],ir0[0],ir0[21],ir0[0]} + lr[ir0[20:18]];
+    	JML:  ip <= {ir1,ir0[40:21],ir0[0],ir0[21],ir0[0]} + lr[ir0[20:18]];
     	default:  ;
       endcase
   end
@@ -823,57 +743,52 @@ always @(posedge clkg)
 if (rst)
 	ir <= {5'b0,{3{NOP_INSN}}};
 else begin
-  begin
+  if (state==ST_RUN) begin
   	if (nexpatx==9'd0)
   		ir <= insn;
-  end
-  if (state==ST_RUN && ihit) begin
     // Note instructions are evaluated in reverse order so that the first
     // branch encountered takes precednce.
-    if (expatx[8])
+    if (expatx[8] & po2)
   	  case(opcode2)
   	  R2:
-  	    if (po2)
-    	    case(funct72)
-      		RET:	ir[122:0] <= {3{NOP_INSN}};
-      		default:  ;
-      	  endcase
+  	    case(funct72)
+    		RET:	ir[122:0] <= {3{NOP_INSN}};
+    		default:  ;
+    	  endcase
   	  LOOP: ir[122:0] <= {3{NOP_INSN}};
-  	  JMP:  if (po2) ir[122:0] <= {3{NOP_INSN}};
+  	  JMP:  ir[122:0] <= {3{NOP_INSN}};
     	default:  ;
       endcase
-    if (expatx[7])
+    if (expatx[7] & po1)
   	  case(opcode1)
   	  R2:
-  	    if (po1)
-    	    case(funct71)
-      		RET:	ir[122:0] <= {3{NOP_INSN}};
-      		default:  ;
-      	  endcase
+  	    case(funct71)
+    		RET:	ir[122:0] <= {3{NOP_INSN}};
+    		default:  ;
+    	  endcase
   	  LOOP: ir[122:0] <= {3{NOP_INSN}};
-  	  JMP:  if (po1) ir[122:0] <= {3{NOP_INSN}};
+  	  JMP:  ir[122:0] <= {3{NOP_INSN}};
     	default:  ;
       endcase
-    if (expatx[6])
+    if (expatx[6] & po0)
   	  case(opcode0)
   	  R2:
-  	    if (po0)
-    	    case(funct70)
-      		RET:	ir[122:0] <= {3{NOP_INSN}};
-      		default:  ;
-      	  endcase
+  	    case(funct70)
+    		RET:	ir[122:0] <= {3{NOP_INSN}};
+    		default:  ;
+    	  endcase
   	  LOOP: ir[122:0] <= {3{NOP_INSN}};
-  	  JMP:  if (po0) ir[122:0] <= {3{NOP_INSN}};
-  	  JML:  if (po0) ir[122:0] <= {3{NOP_INSN}};
+  	  JMP:  ir[122:0] <= {3{NOP_INSN}};
+  	  JML:  ir[122:0] <= {3{NOP_INSN}};
     	default:  ;
       endcase
   end
 end
 
 
-wire [63:0] imm0 = {{64{ir0[33]}},ir0[33:18]};
-wire [63:0] imm1 = {{64{ir1[33]}},ir1[33:18]};
-wire [63:0] imm2 = {{64{ir2[33]}},ir2[33:18]};
+wire [63:0] imm0 = {{64{ir0[40]}},ir0[40:27]};
+wire [63:0] imm1 = {{64{ir1[40]}},ir1[40:27]};
+wire [63:0] imm2 = {{64{ir2[40]}},ir2[40:27]};
 
 wire muli0 = opcode0==MUL; wire muli1 = opcode1==MUL; wire muli2 = opcode2==MUL;
 wire mului0 = opcode0==MULU; wire mului1 = opcode1==MULU; wire mului2 = opcode2==MULU;
@@ -987,78 +902,15 @@ divider udiv2 (
   .idle()
 );
 
-wire [FPWID-1:0] fmao0, fmao1;
-
-fpFMAnr #(80) ufma0
-(
-  .clk(clkg),
-  .ce(1'b1),
-  .op(opcode0[0]),
-  .rm(ir0[34:32]),
-  // Flip MSB for negate for FNMADD / FNMSUB
-  .a(fpa0 ^ {{FPWID-1{1'b0}},opcode0[1]} << (FPWID-1)),
-  .b(fpb0),
-  .c(fpc0),
-  .o(fmao0),
-  .inf(),
-  .zero(),
-  .overflow(),
-  .underflow(),
-  .inexact()
-);
-
-fpFMAnr #(80) ufma1
-(
-  .clk(clkg),
-  .ce(1'b1),
-  .op(opcode1[0]),
-  .rm(ir1[34:32]),
-  // Flip MSB for negate for FNMADD / FNMSUB
-  .a(fpa1 ^ {{FPWID-1{1'b0}},opcode1[1]} << (FPWID-1)),
-  .b(fpb1),
-  .c(fpc1),
-  .o(fmao1),
-  .inf(),
-  .zero(),
-  .overflow(),
-  .underflow(),
-  .inexact()
-);
-
-wire fpcmpo0, fpcmpo1, fpcmpo2;
-wire nanxab0, nanxab1, nanxab2;
-fpCompare #(FPWID) ufpcmp0 (.a(fpa0), .b(fpb0), .o(fpcmpo0), .nan(), .snan());
-fpCompare #(FPWID) ufpcmp1 (.a(fpa1), .b(fpb1), .o(fpcmpo1), .nan(), .snan() );
-fpCompare #(FPWID) ufpcmp2 (.a(fpa2), .b(fpb2), .o(fpcmpo2), .nan(), .snan() );
-wire fpa0_xz, fpa0_vz, fpa0_inf, fpa0_qnan, fpa0_snan, fpa0_nan, fpa0_xinf;
-wire fpa1_xz, fpa1_vz, fpa1_inf, fpa1_qnan, fpa1_snan, fpa1_nan, fpa1_xinf;
-wire fpa2_xz, fpa2_vz, fpa2_inf, fpa2_qnan, fpa2_snan, fpa2_nan, fpa2_xinf;
-fpDecomp #(FPWID) ufpdc0 (.i(fpa0), .sgn(), .exp(), .man(), .fract(), .xz(fpa0_xz), .mz(), .vz(fpa0_vz), .inf(fpa0_inf), .xinf(fpa0_xinf), .qnan(fpa0_qnan), .snan(fpa0_snan), .nan(fpa0_nan));
-fpDecomp #(FPWID) ufpdc1 (.i(fpa1), .sgn(), .exp(), .man(), .fract(), .xz(fpa1_xz), .mz(), .vz(fpa1_vz), .inf(fpa1_inf), .xinf(fpa1_xinf), .qnan(fpa1_qnan), .snan(fpa1_snan), .nan(fpa1_nan));
-fpDecomp #(FPWID) ufpdc2 (.i(fpa2), .sgn(), .exp(), .man(), .fract(), .xz(fpa2_xz), .mz(), .vz(fpa2_vz), .inf(fpa2_inf), .xinf(fpa2_xinf), .qnan(fpa2_qnan), .snan(fpa2_snan), .nan(fpa2_nan));
-tFloat trunco0,trunco1,trunco2;
-tFloat i2fo0,i2fo1,i2fo2;
-i2f #(FPWID)  ui2fs0 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a0[WID-1:0]), .o(i2fo0) );
-i2f #(FPWID)  ui2fs1 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a1[WID-1:0]), .o(i2fo1) );
-i2f #(FPWID)  ui2fs2 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a2[WID-1:0]), .o(i2fo2) );
-f2i #(FPWID)  uf2is0 (.clk(clk), .ce(1'b1), .i(fpa0), .o(f2io0) );
-f2i #(FPWID)  uf2is1 (.clk(clk), .ce(1'b1), .i(fpa1), .o(f2io1) );
-f2i #(FPWID)  uf2is2 (.clk(clk), .ce(1'b1), .i(fpa2), .o(f2io2) );
-fpTrunc #(FPWID) urho1 (.clk(clk), .ce(1'b1), .i(fpa0), .o(trunco0), .overflow());
-fpTrunc #(FPWID) urho2 (.clk(clk), .ce(1'b1), .i(fpa1), .o(trunco1), .overflow());
-fpTrunc #(FPWID) urho3 (.clk(clk), .ce(1'b1), .i(fpa2), .o(trunco2), .overflow());
-
 function [47:0] fnDisassem;
 input [40:0] iri;
 begin
-  case(iri[40:34])
+  case(iri[14:8])
   R2:
-    case(iri[33:27])
+    case(iri[40:34])
     ADD:  fnDisassem = "ADDI  ";
     AND:  fnDisassem = "ANDI  ";
     OR:   fnDisassem = "ORI   ";
-    CEQ:  fnDisassem = "CEQ   ";
-    CNE:  fnDisassem = "CNE   ";
     RET:  fnDisassem = "RET   ";
     LDD:  fnDisassem = "LDDX  ";
     STD:  fnDisassem = "STDX  ";
@@ -1067,9 +919,6 @@ begin
   ADD:  fnDisassem = "ADDI  ";
   AND:  fnDisassem = "ANDI  ";
   OR:   fnDisassem = "ORI   ";
-  ORIS: fnDisassem = "ORIS  ";
-  CEQ:  fnDisassem = "CEQI  ";
-  CNE:  fnDisassem = "CNEI  ";
   JMP:  fnDisassem = "JMP   ";
   LDD:  fnDisassem = "LDD   ";
   STD:  fnDisassem = "STD   ";
@@ -1078,8 +927,28 @@ begin
 end
 endfunction
 
+function [23:0] fnDisPcnd;
+input [3:0] rn;
+input [2:0] cnd;
+begin
+  if (|rn)
+    case(cnd)
+    3'd0: fnDisPcnd = ".un";
+    3'd1: fnDisPcnd = ".??";
+    3'd2: fnDisPcnd = ".eq";
+    3'd3: fnDisPcnd = ".ne";
+    3'd4: fnDisPcnd = ".lt";
+    3'd5: fnDisPcnd = ".ge";
+    3'd6: fnDisPcnd = ".le";
+    3'd7: fnDisPcnd = ".gt";
+    endcase
+  else
+    fnDisPcnd = "   ";
+end
+endfunction
+
 function [23:0] fnPreg;
-input [5:0] rn;
+input [3:0] rn;
 begin
   if (|rn)
     case(rn)
@@ -1099,15 +968,6 @@ begin
     4'd13: fnPreg = "p13";
     4'd14: fnPreg = "p14";
     4'd15: fnPreg = "p15";
-    4'd16:  fnPreg = "p16";
-    4'd17:  fnPreg = "p17";
-    4'd18:  fnPreg = "p18";
-    4'd19:  fnPreg = "p19";
-    4'd20:  fnPreg = "p20";
-    4'd21:  fnPreg = "p21";
-    4'd22:  fnPreg = "p22";
-    4'd23:  fnPreg = "p23";
-    4'd24:  fnPreg = "p24";
     endcase
   else
     fnPreg = "   ";
@@ -1123,9 +983,8 @@ if (rst)
 	state <= ST_RUN;
 else begin
 	case(state)
-	//ST_FETCH: state <= ST_RUN;
 	ST_RUN: 
-	  if (ihit) begin
+	  begin
   		if (expatx[8] & po2) tExecSt(ir2,ST_LD2);
   		if (expatx[7] & po1) tExecSt(ir1,ST_LD1);
   		if (expatx[6] & po0) tExecSt(ir0,ST_LD0);
@@ -1136,13 +995,9 @@ else begin
 	ST_LD0A:	if (ack_i) begin state <= ST_RUN; end
 	ST_LD1A:	if (ack_i) begin state <= ST_RUN; end
 	ST_LD2A:	if (ack_i) begin state <= ST_RUN; end
-`ifdef SLOW
 	ST_ST:	if (ack_i) begin state <= selsh[15:8] ? ST_ST2 : ST_RUN; end
 	ST_ST2: if (~ack_i) state <= ST_ST3;
 	ST_ST3: if (ack_i) state <= ST_RUN;
-`else
-	ST_ST:	if (ack_i) begin state <= ST_RUN; end
-`endif
 	ST_MULDIV:
 	  if (cntdone0&cntdone1&cntdone2)
 	    state <= ST_RUN;
@@ -1155,93 +1010,56 @@ end
 
 always @(posedge clkg)
 if (rst) begin
-	rfwr0 = 1'b0; prfwr0 = 2'b00; prfwrw0 = 1'b0;
-	rfwr1 = 1'b0; prfwr1 = 2'b00; prfwrw1 = 1'b0;
-	rfwr2 = 1'b0; prfwr2 = 2'b00; prfwrw2 = 1'b0;
+	rfwr0 = 1'b0; prfwr0 = 1'b0; prfwrw0 = 1'b0;
+	rfwr1 = 1'b0; prfwr1 = 1'b0; prfwrw1 = 1'b0;
+	rfwr2 = 1'b0; prfwr2 = 1'b0; prfwrw2 = 1'b0;
+	prfwr0a = 1'b0; prfwr1a = 1'b0; prfwr2a = 1'b0;
 	vwr = 1'b0;
 	rd = 1'b0;
 	ld0 = 1'b0; ld1 = 1'b0; ld2 = 1'b0;
 end
 else begin
-	rfwr0 = 1'b0; prfwr0 = 2'b00; prfwrw0 = 1'b0;
-	rfwr1 = 1'b0; prfwr1 = 2'b00; prfwrw1 = 1'b0;
-	rfwr2 = 1'b0; prfwr2 = 2'b00; prfwrw2 = 1'b0;
+	rfwr0 = 1'b0; prfwr0 = 1'b0; prfwrw0 = 1'b0;
+	rfwr1 = 1'b0; prfwr1 = 1'b0; prfwrw1 = 1'b0;
+	rfwr2 = 1'b0; prfwr2 = 1'b0; prfwrw2 = 1'b0;
+	prfwr0a = 1'b0; prfwr1a = 1'b0; prfwr2a = 1'b0;
 	ld0 = 1'b0; ld1 = 1'b0; ld2 = 1'b0;
 	case(state)
 	ST_RUN: 
-	  if (ihit) begin
-  		if (expatx[6]) 
-  		  begin
-  		    case(opcode0)
-  		    `cFLOAT2: if (po0) tFloat2(2'b00,ir0,fpa0,fpb0,fpres0,fprfwr0,res0,rfwr0,pres0,prfwr0);
-  		    default:  
-  		      tExec(ir0,a0,b0,c0,s0,po2,res0,pres0,rfwr0,prfwr0,ld0,presw0,prfwrw0);
-  		    endcase
-  		  end
-  		if (expatx[7])
-  		  begin
-  		    case(opcode1)
-  		    `cFLOAT2: if (po1) tFloat2(2'b01,ir1,fpa1,fpb1,fpres1,fprfwr1,res1,rfwr1,pres1,prfwr1);
-  		    default:
-  		      tExec(ir1,a1,b1,c1,s1,po1,res1,pres1,rfwr1,prfwr1,ld1,presw1,prfwrw1);
-  		    endcase
-  		  end
-  		if (expatx[8])
-  		  begin
-  		    case(opcode2)
-  		    `cFLOAT2: if (po2) tFloat2(2'b10,ir2,fpa2,fpb2,fpres2,fprfwr2,res2,rfwr2,pres2,prfwr2);
-  		    default:
-  		      tExec(ir2,a2,b2,c2,s2,po0,res2,pres2,rfwr2,prfwr2,ld2,presw2,prfwrw2);
-  		    endcase
-  		  end
-  		if (opcode0==LDI) begin if (po0) begin res0 = {ir1,ir0[33:12]}; rfwr0 = 1'b1; end end
-  		else if (opcode1==LDI) begin if (po1) begin res1 = {ir2,ir1[33:12]}; rfwr1 = 1'b1; end end
+	  begin
+  		if (expatx[8] & po2) tExec(ir2,a0,b0,s0,res0,pres0,pres0a,rfwr2,prfwr2,prfwr0a,ld2,presw0,prfwrw0);
+  		if (expatx[7] & po1) tExec(ir1,a1,b1,s1,res1,pres1,pres1a,rfwr1,prfwr1,prfwr1a,ld1,presw1,prfwrw1);
+  		if (expatx[6] & po0) tExec(ir0,a2,b2,s2,res2,pres2,pres2a,rfwr0,prfwr0,prfwr2a,ld0,presw2,prfwrw2);
+  		if (ir0[40:34]==LDI) begin if (po0) begin res0 = {ir1,ir0[33:12]}; rfwr0 = 1'b1; end end
+  		else if (ir1[40:34]==LDI) begin if (po1) begin res1 = {ir2,ir1[33:12]}; rfwr1 = 1'b1; end end
 		end
 	ST_LD0A:	if (ack_i) begin res0 = dat_i; rfwr0 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
 	ST_LD1A:	if (ack_i) begin res1 = dat_i; rfwr1 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
 	ST_LD2A:	if (ack_i) begin res2 = dat_i; rfwr2 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
 	ST_ST:	if (ack_i) begin vwr = 1'b0; vcyc = selsh[15:8]!=8'h00; vstb = 1'b0; end
-`ifdef SLOW
 	ST_ST2: if (~ack_i) begin vstb = 1'b1; end
 	ST_ST3:	if (ack_i) begin vwr = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
-`endif
 	ST_MULDIV:
 	  if (cntdone0&cntdone1&cntdone2) begin
-	    case({mul0,mulu0,div0,divu0,fmadd0|fmsub0|fnmadd0|fnmsub0,fcvt0,ftrunc0})
-	    7'b1??????:  begin res0 = prod0;  rfwr0 = 1'b1;  end
-	    7'b01?????:  begin res0 = produ0; rfwr0 = 1'b1; end
-	    7'b001????:  begin res0 = quot0;  rfwr0 = 1'b1; end
-	    7'b0001???:  begin res0 = quot0;  rfwr0 = 1'b1; end
-	    7'b00001??:  begin fpres0 = fmao0; fprfwr0 = 1'b1; end
-	    7'b000001?:  begin
-	                  case(ir0[23:18])
-	                  `cI2F: fprfwr0 = 1'b1;
-	                  `cF2I: rfwr0 = 1'b1;
-	                  endcase
-	                end
-	    7'b0000001: begin fpres0 = trunco0; fprfwr0 = 1'b1; end
+	    case({mul0,mulu0,div0,divu0})
+	    4'b1???:  begin res0 = prod0;  rfwr0 = 1'b1; pres0a = {res0[WID-1],|res0}; prfwr0a = ir0[0]; end
+	    4'b01??:  begin res0 = produ0; rfwr0 = 1'b1; pres0a = {res0[WID-1],|res0}; prfwr0a = ir0[0]; end
+	    4'b001?:  begin res0 = quot0;  rfwr0 = 1'b1; pres0a = {res0[WID-1],|res0}; prfwr0a = ir0[0]; end
+	    4'b0001:  begin res0 = quot0;  rfwr0 = 1'b1; pres0a = {res0[WID-1],|res0}; prfwr0a = ir0[0]; end
 	    default:  ; // hardware error, got to MULDIV state and no mul/div decoded.
 	    endcase
-	    case({mul1,mulu1,div1,divu1,fmadd1|fmsub1|fnmadd1|fnmsub1,fcvt1,ftrunc1})
-	    7'b1??????:  begin res1 = prod1;  rfwr1 = 1'b1; end
-	    7'b01?????:  begin res1 = produ1; rfwr1 = 1'b1; end
-	    7'b001????:  begin res1 = quot1;  rfwr1 = 1'b1; end
-	    7'b0001???:  begin res1 = quot1;  rfwr1 = 1'b1; end
-	    7'b00001??:  begin fpres1 = fmao1; fprfwr1 = 1'b1; end
-	    7'b000001?:  begin
-	                  case(ir1[23:18])
-	                  `cI2F: fprfwr1 = 1'b1;
-	                  `cF2I: rfwr1 = 1'b1;
-	                  endcase
-	                end
-	    7'b0000001: begin fpres1 = trunco1; fprfwr1 = 1'b1; end
+	    case({mul1,mulu1,div1,divu1})
+	    4'b1???:  begin res1 = prod1;  rfwr1 = 1'b1; pres1a = {res1[WID-1],|res1}; prfwr1a = ir1[0]; end
+	    4'b01??:  begin res1 = produ1; rfwr1 = 1'b1; pres1a = {res1[WID-1],|res1}; prfwr1a = ir1[0]; end
+	    4'b001?:  begin res1 = quot1;  rfwr1 = 1'b1; pres1a = {res1[WID-1],|res1}; prfwr1a = ir1[0]; end
+	    4'b0001:  begin res1 = quot1;  rfwr1 = 1'b1; pres1a = {res1[WID-1],|res1}; prfwr1a = ir1[0]; end
 	    default:  ;
 	    endcase
 	    case({mul2,mulu2,div2,divu2})
-	    4'b1???:  begin res2 = prod2;  rfwr2 = 1'b1; end
-	    4'b01??:  begin res2 = produ2; rfwr2 = 1'b1; end
-	    4'b001?:  begin res2 = quot2;  rfwr2 = 1'b1; end
-	    4'b0001:  begin res2 = quot2;  rfwr2 = 1'b1; end
+	    4'b1???:  begin res2 = prod2;  rfwr2 = 1'b1; pres2a = {res2[WID-1],|res2}; prfwr2a = ir2[0]; end
+	    4'b01??:  begin res2 = produ2; rfwr2 = 1'b1; pres2a = {res2[WID-1],|res2}; prfwr2a = ir2[0]; end
+	    4'b001?:  begin res2 = quot2;  rfwr2 = 1'b1; pres2a = {res2[WID-1],|res2}; prfwr2a = ir2[0]; end
+	    4'b0001:  begin res2 = quot2;  rfwr2 = 1'b1; pres2a = {res2[WID-1],|res2}; prfwr2a = ir2[0]; end
 	    default:  ;
 	    endcase
 	  end
@@ -1249,56 +1067,42 @@ else begin
 	endcase
 	$display("------------------------------------");
 	$display("ip: %h  ir: %h", ip, ir);
-	$display("%c%h %s %s %h %h %h %h", ir[123]?"S":"-",ir0,fnPreg(ir0[5:0]),fnDisassem(ir0),imm0, s0, a0, b0);
-	$display("%c%h %s %s %h %h %h %h", ir[124]?"S":"-",ir1,fnPreg(ir1[5:0]),fnDisassem(ir1),imm1, s1, a1, b1);
-	$display("%c%h %s %s %h %h %h %h", ir[125]?"S":"-",ir2,fnPreg(ir2[5:0]),fnDisassem(ir2),imm2, s2, a2, b2);
+	$display("%c%h %s%s %s %h %h %h %h", ir[123]?"S":"-",ir0,fnPreg(ir0[7:4]),fnDisPcnd(ir0[7:4],ir0[3:1]),fnDisassem(ir0),imm0, s0, a0, b0);
+	$display("%c%h %s%s %s %h %h %h %h", ir[124]?"S":"-",ir1,fnPreg(ir1[7:4]),fnDisPcnd(ir1[7:4],ir1[3:1]),fnDisassem(ir1),imm1, s1, a1, b1);
+	$display("%c%h %s%s %s %h %h %h %h", ir[125]?"S":"-",ir2,fnPreg(ir2[7:4]),fnDisPcnd(ir2[7:4],ir2[3:1]),fnDisassem(ir2),imm2, s2, a2, b2);
 end
 
 task tCmp;
-input [6:0] opcode;
-input [2:0] op3;
 input [WID-1:0] a;
 input [WID-1:0] b;
-input p;
-output o;
-output [1:0] prfwr;
+output [1:0] o;
+output prfwr;
 reg [WID:0] sum;
 begin
-  case(opcode)
-  `cCLT:  o = $signed(a) <  $signed(b);
-  `cCGE:  o = $signed(a) >= $signed(b);
-  `cCLE:  o = $signed(a) <= $signed(b);
-  `cCGT:  o = $signed(a) >  $signed(b);
-  `cCLTU: o = a <  b;
-  `cCGEU: o = a >= b;
-  `cCLEU: o = a <= b;
-  `cCGTU: o = a >  b;
-  `cCEQ:  o = a == b;
-  `cCNE:  o = a != b;
-`ifdef SLOW
-  `cINTERSECT:  o = |(a & b);
-  `cUNION:      o = |(a | b);
-  `cDISJOINT:   o = |(a ^ b);
-`endif
-  default:  o = 1'b0;
-  endcase
-  case(op3)
-  3'd0: prfwr = p ? 2'b01 : 2'b00;
-`ifdef SLOW
-  3'b1:
-    if (p & o)
-      prfwr = 2'b01;
-    else begin
-      o = 1'b0;
-      prfwr = 2'b01;
-    end
-  3'd2: prfwr = (p & o) ? 2'b10 : 2'b00;
-  3'd3: prfwr = (p & o) ? 2'b11 : 2'b00;
-  3'd4: prfwr = o ? 2'b00 : p ? 2'b10 : 2'b00;
-  3'd5: prfwr = o ? 2'b00 : p ? 2'b11 : 2'b00;
-`endif
-  default:  prfwr = 2'b00;
-  endcase
+  if ($signed(a) < $signed(b))
+    o = 2'b11;
+  else if (a==b)
+    o = 2'b00;
+  else
+    o = 2'b01;
+	prfwr = 1'b1;
+end
+endtask
+
+task tCmpu;
+input [WID-1:0] a;
+input [WID-1:0] b;
+output [1:0] o;
+output prfwr;
+reg [WID:0] sum;
+begin
+  if (a < b)
+    o = 2'b11;
+  else if (a==b)
+    o = 2'b00;
+  else
+    o = 2'b01;
+	prfwr = 1'b1;
 end
 endtask
 
@@ -1312,18 +1116,18 @@ output rfwr;
 output ld;
 begin
 	case(op)
-	`cADD:	begin res = a + b; rfwr = 1'b1; end
-	`cSUB:	begin res = a - b; rfwr = 1'b1; end
-	`cAND:	begin res = a & b; rfwr = 1'b1; end
-	`cOR:		begin res = a | b; rfwr = 1'b1; end
-	`cEOR:	begin res = a ^ b; rfwr = 1'b1; end
-	`cANDCM:begin res = a & ~b; rfwr = 1'b1; end
-	`cNAND:	begin res = ~(a & b); rfwr = 1'b1; end
-	`cNOR:	begin res = ~(a | b); rfwr = 1'b1; end
-	`cENOR:	begin res = ~(a ^ b); rfwr = 1'b1; end
-	`cORCM:	begin res = a | ~b; rfwr = 1'b1; end
-	`cDIV:  begin ld = 1'b1; end
-	`cDIVU: begin ld = 1'b1; end
+	ADD:	begin res = a + b; rfwr = 1'b1; end
+	SUB:	begin res = a - b; rfwr = 1'b1; end
+	AND:	begin res = a & b; rfwr = 1'b1; end
+	OR:		begin res = a | b; rfwr = 1'b1; end
+	XOR:	begin res = a ^ b; rfwr = 1'b1; end
+	ANDCM:begin res = a & ~b; rfwr = 1'b1; end
+	NAND:	begin res = ~(a & b); rfwr = 1'b1; end
+	NOR:	begin res = ~(a | b); rfwr = 1'b1; end
+	XNOR:	begin res = ~(a ^ b); rfwr = 1'b1; end
+	ORCM:	begin res = a | ~b; rfwr = 1'b1; end
+	DIV:  begin ld = 1'b1; end
+	DIVU: begin ld = 1'b1; end
 	SHL:	begin res = a << b[5:0]; rfwr = 1'b1; end
 	SHR:	begin res = a >> b[5:0]; rfwr = 1'b1;  end
 	ASR:	begin res = a[WID-1] ? (a >> b[5:0]) | (~({WID{1'b1}} >> b[5:0])) : a >> b[5:0]; rfwr = 1'b1; end
@@ -1338,13 +1142,13 @@ task tExec;
 input [40:0] irx;
 input [WID-1:0] a;
 input [WID-1:0] b;
-input [WID-1:0] c;
 input [WID-1:0] s;
-input po;
 output [WID-1:0] res;
 output [1:0] pres;
+output [1:0] presa;
 output rfwr;
-output [1:0] prfwr;
+output prfwr;
+output prfwra;
 output ld;
 output [31:0] presw;
 output prfwrw;
@@ -1352,165 +1156,80 @@ reg [6:0] opcode;
 reg [WID-1:0] imm;
 reg Sc;
 reg isFloat;
-reg [WID*2-1:0] res1;
 begin
-  rfwr = 1'b0;
-	opcode = irx[40:34];
+	opcode = irx[14:8];
 	isFloat = opcode >= 7'd112 && opcode <= 7'd121;
-  casez(opcode)
-  `cAND:  imm = {{50{1'b1}},irx[33:18]};
-  `cOR:   imm = {50'd0,irx[33:18]};
-  `cEOR:  imm = {50'd0,irx[33:18]};
-  `cSHLP: imm = {58'd0,irx[29:24]};
-  `cSHRP: imm = {58'd0,irx[29:24]};
-  CMPI: imm = {{53{irx[30]}},irx[30:18]};
-  default:  imm = {{50{irx[33]}},irx[33:18]};
+  case(irx[14:8])
+  AND:  imm = {{50{1'b1}},irx[40:27]};
+  OR:   imm = {50'd0,irx[40:27]};
+  XOR:  imm = {50'd0,irx[40:27]};
+  default:  imm = {{50{irx[40]}},irx[40:27]};
   endcase
-  Sc = irx[24];
+  Sc = irx[33];
 	casez(opcode)
 	RR:
-		casez(irx[33:27])
-		CMP:	tCmp(irx[33:27],irx[26:24],a,b,po,pres,prfwr);
-`ifdef SLOW
-		`cSHLP: if (po) begin res1 = {a,b} << (irx[33] ? imm[5:0] : c[5:0]); res = res1[127:64]; rfwr = 1'b1; end
-		`cSHRP: if (po) begin res = {b,a} >> (irx[33] ? imm[5:0] : c[5:0]); rfwr = 1'b1; end
-`else
-		`cSHLP: if (po) begin res1 = {a,b} << imm[5:0]; res = res1[127:64]; rfwr = 1'b1; end
-		`cSHRP: if (po) begin res = {b,a} >> imm[5:0]; rfwr = 1'b1; end
-`endif
-		ASRI: if (po) tAlu(irx,opcode,a,imm,res,rfwr,ld);
+		casez(irx[40:34])
+		CMP:	if (irx[20]) tCmp(a,b,pres,prfwr); else tCmpu(a,b,pres,prfwr);
+		SHLI: tAlu(irx,irx[40:34],a,imm,res,rfwr,ld);
+		SHRI: tAlu(irx,irx[40:34],a,imm,res,rfwr,ld);
+		ASRI: tAlu(irx,irx[40:34],a,imm,res,rfwr,ld);
 		MFSPR:
-		  if (po) begin
-  		  case(irx[23:12])
-  		  12'h001:  begin res = hartid; rfwr = 1'b1; end
-  		  12'h002:  begin res = tick; rfwr = 1'b1; end
+		  begin
+  		  case(irx[32:21])
+  		  12'h001:  begin res = hartid; rfwr <= 1'b1; end
+  		  12'h002:  begin res = tick; rfwr <= 1'b1; end
   		  12'h020,12'h021,12'h022,12'h023,12'h024,12'h025,12'h026,12'h027:
   		    begin res = lr[irx[23:21]]; rfwr = 1'b1; end
   		  12'h016: 
   		    begin
-  		      for (n = 1; n < 64; n = n + 1)
-  		        res[n] = p[n];
-  		      res[0] = 1'b1;
-          end
-        12'h17: begin res <= lc; rfwr = 1'b1; end
+            res[1:0] = 2'b01; res[3:2] = p[1]; res[5:4] = p[2]; res[7:6] = p[3];
+            res[9:8] = p[4];  res[11:10] = p[5]; res[13:12] = p[6]; res[15:14] = p[7];
+            res[17:16] = p[8]; res[19:18] = p[9]; res[21:20] = p[10]; res[23:22] = p[11];
+            res[25:24] = p[12]; res[27:26] = p[13]; res[29:28] = p[14]; res[31:30] = p[15];
+           end
+        12'h17: begin res <= lc; rfwr <= 1'b1; end
   		  12'h060,12'h061,12'h062,12'h063,12'h064,12'h065,12'h066,12'h067:  begin res = sego1; rfwr = 1'b1; end
   		  default:  ;
   		  endcase
 		  end
 		MTSPR:
-		  if (po) 
-  		  case(irx[23:12])
-  		  12'h016: begin presw = s[31:0]; prfwrw = 1'b1; end
-  		  default:  ;
-  		  endcase
-  	LDD:		if (po) begin va = a + (b << {Sc,2'b0}); vrd = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
-`ifdef SLOW
-  	STB:		if (po) begin va = a + b; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
-  	STH:		if (po) begin va = a + (b << Sc); dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
-  	STW:		if (po) begin va = a + (b << {Sc,1'b0}); dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
-`endif
-  	STD:		if (po) begin va = a + (b << {Sc,2'b0}); dato = s; vwr = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
-		default:	if (po) tAlu(irx,irx[33:27],a,b,res,rfwr,ld);
+		  case(irx[32:21])
+		  12'h016: begin presw = s[31:0]; prfwrw = 1'b1; end
+		  default:  ;
+		  endcase
+  	LDD:		begin va = a + (b << {Sc,2'b0}); vrd = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
+  	STB:		begin va = a + b; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
+  	STH:		begin va = a + (b << Sc); dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
+  	STW:		begin va = a + (b << {Sc,1'b0}); dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
+  	STD:		begin va = a + (b << {Sc,2'b0}); dato = s; vwr = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
+		default:	tAlu(irx,irx[40:34],a,b,res,rfwr,ld);
 		endcase
-	ADDIS:  if (po) begin res = s + {{30{irx[33]}},irx[33:12],14'd0}; rfwr = 1'b1; end 
-	ANDIS:  if (po) begin res = s & {{30{irx[33]}},irx[33:12],14'h3FFF}; rfwr = 1'b1; end
-	ORIS:   if (po) begin res = s | {{30{irx[33]}},irx[33:12],14'd0}; rfwr = 1'b1; end
-	XORIS:  if (po) begin res = s ^ {30'd0,irx[33:12],14'd0}; rfwr = 1'b1; end
-	LDD:		if (po) begin va = a + imm; vrd = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
-`ifdef SLOW
-	STB:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
-	STH:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
-	STW:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
-`endif
-	STD:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
-	CMPI:   tCmp(opcode,irx[33:31],a,imm,po,pres,prfwr);
-	default:	if (po) tAlu(irx,opcode,a,imm,res,rfwr,ld);
+	ADDIS:  begin res = s + {{30{irx[40]}},irx[40:21],14'd0}; rfwr <= 1'b1; end 
+	ANDIS:  begin res = s & {{30{irx[40]}},irx[40:21],14'h3FFF}; rfwr <= 1'b1; end
+	ORIS:   begin res = s | {{30{irx[40]}},irx[40:21],14'd0}; rfwr <= 1'b1; end
+	XORIS:  begin res = s ^ {30'd0,irx[40:21],14'd0}; rfwr <= 1'b1; end
+	LDD:		begin va = a + imm; vrd = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
+	STB:		begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
+	STH:		begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
+	STW:		begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
+	STD:		begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
+	CMPI:	if (irx[20]) tCmp(a,imm,pres,prfwr); else tCmpu(a,imm,pres,prfwr);
+	default:	tAlu(irx,irx[6:0],a,imm,res,rfwr,ld);
 	endcase
-end
-endtask
-
-task tFloat2;
-input [1:0] which;
-input [40:0] irx;
-input tFloat fpa;
-input tFloat fpb;
-output tFloat fpres;
-output fprfwr;
-output [WID-1:0] res;
-output rfwr;
-output pres;
-output prfwr;
-reg fpa_nan;
-reg fpa_xinf;
-reg fpa_inf;
-reg fpa_xz;
-reg fpa_vz;
-reg fpa_qnan;
-reg fpa_snan;
-begin
-  fpa_nan = &fpa.exp & |fpa.man;
-  fpa_xinf = &fpa.exp;
-  fpa_inf = &fpa.exp & ~|fpa.man;
-  fpa_xz = ~|fpa.exp;
-  fpa_vz = ~|fpa.exp & ~|fpa.man;
-  fpa_qnan = &fpa.exp & fpa.man[FMSB];
-  fpa_snan = &fpa.exp & ~fpa.man[FMSB] & |fpa.man;
-  case(irx[30:24])
-  `cFCLT,`cFCGE,`cFCLE,`cFCGT,`cFCEQ,`cFCNE,`cFCUN: 
-    case(which)
-    2'd0: begin pres = fpcmpo0; prfwr = 1'b1; end
-    2'd1: begin pres = fpcmpo1; prfwr = 1'b1; end
-    2'd2: begin pres = fpcmpo2; prfwr = 1'b1; end
-    endcase
-	`cFSGNJ:	
-		case(ir[34:31])
-		3'd0:	begin fpres = {fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end		// FSGNJ
-		3'd1:	begin fpres = {~fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJN
-		3'd2:	begin fpres = {fpb[FPWID-1]^fpa[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJX
-		default:	;
-		endcase
-	`cFLOAT1:
-	  case(ir[23:18])
-    `cFMOV:   begin fpres = fpa; fprfwr = 1'b1; end
-    `cFSIGN:  begin fpres = (fpa[FPWID-2:0]==0) ? 0 : {fpa[FPWID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; fprfwr = 1'b1; end
-    `cFMAN:   begin fpres = {fpa[FPWID-1],1'b0,{EMSB{1'b1}},fpa[FMSB:0]}; fprfwr = 1'b1; end
-    `cFISNAN:	begin fpres = {fpa_nan}; end
-    `cFFINITE:	begin fpres = {!fpa_xinf}; end
-    //`cUNORD:		begin fpres0 = {nanxab}; end
-  	`cFCLASS:
-  		begin
-  			res[0] = fpa[FPWID-1] & fpa_inf;
-  			res[1] = fpa[FPWID-1] & !fpa_xz;
-  			res[2] = fpa[FPWID-1] &  fpa_xz;
-  			res[3] = fpa[FPWID-1] &  fpa_vz;
-  			res[4] = ~fpa[FPWID-1] &  fpa_vz;
-  			res[5] = ~fpa[FPWID-1] &  fpa_xz;
-  			res[6] = ~fpa[FPWID-1] & !fpa_xz;
-  			res[7] = ~fpa[FPWID-1] & fpa_inf;
-  			res[8] = fpa_snan;
-  			res[9] = fpa_qnan;
-  			rfwr = 1'b1;
-  		end
-    `cI2F:
-      case(which)
-      2'd0: begin fpres = i2fo0; end
-      2'd1: begin fpres = i2fo1; end
-      2'd2: begin fpres = i2fo2; end
-      endcase
-    `cF2I:
-      case(which)
-      2'd0: begin res = f2io0; end
-      2'd1: begin res = f2io1; end
-      2'd2: begin res = f2io2; end
-      endcase
-  	`cFTRUNC:
-  	  case(which)
-  	  2'd0: begin fpres = trunco0; end
-  	  2'd1: begin fpres = trunco1; end
-  	  2'd2: begin fpres = trunco2; end
-  	  endcase
-  	endcase
-	endcase
+/*
+	if (isFloat) begin
+		if (&res[WID-1:WID-16] && |res[WID-17:0])
+			presa = 2'b10;
+		else if (res[WID-1])
+			presa = 2'b11;
+		else if (res[WID-2:0]=={WID-1{1'b0}})
+			presa = 2'b00;
+		else
+			presa = 2'b01;
+	end
+	else
+  	presa = {res[WID-1],|res};
+*/
 end
 endtask
 
@@ -1522,40 +1241,19 @@ begin
 	MULU: begin state <= ST_MULDIV; end
 	DIV:  begin state <= ST_MULDIV; end
 	DIVU: begin state <= ST_MULDIV; end
-	`cFMADD:  begin state <= ST_MULDIV; end
-	`cFMSUB:  begin state <= ST_MULDIV; end
-	`cFNMADD:  begin state <= ST_MULDIV; end
-	`cFNMSUB:  begin state <= ST_MULDIV; end
 	default:	;
 	endcase
 end endtask
-
-task tFpuSt;
-input [40:0] irx;
-begin
-	casez(irx[40:34])
-	`cFLOAT2:
-	  case(irx[30:24])
-	  `cFCVT: state <= ST_MULDIV;
-	  `cFTRUNC: state <= ST_MULDIV;
-	  endcase
-  endcase
-end
-endtask
 
 task tExecSt;
 input [40:0] irx;
 input [5:0] st;
 begin
-	casez(irx[40:34])
-	RR: tAluSt(irx[33:27]);
+	casez(irx[14:8])
+	RR: tAluSt(irx[40:34]);
 	LD:	state <= st;
 	ST:	state <= ST_ST;
-	default:	
-	  begin
-	    tAluSt(irx[6:0]);
-	    tFpuSt(irx);	    
-	  end
+	default:	tAluSt(irx[6:0]);
 	endcase
 end
 endtask
@@ -1565,20 +1263,18 @@ endmodule
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-module muldivCnt(rst, clk, state, p, opcode, funct, fltfunc, cnt, done);
+module muldivCnt(rst, clk, state, p, opcode, funct, cnt, done);
 input rst;
 input clk;
 input [5:0] state;
 input p;
 input [6:0] opcode;
 input [6:0] funct;
-input [6:0] fltfunc;
 output reg [7:0] cnt;
 output done;
 parameter ST_RUN = 6'd2;
 parameter ST_MULDIV = 6'd7;
 parameter R2=7'd2,MUL=7'd24,MULU=7'd25,DIV=7'd26,DIVU=7'd27;
-parameter FMADD=7'd112,FMSUB=7'd113,FNMADD=7'd114,FNMSUB=7'd115;
 
 assign done = cnt[7];
 always @(posedge clk)
@@ -1601,15 +1297,6 @@ else begin
         MULU: cnt <= 8'd0;
         DIV:  cnt <= 8'd67;
         DIVU: cnt <= 8'd67;
-        `cFMADD:  cnt <= 8'd25;
-        `cFMSUB:  cnt <= 8'd25;
-        `cFNMADD:  cnt <= 8'd25;
-        `cFNMSUB:  cnt <= 8'd25;
-        `cFLOAT2:
-          case(fltfunc)
-          `cFCVT: cnt <= 8'd1;
-          `cFTRUNC: cnt <= 8'd1;
-          endcase
         endcase
       end
     end

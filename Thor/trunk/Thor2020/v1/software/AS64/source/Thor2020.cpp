@@ -25,8 +25,8 @@
 //
 #include "stdafx.h"
 
-#define I_JMP	78
-#define I_JML	79
+#define I_JMP	72LL
+#define I_JML	79LL
 
 #define I_RR	0x8C
 #define I_R1	0x8B
@@ -38,16 +38,17 @@
 #define I_MOVE	0x12
 #define I_MOVO	0x13
 
-#define I_ADD		4
-#define I_ADDI	4
-#define I_AND		8
-#define I_ANDI	8
-#define I_OR		9
-#define I_ORI		9
-#define I_XOR		10
-#define I_XORI	10
-#define I_ADDIS	30
-#define I_ORIS	31
+#define I_ADD		4LL
+#define I_ADDI	4LL
+#define I_AND		8LL
+#define I_ANDI	8LL
+#define I_OR		9LL
+#define I_ORI		9LL
+#define I_XOR		10LL
+#define I_XORI	10LL
+#define I_ADDIS	30LL
+#define I_ORIS	17LL
+#define I_CMP		32LL
 
 #define I_SHL		0x32
 #define I_SHLI	0x38
@@ -173,18 +174,18 @@ static int regCnst;
 #define S_OCTA	3
 #define S_HEXI	4
 
-#define RT(x)		((x) << 15LL)
-#define PT(x)		(((x) & 15LL) << 15LL)
-#define RA(x)		((x) << 21LL)
-#define RB(x)		((x) << 27LL)
-#define RC(x)		((x) << 33LL)
-#define OP(x)		((x) << 8)
-#define PRED(x)	((x) << 1)
-#define CT(x)		(((x) & 7LL) << 15LL)
-#define CA(x)		(((x) & 7LL) << 18LL)
-#define FUNC7(x)	(((x) & 0x7FLL) << 34LL)
-#define BRDISP(x)	(((x) & 0xfffffLL) << 21LL)
-#define IMM(x)	(((x) & 0x3fffLL) << 27LL)
+#define RT(x)		((x) << 6LL)
+#define PT(x)		(((x) & 63LL) << 6LL)
+#define RA(x)		((x) << 12LL)
+#define RB(x)		((x) << 18LL)
+#define RC(x)		((x) << 24LL)
+#define OP(x)		((x) << 34LL)
+#define PRED(x)	((x))
+#define CT(x)		(((x) & 7LL) << 6LL)
+#define CA(x)		(((x) & 7LL) << 9LL)
+#define FUNC7(x)	(((x) & 0x7FLL) << 27LL)
+#define BRDISP(x)	(((x) & 0x3fffffLL) << 12LL)
+#define IMM(x)	(((x) & 0xffffLL) << 18LL)
 
 #define FUNC6(x)	(((x) & 0x3FLL) << 23LL)
 #define FMT(x)	(((x) & 15L) << 29LL)
@@ -1837,16 +1838,35 @@ xit:
 
 static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 {
-	int Ra;
-	int Pt, Rtp;
+	int64_t Ra;
+	int64_t Pt, Rtp;
 	char *p;
 	int64_t val;
 	int sz = 3;
+	int tst = 0;
 	bool li = false;
 
 	p = inptr;
-	if (*p == '.')
-		getSz(&sz);
+	if (*p == '.') {
+		inptr++;
+		tst = NextToken();
+		switch (tst) {
+		tk_eq:	func6 += 8; break;
+		tk_ne:	func6 += 9; break;
+		tk_lt:	func6 += 0; break;
+		tk_ge:	func6 += 1; break;
+		tk_le:	func6 += 2; break;
+		tk_gt:	func6 += 3; break;
+		tk_ltu:	func6 += 4; break;
+		tk_geu:	func6 += 5; break;
+		tk_leu:	func6 += 6; break;
+		tk_gtu:	func6 += 7; break;
+		default:	error("Expected test condition");
+		}
+		p = inptr;
+		if (*p == '.')
+			getSz(&sz);
+	}
 	Pt = getPredreg();
 	need(',');
 	Ra = getRegisterX();
@@ -1856,7 +1876,7 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 	if (!IsNBit(val, 14)) {
 		LoadConstant(val, 56);
 		emit_insn(
-			FUNC7(opcode6) |
+			FUNC7(func6) |
 			PT(Pt) |
 			RA(Ra) |
 			RB(56) |
@@ -1868,7 +1888,7 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 		IMM(val) |
 		PT(Pt) |
 		RA(Ra) |
-		OP(opcode6) |
+		OP(func6) |
 		PRED(predicate), false, 5);
 xit:
 	ScanToEOL();
@@ -2052,25 +2072,44 @@ static void process_rrop()
        
 static void process_cmp()
 {
-	int Pt;
-	int Ra, Rb, Rt, Rbp, Rtp;
-	char *p;
+	int64_t Pt;
+	int64_t Ra, Rb, Rt, Rbp, Rtp;
+	char *p, *q;
 	int sz = 3;
 	int Re = 0;
 	int64_t instr;
 	int64_t funct6 = parm1[token];
 	int64_t iop = parm2[token];
 	int64_t bit23 = parm3[token];
+	int tst;
 
 	instr = 0LL;
-	p = inptr;
+	q = p = inptr;
 	// fxdiv, transform
 	// - check for writeback indicator
 	if (*p == '.') {
 		if (isspace(p[1]))
 			Re = 1;
-		else
-			getSz(&sz);
+		else {
+			inptr++;
+			tst = NextToken();
+			switch (tst) {
+			case tk_eq:	funct6 += 8; break;
+			case tk_ne:	funct6 += 9; break;
+			case tk_lt:	funct6 += 0; break;
+			case tk_ge:	funct6 += 1; break;
+			case tk_le:	funct6 += 2; break;
+			case tk_gt:	funct6 += 3; break;
+			case tk_ltu:	funct6 += 4; break;
+			case tk_geu:	funct6 += 5; break;
+			case tk_leu:	funct6 += 6; break;
+			case tk_gtu:	funct6 += 7; break;
+			default:	error("Expected test condition");
+			}
+			p = inptr;
+			if (*p=='.')
+				getSz(&sz);
+		}
 	}
 	Pt = getPredreg();
 	need(',');
@@ -2081,7 +2120,7 @@ static void process_cmp()
 		if (iop < 0 && iop != -0x84)
 			error("Immediate mode not supported");
 		//printf("Insn:%d\n", token);
-		inptr = p;
+		inptr = q;
 		process_cmpi(iop, funct6, bit23);
 		return;
 	}
@@ -2096,7 +2135,7 @@ static void process_cmp()
 	Ra = Ra & 0x3f;
 	Rb = Rb & 0x3f;
 	Rt = Rt & 0x3f;
-	emit_insn(FUNC7(funct6) | RB(Rb) | PT(Pt) | RA(Ra) | OP(2) | PRED(predicate), false, 5);
+	emit_insn(FUNC7(funct6) | RB(Rb) | PT(Pt) | RA(Ra) | OP(2LL) | PRED(predicate), false, 5);
 xit:
 	prevToken();
 	ScanToEOL();
@@ -2990,7 +3029,7 @@ static void process_bitfield(int64_t oc)
 // bra label
 // ---------------------------------------------------------------------------
 
-static void process_bra(int oc, int cond)
+static void process_bra(int64_t oc, int cond)
 {
   int Ra = 0, Rb = 0;
   int64_t val;
@@ -3035,7 +3074,7 @@ static void process_bra(int oc, int cond)
 // chk r1,r2,r3,label
 // ----------------------------------------------------------------------------
 
-static void process_chk(int opcode6)
+static void process_chk(int64_t opcode6)
 {
 	int Ra;
 	int Rb;
@@ -3062,7 +3101,7 @@ static void process_chk(int opcode6)
 }
 
 
-static void process_chki(int opcode6)
+static void process_chki(int64_t opcode6)
 {
 	int Ra;
 	int Rb;
@@ -3137,12 +3176,24 @@ static void process_fbcc(int64_t opcode3)
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
-static void process_call(int opcode, int opt)
+static void process_call(int64_t opcode, int opt)
 {
 	int64_t val;
 	int Ra = 0;
-	int lk = -1;
+	int64_t lk = -1;
+	int64_t oc;
+	char *p;
+	int typ = 0;
 
+	p = inptr;
+	if (*p == '.') {
+		inptr++;
+		typ = NextToken();
+		switch (typ) {
+		case tk_wtop:	opcode += 3; break;
+		case tk_wexit: opcode += 4; break;
+		}
+	}
 	lk = getRegisterX();
 	if (lk < 0) {
 		lk = opt ? 1 : 0;
@@ -3194,24 +3245,21 @@ static void process_call(int opcode, int opt)
 		while(whichi & 3)
 			emit_insn(I_NOP_INSN, false, 5);
 		emit_insn(
-			(((val & 0xFFFFFCLL) >> 3LL) << 21LL) |
+			(((val & 0xFFFFFFLL) >> 2LL) << 12LL) |
 			CA(0) |
 			CT(lk) |
 			OP(opcode) |
-			PRED(predicate)|
-			((val & 4LL) >> 2), !expand_flag, 5
+			PRED(predicate),
+			!expand_flag, 5
 		);
 		emit_insn(val >> 24LL, false, 5);
 		return;
 	}
-	emit_insn(
-		(((val & 0xFFFFFCLL) >> 3LL) << 21LL) |
-		CA(0) |
+	oc = (((val & 0xFFFFFFLL) >> 2LL) << 12LL) |
 		CT(lk) |
 		OP(opcode) |
-		PRED(predicate) |
-		((val & 4LL) >> 2),!expand_flag,5
-		);
+		PRED(predicate);
+	emit_insn(oc,false,5);
 }
 
 static void process_iret(int64_t op)
@@ -3766,7 +3814,7 @@ static void process_ldi()
 				OP(I_ORI) |
 				PRED(predicate), false, 5);
 			emit_insn(
-				(((val.low) >> 20LL) << 21LL) |
+				((((val.low) >> 16LL) & 0x3FFFFFLL) << 12LL) |
 				RT(Rt) |
 				OP(I_ORIS) |
 				PRED(predicate), false, 5);
@@ -5163,7 +5211,7 @@ static void ProcessEOL(int opt, int opt2)
 		static int wtndx = 0;
 		static char buf[300];
 
-		predicate = 3;	// p0.ne	(p0 = 1)
+		predicate = 0;	// p0.ne	(p0 = 1)
 
 		if ((lineno % 100) == 0) {
 			printf("%c\r", wtcrsr[wtndx]);
@@ -5425,20 +5473,20 @@ static void process_default()
 	case tk_plus: compress_flag = 0;  expand_flag = 1; break;
 	case tk_pred:
 		if (isdigit(inptr[0]) && isdigit(inptr[1])) {
-			predicate = ((inptr[0] - '0' * 10) + (inptr[1] - '0')) << 3;
+			predicate = ((inptr[0] - '0' * 10) + (inptr[1] - '0'));
 			inptr += 2;
-			if (inptr[0] == '.') inptr++;
-			nn = getPredcon();
-			if (nn >= 0)
-				predicate |= nn;
+//			if (inptr[0] == '.') inptr++;
+//			nn = getPredcon();
+//			if (nn >= 0)
+//				predicate |= nn;
 		}
 		else if (isdigit(inptr[0])) {
-			predicate = (inptr[0] - '0') << 3;
+			predicate = (inptr[0] - '0');
 			inptr += 1;
-			if (inptr[0] == '.') inptr++;
-			nn = getPredcon();
-			if (nn >= 0)
-				predicate |= nn;
+//			if (inptr[0] == '.') inptr++;
+//			nn = getPredcon();
+//			if (nn >= 0)
+//				predicate |= nn;
 		}
 		SkipSpaces();
 		break;
@@ -5539,7 +5587,7 @@ void Thor2020_processMaster()
     int nn;
     int64_t bs1, bs2;
 
-		predicate = 3;	// p0.ne	(p0 = 1)
+		predicate = 0;	// p0.ne	(p0 = 1)
 		lineno = 1;
     binndx = 0;
     binstart = 0;
@@ -5569,8 +5617,8 @@ void Thor2020_processMaster()
 		parm1[tk_add] = 0x04LL;
 		parm2[tk_add] = 0x04LL;
 		jumptbl[tk_cmp] = &process_cmp;
-		parm1[tk_cmp] = 0x06LL;
-		parm2[tk_cmp] = 0x98LL;
+		parm1[tk_cmp] = 32LL;
+		parm2[tk_cmp] = 32LL;
 		jumptbl[tk_cmpu] = &process_cmp;
 		parm1[tk_cmpu] = 0x07LL;
 		parm2[tk_cmpu] = 0x99LL;

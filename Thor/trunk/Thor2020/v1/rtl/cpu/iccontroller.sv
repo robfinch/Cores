@@ -36,7 +36,7 @@ module ICController(rst_i, clk_i, missadr, hit, bstate, idle,
 	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
 parameter ABW = 32;
 parameter AMSB = ABW-1;
-parameter RSTPC = 32'hFFFE0000;
+parameter RSTPC = 32'hFFFC0000;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
@@ -111,7 +111,9 @@ if (rst_i) begin
 	state <= IDLE;
 	idle <= TRUE;
 	L1_selpc <= TRUE;
+	L1_adr <= RSTPC;
 	L2_ld <= FALSE;
+	L2_adr <= RSTPC;
 end
 else begin
 L1_wr <= FALSE;
