@@ -25,7 +25,7 @@
 `include "..\inc\Thor2020-const.sv"
 `include "..\inc\Thor2020-types.sv"
 
-module segmentRegs(rst, clk, state, expat, po0, po1, po2, ir0, ir1, ir2, s0, s1, s2, cs, ad, sego, rg, sego1);
+module segmentRegs(rst, clk, state, expat, po0, po1, po2, ir0, ir1, ir2, s0, s1, s2, cs, rad, rsego, wad, wsego, rg, sego1);
 input rst;
 input clk;
 input [5:0] state;
@@ -40,8 +40,10 @@ input tData s0;
 input tData s1;
 input tData s2;
 output tData cs;
-input tAddress ad;
-output tData sego;
+input tAddress rad;
+output tData rsego;
+input tAddress wad;
+output tData wsego;
 input [2:0] rg;
 output tData sego1;
 
@@ -92,7 +94,8 @@ else begin
 end
 
 assign cs = seg[7];
-assign sego = seg[ad[AMSB:AMSB-2]];
+assign rsego = seg[rad[AMSB:AMSB-2]];
+assign wsego = seg[wad[AMSB:AMSB-2]];
 assign sego1 = seg[rg];
 
 endmodule

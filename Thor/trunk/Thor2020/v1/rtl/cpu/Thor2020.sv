@@ -39,7 +39,7 @@ parameter RSTIP = 64'hFFFFFFFFFFFC0000;
 input rst; input clk; input [WID-1:0] hartid;
 output iicl_o; output [2:0] icti_o; output [1:0] ibte_o; output reg icyc_o; output reg istb_o; input iack_i; output [15:0] isel_o;
 output reg [AMSB:0] iadr_o; input [127:0] idat_i;
-output reg cyc_o; output reg stb_o; input ack_i; output reg we_o; output reg [7:0] sel_o; output tAddress adr_o; output tData dat_o; input tData dat_i;
+output reg cyc_o; output reg stb_o; input ack_i; output reg we_o; output reg [15:0] sel_o; output tAddress adr_o; output reg [127:0] dat_o; input [127:0] dat_i;
 parameter RR=7'd2,R2=7'd2,ADDI = 7'd4,CMPI=7'd6,ANDI=7'd8,ORI=7'd9,XORI=7'd10,ADD=7'd4,SUB=7'd5,CMP=7'b0100???,AND=7'd8,
 OR=7'd9,XOR=7'd10,ANDCM=7'd11,NAND=7'd12,NOR=7'd13,XNOR=7'd14,ORCM=7'd15;
 parameter ADDIS=7'd30,ANDIS=7'd16,ORIS=7'd17,XORIS=7'd18;
@@ -51,40 +51,60 @@ parameter CEQ=7'd40,CNE=7'd41,CLT=7'd32,CGE=7'd33,CLE=7'd34,CGT=7'd35,CLTU=7'd36
 parameter NOP_INSN = 32'b000_00000_00000_00000_000000_1110_1010;
 parameter FMADD=7'd112,FMSUB=7'd113,FNMADD=7'd114,FNMSUB=7'd115;
 reg [1:0] ol = 2'b11;
-reg [3:0] state;
-parameter ST_FETCH=4'd1,ST_RUN = 4'd2,ST_LD0=4'd3,ST_LD1=4'd4,ST_LD2=4'd5,ST_ST=4'd6,ST_MULDIV=4'd7,ST_ST2=4'd11,ST_ST3=4'd12;
-parameter ST_LD0A=4'd8,ST_LD1A=4'd9,ST_LD2A=4'd10,ST_FMADD=4'd13;
+reg [4:0] state;
+parameter ST_FETCH=5'd1,ST_RUN = 5'd2,ST_LD0=5'd3,ST_LD1=5'd4,ST_LD2=5'd5,ST_ST1=5'd6,ST_MULDIV=5'd7,ST_ST2=5'd11,ST_ST3=5'd12;
+parameter ST_LD0A=5'd8,ST_LD1A=5'd9,ST_LD2A=5'd10,ST_FMADD=5'd13,ST_ST4=5'd14,ST_ST5=5'd15;
+parameter ST_LD3=5'd16,ST_LD4=5'd17,ST_LD5=5'd18,ST_LD6=5'd19,ST_LD7=5'd20;
 reg [127:0] ir;
 reg [31:0] ip;
 wire [40:0] ir0 = ir[40:0]; wire [40:0] ir1 = ir[81:41]; wire [40:0] ir2 = ir[122:82]; wire [2:0] irb = ir[125:123];
 wire [6:0] opcode0 = ir0[40:34]; wire [6:0] opcode1 = ir1[40:34]; wire [6:0] opcode2 = ir2[40:34];
 wire [6:0] funct70 = ir0[33:27]; wire [6:0] funct71 = ir1[33:27]; wire [6:0] funct72 = ir2[33:27];
+reg [6:0] ldopcode, ldfunc;
 wire [5:0] Ra0 = ir0[`cRA]; wire [5:0] Rb0 = ir0[`cRB]; wire [5:0] Rc0 = ir0[`cRC]; wire [5:0] Rt0 = ir0[`cRT];
 wire [5:0] Ra1 = ir1[`cRA]; wire [5:0] Rb1 = ir1[`cRB]; wire [5:0] Rc2 = ir1[`cRC]; wire [5:0] Rt1 = ir1[`cRT];
 wire [5:0] Ra2 = ir2[`cRA]; wire [5:0] Rb2 = ir2[`cRB]; wire [5:0] Rc1 = ir2[`cRC]; wire [5:0] Rt2 = ir2[`cRT];
+reg [5:0] xRt0, xRt1, xRt2;
+reg [63:0] fpstat;
+wire [2:0] fprm = fpstat[31:29];
 wire isFloat0 = opcode0 >= 7'd112 && opcode0 <= 7'd121;
 wire isFloat1 = opcode1 >= 7'd112 && opcode1 <= 7'd121;
 wire isFloat2 = opcode2 >= 7'd112 && opcode2 <= 7'd121;
 wire [6:0] fltfunc0 = ir0[30:24];
 wire [6:0] fltfunc1 = ir1[30:24];
 wire [6:0] fltfunc2 = ir2[30:24];
+wire [5:0] fltfunc0a = ir0[23:18];
+wire [5:0] fltfunc1a = ir1[23:18];
+wire [5:0] fltfunc2a = ir2[23:18];
 wire fmadd0 = opcode0==FMADD; wire fmsub0 = opcode0==FMSUB;
 wire fnmadd0 = opcode0==FNMADD; wire fnmsub0 = opcode0==FNMSUB;
 wire fmadd1 = opcode1==FMADD; wire fmsub1 = opcode1==FMSUB;
 wire fnmadd1 = opcode1==FNMADD; wire fnmsub1 = opcode1==FNMSUB;
-wire fcvt0 = opcode0==`cFLOAT2 && fltfunc0==`cFCVT;
-wire fcvt1 = opcode1==`cFLOAT2 && fltfunc1==`cFCVT;
-wire ftrunc0 = opcode0==`cFLOAT2 && fltfunc0==`cFTRUNC;
-wire ftrunc1 = opcode1==`cFLOAT2 && fltfunc1==`cFTRUNC;
+wire fmadd2 = opcode2==FMADD; wire fmsub2 = opcode2==FMSUB;
+wire fnmadd2 = opcode2==FNMADD; wire fnmsub2 = opcode2==FNMSUB;
+wire fdiv0 = opcode0==`cFLOAT2 && fltfunc0==`cFDIV;
+wire fdiv1 = opcode1==`cFLOAT2 && fltfunc1==`cFDIV;
+wire fdiv2 = opcode2==`cFLOAT2 && fltfunc2==`cFDIV;
+wire fcvt0 = opcode0==`cFLOAT2 && fltfunc0==`cFLOAT1 && (fltfunc0a==`cF2I || fltfunc0a==`cI2F || fltfunc0a==`cFTRUNC);
+wire fcvt1 = opcode1==`cFLOAT2 && fltfunc1==`cFLOAT1 && (fltfunc1a==`cF2I || fltfunc1a==`cI2F || fltfunc1a==`cFTRUNC);
+wire fcvt2 = opcode2==`cFLOAT2 && fltfunc2==`cFLOAT1 && (fltfunc2a==`cF2I || fltfunc2a==`cI2F || fltfunc2a==`cFTRUNC);
+wire ftrunc0 = opcode0==`cFLOAT2 && fltfunc0==`cFLOAT1 && fltfunc0a==`cFTRUNC;
+wire ftrunc1 = opcode1==`cFLOAT2 && fltfunc1==`cFLOAT1 && fltfunc1a==`cFTRUNC;
+wire ftrunc2 = opcode2==`cFLOAT2 && fltfunc2==`cFLOAT1 && fltfunc2a==`cFTRUNC;
 reg [2:0] ex;
 wire ldstL = state==ST_ST3;
+wire ldst5 = state==ST_ST5;
 reg ld0, ld1, ld2;
-reg lwr, vwr, vrd;
+reg lwr, vwwr, vwrd, vwr;
 reg wr, rd;
-reg vcyc, vstb, lcyc, lstb;
-reg [7:0] vsel;
-tAddress ad, la, va;
-tData dati, dato;
+reg vwcyc, vwstb, lwcyc, lwstb;
+reg vrcyc, vrstb, lrcyc, lrstb;
+reg [9:0] vwsel, vrsel;
+reg [7:0] rsel;
+tAddress wadr0, lwa, vwa, vra, radr0, radr;
+tData dati, wdat;
+reg [79:0] vwdat;
+reg rack;
 wire po0;
 wire po1;
 wire po2;
@@ -113,7 +133,7 @@ else
 // memory access time.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-tData cs, sego, sego1;
+tData cs, rsego, wsego, sego1;
 
 segmentRegs usgr1 (
   .rst(rst),
@@ -130,8 +150,10 @@ segmentRegs usgr1 (
   .s1(s1),
   .s2(s2),
   .cs(cs),
-  .ad(ad),
-  .sego(sego),
+  .rad(vra),
+  .rsego(rsego),
+  .wad(vwa),
+  .wsego(wsego),
   .rg(ir2[23:21]),
   .sego1(sego1)
 );
@@ -146,7 +168,7 @@ reg invline = 1'b0;
 wire isROM;
 wire [2:0] L1_flt;
 wire L1_selpc, L1_wr, L1_nxt, L1_invline;
-wire [127:0] ROM_dat, L1_dat, L2_dat;
+wire [511:0] ROM_dat, L1_dat, L2_dat;
 wire L1_ihit, L2_ihit, L2_ihita;
 wire L2_ld, L2_nxt;
 wire [2:0] L2_cnt;
@@ -159,6 +181,57 @@ tAddress ivadr, iladr;
 assign L2_ihit = isROM|L2_ihita;
 
 wire ihit = L1_ihit & ic_idle;
+
+wire [511:0] d0ROM_dat;
+wire [511:0] d1ROM_dat;
+
+wire [2:0] d0cti;
+wire [1:0] d0bte;
+wire d0cyc, d0stb, d0err_i, d0wrv_i, d0rdv_i;
+reg d0ack_i;
+wire [7:0] d0sel;
+tAddress d0adr;
+wire [2:0] d1cti;
+wire [1:0] d1bte;
+wire d1cyc, d1stb, d1err_i, d1wrv_i, d1rdv_i;
+reg d1ack_i;
+wire [7:0] d1sel;
+tAddress d1adr;
+
+wire d0isROM, d1isROM;
+wire d0L1_wr, d0L2_ld;
+wire d1L1_wr, d1L2_ld;
+tAddress d0L1_adr, d0L2_adr;
+tAddress d1L1_adr, d1L2_adr;
+wire d0L2_rhit, d0L2_whit;
+wire d0L2_rhita, d1L2_rhita;
+wire d0L1_nxt, d0L2_nxt;					// advances cache way lfsr
+wire d1L1_dhit, d1L2_rhit, d1L2_whit;
+wire d1L1_nxt, d1L2_nxt;					// advances cache way lfsr
+wire [63:0] d0L1_sel, d0L2_sel;
+wire [63:0] d1L1_sel, d1L2_sel;
+wire [511:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
+wire [511:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
+wire d0L1_dhit;
+wire d0L1_selpc;
+wire d1L1_selpc, d1L2_selpc;
+wire d0L1_invline,d1L1_invline;
+//reg [255:0] dcbuf;
+
+reg preload;
+reg [1:0] dccnt;
+reg [3:0] dcwait = 4'd3;
+reg [3:0] dcwait_ctr = 4'd3;
+wire dhit0, dhit1;
+wire dhit0a, dhit1a;
+wire dhit00, dhit10;
+wire dhit01, dhit11;
+tAddress dcadr;
+wire [127:0] dcdat;
+wire dcwr;
+wire [15:0] dcsel;
+assign d0L2_rhit = d0isROM|d0L2_rhita;
+assign d1L2_rhit = d1isROM|d1L2_rhita;
 
 L1_icache uic1
 (
@@ -252,6 +325,202 @@ bootrom ubr1 (
   .o2()
 );
 
+reg StoreAck1, isStore;
+tData dc0_out, dc1_out;
+wire whit0, whit1, whit2;
+reg dram0_load, dram1_load;
+
+wire wr_dcache0 = dcwr;
+wire wr_dcache1 = dcwr;
+//wire rd_dcache0 = !dram0_unc & dram0_load;
+//wire rd_dcache1 = !dram1_unc & dram1_load;
+
+DCController udcc1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.dadr(radr),
+	.rd(lrcyc),
+	.wr(dcwr),
+	.wsel(dcsel),
+	.wadr(dcadr),
+	.wdat(dcdat),
+	.bstate(bstate),
+	.state(),
+	.invline(invdcl),
+	.invlineAddr(invlineAddr),
+	.icl_ctr(),
+	.isROM(d0isROM),
+	.ROM_dat(d0ROM_dat),
+	.dL2_rhit(d0L2_rhit),
+	.dL2_rdat(d0L2_rdat),
+	.dL2_whit(d0L2_whit),
+	.dL2_ld(d0L2_ld),
+	.dL2_wsel(d0L2_sel),
+	.dL2_wadr(d0L2_adr),
+	.dL2_wdat(d0L2_wdat),
+	.dL2_nxt(d0L2_nxt),
+	.dL1_hit(d0L1_dhit),
+	.dL1_selpc(d0L1_selpc),
+	.dL1_sel(d0L1_sel),
+	.dL1_adr(d0L1_adr),
+	.dL1_dat(d0L1_dat),
+	.dL1_wr(d0L1_wr),
+	.dL1_invline(d0L1_invline),
+	.dcnxt(d0L1_nxt),
+	.dcwhich(),
+	.dcl_o(),
+	.cti_o(d0cti),
+	.bte_o(d0bte),
+	.bok_i(1'b0),
+	.cyc_o(d0cyc),
+	.stb_o(d0stb),
+	.ack_i(d0ack_i),
+	.err_i(d0err_i),
+	.wrv_i(d0wrv_i),
+	.rdv_i(d0rdv_i),
+	.sel_o(d0sel),
+	.adr_o(d0adr),
+	.dat_i(dat_i)
+);
+
+L1_dcache udc1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d0L1_nxt),
+	.wr(d0L1_wr),
+	.sel(d0L1_sel),
+	.adr(d0L1_selpc ? radr : d0L1_adr),
+	.i({5'd0,d0L1_dat}),
+	.o(dc0_out),
+	.fault(),
+	.hit(d0L1_dhit),
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d0L1_invline)
+);
+
+L2_dcache udc2
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d0L2_nxt),
+	.wr(d0L2_ld),
+	.wadr(d0L2_adr),
+	.radr(d0L1_adr),
+	.sel(d0L2_sel),
+	.tlbmiss_i(1'b0),
+	.rdv_i(1'b0),
+	.wrv_i(1'b0),
+	.i(d0L2_wdat),
+	.err_i(1'b0),
+	.o(d0L2_rdat),
+	.rhit(d0L2_rhita),
+	.whit(d0L2_whit),
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d0L1_invline)
+);
+
+// For now the second data cache isn't really wired up.
+DCController udcc2
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.dadr(radr),
+	.rd(lrcyc),
+	.wr(dcwr),
+	.wsel(dcsel),
+	.wadr(dcadr),
+	.wdat(dcdat),
+	.bstate(bstate),
+	.state(),
+	.invline(invdcl),
+	.invlineAddr(invlineAddr),
+	.icl_ctr(),
+	.isROM(d1isROM),
+	.ROM_dat(d1ROM_dat),
+	.dL2_rhit(d1L2_rhit),
+	.dL2_rdat(d1L2_rdat),
+	.dL2_whit(d1L2_whit),
+	.dL2_ld(d1L2_ld),
+	.dL2_wsel(d1L2_sel),
+	.dL2_wadr(d1L2_adr),
+	.dL2_wdat(d1L2_wdat),
+	.dL2_nxt(d1L2_nxt),
+	.dL1_hit(d1L1_dhit),
+	.dL1_selpc(d1L1_selpc),
+	.dL1_sel(d1L1_sel),
+	.dL1_adr(d1L1_adr),
+	.dL1_dat(d1L1_dat),
+	.dL1_wr(d1L1_wr),
+	.dL1_invline(d1L1_invline),
+	.dcnxt(d1L1_nxt),
+	.dcwhich(),
+	.dcl_o(),
+	.cti_o(d1cti),
+	.bte_o(d1bte),
+	.bok_i(1'b0),
+	.cyc_o(d1cyc),
+	.stb_o(d1stb),
+	.ack_i(d1ack_i),
+	.err_i(d1err_i),
+	.wrv_i(d1wrv_i),
+	.rdv_i(d1rdv_i),
+	.sel_o(d1sel),
+	.adr_o(d1adr),
+	.dat_i(dat_i)
+);
+
+L1_dcache udc3
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d1L1_nxt),
+	.wr(d1L1_wr),
+	.sel(d1L1_sel),
+	.adr(d1L1_selpc ? radr : d1L1_adr),
+	.i({5'd0,d1L1_dat}),
+	.o(dc1_out),
+	.fault(),
+	.hit(d1L1_dhit),
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d1L1_invline)
+);
+
+L2_dcache udc4
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d1L2_nxt),
+	.wr(d1L2_ld),
+	.wadr(d1L2_adr),
+	.radr(d1L1_adr),
+	.sel(d1L2_sel),
+	.tlbmiss_i(1'b0),
+	.rdv_i(1'b0),
+	.wrv_i(1'b0),
+	.i(d1L2_wdat),
+	.err_i(1'b0),
+	.o(d1L2_rdat),
+	.rhit(d1L2_rhita),
+	.whit(d1L2_whit),
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d1L1_invline)
+);
+
+//tData aligned_data = fnDatiAlign(mem0_addr,xdati);
+tData rdat0, rdat1;
+//assign rdat0 = fnDataExtend(dram0_instr,dram0_unc ? aligned_data : dc0_out);
+//assign rdat1 = fnDataExtend(dram1_instr,dram1_unc ? aligned_data : dc1_out);
+assign dhit0a = d0L1_dhit;
+assign dhit1a = d1L1_dhit;
+
+wire [7:0] wb_fault;
+wire wb_q0_done, wb_q1_done;
+wire wb_has_bus;
+assign dhit0 = dhit0a;// && !wb_hit0;
+assign dhit1 = dhit1a;// && !wb_hit1;
+
 always @(posedge clkg)
 if (rst) begin
   ilcyc <= 1'b0;
@@ -298,9 +567,20 @@ end
 // Write buffer
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-assign rad = ad + {sego[WID-1:4],16'h0};
+wire wcyc, wstb, wwe;
+reg wack;
+wire [15:0] wsel;
+wire wport;
+tAddress wadr;
+wire [127:0] wdat;
+reg wwr0;
+wire wack0;
+reg [9:0] wsel0;
+tAddress wadr0;
+reg [79:0] wdat0;
+
 wire wr_ack;
-/*
+
 writeBuffer uwb1 (
   .rst_i(rst),
   .clk_i(clkg),
@@ -314,28 +594,28 @@ writeBuffer uwb1 (
 	.wb_v(),
 	.wb_addr(),
 	.wb_en_i(1'b1),
-	.cwr_o(),
-	.csel_o(),
-	.cadr_o(),
-	.cdat_o(),
+	.cwr_o(dcwr),
+	.csel_o(dcsel),
+	.cadr_o(dcadr),
+	.cdat_o(dcdat),
 
 	.p0_id_i(4'd0),
 	.p0_rid_i(4'd0),
-	.p0_wr_i(wr),
-	.p0_ack_o(wr_ack),
-	.p0_sel_i(8'hFF),
-	.p0_adr_i(rad),
-	.p0_dat_i(dato),
+	.p0_wr_i(wwr0),
+	.p0_ack_o(wack0),
+	.p0_sel_i(wsel0),
+	.p0_adr_i(wadr0),
+	.p0_dat_i(wdat0),
 	.p0_hit(),
 	.p0_cr(),
 
 	.p1_id_i(4'd1),
 	.p1_rid_i(4'd1),
-	.p1_wr_i(1'b0),
-	.p1_ack_o(),
-	.p1_sel_i(8'h00),
-	.p1_adr_i(32'h0),
-	.p1_dat_i(64'd0),
+	.p1_wr_i(vwr1),
+	.p1_ack_o(wack1),
+	.p1_sel_i(vsel1),
+	.p1_adr_i(ad1),
+	.p1_dat_i(dato1),
 	.p1_hit(),
 	.p1_cr(),
 
@@ -349,69 +629,258 @@ writeBuffer uwb1 (
 	.p2_hit(),
 	.p2_cr(),
 
-	.cyc_o(cyc_o),
-	.stb_o(stb_o),
-	.ack_i(ack_i),
+  .port(wport),
+	.cyc_o(wcyc),
+	.stb_o(wstb),
+	.ack_i(wack),
 	.err_i(1'b0),
 	.tlbmiss_i(1'b0),
 	.wrv_i(1'b0),
-	.we_o(we_o),
-	.sel_o(sel_o),
-	.adr_o(adr_o),
-	.dat_o(dat_o),
+	.we_o(wwe),
+	.sel_o(wsel),
+	.adr_o(wadr),
+	.dat_o(wdat),
 	.cr_o()
 );
-*/
-always @(posedge clkg)
+
+reg wcyc, wstb, rcyc, rstb;
+wire ne_wcyc, ne_d0cyc, ne_d1cyc, ne_rcyc;
+edge_det edw (.rst(rst), .clk(clkg), .ce(1'b1), .i(wcyc), .pe(), .ne(ne_wcyc), .ee());
+edge_det edd0 (.rst(rst), .clk(clkg), .ce(1'b1), .i(d0cyc), .pe(), .ne(ne_d0cyc), .ee());
+edge_det edd1 (.rst(rst), .clk(clkg), .ce(1'b1), .i(d1cyc), .pe(), .ne(ne_d1cyc), .ee());
+edge_det edr (.rst(rst), .clk(clkg), .ce(1'b1), .i(rcyc), .pe(), .ne(ne_rcyc), .ee());
+
+reg [1:0] psel;
+always @(posedge clk)
+if (rst)
+  psel = 2'd0;
+else begin
+  if (!(wcyc|d0cyc|d1cyc|rcyc))
+    psel = 2'd0;
+  else begin
+    case(psel)
+    2'd0: 
+      if (ne_wcyc|~wcyc) begin
+        if (d0cyc)
+          psel = 2'd1;
+        else if (d1cyc)
+          psel = 2'd2;
+        else if (rcyc)
+          psel = 2'd3;
+      end
+    2'd1:
+      if (ne_d0cyc|~d0cyc) begin
+        if (d1cyc)
+          psel = 2'd2;
+        else if (rcyc)
+          psel = 2'd3;
+        else if (wcyc)
+          psel = 2'd0;
+      end
+    2'd2:
+      if (ne_d1cyc|~d1cyc) begin
+        if (wcyc)
+          psel = 2'd0;
+        else if (d1cyc)
+          psel = 2'd2;
+        else if (rcyc)
+          psel = 2'd3;
+      end
+    2'd3:
+      if (ne_rcyc|~rcyc) begin
+        if (wcyc)
+          psel = 2'd0;
+        else if (d1cyc)
+          psel = 2'd2;
+        else if (d0cyc)
+          psel = 2'd1;
+      end
+    endcase
+  end
+end
+
+always @*
 if (rst)
   cyc_o <= 1'b0;
-else
-  cyc_o <= vcyc;
+else begin
+  case(psel)
+  2'd0: cyc_o = wcyc;
+  2'd1: cyc_o = d0cyc;
+  2'd2: cyc_o = d1cyc;
+  2'd3: cyc_o = rcyc;
+  endcase
+end
 
-always @(posedge clkg)
+always @*
 if (rst)
   stb_o <= 1'b0;
-else
-  stb_o <= vstb;
+else begin
+  case(psel)
+  2'd0: stb_o = wstb;
+  2'd1: stb_o = d0stb;
+  2'd2: stb_o = d1stb;
+  2'd3: stb_o = rstb;
+  endcase
+end
 
-always @(posedge clkg)
+always @*
+if (rst) begin
+  wack = 1'b0;
+  d0ack_i = 1'b0;
+  d1ack_i = 1'b0;
+  rack = 1'b0;
+end
+else begin
+  case(psel)
+  2'd0: wack = ack_i;
+  2'd1: d0ack_i = ack_i;
+  2'd2: d1ack_i = ack_i;
+  2'd3: rack = ack_i;
+  endcase
+end
+
+always @*
 if (rst)
   we_o <= 1'b0;
-else
-  we_o <= vwr;
+else begin
+  case(psel)
+  2'd0: we_o = wwe;
+  2'd1: we_o = 1'b0;
+  2'd2: we_o = 1'b0;
+  2'd3: we_o = 1'b0;
+  endcase
+end
 
-wire [15:0] selsh = {8'h00,vsel} << {va[2:0],3'b0};
+always @*
+if (rst)
+  sel_o <= 8'b0;
+else begin
+  case(psel)
+  2'd0: sel_o = wsel;
+  2'd1: sel_o = d0sel;
+  2'd2: sel_o = d1sel;
+  2'd3: sel_o = rsel;
+  endcase
+end
+
+always @*
+if (rst)
+  adr_o <= 64'h0;
+else begin
+  case(psel)
+  2'd0: adr_o = wadr;
+  2'd1: adr_o = d0adr;
+  2'd2: adr_o = d1adr;
+  2'd3: adr_o = radr;
+  endcase
+end
+
+always @*
+if (rst)
+  dat_o <= 128'h0;
+else begin
+  case(psel)
+  2'd0: dat_o = wdat;
+  // not used, d0, d1 are read only
+  default:  dat_o = 128'h0;
+  endcase
+end
+
+wire [31:0] wselsh = {9'h00,vwsel} << {vwa[3:0],3'b0};
+wire [31:0] rselsh = {9'h00,vrsel} << {vra[3:0],3'b0};
 
 always @(posedge clkg)
 if (rst)
-  sel_o <= 1'b0;
+  rsel <= 1'b0;
 else
-  sel_o <= ldstL ? selsh[15:8] : selsh[7:0];
+  rsel <= ldstL ? rselsh[31:16] : rselsh[15:0];
+always @(posedge clkg)
+if (rst)
+  wsel0 <= 1'b0;
+else
+  wsel0 <= ldstL ? wselsh[31:16] : wselsh[15:0];
 
-reg [AMSB:0] sva;
+tAddress svwa;
 always @*
 begin
   if (ol==2'b00)
-    sva <= va + {sego[WID-1:4],16'h0};
+    svwa <= vwa + {wsego[WID-1:4],16'h0};
   else
-    sva <= va;
+    svwa <= vwa;
+end
+tAddress svra;
+always @*
+begin
+  if (ol==2'b00)
+    svra <= vra + {rsego[WID-1:4],16'h0};
+  else
+    svra <= vra;
 end
 
 always @(posedge clkg)
 if (rst)
-  adr_o <= 64'd0;
+  radr <= 64'd0;
 else
-  adr_o <= ldstL ? {sva[AMSB:3] + 2'd1,3'b0} : sva;
+  radr <= ldstL ? {svra[AMSB:4] + 2'd1,4'b0} : svra;
+always @(posedge clkg)
+if (rst)
+  wadr0 <= 64'd0;
+else
+  wadr0 <= ldstL ? {svwa[AMSB:4] + 2'd1,4'b0} : svwa;
+wire [255:0] vdatosh = vwdat << {vwa[3:0],3'b0};
+always @(posedge clkg)
+if (rst)
+  wdat0 <= 128'd0;
+else
+  wdat0 <= ldstL ? vdatosh[255:128] : vdatosh[127:0];
+always @(posedge clkg)
+if (rst)
+  wwr0 <= 1'b0;
+else
+  wwr0 <= vwr & vwstb;
+always @(posedge clkg)
+if (rst)
+  lrcyc <= 1'b0;
+else
+  lrcyc <= vrcyc;
 
-wire [127:0] datosh = dato << {va[2:0],3'b0};
+wire [255:0] datosh = wdat << {vwa[3:0],3'b0};
+/*
 always @(posedge clkg)
 if (rst)
   dat_o <= 64'd0;
 else
-  dat_o <= ldstL ? datosh[127:64] : datosh[63:0];
- 
+  dat_o <= p0_ldst5 ? {56'd0,datosh[135:128]} : p0_ldstL ? datosh[127:64] : datosh[63:0];
+*/
+tData dati0, dati1, dati2;
 always @(posedge clkg)
-  dati <= ldstL ? {dat_i,64'h0} >> {va[2:0],3'b0} : dat_i >> {va[2:0],3'b0};
+  if (state==ST_LD1) begin
+    if (d0L1_dhit)
+      dati0 <= dc0_out;
+    else if (rack)
+      dati0 <= dat_i;
+  end
+always @(posedge clkg)
+  if (state==ST_LD3) begin
+    if (d0L1_dhit)
+      dati1 <= dc0_out;
+    else if (rack)
+      dati1 <= dat_i;
+  end
+always @(posedge clkg)
+  if (state==ST_LD5) begin
+    if (d0L1_dhit)
+      dati2 <= dc0_out;
+    else if (rack)
+      dati2 <= dat_i;
+  end
+always @(posedge clkg)
+  if (state==ST_LD6)
+    dati <= {dati2,dati1,dati0} >> {vra[2:0],3'b0};
+
+
+tFloat datid;
+F40ToF80 ufsd1(dati, datid);
 
 reg M1;
 
@@ -468,6 +937,7 @@ reg prfwrw0, prfwrw1, prfwrw2;
 reg pres0, pres1, pres2;  // predicate result busses
 reg [63:0] presw0, presw1, presw2;
 
+/*
 always @(posedge clkg)
 if (rst) begin
 	for (n = 0; n < 64; n = n + 1)
@@ -505,6 +975,7 @@ else begin
 	end
 	p[0] <= 1'b1;
 end
+*/
 assign po0 = p[ir0[5:0]];
 assign po1 = p[ir1[5:0]] && opcode0 != LDI && opcode0 != JML;
 assign po2 = p[ir2[5:0]];
@@ -550,21 +1021,22 @@ initial begin
     regfile[n] = 0;
 end
 `endif
+/*
 always @(posedge clkg)
 begin
-	if (rfwr0) regfile[Rt0] <= res0;
-	if (rfwr1) regfile[Rt1] <= res1;
-	if (rfwr2) regfile[Rt2] <= res2;
+	if (rfwr0) regfile[xRt0] <= res0;
+	if (rfwr1) regfile[xRt1] <= res1;
+	if (rfwr2) regfile[xRt2] <= res2;
 end
-
+*/
 reg [FPWID-1:0] fpregfile [0:63];
 reg fprfwr0,fprfwr1,fprfwr2;
 reg [FPWID-1:0] fpres0, fpres1, fpres2;
 always @(posedge clkg)
 begin
-	if (fprfwr0) fpregfile[Rt0] <= fpres0;
-	if (fprfwr1) fpregfile[Rt1] <= fpres1;
-	if (fprfwr2) fpregfile[Rt2] <= fpres2;
+	if (fprfwr0) fpregfile[xRt0] <= fpres0;
+	if (fprfwr1) fpregfile[xRt1] <= fpres1;
+	if (fprfwr2) fpregfile[xRt2] <= fpres2;
 end
 
 
@@ -589,6 +1061,17 @@ assign s1 = Rt1==6'd0 ? 64'd0 : regfile[Rt1];
 assign a2 = Ra2==6'd0 ? 64'd0 : regfile[Ra2];
 assign b2 = Rb2==6'd0 ? 64'd0 : regfile[Rb2];
 assign s2 = Rt2==6'd0 ? 64'd0 : regfile[Rt2];
+/*
+assign a0 = Ra0==6'd0 ? 64'd0 : Ra0==xRt2 ? res2 : Ra0==xRt1 ? res1 : Ra0==xRt0 ? res0 : regfile[Ra0];
+assign b0 = Rb0==6'd0 ? 64'd0 : Rb0==xRt2 ? res2 : Rb0==xRt1 ? res1 : Rb0==xRt0 ? res0 : regfile[Rb0];
+assign s0 = Rt0==6'd0 ? 64'd0 : Rt0==xRt2 ? res2 : Rt0==xRt1 ? res1 : Rt0==xRt0 ? res0 : regfile[Rt0];
+assign a1 = Ra1==6'd0 ? 64'd0 : Ra1==xRt2 ? res2 : Ra1==xRt1 ? res1 : Ra1==xRt0 ? res0 : regfile[Ra1];
+assign b1 = Rb1==6'd0 ? 64'd0 : Rb1==xRt2 ? res2 : Rb1==xRt1 ? res1 : Rb1==xRt0 ? res0 : regfile[Rb1];
+assign s1 = Rt1==6'd0 ? 64'd0 : Rt1==xRt2 ? res2 : Rt1==xRt1 ? res1 : Rt1==xRt0 ? res0 : regfile[Rt1];
+assign a2 = Ra2==6'd0 ? 64'd0 : Ra2==xRt2 ? res2 : Ra2==xRt1 ? res1 : Ra2==xRt0 ? res0 : regfile[Ra2];
+assign b2 = Rb2==6'd0 ? 64'd0 : Rb2==xRt2 ? res2 : Rb2==xRt1 ? res1 : Rb2==xRt0 ? res0 : regfile[Rb2];
+assign s2 = Rt2==6'd0 ? 64'd0 : Rt2==xRt2 ? res2 : Rt2==xRt1 ? res1 : Rt2==xRt0 ? res0 : regfile[Rt2];
+*/
 `ifdef SLOW
 assign c0 = Rc0==6'd0 ? 64'd0 : regfile[Rc0];
 assign c1 = Rc1==6'd0 ? 64'd0 : regfile[Rc1];
@@ -987,32 +1470,17 @@ divider udiv2 (
   .idle()
 );
 
-wire [FPWID-1:0] fmao0, fmao1;
+tFloat fmao0, fmao1, fmao2;
+wire [2:0] fprm0 = ir0[33:31]==3'b111 ? fprm : ir0[33:31];
+wire [2:0] fprm1 = ir1[33:31]==3'b111 ? fprm : ir1[33:31];
+wire [2:0] fprm2 = ir2[33:31]==3'b111 ? fprm : ir2[33:31];
 
-fpFMAnr #(80) ufma0
-(
-  .clk(clkg),
-  .ce(1'b1),
-  .op(opcode0[0]),
-  .rm(ir0[34:32]),
-  // Flip MSB for negate for FNMADD / FNMSUB
-  .a(fpa0 ^ {{FPWID-1{1'b0}},opcode0[1]} << (FPWID-1)),
-  .b(fpb0),
-  .c(fpc0),
-  .o(fmao0),
-  .inf(),
-  .zero(),
-  .overflow(),
-  .underflow(),
-  .inexact()
-);
-
-fpFMAnr #(80) ufma1
+fpFMAnr #(FPWID) ufma1
 (
   .clk(clkg),
   .ce(1'b1),
   .op(opcode1[0]),
-  .rm(ir1[34:32]),
+  .rm(fprm1),
   // Flip MSB for negate for FNMADD / FNMSUB
   .a(fpa1 ^ {{FPWID-1{1'b0}},opcode1[1]} << (FPWID-1)),
   .b(fpb1),
@@ -1024,6 +1492,25 @@ fpFMAnr #(80) ufma1
   .underflow(),
   .inexact()
 );
+
+fpFMAnr #(FPWID) ufma2
+(
+  .clk(clkg),
+  .ce(1'b1),
+  .op(opcode2[0]),
+  .rm(fprm2),
+  // Flip MSB for negate for FNMADD / FNMSUB
+  .a(fpa2 ^ {{FPWID-1{1'b0}},opcode2[1]} << (FPWID-1)),
+  .b(fpb2),
+  .c(fpc2),
+  .o(fmao2),
+  .inf(),
+  .zero(),
+  .overflow(),
+  .underflow(),
+  .inexact()
+);
+
 
 wire fpcmpo0, fpcmpo1, fpcmpo2;
 wire nanxab0, nanxab1, nanxab2;
@@ -1038,15 +1525,70 @@ fpDecomp #(FPWID) ufpdc1 (.i(fpa1), .sgn(), .exp(), .man(), .fract(), .xz(fpa1_x
 fpDecomp #(FPWID) ufpdc2 (.i(fpa2), .sgn(), .exp(), .man(), .fract(), .xz(fpa2_xz), .mz(), .vz(fpa2_vz), .inf(fpa2_inf), .xinf(fpa2_xinf), .qnan(fpa2_qnan), .snan(fpa2_snan), .nan(fpa2_nan));
 tFloat trunco0,trunco1,trunco2;
 tFloat i2fo0,i2fo1,i2fo2;
-i2f #(FPWID)  ui2fs0 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a0[WID-1:0]), .o(i2fo0) );
-i2f #(FPWID)  ui2fs1 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a1[WID-1:0]), .o(i2fo1) );
-i2f #(FPWID)  ui2fs2 (.clk(clk), .ce(1'b1), .rm(3'd0), .i(a2[WID-1:0]), .o(i2fo2) );
+i2f #(FPWID)  ui2fs0 (.clk(clk), .ce(1'b1), .rm(fprm0), .i(a0[WID-1:0]), .o(i2fo0) );
+i2f #(FPWID)  ui2fs1 (.clk(clk), .ce(1'b1), .rm(fprm1), .i(a1[WID-1:0]), .o(i2fo1) );
+i2f #(FPWID)  ui2fs2 (.clk(clk), .ce(1'b1), .rm(fprm2), .i(a2[WID-1:0]), .o(i2fo2) );
 f2i #(FPWID)  uf2is0 (.clk(clk), .ce(1'b1), .i(fpa0), .o(f2io0) );
 f2i #(FPWID)  uf2is1 (.clk(clk), .ce(1'b1), .i(fpa1), .o(f2io1) );
 f2i #(FPWID)  uf2is2 (.clk(clk), .ce(1'b1), .i(fpa2), .o(f2io2) );
 fpTrunc #(FPWID) urho1 (.clk(clk), .ce(1'b1), .i(fpa0), .o(trunco0), .overflow());
 fpTrunc #(FPWID) urho2 (.clk(clk), .ce(1'b1), .i(fpa1), .o(trunco1), .overflow());
 fpTrunc #(FPWID) urho3 (.clk(clk), .ce(1'b1), .i(fpa2), .o(trunco2), .overflow());
+reg fpdivld;
+tFloat fpdivo0, fpdivo1, fpdivo2;
+`ifdef SLOW
+fpDivnr #(FPWID) ufpdiv0 (
+  .rst(rst),
+  .clk(clkg),
+  .clk4x(1'b0),
+  .ce(1'b1),
+  .ld(fpdivld),
+  .op(1'b0),
+  .a(fpa0),
+  .b(fpb0),
+  .o(fpdivo0),
+  .rm(),
+  .done(),
+  .sign_exe(),
+  .inf(),
+  .overflow(),
+  .underflow()
+);
+fpDivnr #(FPWID) ufpdiv1 (
+  .rst(rst),
+  .clk(clkg),
+  .clk4x(1'b0),
+  .ce(1'b1),
+  .ld(fpdivld),
+  .op(1'b0),
+  .a(fpa1),
+  .b(fpb1),
+  .o(fpdivo1),
+  .rm(),
+  .done(),
+  .sign_exe(),
+  .inf(),
+  .overflow(),
+  .underflow()
+);
+fpDivnr #(FPWID) ufpdiv2 (
+  .rst(rst),
+  .clk(clkg),
+  .clk4x(1'b0),
+  .ce(1'b1),
+  .ld(fpdivld),
+  .op(1'b0),
+  .a(fpa2),
+  .b(fpb2),
+  .o(fpdivo2),
+  .rm(),
+  .done(),
+  .sign_exe(),
+  .inf(),
+  .overflow(),
+  .underflow()
+);
+`endif
 
 function [47:0] fnDisassem;
 input [40:0] iri;
@@ -1130,18 +1672,21 @@ else begin
   		if (expatx[7] & po1) tExecSt(ir1,ST_LD1);
   		if (expatx[6] & po0) tExecSt(ir0,ST_LD0);
 		end
-	ST_LD0:   state <= ST_LD0A;
-	ST_LD1:   state <= ST_LD1A;
-	ST_LD2:   state <= ST_LD2A;
-	ST_LD0A:	if (ack_i) begin state <= ST_RUN; end
-	ST_LD1A:	if (ack_i) begin state <= ST_RUN; end
-	ST_LD2A:	if (ack_i) begin state <= ST_RUN; end
+	ST_LD1: if (rcyc ? rack : d0L1_dhit) state <= ST_LD2;
 `ifdef SLOW
-	ST_ST:	if (ack_i) begin state <= selsh[15:8] ? ST_ST2 : ST_RUN; end
-	ST_ST2: if (~ack_i) state <= ST_ST3;
-	ST_ST3: if (ack_i) state <= ST_RUN;
+	ST_LD2: if (rcyc ? ~rack : 1'b1) state <= ST_LD6;
 `else
-	ST_ST:	if (ack_i) begin state <= ST_RUN; end
+	ST_LD2: if (rcyc ? ~rack : 1'b1) state <= selsh[31:16] ? ST_LD3 : ST_LD6;
+	ST_LD3: if (rcyc ? rack : d0L1_dhit) state <= ST_LD6;
+`endif
+	ST_LD6: state <= ST_LD7;
+	ST_LD7: state <= ST_RUN;
+`ifdef SLOW
+	ST_ST1:	if (wack) begin state <= |wselsh[31:16] ? ST_ST2 : ST_RUN; end
+	ST_ST2: if (~wack) state <= ST_ST3;
+	ST_ST3: if (wack) state <= ST_RUN;
+`else
+	ST_ST1:	if (wack) begin state <= ST_RUN; end
 `endif
 	ST_MULDIV:
 	  if (cntdone0&cntdone1&cntdone2)
@@ -1158,9 +1703,14 @@ if (rst) begin
 	rfwr0 = 1'b0; prfwr0 = 2'b00; prfwrw0 = 1'b0;
 	rfwr1 = 1'b0; prfwr1 = 2'b00; prfwrw1 = 1'b0;
 	rfwr2 = 1'b0; prfwr2 = 2'b00; prfwrw2 = 1'b0;
+	vwcyc = 1'b0; vwstb = 1'b0;
+	vrcyc = 1'b0; vrstb = 1'b0;
 	vwr = 1'b0;
 	rd = 1'b0;
 	ld0 = 1'b0; ld1 = 1'b0; ld2 = 1'b0;
+	for (n = 0; n < 64; n = n + 1)
+	  p[n] = 1'b0;
+	p[0] = 1'b1;
 end
 else begin
 	rfwr0 = 1'b0; prfwr0 = 2'b00; prfwrw0 = 1'b0;
@@ -1172,14 +1722,16 @@ else begin
 	  if (ihit) begin
   		if (expatx[6]) 
   		  begin
+  		    xRt0 = Rt0;
   		    case(opcode0)
   		    `cFLOAT2: if (po0) tFloat2(2'b00,ir0,fpa0,fpb0,fpres0,fprfwr0,res0,rfwr0,pres0,prfwr0);
   		    default:  
-  		      tExec(ir0,a0,b0,c0,s0,po2,res0,pres0,rfwr0,prfwr0,ld0,presw0,prfwrw0);
+  		      tExec(ir0,a0,b0,c0,s0,po0,res0,pres0,rfwr0,prfwr0,ld0,presw0,prfwrw0);
   		    endcase
   		  end
   		if (expatx[7])
   		  begin
+  		    xRt1 = Rt1;
   		    case(opcode1)
   		    `cFLOAT2: if (po1) tFloat2(2'b01,ir1,fpa1,fpb1,fpres1,fprfwr1,res1,rfwr1,pres1,prfwr1);
   		    default:
@@ -1188,60 +1740,100 @@ else begin
   		  end
   		if (expatx[8])
   		  begin
+  		    xRt2 = Rt2;
   		    case(opcode2)
   		    `cFLOAT2: if (po2) tFloat2(2'b10,ir2,fpa2,fpb2,fpres2,fprfwr2,res2,rfwr2,pres2,prfwr2);
   		    default:
-  		      tExec(ir2,a2,b2,c2,s2,po0,res2,pres2,rfwr2,prfwr2,ld2,presw2,prfwrw2);
+  		      tExec(ir2,a2,b2,c2,s2,po2,res2,pres2,rfwr2,prfwr2,ld2,presw2,prfwrw2);
   		    endcase
   		  end
-  		if (opcode0==LDI) begin if (po0) begin res0 = {ir1,ir0[33:12]}; rfwr0 = 1'b1; end end
-  		else if (opcode1==LDI) begin if (po1) begin res1 = {ir2,ir1[33:12]}; rfwr1 = 1'b1; end end
+  		if (opcode0==LDI) begin if (po0) begin regfile[Rt0] = {ir1,ir0[33:12]}; rfwr0 = 1'b1; end end
+  		else if (opcode1==LDI) begin if (po1) begin regfile[Rt1] = {ir2,ir1[33:12]}; rfwr1 = 1'b1; end end
 		end
-	ST_LD0A:	if (ack_i) begin res0 = dat_i; rfwr0 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
-	ST_LD1A:	if (ack_i) begin res1 = dat_i; rfwr1 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
-	ST_LD2A:	if (ack_i) begin res2 = dat_i; rfwr2 = 1'b1; vrd = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
-	ST_ST:	if (ack_i) begin vwr = 1'b0; vcyc = selsh[15:8]!=8'h00; vstb = 1'b0; end
+	ST_LD1: if (rcyc ? rack : d0L1_dhit) begin vrcyc = |rselsh[31:16]; vrstb = 1'b0; end
+	ST_LD2: if (rcyc ? ~rack : 1'b1) vrstb = 1'b1;
+	ST_LD3: if (rcyc ? rack : d0L1_dhit) begin vrcyc = 1'b0; vrstb = 1'b0; end
+  ST_LD7:
+    case(ldopcode)
+    `cR2:
+      case(ldfunc)
+`ifdef SLOW        
+      `cLDB:  begin regfile[Rt0] = {{56{dati[7]}},dati[7:0]}; rfwr0 = 1'b1; end
+      `cLDH:  begin regfile[Rt0] = {{48{dati[15]}},dati[15:0]}; rfwr0 = 1'b1; end
+      `cLDW:  begin regfile[Rt0] = {{32{dati[31]}},dati[31:0]}; rfwr0 = 1'b1; end
+      `cLDBU: begin regfile[Rt0] = {56'd0,dati[7:0]}; rfwr0 = 1'b1; end
+      `cLDHU: begin regfile[Rt0] = {48'd0,dati[15:0]}; rfwr0 = 1'b1; end
+      `cLDWU: begin regfile[Rt0] = {32'd0,dati[31:0]}; rfwr0 = 1'b1; end
+      `cLDFS: begin fpregfile[Rt0] = datid; fprfwr0 = 1'b1; end
+`endif
+      `cLDD:  begin regfile[Rt0] = dati; rfwr0 = 1'b1; end
+      `cLDFD: begin fpregfile[Rt0] = dati; fprfwr0 = 1'b1; end
+      endcase
+`ifdef SLOW      
+    `cLDB:  begin regfile[Rt0] = {{56{dati[7]}},dati[7:0]}; rfwr0 = 1'b1; end
+    `cLDH:  begin regfile[Rt0] = {{48{dati[15]}},dati[15:0]}; rfwr0 = 1'b1; end
+    `cLDW:  begin regfile[Rt0] = {{32{dati[31]}},dati[31:0]}; rfwr0 = 1'b1; end
+    `cLDBU: begin regfile[Rt0] = {56'd0,dati[7:0]}; rfwr0 = 1'b1; end
+    `cLDHU: begin regfile[Rt0] = {48'd0,dati[15:0]}; rfwr0 = 1'b1; end
+    `cLDWU: begin regfile[Rt0] = {32'd0,dati[31:0]}; rfwr0 = 1'b1; end
+    `cLDFS: begin fpregfile[Rt0] = datid; fprfwr0 = 1'b1; end
+`endif
+    `cLDD:  begin regfile[Rt0] = dati; rfwr0 = 1'b1; end
+    `cLDFD: begin fpregfile[Rt0] = dati; fprfwr0 = 1'b1; end
+    endcase
+	ST_ST1:	if ( wack) begin vwr = |wselsh[31:16]; vwcyc = |wselsh[31:16]; vwstb = 1'b0; end
 `ifdef SLOW
-	ST_ST2: if (~ack_i) begin vstb = 1'b1; end
-	ST_ST3:	if (ack_i) begin vwr = 1'b0; vcyc = 1'b0; vstb = 1'b0; end
+	ST_ST2: if (~wack) begin vwstb = 1'b1; end
+	ST_ST3:	if ( wack) begin vwr = 1'b0; vwcyc = 1'b0; vwstb = 1'b0; end
 `endif
 	ST_MULDIV:
 	  if (cntdone0&cntdone1&cntdone2) begin
-	    case({mul0,mulu0,div0,divu0,fmadd0|fmsub0|fnmadd0|fnmsub0,fcvt0,ftrunc0})
-	    7'b1??????:  begin res0 = prod0;  rfwr0 = 1'b1;  end
-	    7'b01?????:  begin res0 = produ0; rfwr0 = 1'b1; end
-	    7'b001????:  begin res0 = quot0;  rfwr0 = 1'b1; end
-	    7'b0001???:  begin res0 = quot0;  rfwr0 = 1'b1; end
-	    7'b00001??:  begin fpres0 = fmao0; fprfwr0 = 1'b1; end
-	    7'b000001?:  begin
+	    case({mul0,mulu0,div0,divu0,fmadd0|fmsub0|fnmadd0|fnmsub0,fcvt0,ftrunc0,fdiv0})
+	    8'b1???????:  begin regfile[Rt0] = prod0;  rfwr0 = 1'b1;  end
+	    8'b01??????:  begin regfile[Rt0] = produ0; rfwr0 = 1'b1; end
+	    8'b001?????:  begin regfile[Rt0] = quot0;  rfwr0 = 1'b1; end
+	    8'b0001????:  begin regfile[Rt0] = quot0;  rfwr0 = 1'b1; end
+	    8'b00001???:  begin fpregfile[Rt0] = fmao0; fprfwr0 = 1'b1; end
+	    8'b000001??:  begin
 	                  case(ir0[23:18])
 	                  `cI2F: fprfwr0 = 1'b1;
 	                  `cF2I: rfwr0 = 1'b1;
 	                  endcase
 	                end
-	    7'b0000001: begin fpres0 = trunco0; fprfwr0 = 1'b1; end
+	    8'b0000001?: begin fpregfile[Rt0] = trunco0; fprfwr0 = 1'b1; end
+	    8'b00000001: begin fpregfile[Rt0] = fpdivo0; fprfwr0 = 1'b1; end
 	    default:  ; // hardware error, got to MULDIV state and no mul/div decoded.
 	    endcase
-	    case({mul1,mulu1,div1,divu1,fmadd1|fmsub1|fnmadd1|fnmsub1,fcvt1,ftrunc1})
-	    7'b1??????:  begin res1 = prod1;  rfwr1 = 1'b1; end
-	    7'b01?????:  begin res1 = produ1; rfwr1 = 1'b1; end
-	    7'b001????:  begin res1 = quot1;  rfwr1 = 1'b1; end
-	    7'b0001???:  begin res1 = quot1;  rfwr1 = 1'b1; end
-	    7'b00001??:  begin fpres1 = fmao1; fprfwr1 = 1'b1; end
-	    7'b000001?:  begin
+	    case({mul1,mulu1,div1,divu1,fmadd1|fmsub1|fnmadd1|fnmsub1,fcvt1,ftrunc1,fdiv1})
+	    8'b1???????:  begin regfile[Rt1] = prod1;  rfwr1 = 1'b1; end
+	    8'b01??????:  begin regfile[Rt1] = produ1; rfwr1 = 1'b1; end
+	    8'b001?????:  begin regfile[Rt1] = quot1;  rfwr1 = 1'b1; end
+	    8'b0001????:  begin regfile[Rt1] = quot1;  rfwr1 = 1'b1; end
+	    8'b00001???:  begin fpregfile[Rt1] = fmao1; fprfwr1 = 1'b1; end
+	    8'b000001??:  begin
 	                  case(ir1[23:18])
 	                  `cI2F: fprfwr1 = 1'b1;
 	                  `cF2I: rfwr1 = 1'b1;
 	                  endcase
 	                end
-	    7'b0000001: begin fpres1 = trunco1; fprfwr1 = 1'b1; end
+	    8'b0000001?: begin fpregfile[Rt1] = trunco1; fprfwr1 = 1'b1; end
+	    8'b00000001: begin fpregfile[Rt1] = fpdivo1; fprfwr1 = 1'b1; end
 	    default:  ;
 	    endcase
-	    case({mul2,mulu2,div2,divu2})
-	    4'b1???:  begin res2 = prod2;  rfwr2 = 1'b1; end
-	    4'b01??:  begin res2 = produ2; rfwr2 = 1'b1; end
-	    4'b001?:  begin res2 = quot2;  rfwr2 = 1'b1; end
-	    4'b0001:  begin res2 = quot2;  rfwr2 = 1'b1; end
+	    case({mul2,mulu2,div2,divu2,fmadd2|fmsub2|fnmadd2|fnmsub2,fcvt2,ftrunc2,fdiv2})
+	    8'b1???????:  begin regfile[Rt2] = prod2;  rfwr2 = 1'b1; end
+	    8'b01??????:  begin regfile[Rt2] = produ2; rfwr2 = 1'b1; end
+	    8'b001?????:  begin regfile[Rt2] = quot2;  rfwr2 = 1'b1; end
+	    8'b0001????:  begin regfile[Rt2] = quot2;  rfwr2 = 1'b1; end
+	    8'b00001???: begin fpregfile[Rt2] = fmao2; fprfwr2 = 1'b1; end
+	    8'b000001??:  begin
+	                  case(ir2[23:18])
+	                  `cI2F: fprfwr2 = 1'b1;
+	                  `cF2I: rfwr2 = 1'b1;
+	                  endcase
+	                end
+	    8'b0000001?: begin fpregfile[Rt2] = trunco2; fprfwr2 = 1'b1; end
+	    8'b00000001: begin fpregfile[Rt2] = fpdivo2; fprfwr2 = 1'b1; end
 	    default:  ;
 	    endcase
 	  end
@@ -1249,20 +1841,21 @@ else begin
 	endcase
 	$display("------------------------------------");
 	$display("ip: %h  ir: %h", ip, ir);
-	$display("%c%h %s %s %h %h %h %h", ir[123]?"S":"-",ir0,fnPreg(ir0[5:0]),fnDisassem(ir0),imm0, s0, a0, b0);
-	$display("%c%h %s %s %h %h %h %h", ir[124]?"S":"-",ir1,fnPreg(ir1[5:0]),fnDisassem(ir1),imm1, s1, a1, b1);
-	$display("%c%h %s %s %h %h %h %h", ir[125]?"S":"-",ir2,fnPreg(ir2[5:0]),fnDisassem(ir2),imm2, s2, a2, b2);
+	$display("%c%h %s %s %h %h %h %h: %d %d %d %d", ir[123]?"S":"-",ir0,fnPreg(ir0[5:0]),fnDisassem(ir0),imm0, s0, a0, b0, Rt0, Ra0, Rb0, Rc0);
+	$display("%c%h %s %s %h %h %h %h: %d %d %d %d", ir[124]?"S":"-",ir1,fnPreg(ir1[5:0]),fnDisassem(ir1),imm1, s1, a1, b1, Rt1, Ra1, Rb1, Rc1);
+	$display("%c%h %s %s %h %h %h %h: %d %d %d %d", ir[125]?"S":"-",ir2,fnPreg(ir2[5:0]),fnDisassem(ir2),imm2, s2, a2, b2, Rt2, Ra2, Rb2, Rc2);
 end
 
 task tCmp;
+input [5:0] Rt;
 input [6:0] opcode;
 input [2:0] op3;
 input [WID-1:0] a;
 input [WID-1:0] b;
-input p;
-output o;
+input pi;
 output [1:0] prfwr;
 reg [WID:0] sum;
+reg o;
 begin
   case(opcode)
   `cCLT:  o = $signed(a) <  $signed(b);
@@ -1283,22 +1876,40 @@ begin
   default:  o = 1'b0;
   endcase
   case(op3)
-  3'd0: prfwr = p ? 2'b01 : 2'b00;
+  3'd0: if (pi) p[Rt] = o;
 `ifdef SLOW
   3'b1:
-    if (p & o)
+    if (pi & o)
+      p[Rt] = o;
+    else
+      p[Rt] = 1'b0;
+  3'd2: if (pi &  o) p[Rt] = p[Rt] | o;
+  3'd3: if (pi &  o) p[Rt] = p[Rt] & o;
+  3'd4: if (pi & ~o) p[Rt] = p[Rt] | o;
+  3'd5: if (pi & ~o) p[Rt] = p[Rt] & o;
+`endif
+  default:  ;
+  endcase
+  p[0] = 1'b1;
+/*
+  case(op3)
+  3'd0: prfwr = pi ? 2'b01 : 2'b00;
+`ifdef SLOW
+  3'b1:
+    if (pi & o)
       prfwr = 2'b01;
     else begin
       o = 1'b0;
       prfwr = 2'b01;
     end
-  3'd2: prfwr = (p & o) ? 2'b10 : 2'b00;
-  3'd3: prfwr = (p & o) ? 2'b11 : 2'b00;
-  3'd4: prfwr = o ? 2'b00 : p ? 2'b10 : 2'b00;
-  3'd5: prfwr = o ? 2'b00 : p ? 2'b11 : 2'b00;
+  3'd2: prfwr = (pi & o) ? 2'b10 : 2'b00;
+  3'd3: prfwr = (pi & o) ? 2'b11 : 2'b00;
+  3'd4: prfwr = o ? 2'b00 : pi ? 2'b10 : 2'b00;
+  3'd5: prfwr = o ? 2'b00 : pi ? 2'b11 : 2'b00;
 `endif
   default:  prfwr = 2'b00;
   endcase
+*/
 end
 endtask
 
@@ -1310,26 +1921,28 @@ input [WID-1:0] b;
 output [WID-1:0] res;
 output rfwr;
 output ld;
+reg [5:0] Rt;
 begin
+  Rt = irx[11:6];
 	case(op)
-	`cADD:	begin res = a + b; rfwr = 1'b1; end
-	`cSUB:	begin res = a - b; rfwr = 1'b1; end
-	`cAND:	begin res = a & b; rfwr = 1'b1; end
-	`cOR:		begin res = a | b; rfwr = 1'b1; end
-	`cEOR:	begin res = a ^ b; rfwr = 1'b1; end
-	`cANDCM:begin res = a & ~b; rfwr = 1'b1; end
-	`cNAND:	begin res = ~(a & b); rfwr = 1'b1; end
-	`cNOR:	begin res = ~(a | b); rfwr = 1'b1; end
-	`cENOR:	begin res = ~(a ^ b); rfwr = 1'b1; end
-	`cORCM:	begin res = a | ~b; rfwr = 1'b1; end
+	`cADD:	begin regfile[Rt] = a + b; rfwr = 1'b1; end
+	`cSUB:	begin regfile[Rt] = a - b; rfwr = 1'b1; end
+	`cAND:	begin regfile[Rt] = a & b; rfwr = 1'b1; end
+	`cOR:		begin regfile[Rt] = a | b; rfwr = 1'b1; end
+	`cEOR:	begin regfile[Rt] = a ^ b; rfwr = 1'b1; end
+	`cANDCM:begin regfile[Rt] = a & ~b; rfwr = 1'b1; end
+	`cNAND:	begin regfile[Rt] = ~(a & b); rfwr = 1'b1; end
+	`cNOR:	begin regfile[Rt] = ~(a | b); rfwr = 1'b1; end
+	`cENOR:	begin regfile[Rt] = ~(a ^ b); rfwr = 1'b1; end
+	`cORCM:	begin regfile[Rt] = a | ~b; rfwr = 1'b1; end
 	`cDIV:  begin ld = 1'b1; end
 	`cDIVU: begin ld = 1'b1; end
-	SHL:	begin res = a << b[5:0]; rfwr = 1'b1; end
-	SHR:	begin res = a >> b[5:0]; rfwr = 1'b1;  end
-	ASR:	begin res = a[WID-1] ? (a >> b[5:0]) | (~({WID{1'b1}} >> b[5:0])) : a >> b[5:0]; rfwr = 1'b1; end
-	SHLI:	begin res = a << b[5:0]; rfwr = 1'b1; end
-	SHRI:	begin res = a >> b[5:0]; rfwr = 1'b1; end
-	ASRI:	begin res = a[WID-1] ? (a >> b[5:0]) | (~({WID{1'b1}} >> b[5:0])) : a >> b[5:0]; rfwr = 1'b1; end
+	SHL:	begin regfile[Rt] = a << b[5:0]; rfwr = 1'b1; end
+	SHR:	begin regfile[Rt] = a >> b[5:0]; rfwr = 1'b1;  end
+	ASR:	begin regfile[Rt] = a[WID-1] ? (a >> b[5:0]) | (~({WID{1'b1}} >> b[5:0])) : a >> b[5:0]; rfwr = 1'b1; end
+	SHLI:	begin regfile[Rt] = a << b[5:0]; rfwr = 1'b1; end
+	SHRI:	begin regfile[Rt] = a >> b[5:0]; rfwr = 1'b1; end
+	ASRI:	begin regfile[Rt] = a[WID-1] ? (a >> b[5:0]) | (~({WID{1'b1}} >> b[5:0])) : a >> b[5:0]; rfwr = 1'b1; end
 	default:	;
 	endcase
 end endtask
@@ -1348,6 +1961,7 @@ output [1:0] prfwr;
 output ld;
 output [31:0] presw;
 output prfwrw;
+reg [5:0] Rt;
 reg [6:0] opcode;
 reg [WID-1:0] imm;
 reg Sc;
@@ -1355,6 +1969,7 @@ reg isFloat;
 reg [WID*2-1:0] res1;
 begin
   rfwr = 1'b0;
+  Rt = irx[11:6];
 	opcode = irx[40:34];
 	isFloat = opcode >= 7'd112 && opcode <= 7'd121;
   casez(opcode)
@@ -1370,60 +1985,89 @@ begin
 	casez(opcode)
 	RR:
 		casez(irx[33:27])
-		CMP:	tCmp(irx[33:27],irx[26:24],a,b,po,pres,prfwr);
+		CMP:	tCmp(Rt,irx[33:27],irx[26:24],a,b,po,prfwr);
 `ifdef SLOW
-		`cSHLP: if (po) begin res1 = {a,b} << (irx[33] ? imm[5:0] : c[5:0]); res = res1[127:64]; rfwr = 1'b1; end
-		`cSHRP: if (po) begin res = {b,a} >> (irx[33] ? imm[5:0] : c[5:0]); rfwr = 1'b1; end
+		`cSHLP: if (po) begin res1 = {a,b} << (irx[33] ? imm[5:0] : c[5:0]); regfile[Rt] = res1[127:64]; rfwr = 1'b1; end
+		`cSHRP: if (po) begin regfile[Rt] = {b,a} >> (irx[33] ? imm[5:0] : c[5:0]); rfwr = 1'b1; end
 `else
-		`cSHLP: if (po) begin res1 = {a,b} << imm[5:0]; res = res1[127:64]; rfwr = 1'b1; end
-		`cSHRP: if (po) begin res = {b,a} >> imm[5:0]; rfwr = 1'b1; end
+		`cSHLP: if (po) begin res1 = {a,b} << imm[5:0]; regfile[Rt] = res1[127:64]; rfwr = 1'b1; end
+		`cSHRP: if (po) begin regfile[Rt] = {b,a} >> imm[5:0]; rfwr = 1'b1; end
 `endif
 		ASRI: if (po) tAlu(irx,opcode,a,imm,res,rfwr,ld);
 		MFSPR:
 		  if (po) begin
   		  case(irx[23:12])
-  		  12'h001:  begin res = hartid; rfwr = 1'b1; end
-  		  12'h002:  begin res = tick; rfwr = 1'b1; end
+  		  12'h001:  begin regfile[Rt] = hartid; rfwr = 1'b1; end
+  		  12'h002:  begin regfile[Rt] = tick; rfwr = 1'b1; end
   		  12'h020,12'h021,12'h022,12'h023,12'h024,12'h025,12'h026,12'h027:
-  		    begin res = lr[irx[23:21]]; rfwr = 1'b1; end
+  		    begin regfile[Rt] = lr[irx[23:21]]; rfwr = 1'b1; end
   		  12'h016: 
   		    begin
   		      for (n = 1; n < 64; n = n + 1)
-  		        res[n] = p[n];
-  		      res[0] = 1'b1;
+  		        regfile[Rt][n] = p[n];
+  		      regfile[Rt][0] = 1'b1;
           end
-        12'h17: begin res <= lc; rfwr = 1'b1; end
-  		  12'h060,12'h061,12'h062,12'h063,12'h064,12'h065,12'h066,12'h067:  begin res = sego1; rfwr = 1'b1; end
+        12'h17: begin regfile[Rt] <= lc; rfwr = 1'b1; end
+  		  12'h060,12'h061,12'h062,12'h063,12'h064,12'h065,12'h066,12'h067:  begin regfile[Rt] = sego1; rfwr = 1'b1; end
   		  default:  ;
   		  endcase
 		  end
 		MTSPR:
 		  if (po) 
   		  case(irx[23:12])
-  		  12'h016: begin presw = s[31:0]; prfwrw = 1'b1; end
+  		  12'h016:
+  		    begin
+         	  for (n = 1; n < 64; n = n + 1)
+         	    p[n] <= s[n];
+         	  p[0] = 1'b1;
+  		    end
+  		    //presw = s[31:0]; prfwrw = 1'b1; end
   		  default:  ;
   		  endcase
-  	LDD:		if (po) begin va = a + (b << {Sc,2'b0}); vrd = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
 `ifdef SLOW
-  	STB:		if (po) begin va = a + b; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
-  	STH:		if (po) begin va = a + (b << Sc); dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
-  	STW:		if (po) begin va = a + (b << {Sc,1'b0}); dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
+  	`cLDB:	if (po) begin vra = a + b; vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h001; ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDH:	if (po) begin vra = a + (b << Sc); vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h003;  ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDW:	if (po) begin vra = a + (b << {Sc,1'b0}); vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h00F;  ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDBU:	if (po) begin vra = a + b; vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h001; ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDHU:	if (po) begin vra = a + (b << Sc); vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h003;  ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDWU:	if (po) begin vra = a + (b << {Sc,1'b0}); vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h00F;  ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDFS:	if (po) begin vra = a + Sc ? {b,3'b0} + {b,1'b0} : b; vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h01F;  ldopcode = opcode; ldfunc = irx[33:27]; end
 `endif
-  	STD:		if (po) begin va = a + (b << {Sc,2'b0}); dato = s; vwr = 1'b1; vcyc = 1'b1; vsel <= 8'hFF; end
+  	`cLDD:	if (po) begin vra = a + (b << {Sc,2'b0}); vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h0FF;  ldopcode = opcode; ldfunc = irx[33:27]; end
+  	`cLDFD:	if (po) begin vra = a + Sc ? {b,3'b0} + {b,1'b0} : b; vrcyc = 1'b1; vrstb = 1'b1; vrsel <= 10'h3FF;  ldopcode = opcode; ldfunc = irx[33:27]; end
+`ifdef SLOW
+  	`cSTB:	if (po) begin vwa = a + b; vwdat = s; vwr = 1'b1; vwsel <= 10'h001; vwcyc = 1'b1; vwstb = 1'b1; end
+  	`cSTH:	if (po) begin vwa = a + (b << Sc); vwdat = s; vwr = 1'b1; vwsel <= 10'h003; vwcyc = 1'b1; vwstb = 1'b1; end
+  	`cSTW:	if (po) begin vwa = a + (b << {Sc,1'b0}); vwdat = s; vwr = 1'b1; vwsel <= 10'h00F; vwcyc = 1'b1; vwstb = 1'b1; end
+`endif
+  	`cSTD:	if (po) begin vwa = a + (b << {Sc,2'b0}); vwdat = s; vwr = 1'b1; vwcyc = 1'b1; vwsel <= 10'h0FF; vwstb = 1'b1; end
+  	`cSTFD:	if (po) begin vwa = a + Sc ? {b,3'b0} + {b,1'b0} : b; vwdat = s; vwr = 1'b1; vwcyc = 1'b1; vwstb = 1'b1; vwsel <= 10'h0FF; end
 		default:	if (po) tAlu(irx,irx[33:27],a,b,res,rfwr,ld);
 		endcase
-	ADDIS:  if (po) begin res = s + {{30{irx[33]}},irx[33:12],14'd0}; rfwr = 1'b1; end 
-	ANDIS:  if (po) begin res = s & {{30{irx[33]}},irx[33:12],14'h3FFF}; rfwr = 1'b1; end
-	ORIS:   if (po) begin res = s | {{30{irx[33]}},irx[33:12],14'd0}; rfwr = 1'b1; end
-	XORIS:  if (po) begin res = s ^ {30'd0,irx[33:12],14'd0}; rfwr = 1'b1; end
-	LDD:		if (po) begin va = a + imm; vrd = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
+	ADDIS:  if (po) begin regfile[Rt] = s + {{30{irx[33]}},irx[33:12],16'd0}; rfwr = 1'b1; end 
+	ANDIS:  if (po) begin regfile[Rt] = s & {{30{1'b1}},irx[33:12],16'h3FFF}; rfwr = 1'b1; end
+	ORIS:   if (po) begin regfile[Rt] = s | {30'd0,irx[33:12],16'd0}; rfwr = 1'b1; end
+	XORIS:  if (po) begin regfile[Rt] = s ^ {30'd0,irx[33:12],16'd0}; rfwr = 1'b1; end
 `ifdef SLOW
-	STB:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h01; vcyc = 1'b1; end
-	STH:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h03; vcyc = 1'b1; end
-	STW:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'h0F; vcyc = 1'b1; end
+	`cLDB:	if (po) begin vra = a + imm; vrsel = 10'h001; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDH:  if (po) begin vra = a + imm; vrsel = 10'h003; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDW:  if (po) begin vra = a + imm; vrsel = 10'h00F; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDBU: if (po) begin vra = a + imm; vrsel = 10'h001; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDHU: if (po) begin vra = a + imm; vrsel = 10'h003; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDWU:	if (po) begin vra = a + imm; vrsel = 10'h00F; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDFS: if (po) begin vra = a + imm; vrsel = 10'h01F; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
 `endif
-	STD:		if (po) begin va = a + imm; dato = s; vwr = 1'b1; vsel <= 8'hFF; vcyc = 1'b1; end
-	CMPI:   tCmp(opcode,irx[33:31],a,imm,po,pres,prfwr);
+	`cLDD:  if (po) begin vra = a + imm; vrsel = 10'h0FF; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+	`cLDFD: if (po) begin vra = a + imm; vrsel = 10'h3FF; vrcyc = 1'b1; vrstb = 1'b1; ldopcode = opcode; end
+`ifdef SLOW
+	`cSTB:	if (po) begin vwa = a + imm; vwdat = s; vwr = 1'b1; vwsel = 10'h001; vwcyc = 1'b1; vwstb = 1'b1; end
+	`cSTH:	if (po) begin vwa = a + imm; vwdat = s; vwr = 1'b1; vwsel = 10'h003; vwcyc = 1'b1; vwstb = 1'b1; end
+	`cSTW:	if (po) begin vwa = a + imm; vwdat = s; vwr = 1'b1; vwsel = 10'h00F; vwcyc = 1'b1; vwstb = 1'b1; end
+`endif
+	`cSTD:	if (po) begin vwa = a + imm; vwdat = s; vwr = 1'b1; vwsel = 10'h0FF; vwcyc = 1'b1; vwstb = 1'b1; end
+	`cSTFD: if (po) begin vwa = a + imm; vwdat = s; vwr = 1'b1; vwsel = 10'h3FF; vwcyc = 1'b1; vwstb = 1'b1; end
+	CMPI:   tCmp(Rt,opcode,irx[33:31],a,imm,po,prfwr);
+	`cFDIV: if (po) begin fpdivld = 1'b1; end
 	default:	if (po) tAlu(irx,opcode,a,imm,res,rfwr,ld);
 	endcase
 end
@@ -1440,6 +2084,7 @@ output [WID-1:0] res;
 output rfwr;
 output pres;
 output prfwr;
+reg [5:0] Rt;
 reg fpa_nan;
 reg fpa_xinf;
 reg fpa_inf;
@@ -1448,6 +2093,7 @@ reg fpa_vz;
 reg fpa_qnan;
 reg fpa_snan;
 begin
+  Rt = irx[11:6];
   fpa_nan = &fpa.exp & |fpa.man;
   fpa_xinf = &fpa.exp;
   fpa_inf = &fpa.exp & ~|fpa.man;
@@ -1464,50 +2110,50 @@ begin
     endcase
 	`cFSGNJ:	
 		case(ir[34:31])
-		3'd0:	begin fpres = {fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end		// FSGNJ
-		3'd1:	begin fpres = {~fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJN
-		3'd2:	begin fpres = {fpb[FPWID-1]^fpa[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJX
+		3'd0:	begin fpregfile[Rt] = {fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end		// FSGNJ
+		3'd1:	begin fpregfile[Rt] = {~fpb[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJN
+		3'd2:	begin fpregfile[Rt] = {fpb[FPWID-1]^fpa[FPWID-1],fpa[FPWID-1:0]}; fprfwr = 1'b1; end	// FSGNJX
 		default:	;
 		endcase
 	`cFLOAT1:
 	  case(ir[23:18])
-    `cFMOV:   begin fpres = fpa; fprfwr = 1'b1; end
-    `cFSIGN:  begin fpres = (fpa[FPWID-2:0]==0) ? 0 : {fpa[FPWID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; fprfwr = 1'b1; end
-    `cFMAN:   begin fpres = {fpa[FPWID-1],1'b0,{EMSB{1'b1}},fpa[FMSB:0]}; fprfwr = 1'b1; end
-    `cFISNAN:	begin fpres = {fpa_nan}; end
-    `cFFINITE:	begin fpres = {!fpa_xinf}; end
+    `cFMOV:   begin fpregfile[Rt] = fpa; fprfwr = 1'b1; end
+    `cFSIGN:  begin fpregfile[Rt] = (fpa[FPWID-2:0]==0) ? 0 : {fpa[FPWID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; fprfwr = 1'b1; end
+    `cFMAN:   begin fpregfile[Rt] = {fpa[FPWID-1],1'b0,{EMSB{1'b1}},fpa[FMSB:0]}; fprfwr = 1'b1; end
+    `cFISNAN:	begin fpregfile[Rt] = {fpa_nan}; end
+    `cFFINITE:	begin fpregfile[Rt] = {!fpa_xinf}; end
     //`cUNORD:		begin fpres0 = {nanxab}; end
   	`cFCLASS:
   		begin
-  			res[0] = fpa[FPWID-1] & fpa_inf;
-  			res[1] = fpa[FPWID-1] & !fpa_xz;
-  			res[2] = fpa[FPWID-1] &  fpa_xz;
-  			res[3] = fpa[FPWID-1] &  fpa_vz;
-  			res[4] = ~fpa[FPWID-1] &  fpa_vz;
-  			res[5] = ~fpa[FPWID-1] &  fpa_xz;
-  			res[6] = ~fpa[FPWID-1] & !fpa_xz;
-  			res[7] = ~fpa[FPWID-1] & fpa_inf;
-  			res[8] = fpa_snan;
-  			res[9] = fpa_qnan;
+  			regfile[Rt][0] = fpa[FPWID-1] & fpa_inf;
+  			regfile[Rt][1] = fpa[FPWID-1] & !fpa_xz;
+  			regfile[Rt][2] = fpa[FPWID-1] &  fpa_xz;
+  			regfile[Rt][3] = fpa[FPWID-1] &  fpa_vz;
+  			regfile[Rt][4] = ~fpa[FPWID-1] &  fpa_vz;
+  			regfile[Rt][5] = ~fpa[FPWID-1] &  fpa_xz;
+  			regfile[Rt][6] = ~fpa[FPWID-1] & !fpa_xz;
+  			regfile[Rt][7] = ~fpa[FPWID-1] & fpa_inf;
+  			regfile[Rt][8] = fpa_snan;
+  			regfile[Rt][9] = fpa_qnan;
   			rfwr = 1'b1;
   		end
     `cI2F:
       case(which)
-      2'd0: begin fpres = i2fo0; end
-      2'd1: begin fpres = i2fo1; end
-      2'd2: begin fpres = i2fo2; end
+      2'd0: begin fpregfile[Rt] = i2fo0; end
+      2'd1: begin fpregfile[Rt] = i2fo1; end
+      2'd2: begin fpregfile[Rt] = i2fo2; end
       endcase
     `cF2I:
       case(which)
-      2'd0: begin res = f2io0; end
-      2'd1: begin res = f2io1; end
-      2'd2: begin res = f2io2; end
+      2'd0: begin regfile[Rt] = f2io0; end
+      2'd1: begin regfile[Rt] = f2io1; end
+      2'd2: begin regfile[Rt] = f2io2; end
       endcase
   	`cFTRUNC:
   	  case(which)
-  	  2'd0: begin fpres = trunco0; end
-  	  2'd1: begin fpres = trunco1; end
-  	  2'd2: begin fpres = trunco2; end
+  	  2'd0: begin fpregfile[Rt] = trunco0; end
+  	  2'd1: begin fpregfile[Rt] = trunco1; end
+  	  2'd2: begin fpregfile[Rt] = trunco2; end
   	  endcase
   	endcase
 	endcase
@@ -1526,6 +2172,7 @@ begin
 	`cFMSUB:  begin state <= ST_MULDIV; end
 	`cFNMADD:  begin state <= ST_MULDIV; end
 	`cFNMSUB:  begin state <= ST_MULDIV; end
+	`cLDB,`cLDH,`cLDW,`cLDD,`cLDBU,`cLDHU,`cLDWU,`cLDFS,`cLDFD:  state <= ST_LD1;
 	default:	;
 	endcase
 end endtask
@@ -1536,8 +2183,12 @@ begin
 	casez(irx[40:34])
 	`cFLOAT2:
 	  case(irx[30:24])
-	  `cFCVT: state <= ST_MULDIV;
-	  `cFTRUNC: state <= ST_MULDIV;
+  	`cFDIV: begin state <= ST_MULDIV; end
+	  `cFLOAT1:
+	    case(irx[23:18])
+	    `cI2F,`cF2I,`cFTRUNC: state <= ST_MULDIV;
+	    default:  ;
+	    endcase
 	  endcase
   endcase
 end
@@ -1549,11 +2200,10 @@ input [5:0] st;
 begin
 	casez(irx[40:34])
 	RR: tAluSt(irx[33:27]);
-	LD:	state <= st;
-	ST:	state <= ST_ST;
+	STD:	state <= ST_ST1;
 	default:	
 	  begin
-	    tAluSt(irx[6:0]);
+	    tAluSt(irx[40:34]);
 	    tFpuSt(irx);	    
 	  end
 	endcase
@@ -1607,7 +2257,8 @@ else begin
         `cFNMSUB:  cnt <= 8'd25;
         `cFLOAT2:
           case(fltfunc)
-          `cFCVT: cnt <= 8'd1;
+          `cFDIV: cnt <= 8'd40;
+          `cFLOAT1: cnt <= 8'd1;
           `cFTRUNC: cnt <= 8'd1;
           endcase
         endcase

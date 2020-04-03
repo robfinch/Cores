@@ -37,22 +37,22 @@ localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
-input [127:0] i;
+input [511:0] i;
 input [2:0] f;
-output reg [127:0] o;
+output reg [511:0] o;
 output reg [2:0] fo;
 
 integer n;
 
 
 (* ram_style="distributed" *)
-reg [127:0] mem [0:pLines-1];
+reg [511:0] mem [0:pLines-1];
 (* ram_style="distributed" *)
 reg [2:0] fmem[0:pLines-1];
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
-		mem[n] <= 128'd0;
+		mem[n] <= 512'd0;
 	for (n = 0; n < pLines; n = n + 1)
 		fmem[n] <= 3'd0;
 end
@@ -80,7 +80,7 @@ module L1_icache_cmptagNway(rst, clk, nxt, wr, invline, invall, adr, lineno, hit
 parameter pLines = 64;
 parameter AMSB = 31;
 localparam pLNMSB = $clog2(pLines)-1;
-localparam pMSB = pLines==128 ? 10 : 9;
+localparam pMSB = pLines==128 ? 12 : 11;
 input rst;
 input clk;
 input nxt;
@@ -93,7 +93,7 @@ output reg hit;
 output reg [AMSB:0] missadr;
 
 (* ram_style="distributed" *)
-reg [AMSB-4:0] mem0 [0:pLines-1];
+reg [AMSB-6:0] mem0 [0:pLines-1];
 (* ram_style="distributed" *)
 reg [pLines-1:0] mem0v;
 
@@ -114,8 +114,8 @@ if (rst)
 	wlineno <= 6'h00;
 else begin
 	if (wr) begin
-		mem0[adr[pMSB:4]] <= adr[AMSB:4];
-		wlineno <= adr[pMSB:4];
+		mem0[adr[pMSB:6]] <= adr[AMSB:6];
+		wlineno <= adr[pMSB:6];
 	end
 end
 
@@ -128,22 +128,22 @@ else begin
 		mem0v <= 1'd0;
 	end
 	else if (invline) begin
-		if (hit0) mem0v[adr[pMSB:4]] <= 1'b0;
+		if (hit0) mem0v[adr[pMSB:6]] <= 1'b0;
 	end
 	else if (wr)
-		mem0v[adr[pMSB:4]] <= 1'b1;
+		mem0v[adr[pMSB:6]] <= 1'b1;
 end
 
 
-assign hit0 = mem0[adr[pMSB:4]]==adr[AMSB:4] & mem0v[adr[pMSB:4]];
+assign hit0 = mem0[adr[pMSB:6]]==adr[AMSB:6] & mem0v[adr[pMSB:6]];
 always @*
 begin
-  lineno = adr[pMSB:4];
+  lineno = adr[pMSB:6];
 	hit = hit0;
 end
 
 always @*
-	missadr = {adr[AMSB:4],4'h0};
+	missadr = {adr[AMSB:6],6'h0};
 
 endmodule
 
@@ -161,7 +161,7 @@ input nxt;
 input wr;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
-input [127:0] i;
+input [511:0] i;
 input [2:0] fi;
 output reg [127:0] o;
 output reg [2:0] fault;
@@ -170,8 +170,8 @@ input invall;
 input invline;
 output [AMSB:0] missadr;
 
-wire [127:0] ic;
-reg [127:0] i1, i2;
+wire [511:0] ic;
+reg [511:0] i1, i2;
 reg [2:0] f1, f2;
 wire [5:0] lineno;
 wire taghit;
@@ -225,7 +225,12 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @*
-	o <= ic;
+  case(adr[5:4])
+  2'd0: o <= ic[127:  0];
+  2'd1: o <= ic[255:128];
+  2'd2: o <= ic[383:256];
+  2'd3: o <= ic[511:384];
+  endcase
 
 endmodule
 
@@ -237,18 +242,18 @@ module L2_icache_mem(clk, wr, lineno, i, fault, o);
 input clk;
 input wr;
 input [10:0] lineno;
-input [127:0] i;
+input [511:0] i;
 input [1:0] fault;
-output [127:0] o;
+output [511:0] o;
 
 (* ram_style="block" *)
-reg [127:0] mem0 [0:2047];
+reg [511:0] mem0 [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
 integer n;
 initial begin
-  for (n = 0; n < 2048; n = n + 1) begin
+  for (n = 0; n < 512; n = n + 1) begin
     mem0[n] <= 1'd0;
   end
 end
@@ -278,7 +283,7 @@ endmodule
 module L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
-parameter AMSB = 51;
+parameter AMSB = 31;
 input rst;
 input clk;
 input nxt;
@@ -286,9 +291,9 @@ input wr;
 input [AMSB:0] adr;
 input [2:0] cnt;
 input exv_i;
-input [127:0] i;
+input [511:0] i;
 input err_i;
-output [127:0] o;
+output [511:0] o;
 output hit;
 input invall;
 input invline;
@@ -297,7 +302,7 @@ wire [10:0] lineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
 reg [2:0] sel1 = 3'd0,sel2= 3'd0;
-reg [127:0] i1 = 64'd0,i2 = 64'd0;
+reg [511:0] i1 = 64'd0,i2 = 64'd0;
 reg [1:0] f1=2'b0, f2=2'b0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
@@ -366,15 +371,15 @@ output reg [10:0] lineno;
 output hit;
 
 (* ram_style="block" *)
-reg [AMSB-7:0] mem0 [0:2047];
+reg [AMSB-7:0] mem0 [0:511];
 (* ram_style="distributed" *)
-reg [2047:0] valid;
+reg [511:0] valid;
 reg [AMSB:0] rradr;
 
 integer n;
 initial begin
-	valid <= 2048'b0;
-  for (n = 0; n < 2048; n = n + 1)
+	valid <= 512'b0;
+  for (n = 0; n < 512; n = n + 1)
   begin
     mem0[n] = 0;
   end
@@ -387,22 +392,22 @@ always @(posedge clk)
 	inv2 <= inv;
 always @(posedge clk)
 	if (invall)
-		valid <= 2048'b0;
+		valid <= 512'b0;
 	else if (inv2) begin
-		if (hit0) valid[adr[14:4]] <= 1'b0;
+		if (hit0) valid[adr[14:6]] <= 1'b0;
 	end
 	else if (wr)
-		valid[adr[14:4]] <= 1'b1;
+		valid[adr[14:6]] <= 1'b1;
 
 always @(posedge clk)
 	if (wr)
-		mem0[adr[14:4]] <= adr[AMSB:4];
+		mem0[adr[14:6]] <= adr[AMSB:6];
 always @(posedge clk)
 	rradr <= adr;
 
-assign hit0 = mem0[rradr[14:4]]==rradr[AMSB:4] && valid[adr[14:4]];
+assign hit0 = mem0[rradr[14:6]]==rradr[AMSB:6] && valid[adr[14:6]];
 always @*
-	lineno = adr[14:4];
+	lineno = adr[14:6];
 assign hit = hit0;
 
 endmodule

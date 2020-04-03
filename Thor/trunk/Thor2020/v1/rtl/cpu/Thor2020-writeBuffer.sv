@@ -30,7 +30,7 @@ module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid
 	p0_id_i, p0_rid_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit, p0_cr,
 	p1_id_i, p1_rid_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit, p1_cr,
 	p2_id_i, p2_rid_i, p2_wr_i, p2_ack_o, p2_sel_i, p2_adr_i, p2_dat_i, p2_hit, p2_cr,
-	cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
+	port, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
 parameter IQ_ENTRIES = 8;
 parameter RENTRIES = 8;
@@ -59,7 +59,7 @@ input wb_en_i;
 input [3:0] p0_id_i;
 input [3:0] p0_rid_i;
 input p0_wr_i;
-input [3:0] p0_sel_i;
+input [9:0] p0_sel_i;
 input tAddress p0_adr_i;
 input tData p0_dat_i;
 output reg p0_ack_o;
@@ -70,7 +70,7 @@ input p0_cr;
 input [3:0] p1_id_i;
 input [3:0] p1_rid_i;
 input p1_wr_i;
-input [3:0] p1_sel_i;
+input [9:0] p1_sel_i;
 input tAddress p1_adr_i;
 input tData p1_dat_i;
 output reg p1_ack_o;
@@ -81,7 +81,7 @@ input p1_cr;
 input [3:0] p2_id_i;
 input [3:0] p2_rid_i;
 input p2_wr_i;
-input [3:0] p2_sel_i;
+input [9:0] p2_sel_i;
 input tAddress p2_adr_i;
 input tData p2_dat_i;
 output reg p2_ack_o;
@@ -89,6 +89,7 @@ output reg p2_hit;
 input p2_cr;
 
 // Memory port
+output reg port;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
@@ -96,27 +97,28 @@ input err_i;
 input tlbmiss_i;
 input wrv_i;
 output reg we_o;
-output reg [7:0] sel_o;
+output reg [15:0] sel_o;
 output tAddress adr_o;
-output tData dat_o;
+output reg [127:0] dat_o;
 output reg cr_o;
 
 // D$ update port
 output reg cwr_o;
-output reg [7:0] csel_o;
+output reg [15:0] csel_o;
 output tAddress cadr_o;
-output tData cdat_o;
+output reg [127:0] cdat_o;
 
 integer n, j;
 reg wb_en;
 reg [3:0] wb_ptr;
-reg [10:0] wb_sel  [0:WB_DEPTH-1];
-tData wb_data [0:WB_DEPTH-1];
+reg [9:0] wb_sel  [0:WB_DEPTH-1];
+reg [79:0] wb_data [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wbo_id;
 reg [RENTRIES-1:0] wbo_rid;
 reg [WB_DEPTH-1:0] wb_cr;
+reg [1:0] wb_port [0:WB_DEPTH-1];
 
 wire writing_wb = /*(p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) ||*/
 									   (p0_wr_i && wb_ptr < WB_DEPTH-1 && !p0_ack_o)
@@ -128,6 +130,8 @@ parameter IDLE = 3'd0;
 parameter StoreAck1 = 3'd1;
 parameter Store2 = 3'd2;
 parameter StoreAck2 = 3'd3;
+parameter Store3 = 3'd4;
+parameter StoreAck3 = 3'd5;
 
 // If the data is in the write buffer, give the buffer a chance to
 // write out the data before trying to load from the cache.
@@ -146,8 +150,8 @@ begin
 	end
 end
 
-reg [14:0] sel_shift;
-reg [127:0] dat_shift;
+reg [31:0] sel_shift;
+reg [255:0] dat_shift;
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -160,7 +164,7 @@ IDLE:
 		state <= StoreAck1;
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
-		if (sel_shift[14:8]==7'h0)
+		if (sel_shift[31:16]==16'h0)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -181,7 +185,7 @@ if (rst_i) begin
 	cyc_o <= LOW;
 	stb_o <= LOW;
 	we_o <= LOW;
-	sel_o <= 8'h00;
+	sel_o <= 16'h0000;
 	adr_o <= 64'd0;
 	dat_o <= 128'd0;
 	wb_has_bus <= FALSE;
@@ -190,6 +194,7 @@ if (rst_i) begin
 	wb_en <= TRUE;
 	wbo_id <= 1'd0;
 	wbo_rid <= 1'd0;
+	port <= 2'b00;
 	uid <= 1'd0;
 	ruid <= 1'd0;
 	update_iq <= FALSE;
@@ -243,6 +248,7 @@ else begin
 			wb_data[wb_ptr] <= p0_dat_i;
 			wb_id[wb_ptr] <= 16'd1 << p0_id_i;
 			wb_rid[wb_ptr] <= 16'd1 << p0_rid_i;
+			wb_port[wb_ptr] <= p0_id_i;
 			wb_cr[wb_ptr] <= p0_cr;
 			wb_ptr <= wb_ptr + 3'd1;
 			p0_ack_o <= TRUE;
@@ -256,6 +262,7 @@ else begin
 			wb_data[wb_ptr] <= p1_dat_i;
 			wb_id[wb_ptr] <= 16'd1 << p1_id_i;
 			wb_rid[wb_ptr] <= 16'd1 << p1_rid_i;
+			wb_port[wb_ptr] <= p1_id_i;
 			wb_cr[wb_ptr] <= p1_cr;
 			wb_ptr <= wb_ptr + 3'd1;
 			p1_ack_o <= TRUE;
@@ -269,6 +276,7 @@ else begin
 			wb_data[wb_ptr] <= p2_dat_i;
 			wb_id[wb_ptr] <= 16'd1 << p2_id_i;
 			wb_rid[wb_ptr] <= 16'd1 << p2_rid_i;
+			wb_port[wb_ptr] <= p2_id_i;
 			wb_cr[wb_ptr] <= p2_cr;
 			wb_ptr <= wb_ptr + 3'd1;
 			p2_ack_o <= TRUE;
@@ -282,14 +290,15 @@ IDLE:
 			cyc_o <= HIGH;
 			stb_o <= HIGH;
 			we_o <= HIGH;
-			sel_o <= wb_sel[0] << wb_addr[0][2:0];
-			adr_o <= {wb_addr[0][AMSB:3],3'h0};
-			dat_o <= wb_data[0] << {wb_addr[0][2:0],3'h0};
+			sel_o <= wb_sel[0] << wb_addr[0][3:0];
+			adr_o <= {wb_addr[0][AMSB:4],4'h0};
+			dat_o <= wb_data[0] << {wb_addr[0][3:0],3'h0};
 			cr_o <= wb_cr[0];
 			wbo_id <= wb_id[0];
 			wbo_rid <= wb_rid[0];
-			sel_shift <= {15'd0,wb_sel[0]} << wb_addr[0][2:0];
-			dat_shift <= {64'd0,wb_data[0]} << {wb_addr[0][2:0],3'h0};
+			port <= wb_port[0];
+			sel_shift <= {32'd0,wb_sel[0]} << wb_addr[0][3:0];
+			dat_shift <= {128'd0,wb_data[0]} << {wb_addr[0][3:0],3'h0};
 			wb_has_bus <= 1'b1;
 		end
 		if (wb_v[0]==INV && !writing_wb) begin
@@ -297,6 +306,7 @@ IDLE:
 		   	wb_v[j-1] <= wb_v[j];
 		   	wb_id[j-1] <= wb_id[j];
 		   	wb_rid[j-1] <= wb_rid[j];
+  			wb_port[j-1] <= wb_port[j];
 		   	wb_sel[j-1] <= wb_sel[j];
 		   	wb_addr[j-1] <= wb_addr[j];
 		   	wb_data[j-1] <= wb_data[j];
@@ -313,10 +323,10 @@ IDLE:
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		stb_o <= LOW;
-		if (sel_shift[14:8]==7'h0) begin
+		if (sel_shift[31:16]==16'h0000) begin
 			cyc_o <= LOW;
 			we_o <= LOW;
-			sel_o <= 8'h00;
+			sel_o <= 16'h0000;
 			cr_o <= LOW;
     // This isn't a good way of doing things; the state should be propagated
     // to the commit stage, however since this is a store we know there will
@@ -338,24 +348,24 @@ StoreAck1:
 	    wb_has_bus <= FALSE;
 		end
   	cwr_o <= HIGH;
-		csel_o <= wb_sel[0];
-		cadr_o <= wb_addr[0];
-		cdat_o <= wb_data[0];
+		csel_o <= sel_o;
+		cadr_o <= adr_o;
+		cdat_o <= dat_o;
 	end
 Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
-		sel_o <= {1'h0,sel_shift[14:8]};
-		adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
-		adr_o[2:0] <= 3'b0;
-		dat_o <= dat_shift[127:64];
+		sel_o <= sel_shift[31:16];
+		adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
+		adr_o[3:0] <= 4'b0;
+		dat_o <= dat_shift[255:128];
 	end
 StoreAck2:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		cyc_o <= LOW;
 		stb_o <= LOW;
 		we_o <= LOW;
-		sel_o <= 8'h00;
+		sel_o <= 16'h0000;
 		cr_o <= LOW;
 //    if (cr_o)
 //			sema[0] <= rbi_i;
@@ -369,9 +379,9 @@ StoreAck2:
 //			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
     end
   	cwr_o <= HIGH;
-		csel_o <= wb_sel[0];
-		cadr_o <= wb_addr[0];
-		cdat_o <= wb_data[0];
+		csel_o <= sel_o;
+		cadr_o <= adr_o;
+		cdat_o <= dat_o;
     wb_has_bus <= FALSE;
 	end
 endcase
