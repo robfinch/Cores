@@ -26,13 +26,15 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module opcmux(rst,nmi,irq,freeze,ico,o);
+module opcmux(rst,nmi,irq,freeze,ihit,branchmiss,ico,o);
 input rst;
 input nmi;
 input [2:0] irq;
 input freeze;
-input Instruction ico;
-output Instruction o;
+input ihit;
+input branchmiss;
+input tInstruction ico;
+output tInstruction o;
 
 // Multiplex exceptional conditions into the instruction stream.
 always @*
@@ -44,10 +46,10 @@ case(freeze)
 	3'b001:	o = {52'h0,1'b0,irq,`IRQ,`BRKGRP};
 	// The following shouldn't happen (pc frozen without interrupt present).
 	// It's a hardware error. Just do reset.
-	default:	o = {52'h0,4'h0,`RST,`BRKGRP};
+	default:	o = `NOP_INSN;//{52'h0,4'h0,`RST,`BRKGRP};
 	endcase
 default:	
-	o = ico;
+	o = ihit ? ico : `NOP_INSN;
 endcase
 
 endmodule

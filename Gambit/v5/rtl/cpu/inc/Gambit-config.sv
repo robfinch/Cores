@@ -79,7 +79,7 @@
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define IQ_ENTRIES	9		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	7		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time. For now it must be the same size as the dispatch
@@ -100,11 +100,9 @@
 `define RBITS			`RBIT-1:0
 `define RBITSP1		`RBIT:0
 
-// The following bitfield spec is for the instruction sequence number. The
-// sequence number must be reset periodically so it needs enough bits to
-// run until an interrupt routine may reset it. It alos needs to be small
-// enough not to cause timing issues.
-`define SNBIT			19
+// The following bitfield spec is for the instruction sequence number. It should
+// be at least one bit larger than the queue id.
+`define SNBIT			(`QBIT+1)
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will
@@ -128,7 +126,7 @@
 // affects how many instructions are queued.
 `define WAYS			2				// number of ways parallel (1-2) (use only 2)
 `define NUM_IDU		2				// number of instruction decode units (2 only)
-`define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_ALU		1				// number of ALU's (1-2)
 `define NUM_AGEN	2				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-2)
 `define NUM_FPU		1				// number of floating-point units (0-2)
@@ -149,7 +147,7 @@
 // Comment out the following to remove bypassing logic on the functional units.
 // Disabling the bypass will reduce core performance by about 15%-33% while also
 // reducing the size of the core.
-`define FU_BYPASS	1
+//`define FU_BYPASS	1
 
 `define SUPPORT_TLB		1
 

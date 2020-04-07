@@ -29,6 +29,7 @@
 
 `define CSR				7'h01
 `define DIV_3R		7'h03
+`define MOD_3R		7'h13
 `define ADD_3R		7'h04
 `define ADD_RI22	7'h14
 `define ADD_RI35	7'h24
@@ -44,6 +45,7 @@
 `define CMPU_3R		7'h07
 `define CMPU_RI22	7'h17
 `define CMPU_RI35	7'h27
+`define LDI				7'h21
 `define MUL_3R		7'h0E
 `define MUL_RI22	7'h1E
 `define MUL_RI35	7'h2E
@@ -163,7 +165,7 @@
 `define FSEQ		7'h6C
 `define FSNE		7'h7C
 
-`define NOP_INSN	52'hC3
+`define NOP_INSN	65'hC3
 
 `define UO_ADD		6'd0
 `define UO_ADDu		6'd1
@@ -236,13 +238,13 @@
 `define IB_FC			15
 `define IB_LOAD		16
 `define IB_STORE	17
-`define IB_MEMSZ	18
 `define IB_MEM		19
 `define IB_JAL		20
 `define IB_BR			21
 `define IB_RFW		22
 `define IB_CONST	74:23
-`define IBTOP		75
+`define IB_MEMSZ	78:75
+`define IBTOP		79
 
 `define CSR_CR0     12'h000
 `define CSR_HARTID  12'h001

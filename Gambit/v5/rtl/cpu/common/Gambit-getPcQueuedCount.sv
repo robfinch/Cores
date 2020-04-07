@@ -34,9 +34,7 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module getQueuedCount(rst, clk, ce, branchmiss,
-  decbufv0, decbufv1,
-  brk, tails, rob_tails, slotvd,
+module getPcQueuedCount(rst, clk, ce, branchmiss, brk, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iqs_v, rob_v, queuedCnt, queuedCntNzp, queuedCntd1,
 	queuedCntd2, queuedOnp, queuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -47,8 +45,6 @@ input rst;
 input clk;
 input ce;
 input branchmiss;
-input decbufv0;
-input decbufv1;
 input [QSLOTS-1:0] brk;
 input Qid tails [0:QSLOTS*2-1];
 input Rid rob_tails [0:RSLOTS*2-1];
@@ -65,25 +61,26 @@ output reg [QSLOTS-1:0] queuedOnp;
 output reg [QSLOTS-1:0] queuedOn;
 
 wire fourEmpty = iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV
- 						    && iqs_v[tails[2]]==`INV && iqs_v[tails[3]]==`INV;
-wire oneEmpty = iqs_v[tails[0]]==`INV;
-wire twoEmpty = iqs_v[tails[0]]==`INV && iqs_v[tails[1]]==`INV;
-
+ 						    && iqs_v[tails[2]]==`INV && iqs_v[tails[3]]==`INV
+     						;
 always @*
 begin
-	queuedCnt = 3'd0;
-	queuedOnp = 2'd0;
-	queuedCntNzp = 1'b0;
+	queuedCnt <= 3'd0;
+	queuedOnp <= 1'd0;
+	queuedCntNzp <= 1'b0;
 	if (!branchmiss) begin
-    if (twoEmpty) begin
-      queuedCnt = decbufv0|decbufv1;
-      queuedOnp[0] = decbufv0;
-      queuedCntNzp = 1'b1;
-      if (decbufv1 && take_branch[0]==1'b0 && slot_jmp[0]==1'b0 && brk[0]==1'b0) begin
-        if (`WAYS > 1) begin
-        	queuedCnt = decbufv0 ? 3'd2 : 3'd1;
-	        queuedOnp[1] = decbufv1;
-	      end
+    if (fourEmpty) begin
+      queuedCnt <= 3'd2;
+      queuedOnp[0] <= `TRUE;
+      queuedOnp[1] <= `TRUE;
+      queuedCntNzp <= 1'b1;
+      if (!brk[0]) begin
+        if (!(slot_jmp[0]|take_branch[0])) begin
+          if (`WAYS > 1) begin
+          	queuedCnt <= 3'd2;
+		        queuedOnp[1] <= `TRUE;
+		      end
+        end
       end
   	end
   end
@@ -96,10 +93,10 @@ if (rst) begin
 	queuedOn <= 2'b00;
 end
 else begin
+	queuedCntd1 <= queuedCnt;
 	queuedCntd2 <= queuedCntd1;
 	if (ce) begin
 		queuedOn <= queuedOnp;
-  	queuedCntd1 <= queuedCnt;
 	end
 end
 

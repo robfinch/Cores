@@ -129,7 +129,7 @@ else begin
 				begin
 					if (q2)
 						pc <= pc + len1 + len2;
-					else if (q1)
+					else if (q1 & 1'b0)
 						pc <= pc + len1;
 //				if (((q1 & ~q1bx)|q2) & br[0])
 //					pc <= btgt[0];
@@ -156,7 +156,7 @@ if (rst) begin
 end
 else begin
 	branch_pc = pc;
-	if (q1) begin
+	if (q1 & 1'b0) begin
 		if (wai[0])
 			branch_pc = pc - 52'd1;
 		else if (rts[0])

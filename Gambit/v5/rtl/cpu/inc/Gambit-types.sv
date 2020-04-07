@@ -38,23 +38,35 @@ logic [3:0] cnst;
 
 typedef logic [7:0] MicroOpPtr;
 
-typedef logic [`ABITS] Address;
+typedef logic [`ABITS] tAddress;
 typedef logic [7:0] ASID;
 typedef logic [51:0] Data;
 typedef logic [`QBITS] Qid;			// Issue queue id
 typedef logic [`RBITS] Rid;			// Reorder buffer id
+typedef logic [2:0] Fuid;				// functional unit id
 typedef logic [6:0] RegTag;			// Register tag
 typedef logic [7:0] ExcCode;		// Exception code
 typedef logic [`SNBITS] Seqnum;	// Sequence number
 // Rather than having a number represent a register like the RegTag type, this
 // type represents a register with a bit position in a vector.
 typedef logic [`AREGS-1:0] RegTagBitmap;
+typedef logic [2:0] ILen;
 
 typedef struct packed
 {
 	ASID asid;
-	Address adr;
+	tAddress adr;
 } AddressWithASID;
+
+typedef enum bit[3:0] {
+	octa = 4'd0,
+	byt = 4'd1,
+	wyde = 4'd2,
+	tetra = 4'd4,
+	ubyt = 4'd5,
+	uwyde = 4'd6,
+	utetra = 4'd8
+} MemSize;
 
 typedef enum bit[2:0] {
 	BC_NULL,
@@ -69,13 +81,13 @@ typedef enum bit[2:0] {
 
 typedef struct packed
 {
-	logic [44:0] payload;
+	logic [57:0] payload;
 	logic [6:0] opcode;
 } Gen_Instruction;
 
 typedef struct packed
 {
-	logic [25:0] pad;
+	logic [38:0] pad;
 	logic one;
 	logic [7:0] imm8;
 	logic [4:0] Ra;
@@ -85,7 +97,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [25:0] pad;
+	logic [38:0] pad;
 	logic zero;
 	logic [2:0] padr;
 	logic [4:0] Rb;
@@ -96,7 +108,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [12:0] pad13;
+	logic [25:0] pad13;
 	logic [21:0] imm22;
 	logic [4:0] Ra;
 	logic [4:0] Rt;
@@ -105,7 +117,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [34:0] imm35;
+	logic [47:0] imm35;
 	logic [4:0] Ra;
 	logic [4:0] Rt;
 	logic [6:0] opcode;
@@ -113,7 +125,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [4:0] pad5;
+	logic [17:0] pad5;
 	logic [29:0] imm30;
 	logic [4:0] Ra;
 	logic [4:0] Rt;
@@ -122,7 +134,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [25:0] pad25;
+	logic [38:0] pad25;
 	logic [11:0] disp;
 	logic [2:0] cr;
 	logic [1:0] pred;
@@ -132,7 +144,7 @@ typedef struct packed
 
 typedef struct packed
 { 
-	logic [12:0] pad13;
+	logic [25:0] pad13;
 	logic [2:0] op;
 	logic [2:0] ol;
 	logic [3:0] pad4;
@@ -144,14 +156,14 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [42:0] addr;
+	logic [55:0] addr;
 	logic [1:0] lk;
 	logic [6:0] opcode;
 } Jal_Instruction;
 
 typedef struct packed
 {
-	logic [38:0] pad39;
+	logic [51:0] pad39;
 	logic [3:0] Ra;
 	logic [1:0] lk;
 	logic [6:0] opcode;
@@ -159,7 +171,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [38:0] pad39;
+	logic [51:0] pad39;
 	logic [1:0] pad2;
 	logic [1:0] lk;
 	logic [1:0] exop;
@@ -168,7 +180,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [38:0] pad39;
+	logic [51:0] pad39;
 	logic [3:0] sigmsk;
 	logic [1:0] exop;
 	logic [6:0] opcode;
@@ -176,7 +188,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [38:0] pad39;
+	logic [51:0] pad39;
 	logic [3:0] cnst;
 	logic [1:0] exop;
 	logic [6:0] opcode;
@@ -184,7 +196,15 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [12:0] pad13;
+  logic [51:0] pad39;
+  logic [3:0] cnst;
+  logic [1:0] exop;
+  logic [6:0] opcode;
+} Brk_Instruction;
+
+typedef struct packed
+{
+	logic [25:0] pad13;
 	logic [5:0] pad6;
 	logic [3:0] imask;
 	logic [2:0] tgt;
@@ -196,7 +216,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [25:0] pad26;
+	logic [38:0] pad26;
 	logic zero;
 	logic [2:0] pad3;
 	logic [2:0] dcmd;
@@ -208,7 +228,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [25:0] pad;
+	logic [38:0] pad;
 	logic zero;
 	logic [2:0] rm;
 	logic [4:0] func5;
@@ -219,7 +239,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [25:0] pad;
+	logic [38:0] pad;
 	logic zero;
 	logic [2:0] rm;
 	logic [4:0] Rb;
@@ -230,12 +250,12 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [51:0] bits;
+	logic [64:0] bits;
 } RAW_Instruction;
 
 typedef union packed
 {
-	logic [51:0] raw;
+	logic [64:0] raw;
 	Gen_Instruction gen;
 	RR_Instruction rr;
 	RI8_Instruction ri8;
@@ -248,12 +268,16 @@ typedef union packed
 	Ret_Instruction ret;
 	Wai_Instruction wai;
 	Stp_Instruction stp;
+	Brk_Instruction brk;
 	Rex_Instruction rex;
 	CSR_Instruction csr;
 	FLT1_Instruction flt1;
 	FLT2_Instruction flt2;
 	Cache_Instruction cache;
-} Instruction;
+} tInstruction;
+
+typedef tAddress Address;
+typedef tInstruction Instruction;
 
 typedef struct packed
 {
@@ -268,21 +292,44 @@ typedef struct packed
 
 typedef struct packed
 {
+  logic valid;
+  Rid source;
+  Data value;
+} tArgument;
+
+typedef struct packed
+{
 	IQState iqs;
-	Address [`IQ_ENTRIES-1:0] predicted_pc;
+	Seqnum [`IQ_ENTRIES-1:0] sn;
+	tAddress [`IQ_ENTRIES-1:0] pc;
+	ILen [`IQ_ENTRIES-1:0] ilen;
+	Instruction [`IQ_ENTRIES-1:0] instr;		// instruction
+	tAddress [`IQ_ENTRIES-1:0] predicted_pc;
 	logic [`IQ_ENTRIES-1:0] prior_fsync;
 	logic [`IQ_ENTRIES-1:0] prior_sync;
 	logic [`IQ_ENTRIES-1:0] prior_memdb;
 	logic [`IQ_ENTRIES-1:0] prior_memsb;
 	logic [`IQ_ENTRIES-1:0] prior_pathchg;
 	logic [`IQ_ENTRIES-1:0] fsync;
-	logic [`IQ_ENTRIES-1:0] fpu;
 	logic [`IQ_ENTRIES-1:0] memdb;
 	logic [`IQ_ENTRIES-1:0] memsb;
 	logic [`IQ_ENTRIES-1:0] sync;
 	logic [`IQ_ENTRIES-1:0] fc;
 	logic [`IQ_ENTRIES-1:0] canex;
+	logic [`IQ_ENTRIES-1:0] alu;
+	logic [`IQ_ENTRIES-1:0] alu0;
+	logic [`IQ_ENTRIES-1:0] fpu;
 	logic [`IQ_ENTRIES-1:0] fpu0;
+	logic [`IQ_ENTRIES-1:0] mem;
+	logic [`IQ_ENTRIES-1:0] memndx;			// indexed memory instruction
+	logic [3:0] [`IQ_ENTRIES-1:0] memsz;			// size of memory operation
+	logic [`IQ_ENTRIES-1:0] load;				// memory load operation
+	logic [`IQ_ENTRIES-1:0] store;			// memory store operation
+	logic [`IQ_ENTRIES-1:0] store_cr;		// memory store and clear reservation operation
+	tAddress [`IQ_ENTRIES-1:0] ma;				// memory address
+	tArgument [`IQ_ENTRIES-1:0] argA;	// First argument
+  tArgument [`IQ_ENTRIES-1:0] argB;	// Second argument
+  tArgument [`IQ_ENTRIES-1:0] argT ;	// Target/Source argument
 } IQ;
 
 typedef struct packed
@@ -294,7 +341,8 @@ typedef struct packed
 typedef struct packed
 {
 	Qid [`RENTRIES-1:0] id;			// Link to issue queue
-	Address [`RENTRIES-1:0] pc;
+	Fuid [`RENTRIES-1:0] fuid;	// link back to functional unit
+	tAddress [`RENTRIES-1:0] pc;
 	Instruction [`RENTRIES-1:0] instr;
 	Data [`RENTRIES-1:0] res;
 	RegTag [`RENTRIES-1:0] tgt;
@@ -365,5 +413,20 @@ class Rob;
 endclass
 */
 typedef logic [19:0] Key;
+
+typedef struct packed
+{
+	logic v;
+	tAddress adr;
+	tInstruction ins;
+} tDecodeBuffer;
+
+typedef struct packed
+{
+  logic predict_taken;
+  logic v;
+  tAddress adr;
+  tInstruction ins;
+} tFetchBuffer;
 
 `endif
