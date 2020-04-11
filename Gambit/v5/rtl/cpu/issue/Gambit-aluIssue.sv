@@ -26,10 +26,11 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module aluIssue(rst, clk, ce, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
+module aluIssue(rst, clk, ce, allow_issue, could_issue, alu0_idle, alu1_idle, iq_alu, iq_alu0, iq_prior_sync, issue0, issue1);
 input rst;
 input clk;
 input ce;
+input [8:0] allow_issue;
 input [`IQ_ENTRIES-1:0] could_issue;
 input alu0_idle;
 input alu1_idle;
@@ -49,7 +50,7 @@ begin
 	issue0p = {`IQ_ENTRIES{1'b0}};
 	issue1p = {`IQ_ENTRIES{1'b0}};
 	
-	if (alu0_idle) begin
+	if (alu0_idle & allow_issue[0]) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_alu[n]
 			&& issue0p == {`IQ_ENTRIES{1'b0}}
@@ -61,7 +62,7 @@ begin
 		end
 	end
 
-	if (alu1_idle && `NUM_ALU > 1) begin
+	if (alu1_idle && allow_issue[1] && `NUM_ALU > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_alu[n] && !iq_alu0[n]
 				&& !issue0p[n]
@@ -73,11 +74,19 @@ begin
 	end
 end
 
+
+always @*
+	issue0 <= issue0p;
+always @*
+	issue1 <= issue1p;
+
+/*
 always @(posedge clk)
 if (ce)
 	issue0 <= issue0p;
 always @(posedge clk)
 if (ce)
 	issue1 <= issue1p;
+*/
 
 endmodule

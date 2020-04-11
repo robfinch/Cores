@@ -29,10 +29,11 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module memissueSelect(rst, clk, ce, iq_stomp, iq_memissue, iqs_agen, dram0, dram1, issue0, issue1);
+module memissueSelect(rst, clk, ce, allow_issue, iq_stomp, iq_memissue, iqs_agen, dram0, dram1, issue0, issue1);
 input rst;
 input clk;
 input ce;
+input [8:0] allow_issue;
 input [`IQ_ENTRIES-1:0] iq_stomp;
 input [`IQ_ENTRIES-1:0] iq_memissue;
 input [`IQ_ENTRIES-1:0] iqs_agen;
@@ -58,13 +59,13 @@ else begin
 	issue0p = `IQ_ENTRIES;
 	issue1p = `IQ_ENTRIES;
 	for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-    if (iq_memissue[n] && iqs_agen[n] && !li0) begin
+    if (allow_issue[7] && iq_memissue[n] && iqs_agen[n] && !li0) begin
       if (dram0 == `DRAMSLOT_AVAIL) begin
        	issue0p = n;
       end
     end
 	for (n = 0; n < `IQ_ENTRIES; n = n + 1)
-    if (iq_memissue[n] && iqs_agen[n] && !li1) begin
+    if (allow_issue[8] && iq_memissue[n] && iqs_agen[n] && !li1) begin
     	if (n != issue0p && `NUM_MEM > 1) begin
         if (dram1 == `DRAMSLOT_AVAIL) begin
 					issue1p = n;
@@ -75,20 +76,20 @@ end
 
 always @(posedge clk)
 if (rst)
-	li0 <= 1'b0;
+	li0 = 1'b0;
 else begin
 	if (ce) begin
-		li0 <= issue0p != `IQ_ENTRIES;
-		issue0 <= issue0p;
+		li0 = issue0p != `IQ_ENTRIES;
+		issue0 = issue0p;
 	end
 end
 always @(posedge clk)
 if (rst)
-	li1 <= 1'b0;
+	li1 = 1'b0;
 else begin
 	if (ce) begin
-		li1 <= issue1p != `IQ_ENTRIES;
-		issue1 <= issue1p;
+		li1 = issue1p != `IQ_ENTRIES;
+		issue1 = issue1p;
 	end
 end
 

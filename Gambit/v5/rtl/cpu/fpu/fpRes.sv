@@ -22,14 +22,13 @@
 // ============================================================================
 //
 `include "fpConfig.sv"
-`include "fpTypes.sv"
 
 module fpRes(clk, ce, a, o);
 parameter FPWID = `FPWID;
 input clk;
 input ce;
-input Float a;
-output Float o;
+input [`MSB:0] a;
+output [`MSB:0] o;
 
 // This table encodes two endpoints k0, k1 of a piece-wise linear
 // approximation to the reciprocal in the range [1.0,2.0).
@@ -1063,15 +1062,15 @@ k01[1023] = 32'h800f4009;
 end
 
 wire sa;
-wire Exponent xa;
-wire Mantissa ma;
+wire [`EMSB:0] xa;
+wire [`FMSB:0] ma;
 fpDecomp #(`FPWID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
 
 wire [`EMSB+1:0] bias = {1'b0,{`EMSB{1'b1}}};
 wire [`EMSB+1:0] x1 = xa - bias;
-wire Exponent exp = bias - x1 - 2'd1;	// make exponent negative
+wire [`EMSB:0] exp = bias - x1 - 2'd1;	// make exponent negative
 wire sa3;
-wire Exponent exp3;
+wire [`EMSB:0] exp3;
 wire [9:0] index = ma[`FMSB:`FMSB-9];
 reg [9:0] indexr;
 reg [15:0] k0, k1;

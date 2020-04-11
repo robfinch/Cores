@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,6 +24,8 @@
 //                                                                          
 // ============================================================================
 
+`include "..\fpConfig.sv"
+
 module fpRes_tb();
 reg rst;
 reg clk;
@@ -38,7 +40,8 @@ initial begin
 	rst = 1'b0;
 	clk = 1'b0;
 	adr = 0;
-	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/fpRes_tv.txt", mem);
+	$readmemh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpRes_tv64.txt", mem);
+//	$readmemh("d:/cores5/Gambit/v5/rtl/cpu/fpu/fpRes_tv52.txt", mem52);
 	#20 rst = 1;
 	#50 rst = 0;
 end
@@ -60,7 +63,7 @@ begin
 	a6 <= a5;
 	memo[adr] <= {o5,o,a5};
 	if (adr==8191) begin
-		$writememh("d:/cores6/nvio/v1/rtl/fpUnit/fpRes_tvo.txt", memo);
+		$writememh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpRes_tv64o.txt", memo);
 		$finish;
 	end
 end

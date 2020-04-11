@@ -150,7 +150,7 @@ case(op.rr.opcode)
 		endcase
 	end
 `CSR:			o = csr_i;
-default:	o = {3{16'hDEAE}};
+default:	o = {3{16'hDCAE}};
 endcase
 
 always @*

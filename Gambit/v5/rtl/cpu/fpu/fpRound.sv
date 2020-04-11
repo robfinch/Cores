@@ -36,8 +36,8 @@ parameter FPWID = 52;
 input clk;
 input ce;
 input [2:0] rm;			// rounding mode
-input FloatGRS i;		// intermediate format input
-output Float o;		// rounded output
+input [MSB+3:0] i;		// intermediate format input
+output [MSB:0] o;		// rounded output
 
 //------------------------------------------------------------
 // variables
@@ -46,17 +46,17 @@ reg so;
 `else
 wire so;
 `endif
-Exponent xo;
-Mantissa mo;
-Exponent xo1;
-MantissaGRS mo1;
-wire xInf = &i.flt.exp;
-wire so0 = i.flt.sign;
+wire [EMSB:0] xo;
+reg [FMSB:0] mo;
+reg [EMSB:0] xo1;
+reg [FMSB+3:0] mo1;
+wire xInf = &i[MSB+2:FMSB+4];
+wire so0 = i[MSB+3];
 assign o = {so,xo,mo};
 
-wire g = i.g;	// guard bit: always the same bit for all operations
-wire r = i.r;	// rounding bit
-wire s = i.s;	// sticky bit
+wire g = i[2];	// guard bit: always the same bit for all operations
+wire r = i[1];	// rounding bit
+wire s = i[0];	// sticky bit
 reg rnd;
 
 //------------------------------------------------------------
@@ -108,7 +108,7 @@ reg [MSB:0] rounded2;
 reg carry2;
 reg rnd2;
 reg dn2;
-Exponent xo2;
+wire [EMSB:0] xo2;
 wire [MSB:0] rounded1 = {xo1,mo1[FMSB+3:2]} + rnd;
 `ifdef MIN_LATENCY
 always @*
@@ -150,8 +150,8 @@ delay1 #(EMSB+1) u22 (.clk(clk), .ce(ce), .i(xo2), .o(xo));
 
 always @(posedge clk)
 	casez({rnd2,&xo2,carry2,dn2})
-	4'b0??0:	mo <= mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
-	4'b0??1:	mo <= mo1[FMSB+3:3];		// not rounding, denormalized
+	4'b0??0:	mo <= mo1[FMSB+2:2];			// not rounding, not denormalized, => hide MSB
+	4'b0??1:	mo <= mo1[FMSB+3:3];			// not rounding, denormalized
 	4'b1000:	mo <= rounded2[FMSB  :0];	// exponent didn't change, number was normalized, => hide MSB,
 	4'b1001:	mo <= rounded2[FMSB+1:1];	// exponent didn't change, but number was denormalized, => retain MSB
 	4'b1010:	mo <= rounded2[FMSB+1:1];	// exponent incremented (new MSB generated), number was normalized, => hide 'extra (FMSB+2)' MSB

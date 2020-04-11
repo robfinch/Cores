@@ -76,9 +76,7 @@ Exponent bias = {1'b0,{EMSB{1'b1}}};	//2^0 exponent
 Mantissa qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
-wire [FX:0] fract1;
-reg [FX:0] fract1a;
-wire [FX:0] fracto;
+wire [FX-1:0] fract1;
 wire [EMSB+2:0] ex1;	// sum of exponents
 wire [EMSB:0] ex2;
 

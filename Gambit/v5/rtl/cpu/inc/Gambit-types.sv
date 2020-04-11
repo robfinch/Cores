@@ -323,6 +323,7 @@ typedef struct packed
 	logic [`IQ_ENTRIES-1:0] mem;
 	logic [`IQ_ENTRIES-1:0] memndx;			// indexed memory instruction
 	logic [3:0] [`IQ_ENTRIES-1:0] memsz;			// size of memory operation
+	logic [`IQ_ENTRIES-1:0] [18:0] sel;	// select lines, for memory overlap detect
 	logic [`IQ_ENTRIES-1:0] load;				// memory load operation
 	logic [`IQ_ENTRIES-1:0] store;			// memory store operation
 	logic [`IQ_ENTRIES-1:0] store_cr;		// memory store and clear reservation operation

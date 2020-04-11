@@ -1,152 +1,118 @@
-/* ===============================================================
-	(C) 2006  Robert Finch
-	All rights reserved.
-	rob@birdcomputer.ca
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fpdivr16.v
+//    Radix 16 floating point divider primitive
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
 
-	fpdivr4.v
-		Radix 4 floating point divider primitive
+module fpdivr4(clk, ld, a, b, q, r, done, lzcnt);
+parameter WID1 = 112;
+localparam REM = WID1 % 2;
+localparam WID = ((WID1*2)+1)/2;
+localparam DMSB = WID-1;
+input clk;
+input ld;
+input [WID-1:0] a;
+input [WID-1:0] b;
+output reg [WID*2-1:0] q = 1'd0;
+output reg [WID-1:0] r = 1'd0;
+output reg done = 1'd0;
+output reg [7:0] lzcnt = 1'd0;
 
-
-	This source code is free for use and modification for
-	non-commercial or evaluation purposes, provided this
-	copyright statement and disclaimer remains present in
-	the file.
-
-	If you do modify the code, please state the origin and
-	note that you have modified the code.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
-	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
-	the entire risk of using the Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
-	ANY INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-	WHATSOEVER RELATING TO THE USE OF THIS WORK, OR YOUR
-	RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU
-	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
-	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
-	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
-	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
-	AND YOU AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS
-	FROM ANY CLAIMS OR LOSSES RELATING TO SUCH UNAUTHORIZED
-	USE.
-
-
-	Performance
-	Webpack 8.1i  xc3s1000-4ft256
-	202 slices / 382 LUTs / 72.5 MHz
-=============================================================== */
-
-module fpdivr4
-#(	parameter FPWID = 24 )
-(
-	input clk,
-	input ce,
-	input ld,
-	input [FPWID-1:0] a,
-	input [FPWID-1:0] b,
-	output reg [FPWID*2-1:0] q,
-	output [FPWID-1:0] r,
-	output done
-);
-	localparam DMSB = FPWID-1;
-
-	wire [DMSB:0] rx [1:0];		// remainder holds
-	reg [DMSB:0] rxx;
-	reg [5:0] cnt;				// iteration count
-	wire [DMSB:0] sdq;
-	wire [DMSB:0] sdr;
-	wire sdval;
-	wire sddbz;
-	
-	specialDivider #(FPWID) u1 (.a(a), .b(b), .q(sdq), .r(sdr), .val(sdval), .divByZero(sdbz) );
-
-
-	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[FPWID*2-1  ]} + b : {rxx  ,q[FPWID*2-1  ]} - b;
-	assign rx[1] = rx[0][DMSB] ? {rx[0],q[FPWID*2-1-1]} + b : {rx[0],q[FPWID*2-1-1]} - b;
-
-
-	always @(posedge clk)
-		if (ce) begin
-			if (ld)
-				cnt <= sdval ? 0 : FPWID;
-			else if (!done)
-				cnt <= cnt - 1;
-		end
-
-
-	always @(posedge clk)
-		if (ce) begin
-			if (ld)
-				rxx = 0;
-			else if (!done)
-				rxx = rx[1];
-		end
-
-
-	always @(posedge clk)
-		if (ce) begin
-			if (ld) begin
-				if (sdval)
-					q = {sdq,{FPWID{1'b0}}};
-				else
-					q = {a,{FPWID{1'b0}}};
-			end
-			else if (!done) begin
-				q[FPWID*2-1:2] = q[FPWID*2-1-2:0];
-				q[0] = ~rx[1][DMSB];
-				q[1] = ~rx[0][DMSB];
-			end
-		end
-
-	// correct remainder
-	assign r = sdval ? sdr : rx[1][DMSB] ? rx[1] + b : rx[1];
-	assign done = ~|cnt;
-
-endmodule
-
-/*
-module fpdiv_tb();
-
-	reg rst;
-	reg clk;
-	reg ld;
-	reg [6:0] cnt;
-
-	wire ce = 1'b1;
-	wire [49:0] a = 50'h0_0000_0400_0000;
-	wire [23:0] b = 24'd101;
-	wire [49:0] q;
-	wire [49:0] r;
-	wire done;
-
-	initial begin
-		clk = 1;
-		rst = 0;
-		#100 rst = 1;
-		#100 rst = 0;
+initial begin
+	if (WID % 2) begin
+		$display("fpdvir4: Width must be a multiple of two.");
+		$finish;
 	end
+end
 
-	always #20 clk = ~clk;	//  25 MHz
-	
-	always @(posedge clk)
-		if (rst)
-			cnt <= 0;
-		else begin
-			ld <= 0;
-			cnt <= cnt + 1;
-			if (cnt == 3)
-				ld <= 1;
-			$display("ld=%b q=%h r=%h done=%b", ld, q, r, done);
+wire [7:0] maxcnt;
+reg [DMSB:0] rxx = 1'd0;
+reg [8:0] cnt = 1'd0;				// iteration count
+// Simulation didn't like all the wiring.
+reg [DMSB+1:0] ri = 1'd0; 
+reg b0 = 1'd0,b1 = 1'd0,b2 = 1'd0,b3 = 1'd0;
+reg [DMSB+1:0] r1 = 1'd0,r2 = 1'd0,r3 = 1'd0,r4 = 1'd0;
+reg gotnz = 0;
+
+assign maxcnt = WID*2/2-1;
+always @*
+	b0 = b <= {rxx,q[WID*2-1]};
+always @*
+	r1 = b0 ? {rxx,q[WID*2-1]} - b : {rxx,q[WID*2-1]};
+always @*
+	b1 = b <= {r1,q[WID*2-2]};
+always @*
+	r2 = b1 ? {r1,q[WID*2-2]} - b : {r1,q[WID*2-2]};
+
+reg [2:0] state = 0;
+always @(posedge clk)
+begin
+  if (ld) state <= 3'd1;
+  case(state)
+  3'd0:	;
+  3'd1: if (cnt[8]) state <= 3'd2;
+  3'd2: state <= 3'd0;
+  default:  state <= 3'd0;
+  endcase
+end
+
+always @(posedge clk)
+begin
+done <= 1'b0;
+case(state)
+3'd0:	;
+3'd1:
+	if (!cnt[8]) begin
+		q[WID*2-1:2] <= q[WID*2-3:0];
+		q[1] <= b0;
+		q[0] <= b1;
+		if (!gotnz)
+			casez({b0,b1})
+			2'b1?:	;
+			2'b01:	lzcnt <= lzcnt + 8'd1;
+			2'b00:	lzcnt <= lzcnt + 8'd2;
+			endcase
+		if ({b0,b1} != 2'h0 && !gotnz) begin
+			gotnz <= 3'd1;
 		end
-	
-
-	fpdivr8 divu0(.clk(clk), .ce(ce), .ld(ld), .a(a), .b(b), .q(q), .r(r), .done(done) );
+        rxx <= r2;
+		cnt <= cnt - 3'd1;
+	end
+3'd2:
+	begin
+    	r <= r2;
+    	done <= 1'b1;
+    end
+default:	;
+endcase
+if (ld) begin
+	lzcnt <= 0;
+	gotnz <= 1'b0;
+	cnt <= {1'b0,maxcnt};
+	q <= {(a << REM),{WID{1'b0}}};
+      rxx <= {WID{1'b0}};
+end
+end
 
 endmodule
-
-*/
 

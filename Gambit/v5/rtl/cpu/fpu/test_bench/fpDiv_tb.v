@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -42,13 +42,18 @@ reg [95:0] mem [0:8191];
 reg [95:0] memo [0:9000];
 reg [191:0] memd [0:8191];
 reg [191:0] memdo [0:9000];
+reg [155:0] mem52 [0:8191];
+reg [155:0] mem52o [0:9000];
 reg [31:0] a,b,a6,b6;
 reg [63:0] ad,bd;
+reg [51:0] a52,b52;
 wire [31:0] a5,b5;
 wire [31:0] o;
 wire [63:0] od;
+wire [51:0] o52;
 reg ld;
-wire done;
+wire done,done32,done52;
+reg [1:0] donecnt;
 reg [3:0] state;
 
 initial begin
@@ -56,8 +61,9 @@ initial begin
 	clk = 1'b0;
 	clk4x = 1'b0;
 	adr = 13'd0;
-	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpDiv_tv.txt", mem);
-	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpDiv_tvd.txt", memd);
+	$readmemh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tv.txt", mem);
+	$readmemh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tvd.txt", memd);
+	$readmemh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tv52.txt", mem52);
 	#20 rst = 1'd1;
 	#50 rst = 1'd0;
 end
@@ -82,29 +88,39 @@ case(state)
 		b <= mem[adr][63:32];
 		ad <= memd[adr][63:0];
 		bd <= memd[adr][127:64];
+		a52 <= mem52[adr][51:0];
+		b52 <= mem52[adr][103:52];
 		ld <= 1'b1;
 		state <= 4'd2;
 	end
 4'd2:
 		state <= 4'd3;
 4'd3:
-	if (done) begin
+	begin
+		if (done) begin
+			state <= 4'd4;
+	end
+	end
+4'd4:	
+	begin
 		memo[adr] <= {o,b,a};
 		memdo[adr] <= {od,bd,ad};
+		mem52o[adr] <= {o52,b52,a52};
 		adr <= adr + 4'd1;
 		if (adr==13'd8191) begin
-			$writememh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpDiv_tvo.txt", memo);
-			$writememh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpDiv_tvdo.txt", memdo);
+			$writememh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tvo.txt", memo);
+			$writememh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tvdo.txt", memdo);
+			$writememh("d:/cores5/Gambit/v5/rtl/cpu/fpu/test_bench/fpDiv_tv52o.txt", mem52o);
 			$finish;
 		end
-		state <= 4'd4;
+		state <= 4'd5;
 	end
-4'd4:	state <= 4'd5;
 4'd5:	state <= 1;
 endcase
 end
 
-fpDivnr #(32) u1 (rst, clk, clk4x, 1'b1, ld, 1'b0, a, b, o, 3'b000);//, sign_exe, inf, overflow, underflow);
+fpDivnr #(32) u1 (rst, clk, clk4x, 1'b1, ld, 1'b0, a, b, o, 3'b000,done32);//, sign_exe, inf, overflow, underflow);
 fpDivnr #(64) u2 (rst, clk, clk4x, 1'b1, ld, 1'b0, ad, bd, od, 3'b000, done);//, sign_exe, inf, overflow, underflow);
+fpDivnr #(52) u3 (rst, clk, clk4x, 1'b1, ld, 1'b0, a52, b52, o52, 3'b000,done52);//, sign_exe, inf, overflow, underflow);
 
 endmodule

@@ -585,8 +585,9 @@ else begin
         if (fetchbufC.v==`INV && fetchbufD.v==`INV)
           fetchbuf = 1'b0;
       end
-      else if (fetchbufC.v == `INV && fetchbufD.v == `INV)
+      else if (fetchbufC.v == `INV && fetchbufD.v == `INV) begin
   	    FetchCD();
+  	  end
   	    //
   	    // update fetchbufX_v and fetchbuf ... relatively simple, as
   	    // there are no backwards branches in the mix
@@ -682,7 +683,10 @@ task FetchB;
 begin
 	if (phit && ~freezePC && ~didFetch) begin
   	fetchbufB.ins = insn1;
-  	fetchbufB.v = `WAYS > 1;
+    if (IsBranch(insn0) & predict_taken0)
+      fetchbufB.v = `INV;
+    else
+  	  fetchbufB.v = `WAYS > 1;
   	fetchbufB.adr = pc0 + len1;
   	fetchbufB.predict_taken = predict_taken1;
 		if (`WAYS > 1)
@@ -717,7 +721,10 @@ task FetchD;
 begin
 	if (phit && ~freezePC && ~didFetch) begin
   	fetchbufD.ins = insn1;
-  	fetchbufD.v = `WAYS > 1;
+    if (IsBranch(insn0) & predict_taken0)
+      fetchbufD.v = `INV;
+    else
+  	  fetchbufD.v = `WAYS > 1;
   	fetchbufD.adr = pc0 + len1;
   	fetchbufD.predict_taken = predict_taken1;
 		if (`WAYS > 1)
@@ -753,7 +760,7 @@ case(fetchbuf.ins.gen.opcode)
 `BRKGRP:	branch_pc = brkVec;
 default:
 	begin
-		branch_pc = fetchbuf.adr + {{41{fetchbuf.ins.br.disp[11]}},fetchbuf.ins.br.disp};
+		branch_pc = fetchbuf.adr + {{41{fetchbuf.ins.br.disp[11]}},fetchbuf.ins.br.disp} + 2'd2;
 	end
 
 endcase

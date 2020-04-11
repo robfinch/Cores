@@ -26,10 +26,11 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fpuIssue(rst, clk, ce, could_issue, fpu0_idle, fpu1_idle, iq_fpu, iq_fpu0, iq_prior_sync, iq_prior_fsync, issue0, issue1);
+module fpuIssue(rst, clk, ce, allow_issue, could_issue, fpu0_idle, fpu1_idle, iq_fpu, iq_fpu0, iq_prior_sync, iq_prior_fsync, issue0, issue1);
 input rst;
 input clk;
 input ce;
+input [8:0] allow_issue;
 input [`IQ_ENTRIES-1:0] could_issue;
 input fpu0_idle;
 input fpu1_idle;
@@ -49,7 +50,7 @@ begin
 	issue0p = {`IQ_ENTRIES{1'b0}};
 	issue1p = {`IQ_ENTRIES{1'b0}};
 	
-	if (fpu0_idle) begin
+	if (fpu0_idle && allow_issue[4] && `NUM_FPU > 0) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_fpu[n]
 			&& issue0p == {`IQ_ENTRIES{1'b0}}
@@ -61,7 +62,7 @@ begin
 		end
 	end
 
-	if (fpu1_idle && `NUM_ALU > 1) begin
+	if (fpu1_idle && allow_issue[5] && `NUM_FPU > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_fpu[n]
 				&& !iq_fpu0[n]

@@ -399,7 +399,7 @@ fpDecomp #(FPWID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNa
 //fp_decomp #(32) u1s (.i(a[31:0]), .sgn(sas), .man(mas), .vz(azs), .inf(aInfs), .nan(aNans) );
 //fp_decomp #(32) u2s (.i(b[31:0]), .sgn(sbs), .man(mbs), .vz(bzs), .inf(bInfs), .nan(bNans) );
 
-wire [2:0] rmd = ir[30:28]==3'b111 ? rm : ir[30:28];
+wire [2:0] rmd = ir[25] ? rm : ir[24:22]==3'b111 ? rm : ir[24:22];
 delay4 #(3) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
 delay1 #(6) u4 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op1) );
 delay2 #(8) u5 (.clk(clk), .ce(pipe_ce), .i(opcode), .o(op2) );

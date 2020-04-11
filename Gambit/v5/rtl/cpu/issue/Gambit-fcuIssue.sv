@@ -26,12 +26,13 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module fcuIssue(rst, clk, ce, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
+module fcuIssue(rst, clk, ce, allow_issue, could_issue, branchmiss, fcu_id, fcu_done, iq_fc,
 	iq_br, iq_brkgrp, iq_retgrp, iq_jal, iqs_v, iq_sn,
 	iq_prior_sync, issue, nid);
 input rst;
 input clk;
 input ce;
+input [8:0] allow_issue;
 input [`IQ_ENTRIES-1:0] could_issue;
 input branchmiss;
 input Qid fcu_id;
@@ -42,7 +43,7 @@ input [`IQ_ENTRIES-1:0] iq_brkgrp;
 input [`IQ_ENTRIES-1:0] iq_retgrp;
 input [`IQ_ENTRIES-1:0] iq_jal;
 input [`IQ_ENTRIES-1:0] iqs_v;
-input Seqnum iq_sn [0:`IQ_ENTRIES-1];
+input Seqnum [`IQ_ENTRIES-1:0] iq_sn;
 input [`IQ_ENTRIES-1:0] iq_prior_sync;
 output reg [`IQ_ENTRIES-1:0] issue;
 output Qid nid;
@@ -89,7 +90,7 @@ else begin
 	
 	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
-			if (could_issue[n] && iq_fc[n]
+			if (allow_issue[6] && could_issue[n] && iq_fc[n]
 			&& issuep == {`IQ_ENTRIES{1'b0}}
 			&& (!iq_prior_sync[n])
 			)

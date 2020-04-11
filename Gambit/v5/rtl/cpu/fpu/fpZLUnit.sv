@@ -98,7 +98,8 @@ case(ir.gen.opcode)
 			o[7] <= ~a[FPWID-1] & a_inf;	// +Inf
 			o[8] <= a_snan;
 			o[9] <= a_qnan;
-			o[FPWID-1:10] <= 1'd0;
+			o[FPWID-2:10] <= 1'd0;
+			o[FPWID-1] <= a[FPWID-1];
   	end
   default: o <= 0;
   endcase

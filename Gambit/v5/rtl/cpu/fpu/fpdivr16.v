@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -73,6 +73,16 @@ always @*
 	r4 = b3 ? {r3,q[WID*2-4]} - b : {r3,q[WID*2-4]};
 
 reg [2:0] state = 0;
+always @(posedge clk)
+begin
+  if (ld) state <= 3'd1;
+  case(state)
+  3'd0:	;
+  3'd1: if (cnt[8]) state <= 3'd2;
+  3'd2: state <= 3'd0;
+  default:  state <= 3'd0;
+  endcase
+end
 
 always @(posedge clk)
 begin
@@ -100,15 +110,12 @@ case(state)
         rxx <= r4;
 		cnt <= cnt - 3'd1;
 	end
-	else
-		state <= 3'd2;
 3'd2:
 	begin
     	r <= r4;
     	done <= 1'b1;
-    	state <= 1'd0;
     end
-default:	state <= 1'd0;
+default:	;
 endcase
 if (ld) begin
 	lzcnt <= 0;
@@ -116,7 +123,6 @@ if (ld) begin
 	cnt <= {1'b0,maxcnt};
 	q <= {(a << REM),{WID{1'b0}}};
       rxx <= {WID{1'b0}};
-	state <= 3'd1;
 end
 end
 

@@ -42,7 +42,7 @@ input [IQ_ENTRIES-1:0] iqs_mem;
 input [IQ_ENTRIES-1:0] iqs_agen;
 input [IQ_ENTRIES-1:0] iq_load;
 input [IQ_ENTRIES-1:0] iq_store;
-input [22:0] iq_sel [0:IQ_ENTRIES-1];
+input [IQ_ENTRIES-1:0] [18:0] iq_sel;
 input [IQ_ENTRIES-1:0] prior_pathchg;
 input [IQ_ENTRIES-1:0] iq_aq;
 input [IQ_ENTRIES-1:0] iq_rl;
@@ -53,7 +53,7 @@ input [`WB_DEPTH-1:0] wb_v;
 input inwb0;
 input inwb1;
 input sple;
-input [AMSB:0] iq_ma [0:IQ_ENTRIES-1];
+input Address [IQ_ENTRIES-1:0] iq_ma;
 output reg [IQ_ENTRIES-1:0] memissue = 1'd0;
 output reg [1:0] issue_count;
 
@@ -73,7 +73,7 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 						// Select lines don't overlap
 						((iq_sel[heads[n]] & iq_sel[heads[m]]) == 18'd0)
 						&& ((!iqs_mem[heads[m]] /*|| (iqs_agen[heads[m]] & iqs_out[heads[m]]) */ || iqs_done[heads[m]]
-							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][22:16] || |iq_sel[heads[m]][22:16])) || iqs_out[heads[m]] || iqs_done[heads[m]]))
+							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][18:16] || |iq_sel[heads[m]][18:16])) || iqs_out[heads[m]] || iqs_done[heads[m]]))
 							// If we have two loads to overlapping addresses we don't care.
 							|| (iq_load[heads[n]] && iq_load[heads[m]])
 						)

@@ -46,17 +46,17 @@ output [`EX:0] o;	// output
 
 // variables
 wire so;			// sign output
-Exponent xo;	// de normalized exponent output
-Exponent xo1;	// de normalized exponent output
-ExpandedMantissa mo;	// mantissa output
-ExpandedMantissa mo1;	// mantissa output
+wire [EMSB:0] xo;	// de normalized exponent output
+reg [EMSB:0] xo1;	// de normalized exponent output
+wire [`FX:0] mo;	// mantissa output
+reg [`FX:0] mo1;	// mantissa output
 
 assign o = {so,xo,mo};
 
 // operands sign,exponent,mantissa
 wire sa, sb;
-Exponent xa, xb;
-Mantissa ma, mb;
+wire [EMSB:0] xa, xb;
+wire [`FMSB:0] ma, mb;
 wire [`FMSB+1:0] fracta, fractb;
 wire [`FMSB+1:0] fracta1, fractb1;
 
@@ -72,8 +72,8 @@ wire xaInf, xbInf;
 wire aInf, bInf, aInf1, bInf1;
 wire aNan, bNan, aNan1, bNan1;
 
-Exponent xad = xa|adn;	// operand a exponent, compensated for denormalized numbers
-Exponent xbd = xb|bdn; // operand b exponent, compensated for denormalized numbers
+wire [EMSB:0] xad = xa|adn;	// operand a exponent, compensated for denormalized numbers
+wire [EMSB:0] xbd = xb|bdn; // operand b exponent, compensated for denormalized numbers
 
 fpDecomp #(`FPWID) u1a (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(fracta), .xz(adn), .vz(az), .xinf(xaInf), .inf(aInf), .nan(aNan) );
 fpDecomp #(`FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .man(mb), .fract(fractb), .xz(bdn), .vz(bz), .xinf(xbInf), .inf(bInf), .nan(bNan) );
@@ -134,7 +134,7 @@ delay2 #(`EMSB+1) d1(.clk(clk), .ce(ce), .i(xo1), .o(xo) );
 delay2 #(1)      d2(.clk(clk), .ce(ce), .i(so1), .o(so) );
 
 // Compute the difference in exponents, provides shift amount
-wire Exponent xdiff = xa_gt_xb ? xad - xbd : xbd - xad;
+wire [EMSB:0] xdiff = xa_gt_xb ? xad - xbd : xbd - xad;
 wire [6:0] xdif = xdiff > `FMSB+3 ? `FMSB+3 : xdiff;
 wire [6:0] xdif1;
 
@@ -168,7 +168,7 @@ delay1 #(1)      d16(.clk(clk), .ce(ce), .i(sticky), .o(sticky1) );
 delay1 #(7)      d15(.clk(clk), .ce(ce), .i(xdif),   .o(xdif1) );
 delay1 #(`FMSB+2) d14(.clk(clk), .ce(ce), .i(mfs),    .o(mfs1) );
 
-MantissaGRS md1 = ({mfs1,2'b0} >> xdif1)|sticky1;
+wire [`FMSB+3:0] md1 = ({mfs1,2'b0} >> xdif1)|sticky1;
 
 // sync control signals
 delay1 #(1) d4 (.clk(clk), .ce(ce), .i(xa_gt_xb), .o(xa_gt_xb1) );
@@ -184,10 +184,10 @@ delay1 #(1) d11(.clk(clk), .ce(ce), .i(op), .o(op1) );
 
 // Sort operands and perform add/subtract
 // addition can generate an extra bit, subtract can't go negative
-MantissaGRS oa = xa_gt_xb1 ? {fracta1,2'b0} : md1;
-MantissaGRS ob = xa_gt_xb1 ? md1 : {fractb1,2'b0};
-MantissaGRS oaa = a_gt_b1 ? oa : ob;
-MantissaGRS obb = a_gt_b1 ? ob : oa;
+wire [`FMSB+3:0] oa = xa_gt_xb1 ? {fracta1,2'b0} : md1;
+wire [`FMSB+3:0] ob = xa_gt_xb1 ? md1 : {fractb1,2'b0};
+wire [`FMSB+3:0] oaa = a_gt_b1 ? oa : ob;
+wire [`FMSB+3:0] obb = a_gt_b1 ? ob : oa;
 wire [`FMSB+4:0] mab = realOp1 ? oaa - obb : oaa + obb;
 wire xoinf = &xo;
 
@@ -217,7 +217,7 @@ input Float b;	// operand b
 output Float o;	// output
 
 wire [`EX:0] o1;
-FloatGRS fpn0;
+wire [MSB+3:0] fpn0;
 
 fpAddsub    #(`FPWID) u1 (clk, ce, rm, op, a, b, o1);
 fpNormalize #(`FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );

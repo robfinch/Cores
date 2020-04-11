@@ -26,10 +26,11 @@
 `include "..\inc\Gambit-defines.sv"
 `include "..\inc\Gambit-types.sv"
 
-module agenIssue(rst, clk, ce, agen0_idle, agen1_idle, could_issue, iq_mem, iq_prior_sync, issue0, issue1);
+module agenIssue(rst, clk, ce, allow_issue, agen0_idle, agen1_idle, could_issue, iq_mem, iq_prior_sync, issue0, issue1);
 input rst;
 input clk;
 input ce;
+input [8:0] allow_issue;
 input agen0_idle;
 input agen1_idle;
 input [`IQ_ENTRIES-1:0] could_issue;
@@ -53,7 +54,7 @@ else begin
 	issue0p = {`IQ_ENTRIES{1'b0}};
 	issue1p = {`IQ_ENTRIES{1'b0}};
 	
-	if (agen0_idle) begin
+	if (agen0_idle & allow_issue[2]) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_mem[n] && issue0p == {`IQ_ENTRIES{1'b0}}
 			// If there are no valid queue entries prior it doesn't matter if there is
@@ -64,7 +65,7 @@ else begin
 		end
 	end
 
-	if (agen1_idle && `NUM_AGEN > 1) begin
+	if (agen1_idle && allow_issue[3] && `NUM_AGEN > 1) begin
 		for (n = 0; n < `IQ_ENTRIES; n = n + 1) begin
 			if (could_issue[n] && iq_mem[n]
 				&& !issue0p[n]

@@ -79,7 +79,7 @@ begin
       queuedCnt = decbufv0|decbufv1;
       queuedOnp[0] = decbufv0;
       queuedCntNzp = 1'b1;
-      if (decbufv1 && take_branch[0]==1'b0 && slot_jmp[0]==1'b0 && brk[0]==1'b0) begin
+      if (decbufv1 && ((take_branch[0]==1'b0 && slot_jmp[0]==1'b0 && brk[0]==1'b0) || !decbufv0)) begin
         if (`WAYS > 1) begin
         	queuedCnt = decbufv0 ? 3'd2 : 3'd1;
 	        queuedOnp[1] = decbufv1;

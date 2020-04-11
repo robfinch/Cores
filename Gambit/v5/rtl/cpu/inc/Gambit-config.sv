@@ -147,7 +147,7 @@
 // Comment out the following to remove bypassing logic on the functional units.
 // Disabling the bypass will reduce core performance by about 15%-33% while also
 // reducing the size of the core.
-//`define FU_BYPASS	1
+`define FU_BYPASS	1
 
 `define SUPPORT_TLB		1
 

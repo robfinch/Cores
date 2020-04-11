@@ -41,7 +41,6 @@ reg [WID-1:0] ro;
 output done;
 output idle;
 output dvByZr;
-reg dvByZr;
 
 reg [WID-1:0] bb;
 reg so;
@@ -50,18 +49,29 @@ reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
 assign done = state==DONE||(state==IDLE && !ld);
 assign idle = state==IDLE;
+assign dvByZr = b=={WID{1'b0}};
 reg ce1;
-reg [WID-1:0] q;
-reg [WID:0] r;
-wire b0 = bb <= r;
-wire [WID-1:0] r1 = b0 ? r - bb : r;
+
+reg ldd;
+reg [WID-1:0] oa;
+reg [WID-1:0] ob;
+wire ddone;
 
 initial begin
-  q = {WID{1'd0}};
-  r = {WID{1'd0}};
   qo = {WID{1'd0}};
   ro = {WID{1'd0}};
 end
+
+fpdivr16 udiv1 (
+	.clk(clk),
+	.ld(ldd),
+	.a(oa),
+	.b(ob),
+	.q(q),
+	.r(r),
+	.done(ddone),
+	.lzcnt()
+);
 
 always @(posedge clk)
 if (rst)
@@ -72,9 +82,7 @@ else
 		if (ld)
 			state <= DIV;
 	DIV:
-		if (dvByZr)
-			state <= DONE;
-		else if (cnt_done)
+		if (ddone | dvByZr)
 			state <= DONE;
 	DONE:
 		state <= IDLE;
@@ -82,82 +90,66 @@ else
 	endcase
 
 always @(posedge clk)
-if (rst)
-	cnt <= 8'h00;
-else begin
-	if (abort)
-	  cnt <= 8'd00;
-	else if (ld)
-		cnt <= WID+1;
-	else if (!cnt_done)
-		cnt <= cnt - 8'd1;
-end
-
-always @(posedge clk)
-if (rst)
-	dvByZr <= 1'b0;
-else begin
-	if (ld)
-		dvByZr <= b=={WID{1'b0}};
-end
-
-always @(posedge clk)
 if (rst) begin
-	bb <= {WID{1'b0}};
-	q <= {WID{1'b0}};
-	r <= {WID{1'b0}};
+	oa <= {WID{1'b0}};
+	ob <= {WID{1'b0}};
 	qo <= {WID{1'b0}};
 	ro <= {WID{1'b0}};
+	ldd <= 1'b0;
 end
 else
 begin
-
-case(state)
-IDLE:
+	ldd <= 1'b0;
 	if (ld) begin
+		ldd <= b != {WID{1'b0}};
 		if (sgn) begin
-			q <= a[WID-1] ? -a : a;
-			bb <= b[WID-1] ? -b : b;
+			oa <= a[WID-1] ? -a : a;
+			ob <= b[WID-1] ? -b : b;
 			so <= a[WID-1] ^ b[WID-1];
 		end
 		else if (sgnus) begin
-			q <= a[WID-1] ? -a : a;
-      bb <= b;
+			oa <= a[WID-1] ? -a : a;
+      ob <= b;
       so <= a[WID-1];
 		end
 		else begin
-			q <= a;
-			bb <= b;
+			oa <= a;
+			ob <= b;
 			so <= 1'b0;
-			$display("bb=%d", b);
 		end
-		r <= {WID{1'b0}};
-	end
-DIV:
-	if (!cnt_done && !dvByZr) begin
-		$display("cnt:%d r1=%h q[63:0]=%h", cnt,r1,q);
-		q <= {q[WID-2:0],b0};
-		r <= {r1,q[WID-1]};
-	end
-	else begin
-		$display("cnt:%d r1=%h q[63:0]=%h", cnt,r1,q);
-		if (sgn|sgnus) begin
-			if (so) begin
-				qo <= dvByZr ? {1'b1,{WID-1{1'b0}}} : -q;
-				ro <= dvByZr ? {1'b1,{WID-1{1'b0}}} : -r[WID:1];
+		if (b == {WID{1'b0}}) begin
+			if (sgn|sgnus) begin
+				if (so) begin
+					qo <= {1'b1,{WID-1{1'b0}}};
+					ro <= {1'b1,{WID-1{1'b0}}};
+				end
+				else begin
+					qo <= {WID-1{1'b1}};
+					ro <= {WID-1{1'b1}};
+				end
 			end
 			else begin
-				qo <= dvByZr ? {WID-1{1'b1}} : q;
-				ro <= dvByZr ? {WID-1{1'b1}} : r[WID:1];
+				qo <= {WID-1{1'b1}};
+				ro <= {WID-1{1'b1}};
+			end
+		end
+	end
+	if (ddone & ~dvByZr) begin
+		if (sgn|sgnus) begin
+			if (so) begin
+				qo <= -q;
+				ro <= -r;
+			end
+			else begin
+				qo <= q;
+				ro <= r;
 			end
 		end
 		else begin
-			qo <= dvByZr ? {WID-1{1'b1}} : q;
-			ro <= dvByZr ? {WID-1{1'b1}} : r[WID:1];
+			qo <= q;
+			ro <= r;
 		end
 	end
-default: ;
-endcase
 end
 
 endmodule

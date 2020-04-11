@@ -34,11 +34,11 @@
 
 `include "fpConfig.sv"
 `include "fpDefines.v"
-`define GOLDSCHMIDT	1'b1
+//`define GOLDSCHMIDT	1'b1
 
 module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 
-parameter FPWID = 52;
+parameter FPWID = 64;
 `include "fpSize.sv"
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
 localparam FADD = FPWID==128 ? 9 :
@@ -46,7 +46,7 @@ localparam FADD = FPWID==128 ? 9 :
 				  FPWID==84 ? 9 :
 				  FPWID==80 ? 9 :
 				  FPWID==64 ? 13 :
-				  FPWID==52 ? 11 :	// was 9
+				  FPWID==52 ? 13 :
 				  FPWID==48 ? 10 :
 				  FPWID==44 ? 9 :
 				  FPWID==42 ? 11 :
@@ -87,7 +87,7 @@ wire [EMSB:0] bias = {1'b0,{EMSB{1'b1}}};	//2^0 exponent
 wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
-wire [EMSB+2:0] ex1;	// sum of exponents
+reg [EMSB+2:0] ex1;	// sum of exponents
 `ifndef GOLDSCHMIDT
 wire [(FMSB+FADD)*2-1:0] divo;
 `else
@@ -112,18 +112,26 @@ wire signed [7:0] lzcnt;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(FPWID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
-fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
+wire ld1;
+fpDecompReg #(FPWID) u1a (.clk(clk), .ce(ce), .i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecompReg #(FPWID) u1b (.clk(clk), .ce(ce), .i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
+delay1 #(1) u5 (.clk(clk), .ce(ce), .i(ld), .o(ld1));
 
 // Compute the exponent.
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
+reg [EMSB+2:0] ex1a;
+always @(posedge clk)
+  if (ce) ex1a = (xa|a_dn) - (xb|b_dn) + bias;
+ 
 `ifndef GOLDSCHMIDT
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-1) - lzcnt - 8'd1;
+always @(posedge clk)
+  if (ce) ex1 = ex1a + FMSB + (FADD-1) - lzcnt - 8'd1;
 `else
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB - lzcnt + 8'd4;
+  if (ce) ex1 = ex1a + FMSB - lzcnt + 8'd4;
 `endif
+
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
@@ -132,18 +140,31 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 // Perform divide
 // Divider width must be a multiple of four
 `ifndef GOLDSCHMIDT
-fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
+fpdivr4 #(FMSB+FADD) u2 (.clk(clk), .ld(ld1), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
 //fpdivr2 #(FMSB+FADD) u2 (.clk4x(clk4x), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
-wire [(FMSB+FADD)*2-1:0] divo1 = divo[(FMSB+FADD)*2-1:0] << (lzcnt-2);
+reg [(FMSB+FADD)*2-1:0] divo1, divo2;
+reg [7:0] lzcnts;
+always @(posedge clk)
+  if (ce) lzcnts = lzcnt - 2;
+always @(posedge clk)
+  if (ce) divo2 = divo[(FMSB+FADD)*2-1:0];
+
+always @(posedge clk)
+  if (ce) divo1 = divo2 << lzcnts;
 `else
 DivGoldschmidt #(.FPWID(FMSB+6),.WHOLE(1),.POINTS(FMSB+5))
-	u2 (.rst(rst), .clk(clk), .ld(ld), .a({fracta,4'b0}), .b({fractb,4'b0}), .q(divo), .done(done1), .lzcnt(lzcnt));
-wire [(FMSB+6)*2+1:0] divo1 =
-	lzcnt > 8'd5 ? divo << (lzcnt-8'd6) :
-	divo >> (8'd6-lzcnt);
-	;
+	u2 (.rst(rst), .clk(clk), .ld(ld1), .a({fracta,4'b0}), .b({fractb,4'b0}), .q(divo), .done(done1), .lzcnt(lzcnt));
+reg [(FMSB+6)*2+1:0] divo1, divo2;
+always @(posedge clk)
+  if (ce) divo2 = divo;
+always @(posedge clk)
+  if (ce) divo1 =
+	  lzcnt > 8'd5 ? divo2 << (lzcnt-8'd6) :
+	  divo2 >> (8'd6-lzcnt);
+	  ;
 `endif
-delay1 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done));
+delay2 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done2));
+delay3 #(1) u4 (.clk(clk), .ce(ce), .i(done1), .o(done));
 
 
 // determine when a NaN is output
@@ -161,7 +182,7 @@ if (rst) begin
 	underflow <= 1'd0;
 end
 else if (ce) begin
-		if (done1) begin
+		if (done2) begin
 			casez({qNaNOut|aNan|bNan,bInf,bz,over,under})
 			5'b1????:		xo <= infXp;	// NaN exponent value
 			5'b01???:		xo <= 1'd0;		// divide by inf
@@ -197,7 +218,7 @@ else if (ce) begin
 endmodule
 
 module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
-parameter FPWID=52;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input rst;
@@ -221,7 +242,7 @@ wire [MSB+3:0] fpn0;
 wire done1;
 
 fpDiv       #(FPWID) u1 (rst, clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
-fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
 fpRound  		#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
