@@ -1,3 +1,4 @@
+`include "positConfig.sv"
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2020  Robert Finch, Waterloo
@@ -5,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positConfig.sv
+//	positCntlo.sv
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -22,9 +23,23 @@
 //
 // ============================================================================
 //
-`ifndef POSIT_CONFIG_SV
-`define POSIT_CONFIG_SV	1
+module positCntlo(i, o);
+parameter PSTWID = `PSTWID;
+input [PSTWID-2:0] i;
+output [$clog2(PSTWID-2):0] o;
 
-`define FPWID 80
+generate begin : gClz
+  case(PSTWID)
+  16: cntlo16 u1 (.i({i,1'b1}), .o(o));
+  20: cntlo24 u1 (.i({i,1'b1,4'hF}), .o(o));
+  32: cntlo32 u1 (.i({i,1'b1}), .o(o));
+  40: cntlo48 u1 (.i({i,1'b1,8'hFF}), .o(o));
+  52: cntlo64 u1 (.i({i,1'b1,12'hFFF}), .o(o));
+  64: cntlo64 u1 (.i({i,1'b1}), .o(o));
+  80: cntlo80 u1 (.i({i,1'b1}), .o(o));
+  default:  ;
+  endcase
+end
+endgenerate
 
-`endif
+endmodule

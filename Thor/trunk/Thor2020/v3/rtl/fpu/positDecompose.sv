@@ -23,66 +23,69 @@
 //
 // ============================================================================
 //
+`include "positConfig.sv"
+
 // Decompose a posit number.
-module positDecompose(i, sgn, rgm, exp, sig, zer, inf);
-parameter FPWID = `FPWID;
-parameter es = FPWID==80 ? 3 : FPWID==64 ? 3 : FPWID==52 ? 3 : FPWID==40 ? 3 : FPWID==32 ? 2 : FPWID==20 ? 2 : FPWID==16 ? 1 : 0
-input [FPWID-1:0] i;
-output sgn;
-output [$clog2(FPWID):0] rgm;
-output [es-1:0] exp;
-output [FPWID-es-1:0] sig;
-output zer;
-output inf;
+module positDecompose(i, sgn, rgs, rgm, exp, sig, zer, inf);
+`include "positSize.sv"
+input [PSTWID-1:0] i;
+output sgn;                       // sign of number
+output rgs;                       // sign of regime
+output [$clog2(PSTWID)-1:0] rgm;   // regime (absolute value)
+output [es-1:0] exp;              // exponent
+output [PSTWID-es-1:0] sig;        // significand
+output zer;                       // number is zero
+output inf;                       // number is infinite
 
-integer n;
-wire [6:0] lzcnt;
-wire [6:0] locnt;
+wire [$clog2(PSTWID-2):0] lzcnt;
+wire [$clog2(PSTWID-2):0] locnt;
 
 
-assign sgn = i[FPWID-1];
-assign inf = ~|i[FPWID-2:0] & i[FPWID-1];
+assign sgn = i[PSTWID-1];
+assign inf = ~|i[PSTWID-2:0] & i[PSTWID-1];
 assign zer = ~|i;
-wire [FPWID-1:0] ii = sgn ? -i : i;
+wire [PSTWID-1:0] ii = sgn ? -i : i;
+assign rgs = ii[PSTWID-2];
 
-wire [6:0] lzcnt, locnt;
+positCntlz #(PSTWID,es) u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
+positCntlo #(PSTWID,es) u2 (.i(ii[PSTWID-2:0]), .o(locnt));
 
-positCntlz #(FPWID,es) u1 (.i(ii[FPWID-2:0]), .o(lzcnt));
-positCntlo #(FPWID,es) u2 (.i(ii[FPWID-2:0]), .o(locnt));
-
-assign rgm = ii[FPWID-2] ? locnt - 1 : -lzcnt;
-wire [FPWID-1:0] tmp = ii << rgm;
-assign exp = |es ? tmp[FPWID-2:FPWID-1-es] : 0;
-assign sig = {1'b1,tmp[FPWID-2-es:0]};
+assign rgm = rgs ? locnt - 1 : lzcnt;
+wire [$clog2(PSTWID)-1:0] shamt = rgs ? locnt + 2'd1 : lzcnt + 2'd1;
+wire [PSTWID-1:0] tmp = ii << shamt;
+assign exp = |es ? tmp[PSTWID-2:PSTWID-1-es] : 0;
+assign sig = {1'b1,tmp[PSTWID-2-es:0]};
 
 endmodule
 
 // Decompose posit number and register outputs.
-module positDecomposeReg(clk, ce, i, sgn, rgm, exp, sig, zer, inf);
-parameter FPWID = `FPWID;
-parameter es = FPWID==80 ? 3 : FPWID==64 ? 3 : FPWID==52 ? 3 : FPWID==40 ? 3 : FPWID==32 ? 2 : FPWID==20 ? 2 : FPWID==16 ? 1 : 0
+module positDecomposeReg(clk, ce, i, sgn, rgs, rgm, exp, sig, zer, inf);
+`include "positSize.sv"
 input clk;
 input ce;
-input [FPWID-1:0] i;
+input [PSTWID-1:0] i;
 output reg sgn;
-output reg [$clog2(FPWID):0] rgm;
+output reg rgs;
+output reg [$clog2(PSTWID)-1:0] rgm;
 output reg [es-1:0] exp;
-output reg [FPWID-es-1:0] sig;
+output reg [PSTWID-es-1:0] sig;
 output reg zer;
 output reg inf;
 
 wire isgn;
-wire [$clog2(FPWID):0] irgm;
+wire irgs;
+wire [$clog2(PSTWID)-1:0] irgm;
 wire [es-1:0] iexp;
-wire [FPWID-es-1:0] isig;
+wire [PSTWID-es-1:0] isig;
 wire izer;
 wire iinf;
 
-positDecompose #(FPWID) u1 (i, isgn, irgm, iexp, isig, iinf);
+positDecompose #(PSTWID) u1 (i, isgn, irgs, irgm, iexp, isig, iinf);
 
 always @(posedge clk)
 if (ce) begin
   sgn = isgn;
+  rgs = irgs;
   rgm = irgm;
   exp = iexp;
   sig = isig;
