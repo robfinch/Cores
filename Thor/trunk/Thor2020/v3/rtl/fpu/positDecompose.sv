@@ -47,14 +47,14 @@ assign zer = ~|i;
 wire [PSTWID-1:0] ii = sgn ? -i : i;
 assign rgs = ii[PSTWID-2];
 
-positCntlz #(PSTWID,es) u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
-positCntlo #(PSTWID,es) u2 (.i(ii[PSTWID-2:0]), .o(locnt));
+positCntlz #(PSTWID) u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
+positCntlo #(PSTWID) u2 (.i(ii[PSTWID-2:0]), .o(locnt));
 
 assign rgm = rgs ? locnt - 1 : lzcnt;
 wire [$clog2(PSTWID)-1:0] shamt = rgs ? locnt + 2'd1 : lzcnt + 2'd1;
 wire [PSTWID-1:0] tmp = ii << shamt;
 assign exp = |es ? tmp[PSTWID-2:PSTWID-1-es] : 0;
-assign sig = {1'b1,tmp[PSTWID-2-es:0]};
+assign sig = {~zer,tmp[PSTWID-2-es:0]};
 
 endmodule
 
