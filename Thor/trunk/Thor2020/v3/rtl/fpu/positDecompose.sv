@@ -28,17 +28,18 @@
 // Decompose a posit number.
 module positDecompose(i, sgn, rgs, rgm, exp, sig, zer, inf);
 `include "positSize.sv"
+localparam rs = $clog2(PSTWID-1);
 input [PSTWID-1:0] i;
 output sgn;                       // sign of number
 output rgs;                       // sign of regime
-output [$clog2(PSTWID)-1:0] rgm;   // regime (absolute value)
+output [rs:0] rgm;   // regime (absolute value)
 output [es-1:0] exp;              // exponent
-output [PSTWID-es-1:0] sig;        // significand
+output [PSTWID-1-es:0] sig;       // significand
 output zer;                       // number is zero
 output inf;                       // number is infinite
 
-wire [$clog2(PSTWID-2):0] lzcnt;
-wire [$clog2(PSTWID-2):0] locnt;
+wire [rs:0] lzcnt;
+wire [rs:0] locnt;
 
 
 assign sgn = i[PSTWID-1];
@@ -51,7 +52,7 @@ positCntlz #(PSTWID) u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
 positCntlo #(PSTWID) u2 (.i(ii[PSTWID-2:0]), .o(locnt));
 
 assign rgm = rgs ? locnt - 1 : lzcnt;
-wire [$clog2(PSTWID)-1:0] shamt = rgs ? locnt + 2'd1 : lzcnt + 2'd1;
+wire [rs:0] shamt = rgs ? locnt + 2'd1 : lzcnt + 2'd1;
 wire [PSTWID-1:0] tmp = ii << shamt;
 assign exp = |es ? tmp[PSTWID-2:PSTWID-1-es] : 0;
 assign sig = {~zer,tmp[PSTWID-2-es:0]};

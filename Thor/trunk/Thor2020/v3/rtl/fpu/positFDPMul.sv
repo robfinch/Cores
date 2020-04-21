@@ -5,9 +5,11 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positMul.v
-//    - posit number multiplier
+//	positFDPMul.v
+//    - fused dot product posit number multiplier
 //    - parameterized width
+//    - perform a multiplication but retain all the product bits
+//      in the result in preparation for addition.
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -27,12 +29,12 @@
 
 `include "positConfig.sv"
 
-module positMul(a, b, o, zero, inf);
+module positFDPMul(a, b, o, zero, inf);
 `include "positSize.sv"
 localparam rs = $clog2(PSTWID-1);
 input [PSTWID-1:0] a;
 input [PSTWID-1:0] b;
-output reg [PSTWID-1:0] o;
+output reg [PSTWID+es+(PSTWID-es)*2-1:0] o;
 output zero;
 output inf;
 
@@ -95,26 +97,15 @@ wire [rs:0] rgml = (~srxtmp | |(rxn[es-1:0])) ? rxtmp2c[rs+es:es] + 2'd1 : rxtmp
 // Build expanded posit number:
 // trim one leading bit off the product bits
 // and keep guard, round bits, and create sticky bit
-wire [PSTWID*2-1+3:0] tmp = {{PSTWID-1{~srxtmp}},srxtmp,exp,prod1[(PSTWID-es)*2-2:(PSTWID-es-2)],|prod1[(PSTWID-es-3):0]};
-
-wire [PSTWID*3-1+3:0] tmp1 = {tmp,{PSTWID{1'b0}}} >> rgml;
-
-// Rounding
-// Guard, Round, and Sticky
-wire L = tmp1[PSTWID+4], G = tmp1[PSTWID+3], R = tmp1[PSTWID+2], St = |tmp1[PSTWID+1:0],
-     ulp = ((G & (R | St)) | (L & G & ~(R | St)));
-wire [PSTWID-1:0] rnd_ulp = {{PSTWID-1{1'b0}},ulp};
-
-wire [PSTWID:0] tmp1_rnd_ulp = tmp1[2*PSTWID-1+3:PSTWID+3] + rnd_ulp;
-wire [PSTWID-1:0] tmp1_rnd = (rgml < PSTWID-es-2) ? tmp1_rnd_ulp[PSTWID-1:0] : tmp1[2*PSTWID-1+3:PSTWID+3];
-
-wire [PSTWID-1:0] abs_tmp = so ? -tmp1_rnd : tmp1_rnd;
+wire [PSTWID+es+(PSTWID-es)*2-2:0] tmp = {{PSTWID-1{~srxtmp}},srxtmp,exp,prod1[(PSTWID-es)*2-2:0]};
+wire [PSTWID+es+(PSTWID-es)*2-2:0] tmp1 = tmp << (PSTWID-rgml);
+wire [PSTWID+es+(PSTWID-es)*2-1:0] abstmp = so ? {1'b1,-tmp1} : {1'b0,tmp1};
 
 always @*
   casez({zero,inf})
-  2'b1?: o = {PSTWID{1'b0}};
-  2'b01: o = {1'b1,{PSTWID-1{1'b0}}};
-  default:  o = {so,abs_tmp[PSTWID-1:1]};
+  2'b1?: o = {PSTWID+es+(PSTWID-es)*2-2:0{1'b0}};
+  2'b01: o = {1'b1,{PSTWID+es+(PSTWID-es)*2-2:0-1{1'b0}}};
+  default:  o = abstmp;
   endcase
 
 endmodule

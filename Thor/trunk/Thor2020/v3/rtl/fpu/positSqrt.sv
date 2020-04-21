@@ -9,13 +9,6 @@
 //    - posit number square root function
 //    - parameterized width
 //
-/////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////
-// This function currently only seems to work with even sizes of 
-// exponents.
-/////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////
-//
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -68,6 +61,14 @@ positDecompose #(PSTWID,es) u1 (
 );
 
 assign so = si;				// square root of positive numbers only
+// Compute length of significand. This length is needed to align the
+// significand input to the square root module.
+//wire [rs+1:0] rgml1 = rgsi ? rgmi + 2'd2 : rgmi + 2'd1;
+//wire [rs+1:0] sigl = PSTWID-rgml1-es-1;
+// The length could be zero or less  
+//wire [rs:0] sigl1 = sigl[rs+1] ? {rs{1'b0}} : sigl;
+
+// Compute exponent
 wire [rs+1:0] rgm1 = rgsi ? rgmi : -rgmi;
 wire [rs+es+1:0] rx1 = {rgm1,expi};
 // If exponent is odd, make it even. May need to shift the significand later.
@@ -76,20 +77,23 @@ wire [rs+es+1:0] rxtmp = {{2{rx1[rs+es+1]}},rx1} >> 1;   // right shift takes sq
 assign sqrinf = infi;
 assign sqrneg = so;
 // If the exponent was made even, shift the significand left.
-wire [PSTWID-1:0] sig1 = rx1[0] ? {sigi,1'b0} : {1'b0,sigi};
+wire [PSTWID-1:0] sig1 = (rx1[0] ^ ~es[0]) ? {sigi,1'b0} : {1'b0,sigi};
 
 wire ldd;
 delay1 #(1) u3 (.clk(clk), .ce(ce), .i(start), .o(ldd));
 wire [PSTWID*3-1:0] sqrto;
 
 wire [rs:0] lzcnt;
+
+// iqsrt2 left aligns the number
 isqrt2 #(PSTWID*3/2) u2
 (
 	.rst(rst),
 	.clk(clk),
 	.ce(ce),
 	.ld(ldd),
-	.a({sig1,{(PSTWID/2+1-(PSTWID%2)){1'b0}}}),
+	// Align the input according to odd/even length
+	.a({sig1,{PSTWID/2{1'b0}}}),
 	.o(sqrto),
 	.done(done),
 	.lzcnt(lzcnt)
