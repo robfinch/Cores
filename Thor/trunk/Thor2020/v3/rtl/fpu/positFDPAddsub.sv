@@ -96,14 +96,14 @@ assign diff = {argm1,exp1} - {argm2,exp2};
 wire [rs-1:0] exp_diff = (|diff[es+rs:rs]) ? {rs{1'b1}} : diff[rs-1:0];
 wire [PSTWID*2+(PSTWID-es)*2-1:0] sig2s = {sig2,{PSTWID{1'b0}}} >> exp_diff;
 wire [PSTWID*2+(PSTWID-es)*2-1:0] sig1s = {sig1,{PSTWID{1'b0}}};
-wire [PSTWID*2+(PSTWID-es)*2:0] sig_sd = rop ? sig1s - sig2s : sig1s + sig2s;
+wire [PSTWID*2+(PSTWID-es)*2+2:0] sig_sd = rop ? sig1s - sig2s : sig1s + sig2s;
 wire zeroRes = (rop && sig1s==sig2s) || (~rop && (sig1s==-sig2s));
-wire [1:0] sigov = sig_sd[PSTWID*2+(PSTWID-es)*2:PSTWID*2+(PSTWID-es)*2-1];
+wire [1:0] sigov = sig_sd[PSTWID*2+(PSTWID-es)*2+2:PSTWID*2+(PSTWID-es)*2+1];
 // Round the size to a multiple of 64 bits
-integer wid = PSTWID*2+(PSTWID-es)*2+2;
-integer rem = (64-(wid % 64));
-integer wid2 = wid + rem;
-wire [wid2-1:0] sigi = {|sigov,sig_sd << rem};
+localparam wid = PSTWID*2+(PSTWID-es)*2+2;
+localparam rem = (64-(wid % 64));
+localparam wid2 = wid + rem;
+wire [wid2-1:0] sigi = {|sigov,sig_sd[PSTWID*2+(PSTWID-es)*2:0]} << rem;
 
 wire [$clog2(wid2-1):0] lzcnt;
 generate begin : gClz
@@ -113,14 +113,17 @@ generate begin : gClz
   192:  cntlz192 u1(.i(sigi), .o(lzcnt));
   256:  cntlz256 u1(.i(sigi), .o(lzcnt));
   default:
-    $display ("postFDPAddsub: significand too large");
-    $finish;
-  endcase
+		always @*
+		begin
+			$display ("postFDPAddsub: significand too large");
+			$finish;
+		end
+		endcase
 end
 endgenerate
 
 //positCntlz #(.PSTWID(PSTWID)) u3 (.i({|sigov,sig_sd[PSTWID-2:0]}), .o(lzcnt));
-wire [PSTWID*2+(PSTWID-es)*2-1:0] sig_ls = sig_sd[PSTWID*2+(PSTWID-es)*2-1:0] << lzcnt;
+wire [PSTWID*2+(PSTWID-es)*2-1:0] sig_ls = sig_sd[PSTWID*2+(PSTWID-es)*2+1:0] << (lzcnt-1);
 
 wire [rs:0] absrgm1 = rgs1 ? rgm1 : -rgm1;  // rgs1 = 1 = positive
 wire [es+rs+1:0] rxtmp;
@@ -131,7 +134,7 @@ wire [(es==0 ? 0 : es-1):0] expo;
 wire [rs:0] rgmo;
 generate begin : gEsz
 if (es > 0) begin
-assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es};
+assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+2};
 assign rxtmp1 = rxtmp + sigov[1]; // add in overflow if any
 assign srxtmp1 = rxtmp1[es+rs+1];
 assign abs_rxtmp = srxtmp1 ? -rxtmp1 : rxtmp1;
@@ -140,7 +143,7 @@ assign expo = (srxtmp1 & |abs_rxtmp[es-1:0]) ? rxtmp1[es-1:0] : abs_rxtmp[es-1:0
 assign rgmo = (~srxtmp1 || (srxtmp1 & |abs_rxtmp[es-1:0])) ? abs_rxtmp[es+rs:es] + 1'b1 : abs_rxtmp[es+rs:es];
 end
 else begin
-assign rxtmp = absrgm1 - {{1{1'b0}},lzcnt};
+assign rxtmp = absrgm1 - {{1{1'b0}},lzcnt+2};
 assign rxtmp1 = rxtmp + sigov[1]; // add in overflow if any
 assign srxtmp1 = rxtmp1[rs+1];
 assign abs_rxtmp = srxtmp1 ? -rxtmp1 : rxtmp1;
@@ -154,10 +157,10 @@ endgenerate
 reg [2*PSTWID-1+3:0] tmp;
 always @*
 case(es)
-0:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, sig_ls[PSTWID*2+(PSTWID-es)*2-2:PSTWID+(PSTWID-es)*2-2], |sig_ls[PSTWID+(PSTWID-es)*2-3:0]};
-1:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-2:PSTWID+(PSTWID-es)*2-1], |sig_ls[PSTWID+(PSTWID-es)*2-2:0]};
-2:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-2:PSTWID+(PSTWID-es)*2], |sig_ls[PSTWID+(PSTWID-es)*2-1:0]};
-default:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-2:PSTWID+(PSTWID-es)*2-(2-es)], |sig_ls[PSTWID+(PSTWID-es)*2-(2-es)-1:0]};
+0:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-2], |sig_ls[PSTWID+(PSTWID-es)*2-3:0]};
+1:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-1], |sig_ls[PSTWID+(PSTWID-es)*2-2:0]};
+2:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2], |sig_ls[PSTWID+(PSTWID-es)*2-1:0]};
+default:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-(2-es)+1], |sig_ls[PSTWID+(PSTWID-es)*2-(2-es):0]};
 endcase
 
 wire [3*PSTWID-1+3:0] tmp1 = {tmp,{PSTWID{1'b0}}} >> rgmo;
@@ -190,7 +193,7 @@ assign z = zero|zeroRes;
 assign i = inf;
 
 always @*
-  casez({z,inf,sig_ls[PSTWID*2+(PSTWID-es)*2-1]})
+  casez({z,inf,sig_ls[(PSTWID-es)*2]})
   3'b1??: o = {PSTWID{1'b0}};
   3'b01?: o = {1'b1,{PSTWID-1{1'b0}}};
   3'b001: o = {PSTWID{1'b0}};

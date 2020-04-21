@@ -30,7 +30,7 @@
 module intToPosit(i, o);
 `include "positSize.sv"
 localparam rs = $clog2(PSTWID-1);
-localparam lzs = $clog2(PSTWID-2);
+localparam lzs = $clog2(PSTWID-1)-1;
 input [PSTWID-1:0] i;
 output [PSTWID-1:0] o;
 

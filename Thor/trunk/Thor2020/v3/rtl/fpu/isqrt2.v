@@ -124,7 +124,7 @@ assign done = state==DONE && cnt > 8'd0;
 endmodule
 
 
-module isqrt_tb();
+module isqrt2_tb();
 
 reg clk;
 reg rst;
@@ -165,7 +165,7 @@ case(state)
 endcase
 end
 
-isqrt #(32) u1 (.rst(rst), .clk(clk), .ce(1'b1), .ld(ld), .a(a), .o(o), .done(done));
+isqrt2 #(32) u1 (.rst(rst), .clk(clk), .ce(1'b1), .ld(ld), .a(a), .o(o), .done(done));
 
 endmodule
 

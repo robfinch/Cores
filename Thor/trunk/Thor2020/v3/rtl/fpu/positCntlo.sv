@@ -29,16 +29,24 @@ input [PSTWID-2:0] i;
 output [$clog2(PSTWID-2):0] o;
 
 generate begin : gClz
-  case(PSTWID)
-  16: cntlo16 u1 (.i({i,1'b1}), .o(o));
-  20: cntlo24 u1 (.i({i,1'b1,4'hF}), .o(o));
-  32: cntlo32 u1 (.i({i,1'b1}), .o(o));
-  40: cntlo48 u1 (.i({i,1'b1,8'hFF}), .o(o));
-  52: cntlo64 u1 (.i({i,1'b1,12'hFFF}), .o(o));
-  64: cntlo64 u1 (.i({i,1'b1}), .o(o));
-  80: cntlo80 u1 (.i({i,1'b1}), .o(o));
-  default:  ;
-  endcase
+  if (PSTWID <= 8)
+    cntlo8 u1 (.i({i,{9-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 16)
+    cntlo16 u1 (.i({i,{17-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 24)
+    cntlo24 u1 (.i({i,{25-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 32)
+    cntlo32 u1 (.i({i,{33-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 48)
+    cntlo48 u1 (.i({i,{49-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 64)
+    cntlo64 u1 (.i({i,{65-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 80)
+    cntlo80 u1 (.i({i,{81-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 96)
+    cntlo96 u1 (.i({i,{97-PSTWID{1'b1}}}), .o(o));
+  else if (PSTWID <= 128)
+    cntlo128 u1 (.i({i,{129-PSTWID{1'b1}}}), .o(o));
 end
 endgenerate
 

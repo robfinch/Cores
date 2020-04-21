@@ -36,12 +36,14 @@ input [PSTWID-1:0] b;
 input [PSTWID-1:0] c;
 input [PSTWID-1:0] d;
 output [PSTWID-1:0] o;
+output zero;
+output inf;
 
 wire [PSTWID+es+(PSTWID-es)*2-1:0] o1;
 wire [PSTWID+es+(PSTWID-es)*2-1:0] o2;
 
 positFDPMul #(.PSTWID(PSTWID), .es(es)) u1 (a, b, o1, zero1, inf1);
 positFDPMul #(.PSTWID(PSTWID), .es(es)) u2 (c, d, o2, zero2, inf2);
-positFDPAddsub(op, o1, o2, o, zero, inf);
+positFDPAddsub #(.PSTWID(PSTWID), .es(es)) u3 (op, o1, o2, o, zero, inf);
 
 endmodule

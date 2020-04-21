@@ -47,7 +47,6 @@ wire [PSTWID-es-1:0] siga, sigb;
 wire [(PSTWID-es)*2-1:0] prod;
 wire zera, zerb;
 wire infa, infb;
-wire [PSTWID-1:0] aa, bb;
 wire inf = infa|infb;
 wire zero = zera|zerb;
 
@@ -98,13 +97,13 @@ wire [rs:0] rgml = (~srxtmp | |(rxn[es-1:0])) ? rxtmp2c[rs+es:es] + 2'd1 : rxtmp
 // trim one leading bit off the product bits
 // and keep guard, round bits, and create sticky bit
 wire [PSTWID+es+(PSTWID-es)*2-2:0] tmp = {{PSTWID-1{~srxtmp}},srxtmp,exp,prod1[(PSTWID-es)*2-2:0]};
-wire [PSTWID+es+(PSTWID-es)*2-2:0] tmp1 = tmp << (PSTWID-rgml);
+wire [PSTWID+es+(PSTWID-es)*2-2:0] tmp1 = tmp << (PSTWID-rgml-1);
 wire [PSTWID+es+(PSTWID-es)*2-1:0] abstmp = so ? {1'b1,-tmp1} : {1'b0,tmp1};
 
 always @*
   casez({zero,inf})
-  2'b1?: o = {PSTWID+es+(PSTWID-es)*2-2:0{1'b0}};
-  2'b01: o = {1'b1,{PSTWID+es+(PSTWID-es)*2-2:0-1{1'b0}}};
+  2'b1?: o = {PSTWID+es+(PSTWID-es)*2-2{1'b0}};
+  2'b01: o = {1'b1,{PSTWID+es+(PSTWID-es)*2-2-1{1'b0}}};
   default:  o = abstmp;
   endcase
 

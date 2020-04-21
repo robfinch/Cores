@@ -38,8 +38,8 @@ output [PSTWID-1-es:0] sig;       // significand
 output zer;                       // number is zero
 output inf;                       // number is infinite
 
-wire [rs:0] lzcnt;
-wire [rs:0] locnt;
+wire [rs-1:0] lzcnt;
+wire [rs-1:0] locnt;
 
 
 assign sgn = i[PSTWID-1];
