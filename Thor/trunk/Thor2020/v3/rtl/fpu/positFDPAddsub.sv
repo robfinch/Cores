@@ -105,7 +105,7 @@ localparam rem = (64-(wid % 64));
 localparam wid2 = wid + rem;
 wire [wid2-1:0] sigi = {|sigov,sig_sd[PSTWID*2+(PSTWID-es)*2:0]} << rem;
 
-wire [$clog2(wid2-1):0] lzcnt;
+wire [$clog2(wid2-1)-1:0] lzcnt;
 generate begin : gClz
   case(wid2)
   64:   cntlz64 u1 (.i(sigi), .o(lzcnt));
@@ -134,7 +134,15 @@ wire [(es==0 ? 0 : es-1):0] expo;
 wire [rs:0] rgmo;
 generate begin : gEsz
 if (es > 0) begin
-assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+2};
+case(es)
+0:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es-2};
+1:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es-1};
+2:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+0};
+3:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+1};
+4:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+2};
+5:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+3};
+6:  assign rxtmp = {absrgm1,exp1} - {{es+1{1'b0}},lzcnt-es+4};
+endcase
 assign rxtmp1 = rxtmp + sigov[1]; // add in overflow if any
 assign srxtmp1 = rxtmp1[es+rs+1];
 assign abs_rxtmp = srxtmp1 ? -rxtmp1 : rxtmp1;
@@ -157,9 +165,9 @@ endgenerate
 reg [2*PSTWID-1+3:0] tmp;
 always @*
 case(es)
-0:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-2], |sig_ls[PSTWID+(PSTWID-es)*2-3:0]};
-1:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-1], |sig_ls[PSTWID+(PSTWID-es)*2-2:0]};
-2:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2], |sig_ls[PSTWID+(PSTWID-es)*2-1:0]};
+0:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-1], |sig_ls[PSTWID+(PSTWID-es)*2-2:0]};
+1:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-0], |sig_ls[PSTWID+(PSTWID-es)*2-1:0]};
+2:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2+1], |sig_ls[PSTWID+(PSTWID-es)*2-0:0]};
 default:  tmp = { {PSTWID{~srxtmp1}}, srxtmp1, expo, sig_ls[PSTWID*2+(PSTWID-es)*2-1:PSTWID+(PSTWID-es)*2-(2-es)+1], |sig_ls[PSTWID+(PSTWID-es)*2-(2-es):0]};
 endcase
 
