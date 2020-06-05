@@ -39,11 +39,11 @@ package hardposit
 
 import Chisel._
 
-object classify
+object classifyPosit
 {
   def apply(expWidth: Int, posWidth: Int, in: Bits) =
   {
-    val rawIn = decompose(expWidth, posWidth, in)
+    val rawIn = decomposePosit(expWidth, posWidth, in)
     val isFiniteNonzero = ! rawIn.isNaR && ! rawIn.isZero
 
     Cat(

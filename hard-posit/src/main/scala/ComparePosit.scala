@@ -39,32 +39,26 @@ package hardposit
 
 import Chisel._
 
-/*----------------------------------------------------------------------------
-| In the result, no more than one of 'isNaN', 'isInf', and 'isZero' will be
-| set.
-*----------------------------------------------------------------------------*/
-object decompose
+class ComparePosit(expWidth: Int, posWidth: Int) extends Module
 {
-  def apply(expWidth: Int, posWidth: Int, in: Bits): RawPosit =
-  {
-    val n = Mux(in(posWidth-1),-in,in)
-    val rgmlen = countLeadingBits(n(posWidth-2,0)) + 1
-    val exp = n(posWidth - rgmlen - 1, posWidth - rgmlen - expWidth)
-
-    val out = Wire(new RawPosit(expWidth, posWidth))
-    out.isNaR  := in(posWidth-1) === UInt(1) && in(posWidth-2,0)===UInt(0)
-    out.isInf  := in(posWidth-1) === UInt(1) && in(posWidth-2,0)===UInt(0)
-    out.isZero := in(posWidth-1,0) === UInt(0))
-    out.sign   := in(posWidth-1)
-    out.exp    := exp.zext
-    out.regsign := n(posWidth-2)
-    out.regime := Mux(n(posWidth-2),rgmlen,rgmlen-1)
-    out.sigWidth := Max(0,posWidth - rgmlen - expWidth)
-    if (posWidth - rgmlen - expWidth - 1 >= 0)
-      out.sig  := Cat(UInt(1,1),n(posWidth - rgmlen - expWidth - 1,0))
-    else
-      out.sig  := 1
-    out
+  val io = new Bundle {
+    val a = Bits(INPUT, posWidth)
+    val b = Bits(INPUT, posWidth)
+    val lt = Bool(OUTPUT)
+    val eq = Bool(OUTPUT)
+    val gt = Bool(OUTPUT)
   }
-}
 
+  val rawA = decompose(expWidth, posWidth, io.a)  // for NaR
+  val rawB = decompose(expWidth, posWidth, io.b)
+
+  val ordered = ! rawA.isNaR && ! rawB.isNaR
+
+  // The beauty of posits
+  val ordered_lt = a.asInt < b.asInt
+  val ordered_eq = a === b
+
+  io.lt := ordered && ordered_lt
+  io.eq := ordered && ordered_eq
+  io.gt := ordered && ! ordered_lt && ! ordered_eq
+}
