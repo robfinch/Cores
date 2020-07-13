@@ -50,7 +50,7 @@ object classifyPosit
       rawIn.isNaR,
       ! rawIn.sign && isFiniteNonzero,
       rawIn.isZero,
-      rawIn.sign   && isFiniteNonzero,
+      rawIn.sign   && isFiniteNonzero
     )
   }
 }

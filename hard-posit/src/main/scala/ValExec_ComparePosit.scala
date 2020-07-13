@@ -3,11 +3,9 @@
 
 This Chisel source file is part of a pre-release version of the HardPosit
 Arithmetic Package an adpatation of the HardFloat package, by John R. Hauser
-(with some contributions
-from Yunsup Lee and Andrew Waterman, mainly concerning testing).
 
-Copyright 2010, 2011, 2012, 2013, 2014, 2015, 2016 The Regents of the
-University of California.  All rights reserved.
+Copyright (c) 2020 Robert Finch
+All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -40,7 +38,7 @@ package hardposit
 
 import Chisel._
 
-class ValExec_CompareRecFN_lt(expWidth: Int, posWidth: Int) extends Module
+class ValExec_ComparePosit_lt(expWidth: Int, posWidth: Int) extends Module
 {
   val io = new Bundle {
     val a = Bits(INPUT, posWidth-1)
@@ -57,13 +55,13 @@ class ValExec_CompareRecFN_lt(expWidth: Int, posWidth: Int) extends Module
     val pass = Bool(OUTPUT)
   }
 
-  val compareRecFN = Module(new CompareRecFN(expWidth, posWidth))
-  compareRecFN.io.a := recFNFromFN(expWidth, posWidth, io.a)
-  compareRecFN.io.b := recFNFromFN(expWidth, posWidth, io.b)
-  compareRecFN.io.signaling := Bool(true)
+  val comparePosit = Module(new ComparePosit(expWidth, posWidth))
+  comparePosit.io.a := rawPositFromBits(expWidth, posWidth, io.a)
+  comparePosit.io.b := rawPositFromBits(expWidth, posWidth, io.b)
+  comparePosit.io.signaling := Bool(true)
 
-  io.actual.out := compareRecFN.io.lt
-  io.actual.exceptionFlags := compareRecFN.io.exceptionFlags
+  io.actual.out := comparePosit.io.lt
+  io.actual.exceptionFlags := comparePosit.io.exceptionFlags
 
   io.check := Bool(true)
   io.pass :=
@@ -71,11 +69,11 @@ class ValExec_CompareRecFN_lt(expWidth: Int, posWidth: Int) extends Module
     (io.actual.exceptionFlags === io.expected.exceptionFlags)
 }
 
-class ValExec_CompareRecF16_lt extends ValExec_CompareRecFN_lt(2, 16)
-class ValExec_CompareRecF32_lt extends ValExec_CompareRecFN_lt(3, 32)
-class ValExec_CompareRecF64_lt extends ValExec_CompareRecFN_lt(4, 64)
+class ValExec_ComparePosit16_lt extends ValExec_ComparePosit_lt(2, 16)
+class ValExec_ComparePosit32_lt extends ValExec_ComparePosit_lt(3, 32)
+class ValExec_ComparePosit64_lt extends ValExec_ComparePosit_lt(4, 64)
 
-class ValExec_CompareRecFN_le(expWidth: Int, posWidth: Int) extends Module
+class ValExec_ComparePosit_le(expWidth: Int, posWidth: Int) extends Module
 {
     val io = new Bundle {
         val a = Bits(INPUT, posWidth - 1)
@@ -92,9 +90,9 @@ class ValExec_CompareRecFN_le(expWidth: Int, posWidth: Int) extends Module
         val pass = Bool(OUTPUT)
     }
 
-    val compareRecFN = Module(new CompareRecFN(expWidth, posWidth))
-    compareRecFN.io.a := recFNFromFN(expWidth, posWidth, io.a)
-    compareRecFN.io.b := recFNFromFN(expWidth, posWidth, io.b)
+    val comparePosit = Module(new ComparePosit(expWidth, posWidth))
+    compareRecFN.io.a := rawPositFromBits(expWidth, posWidth, io.a)
+    compareRecFN.io.b := rawPositFromBits(expWidth, posWidth, io.b)
     compareRecFN.io.signaling := Bool(true)
 
     io.actual.out := compareRecFN.io.lt || compareRecFN.io.eq
@@ -106,11 +104,11 @@ class ValExec_CompareRecFN_le(expWidth: Int, posWidth: Int) extends Module
         (io.actual.exceptionFlags === io.expected.exceptionFlags)
 }
 
-class ValExec_CompareRecF16_le extends ValExec_CompareRecFN_le(2, 16)
-class ValExec_CompareRecF32_le extends ValExec_CompareRecFN_le(3, 32)
-class ValExec_CompareRecF64_le extends ValExec_CompareRecFN_le(4, 64)
+class ValExec_ComparePosit16_le extends ValExec_ComparePosit_le(2, 16)
+class ValExec_ComparePosit32_le extends ValExec_ComparePosit_le(3, 32)
+class ValExec_ComparePosit64_le extends ValExec_ComparePosit_le(4, 64)
 
-class ValExec_CompareRecFN_eq(expWidth: Int, posWidth: Int) extends Module
+class ValExec_ComparePosit_eq(expWidth: Int, posWidth: Int) extends Module
 {
     val io = new Bundle {
         val a = Bits(INPUT, posWidth - 1)
@@ -127,13 +125,13 @@ class ValExec_CompareRecFN_eq(expWidth: Int, posWidth: Int) extends Module
         val pass = Bool(OUTPUT)
     }
 
-    val compareRecFN = Module(new CompareRecFN(expWidth, posWidth))
-    compareRecFN.io.a := recFNFromFN(expWidth, posWidth, io.a)
-    compareRecFN.io.b := recFNFromFN(expWidth, posWidth, io.b)
-    compareRecFN.io.signaling := Bool(false)
+    val comparePosit = Module(new ComparePosit(expWidth, posWidth))
+    comparePosit.io.a := rawPositFromBits(expWidth, posWidth, io.a)
+    comparePosit.io.b := rawPositFromBits(expWidth, posWidth, io.b)
+    comparePosit.io.signaling := Bool(false)
 
-    io.actual.out := compareRecFN.io.eq
-    io.actual.exceptionFlags := compareRecFN.io.exceptionFlags
+    io.actual.out := comparePosit.io.eq
+    io.actual.exceptionFlags := comparePosit.io.exceptionFlags
 
     io.check := Bool(true)
     io.pass :=
@@ -141,7 +139,7 @@ class ValExec_CompareRecFN_eq(expWidth: Int, posWidth: Int) extends Module
         (io.actual.exceptionFlags === io.expected.exceptionFlags)
 }
 
-class ValExec_CompareRecF16_eq extends ValExec_CompareRecFN_eq(2, 16)
-class ValExec_CompareRecF32_eq extends ValExec_CompareRecFN_eq(3, 32)
-class ValExec_CompareRecF64_eq extends ValExec_CompareRecFN_eq(4, 64)
+class ValExec_ComparePosit16_eq extends ValExec_ComparePosit_eq(2, 16)
+class ValExec_ComparePosit32_eq extends ValExec_ComparePosit_eq(3, 32)
+class ValExec_ComparePosit64_eq extends ValExec_ComparePosit_eq(4, 64)
 

@@ -49,8 +49,8 @@ class ComparePosit(expWidth: Int, posWidth: Int) extends Module
     val gt = Bool(OUTPUT)
   }
 
-  val rawA = decompose(expWidth, posWidth, io.a)  // for NaR
-  val rawB = decompose(expWidth, posWidth, io.b)
+  val rawA = decomposePosit(expWidth, posWidth, io.a)  // for NaR
+  val rawB = decomposePosit(expWidth, posWidth, io.b)
 
   val ordered = ! rawA.isNaR && ! rawB.isNaR
 
