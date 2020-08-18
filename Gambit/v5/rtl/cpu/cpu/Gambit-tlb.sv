@@ -32,6 +32,12 @@
 //=============================================================================
 //
 `define TLBMissPage		{DBW-13{1'b1}}
+`define TLB_RD        5'd2
+`define TLB_WR        5'd3
+`define TLB_WI        5'd4
+`define TLB_EN        5'd5
+`define TLB_DIS       5'd6
+`define TLB_SPGSZ     5'd12
 
 module TLB(clk, ld, done, idle, ol,
 	ASID, op, regno, dati, dato,
@@ -292,8 +298,8 @@ begin
 		`TLB_WRREG:
 			begin
 			case(regno)
-			`TLBWired:		Wired <= dati[2:0];
-			`TLBIndex:		Index <= dati[5:0];
+			`TLBWired:		Wired <= dati[3:0];
+			`TLBIndex:		Index <= dati[7:0];
 			//`TLBPageSize:	PageSize <= dati[2:0];
 			`TLBVirtPage:	HTLBVirtPage <= dati;
 			`TLBPhysPage:	HTLBPhysPage <= dati;
@@ -308,6 +314,10 @@ begin
 						HTLBU <= dati[8];
 						HTLBD <= dati[9];
 						HTLBG <= dati[10];
+						// We track the page size according to the ASID, but for the entry
+						// to be updated, it may not be in the current address space. So, the
+						// page size might be different, hence the desired size for that
+						// entry must be supplied.
 						HTLBPageSize <= dati[13:11];
 						HTLBASID <= dati[23:16];
 						HTLBPL <= dati[31:24];
@@ -325,6 +335,8 @@ begin
 			TLBenabled <= 1'b0;
 		`TLB_INVALL:
 			TLBValid <= 256'd0;
+		`TLB_SPGSZ:
+  		TLBPageSize[dati[11:4]] <= dat[2:0];
 		default:  ;
 		endcase
 	end
@@ -357,7 +369,7 @@ begin
 				TLBVirtPage[i] <= HTLBVirtPage;
 				TLBASID[i] <= HTLBASID;
 				TLBPL[i] <= HTLBPL;
-				TLBPageSize[i] <= HTLBPageSize;
+//				TLBPageSize[ASID] <= HTLBPageSize;
 				TLBG[i] <= HTLBG;
 				TLBD[i] <= HTLBD;
 				TLBC[i] <= HTLBC;
