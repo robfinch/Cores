@@ -32,18 +32,39 @@
 //=============================================================================
 //
 `define TLBMissPage		{DBW-13{1'b1}}
+`define TLBWired      4'd0
+`define TLBIndex      4'd1
+`define TLBRandom     4'd2
+`define TLBPageSize   4'd3
+`define TLBVirtPage   4'd4
+`define TLBPhysPage   4'd5
+`define TLBASID       4'd7
+`define TLBMisc       4'd7
+`define TLBMissAddr   4'd8
+`define TLBPageTblAddr  4'd10
+`define TLBPageTblCtrl  4'd11
+`define TLBAFC        4'd12
+`define TLBRefCount   4'd13
+
+`define TLB_NOP       5'd0
+`define TLB_PB        5'd1
 `define TLB_RD        5'd2
 `define TLB_WR        5'd3
 `define TLB_WI        5'd4
 `define TLB_EN        5'd5
 `define TLB_DIS       5'd6
+`define TLB_RDREG     5'd7
+`define TLB_WRREG     5'd8
+`define TLB_INVALL    5'd9
+`define TLB_RDAGE     5'd10
+`define TLB_WRAGE     5'd11
 `define TLB_SPGSZ     5'd12
 
 module TLB(clk, ld, done, idle, ol,
-	ASID, op, regno, dati, dato,
+	ASID, keys, op, regno, dati, dato,
 	uncached,
 	icl_i, cyc_i, stb_i, we_i, vadr_i, cyc_o, stb_o, we_o, padr_o,
-	wrv_o, rdv_o, exv_o,
+	wrv_o, rdv_o, exv_o, kyv_o,
 	TLBMiss, HTLBVirtPageo);
 parameter DBW=52;
 parameter ABW=52;
@@ -73,10 +94,12 @@ input we_i;
 output reg cyc_o;
 output reg stb_o;
 output reg we_o;
-output reg exv_o;
-output reg wrv_o;
-output reg rdv_o;
+output reg exv_o;         // execute violation
+output reg wrv_o;         // write violation
+output reg rdv_o;         // read violation
+output reg kyv_o;         // key violation
 input [7:0] ASID;
+input [19:0] keys [0:7];
 input [3:0] op;
 input [3:0] regno;
 input [DBW-1:0] dati;
@@ -101,8 +124,11 @@ reg HTLBD;
 reg HTLBR, HTLBW, HTLBX, HTLBA, HTLBU, HTLBS;
 reg [2:0] HTLBC;
 reg [7:0] HTLBPL;
+reg [19:0] HTLBKey;
 reg [2:0] HTLBPageSize;
 reg HTLBValid;
+reg [19:0] HTLBKey;
+reg [31:0] HTLBRefCount;
 reg [ABW-1:0] miss_addr;
 
 reg TLBenabled = 1'b0;
@@ -112,6 +138,7 @@ reg [3:0] Random = 4'hF;
 reg [3:0] Wired = 4'd0;
 reg [2:0] PageSize;
 reg [15:0] Match;
+reg keyMatch;
 
 reg [4:0] q;
 wire doddpage;
@@ -124,6 +151,7 @@ reg [ENTRIES-1:0] TLBA;
 reg [2:0] TLBC [ENTRIES-1:0];
 reg [7:0] TLBASID [ENTRIES-1:0];
 reg [7:0] TLBPL [ENTRIES-1:0];
+reg [19:0] TLBKey [ENTRIES-1:0];
 reg [2:0] TLBPageSize [255:0];
 reg [ENTRIES-1:0] TLBValid;
 reg [DBW-1:0] imiss_addr;
@@ -303,7 +331,7 @@ begin
 			//`TLBPageSize:	PageSize <= dati[2:0];
 			`TLBVirtPage:	HTLBVirtPage <= dati;
 			`TLBPhysPage:	HTLBPhysPage <= dati;
-			`TLBASID:	begin
+			`TLBMisc:	begin
 						HTLBValid <= |dati[2:0];
 						HTLBX <= dati[0];
 						HTLBW <= dati[1];
@@ -321,7 +349,12 @@ begin
 						HTLBPageSize <= dati[13:11];
 						HTLBASID <= dati[23:16];
 						HTLBPL <= dati[31:24];
+  		      HTLBKey <= dat_i[51:32];
 						end
+		  `TLBRefCount:
+		    begin
+		      HTLBRefCount <= dati[31:0];
+		    end
 			`TLBMissAdr:	miss_addr <= dati;
 			`TLBPageTblAddr:	PageTblAddr <= dati;
 			`TLBPageTblCtrl:	PageTblCtrl <= dati;
@@ -352,6 +385,7 @@ begin
 				HTLBPhysPage <= TLBPhysPage_rdo;
 				HTLBASID <= TLBASID[i];
 				HTLBPL <= TLBPL[i];
+				HTLBKey <= TLBKey[i];
 				HTLBPageSize <= TLBPageSize[i];
 				HTLBG <= TLBG[i];
 				HTLBD <= TLBD[i];
@@ -369,7 +403,8 @@ begin
 				TLBVirtPage[i] <= HTLBVirtPage;
 				TLBASID[i] <= HTLBASID;
 				TLBPL[i] <= HTLBPL;
-//				TLBPageSize[ASID] <= HTLBPageSize;
+				TLBKey[i] <= HTLBKey;
+				TLBPageSize[i] <= HTLBPageSize;
 				TLBG[i] <= HTLBG;
 				TLBD[i] <= HTLBD;
 				TLBC[i] <= HTLBC;
@@ -397,7 +432,7 @@ always @(posedge clk)
 	`TLBPhysPage:	dato <= HTLBPhysPage;
 	`TLBVirtPage:	dato <= HTLBVirtPage;
 	`TLBPageSize:	dato <= PageSize;
-	`TLBASID:	begin
+	`TLBMisc:	begin
 				dato <= {DBW{1'b0}};
 				dato[0] <= HTLBX;
 				dato[1] <= HTLBW;
@@ -411,6 +446,7 @@ always @(posedge clk)
 				dato[13:11] <= HTLBPageSize;
 				dato[23:16] <= HTLBASID;
 				dato[31:24] <= HTLBPL;
+				dato[51:32] <= HTLBKey;
 				end
 	`TLBMissAdr:	dato <= miss_addr;
 	`TLBPageTblAddr:	dato <= PageTblAddr;
@@ -502,6 +538,14 @@ begin
 		if (Match[n]) q = n;
 end
 
+always @*
+begin
+  keyMatch = FALSE;
+  for (n = 0; n < 8; n = n + 1)
+    if (keys[n]==TLBKey[{q,vadrs[3:0]}] || TLBKey[{q,vadrs[3:0]}]==20'h0)
+      keyMatch = TRUE;
+end
+
 assign uncached = TLBC[{q[3:0],vadrs[3:0]}]==3'd1;// || unmappedDataArea;
 
 assign TLBMiss = (ol!=2'b00) && TLBenabled && (!unmappedArea & (q[4] | ~TLBValid[{q[3:0],vadrs[3:0]}]) ||
@@ -524,6 +568,9 @@ always @(posedge clk)
 
 always @(posedge clk)
 	exv_o <= icl_i & ~TLBMiss & ~tlbXo1 & TLBenabled && (ol != 2'b00);
+
+always @(posedge clk)
+	kyv_o <= !TLBMiss && TLBenabled && (ol != 2'b00) && !keyMatch;
 
 always @(posedge clk)
 if (TLBenabled && ol != 2'b00) begin
