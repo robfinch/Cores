@@ -3,7 +3,7 @@
 #include <setjmp.h>
 #include <malloc.h>
 #include "err.h"
-#include "c:\projects\fw\inc\hash.h"
+#include "d:\projects\fw\inc\hash.h"
 #define ALLOC
 #include "sym.h"
 #undef ALLOC

@@ -6,7 +6,7 @@
 #endif
 
 #ifndef HASH_H
-#include "c:\projects\fw\inc\hash.h"
+#include "d:\projects\fw\inc\hash.h"
 #endif
 
 #include "sym.h"   // CHashBucket

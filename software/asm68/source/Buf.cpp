@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "c:\projects\bcinc\fwstr.h"
+#include "d:\projects\bcinc\fwstr.h"
 #include <ctype.h>
 #include "err.h"
 #include <buf.hpp>

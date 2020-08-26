@@ -12,6 +12,24 @@ int min(int a, int b)
 {
    return (a < b) ? a : b;
 }
+
+// ignore REGS designator
+bool IsRegKeyword(char *ptr, char **eptr)
+{
+	*eptr = ptr;
+	if (!strnicmp(ptr, "REG", 3))
+	{
+		if (ptr[3] == 'S' || ptr[3] == 's')
+			ptr++;
+		ptr += 3;
+		*eptr = ptr;
+		if (IsIdentChar(*ptr))
+			return 0;
+		return 1;
+	}
+	return 0;
+}
+
 /* ---------------------------------------------------------------
    Description :
       Gets bits pattern for specified registers. Registers may
@@ -31,6 +49,13 @@ int IsRegList(char *s,int *rev)
    int LastDigit, NewDigit;
    char *ptr;
    char *ep;
+	 int id;
+	 char *sptr, *eptr;
+	 char buf[500];
+	 CSymbol ts, *pts = nullptr;
+	 CAsmBuf eb;
+
+	 eb.set(s, strlen(s));
 
    *rev = 1;
    ptr = s;
@@ -48,13 +73,7 @@ int IsRegList(char *s,int *rev)
 		ptr = ep;
 		return regpat;
 	}
-	// ignore REGS designator
-	if (!strnicmp(ptr, "REGS", 4))
-	{
-		ptr += 4;
-		if (IsIdentChar(*ptr))
-			return 0;
-	}
+again:
 	while(isspace(*ptr)) ptr++;
    while(*ptr)
    {
@@ -125,7 +144,43 @@ int IsRegList(char *s,int *rev)
       }
       ptr++;
    }
-grp1:
+ grp1:
+	 if (regpat == 0) {
+		 eb.set(s, strlen(s));
+		 // ignore REGS designator
+		 id = eb.GetIdentifier(&sptr, &eptr, 0);
+		 if (id) {
+			 strncpy_s(buf, sizeof(buf), sptr, id);
+			 if (id == 3) {
+				 if (!strnicmp(buf, "REG", 3)) {
+					 ptr = s + 3;
+					 goto again;
+				 }
+			 }
+			 ts.SetName(buf);
+			 if (LocalSymTbl)
+				 pts = LocalSymTbl->find(&ts);
+			 if (pts == NULL)
+				 pts = SymbolTbl->find(&ts);
+			 if (pass > 1) {
+				 if (pts == NULL)
+					 Err(E_NOTDEFINED, sptr);
+				 else if (pts->Defined() == 0) {
+					 if (!pts->IsExtern())
+						 Err(E_NOTDEFINED, sptr);
+				 }
+				 if (pts) {
+					 if (pts->reglist)
+						 return pts->value;
+				 }
+			 }
+			 else {
+				 if (pts)
+					 if (pts->reglist)
+						 return 0xFFFF;
+			 }
+		 }
+	 }
    return (regpat);
 }
 

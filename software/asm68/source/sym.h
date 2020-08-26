@@ -5,7 +5,7 @@
 #include <malloc.h>
 
 #ifndef HASH_H
-#include "c:\projects\fw\inc\hash.h"
+#include "d:\projects\fw\inc\hash.h"
 #endif
 
 #undef E
@@ -331,6 +331,7 @@ class CSymbol
 public:
    __int64 value;             // symbol value
    unsigned PhaseErr : 1;
+	 unsigned reglist : 1;			// 1 = register list value
 public:
 	int min(int a, int b) { return a < b ? a : b; };
    void SetBase(int bs) { base = bs; };

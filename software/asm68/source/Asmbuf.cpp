@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "c:\projects\bcinc\fwstr.h"
+#include "d:\projects\bcinc\fwstr.h"
 #include "fasm68.h"	// MAX_MACRO_PARMS
 #include "err.h"
 #include "asmbuf.h"

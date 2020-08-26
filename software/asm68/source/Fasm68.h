@@ -252,7 +252,6 @@ typedef struct
 #define MACRO_PARM_MARKER       0x14    // Special character used to identify macro parameter
 
 
-int GetIdentifier(char *ptr, char **sptr, char **eptr, char);
 long GetNumeric(char *ptr, char **eptr, int base); // get numeric value from input
 
 

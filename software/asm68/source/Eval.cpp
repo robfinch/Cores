@@ -397,6 +397,7 @@ void CAsmBuf::Func(SValue *val, int ch)
 void CAsmBuf::Factor(SValue *val)
 {
    __int64 value = 0;
+	 int valu;
    int LookForBracket = 0;
    int id;
    char ch, ch2;
@@ -415,7 +416,15 @@ void CAsmBuf::Factor(SValue *val)
    {
       ch = *eptr;
       *eptr = '\0';
-      if (isfunc(sptr))
+			printf(sptr);
+			printf(" ");
+			if (!stricmp(sptr, "REG") || !stricmp(sptr, "REGS")) {
+				sz = 'L';
+				*eptr = ch;
+				value = IsRegList(sptr, &valu);
+				goto exitpt3;
+			}
+      else if (isfunc(sptr))
       {
          *eptr = ch;
          Func(val, *sptr);
@@ -526,7 +535,7 @@ exitpt:
    }
 	else
 		unNextCh();
-
+exitpt3:
    val->value = value;
    val->size = sz;
 exitpt2:
@@ -928,7 +937,7 @@ SValue CAsmBuf::expeval(char **pout)
 		value.fForcedSize = FALSE;
 		errtype = FALSE;
 	}
-exitpt:
+
 	if (pout)
 		*pout = Ptr();
 	return value;  /* evaluate string */

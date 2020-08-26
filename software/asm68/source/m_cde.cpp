@@ -793,6 +793,8 @@ int m_dbranch(SOp *optr)
    {
       val = expeval(gOperand[1], NULL);
       loc = val.value - (Counter() + 2);
+	  if (gProcessor & PL_FT)
+		  loc /= 2;
       emitw(op | RegFld(dr));
    if (lastsym)
 	lastsym->AddReference(Counter());
@@ -822,6 +824,11 @@ int m_divide(SOp *optr)
 	int op2 = optr->ocode2;
 	int fIsDiv = 0;
 
+	if (gProcessor & PL_FT) {
+		if (!IsDReg(gOperand[1], &dr))
+			return (FALSE);
+		return (stdemit(gOperand[0], AM_DATA, dr, 'L', op));
+	}
 	if (gSzChar == 'W' || (gProcessor & (PL_0 | PL_1)))
 	{
 		if (!IsDReg(gOperand[1], &dr))
@@ -981,6 +988,7 @@ int m_equ(char *iid)
    char tbuf[80];
    int idlen;
    SValue v;
+	 bool reglist = false;
 
 //   printf("m_equ(%s)\n", iid);
 
@@ -996,7 +1004,7 @@ int m_equ(char *iid)
 
    if (idlen == 3)
    {
-      if (strnicmp(sptr, "equ", 3))
+      if (strnicmp(sptr, "equ", 3) && strnicmp(sptr, "reg",3))
       {
          ibuf.setptr(ptr);
          return (FALSE);
@@ -1008,6 +1016,11 @@ int m_equ(char *iid)
       return (FALSE);
    }
 
+	 if (!strnicmp(sptr, "reg",3))
+	 {
+		 ibuf.setptr(sptr);
+		 reglist = true;
+	 }
    /* -------------------------------------------------------
          Attempt to find the symbol in the symbol tree. If
       found during pass one then it is a redefined symbol
@@ -1067,6 +1080,7 @@ int m_equ(char *iid)
 	  }
       p->SetValue(n);
       p->SetDefined(1);
+			p->reglist = reglist;
    }
    /* --------------------------------------------------------
          During pass two the symbol should be in the symbol
@@ -1102,6 +1116,7 @@ int m_equ(char *iid)
          return (TRUE);
       }
       p->SetValue(n);
+			p->reglist = reglist;
 
       /* ---------------------------------------------------------------------
             Print symbol value if in listing mode. The monkey business with
