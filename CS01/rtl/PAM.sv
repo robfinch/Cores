@@ -23,21 +23,27 @@
 // ============================================================================
 
 module PAM(rst, clk, alloc_i, free_i, freeall_i, pageno_i, pageno_o, done);
+parameter NWORD = 16;
+parameter BPW = 32;                  // bits per word in parallel
+parameter OSPAGEMAP = {BPW{1'b1}};
+parameter FULLWORD = {BPW{1'b1}};
+localparam LOGBPW = $clog2(BPW-1);
 input rst;
 input clk;
 input alloc_i;
 input free_i;
 input freeall_i;
-input [8:0] pageno_i;
-output reg [8:0] pageno_o;
+input [$clog2(NWORD-1)-1+LOGBPW:0] pageno_i;
+output reg [$clog2(NWORD-1)-1+LOGBPW:0] pageno_o;
 output reg done;
 
 integer n;
-reg [31:0] pam [0:15];
+reg [BPW-1:0] pam [0:NWORD-1];
 reg [3:0] state;
-reg [3:0] wordno;
-reg [4:0] bitno;
-reg [31:0] map;
+reg [$clog2(NWORD-1)-1:0] wordno, curword;
+reg [LOGBPW-1:0] bitno;
+reg [BPW-1:0] map;
+reg [$clog2(NWORD-1)-1:0] srchcnt;  // search counter
 
 parameter IDLE = 4'd0;
 parameter ALLOC1 = 4'd1;
@@ -53,7 +59,9 @@ parameter RESET = 4'd9;
 always @(posedge clk)
 if (rst) begin
 	done <= 1'b0;
+	curword <= 4'd0;
 	wordno <= 4'd0;
+	srchcnt <= 4'd0;
 	state <= RESET;
 end
 else begin
@@ -61,27 +69,32 @@ case (state)
 IDLE:
 	begin
 		if (freeall_i) begin
+		  srchcnt <= 4'd0;
+		  curword <= 4'd0;
 			wordno <= 4'd0;
 			done <= 1'b0;
 			goto (RESET);
 		end
 		else if (free_i) begin
-			wordno <= pageno_i[8:5];
-			bitno <= pageno_i[4:0];
+			wordno <= pageno_i[$clog2(NWORD-1)-1+LOGBPW:LOGBPW];
+			bitno <= pageno_i[LOGBPW-1:0];
 			done <= 1'b0;
 			goto (FREE1);
 		end
 		else if (alloc_i) begin
-			wordno <= 4'd0;
+		  srchcnt <= 4'd0;
+			wordno <= curword;
 			done <= 1'b0;
 			goto (ALLOC1);
 		end
 	end
 RESET:
 	begin
-		pam[wordno] <= 32'h0;
+	  curword <= 2'd0;
+		pam[wordno] <= {BPW{1'b0}};
 		wordno <= wordno + 3'd1;
-		if (wordno==4'd15) begin
+		srchcnt <= srchcnt + 3'd1;
+		if (srchcnt==NWORD-1) begin
 			done <= 1'b1;
 			goto (IDLE);
 		end
@@ -93,23 +106,24 @@ ALLOC1:
 		// Force pages to always be allocated already
 		// First 32 pages allocated for the OS
 		if (wordno==4'd0)
-			map <= 32'hFFFFFFFF;
+			map <= OSPAGEMAP;
 		// Force last page allocated for system stack
-		else if (wordno==4'd15)
-			map[31] <= 1'b1;
+		else if (wordno==NWORD-1)
+			map[BPW-1] <= 1'b1;
 		goto (ALLOC2);
 	end
 ALLOC2:
 	begin
 		goto (ALLOC3);
-		if (map==32'hFFFFFFFF) begin
+		if (map==FULLWORD) begin
 			wordno <= wordno + 2'd1;
-			if (wordno==4'd15)
+			srchcnt <= srchcnt + 2'd1;
+			if (srchcnt==NWORD-1)
 				goto (ALLOC5);
 			else
 				goto (ALLOC1);
 		end
-		for (n = 0; n < 32; n = n + 1)
+		for (n = 0; n < BPW; n = n + 1)
 			if (map[n]==1'b0)
 				bitno <= n;
 	end
@@ -120,6 +134,7 @@ ALLOC3:
 	end
 ALLOC4:
 	begin
+	  curword <= wordno;
 		pam[wordno] <= map;
 		pageno_o <= {wordno,bitno};
 		done <= 1'b1;
@@ -127,7 +142,7 @@ ALLOC4:
 	end
 ALLOC5:
 	begin
-		pageno_o <= 9'h00;
+		pageno_o <= 4'h0;
 		done <= 1'b1;
 		goto (IDLE);
 	end
