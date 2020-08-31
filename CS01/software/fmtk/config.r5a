@@ -3,3 +3,4 @@ NR_TCB		EQU		16
 LOG_TCBSZ	EQU		10
 LOG_PGSZ	EQU		10
 OSPAGES		EQU		64		; pages of memory dedicated to OS
+PAGESZ    EQU   1024  ; size of a page of memory

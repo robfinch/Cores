@@ -38,13 +38,13 @@ InsertIntoReadyList:
 	ldi		$v0,#E_Ok						; setup for ok
 	ldi		$v1,#MAX_TID				; check argument
 	bgtu	$a0,$v1,.badTid
-	insrdy	$a0
 	sll		$t3,$a0,#LOG_TCBSZ	; tid to pointer
 	ldbu	$t0,TCBStatus[$t3]	; set status to ready
 	or		$t0,$t0,#TS_READY
 	sb		$t0,TCBStatus[$t3]
-	ret
 	ldb		$t0,TCBPriority[$t3]
+	insrdy	$a0,$t0
+	ret
 	and		$t0,$t0,#3					; limit to four
 	sll		$t0,$t0,#1					; *2 for indexing
 	ldw		$t1,READYQ[$t0]			; get head of queue for that priority
@@ -322,32 +322,38 @@ DumpReadyList:
 	call	Putch
 	ldi		$a0,#'Q'
 	call	Putch
-	srl		$a0,$t1,#1
+	;srl		$a0,$t1,#1
+	mov   $a0,$t1
 	call	PutHexNybble
 	ldi		$a0,#':'
 	call	Putch
-	ldw		$a2,READYQ[$t1]
-	blt		$a2,$x0,.nxt
+	ldi   $t2,#15
+.0003:
+	getrdy  $a2,$x0,$t1
+;	ldw		$a2,READYQ[$t1]
+;	blt		$a2,$x0,.nxt
 	mov		$a3,$a2
 .0001:
 	mov		$a0,$a3
 	call	PutHexHalf
 	ldi		$a0,#' '
 	call	Putch
-	sll		$a3,$a3,#LOG_TCBSZ
-	ldw		$a0,TCBNext[$a3]
-	call	PutHexHalf
-	ldi		$a0,#' '
-	call	Putch
-	ldw		$a0,TCBPrev[$a3]
-	call	PutHexHalf
+	sub   $t2,$t2,#1
+	bgtz  $t2,.0003
+;	sll		$a3,$a3,#LOG_TCBSZ
+;	ldw		$a0,TCBNext[$a3]
+;	call	PutHexHalf
+;	ldi		$a0,#' '
+;	call	Putch
+;	ldw		$a0,TCBPrev[$a3]
+;	call	PutHexHalf
 	ldi		$a0,#CR
 	call	Putch
-	ldw		$a3,TCBNext[$a3]
-	bne		$a2,$a3,.0001
+;	ldw		$a3,TCBNext[$a3]
+;	bne		$a2,$a3,.0001
 .nxt:
-	add		$t1,$t1,#2
-	slt		$t2,$t1,#8
+	add		$t1,$t1,#1
+	slt		$t2,$t1,#4
 	bnez	$t2,.0002
 .brk:
 	csrrw	$x0,#$300,$s1
@@ -395,8 +401,8 @@ DumpTimeoutList:
 ;	sll		$a3,$a3,#LOG_TCBSZ
 ;	ldt		$a0,TCBTimeout[$a3]
 	call	PutHexWord
-	ldi		$a0,#CR
-	call	Putch
+;	ldi		$a0,#CR
+;	call	Putch
 	add		$a3,$a3,#1
 	and		$a3,$a3,#15
 	bgt		$a3,$x0,.0002

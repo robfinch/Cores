@@ -167,22 +167,22 @@ FMTK_SendMsg:
 	ldi		$v0,#E_Ok
 	bra		.xit
 .noWaiters:
-	lw		$t1,FreeMsg
+	ldt		$t1,FreeMsg
 	beq		$t1,$x0,.noMsg			; message available?
-	lw		$t2,MSG_LINK[$t1]
-	sw		$t2,FreeMsg
-	sw		$a2,MSG_D1[$t1]
-	sw		$a3,MSG_D2[$t1]
-	sw		$a4,MSG_D3[$t1]
-	lw		$t3,MBX_MQTAIL[$t0]
+	ldt		$t2,MSG_LINK[$t1]
+	stt		$t2,FreeMsg
+	stt		$a2,MSG_D1[$t1]
+	stt		$a3,MSG_D2[$t1]
+	stt		$a4,MSG_D3[$t1]
+	ldt		$t3,MBX_MQTAIL[$t0]
 	beq		$t3,$x0,.mbxEmpty
-	sw		$t1,MSG_LINK[$t3]
-	sw		$t1,MBX_MQTAIL[$t0]
+	stt		$t1,MSG_LINK[$t3]
+	stt		$t1,MBX_MQTAIL[$t0]
 	ldi		$v0,#E_Ok
 	bra		.xit
 .mbxEmpty:
-	sw		$t1,MBX_MQHEAD[$t0]
-	sw		$t1,MBX_MQTAIL[$t0]
+	stt		$t1,MBX_MQHEAD[$t0]
+	stt		$t1,MBX_MQTAIL[$t0]
 	ldi		$v0,#E_Ok
 	bra		.xit
 .noMsg:

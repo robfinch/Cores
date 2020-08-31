@@ -61,6 +61,8 @@
 ; The following must be at least 128 byte aligned
 DVF_Base		EQU		$A000
 DVF_Limit		EQU		$B000
+DCB_Base    EQU   $B000
+DCB_Limit   EQU   $BC00
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -92,6 +94,69 @@ FMTK_IO:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
+;		a1 = I/O channel
+;		a2 = field offset
+;   a3 = 0 = get word, 1 = get byte
+;------------------------------------------------------------------------------
+
+FMTK_GetDCBField:
+	ldi		$v0,#32
+	bgeu	$a1,$v0,.badDev
+	ldi		$v1,#DCB_Size
+	bgeu	$a2,$v1,.badFunc
+	mul		$v0,$a1,$v1		      ; each device allowed (96 bytes)
+	add		$v0,$v0,#DCB_Base		; base address of function table
+	add   $v0,$v0,$a2         ; add field offset
+	beqz  $a3,.ldWord
+	ldb   $v1,[$v0]
+	bra   .ok
+.ldWord:
+  ldt   $v1,[$v0]
+.ok:
+  ldi   $v0,#E_Ok
+.xit:
+	jmp		ERETx
+.badFunc:
+	ldi		$v0,#E_BadDevOp
+	bra		.xit
+.badDev:
+	ldi		$v0,#E_BadDevNum
+	bra		.xit
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = I/O channel
+;		a2 = field offset
+;   a3 = 0 = get word, 1 = get byte
+;   a4 = value to set
+;------------------------------------------------------------------------------
+
+FMTK_SetDCBField:
+	ldi		$v0,#32
+	bgeu	$a1,$v0,.badDev
+	ldi		$v1,#DCB_Size
+	bgeu	$a2,$v1,.badFunc
+	mul		$v0,$a1,$v1		      ; each device allowed (96 bytes)
+	add		$v0,$v0,#DCB_Base		; base address of function table
+	add   $v0,$v0,$a2         ; add field offset
+	beqz  $a3,.stWord
+	stb   $a4,[$v0]
+	bra   .ok
+.stWord:
+  stt   $a4,[$v0]
+.ok:
+  ldi   $v0,#E_Ok
+.xit:
+	jmp		ERETx
+.badFunc:
+	ldi		$v0,#E_BadDevOp
+	bra		.xit
+.badDev:
+	ldi		$v0,#E_BadDevNum
+	bra		.xit
+
+;------------------------------------------------------------------------------
+; Parameters:
 ;		a0 = I/O channel
 ;		a1 = points to function table
 ;------------------------------------------------------------------------------
@@ -108,4 +173,53 @@ CopyDevFuncTbl:
 	sub		$t0,$t0,#1
 	bgt		$t0,$x0,.again
 	ret
-	
+
+;------------------------------------------------------------------------------
+
+CopyDevDCB:
+  ldi   $v0,#DCB_Size
+  mul   $v0,$a0,$v0
+  add   $v0,$v0,#DCB_Base
+	ldi		$t0,#24							; 24 words to copy
+.again:
+	ldt		$t2,[$a1]
+	stt		$t2,[$v0]
+	add		$a1,$a1,#4
+	add		$v0,$v0,#4
+	sub		$t0,$t0,#1
+	bgt		$t0,$x0,.again
+	ret
+
+
+;------------------------------------------------------------------------------
+;    Compare the current TID against the device owner to see if the device
+; is owned.
+;------------------------------------------------------------------------------
+
+CheckDevOwner:
+  sub   $sp,$sp,#4
+  stt   $s1,[$sp]
+  ldi   $a0,#14             ; FMTK: GetCurrentTid
+  ecall
+  mov   $s1,$v1
+  ldi   $a0,#27             ; FMTK Get DCB Field
+  ldi   $a2,#DCB_hJob
+  ldi   $a3,#1              ; get byte
+  ecall
+  and   $v1,$v1,#15
+  xor   $v1,$v1,$s1
+  bnez  $v1,.notOwner
+  ldi   $v0,#E_Ok
+.xit:
+  ldt   $s1,[$sp]
+  add   $sp,$sp,#4
+  ret
+.notOwner:
+  ldi   $v0,#E_NotOwner
+  ldi   $a0,#28             ; FMTK Set DCB field
+  ldi   $a2,#DCB_LastErc
+  ldi   $a3,#0              ; word
+  mov   $a4,$v0             
+  ecall                     
+  bra   .xit
+

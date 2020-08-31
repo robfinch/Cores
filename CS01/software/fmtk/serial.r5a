@@ -37,7 +37,7 @@ SerRcvXoff	EQU		$9811
 	code
 	align	8
 SerialFuncTbl:
-	dw		0							; no operation
+	dw		SerialNOP			; no operation
 	dw		0							; setup
 	dw		0							; initialize
 	dw		0							; status
@@ -64,13 +64,43 @@ SerialFuncTbl:
 	dw		0							; ioctrl read
 	dw		0							; ioctrl write
 	dw		0							; output until busy
-	dw		0							; 27
+	dw		SerialGetUI		; get ui flag
 	dw		0
 	dw		0
 	dw		0
 	dw		0							; 31
 
 MAX_DEV_OP			EQU		31
+
+  align 8
+SerialDCB:
+  db    4,"COM1       "
+  dw    0     ; type
+  dw    0     ; nBPB
+  dw    0
+  dw    0     ; last error code
+  dw    0
+  dw    0     ; starting block number
+  dw    0
+  dw    0     ; number of blocks
+  dw    0
+  dw    0     ; command processing routine
+  dw    0
+  db    0     ; reentrancy count
+  db    0     ; single user flag
+  db    1     ; user interface device flag
+  db    0
+  dw    0
+  dw    0     ; hJob
+  dw    0
+  dw    0     ; Mailbox handle
+  dw    0
+  dw    0     ; pointer to device semaphore
+  dw    0
+  dw    0     ; reserved
+  dw    0
+;  dw    0     ; reserved
+;  dw    0
 
 ;------------------------------------------------------------------------------
 ; Initialize serial port.
@@ -81,24 +111,28 @@ MAX_DEV_OP			EQU		31
 
 SerialInit:
 	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	stt		$ra,[$sp]
 	ldi		$a0,#5							; serial device
 	ldi		$a1,#SerialFuncTbl
 	call	CopyDevFuncTbl
-	sw		$x0,SerHeadRcv
-	sw		$x0,SerTailRcv
-	sw		$x0,SerHeadXmit
-	sw		$x0,SerTailXmit
-	sb		$x0,SerRcvXon
-	sb		$x0,SerRcvXoff
+	ldi		$a0,#5							; serial device
+	ldi   $a1,#SerialDCB
+	call  CopyDevDCB
+	stt		$x0,SerHeadRcv
+	stt		$x0,SerTailRcv
+	stt		$x0,SerHeadXmit
+	stt		$x0,SerTailXmit
+	stb		$x0,SerRcvXon
+	stb		$x0,SerRcvXoff
 	ldi		$t0,#$09						; dtr,rts active, rxint enabled, no parity
-	sw		$t0,UART+8
+	stt		$t0,UART+8
 	ldi		$t0,#$0006001E			; reset the fifo's
-	sw		$t0,UART+12
+	stt		$t0,UART+12
 	ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
-	sw		$t0,UART+12
-	lw		$ra,[$sp]
+	stt		$t0,UART+12
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
+SerialNOP:
 	ret
 		
 ;------------------------------------------------------------------------------
@@ -155,7 +189,7 @@ SerialFinishCmd:
 ; XON.
 ;
 ; Stack Space:
-;		3 words
+;		4 words
 ; Parameters:
 ;		none
 ; Modifies:
@@ -165,37 +199,40 @@ SerialFinishCmd:
 ;------------------------------------------------------------------------------
 
 SerialGetChar:
-		sub		$sp,$sp,#12
-		sw		$ra,[$sp]
-		sw		$v1,4[$sp]
-		sw		$s1,8[$sp]
-		lb		$s1,SerRcvXon				; skip sending XON if already sent
-		csrrc	$s1,#$300,#1				; disable interrupts
-		bne		$s1,$x0,.0002
+		sub		$sp,$sp,#16
+		stt		$ra,[$sp]
+		stt		$v1,4[$sp]
+		stt		$s1,8[$sp]          ; XON status
+		stt   $s2,12[$sp]         ; interrupt state
+		ldb		$s1,SerRcvXon				; skip sending XON if already sent
+		csrrc	$s2,#$300,#1				; disable interrupts
 		call	SerialRcvCount			; check number of chars in receive buffer
 		slt		$v0,$v0,#8					; less than 8?
-		beq		$v0,$x0,.0002
+		beqz	$v0,.0002
+		bnez	$s1,.0002           ; XON already sent?
 		ldi		$v0,#XON						; if <8 send an XON
-		sb		$x0,SerRcvXoff			; clear XOFF status
-		sb		$v0,SerRcvXon				; flag so we don't send it multiple times
-		sb		$v0,UART+UART_TRB
+		stb		$x0,SerRcvXoff			; clear XOFF status
+		stb		$v0,SerRcvXon				; flag so we don't send it multiple times
+		stb		$v0,UART+UART_TRB
 .0002:
-		lbu		$v1,SerHeadRcv			; check if anything is in buffer
-		lbu		$v0,SerTailRcv
+		ldbu	$v1,SerHeadRcv			; check if anything is in buffer
+		ldbu	$v0,SerTailRcv
 		beq		$v0,$v1,.noChars		; no?
-		lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
+		ldb		$v0,SerRcvBuf[$v1]	; get byte from buffer
 		add		$v1,$v1,#1					; update head index
-		sb		$v1,SerHeadRcv				
+		and   $v1,$v1,#255        ; ring buffer wrapping
+		stb		$v1,SerHeadRcv
 		bra		.xit
 .noChars:
 .0001:
 		ldi		$v0,#-1
 .xit
-		csrrw	$x0,#$300,$s1				; restore interrupts
-		lw		$ra,[$sp]
-		lw		$v1,4[$sp]
-		lw		$s1,8[$sp]
-		add		$sp,$sp,#12
+		csrrw	$x0,#$300,$s2				; restore interrupts
+		ldt		$ra,[$sp]
+		ldt		$v1,4[$sp]
+		ldt		$s1,8[$sp]
+		ldt   $s2,12[$sp]
+		add		$sp,$sp,#16
 		ret
 
 ;------------------------------------------------------------------------------
@@ -217,23 +254,23 @@ SerialGetChar:
 
 SerialPeekChar:
 	sub		$sp,$sp,#12
-	sw		$ra,[$sp]
-	sw		$v1,4[$sp]
-	sw		$s1,8[$sp]
+	stt		$ra,[$sp]
+	stt		$v1,4[$sp]
+	stt		$s1,8[$sp]
 	csrrc	$s1,#$300,#1				; disable interrupts
-	lbu		$v1,SerHeadRcv			; check if anything is in buffer
-	lbu		$v0,SerTailRcv
+	ldbu	$v1,SerHeadRcv			; check if anything is in buffer
+	ldbu	$v0,SerTailRcv
 	beq		$v0,$v1,.noChars		; no?
-	lb		$v0,SerRcvBuf[$v1]	; get byte from buffer
+	ldb		$v0,SerRcvBuf[$v1]	; get byte from buffer
 	bra		.xit
 .noChars:
 .0001:
 	ldi		$v0,#-1
 .xit
 	csrrw	$x0,#$300,$s1				; restore interrupts
-	lw		$ra,[$sp]
-	lw		$v1,4[$sp]
-	lw		$s1,8[$sp]
+	ldt		$ra,[$sp]
+	ldt		$v1,4[$sp]
+	ldt		$s1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 
@@ -254,22 +291,22 @@ SerialPeekChar:
 
 SerialPeekCharDirect:
 	sub		$sp,$sp,#12
-	sw		$ra,[$sp]
-	sw		$v1,4[$sp]
-	sw		$s1,8[$sp]
+	stt		$ra,[$sp]
+	stt		$v1,4[$sp]
+	stt		$s1,8[$sp]
 	csrrc	$s1,#$300,#1				; disable interrupts
-	lb		$v0,UART+UART_STAT
+	ldb		$v0,UART+UART_STAT
 	and		$v0,$v0,#8					; look for Rx not empty
-	beq		$v0,$x0,.0001
-	lb		$v0,UART+UART_TRB
+	beqz	$v0,.0001
+	ldb		$v0,UART+UART_TRB
 	bra		.xit
 .0001:
 	ldi		$v0,#-1
 .xit
 	csrrw	$x0,#$300,$s1				; restore interrupts
-	lw		$ra,[$sp]
-	lw		$v1,4[$sp]
-	lw		$s1,8[$sp]
+	ldt		$ra,[$sp]
+	ldt		$v1,4[$sp]
+	ldt		$s1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 
@@ -301,7 +338,7 @@ SerialPutChar:
 ;	beq		$v1,$x0,.goSleep
 	ldb		$v0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$v0,$v0,#16					; bit #4 of the status reg
-	beq		$v0,$x0,.0001				; branch if transmitter is not empty
+	beqz	$v0,.0001				    ; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
 	ldt		$v0,[$sp]
 	ldt		$ra,4[$sp]
@@ -341,36 +378,41 @@ SerialRcvCount:
 
 SerialIRQ:
 .nxtByte:
+	ldt		$a0,UART+UART_STAT	; check the status
 	and		$t0,$a0,#$08				; bit 3 = rx full
-	beq		$t0,$x0,.notRxInt
-	lw		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
-	lbu		$t2,SerHeadRcv			; get buffer indexes
-	lbu		$t3,SerTailRcv
+	beqz	$t0,.notRxInt
+	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	ldbu	$t2,SerHeadRcv			; get buffer indexes
+	ldbu	$t3,SerTailRcv
 	add		$t3,$t3,#1					; see if buffer full
 	and		$t3,$t3,#255
 	beq		$t2,$t3,.rxFull
-	sb		$t3,SerTailRcv			; update tail pointer
+	stb		$t3,SerTailRcv			; update tail pointer
 	sub		$t3,$t3,#1
 	and		$t2,$t3,#255
-	sb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
-	lb		$v0,SerRcvXoff			; check if xoff already sent
-	bne		$v0,$x0,.0001
+	stb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
+	ldb		$v0,SerRcvXoff			; check if xoff already sent
+	bnez	$v0,.nxtByte
 	call	SerialRcvCount			; if more than 240 chars in buffer
 	slt		$v0,$v0,#240				; send an XOFF
-	bne		$v0,$x0,.0001
+	bnez	$v0,.nxtByte
 	ldi		$a0,#XOFF
-	sb		$x0,SerRcvXon				; clear XON status
-	sb		$a0,SerRcvXoff			; set XOFF status
-	sb		UART+UART_TRB
-.0001:
-	lw		$a0,UART+UART_STAT	; check the status for another byte
-	bra		.nxtByte
+	stb		$x0,SerRcvXon				; clear XON status
+	stb		$a0,SerRcvXoff			; set XOFF status
+	stb		UART+UART_TRB
+	bra		.nxtByte            ; check the status for another byte
 ;	ldi		$a0,#$0B						; dtr,rts active, rxint disabled, no parity
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
-	csrrc	$x0,#$800,#15				; switch to user regset
 	eret
-	
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+SerialGetUI:
+  ldi   $v0,#E_Ok           ; no errors
+  ldi   $v1,#1              ; yes this is a UI device
+  ret
+
 nmeSerial:
 	db		"Serial",0

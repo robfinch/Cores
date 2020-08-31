@@ -26,7 +26,7 @@
 ; unlock the a semaphore	
 macro mUnlockSemaphore (adr)
 	ldi		v0,#-1
-	sw		v0,adr
+	stt		v0,adr
 endm
 
 ; Look at the asid register for task id
@@ -36,27 +36,34 @@ macro mGetCurrentTid
 endm
 
 macro	mHasFocus
-	ldi		a0,#20
+	ldi		$a0,#20
 	ecall
 endm
 
 macro mSleep(tm)
-	ldi		a0,#5
-	ldi		a1,#tm
+	ldi		$a0,#5            ; FMTK Sleep() function
+	ldi		$a1,#tm
 	ecall
 endm
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;   a1 = device # to check
 ;------------------------------------------------------------------------------
 
 macro mWaitForFocus
 .WFF1@:
 	mHasFocus
-	bne		v1,x0,.HasFocus@
-	call	SerialPeekChar	;Direct
-	ldi		a0,#$14							; CTRL-T
+	bnez	$v1,.HasFocus@
+	ldi   $a0,#26             ; FMTK_IO
+	ldi   $a2,#9              ; peekchar function
+	ecall
+	ldi		$a0,#$14						; CTRL-T
 	bne		$v0,$a0,.WFF2@
-	call	SerialGetChar
+	; eat up the CTRL-T
+	ldi		$a0,#26							; FMTK_IO
+	ldi		$a2,#8							; getchar function
+	ecall
 	ldi		$a0,#21							; switch IO Focus
 	ecall
 	bra		.WFF1@

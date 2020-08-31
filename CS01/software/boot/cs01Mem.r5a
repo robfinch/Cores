@@ -138,7 +138,7 @@ Alloc:
 	sw			$s2,8[$sp]
 	sw			$s3,12[$sp]
 	; First check if there are enough pages available in the system.
-	add			$v0,$a1,#1023			; v0 = round memory request
+	add			$v0,$a1,#PAGESZ-1	; v0 = round memory request
 	srl			$v0,$v0,#LOG_PGSZ	; v0 = convert to pages required
 	lw			$t0,NPAGES				; check number of pages available
 	bleu		$v0,$t0,.enough
@@ -197,7 +197,7 @@ AllocStack:
 	mvmap		$v0,$x0,$v1			; check if stack already allocated
 	bnez		$v0,.0001
 	palloc	$v0							; allocate a page
-	beq			$v0,$x0,.xit		; success?
+	beqz		$v0,.xit		    ; success?
 	mvmap		$x0,$v0,$v1
 .0001:
 	and			$v1,$v1,#511

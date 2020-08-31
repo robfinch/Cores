@@ -189,3 +189,52 @@ FMTK_ForceReleaseIOFocus:
 .noFocus:
 	ldi		$v0,#E_Ok
 	jmp		ERETx
+
+;------------------------------------------------------------------------------
+;     Wait for the IO Focus. Returns only when focus is present.
+; Parameters:
+;   a1 = device # to check, 5 = COM1 serial port, 1 = KBD keyboard
+;------------------------------------------------------------------------------
+
+_WaitForIOFocus:
+WaitForIOFocus:
+  sub   $sp,$sp,#12
+  stt   $a0,[$sp]
+  stt   $a1,4[$sp]
+  stt   $a2,8[$sp]
+.WFF1:
+	ldi		$a0,#20           ; FMTK Has Focus
+	ecall
+	bnez	$v1,.HasFocus
+	ldi   $a0,#26           ; FMTK_IO
+	ldi   $a2,#9            ; peekchar function
+	ecall
+	ldi		$a0,#$14					; CTRL-T
+	bne		$v0,$a0,.WFF2
+	; eat up the CTRL-T
+	ldi		$a0,#26						; FMTK_IO
+	ldi		$a2,#8						; getchar function
+	ecall
+	ldi		$a0,#21						; switch IO Focus
+	ecall
+	bra		.WFF1@
+.WFF2:
+	ldi		$a0,#5            ; FMTK Sleep() function
+	ldi		$a1,#1
+	ecall
+	bra		.WFF1
+.HasFocus:
+  ldt   $a0,[$sp]
+  ldt   $a1,4[$sp]
+  ldt   $a2,8[$sp]
+  add   $sp,$sp,#12
+  ret
+
+;------------------------------------------------------------------------------
+
+GetUIFlag:
+  ldi   $a0,#27           ; Get DCB Field
+  ldi   $a2,#DCB_fUI      ; Get UI Flag
+  ldi   $a3,#1            ; 1 byte
+  ecall
+  ret

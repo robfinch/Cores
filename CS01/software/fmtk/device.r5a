@@ -36,12 +36,13 @@ DCB_nBlocks			EQU		0x28		; number of blocks on device
 DCB_pCmdProc		EQU		0x30		; pointer to command processor routine
 DCB_ReentCount		EQU		0x38		; re-entrancy count (1 to 255)
 DCB_fSingleUser		EQU		0x39
+DCB_fUI       EQU   0x3A    ; user interface device
 DCB_hJob			EQU		0x40		; handle to associated job
 DCB_Mbx				EQU		0x48
 DCB_pSema			EQU		0x50		; pointer to device semaphore
 DCB_Resv1			EQU		0x58		; reserved
 DCB_Resv2			EQU		0x60		; reserved
-DCB_Size			EQU		0x68
+DCB_Size			EQU		0x60
 
 ; Device command opcodes
 ;
@@ -71,6 +72,7 @@ DVC_IsRemoveable	EQU		23
 DVC_IOCTRL_READ		EQU		24
 DVC_IOCTRL_WRITE	EQU		25
 DVC_OutputUntilBusy	EQU		26
+DVC_IsUI          EQU   27
 
 MAX_DEV_OP			EQU		31
 

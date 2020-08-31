@@ -58,7 +58,6 @@ MachineStart:
 		ldi		$t0,#UserStart
 		csrrw	$x0,#$341,$t0		; set mepc
 		;csrrs	$x0,#$300,#8		; enable interrupts (on eret)
-		csrrc	$x0,#$800,#15		; select user register set
 		eret									; switch to user mode
 UserStart:
 		ldi		$a0,#1					; start TinyBasic
@@ -82,7 +81,7 @@ UserStart2:
 		ldi		$t2,#16							; send an XON just in case
 		ldi		$a3,#XON
 .0004:
-		call	SerialPutChar
+		call	Putch ;SerialPutChar
 		sub		$t2,$t2,#1
 		bne		$t2,$x0,.0004
 .0002:
@@ -124,8 +123,9 @@ Getch:
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
 	stt		$a1,8[$sp]
-;	mWaitForFocus
-	call	SerialGetChar
+	;mWaitForFocus
+	ldi   $a1,#5
+	call  fgetc
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
 	ldt		$a1,8[$sp]
@@ -137,19 +137,19 @@ Getch:
 
 Putch:
 	sub		$sp,$sp,#20
-	sw		$ra,[$sp]
-	sw		$v0,4[$sp]
-	sw		$a3,8[$sp]
-	sw		$v1,12[$sp]
-	sw		$a1,16[$sp]
+	stt		$ra,[$sp]
+	stt		$v0,4[$sp]
+	stt		$a3,8[$sp]
+	stt		$v1,12[$sp]
+	stt		$a1,16[$sp]
 	mov		$a3,$a0
 	ldi		$a1,#5							; serial port
 	call	fputc
-	lw		$ra,[$sp]
-	lw		$v0,4[$sp]
-	lw		$a3,8[$sp]
-	lw		$v1,12[$sp]
-	lw		$a1,16[$sp]
+	ldt		$ra,[$sp]
+	ldt		$v0,4[$sp]
+	ldt		$a3,8[$sp]
+	ldt		$v1,12[$sp]
+	ldt		$a1,16[$sp]
 	add		$sp,$sp,#20
 	ret
 
@@ -168,7 +168,7 @@ Putch:
 ; Modifies:
 ;		none
 ; Returns:
-;		none
+;		E_Ok (0) if successful
 ;------------------------------------------------------------------------------
 
 fputc:
@@ -179,18 +179,66 @@ fputc:
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
-;	mWaitForFocus
+	call  GetUIFlag
+	beqz  $v1,.checkOwner
+	call  WaitForIOFocus
+	bra   .0001
+.checkOwner:
+  call  CheckDevOwner
+  bnez  $v0,.notOwner
+.0001:
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
+	ldi   $v0,#E_Ok
+.notOwner:
 	ldt		$ra,[$sp]
-	ldt		$v0,4[$sp]
+;	ldt		$v0,4[$sp]
 	ldt		$a0,8[$sp]
 	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
+ 
+;------------------------------------------------------------------------------
+; fgetc - get a character from an I/O device. If the task doesn't have the I/O
+; focus then it is rescheduled, allowing another task to run.
+;
+; Stack Space:
+;		6 words
+; Register Usage:
+;		a0 = FMTK_IO specify
+;		a2 = device getchar function
+; Parameters:
+;		a1 = I/O channel
+; Modifies:
+;		none
+; Returns:
+;		v0 character, -1 if none available
+;------------------------------------------------------------------------------
+
+fgetc:
+	sub		$sp,$sp,#24
+	stt		$ra,[$sp]
+	stt		$v0,4[$sp]
+	stt		$a0,8[$sp]
+	stt		$v1,12[$sp]
+	stt		$a1,16[$sp]
+	stt		$a2,20[$sp]
+	call  WaitForIOFocus
+	ldi		$a0,#26							; FMTK_IO
+	ldi		$a2,#8							; getchar function
+	ecall
+	ldt		$ra,[$sp]
+;	ldt		$v0,4[$sp]
+	ldt		$a0,8[$sp]
+	ldt		$v1,12[$sp]
+	ldt		$a1,16[$sp]
+	ldt		$a2,20[$sp]
+	add		$sp,$sp,#24
+	ret
+
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -209,8 +257,8 @@ MonEntry:
 
 Monitor:
 		csrrc	$x0,#$300,#1
-		call	DumpReadyList
-		call	DumpTimeoutList
+;		call	DumpReadyList
+;		call	DumpTimeoutList
 		csrrs	$x0,#$300,#1
 		ldi		$s1,#0					; s1 = input pointer
 		ldi		$a0,#CR
@@ -223,14 +271,14 @@ Monitor:
 		call	Getch						; wait until character pressed
 		blt		$v0,$x0,.0001
 		xor		$t0,$v0,#LF			; ignore line feed
-		beq		$t0,$x0,.procLine
+		beqz	$t0,.procLine
 		xor		$t0,$v0,#CR
-		beq		$t0,$x0,.procLine
+		beqz	$t0,.procLine
 		xor		$t0,$v0,#BS
-		beq		$t0,$x0,.doBackspace
+		beqz	$t0,.doBackspace
 		xor		$t0,$v0,#DEL
-		beq		$t0,$x0,.doDelete
-		sb		$v0,INBUF[$s1]
+		beqz	$t0,.doDelete
+		stb		$v0,INBUF[$s1]
 		add		$s1,$s1,#1
 		mov		$a0,$v0
 		call	Putch
@@ -239,13 +287,13 @@ Monitor:
 		mov		$s2,$s1
 		add		$s2,$s2,#1
 .0002:
-		lb		$t0,INBUF[$s2]
-		sb		$t0,INBUF-1[$s2]
+		ldb		$t0,INBUF[$s2]
+		stb		$t0,INBUF-1[$s2]
 		add		$s2,$s2,#1
 		add		$t0,$s2,#INBUF
 		slt		$t0,$t0,#INBUF+$7F
 		bne		$t0,$x0,.0002
-		sb		$x0,INBUF[$s2]
+		stb		$x0,INBUF[$s2]
 		bra		.0001
 .doBackspace:
 		beq		$s1,$x0,.0001		; can't backspace anymore
@@ -254,19 +302,19 @@ Monitor:
 		sub		$s1,$s1,#1
 		mov		$s2,$s1
 .0003:
-		lb		$t0,INBUF+1[$s2]
-		sb		$t0,INBUF[$s2]
+		ldb		$t0,INBUF+1[$s2]
+		stb		$t0,INBUF[$s2]
 		add		$s2,$s2,#1
 		add		$t0,$s2,#INBUF
 		slt		$t0,$t0,#INBUF+$7F
 		bne		$t0,$x0,.0003
-		sb		$x0,INBUF[$s2]
+		stb		$x0,INBUF[$s2]
 		bra		.0001
 .procLine:
-		sb		$x0,INBUF[$s1]
+		stb		$x0,INBUF[$s1]
 		ldi		$s1,#0
 .skip:
-		lb		$t0,INBUF[$s1]
+		ldb		$t0,INBUF[$s1]
 		beq		$t0,$x0,.0005
 		xor		$t1,$t0,#'>'
 		bne		$t1,$x0,.0004
@@ -347,12 +395,12 @@ Monitor:
 doMem:
 		sub		$sp,$sp,#4
 		add		$s1,$s1,#1
-		sw		$s1,[$sp]
+		stt		$s1,[$sp]
 		ldi		$a0,#CR
 		call	Putch
 		ldi		$a0,INBUF
 		call	PutString
-		lw		$s1,[$sp]
+		ldt		$s1,[$sp]
 		add		$sp,$sp,#4
 		call	GetHexNum
 		mov		$s3,$v0
@@ -373,7 +421,7 @@ doMem:
 .loop:
 		ldi		$a0,#' '
 		call	Putch
-		lb		$a0,[$s3]
+		ldb		$a0,[$s3]
 		call	PutHexByte
 		add		$s3,$s3,#1
 		sub		$s2,$s2,#1
@@ -386,7 +434,7 @@ EditMem:
 		mov		$s3,$v0
 		add		$s1,$s1,#1
 		call	GetHexNum			; get value to set
-		sb		$s3,[$v0]			; update mem
+		stb		$s3,[$v0]			; update mem
 		jmp		Monitor
 
 ;------------------------------------------------------------------------------
@@ -403,7 +451,7 @@ FillMem:
 		add		$s1,$s1,#1
 		call	GetHexNum			; get byte to use
 .0001:
-		sb		$v0,[$s3]
+		stb		$v0,[$s3]
 		sub		$s4,$s4,#1
 		bgt		$s4,$x0,.0001
 		jmp		Monitor
@@ -506,12 +554,12 @@ PutHexHalf:
 
 PutHexByte:
 		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		stt		$ra,[$sp]
+		stt		$a0,4[$sp]
 		srl		$a0,$a0,#4		; put the high order nybble first
 		call	PutHexNybble
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
+		ldt		$ra,[$sp]
+		ldt		$a0,4[$sp]
 		add		$sp,$sp,#8		; fall through to PutHexNybble
 
 ;------------------------------------------------------------------------------
@@ -520,8 +568,8 @@ PutHexByte:
 
 PutHexNybble:
 		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
+		stt		$ra,[$sp]
+		stt		$a0,4[$sp]
 		and		$a0,$a0,#15		; strip off high order bits
 		ldi		$t0,#10
 		blt		$a0,$t0,.lt10
@@ -533,8 +581,8 @@ PutHexNybble:
 		add		$a0,$a0,#'0'
 		call	Putch
 .0001:
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
+		ldt		$ra,[$sp]
+		ldt		$a0,4[$sp]
 		add		$sp,$sp,#8
 		ret
 
@@ -554,18 +602,18 @@ PutHexNybble:
 
 PutString:
 		sub		$sp,$sp,#8				; save link register
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]				; and argument
+		stt		$ra,[$sp]
+		stt		$a0,4[$sp]				; and argument
 		mov		$t1,$a0						; t1 = pointer to string
 .0001:
-		lb		$a0,[$t1]
+		ldb		$a0,[$t1]
 		add		$t1,$t1,#1				; advance pointer to next byte
 		beq		$a0,$x0,.done			; branch if done
 		call	Putch							; output character
 		bra		.0001
 .done:
-		lw		$ra,[$sp]					; restore return address
-		lw		$a0,4[$sp]				; and argument
+		ldt		$ra,[$sp]					; restore return address
+		ldt		$a0,4[$sp]				; and argument
 		add		$sp,$sp,#8
 		ret
 
@@ -574,24 +622,26 @@ PutString:
 ; As per the RISCV privilege spec, the MSB indicates an external interrupt.
 ; The system uses cause codes 32 to 63 for external devices. This cause code
 ; range is reserved in the RISCV spec.
+;
+; On incoming the register file has been set to the interrupt register file
+; or the machine mode register file.
 ;------------------------------------------------------------------------------
 	code
 	align	4
 IRQRout:
-	csrrs	$x0,#$800,#15		; select machine regs
-	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	csrrw	$t0,#$342,$x0			; get cause code
-	blt		$t0,$x0,.isIRQ		; irq or ecall?
+	bltz	$t0,.isIRQ		  ; irq or ecall?
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	jmp		OSCALL					; goto operating system call dispatcher
 .isIRQ:
 	and		$t0,$t0,#31			; interrupting device # is low order 5 bits of cause code
 	sll		$t0,$t0,#7				; 128 bytes per device func table
 	add		$t0,$t0,#DVF_Base+22*4	; load IRQ routine vector from device func table
-	lw		$t0,[$t0]
-	beq		$t0,$x0,.noIRQ	; make sure there's an address to go to
+	ldt		$t0,[$t0]
+	beqz	$t0,.noIRQ	    ; make sure there's an address to go to
+	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
 	jmp		[$t0]						; jump to the IRQ routine
 .noIRQ:
-	csrrc	$x0,#$800,#15
 	eret
 
 ;------------------------------------------------------------------------------
