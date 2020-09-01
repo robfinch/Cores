@@ -7,6 +7,10 @@ RISCV ISA specification. Working draft, subject to change.
 For a garbage collected system which is interrupt driven, false positive matches of object pointers can occur during execution of a function prolog when the stack space has been allocated but not yet initilized.
 To prevent these false matches, this proposal suggests deferring the processing of garbage collect interrupts until after the function prolog is complete. This would be accomplished by disabling the garbage collect interrupt during the function prolog.
 
+### Acronyms
+
+GC = Garbage Collect
+
 ## Scope
 This document applies only to interrupt driven garbage collection systems.
 
@@ -74,4 +78,9 @@ It may not be sufficient to manipulate a GC enable bit in multi-core systems.
 
 The size of the function prolog is known by the compiler. Since this is a known value it could be included as the limit as part of a call instruction.
 A small field (three or four bits) in a call instruction could indicate the prolog size in multiples of four words for instance.
+This would require a new call instruction, possibly a 48-bit instruction.
+
+## Summary
+The benefit of deferring GC interrupts may not be significant, but the hardware cost is small.
+
 
