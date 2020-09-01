@@ -5,6 +5,7 @@ RISCV ISA specification. Working draft, subject to change.
 
 ## Introduction
 For a garbage collected system which is interrupt driven, false positive matches of object pointers can occur during execution of a function prolog when the stack space has been allocated but not yet initilized.
+In fact, false positive matches can occur any time stack storage is allocated but not yet initialized.
 To prevent these false matches, this proposal suggests deferring the processing of garbage collect interrupts until after the function prolog is complete. This would be accomplished by disabling the garbage collect interrupt during the function prolog.
 
 ### Acronyms
@@ -21,12 +22,16 @@ We propose to:
 
 * modify the JAL instruction operation so that it automatically disables GC interrupts only when operating at the user level.
 
+* OR modify the ADDI, SUB instructions so that they automatically disable GC interrupts only when operating at the user level and an update to the stack pointer is occurring.
+
 ### Rationale
 
 Function prolog code usually begins with a stack allocation followed by some register spills to the allocated area. This usually occurs near the start of a function.
 Rather than add additional code to the instruction stream which costs code size and execution time, it is proposed to modify the JAL instruction so that it automatically disables the garbage collect interrupt while operating at the user level.
 A JAL instruction is close to the beginning of the function prolog as JAL is used to invoke functions.
 The JAL instruction would detect user mode, then clear the GC enable bit in the new CSR. Since this is just a single bit clear the hardware cost is small.
+
+Modifying the ADDI or SUB instructions are more hardware costly as they need to detect the registers involved, but further reduce false positive matches by allowing any stack allocation to trigger a disable of the GC interrupt.
 
 The new CSR register containing a single bit is required as it represents an interrupt enable / disable capability in user mode which currently does not have a register for this.
 Using CSR register operations to modify an enable bit is a standard approach. The existing CSR instructions may be used to modify the bit.
