@@ -25,7 +25,7 @@ We propose to:
 
 * OR modify the ADDI, SUB instructions so that they automatically disable GC interrupts only when operating at the user level and an update to the stack pointer is occurring.
 
-* OR add a new custom instruction 'ASTK' for allocations which will automatically disable GC interrupts only when operating at the user level.
+* OR add a new custom instruction 'GCSUB' for allocations which will automatically disable GC interrupts only when operating at the user level.
 
 ### Rationale
 
@@ -47,7 +47,7 @@ Using CSR register $004 is suggested as it mirrors the interrupt enable / disabl
 The primary reason to modify an existing instruction or add a new custom instruction is to reduce the size of code. GC interrupts could be deferred simply using an additional CSR instruction in the instruction stream. However that cost code size and performance.
 
 ### Lock-out
-One possibility is to lock-out the GC interrupt for a number of instructions after the JAL, SUB, ADDI or ASTK. This could be for a fixed number of instructions or based on the allocation size of the SUB, ADDI or ASTK.
+One possibility is to lock-out the GC interrupt for a number of instructions after the JAL, SUB, ADDI or GCSUB. This could be for a fixed number of instructions or based on the allocation size of the SUB, ADDI or GCSUB.
 
 #### Advantages:
 It hides the GC lockout architecturally so that no additional instructions are required in the instruction stream. There is no impact to code size and existing code-base can be used.
@@ -59,7 +59,7 @@ Otherwise the GC deferral may not be as effective.
 
 ### Hardware Impact
 The cost of implmenting the deferred garbage collection is small. It is the manipulation of a single bit using hardware decodes (JAL/CSR) that are already present.
-An additional decode for the 'ASTK' instruction must be present if implemented.
+An additional decode for the 'GCSUB' instruction must be present if implemented.
 
 ### Software Impact
 Enabling the GC interrupt after the function prolog requires a CSR set instruction in the instruction stream. This may increase the size of user mode code.
