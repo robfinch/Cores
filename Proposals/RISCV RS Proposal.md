@@ -59,9 +59,9 @@ SwapContext:
 
 ## CSR Format
   XLEN - 1            4    3     2     1     0
-+-----------------------+-----+-----+-----+----+
-: XLEN-1 to 4 reserved  : Rs3 : Rs2 : Rs1 : Rd :
-+-----------------------+-----+-----+-----+----+
+|-----------------------|-----|-----|-----|----|
+| XLEN-1 to 4 reserved  | Rs3 | Rs2 | Rs1 | Rd |
+|-----------------------|-----|-----|-----|----|
 
 ## Operation
 If the bit corresponding to the register field of a instruction is set in the CSR then that register field refers to the user register file.
