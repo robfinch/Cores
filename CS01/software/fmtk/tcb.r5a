@@ -315,9 +315,9 @@ DumpReadyList:
 	ldi		$t1,#0
 	csrrc	$s1,#$300,#1
 .0002:
-	call	SerialPeekCharDirect
-	xor		$v0,$v0,#CTRLC
-	beqz	$v0,.brk
+;	call	SerialPeekCharDirect
+;	xor		$v0,$v0,#CTRLC
+;	beqz	$v0,.brk
 	ldi		$a0,#CR
 	call	Putch
 	ldi		$a0,#'Q'

@@ -9,12 +9,15 @@ LF					equ		$0A
 CR					equ		$0D
 XON					equ		$11
 XOFF				equ		$13
+EOF         equ   $1A
 DEL					equ		$7F
 VIA					equ		$FFDC0600
 VIA_PA			equ		$04
 VIA_DDRA		equ		$0C
 VIA_T1CL		equ		$10
 VIA_T1CH		equ		$14
+VIA_T2CL    equ   $20
+VIA_T2CH    equ   $24
 VIA_ACR			equ		$2C
 VIA_PCR			equ		$30
 VIA_IFR			equ		$34
@@ -29,78 +32,92 @@ INBUF				equ		$4100
 switchflag	equ		$4200
 milliseconds	equ		$4208
 
+CSR_UIE     equ   $004
 
-		code	18 bits
+	code	18 bits
 ;------------------------------------------------------------------------------
 ; Exception vector table.
 ;------------------------------------------------------------------------------
-		org		$FFFC0000				; user mode exception
-		jmp		IRQRout
-		org 	$FFFC00C0				; machine mode exception
-		jmp		IRQRout
-		org		$FFFC00FC				; non-maskable interrupt
-		jmp		MachineStart
+	org		$FFFC0000				; user mode exception
+	jmp		IRQRout
+	org 	$FFFC00C0				; machine mode exception
+	jmp		IRQRout
+	org		$FFFC00FC				; non-maskable interrupt
+	jmp		MachineStart
 
 ;------------------------------------------------------------------------------
 ; User mode code starts here
 ;------------------------------------------------------------------------------
-		org		$FFFC0100
+	org		$FFFC0100
 MachineStart:
-		ldi		$sp,#$80000-4		; setup machine mode stack pointer
-		call	MMUInit					; initialize MMU for address space zero.
-		call	FMTKInit
-		call	ViaInit
-		call	SerialInit
-		ldi		$t0,#0
-		csrrw	$x0,#$181,$t0		; set ASID
-		ldi		$t0,#$FFFC0000
-		csrrw $x0,#$301,$t0		; set tvec
-		ldi		$t0,#UserStart
-		csrrw	$x0,#$341,$t0		; set mepc
-		;csrrs	$x0,#$300,#8		; enable interrupts (on eret)
-		eret									; switch to user mode
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
+	call	MMUInit					; initialize MMU for address space zero.
+	call	FMTKInit
+	call	ViaSetup
+	call	SerialInit
+	ldi		$t0,#0
+	csrrw	$x0,#$181,$t0		; set ASID
+	ldi		$t0,#$FFFC0000
+	csrrw $x0,#$301,$t0		; set tvec
+	ldi		$t0,#UserStart
+	csrrw	$x0,#$341,$t0		; set mepc
+	eret									; switch to user mode
 UserStart:
-		ldi		$a0,#1					; start TinyBasic
-		ldi		$a1,#32000
-		ldi		$a2,#CSTART
-		ecall
-		ldi		$a0,#1
-		ldi		$a1,#24000
-		ldi		$a2,#UserStart2
-		ecall
-;		wfi
+	ldi		$a0,#1					; start TinyBasic
+	ldi		$a1,#32000
+	ldi		$a2,#CSTART
+	ecall
+	ldi		$a0,#1
+	ldi		$a1,#24000
+	ldi		$a2,#UserStart2
+	ecall
+;	csrrc $x0,#$300,#1    ; enable interrupts
+;	wfi
+	
 UserStart2:
-		ldi		$a0,#14							; Get current tid
-		ecall
-		mov		$a1,$v1
-		ldi		$a0,#24							; RequestIOFocus
-		ecall
-		ldi		$sp,#$80000-1028		; setup user mode stack pointer
-		ldi		$t0,#$08						; turn on the LED
-		sw		$t0,VIA+VIA_PARAW
-		ldi		$t2,#16							; send an XON just in case
-		ldi		$a3,#XON
+	ldi		$a0,#14							; Get current tid
+	ecall
+	mov		$a1,$v1             ; $a1 = tid
+	ldi		$a0,#24							; RequestIOFocus
+	ecall
+	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
+	mov   $a0,$a1             ; $a0 = tid
+	call  AllocStack
+	add   $sp,$v1,#1020       ; place stack pointer at top of allocated region
+	ldi		$t0,#$08						; turn on the LED
+	stt		$t0,VIA+VIA_PARAW
+	ldi		$t2,#16							; send an XON just in case
+	ldi		$a3,#XON
 .0004:
-		call	Putch ;SerialPutChar
-		sub		$t2,$t2,#1
-		bne		$t2,$x0,.0004
+	call	Putch ;SerialPutChar
+	sub		$t2,$t2,#1
+	bnez	$t2,.0004
 .0002:
-		ldi		$a0,#msgStart				; spit out a startup message
-		call	PutString
+	ldi		$a0,#msgStart				; spit out a startup message
+	call	PutString
 ;		ldi		a0,#1
 ;		ldi		a1,#24000
 ;		ldi		a2,#Monitor
 ;		ecall
-		call	DumpReadyList
-		bra		MonEntry
+	call	DumpReadyList
+	bra		MonEntry
 
 		; Now a loop to recieve and echo back characters
 .0003:
-		call	SerialPeekChar
-		blt		$v0,$x0,.0003
-		mov		$a0,$v0
-		call	SerialPutChar
-		bra		.0003
+;	ldi		$a0,#26							; FMTK_IO
+;	ldi   $a1,#5
+;	ldi		$a2,#9							; peekchar function
+;	ecall
+;	mov   $v0,$v1
+;	bltz	$v1,.0003
+;	ldi		$a0,#26							; FMTK_IO
+;	ldi   $a1,#5
+;	ldi		$a2,#8							; getchar function
+;	ecall
+;	mov		$a3,$v1
+;	mov   $a0,$a3
+;	call  PutHexByte
+	bra		.0003
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -119,11 +136,11 @@ IdleTask:
 ;------------------------------------------------------------------------------
 
 Getch:
-	sub		$sp,$sp,#12
+	gcsub	$sp,$sp,#12
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
 	stt		$a1,8[$sp]
-	;mWaitForFocus
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	ldi   $a1,#5
 	call  fgetc
 	ldt		$ra,[$sp]
@@ -133,20 +150,21 @@ Getch:
 	ret
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;   a0 = chracter to put
 ;------------------------------------------------------------------------------
 
 Putch:
-	sub		$sp,$sp,#20
+	gcsub	$sp,$sp,#20
 	stt		$ra,[$sp]
-	stt		$v0,4[$sp]
 	stt		$a3,8[$sp]
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	mov		$a3,$a0
 	ldi		$a1,#5							; serial port
 	call	fputc
 	ldt		$ra,[$sp]
-	ldt		$v0,4[$sp]
 	ldt		$a3,8[$sp]
 	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
@@ -168,17 +186,20 @@ Putch:
 ; Modifies:
 ;		none
 ; Returns:
-;		E_Ok (0) if successful
+;   EOF if error occurred, otherwise character to put
 ;------------------------------------------------------------------------------
 
 fputc:
-	sub		$sp,$sp,#24
+	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
-	stt		$v0,4[$sp]
 	stt		$a0,8[$sp]
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	; If the device is a UI device there may be multiple owning jobs. It doesn't
+	; do any good to check for ownership. Instead the I/O focus is checked to
+	; see if it's present.
 	call  GetUIFlag
 	beqz  $v1,.checkOwner
 	call  WaitForIOFocus
@@ -187,19 +208,22 @@ fputc:
   call  CheckDevOwner
   bnez  $v0,.notOwner
 .0001:
+  ldt   $a1,16[$sp]
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
-	ldi   $v0,#E_Ok
-.notOwner:
+	mov   $v0,$a3
+.xit:
 	ldt		$ra,[$sp]
-;	ldt		$v0,4[$sp]
 	ldt		$a0,8[$sp]
 	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
+.notOwner:
+  ldi   $v0,#EOF
+  bra   .xit
  
 ;------------------------------------------------------------------------------
 ; fgetc - get a character from an I/O device. If the task doesn't have the I/O
@@ -219,17 +243,27 @@ fputc:
 ;------------------------------------------------------------------------------
 
 fgetc:
-	sub		$sp,$sp,#24
+	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
-	stt		$v0,4[$sp]
+;	stt		$v0,4[$sp]
 	stt		$a0,8[$sp]
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	call  GetUIFlag
+	beqz  $v1,.checkOwner
 	call  WaitForIOFocus
+	bra   .0001
+.checkOwner:
+  call  CheckDevOwner
+  bnez  $v0,.notOwner
+.0001:
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#8							; getchar function
 	ecall
+	mov   $v0,$v1
+.0002:
 	ldt		$ra,[$sp]
 ;	ldt		$v0,4[$sp]
 	ldt		$a0,8[$sp]
@@ -238,7 +272,9 @@ fgetc:
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
-
+.notOwner:
+  ldi   $v0,#-1
+  bra   .0002
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -256,186 +292,216 @@ MonEntry:
 ;		call	PutString
 
 Monitor:
-		csrrc	$x0,#$300,#1
+	csrrc	$x0,#$300,#1
 ;		call	DumpReadyList
 ;		call	DumpTimeoutList
-		csrrs	$x0,#$300,#1
-		ldi		$s1,#0					; s1 = input pointer
-		ldi		$a0,#CR
-		call	Putch
-		ldi		$a0,#LF
-		call	Putch
-		ldi		$a0,#'>'
-		call	Putch
+	csrrs	$x0,#$300,#1
+	ldi		$s1,#0					; s1 = input pointer
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,#LF
+	call	Putch
+	ldi		$a0,#'>'
+	call	Putch
 .0001:
-		call	Getch						; wait until character pressed
-		blt		$v0,$x0,.0001
-		xor		$t0,$v0,#LF			; ignore line feed
-		beqz	$t0,.procLine
-		xor		$t0,$v0,#CR
-		beqz	$t0,.procLine
-		xor		$t0,$v0,#BS
-		beqz	$t0,.doBackspace
-		xor		$t0,$v0,#DEL
-		beqz	$t0,.doDelete
-		stb		$v0,INBUF[$s1]
-		add		$s1,$s1,#1
-		mov		$a0,$v0
-		call	Putch
-		bra		.0001
+	call	Getch						; wait until character pressed
+	bltz	$v0,.0001
+	xor		$t0,$v0,#LF			; ignore line feed
+	beqz	$t0,.procLine
+	xor		$t0,$v0,#CR
+	beqz	$t0,.procLine
+	xor		$t0,$v0,#BS
+	beqz	$t0,.doBackspace
+	xor		$t0,$v0,#DEL
+	beqz	$t0,.doDelete
+	stb		$v0,INBUF[$s1]
+	add		$s1,$s1,#1
+	mov		$a0,$v0
+	call	Putch
+	bra		.0001
 .doDelete:
-		mov		$s2,$s1
-		add		$s2,$s2,#1
+	mov		$s2,$s1
+	add		$s2,$s2,#1
 .0002:
-		ldb		$t0,INBUF[$s2]
-		stb		$t0,INBUF-1[$s2]
-		add		$s2,$s2,#1
-		add		$t0,$s2,#INBUF
-		slt		$t0,$t0,#INBUF+$7F
-		bne		$t0,$x0,.0002
-		stb		$x0,INBUF[$s2]
-		bra		.0001
+	ldb		$t0,INBUF[$s2]
+	stb		$t0,INBUF-1[$s2]
+	add		$s2,$s2,#1
+	add		$t0,$s2,#INBUF
+	slt		$t0,$t0,#INBUF+$7F
+	bne		$t0,$x0,.0002
+	stb		$x0,INBUF[$s2]
+	bra		.0001
 .doBackspace:
-		beq		$s1,$x0,.0001		; can't backspace anymore
-		mov		$a0,$v0					; show the backspace
-		call	Putch
-		sub		$s1,$s1,#1
-		mov		$s2,$s1
+	beq		$s1,$x0,.0001		; can't backspace anymore
+	mov		$a0,$v0					; show the backspace
+	call	Putch
+	sub		$s1,$s1,#1
+	mov		$s2,$s1
 .0003:
-		ldb		$t0,INBUF+1[$s2]
-		stb		$t0,INBUF[$s2]
-		add		$s2,$s2,#1
-		add		$t0,$s2,#INBUF
-		slt		$t0,$t0,#INBUF+$7F
-		bne		$t0,$x0,.0003
-		stb		$x0,INBUF[$s2]
-		bra		.0001
+	ldb		$t0,INBUF+1[$s2]
+	stb		$t0,INBUF[$s2]
+	add		$s2,$s2,#1
+	add		$t0,$s2,#INBUF
+	slt		$t0,$t0,#INBUF+$7F
+	bne		$t0,$x0,.0003
+	stb		$x0,INBUF[$s2]
+	bra		.0001
 .procLine:
-		stb		$x0,INBUF[$s1]
-		ldi		$s1,#0
+	stb		$x0,INBUF[$s1]
+	ldi		$s1,#0
 .skip:
-		ldb		$t0,INBUF[$s1]
-		beq		$t0,$x0,.0005
-		xor		$t1,$t0,#'>'
-		bne		$t1,$x0,.0004
+	ldb		$t0,INBUF[$s1]
+	beq		$t0,$x0,.0005
+	xor		$t1,$t0,#'>'
+	bne		$t1,$x0,.0004
 .skip2:
-		add		$s1,$s1,#1
-		bra		.skip
+	add		$s1,$s1,#1
+	bra		.skip
 .0004:
-		xor		$t1,$t0,#' '
-		beq		$t1,$x0,.skip2
-		xor		$t1,$t0,#'\t'
-		beq		$t1,$x0,.skip2
-		xor		$t1,$t0,#'M'
-		beq		$t1,$x0,doMem
-		ldi		$t1,#'B'
-		bne		$t0,$t1,.0006
-		ldi		$a0,#1					; Start task
-		ldi		$a1,#32000			; 32 kB
-		ldi		$a2,#CSTART			; start address
-		ecall
-		mov		$s1,$v1					; save v1
-		ldi		$a0,#msgCRLF
-		call	PutString
-		mov		$a0,$s1					; get back v1
-		call	PutHexByte
-		ldi		$a0,#msgTaskStart
-		call	PutString
-		call  DumpReadyList
-		;ldi		$a0,#5					; Reschedule task
-		;ldi		$a1,#1					; sleep(0)
-		;ecall
-		jmp		Monitor
+	xor		$t1,$t0,#' '
+	beq		$t1,$x0,.skip2
+	xor		$t1,$t0,#'\t'
+	beq		$t1,$x0,.skip2
+	xor		$t1,$t0,#'M'
+	beq		$t1,$x0,doMem
+	xor   $t1,$t0,#'V'
+	beqz  $t1,doVMem
+	ldi		$t1,#'B'
+	bne		$t0,$t1,.0006
+	ldi		$a0,#1					; Start task
+	ldi		$a1,#32000			; 32 kB
+	ldi		$a2,#CSTART			; start address
+	ecall
+	mov		$s1,$v1					; save v1
+	ldi		$a0,#msgCRLF
+	call	PutString
+	mov		$a0,$s1					; get back v1
+	call	PutHexByte
+	ldi		$a0,#msgTaskStart
+	call	PutString
+	call  DumpReadyList
+	;ldi		$a0,#5					; Reschedule task
+	;ldi		$a1,#1					; sleep(0)
+	;ecall
+	jmp		Monitor
 .0006:
-		ldi		$t1,#'D'
-		bne		$t0,$t1,.0007
-		lb		$t0,INBUF+1[$s1]
-		ldi		$t1,#'T'
-		bne		$t0,$t1,.noT
-		call	DumpTimeoutList
-		jmp		Monitor
+	ldi		$t1,#'D'
+	bne		$t0,$t1,.0007
+	lb		$t0,INBUF+1[$s1]
+	ldi		$t1,#'T'
+	bne		$t0,$t1,.noT
+	call	DumpTimeoutList
+	jmp		Monitor
 .noT:
-		call 	DumpReadyList
-		;ldi		$a0,#15
-		;ecall
-		jmp		Monitor
+	call 	DumpReadyList
+	;ldi		$a0,#15
+	;ecall
+	jmp		Monitor
 .0007:
-		ldi		$t1,#'E'
-		bne		$t0,$t1,.0008
-		jmp		EditMem
+	ldi		$t1,#'E'
+	bne		$t0,$t1,.0008
+	jmp		EditMem
 .0008:
-		ldi		$t1,#'F'
-		bne		$t0,$t1,.0009
-		jmp		FillMem
+	ldi		$t1,#'F'
+	bne		$t0,$t1,.0009
+	jmp		FillMem
 .0009:
-		ldi		$t1,#'S'
-		bne		$t0,$t1,.0010
-		ldi		$a0,#5					; sleep(0)
-		ldi		$a1,#1
-		ecall
-		jmp		Monitor
+	ldi		$t1,#'S'
+	bne		$t0,$t1,.0010
+	ldi		$a0,#5					; sleep(0)
+	ldi		$a1,#1
+	ecall
+	jmp		Monitor
 .0010:
-		ldi		$t1,#'K'
-		bne		$t0,$t1,.0011
-		call	GetHexNum
-		ldi		$a0,#3					; kill task
-		mov		$a1,$v0					; a0 = pid
-		ecall
-		jmp		Monitor
+	ldi		$t1,#'K'
+	bne		$t0,$t1,.0011
+	call	GetHexNum
+	ldi		$a0,#3					; kill task
+	mov		$a1,$v0					; a0 = pid
+	ecall
+	jmp		Monitor
 .0011:
-		ldi		$t1,#'?'
-		bne		$t0,$t1,.0012
-		ldi		$a0,#msgMonHelp
-		call	PutString
-		jmp		Monitor
+	ldi		$t1,#'?'
+	bne		$t0,$t1,.0012
+	ldi		$a0,#msgMonHelp
+	call	PutString
+	jmp		Monitor
 .0012:
 .0005:
-		bra		Monitor
+	bra		Monitor
 
 doMem:
-		sub		$sp,$sp,#4
-		add		$s1,$s1,#1
-		stt		$s1,[$sp]
-		ldi		$a0,#CR
-		call	Putch
-		ldi		$a0,INBUF
-		call	PutString
-		ldt		$s1,[$sp]
-		add		$sp,$sp,#4
-		call	GetHexNum
-		mov		$s3,$v0
-		add		$s1,$s1,#1
-		call	GetHexNum
-		add		$s4,$v0,$s3
+	sub		$sp,$sp,#4
+	add		$s1,$s1,#1
+	stt		$s1,[$sp]
+	ldi		$a0,#CR
+	call	Putch
+	ldi		$a0,INBUF
+	call	PutString
+	ldt		$s1,[$sp]
+	add		$sp,$sp,#4
+	call	GetHexNum
+	mov		$s3,$v0
+	add		$s1,$s1,#1
+	call	GetHexNum
+	add		$s4,$v0,$s3
 .loop2:
-		call	Getch						; check for ctrl-c
-		xor		$v0,$v0,#3
-		beq		$v0,$x0,Monitor
-		ldi		$a0,#CR
-		call	Putch
-		mov		$a0,$s3
-		call	PutHexWord
-		ldi		$a0,#':'
-		call	Putch
-		ldi		$s2,#7
+	call	Getch						; check for ctrl-c
+	xor		$v0,$v0,#3
+	beq		$v0,$x0,Monitor
+	ldi		$a0,#CR
+	call	Putch
+	mov		$a0,$s3
+	call	PutHexWord
+	ldi		$a0,#':'
+	call	Putch
+	ldi		$s2,#7
 .loop:
-		ldi		$a0,#' '
-		call	Putch
-		ldb		$a0,[$s3]
-		call	PutHexByte
-		add		$s3,$s3,#1
-		sub		$s2,$s2,#1
-		bge		$s2,$x0,.loop
-		bltu	$s3,$s4,.loop2
-		bra		Monitor		
+	ldi		$a0,#' '
+	call	Putch
+	ldb		$a0,[$s3]
+	call	PutHexByte
+	add		$s3,$s3,#1
+	sub		$s2,$s2,#1
+	bge		$s2,$x0,.loop
+	bltu	$s3,$s4,.loop2
+	bra		Monitor		
 
 EditMem:
-		call	GetHexNum			; get address to edit
-		mov		$s3,$v0
-		add		$s1,$s1,#1
-		call	GetHexNum			; get value to set
-		stb		$s3,[$v0]			; update mem
-		jmp		Monitor
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	call	GetHexNum			; get address to edit
+	mov		$s3,$v0
+	add		$s1,$s1,#1
+	call	GetHexNum			; get value to set
+	stb		$s3,[$v0]			; update mem
+	jmp		Monitor
+
+;------------------------------------------------------------------------------
+; >V 0
+; Displays the virtual memory map for the specified app.
+;------------------------------------------------------------------------------
+
+doVMem:
+  call  GetHexNum
+  ldi   $t1,#0
+  sll   $t0,$v0,#16
+.0001:
+  and   $a0,$t1,#15
+  bnez  $a0,.notLF
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+.notLF:
+  mvmap $a0,$x0,$t0
+  call  PutHexHalf
+  ldi   $a0,#' '
+  call  Putch
+  add   $t0,$t0,#1
+  add   $t1,$t1,#1
+  slt   $a0,$t1,#512
+  bnez  $a0,.0001  
+  jmp   Monitor
 
 ;------------------------------------------------------------------------------
 ;	>F 1000 800 EE
@@ -443,148 +509,155 @@ EditMem:
 ;------------------------------------------------------------------------------
 
 FillMem:
-		call	GetHexNum			; get address
-		mov		$s3,$v0
-		add		$s1,$s1,#1
-		call	GetHexNum			; get length
-		mov		$s4,$v0
-		add		$s1,$s1,#1
-		call	GetHexNum			; get byte to use
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	call	GetHexNum			; get address
+	mov		$s3,$v0
+	add		$s1,$s1,#1
+	call	GetHexNum			; get length
+	mov		$s4,$v0
+	add		$s1,$s1,#1
+	call	GetHexNum			; get byte to use
 .0001:
-		stb		$v0,[$s3]
-		sub		$s4,$s4,#1
-		bgt		$s4,$x0,.0001
-		jmp		Monitor
+	stb		$v0,[$s3]
+	sub		$s4,$s4,#1
+	bgt		$s4,$x0,.0001
+	jmp		Monitor
 
 ;------------------------------------------------------------------------------
 ; Skip over spaces and tabs in the input buffer.
 ;------------------------------------------------------------------------------
 
 SkipSpaces:
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 .skip2:
-		lb		$t0,INBUF[$s1]
-		xor		$t1,$t0,#' '
-		beq		$t1,$x0,.skip1
-		xor		$t1,$t0,#'\t'
-		beq		$t1,$x0,.skip1
-		ret
+	ldb		$t0,INBUF[$s1]
+	xor		$t1,$t0,#' '
+	beqz	$t1,.skip1
+	xor		$t1,$t0,#'\t'
+	beqz	$t1,.skip1
+	ret
 .skip1:
-		add		$s1,$s1,#1
-		bra		.skip2
+	add		$s1,$s1,#1
+	bra		.skip2
 
 ;------------------------------------------------------------------------------
 ; Get a hex number from the input buffer.
 ;------------------------------------------------------------------------------
 
 GetHexNum:
-		ldi		$v0,#0							; v0 = num
-		sub		$sp,$sp,#4
-		sw		$ra,[$sp]
-		call	SkipSpaces
+	ldi		$v0,#0							; v0 = num
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	call	SkipSpaces
 .next:
-		lb		$t0,INBUF[$s1]
-		ldi		$t2,#'0'
-		blt		$t0,$t2,.0001
-		ldi		$t2,#'9'+1
-		blt		$t0,$t2,.isDigit
-		ldi		$t2,#'A'
-		blt		$t0,$t2,.0001
-		ldi		$t2,#'F'+1
-		blt		$t0,$t2,.isHexUpper
-		ldi		$t2,#'a'
-		blt		$t0,$t2,.0001
-		ldi		$t2,#'f'+1
-		blt		$t0,$t2,.isHexLower
+	ldb		$t0,INBUF[$s1]
+	ldi		$t2,#'0'
+	blt		$t0,$t2,.0001
+	ldi		$t2,#'9'+1
+	blt		$t0,$t2,.isDigit
+	ldi		$t2,#'A'
+	blt		$t0,$t2,.0001
+	ldi		$t2,#'F'+1
+	blt		$t0,$t2,.isHexUpper
+	ldi		$t2,#'a'
+	blt		$t0,$t2,.0001
+	ldi		$t2,#'f'+1
+	blt		$t0,$t2,.isHexLower
 .0001:
-		lw		$ra,[$sp]
-		add		$sp,$sp,#4
-		ret
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 .isHexUpper:
-		sll		$v0,$v0,#4
-		sub		$t0,$t0,#'A'
-		add		$t0,$t0,#10
-		or		$v0,$v0,$t0
-		add		$s1,$s1,#1
-		bra		.next
+	sll		$v0,$v0,#4
+	sub		$t0,$t0,#'A'
+	add		$t0,$t0,#10
+	or		$v0,$v0,$t0
+	add		$s1,$s1,#1
+	bra		.next
 .isHexLower:
-		sll		$v0,$v0,#4
-		sub		$t0,$t0,#'a'
-		add		$t0,$t0,#10
-		or		$v0,$v0,$t0
-		add		$s1,$s1,#1
-		bra		.next
+	sll		$v0,$v0,#4
+	sub		$t0,$t0,#'a'
+	add		$t0,$t0,#10
+	or		$v0,$v0,$t0
+	add		$s1,$s1,#1
+	bra		.next
 .isDigit:
-		sll		$v0,$v0,#4
-		sub		$t0,$t0,#'0'
-		or		$v0,$v0,$t0
-		add		$s1,$s1,#1
-		bra		.next
+	sll		$v0,$v0,#4
+	sub		$t0,$t0,#'0'
+	or		$v0,$v0,$t0
+	add		$s1,$s1,#1
+	bra		.next
 
 ;------------------------------------------------------------------------------
 ; Output a word as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexWord:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
-		srl		$a0,$a0,#16
-		call	PutHexHalf
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]
-		add		$sp,$sp,#8	; fall through to PutHexHalf
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	srl		$a0,$a0,#16
+	call	PutHexHalf
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	add		$sp,$sp,#8	; fall through to PutHexHalf
 
 ;------------------------------------------------------------------------------
 ; Output a half-word (16 bits) as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexHalf:
-		sub		$sp,$sp,#8
-		sw		$ra,[$sp]
-		sw		$a0,4[$sp]
-		srl		$a0,$a0,#8
-		call	PutHexByte
-		lw		$ra,[$sp]
-		lw		$a0,4[$sp]		
-		add		$sp,$sp,#8	; fall through to PutHexByte
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	srl		$a0,$a0,#8
+	call	PutHexByte
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]		
+	add		$sp,$sp,#8	; fall through to PutHexByte
 
 ;------------------------------------------------------------------------------
 ; Output a byte as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexByte:
-		sub		$sp,$sp,#8
-		stt		$ra,[$sp]
-		stt		$a0,4[$sp]
-		srl		$a0,$a0,#4		; put the high order nybble first
-		call	PutHexNybble
-		ldt		$ra,[$sp]
-		ldt		$a0,4[$sp]
-		add		$sp,$sp,#8		; fall through to PutHexNybble
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	srl		$a0,$a0,#4		; put the high order nybble first
+	call	PutHexNybble
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	add		$sp,$sp,#8		; fall through to PutHexNybble
 
 ;------------------------------------------------------------------------------
 ; Output a nybble as a hex string.
 ;------------------------------------------------------------------------------
 
 PutHexNybble:
-		sub		$sp,$sp,#8
-		stt		$ra,[$sp]
-		stt		$a0,4[$sp]
-		and		$a0,$a0,#15		; strip off high order bits
-		ldi		$t0,#10
-		blt		$a0,$t0,.lt10
-		sub		$a0,$a0,#10
-		add		$a0,$a0,#'A'
-		call	Putch
-		bra		.0001
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	and		$a0,$a0,#15		; strip off high order bits
+	ldi		$t0,#10
+	blt		$a0,$t0,.lt10
+	sub		$a0,$a0,#10
+	add		$a0,$a0,#'A'
+	call	Putch
+	bra		.0001
 .lt10:
-		add		$a0,$a0,#'0'
-		call	Putch
+	add		$a0,$a0,#'0'
+	call	Putch
 .0001:
-		ldt		$ra,[$sp]
-		ldt		$a0,4[$sp]
-		add		$sp,$sp,#8
-		ret
+	ldt		$ra,[$sp]
+	ldt		$a0,4[$sp]
+	add		$sp,$sp,#8
+	ret
 
 ;------------------------------------------------------------------------------
 ; PutString
@@ -601,21 +674,22 @@ PutHexNybble:
 ;------------------------------------------------------------------------------
 
 PutString:
-		sub		$sp,$sp,#8				; save link register
-		stt		$ra,[$sp]
-		stt		$a0,4[$sp]				; and argument
-		mov		$t1,$a0						; t1 = pointer to string
+	gcsub	$sp,$sp,#8				; save link register
+	stt		$ra,[$sp]
+	stt		$a0,4[$sp]				; and argument
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	mov		$t1,$a0						; t1 = pointer to string
 .0001:
-		ldb		$a0,[$t1]
-		add		$t1,$t1,#1				; advance pointer to next byte
-		beq		$a0,$x0,.done			; branch if done
-		call	Putch							; output character
-		bra		.0001
+	ldb		$a0,[$t1]
+	add		$t1,$t1,#1				; advance pointer to next byte
+	beq		$a0,$x0,.done			; branch if done
+	call	Putch							; output character
+	bra		.0001
 .done:
-		ldt		$ra,[$sp]					; restore return address
-		ldt		$a0,4[$sp]				; and argument
-		add		$sp,$sp,#8
-		ret
+	ldt		$ra,[$sp]					; restore return address
+	ldt		$a0,4[$sp]				; and argument
+	add		$sp,$sp,#8
+	ret
 
 ;------------------------------------------------------------------------------
 ; Exception processing code starts here.
@@ -634,6 +708,13 @@ IRQRout:
 	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	jmp		OSCALL					; goto operating system call dispatcher
 .isIRQ:
+  and   $t0,$t0,#$FF
+  sub   $t1,$t0,#1
+  beqz  $t1,.softwareIrq
+  sub   $t1,$t1,#1
+  beqz  $t1,.timerIrq
+  sub   $t1,$t1,#1      ; garbage collect interrupt?
+  beqz  $t1,.gcIrq
 	and		$t0,$t0,#31			; interrupting device # is low order 5 bits of cause code
 	sll		$t0,$t0,#7				; 128 bytes per device func table
 	add		$t0,$t0,#DVF_Base+22*4	; load IRQ routine vector from device func table
@@ -642,7 +723,13 @@ IRQRout:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
 	jmp		[$t0]						; jump to the IRQ routine
 .noIRQ:
+.softwareIrq:
+.timerIrq:
 	eret
+.gcIrq:
+	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
+  call  gcIncrement
+  eret
 
 ;------------------------------------------------------------------------------
 ; Message strings
@@ -681,4 +768,5 @@ flt10:
 .include "../fmtk/tcb.r5a"
 .include "../fmtk/iofocus.r5a"
 .include "../fmtk/io.r5a"
+.include "../fmtk/gcIncremental.r5a"
 .include "TinyBasic.r5a"

@@ -197,12 +197,15 @@ AllocStack:
 	mvmap		$v0,$x0,$v1			; check if stack already allocated
 	bnez		$v0,.0001
 	palloc	$v0							; allocate a page
+;	mov     $a0,$v0
+;	call    PutHexWord
 	beqz		$v0,.xit		    ; success?
 	mvmap		$x0,$v0,$v1
 .0001:
 	and			$v1,$v1,#511
 	sll			$v0,$v0,#LOG_PGSZ			; convert pages to addresses
 	sll			$v1,$v1,#LOG_PGSZ
+	or      $v1,$v1,#$A0000000    ; set stack segment
 .xit:
 	ret
 
@@ -239,6 +242,26 @@ FreeAll:
 	ret
 
 ;------------------------------------------------------------------------------
+; Convert a virtual address to a linear one.
+;
+; Parameters:
+;		a0 = virtual address to convert
+; Modifies:
+;		t0
+; Returns:
+;		v0 = linear address
+;------------------------------------------------------------------------------
+
+VirtToLinear:
+	srl   $v0,$a0,#28         ; get segment register of address
+	mvseg $v0,$x0,$v0         ; get segment register value
+	and   $v0,$v0,#$FFFFFFF0  ; mask off acr bits
+	sll   $v0,$v0,#6          ; shift into position
+	and   $t0,$a0,#$0FFFFFFF  ; mask off segment
+	add   $v0,$v0,$t0         ; v0 = linear address (segment base + address)
+  ret
+
+;------------------------------------------------------------------------------
 ; Convert a virtual address to a physical one
 ;
 ; Parameters:
@@ -246,12 +269,15 @@ FreeAll:
 ; Modifies:
 ;		t0
 ; Returns:
-;		v0 = physcial address
+;		v0 = physical address
 ;------------------------------------------------------------------------------
 
 VirtToPhys:
 	blt		$a0,$x0,.notMapped
-	srl		$t0,$a0,#LOG_PGSZ		; convert virt to page
+	sub   $sp,$sp,#4
+	stt   $ra,[$sp]
+	call  VirtToLinear
+	srl		$t0,$v0,#LOG_PGSZ		; convert virt to page
 	mGetCurrentTid
 	sll		$v0,$v0,#16
 	or		$v0,$v0,$t0					; and in tid
@@ -259,6 +285,8 @@ VirtToPhys:
 	sll		$v0,$v0,#LOG_PGSZ		; convert page to address
 	and		$t0,$a0,#$3FF				; insert LSB's
 	or		$v0,$v0,$t0
+	ldt   $ra,[$sp]
+	add   $sp,$sp,#4
 	ret
 .notMapped:
 	mov		$v0,$a0

@@ -93,12 +93,12 @@ DRSP_DONE			EQU		1
 ;7		RS-232 3				COM3
 ;8		RS-232 4				COM4
 ;9		Parallel xfer	  PTI
-;10		Floppy					FD0
-;11		Floppy					FD1
-;12		Hard disk				HD0
-;13		Hard disk				HD1
+;10		Front Panel 		FP
+;11
+;12		Hard disk				HD1
+;13		Hard disk				HD2
 ;14
-;15
+;15   Time slice / GP	VIA
 ;16		SDCard					CARD1 	(OS built-in)
 ;17
 ;18

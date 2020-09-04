@@ -647,9 +647,6 @@ ERETx:
 	csrrc	$x0,#$800,#1				; select user for destination
 	mov		$v1,$v1							; move return values to user registers
 	mov		$v0,$v0
-ERETx2:
-	csrrs $x0,#$300,#1        ; disable interrupts
-	csrrc $x0,#$801,#1        ; clear busy bit
 	eret											; return (selects user registers)
 
 ;------------------------------------------------------------------------------

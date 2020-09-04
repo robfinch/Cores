@@ -27,8 +27,8 @@
 ;
 	align	8
 ViaFuncTbl:
-	dw		0							; no operation
-	dw		0							; setup
+	dw		ViaNOP				; no operation
+	dw		ViaSetup			; setup
 	dw		0							; initialize
 	dw		0							; status
 	dw		0							; media check
@@ -60,31 +60,77 @@ ViaFuncTbl:
 	dw		0
 	dw		0							; 31
 
+  align 8
+ViaDCB:
+  db    3,"VIA        "
+  dw    0     ; type
+  dw    0     ; nBPB
+  dw    0
+  dw    0     ; last error code
+  dw    0
+  dw    0     ; starting block number
+  dw    0
+  dw    0     ; number of blocks
+  dw    0
+  dw    0     ; command processing routine
+  dw    0
+  db    0     ; reentrancy count
+  db    0     ; single user flag
+  db    0     ; user interface device flag
+  db    0
+  dw    0
+  dw    0     ; hJob
+  dw    0
+  dw    0     ; Mailbox handle
+  dw    0
+  dw    0     ; pointer to device semaphore
+  dw    0
+  dw    0     ; reserved
+  dw    0
+
 ;------------------------------------------------------------------------------
-; ViaInit
-;
-; Initialize the versatile interface adapter.
 ;------------------------------------------------------------------------------
 
-ViaInit:
+ViaSetup:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi		$a0,#15							; VIA device
 	ldi		$a1,#ViaFuncTbl
 	call	CopyDevFuncTbl
-	; Initialize port A low order eight bits as output, the remaining bits as
-	; input.
-	ldi		$t1,VIA
+	ldi		$a0,#15							; VIA device
+	ldi		$a1,#ViaDCB
+	call	CopyDevDCB
+	call  ViaInit
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+ViaNOP:
+	ret
+
+;------------------------------------------------------------------------------
+; ViaInit
+;
+; Initialize the versatile interface adapter.
+; Initialize port A low order eight bits as output, the remaining bits as
+; input. Setup timer #3 as the system time slice (30ms).
+;------------------------------------------------------------------------------
+
+ViaInit:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	ldi		$t1,#VIA
 	ldi		$t0,#$000000FF
 	stt		$t0,VIA_DDRA[$t1]
 	ldi		$t0,#1							; select timer 3 access
 	stb		$t0,VIA_PCR+1[$t1]
-	ldi		$t0,#$1F
-	stb		$t0,VIA_ACR+1[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
+	ldi		$t0,#$1F00
+	stw		$t0,VIA_ACR[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
 	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
 	stt		$t0,VIA_T1CL[$t1]
 	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
-	ldi		$t0,#$180						; emable timer3 interrupts
+	ldi   $t0,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	stt   $t0,VIA_T2CL[$t1]
+	stt   $x0,VIA_T2CH[$t1]
+	ldi		$t0,#$1C0						; emable timer3/timer2 interrupts
 	stt		$t0,VIA_IER[$t1]
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -95,16 +141,29 @@ ViaInit:
 ;------------------------------------------------------------------------------
 
 ViaIRQ:
-	; Was it the VIA that caused the interrupt?
-	ldi		$t1,VIA
-	ldb		$t0,VIA_IFR[$t1]
-	bge		$t0,$x0,.0003				; no
-	ldi		$t0,#1							; select timer 3 access
-	stb		$t0,VIA_PCR+1[$t1]
-	ldt		$t0,VIA_T1CL[$t1]		; yes, clear interrupt
-	ldt		$t0,milliseconds
-	add		$t0,$t0,#30
-	stt		$t0,milliseconds
-	stt		$t0,switchflag
-	call  FMTK_SchedulerIRQ
+	ldi		$t1,#VIA
+	ldw		$t0,VIA_IFR[$t1]    ; get the flag register
+	and   $v0,$t0,#$40        ; timer 2? (bit 6)
+	bnez  $v0,.timer2irq
+.0001:
+	and   $v0,$t0,#$100       ; timer 3? (bit 8)
+	bnez  $v0,.timer3irq
 	eret
+.timer3irq:
+	ldi		$t2,#1							; assume timer3, select timer 3 access
+	stb		$t2,VIA_PCR+1[$t1]
+	ldt		$t2,VIA_T1CL[$t1]		; yes, clear interrupt
+	ldt		$t2,milliseconds
+	add		$t2,$t2,#30
+	stt		$t2,milliseconds
+	stt		$t2,switchflag
+;	call  FMTK_SchedulerIRQ
+.0003:
+	eret
+	; reset countdown to clear interrupt
+.timer2irq:
+	ldi   $t2,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	stt   $t2,VIA_T2CL[$t1]
+	stt   $x0,VIA_T2CH[$t1]
+	csrrs $x0,#$044,#1        ; set GC interrupt pending bit
+	bra   .0001               ; there might be a timer 3 irq too

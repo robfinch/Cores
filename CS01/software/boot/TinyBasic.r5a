@@ -106,7 +106,7 @@ GOBYE:
 //message "CSTART"
 public CSTART:
 	; First save off the link register and OS sp value
-	sw		$sp,OSSP
+	stt		$sp,OSSP
 	ldi		$sp,#STACKOFFS	; initialize stack pointer
 	ldi		$a0,#14							; Get current tid
 	ecall
@@ -2899,10 +2899,10 @@ CRLF:
 ;   a0,a1,r4
 ;
 PRMESG:
-	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	sub	  $sp,$sp,#4
+	stt		$ra,[$sp]
 	call	PutString
-	lw		$ra,[$sp]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 

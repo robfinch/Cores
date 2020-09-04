@@ -79,9 +79,9 @@ FMTK_IO:
 	sll		$v0,$a1,#7					; each device allowed 32 functions (*128)
 	sll		$v1,$a2,#2					; function number *4
 	add		$v0,$v0,#DVF_Base		; base address of function table
-	or		$v0,$v0,$v1
+	add		$v0,$v0,$v1
 	ldt		$v0,[$v0]
-	beq		$v0,$x0,.badFunc
+	beqz	$v0,.badFunc
 	call	[$v0]
 .xit:
 	jmp		ERETx
@@ -117,7 +117,7 @@ FMTK_GetDCBField:
 .xit:
 	jmp		ERETx
 .badFunc:
-	ldi		$v0,#E_BadDevOp
+	ldi		$v0,#E_BadDCBOffset
 	bra		.xit
 .badDev:
 	ldi		$v0,#E_BadDevNum
@@ -149,7 +149,7 @@ FMTK_SetDCBField:
 .xit:
 	jmp		ERETx
 .badFunc:
-	ldi		$v0,#E_BadDevOp
+	ldi		$v0,#E_BadDCBOffset
 	bra		.xit
 .badDev:
 	ldi		$v0,#E_BadDevNum
@@ -162,6 +162,7 @@ FMTK_SetDCBField:
 ;------------------------------------------------------------------------------
 
 CopyDevFuncTbl:
+	csrrs $x0,#$004,#1        ; enable gc interrupt
 	sll		$v0,$a0,#7					; each device allowed 32 functions (*128)
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	ldi		$t0,#32							; 32 functions to copy
@@ -177,6 +178,7 @@ CopyDevFuncTbl:
 ;------------------------------------------------------------------------------
 
 CopyDevDCB:
+	csrrs $x0,#$004,#1        ; enable gc interrupt
   ldi   $v0,#DCB_Size
   mul   $v0,$a0,$v0
   add   $v0,$v0,#DCB_Base
@@ -199,6 +201,7 @@ CopyDevDCB:
 CheckDevOwner:
   sub   $sp,$sp,#4
   stt   $s1,[$sp]
+	csrrs $x0,#$004,#1        ; enable gc interrupt
   ldi   $a0,#14             ; FMTK: GetCurrentTid
   ecall
   mov   $s1,$v1

@@ -195,13 +195,13 @@ SerialFinishCmd:
 ; Modifies:
 ;		none
 ; Returns:
-;		$v0 = character or -1
+;   $v0 = E_Ok
+;		$v1 = character or -1
 ;------------------------------------------------------------------------------
 
 SerialGetChar:
-		sub		$sp,$sp,#16
+		gcsub	$sp,$sp,#16
 		stt		$ra,[$sp]
-		stt		$v1,4[$sp]
 		stt		$s1,8[$sp]          ; XON status
 		stt   $s2,12[$sp]         ; interrupt state
 		ldb		$s1,SerRcvXon				; skip sending XON if already sent
@@ -226,10 +226,12 @@ SerialGetChar:
 .noChars:
 .0001:
 		ldi		$v0,#-1
-.xit
+.xit:
+    mov   $v1,$v0
+    ldi   $v0,#E_Ok
 		csrrw	$x0,#$300,$s2				; restore interrupts
+		csrrc $x0,#$004,#1
 		ldt		$ra,[$sp]
-		ldt		$v1,4[$sp]
 		ldt		$s1,8[$sp]
 		ldt   $s2,12[$sp]
 		add		$sp,$sp,#16
@@ -249,14 +251,14 @@ SerialGetChar:
 ; Modifies:
 ;		none
 ; Returns:
-;		$v0 = character or -1
+;   $v0 = E_Ok
+;		$v1 = character or -1
 ;------------------------------------------------------------------------------
 
 SerialPeekChar:
-	sub		$sp,$sp,#12
+	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
-	stt		$v1,4[$sp]
-	stt		$s1,8[$sp]
+	stt		$s1,4[$sp]
 	csrrc	$s1,#$300,#1				; disable interrupts
 	ldbu	$v1,SerHeadRcv			; check if anything is in buffer
 	ldbu	$v0,SerTailRcv
@@ -267,11 +269,13 @@ SerialPeekChar:
 .0001:
 	ldi		$v0,#-1
 .xit
+  mov   $v1,$v0
+  ldi   $v0,#E_Ok
 	csrrw	$x0,#$300,$s1				; restore interrupts
+	csrrc $x0,#$004,#1        ; restore gc interrupts
 	ldt		$ra,[$sp]
-	ldt		$v1,4[$sp]
-	ldt		$s1,8[$sp]
-	add		$sp,$sp,#12
+	ldt		$s1,4[$sp]
+	add		$sp,$sp,#8
 	ret
 
 ;------------------------------------------------------------------------------
@@ -286,28 +290,29 @@ SerialPeekChar:
 ; Modifies:
 ;		none
 ; Returns:
-;		$v0 = character or -1
+;   $v0 = E_Ok
+;		$v1 = character or -1
 ;------------------------------------------------------------------------------
 
 SerialPeekCharDirect:
-	sub		$sp,$sp,#12
+	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
-	stt		$v1,4[$sp]
-	stt		$s1,8[$sp]
+	stt		$s1,4[$sp]
 	csrrc	$s1,#$300,#1				; disable interrupts
 	ldb		$v0,UART+UART_STAT
 	and		$v0,$v0,#8					; look for Rx not empty
 	beqz	$v0,.0001
-	ldb		$v0,UART+UART_TRB
+	ldb		$v1,UART+UART_TRB
 	bra		.xit
 .0001:
-	ldi		$v0,#-1
-.xit
+	ldi		$v1,#-1
+.xit:
+  ldi   $v0,#E_Ok
 	csrrw	$x0,#$300,$s1				; restore interrupts
+	csrrs $x0,#$004,#1
 	ldt		$ra,[$sp]
-	ldt		$v1,4[$sp]
-	ldt		$s1,8[$sp]
-	add		$sp,$sp,#12
+	ldt		$s1,4[$sp]
+	add		$sp,$sp,#8
 	ret
 
 ;------------------------------------------------------------------------------
@@ -399,7 +404,7 @@ SerialIRQ:
 	ldi		$a0,#XOFF
 	stb		$x0,SerRcvXon				; clear XON status
 	stb		$a0,SerRcvXoff			; set XOFF status
-	stb		UART+UART_TRB
+	stb		$a0,UART+UART_TRB
 	bra		.nxtByte            ; check the status for another byte
 ;	ldi		$a0,#$0B						; dtr,rts active, rxint disabled, no parity
 ;	sw		$a0,UART+UART_CMD
