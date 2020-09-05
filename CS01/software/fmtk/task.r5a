@@ -28,6 +28,10 @@ missed_ticks	equ		$4320
 TimeoutList		equ		$4328
 Tick		EQU		$4330
 SysSema	EQU		$4340
+MEPC0   EQU   $4350
+MEPC1   EQU   $4358
+MEPC2   EQU   $4360
+MEPC3   EQU   $4368
 RDYQ0		EQU		$4400
 RDYQ1		EQU		$4500
 RDYQ2		EQU		$4600
@@ -224,7 +228,7 @@ SelectTaskToRun:
 
 SwapContext:
 	; Save outgoing register set in TCB
-	csrrc	$x0,#$800,#4	; select user register set for Rs2
+	csrrs	$x0,#$780,#4	; select user register set for Rs2
 	stt		$x1,4[$a0]
 	stt		$x2,8[$a0]
 	stt		$x3,12[$a0]
@@ -256,7 +260,7 @@ SwapContext:
 	stt		$x29,116[$a0]
 	stt		$x30,120[$a0]
 	stt		$x31,124[$a0]
-	csrrs	$x0,#$800,#4				; select machine register set for Rs2
+	csrrc	$x0,#$780,#4				; select machine register set for Rs2
 	csrrw	$x2,#$341,$x0				; save off mepc
 	stt		$x2,TCBepc[$a0]
 	; Now save off segment registers
@@ -290,7 +294,7 @@ SwapContext:
 	ldt		$x2,TCBepc[$a1]			; restore epc
 	csrrw	$x0,#$341,$x2
 	; Restore incoming registers
-	csrrc	$x0,#$800,#1				; select user regset for Rd
+	csrrs	$x0,#$780,#1				; select user regset for Rd
 	ldt		$x1,4[$a1]
 	ldt		$x2,8[$a1]
 	ldt		$x3,12[$a1]
@@ -322,7 +326,7 @@ SwapContext:
 	ldt		$x29,116[$a1]
 	ldt		$x30,120[$a1]
 	ldt		$x31,124[$a1]
-	csrrs	$x0,#$800,#1				; select machine regset for Rd
+	csrrc	$x0,#$780,#1				; select machine regset for Rd
 	ret
 
 ;------------------------------------------------------------------------------
@@ -331,14 +335,14 @@ SwapContext:
 ;------------------------------------------------------------------------------
 
 OSCALL:
-	csrrc	$x0,#$800,#2		; select user regs for Rs1		
+	csrrs	$x0,#$780,#2		; select user regs for Rs1		
 	mov		$a0,$a0					; move user to machine
 	mov		$a1,$a1
 	mov		$a2,$a2
 	mov		$a3,$a3
 	mov		$a4,$a4
 	mov		$a5,$a5
-	csrrs	$x0,#$800,#15		; get back machine registers for all
+	csrrc	$x0,#$780,#15		; get back machine registers for all
 	and		$a0,$a0,#31
 	sll		$a0,$a0,#2
 	ldt	  $t0,OSCallTbl[$a0]
@@ -644,10 +648,10 @@ FMTK_StartTask:
 	mov		$v1,$a0
 .err:
 ERETx:
-	csrrc	$x0,#$800,#1				; select user for destination
+	csrrs	$x0,#$780,#1				; select user for destination
 	mov		$v1,$v1							; move return values to user registers
 	mov		$v0,$v0
-	eret											; return (selects user registers)
+	jmp   ERETx2
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.

@@ -61,7 +61,8 @@ MachineStart:
 	csrrw $x0,#$301,$t0		; set tvec
 	ldi		$t0,#UserStart
 	csrrw	$x0,#$341,$t0		; set mepc
-	eret									; switch to user mode
+	stt   $t0,MEPC1
+	jmp   ERETx2  				; switch to user mode
 UserStart:
 	ldi		$a0,#1					; start TinyBasic
 	ldi		$a1,#32000
@@ -366,6 +367,8 @@ Monitor:
 	beq		$t1,$x0,doMem
 	xor   $t1,$t0,#'V'
 	beqz  $t1,doVMem
+	xor   $t1,$t0,#'P'
+	beqz  $t1,doPStat
 	ldi		$t1,#'B'
 	bne		$t0,$t1,.0006
 	ldi		$a0,#1					; Start task
@@ -503,6 +506,30 @@ doVMem:
   bnez  $a0,.0001  
   jmp   Monitor
 
+;------------------------------------------------------------------------------
+; >P
+; Display the PAM bits status.
+;------------------------------------------------------------------------------
+
+doPStat:
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+  ldi   $t0,#0
+  ldi   $t1,#-1
+.0001:
+  pstat $v0,$t0,$t1
+  ldi   $a0,#'0'
+  beqz  $v0,.zero
+  ldi   $a0,#'1'
+.zero:
+  call  Putch
+  add   $t0,$t0,#1
+  slt   $a0,$t0,#512
+  bnez  $a0,.0001
+  jmp   Monitor
+ 
 ;------------------------------------------------------------------------------
 ;	>F 1000 800 EE
 ; Fills memory beginning at address $1000 for $800 bytes with the value $EE
@@ -703,6 +730,11 @@ PutString:
 	code
 	align	4
 IRQRout:
+  csrrw $t0,#$780,$x0   ; get register sets
+  srl   $t0,$t0,#4      ; extract register set selection
+  sll   $t0,$t0,#3
+  csrrw $t1,#$341,$x0   ; get mepc
+  stt   $t1,MEPC0[$t0]  ; save it
 	csrrw	$t0,#$342,$x0			; get cause code
 	bltz	$t0,.isIRQ		  ; irq or ecall?
 	ldi		$sp,#$80000-4		; setup machine mode stack pointer
@@ -725,11 +757,17 @@ IRQRout:
 .noIRQ:
 .softwareIrq:
 .timerIrq:
-	eret
+  bra   ERETx2
 .gcIrq:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
   call  gcIncrement
-  eret
+ERETx2:
+  csrrw $t0,#$780,$x0   ; get register sets
+  srl   $t0,$t0,#4      ; extract register set selection
+  sll   $t0,$t0,#3
+  ldt   $t1,MEPC0[$t0]  ; get it
+  csrrw $x0,#$341,$t1   ; set mepc
+	eret
 
 ;------------------------------------------------------------------------------
 ; Message strings

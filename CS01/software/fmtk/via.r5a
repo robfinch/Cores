@@ -148,7 +148,7 @@ ViaIRQ:
 .0001:
 	and   $v0,$t0,#$100       ; timer 3? (bit 8)
 	bnez  $v0,.timer3irq
-	eret
+	jmp   ERETx2
 .timer3irq:
 	ldi		$t2,#1							; assume timer3, select timer 3 access
 	stb		$t2,VIA_PCR+1[$t1]
@@ -159,7 +159,7 @@ ViaIRQ:
 	stt		$t2,switchflag
 ;	call  FMTK_SchedulerIRQ
 .0003:
-	eret
+	jmp   ERETx2
 	; reset countdown to clear interrupt
 .timer2irq:
 	ldi   $t2,#$004C4B40      ; divider value for 10 Hz (100 ms)

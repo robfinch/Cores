@@ -77,7 +77,7 @@
 `include "fp/fpConfig.sv"
 
 module friscv_wb(rst_i, hartid_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, 
-	cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i
+	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i
 	);
 parameter WID = 32;
 parameter FPWID = 32;
@@ -85,14 +85,15 @@ parameter RSTPC = 32'hFFFC0100;
 input rst_i;
 input [31:0] hartid_i;
 input clk_i;
-input wc_clk_i;
+input wc_clk_i;             // wall clock timing input
 input nmi_i;
 input irq_i;
 input [7:0] cause_i;
-output reg vpa_o;
+output reg vpa_o;           // valid program address
 output cyc_o;
 output reg stb_o;
 input ack_i;
+input err_i;
 output reg we_o;
 output reg [3:0] sel_o;
 output reg [31:0] adr_o;
@@ -110,7 +111,7 @@ reg lcyc;						// linear cycle
 reg [31:0] ladr;		// linear address
 
 // Non visible registers
-reg MachineMode;
+wire MachineMode, UserMode;
 reg [31:0] ir;			// instruction register
 reg [31:0] upc;			// user mode pc
 reg [31:0] spc;			// system mode pc
@@ -118,7 +119,6 @@ reg [4:0] Rd, Rs1, Rs2, Rs3;
 reg [WID-1:0] ia, ib, ic;
 reg [FPWID-1:0] fa, fb, fc;
 reg [WID-1:0] imm, res;
-reg [WID-1:0] displacement;				// branch displacement
 // Decoding
 wire [6:0] opcode = ir[6:0];
 wire [2:0] funct3 = ir[14:12];
@@ -126,13 +126,14 @@ wire [4:0] funct5 = ir[31:27];
 wire [6:0] funct7 = ir[31:25];
 wire [2:0] rm3 = ir[14:12];
 
-reg [WID-1:0] iregfile [0:63];		// integer / system register file
+reg [1:0] crs;
+reg [WID-1:0] iregfile [0:127];		// integer / system / interrupt register file
 reg [WID-1:0] sregfile [0:15];		// segment registers
 reg [3:0] ASID;
 reg wrpagemap;
 wire [12:0] pagemap_ndx;
 wire [8:0] pagemapoa, pagemapo;
-wire [12:0] pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
+wire [12:0] pagemapa;
 PagemapRam pagemap (
   .clka(clk_g),
   .ena(1'b1),
@@ -147,7 +148,7 @@ PagemapRam pagemap (
   .dinb(9'h00),
   .doutb(pagemapo)
 );
-reg palloc,pfree,pfreeall;
+reg palloc,pfree,pfreeall,pstat;
 wire pdone;
 wire [8:0] pam_pageo;
 PAM upam1 (
@@ -156,8 +157,10 @@ PAM upam1 (
 	.alloc_i(palloc),
 	.free_i(pfree),
 	.freeall_i(pfreeall),
-	.pageno_i(ia[8:0]),
+	.stat_i(pstat),
+	.pageno_i(ia[14:0]),
 	.pageno_o(pam_pageo),
+	.val_i(ib[1:0]),
 	.done(pdone)
 );
 reg decto, setto, getto;
@@ -194,25 +197,29 @@ ReadyList url1
 );
 
 reg [FPWID-1:0] fregfile [0:31];		// floating-point register file
+reg [255:0] gcie;
 reg [31:0] pc;			// generic program counter
 reg [31:0] ipc;			// pc value at instruction
 reg [2:0] rm;
 reg wrirf, wrfrf;
-wire [WID-1:0] irfoa = iregfile[{regset[1],Rs1}];
-wire [WID-1:0] irfob = iregfile[{regset[2],Rs2}];
-wire [WID-1:0] irfoc = iregfile[{regset[3],Rs3}];
+reg [1:0] Rs1x, Rs2x, Rs3x, Rdx;
+wire [WID-1:0] irfoa = iregfile[{Rs1x,Rs1}];
+wire [WID-1:0] irfob = iregfile[{Rs2x,Rs2}];
+wire [WID-1:0] irfoc = iregfile[{Rs3x,Rs3}];
+assign pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
 wire [FPWID-1:0] frfoa = fregfile[Rs1];
 wire [FPWID-1:0] frfob = fregfile[Rs2];
 wire [FPWID-1:0] frfoc = fregfile[Rs3];
 always @(posedge clk_i)
 if (wrirf && state==WRITEBACK)
-	iregfile[{regset[0],Rd}] <= res[WID-1:0];
+	iregfile[{Rdx,Rd}] <= res[WID-1:0];
 always @(posedge clk_i)
 if (wrfrf && state==WRITEBACK)
 	fregfile[Rd] <= res;
 reg illegal_insn;
 
 // CSRs
+reg [31:0] uip;     // user interrupt pending
 reg [3:0] regset;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
@@ -229,18 +236,23 @@ reg [31:0] mimpid = 32'h01108000;
 reg [31:0] mcause;
 reg [31:0] mstatus;
 reg [31:0] mtvec = 32'hFFFC0000;
-reg [31:0] mie;
+reg [31:0] mie, uie, uip;
 reg [31:0] mscratch;
 reg [31:0] mbadaddr;
+reg [31:0] usema;
 wire [31:0] mip;
-reg msip;
+reg msip, ugip;
 assign mip[31:8] = 24'h0;
+assign mip[7] = 1'b0;
 assign mip[6:4] = 3'b0;
 assign mip[3] = msip;
-assign mip[2:0] = 3'b0;
+assign mip[2:1] = 2'b0;
+assign mip[0] = ugip;
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 wire ie = mstatus[0];
+assign MachineMode = mstatus[2:1]==2'b11;
+assign UserMode = mstatus[2:1]==2'b00;
 
 function [7:0] fnSelect;
 input [6:0] op6;
@@ -284,7 +296,7 @@ default:	fnSelect = 8'h00;
 endcase
 endfunction
 
-wire [31:0] ea = ia + imm;
+reg [31:0] ea;
 wire [3:0] segsel = ea[31:28];
 reg [63:0] dati;
 reg [31:0] datiH;
@@ -314,6 +326,9 @@ parameter REGFETCH2 = 5'd18;
 parameter MEMORY3 = 5'd19;
 parameter MEMORY4 = 5'd20;
 parameter TMO = 5'd21;
+parameter NSIMM = 5'd22;
+parameter NSIMM2 = 5'd23;
+parameter REGFETCH3 = 5'd24;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -486,7 +501,6 @@ if (rst_i) begin
 	pc <= RSTPC;
 	mepc <= 32'hFFFC0200;
 	mtvec <= 32'hFFFC0000;
-	MachineMode <= 1'b1;
 	wrirf <= 1'b0;
 	wrfrf <= 1'b0;
 	// Reset bus
@@ -502,13 +516,15 @@ if (rst_i) begin
 	ld_time <= 1'b0;
 	wc_times <= 1'b0;
 	wc_time_irq_clr <= 6'h3F;
-	mstatus <= 6'b001110;
+	mstatus <= 9'b001001110;
 	nmif <= 1'b0;
 	ldd <= 1'b0;
 	wrpagemap <= 1'b0;
 	palloc <= 1'b0;
 	pfree <= 1'b0;
 	pfreeall <= 1'b0;
+	pstat <= 1'b0;
+	crs <= 2'b01;
 	regset <= 4'hF;
 	setto <= 1'b0;
 	getto <= 1'b0;
@@ -530,6 +546,7 @@ if (wc_time_irq==1'b0)
 palloc <= 1'b0;
 pfree <= 1'b0;
 pfreeall <= 1'b0;
+pstat <= 1'b0;
 
 if (MachineMode)
 	adr_o <= ladr;
@@ -548,6 +565,10 @@ case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 IFETCH:
 	begin
+	  Rdx  <= (regset[0] ? 2'b00 : crs);
+	  Rs1x <= (regset[1] ? 2'b00 : crs);
+	  Rs2x <= (regset[2] ? 2'b00 : crs);
+	  Rs3x <= (regset[3] ? 2'b00 : crs);
 		illegal_insn <= 1'b1;
 		ipc <= pc;
 		wrirf <= 1'b0;
@@ -561,43 +582,25 @@ IFETCH:
 		if (nmif) begin
 			nmif <= 1'b0;
 			lcyc <= LOW;
-			mcause[31] <= 1'b1;
-			mcause[7:0] <= 8'd254;
-			MachineMode <= 1'b1;
-			mepc <= pc;
+			tException(32'h800000FE,pc);
 			pc <= mtvec + 8'hFC;
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			state <= IFETCH;
 		end
  		else if (irq_i & ie) begin
 			lcyc <= LOW;
-			mcause[31] <= 1'b1;
-			mcause[7:0] <= cause_i;
-			MachineMode <= 1'b1;
-			mepc <= pc;
-			pc <= mtvec + {mstatus[2:1],6'h00};
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			state <= IFETCH;
+			tException(32'h80000000|cause_i,pc);
 		end
 		else if (mip[7] & mie[7] & ie) begin
 			lcyc <= LOW;
-			mcause[31] <= 1'b1;
-			mcause[7:0] <= 8'h01;	// timer IRQ
-			MachineMode <= 1'b1;
-			mepc <= pc;
-			pc <= mtvec + {mstatus[2:1],6'h00};
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			state <= IFETCH;
+			tException(32'h80000001,pc);  // timer IRQ
 		end
 		else if (mip[3] & mie[3] & ie) begin
 			lcyc <= LOW;
-			mcause[31] <= 1'b1;
-			mcause[7:0] <= 8'h02;	// software IRQ
-			MachineMode <= 1'b1;
-			mepc <= pc;
-			pc <= mtvec + {mstatus[2:1],6'h00};
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			state <= IFETCH;
+			tException(32'h80000002, pc); // software IRQ
+		end
+		else if (uip[0] && gcie[ASID] && ie) begin
+			lcyc <= LOW;
+			tException(32'h80000003, pc); // garbage collect IRQ
+			uip[0] <= 1'b0;
 		end
 		else
 			pc <= pc + 3'd4;
@@ -621,21 +624,14 @@ IFETCH2:
 DECODE:
 	begin
 		state <= RFETCH;
-		if (ir==`PFI && irq_i != 4'h0) begin
-			mcause[31] <= 1'b1;
-			mcause[3:0] <= irq_i;
-			MachineMode <= 1'b1;
-			mepc <= ipc;
-			pc <= mtvec + {mstatus[2:1],6'h00};
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			state <= IFETCH;
-		end
+		if (ir==`PFI && irq_i != 1'b0)
+		  tException(32'h80000000|cause_i,ipc);
 		// Set some sensible decode defaults
 		Rs1 <= ir[19:15];
 		Rs2 <= ir[24:20];
 		Rs3 <= ir[31:27];
 		Rd <= 5'd0;
-		displacement <= 32'd0;
+		imm <= 32'd0;
 		// Override defaults
 		case(opcode)
 		`AUIPC,`LUI:
@@ -698,6 +694,12 @@ DECODE:
 						default:	;
 						endcase
 					end
+			  3'd3: 
+			    begin
+			      wrirf <= 1'b1;
+				    imm <= {{20{ir[31]}},ir[31:20]};
+			    end
+			  default:  ;
 				endcase
 			end
 		7'd19:
@@ -734,7 +736,7 @@ DECODE:
 					wrfrf <= 1'b1;
 			end
 		`Bcc:
-			displacement <= {{WID-13{ir[31]}},ir[31],ir[7],ir[30:25],ir[11:8],1'b0};
+			imm <= {{WID-13{ir[31]}},ir[31],ir[7],ir[30:25],ir[11:8],1'b0};
 		endcase
 	end
 
@@ -759,9 +761,36 @@ RFETCH:
 		endcase
 		fb <= Rs2==5'd0 ? {FPWID{1'd0}} : frfob;
 		fc <= Rs3==5'd0 ? {FPWID{1'd0}} : frfoc;
+    if (imm[11:0]==12'h800)
+      state <= NSIMM;
 	end
 REGFETCH2:
-	state <= EXECUTE;
+	goto (REGFETCH3);
+REGFETCH3:
+  begin
+    ea <= ia + imm;
+    goto (EXECUTE);
+  end
+
+NSIMM:
+  begin
+		lcyc <= HIGH;
+		stb_o <= HIGH;
+		sel_o <= 4'hF;
+		tPC();
+  	pc <= pc + 3'd4;
+		state <= NSIMM2;
+  end
+NSIMM2:
+	if (ack_i) begin
+		vpa_o <= LOW;
+		lcyc <= LOW;
+		stb_o <= LOW;
+		sel_o <= 4'h0;
+		tPC();
+		imm <= dat_i[31:0];
+		state <= REGFETCH2;
+	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute stage
@@ -795,6 +824,12 @@ EXECUTE:
 				7'd6:
 					begin
 						pfreeall <= 1'b1;
+						state <= PAM;
+						illegal_insn <= 1'b0;
+					end
+				7'd7:
+					begin
+						pstat <= 1'b1;
 						state <= PAM;
 						illegal_insn <= 1'b0;
 					end
@@ -839,17 +874,34 @@ EXECUTE:
 						state <= TMO;
 						illegal_insn <= 1'b0;
 					end
+				7'd32:
+				  begin
+	          res <= ia - ib;
+			      if (UserMode)
+  		        gcie[ASID] <= 1'b0;
+	          illegal_insn <= 1'b0;
+	        end
 				default:	;
 				endcase
+		  3'd3:
+		    begin
+          res <= ia + imm;
+		      if (UserMode)
+		        gcie[ASID] <= 1'b0;
+		      illegal_insn <= 1'b0;
+		    end
 			default:	;
-			endcase
+			endcase // funct3
 		7'd51:
 			case(funct3)
 			3'd0:
 				case(funct7)
 				7'd0:		begin res <= ia + ib; illegal_insn <= 1'b0; end
 				7'd1:		begin state <= MUL1; mathCnt <= 8'd0; illegal_insn <= 1'b0; end
-				7'd32:	begin res <= ia - ib; illegal_insn <= 1'b0; end
+				7'd32:	begin
+				          res <= ia - ib;
+				          illegal_insn <= 1'b0;
+				        end
 				default:	;
 				endcase
 			3'd1:
@@ -905,7 +957,10 @@ EXECUTE:
 			endcase	
 		7'd19:
 			case(funct3)
-			3'd0:	begin res <= ia + imm; illegal_insn <= 1'b0; end
+			3'd0:	begin
+			        res <= ia + imm;
+			        illegal_insn <= 1'b0;
+			      end
 			3'd1:
 				case(funct7)
 				7'd0:	begin res <= ia << imm[4:0]; illegal_insn <= 1'b0; end
@@ -989,21 +1044,25 @@ EXECUTE:
 				res <= pc;
 				pc <= ipc + imm;
 				pc[0] <= 1'b0;
+//				if (UserMode)
+//				  mie[0] <= 1'b0;
 			end
 		`JALR:
 			begin
 				res <= pc;
 				pc <= ia + imm;
 				pc[0] <= 1'b0;
+//				if (UserMode)
+//				  mie[0] <= 1'b0;
 			end
 		`Bcc:
 			case(funct3)
-			3'd0:	begin if (ia==ib) pc <= ipc + displacement; illegal_insn <= 1'b0; end
-			3'd1: begin if (ia!=ib) pc <= ipc + displacement; illegal_insn <= 1'b0; end
-			3'd4:	begin if ($signed(ia) < $signed(ib)) pc <= ipc + displacement; illegal_insn <= 1'b0; end
-			3'd5:	begin if ($signed(ia) >= $signed(ib)) pc <= ipc + displacement; illegal_insn <= 1'b0; end
-			3'd6:	begin if (ia < ib) pc <= ipc + displacement; illegal_insn <= 1'b0; end
-			3'd7:	begin if (ia >= ib) pc <= ipc + displacement; illegal_insn <= 1'b0; end
+			3'd0:	begin if (ia==ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
+			3'd1: begin if (ia!=ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
+			3'd4:	begin if ($signed(ia) < $signed(ib)) pc <= ipc + imm; illegal_insn <= 1'b0; end
+			3'd5:	begin if ($signed(ia) >= $signed(ib)) pc <= ipc + imm; illegal_insn <= 1'b0; end
+			3'd6:	begin if (ia < ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
+			3'd7:	begin if (ia >= ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
 			default:	;
 			endcase
 		`LOAD:
@@ -1054,32 +1113,19 @@ EXECUTE:
 			begin
 				case(ir)
 				`EBREAK:
-					begin
-						MachineMode <= 1'b1;
-						pc <= mtvec + {mstatus[2:1],6'h00};
-						mepc <= pc;
-						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-						mcause <= 4'h3;
-						illegal_insn <= 1'b0;
-						state <= IFETCH;
-						instret <= instret + 2'd1;
-					end
+					if (crs != 2'b11)
+					  tException(4'd3, pc);
 				`ECALL:
-					begin
-						MachineMode <= 1'b1;
-						pc <= mtvec + {mstatus[2:1],6'h00};
-						mepc <= pc;
-						mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-						mcause <= 4'h8 + mstatus[2:1];
-						illegal_insn <= 1'b0;
-						state <= IFETCH;
-						instret <= instret + 2'd1;
-					end
+					if (crs != 2'b11)
+					  tException(4'h8 + mstatus[2:1],pc);
 				`ERET:
 					if (MachineMode) begin
-						MachineMode <= 1'b0;
+      			if (crs!=2'b00)
+      			  crs <= crs - 2'd1;
+      			if (crs==2'b01)
+				      regset <= 4'h0;
 						pc <= mepc;
-						mstatus[5:0] <= {2'b00,1'b1,mstatus[5:3]};
+						mstatus[8:0] <= {2'b00,1'b1,mstatus[8:3]};
 						illegal_insn <= 1'b0;
 						state <= IFETCH;
 						instret <= instret + 2'd1;
@@ -1094,6 +1140,8 @@ EXECUTE:
 						12'h001:	begin res <= fscsr[4:0]; illegal_insn <= 1'b0; end
 						12'h002:	begin res <= rm; illegal_insn <= 1'b0; end
 						12'h003:	begin res <= fscsr; illegal_insn <= 1'b0; end
+						12'h004:	begin res <= gcie[ASID]; illegal_insn <= 1'b0; end
+						12'h044:	begin res <= uip[0]; illegal_insn <= 1'b0; end
 						12'h181:	begin res <= ASID; illegal_insn <= 1'b0; end
 						12'h300:	begin res <= mstatus; illegal_insn <= 1'b0; end
 						12'h301:	begin res <= mtvec; illegal_insn <= 1'b0; end
@@ -1104,7 +1152,8 @@ EXECUTE:
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
-						12'h800:	begin res <= regset; illegal_insn <= 1'b0; end
+						12'h780:	begin res <= {crs,regset}; illegal_insn <= 1'b0; end
+//						12'h801:  begin res <= usema; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
 						12'hC01,12'h701,12'hB01:	begin res <= wc_times[31: 0]; illegal_insn <= 1'b0; end
@@ -1114,6 +1163,7 @@ EXECUTE:
 						12'hF00:	begin res <= mcpuid; illegal_insn <= 1'b0; end	// cpu description
 						12'hF01:	begin res <= mimpid; illegal_insn <= 1'b0; end // implmentation id
 						12'hF10:	begin res <= hartid_i; illegal_insn <= 1'b0; end
+//						12'hFC1:  begin res <= usema; illegal_insn <= 1'b0; end
 						default:	;
 						endcase
 					default:	;
@@ -1207,11 +1257,11 @@ MEMORY:
 			case(opcode)
 			`LOAD:
 				case(funct3)
-				3'd0:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
-				3'd1: begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
-				3'd2:	begin res <= dat_i; illegal_insn <= 1'b0; end
-				3'd4:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
-				3'd5:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
+				`LB:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
+				`LH:  begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
+				`LW:	begin res <= dat_i; illegal_insn <= 1'b0; end
+				`LBU:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
+				`LHU:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			`LOADF:	begin res <= dat_i; illegal_insn <= 1'b0; end
@@ -1405,14 +1455,8 @@ WRITEBACK:
 		insrdy <= 1'b0;
 		rmvrdy <= 1'b0;
 		getrdy <= 1'b0;
-		if (illegal_insn) begin
-			MachineMode <= 1'b1;
-			pc <= mtvec + {mstatus[2:1],6'h00};
-			mepc <= ipc;
-			mstatus[5:0] <= {mstatus[2:0],2'b11,1'b0};
-			mcause <= 4'h2;
-			illegal_insn <= 1'b0;
-		end
+		if (illegal_insn)
+		  tException(32'd2, ipc);
 		set_wfi <= 1'b0;
 		if (!illegal_insn && opcode==7'd13) begin
 			case(funct3)
@@ -1447,6 +1491,9 @@ WRITEBACK:
 										fnv <= ia[4];
 										rm <= ia[7:5];
 									end
+				12'h004:	gcie[ASID] <= ia[0];
+			  12'h044:  uip[0] <= ia[0];
+//				12'h044:	begin if (UserMode) uip <= ia; end
 				12'h181:	begin if (MachineMode) ASID <= ia; end
 				12'h300:	begin if (MachineMode) mstatus <= ia; end
 				12'h301:	begin if (MachineMode) mtvec <= {ia[31:2],2'b0}; end
@@ -1457,11 +1504,13 @@ WRITEBACK:
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
-				12'h800:	begin if (MachineMode) regset <= ia[3:0]; end
+				12'h780:	begin if (MachineMode) begin regset <= ia[3:0]; crs <= ia[5:4]; end end
+//				12'h801:  begin if (UserMode) usema <= ia; end
 				default:	;
 				endcase
 			3'd2,3'd6:
 				case({funct7,Rs2})
+				// No setting CSR $000
 				12'h001:	begin
 										if (ia[0]) fnx <= 1'b1;
 										if (ia[1]) fuf <= 1'b1;
@@ -1478,9 +1527,17 @@ WRITEBACK:
 										if (ia[4]) fnv <= 1'b1;
 										rm <= rm | ia[7:5];
 									end
+			  12'h004:  gcie[ASID] <= gcie[ASID] | ia[0];
+			  12'h044:  uip[0] <= uip[0] | ia[0];
+//				12'h044:	if (UserMode) uip <= uip | ia;
+			  12'h300:  begin
+			              if (MachineMode)
+			                mstatus <= mstatus | ia;
+			            end
 				12'h304:	if (MachineMode) mie <= mie | ia;
 				12'h344:	if (MachineMode) msip <= msip | ia[3];
-				12'h800:	if (MachineMode) regset <= regset | ia[3:0];
+				12'h780:	if (MachineMode) regset <= regset | ia[3:0];
+//				12'h801:  if (UserMode) usema <= usema | ia;
 				default: ;
 				endcase
 			3'd3,3'd7:
@@ -1501,9 +1558,16 @@ WRITEBACK:
 										if (ia[4]) fnv <= 1'b0;
 										rm <= rm & ~ia[7:5];
 									end
+			  12'h004:  gcie[ASID] <= gcie[ASID] & ~ia[0];
+			  12'h044:  uip[0] <= uip[0] & ~ia[0];
+//				12'h044:	if (UserMode) uip <= uip & ~ia;
+				// For the status register interrupts are allowed to be enabled from
+				// user mode. Interrupts cannot be disabled from user mode.
+				12'h300:  if (MachineMode) mstatus <= mstatus & ~ia;
 				12'h304:	if (MachineMode) mie <= mie & ~ia;
 				12'h344:	if (MachineMode) msip <= msip & ~ia[3];
-				12'h800:	if (MachineMode) regset <= regset & ~ia[3:0];
+				12'h780:	if (MachineMode) regset <= regset & ~ia[3:0];
+//				12'h801:  if (UserMode) usema <= usema & ~ia;
 				default: ;
 				endcase
 			default:	;
@@ -1530,6 +1594,30 @@ begin
 		ladr <= pc;
 	else
 		ladr <= pc[29:0] + {sregfile[{2'b11,pc[31:30]}][WID-1:4],10'd0};
+end
+endtask
+
+task tException;
+input [31:0] cse;
+input [31:0] tpc;
+begin
+	pc <= mtvec + {mstatus[2:1],6'h00};
+	mepc <= tpc;
+	mstatus[8:0] <= {mstatus[5:0],2'b11,1'b0};
+	mcause <= cse;
+	illegal_insn <= 1'b0;
+	instret <= instret + 2'd1;
+	if (crs != 2'b11)
+    crs <= crs + 2'd1;
+	regset <= 4'hF;
+	goto (IFETCH);
+end
+endtask
+
+task goto;
+input [5:0] nst;
+begin
+  state <= nst;
 end
 endtask
 
