@@ -80,6 +80,10 @@ A CSR ($780) is used. The upper bits of the register file index need to be suppl
 ## Software Impact
 No changes to the existing instruction set are required. Software may need to be altered to make use of the CSR.
 
+## Gotcha's
+Note that while there may be multiple sets of general purpose registers there are not multiple sets of other CSR's. These represent state that must also be saved and restored when switching processor modes.
+In particular the MEPC register must be saved and restored if nested exceptions are supported (interrupt machine mode code).
+
 ## Example Test System
 A test system (CS01) has been constructed implementing the register set selection CSR. This test system has four registers sets, one user mode register set and three machine mode register sets. While logically independent all four register sets are part of the same memory.
 When an exception or interrupt occurs, machine mode is activated and the an internal register set selection is incremented. When a exception return instruction is executed the internal register set selection is decremented.
