@@ -36,7 +36,7 @@ ERETx:
 	mov		$v1,$v1							; move return values to user registers
 	mov		$v0,$v0
 	eret											; return (auto selects user registers)
-'''
+```
 
 Another frequent operating system requirement is to save the user state. This becomes easy to do with regset selection controlled by a CSR.
 
@@ -59,7 +59,7 @@ SwapContext:
 	sw		$x5,20[$a0]
 	sw		$x6,24[$a0]
 	sw		$x7,28[$a0]
-'''
+```
 
 ## CSR Format
 |-----------------------|-----|-----|-----|----|
