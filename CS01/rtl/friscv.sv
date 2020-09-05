@@ -525,7 +525,7 @@ if (rst_i) begin
 	pfreeall <= 1'b0;
 	pstat <= 1'b0;
 	crs <= 2'b01;
-	regset <= 4'hF;
+	regset <= 4'h0;
 	setto <= 1'b0;
 	getto <= 1'b0;
 	decto <= 1'b0;
@@ -1123,7 +1123,7 @@ EXECUTE:
       			if (crs!=2'b00)
       			  crs <= crs - 2'd1;
       			if (crs==2'b01)
-				      regset <= 4'h0;
+				      regset <= 4'hF;
 						pc <= mepc;
 						mstatus[8:0] <= {2'b00,1'b1,mstatus[8:3]};
 						illegal_insn <= 1'b0;
@@ -1609,7 +1609,7 @@ begin
 	instret <= instret + 2'd1;
 	if (crs != 2'b11)
     crs <= crs + 2'd1;
-	regset <= 4'hF;
+	regset <= 4'h0;
 	goto (IFETCH);
 end
 endtask
