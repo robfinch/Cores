@@ -62,11 +62,9 @@ SwapContext:
 ```
 
 ## CSR Format
-|-----------------------|-----|-----|-----|----|
 | XLEN - 1            4 |  3  |  2  |  1  |  0 |
 |-----------------------|-----|-----|-----|----|
 | XLEN-1 to 4 reserved  | Rs3 | Rs2 | Rs1 | Rd |
-|-----------------------|-----|-----|-----|----|
 
 ## Operation
 If the bit corresponding to the register field of a instruction is set in the CSR then that register field refers to the user register file.
@@ -83,8 +81,9 @@ A CSR ($780) is used. The upper bits of the register file index need to be suppl
 No changes to the existing instruction set are required. Software may need to be altered to make use of the CSR.
 
 ## Example Test System
-A test system has been constructed implementing the register set selection CSR. This test system has four registers sets, one user mode register set and three machine mode register sets. While logically independent all four register sets are part of the same memory.
+A test system (CS01) has been constructed implementing the register set selection CSR. This test system has four registers sets, one user mode register set and three machine mode register sets. While logically independent all four register sets are part of the same memory.
 When an exception or interrupt occurs, machine mode is activated and the an internal register set selection is incremented. When a exception return instruction is executed the internal register set selection is decremented.
 This system setup allows an interrupt to have it's own dedicated register file for high-speed interrupt processing, while allowing interrupts to occur while processing in the machine mode.
 User mode registers are made accessible to the operating system running in machine mode through the use of the CSR. Interrupts do not access user or operating system registers.
 
+The CS01 files may be found at: https://github.com/robfinch/Cores/tree/master/CS01
