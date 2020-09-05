@@ -22,7 +22,7 @@ We propose:
 
 ## Rationale
 Many designs offer ways to move values between register sets. This is often done with dedicated move instructions. Another approach is to have a subset of registers visible to multiple operating modes.
-Rather than add custom move instructions to the instruction set, what it proposed here is to use a CSR to control the selected register set for <italic>all</italic> instructions.
+Rather than add custom move instructions to the instruction set, what it proposed here is to use a CSR to control the selected register set for *all* instructions.
 Using a CSR register has greater flexibility than custom move instructions or register subset selections. For instance by switching the register set using a CSR, load and store operations may be performed against an alternate register set.
 Automatic register set selection occurring during mode switches adds a safety factor to system operation. When an operating mode is activated the registers should be selected as expected. If for some reason the processor mode is accidently switched to user mode from machine mode, only user mode registers should be accessible.
 
@@ -30,14 +30,17 @@ Automatic register set selection occurring during mode switches adds a safety fa
 Operating system calls often need to transfer data between user and machine mode. Returning a value requires moving values between register sets.
 This can be done by setting a selection bit in a CSR.
 
+```r5a
 ERETx:
 	csrrs	$x0,#$780,#1				; select user regfile for destination
 	mov		$v1,$v1							; move return values to user registers
 	mov		$v0,$v0
 	eret											; return (auto selects user registers)
+'''
 
 Another frequent operating system requirement is to save the user state. This becomes easy to do with regset selection controlled by a CSR.
 
+```r5a
 ;------------------------------------------------------------------------------
 ; Swap from outgoing context to incoming context.
 ;
@@ -56,9 +59,11 @@ SwapContext:
 	sw		$x5,20[$a0]
 	sw		$x6,24[$a0]
 	sw		$x7,28[$a0]
+'''
 
 ## CSR Format
-  XLEN - 1            4    3     2     1     0
+|-----------------------|-----|-----|-----|----|
+| XLEN - 1            4 |  3  |  2  |  1  |  0 |
 |-----------------------|-----|-----|-----|----|
 | XLEN-1 to 4 reserved  | Rs3 | Rs2 | Rs1 | Rd |
 |-----------------------|-----|-----|-----|----|
