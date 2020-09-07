@@ -158,6 +158,22 @@ namespace FriscCoreGen
 				FilterPos("FMA");
 			else
 				FilterNeg("FMA");
+			if (checkBox23.Checked)
+				FilterPos("PGMAP");
+			else
+				FilterNeg("PGMAP");
+			if (checkBox24.Checked)
+				FilterPos("NSIMM");
+			else
+				FilterNeg("NSIMM");
+			if (checkBox25.Checked)
+				FilterPos("PAM");
+			else
+				FilterNeg("PAM");
+			if (checkBox26.Checked)
+				FilterPos("SEG");
+			else
+				FilterNeg("SEG");
 			cha = new char[1];
 			cha[0] = ',';
 			Mops = MCap.Split(cha);
@@ -257,6 +273,11 @@ namespace FriscCoreGen
 				MMcap = fm.cap;
 				MMcapn = fm.capn;
 			}
+		}
+
+		private void checkBox22_CheckedChanged(object sender, EventArgs e)
+		{
+
 		}
 
 		private void checkBox19_CheckedChanged(object sender, EventArgs e)

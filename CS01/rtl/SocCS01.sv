@@ -63,6 +63,7 @@ wire clk50;
 wire clk;						// system clock (50MHz)
 wire clk14p7;				// uart clock 14.746 MHz
 wire clk20;					// 20MHz for wall clock time
+wire cpuclk;
 wire locked;				// clock generation is locked
 wire [1:0] btn_db;	// debounced button output
 
@@ -115,6 +116,7 @@ cs01clkgen ucg1
 assign rst = !locked;
 assign irq = uart_irq|via_irq;
 assign clk = clk50;
+assign cpuclk = clk50;
 
 // -----------------------------------------------------------------------------
 // Circuit select logic
@@ -167,7 +169,7 @@ always @(posedge clk)
 assign rom_dato = rommem[adrr[14:2]];
 ack_gen #(.READ_STAGES(3), .WRITE_STAGES(3)) uag1
 (
- .clk_i(clk),
+ .clk_i(cpuclk),
  .ce_i(1'b1),
  .i(cs_rom),
  .we_i(cs_rom),
@@ -244,24 +246,24 @@ cs01memInterface umi1
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
-
+/*
 semamem usema1
 (
-	.clk(clk),
+	.clk(cpuclk),
 	.cs(cs_sema),
 	.wr(we),
 	.ad(adr[9:0]),
 	.i(dat_o[7:0]),
 	.o(sema_dato)
 );
-
+*/
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
 via6522 uvia1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpuclk),
 	.irq_o(via_irq),
 	.cs_i(cs_via),
 	.cyc_i(cyc),
@@ -289,7 +291,7 @@ via6522 uvia1
 uart6551 uuart1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpuclk),
 	.cs_i(cs_uart),
 	.irq_o(uart_irq),
 	.cyc_i(cyc),
@@ -319,10 +321,10 @@ uart6551 uuart1
 // CPU
 // -----------------------------------------------------------------------------
 
-always @(posedge clk)
+always @(posedge cpuclk)
 	ack <= ack_rom|ack_mem|ack_via|ack_uart|cs_sema;
 
-always @(posedge clk)
+always @(posedge cpuclk)
 casez({cs_rom,cs_mem,cs_via,cs_uart,cs_sema})
 5'b1????:	dat_i <= rom_dato;
 5'b01???:	dat_i <= mem_dato;
@@ -335,7 +337,7 @@ endcase
 friscv_wb ucpu1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpuclk),
 	.wc_clk_i(clk20),
 	.irq_i(uart_irq|via_irq),
 	.cause_i(uart_irq ? 8'd37 : via_irq ? 8'd47 : 8'd00),
@@ -359,7 +361,7 @@ CS01_ILA uila1 (
 	.probe3(ucpu1.we_o), // input wire [0:0]  probe3 
 	.probe4(ucpu1.adr_o), // input wire [31:0]  probe4 
 	.probe5(ucpu1.dat_o), // input wire [31:0]  probe5
-	.probe6(ucpu1.mepc)
+	.probe6({ucpu1.crs,ucpu1.regset})
 );
 
 

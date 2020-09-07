@@ -38,6 +38,7 @@ It is assumed for a smaller system that upper address bits are not used for addr
 
 ## Base Register Format
 | Base Address 28 bits |  RWX  |
+|----------------------|-------|
 The low order four bits of the base register are reserved for access rights bits. Supporting memory access rights is optional.
 * R: 1=segment readable
 * W: 1 = segment writeable
@@ -45,6 +46,7 @@ The low order four bits of the base register are reserved for access rights bits
 
 ## Linear Address Generation
 The base address value contained in the upper 28 bits of a base register is shifted left 10 bits before being added to the virtual address. This gives potentially a 38-bit address space.
+The address shift of 10 bits is determined to be the same size as a mapped page.
 Note there is no limit field. Access is limited by what is mapped into the base address range.
 
 ## The Page Map
@@ -76,6 +78,12 @@ The page mapping table is indexed by the ASID and the virtual page number to det
 
 ## The 1kB Page
 Many memory systems use a 4kB page size or larger. That size was not chosen here as the available memory is assumed to be small and a 4kB page size would result in too few pages of memory to support multiple tasks. A smaller page size results in less wasted space which is important with a small memory system. It’s a careful balance, an even smaller page size would waste less memory but would require a much larger page mapping ram.
+
+## Exceptions
+Unused page map entries should point to an unimplemented area of memory so that an access exception will be generated. It is assumed that an exception is generated for unimplemented regions of the address space.
+Alternately, one page of the memory space could be reserved as a general crash area if exceptions are not supported.
+Exceptions may be generated if the access rights specified in a base register don't match the type of access attempted.
+Since the mapping mechanism prevents access to unmapped memory areas an app may crash without affecting other apps.
 
 ## MVBASE
 mvbase atomically swaps the current value to Rd for a new value in Rs1 of the base register identified by Rs2.

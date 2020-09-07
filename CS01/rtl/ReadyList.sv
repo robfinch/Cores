@@ -33,6 +33,8 @@ parameter REMOVE3 = 4'd8;
 
 always @(posedge clk_i)
 if (rst_i) begin
+  in_readylist <= 16'h0;
+  headv <= 5'h0;
 	done_o <= 1'b1;
 	goto (IDLE);
 end
@@ -117,12 +119,15 @@ REMOVE1:
 	end
 REMOVE2:
 	begin
+	  if (nx==pv)
+	    headv[priority_i] <= 1'b0;
 		prv[ndx] <= pv;			// nxt->prev = tid->prev
 		ndx <= pv;
 		goto (REMOVE3);
 	end
 REMOVE3:
 	begin
+	  in_readylist[tid_i] <= 1'b0;
 		nxt[ndx] <= nx;			// prev->next = tid->next
 		if (tid_i==head[priority_i])
 			head[priority_i] <= nx;

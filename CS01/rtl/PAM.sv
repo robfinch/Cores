@@ -22,9 +22,12 @@
 //                                                                          
 // ============================================================================
 
-module PAM(rst, clk, alloc_i, free_i, freeall_i, pageno_i, pageno_o, done);
-parameter NWORD = 16;
-parameter BPW = 32;                  // bits per word in parallel
+module PAM(rst, clk, alloc_i, free_i, freeall_i, stat_i, pageno_i, val_i, pageno_o, done);
+parameter BPW = 32;                   // bits per word in parallel
+parameter RAMSIZE = 32768;            // sizeof block ram in bits
+parameter PAMSIZE = 512;
+localparam NWORD = RAMSIZE / BPW;     // sizeof block ram in bits / BPW
+localparam NPAM = PAMSIZE / BPW;
 parameter OSPAGEMAP = {BPW{1'b1}};
 parameter FULLWORD = {BPW{1'b1}};
 localparam LOGBPW = $clog2(BPW-1);
@@ -33,11 +36,14 @@ input clk;
 input alloc_i;
 input free_i;
 input freeall_i;
+input stat_i;
+input [1:0] val_i;
 input [$clog2(NWORD-1)-1+LOGBPW:0] pageno_i;
 output reg [$clog2(NWORD-1)-1+LOGBPW:0] pageno_o;
 output reg done;
 
 integer n;
+(* ram_style="block" *)
 reg [BPW-1:0] pam [0:NWORD-1];
 reg [3:0] state;
 reg [$clog2(NWORD-1)-1:0] wordno, curword;
@@ -55,6 +61,14 @@ parameter FREE1 = 4'd6;
 parameter FREE2 = 4'd7;
 parameter FREE3 = 4'd8;
 parameter RESET = 4'd9;
+parameter STAT1 = 4'd10;
+parameter STAT2 = 4'd11;
+parameter STAT3 = 4'd12;
+
+wire wr_pam = state==RESET || state==ALLOC4 || state==FREE3 || state==STAT3;
+wire [31:0] pamo;
+
+PAM_ram u1 (clk, wr_pam, wordno, map, wordno, pamo);
 
 always @(posedge clk)
 if (rst) begin
@@ -62,6 +76,9 @@ if (rst) begin
 	curword <= 4'd0;
 	wordno <= 4'd0;
 	srchcnt <= 4'd0;
+	// Force pages to always be allocated already
+	// First 32 pages allocated for the OS
+  map <= {BPW{1'b1}};
 	state <= RESET;
 end
 else begin
@@ -73,6 +90,7 @@ IDLE:
 		  curword <= 4'd0;
 			wordno <= 4'd0;
 			done <= 1'b0;
+			map <= {BPW{1'b1}};
 			goto (RESET);
 		end
 		else if (free_i) begin
@@ -87,14 +105,23 @@ IDLE:
 			done <= 1'b0;
 			goto (ALLOC1);
 		end
+		else if (stat_i) begin
+			wordno <= pageno_i[$clog2(NWORD-1)-1+LOGBPW:LOGBPW];
+			bitno <= pageno_i[LOGBPW-1:0];
+			done <= 1'b0;
+			goto (STAT1);
+	  end
 	end
 RESET:
 	begin
+		// Force last page allocated for system stack
+		map <= {BPW{1'b0}};
+		if (wordno==NPAM-2)
+			map[BPW-1] <= 1'b1;
 	  curword <= 2'd0;
-		pam[wordno] <= {BPW{1'b0}};
 		wordno <= wordno + 3'd1;
 		srchcnt <= srchcnt + 3'd1;
-		if (srchcnt==NWORD-1) begin
+		if (srchcnt==NPAM-1) begin
 			done <= 1'b1;
 			goto (IDLE);
 		end
@@ -102,14 +129,7 @@ RESET:
 
 ALLOC1:
 	begin
-		map <= pam[wordno];
-		// Force pages to always be allocated already
-		// First 32 pages allocated for the OS
-		if (wordno==4'd0)
-			map <= OSPAGEMAP;
-		// Force last page allocated for system stack
-		else if (wordno==NWORD-1)
-			map[BPW-1] <= 1'b1;
+		map <= pamo;
 		goto (ALLOC2);
 	end
 ALLOC2:
@@ -117,8 +137,10 @@ ALLOC2:
 		goto (ALLOC3);
 		if (map==FULLWORD) begin
 			wordno <= wordno + 2'd1;
+			if (wordno==NPAM-1)
+			  wordno <= 2'd0;
 			srchcnt <= srchcnt + 2'd1;
-			if (srchcnt==NWORD-1)
+			if (srchcnt==NPAM-1)
 				goto (ALLOC5);
 			else
 				goto (ALLOC1);
@@ -135,7 +157,6 @@ ALLOC3:
 ALLOC4:
 	begin
 	  curword <= wordno;
-		pam[wordno] <= map;
 		pageno_o <= {wordno,bitno};
 		done <= 1'b1;
 		goto (IDLE);
@@ -149,7 +170,7 @@ ALLOC5:
 
 FREE1:
 	begin
-		map <= pam[wordno];
+		map <= pamo;//pam[wordno];
 		goto(FREE2);
 	end
 FREE2:
@@ -159,10 +180,27 @@ FREE2:
 	end
 FREE3:
 	begin
-		pam[wordno] <= map;
 		done <= 1'b1;
 		goto (IDLE);
 	end
+	
+STAT1:
+  begin
+    map <= pamo;
+    goto (STAT2);
+  end
+STAT2:
+  begin
+    pageno_o <= map[bitno];
+    if (!val_i[1])
+      map[bitno] <= val_i[0];
+    goto (STAT3);
+  end
+STAT3:
+  begin
+    done <= 1'b1;
+    goto (IDLE);
+  end
 endcase
 	
 end
@@ -173,5 +211,26 @@ begin
 	state <= nst;
 end
 endtask
+
+endmodule
+
+module PAM_ram(clk, wr, wa, i, ra, o);
+input clk;
+input wr;
+input [9:0] wa;
+input [31:0] i;
+input [9:0] ra;
+output [31:0] o;
+
+(* ram_style="block" *)
+reg [31:0] mem [0:1023];
+reg [9:0] rra;
+
+always @(posedge clk)
+  if (wr)
+    mem [wa] <= i;
+always @(posedge clk)
+  rra <= ra;
+assign o = mem[rra];
 
 endmodule

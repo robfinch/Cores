@@ -52,8 +52,10 @@ parameter WR3 = 4'd4;
 parameter RWDONE = 4'd5;
 parameter RWNACK = 4'd6;
 parameter RD2 = 4'd7;
+parameter WR0 = 4'd8;
 reg [3:0] memCount;
 reg [31:0] memDat;
+reg [7:0] memDato;
 reg memT;		// tri-state for write
 reg [3:0] sel;
 
@@ -87,7 +89,7 @@ IDLE:
 			4'b?100:	begin memCount <= 4'd2;	MemAdr[1:0] <= 2'b10; sel <= {2'b0,sel_i[3:2]}; end
 			4'b1000:	begin memCount <= 4'd3; MemAdr[1:0] <= 2'b11; sel <= {3'b0,sel_i[3]}; end
 			endcase
-			state <= we_i ? WR1 : RD2;
+			state <= we_i ? WR0 : RD2;
 			if (!we_i)						// For a read cycle enable the ram's output drivers
 				RamOEn <= LOW;
 			else
@@ -108,7 +110,7 @@ RD1:
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
 		memCount <= memCount + 4'd1;
 		sel <= {1'b0,sel[3:1]};
-		if (sel[3:1]==3'b000)
+		if (sel[3:1]==3'b0)
 			state <= RWDONE;
 		else
 			state <= RD2;
@@ -117,6 +119,17 @@ RD1:
 RD2:
 	state <= RD1;
 
+WR0:
+  begin
+	  case(memCount[1:0])
+	  2'd0: memDato <= memDat[7:0];
+	  2'd1: memDato <= memDat[15:8];
+	  2'd2: memDato <= memDat[23:16];
+	  2'd3: memDato <= memDat[31:24];
+	  default:  ;
+	  endcase
+	  state <= WR1;
+  end
 	// For a write cycle begin by enabling the ram's write input.
 WR1:
 	begin
@@ -130,20 +143,18 @@ WR2:
 		RamWEn <= HIGH;
 		state <= WR3;
 	end
-	// After another cycle, shift over the data to store to the ram.
-	// increment the memory address and memory count.
+	// After another cycle increment the memory address and memory count.
 	// If the count expired goto the done state, otherwise go back to the first
 	// write state.
 WR3:
 	begin
-		memDat <= {8'h00,memDat[31:8]};
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		sel <= {1'b0,sel[3:1]};
 		memCount <= memCount + 2'd1;
-		if (sel[3:1]==3'b000)
+		sel <= {1'b0,sel[3:1]};
+		if (sel[3:1]==3'b0)
 			state <= RWDONE;
 		else
-			state <= WR1;
+			state <= WR0;
 	end
 	// Here a read/write is done. Signal the processor.
 RWDONE:
@@ -165,6 +176,6 @@ endcase
 
 // Assign the memory bus tri-state unless a write is occuring.
 // Reading the ram will override the tri-state drivers.
-assign MemDB = memT ? 8'bz : memDat[7:0];
+assign MemDB = memT ? 8'bz : memDato;
 
 endmodule
