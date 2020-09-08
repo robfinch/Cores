@@ -245,7 +245,7 @@ SerialGetChar:
 ; to send an XON here.
 ;
 ; Stack Space:
-;		3 words
+;		2 words
 ; Parameters:
 ;		none
 ; Modifies:
@@ -272,7 +272,6 @@ SerialPeekChar:
   mov   $v1,$v0
   ldi   $v0,#E_Ok
 	csrrw	$x0,#$300,$s1				; restore interrupts
-	csrrc $x0,#$004,#1        ; restore gc interrupts
 	ldt		$ra,[$sp]
 	ldt		$s1,4[$sp]
 	add		$sp,$sp,#8
@@ -389,13 +388,12 @@ SerialIRQ:
 	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
 	ldbu	$t2,SerHeadRcv			; get buffer indexes
 	ldbu	$t3,SerTailRcv
+	mov   $t4,$t3
 	add		$t3,$t3,#1					; see if buffer full
 	and		$t3,$t3,#255
 	beq		$t2,$t3,.rxFull
 	stb		$t3,SerTailRcv			; update tail pointer
-	sub		$t3,$t3,#1
-	and		$t2,$t3,#255
-	stb		$a1,SerRcvBuf[$t2]	; store recieved byte in buffer
+	stb		$a1,SerRcvBuf[$t4]	; store recieved byte in buffer
 	ldb		$v0,SerRcvXoff			; check if xoff already sent
 	bnez	$v0,.nxtByte
 	call	SerialRcvCount			; if more than 240 chars in buffer

@@ -1,0 +1,153 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+	code
+	align	4
+
+;------------------------------------------------------------------------------
+; Parameters:
+;   none
+; Returns:
+;   $v0 = app id (0 to 31), -1 if none available
+;------------------------------------------------------------------------------
+
+AllocAppId:
+  ldt   $v1,APPID_POOL
+  ldi   $v0,#31
+.0002:
+  bltz  $v1,.0001
+  ldi   $t0,#1
+  sll   $t0,$t0,$v0
+  or    $v1,$v1,$t0
+  stt   $v1,APPID_POOL
+  ret
+.0001:
+  sll   $v1,$v1,#1
+  sub   $v0,$v0,#1
+  bge   $v0,$x0,.0002
+  ldi   $v0,#-1
+  ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;   $a1 = pointer to application start record
+;------------------------------------------------------------------------------
+
+FMTK_StartApp:
+  mov   $s1,$a1
+  call  AllocAppId
+  bltz  $v0,.noMoreApps
+  sll   $s2,$v0,#2        ; $s2 = index into ACB pointer table
+  mov   $a0,$x0           ; OS owns the ACB
+  ldi   $a1,#4096         ; size of application control block
+  call  Alloc             ; allocate ACB
+  stt   $v1,ACBPtrs[$s2]  ; save off pointer to ACB
+  mov   $s3,$v1           ; $s3 = pointer to ACB
+  ldi   $t0,#ACBMagic
+  stt   $t0,ACBMagic[$s3]
+  stt   $x0,ACBGarbageList[$s3]
+  ; Allocate a virtual screen and set pointers to it.
+  srl   $a0,$s2,#2        ; App owns the screen
+  ldi   $a1,#8192         ; size of virtual screen
+  call  Alloc
+  bltz  $v0,.noMem
+  stt   $v1,ACBpVidMem[$s3]
+  stt   $v1,ACBpVirtVidMem[$s3]
+  ; Setup screen attributes
+  ldi   $t0,#56
+  stb   $t0,ACBVideoCols[$s3]
+  ldi   $t0,#31
+  stb   $t0,ACBVideoRows[$s3]
+  stb   $x0,ACBCursorRow[$s3]
+  stb   $x0,ACBCursorCol[$s3]
+  ldi   $t0,#$0087FC00
+  stt   $t0,ACBNormAttr[$s3]
+
+  ; Allocate memory for application code and copy code into position
+  ldt   $a1,ASRCodeSize[$s1]
+  beqz  $a1,.0004         ; 0 size code = in ROM
+  call  Alloc
+  bltz  $v0,.noMem
+  stt   $v1,ACBpCode[$s3] ; save pointer to code area in ACB
+  mov   $s4,$v1           ; $s4 = pointer to application code
+  mov   $t0,$a1           ; $t0 = code size
+  ldt   $s5,ASRpCode[$s1] ; $s5 = pointer to application code
+.0001:
+  ldt   $t1,[$s5]
+  stt   $t1,[$s4]
+  add   $s5,$s5,#4
+  add   $s4,$s4,#4
+  sub   $t0,$t0,#1
+  bgtz  $t0,.0001
+  bra   .0003
+.0004:
+  ldt   $s5,ASRpCode[$s1] ; $s5 = pointer to application code
+  stt   $s5,ACBpCode[$s3] ; save pointer to code area in ACB
+
+.0003:
+  ; Allocate memory for application data and copy data into position
+  stt   $x0,ACBpData[$s3]
+  ldt   $a1,ASRDataSize[$s1]
+  beqz  $a1,.0005         ; no pre-initialized data?
+  call  Alloc
+  bltz  $v0,.noMem
+  stt   $v1,ACBpData[$s3]
+
+  mov   $s4,$v1           ; $s4 = pointer to application data
+  mov   $t0,$a1           ; $t0 = code size
+  ldt   $s5,ASRpData[$s1] ; $s5 = pointer to application data
+.0002:
+  ldt   $t1,[$s5]
+  stt   $t1,[$s4]
+  add   $s5,$s5,#4
+  add   $s4,$s4,#4
+  sub   $t0,$t0,#1
+  bgtz  $t0,.0002
+
+.0005:
+  ; Allocate memory for uninitialized data
+  stt   $x0,ACBpUIData[$s3]
+  ldt   $a1,ASRUIDataSize[$s1]
+  beqz  $a1,.0006         ; no uninitialized data?
+  call  Alloc
+  bltz  $v0,.noMem
+  stt   $v1,ACBpUIData[$s3]
+
+.0006:
+  ; Allocate memory for heap
+  ldt   $a1,ASRHeapSize[$s1]
+  beqz  $a1,.0007         ; no heap?
+  call  Alloc
+  bltz  $v0,.noMem
+  stt   $v1,ACBHeap[$s3]
+
+.0007:
+  srl   $a0,$s2,#2        ; $a0 = app id
+  ldi   $a1,#1024         ; task local memory
+  ldt   $a2,ASRpCode[$s1] ; get pointer to code area
+  jmp   FMTK_StartTask    ; start the initial app task
+
+.noMoreApps:
+  ldi   $v0,#E_NoMoreAppIds
+.noMem
+  jmp   ERETx

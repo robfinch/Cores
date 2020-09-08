@@ -1,0 +1,62 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+INBUF				equ		$0100
+switchflag	equ		$0200
+milliseconds	equ		$0208
+CurrentTid  equ   $210
+TidTcbMap   equ   $220
+
+ACBPtrs EQU $0280
+APPID_POOL  EQU   $02F0
+NPAGES	equ		$0300
+QNDX		EQU		$0304
+READYQ	EQU		$0308
+PIDMAP	EQU		$0310
+missed_ticks	equ		$0320
+TimeoutList		equ		$0328
+Tick		EQU		$0330
+SysSema	EQU		$0340
+MEPC0   EQU   $0350
+MEPC1   EQU   $0358
+MEPC2   EQU   $0360
+MEPC3   EQU   $0368
+CURIN   EQU   $0370
+CUROUT  EQU   $0371
+READYQ  EQU   $0400
+RDYQ0		EQU		$0400
+RDYQ1		EQU		$0500
+RDYQ2		EQU		$0600
+RDYQ3		EQU		$0700
+msgs		EQU		$0800
+mbxs		EQU		$4800
+mbxs_end	EQU	$4A00
+FreeMsg	EQU		$4C00
+PAMPtr  EQU   $4FF8
+PAM     EQU   $5000
+PAMend  EQU   $5040
+IOFocusNdx		EQU		$5040
+IOFocusTbl		EQU		$5048
+IRQFlag   EQU $5050
+IRQCause  EQU $5058
+

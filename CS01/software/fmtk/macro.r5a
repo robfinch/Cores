@@ -31,8 +31,9 @@ endm
 
 ; Look at the asid register for task id
 macro mGetCurrentTid
-	csrrw	v0,#$181,x0
-	and		v0,v0,#15
+;	csrrw	v0,#$181,x0
+;	and		v0,v0,#15
+	ldt   $v0,CurrentTid
 endm
 
 macro	mHasFocus
@@ -83,27 +84,27 @@ endm
 ;------------------------------------------------------------------------------
 
 macro mMbxRemoveTask
-	sub		$sp,$sp,#16
-	sw		$s1,[$sp]
-	sw		$t0,4[$sp]
-	sw		$t1,8[$sp]
-	sw		$t2,12[$sp]
-	sll		$s1,$a0,#LOG_TCBSZ		; tid to pointer
-	lh		$t0,TCBWaitMbx[$s1]		; get mailbox handle
-	blt		$t0,$x0,.xit@					; handle good?
+	gcsub	$sp,$sp,#16
+	stt		$s1,[$sp]
+	stt		$t0,4[$sp]
+	stt		$t1,8[$sp]
+	stt		$t2,12[$sp]
+	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
+	bltz	$t0,.xit@					    ; handle good?
 	sll		$t0,$t0,#4						; convert to pointer
 	add		$t0,$t0,#mbxs					; by adding base address
 	lhu		$t1,MBX_WTIDS[$t0]		; get waiting task list
+	ldb   $s1,TCBMap[$a0]
 	ldi		$t2,#1								; create a mask for given task id
-	sll		$t2,$t2,$a0
+	sll		$t2,$t2,$s1
 	xor		$t2,$t2,#-1
 	and		$t1,$t1,$t2						; clear bit
-	sh		$t1,MBX_WTIDS[$t0]		; update waiting task list
+	stw		$t1,MBX_WTIDS[$t0]		; update waiting task list
 .xit@:
-	lw		$s1,[$sp]
-	lw		$t0,4[$sp]
-	lw		$t1,8[$sp]
-	lw		$t2,12[$sp]
+	ldt		$s1,[$sp]
+	ldt		$t0,4[$sp]
+	ldt		$t1,8[$sp]
+	ldt		$t2,12[$sp]
 	add		$sp,$sp,#16
 endm
 
@@ -121,25 +122,18 @@ endm
 ;------------------------------------------------------------------------------
 
 macro mPopTimeoutList
-	sll		$t0,$v0,#LOG_TCBSZ		; tid to pointer
-	lbu		$v1,TCBStatus[$t0]		; no longer a waiting status
+	lbu		$v1,TCBStatus[$v0]		; no longer a waiting status
 	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
 	beqz	$t1,.noWait@
 	mMbxRemoveTask							; remove task from mailbox list
 .noWait@:
 	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
-	stb		$v1,TCBStatus[$t0]
-	ldw		$v1,TCBNext[$t0]			; get next task on timeout list
-	stw		$v1,TimeoutList				; update list head
-	ldi		$t1,#NR_TCB						; check valid handle
-	bgeu	$v1,$t1,.done@
-	ldi		$t1,#-1								;
-	sll		$v1,$v1,#LOG_TCBSZ		; v1 = tid to pointer
-	stw		$t1,TCBPrev[$v1]			; TimeoutList->prev = -1
+	stb		$v1,TCBStatus[$v0]
+	ldt		$v1,TCBNext[$v0]			; get next task on timeout list
+	stt		$v1,TimeoutList				; update list head
+	beqz	$v1,.done@
+	stt		$x0,TCBPrev[$v1]			; TimeoutList->prev = 0
 .done@:
-	ldi		$t1,#-1								; reset next and prev indexes
-	stw		$t1,TCBNext[$t0]			; on popped task
-	stw		$t1,TCBPrev[$t0]
+	stt		$x0,TCBNext[$v0]
+	stt		$x0,TCBPrev[$v0]
 endm
-
-

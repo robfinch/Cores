@@ -21,28 +21,33 @@
 ;
 ; ============================================================================
 
+TCBObject   EQU   $000    ; Object structure, state = RED (fixed in memory)
+TCBIntRegs  EQU   $040    ; integer register set storage area (room for 64-bit)
+TCBFltRegs  EQU   $140    ; float register set storage area
+TCBRegsEnd  EQU   $240
 ; First 128 bytes are for integer register set
 ; Second 128 bytes are for float register set
 ; Leave some room for 64-bit regs
-TCBsegs			EQU		$200		; segment register storage
-TCBepc			EQU		$280
-TCBStatus		EQU		$288
-TCBPriority	EQU		$289
-TCBWaitMbx	EQU		$28A
-TCBStackBot	EQU		$290
-TCBMsgD1		EQU		$298
-TCBMsgD2		EQU		$2A0
-TCBMsgD3		EQU		$2A8
-TCBStartTick	EQU	$2B0
-TCBEndTick	EQU		$2B8
-TCBTicks		EQU		$2C0
-TCBException	EQU	$2C8
-TCBNext			EQU		$2D0
-TCBPrev			EQU		$2D8
-TCBTimeout	EQU		$2E0
-IOF_NEXT		EQU		$2E8
-IOF_PREV		EQU		$2F0
-TCBName			EQU		$2F8
+TCBsegs			EQU		$240		; segment register storage
+TCBepc			EQU		$2C0
+TCBStatus		EQU		$2C8
+TCBPriority	EQU		$2C9
+TCBWaitMbx	EQU		$2CA
+TCBStackBot	EQU		$2D0
+TCBMsgD1		EQU		$2D8
+TCBMsgD2		EQU		$2E0
+TCBMsgD3		EQU		$2E8
+TCBStartTick	EQU	$2D0
+TCBEndTick	EQU		$2D8
+TCBTicks		EQU		$300
+TCBException	EQU	$308
+TCBNext			EQU		$310
+TCBPrev			EQU		$318
+TCBTimeout	EQU		$320
+IOF_NEXT		EQU		$328
+IOF_PREV		EQU		$330
+TCBMap      EQU   $338
+TCBName			EQU		$340
 
 TS_NONE			EQU		0
 TS_READY		EQU		1
@@ -52,6 +57,86 @@ TS_WAITMSG	EQU		8
 TS_TIMEOUT	EQU		16
 TS_PREEMPT	EQU		32
 TS_RUNNING	EQU		128
+
+OST_WHITE   EQU   0
+OST_GREY    EQU   1
+OST_BLACK   EQU   2
+
+OBJMagic    EQU   0
+OBJSize     EQU   8
+OBJTypenum  EQU   16
+OBJID       EQU   20
+OBJState    EQU   24    ; WHITE, GREY, BLACK, or RED
+OBJScavcnt  EQU   25    ; scavange count
+OBJOwningMap  EQU   26
+OBJPad1       EQU   27
+OBJPad2       EQU   28
+OBJUsedInMap  EQU   32    ; used in map
+OBJPad3       EQU   36
+OBJFWAddr     EQU   40    ; forwarding address
+OBJFinalizer  EQU   48
+OBJ_SIZE      EQU   64
+
+; Application Control Block
+ACB_MAGIC     EQU   $0ACB
+
+ACBMagic      EQU   0
+ACBpData      EQU   8
+ACBDataSize   EQU   16
+ACBpUIData    EQU   24
+ACBUIDataSize EQU   32
+ACBGCRoots    EQU   40
+ACBGCRootCnt  EQU   48
+ACBGCNdx      EQU   56
+ACBGCMarkingQue EQU   64
+ACBGCMarkingQueFull   EQU   72
+ACBGCMarkingQueEmpty  EQU   73
+ACBGCOverflow EQU   74
+ACBpCode      EQU   80
+ACBObjectList EQU   88
+ACBGarbageList  EQU   96
+ACBHeap       EQU   104   ; 640+ bytes for heap object info
+ACBIOFNext    EQU   768
+ACBIOFPrev    EQU   776
+ACBUserName   EQU   784   ; 2 byte index of string in string area
+ACBPath       EQU   786   ; 2 byte index of string in string area
+ACBExitRunFile  EQU   788 ; 2 byte index of string in string area
+ACBCommandLine  EQU   790 ; 2 byte index of string in string area
+ACBpVidMem    EQU   792
+ACBpVirtVidMem  EQU 800
+ACBVideoRows  EQU   808
+ACBVideoCols  EQU   809
+ACBCursorRow  EQU   810
+ACBCursorCol  EQU   811
+ACBNormAttr   EQU   812
+ACBKeyState1  EQU   816
+ACBKeyState2  EQU   818
+ACBKeybdWaitFlag  EQU   820
+ACBKeybdHead  EQU   822
+ACBKeybdTail  EQU   823
+ACBKeybdBuffer  EQU   824
+ACBnumber     EQU   888
+ACBNext       EQU   896
+ACBTask       EQU   904
+ACBTemplates  EQU   912   ; 256 * 8 bytes reserved for template pointers
+ACBPad        EQU   2960
+ACBStrings    EQU   3072  ; start of 1kB string area
+ACBEnd        EQU   4096
+
+; Application startup record
+ASRPageSize   EQU   0
+ASRPriority   EQU   1
+ASRReserved   EQU   2
+ASRAffinity   EQU   4
+ASRCodeSize   EQU   8
+ASRDataSize   EQU   16
+ASRUIDataSize EQU   24
+ASRHeapSize   EQU   32
+ASRStackSize  EQU   40
+ASRpCode      EQU   48
+ASRpData      EQU   56
+ASRpUIData    EQU   64
+ASR_SIZE      EQU   72
 
 ; error codes
 E_Ok		=		0x00
@@ -80,7 +165,8 @@ E_TooManyBlocks	=	0x26
 ; resource errors
 E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
-E_NoMoreAlarmBlks	=0x44
+E_NoMoreAlarmBlks	= 0x44
 E_NoMoreTCBs	=	0x45
-E_NoMem		= 12
+E_NoMoreAppIds = 0x46
+E_NoMem = 0x47
 

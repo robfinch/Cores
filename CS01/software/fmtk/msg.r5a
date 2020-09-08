@@ -63,8 +63,7 @@ FMTK_AllocMbx:
 	slt		$t1,$t0,#mbxs_end
 	bne		$t1,$x0,.nxt
 	ldi		$v0,#E_NoMoreMbx
-	mov		u:$v0,m:$v0
-	eret
+	jmp   ERETx
 .noOwner:
 	sb		$a1,MBX_OWNER[$t0]
 	sub		$t5,$t0,#mbxs				; convert pointer to handle
@@ -87,24 +86,26 @@ FMTK_FreeMbx:
 	sll		$s1,$a1,#4					; convert handle to pointer
 	add		$s1,$s1,#mbxs
 	ldi		$s2,#0
-	ldi		$s4,#16							; possibly 16 tasks
-	lw		$s6,MBX_WTIDS[$s1]
+	ldi		$s4,#32							; possibly 32 tasks
+	ldt		$s6,MBX_WTIDS[$s1]
 .0002:
 	and		$s3,$s6,#1
-	beq		$s3,$x0,.0001
-	sll		$s5,$s2,#LOG_TCBSZ		; tid to pointer
-	lbu		$v0,TCBStatus[$s5]
+	beqz	$s3,.0001
+	sll   $s2,$s2,#2
+	ldt   $s5,TidTcbMap[$s2]
+	srl   $s2,$s2,#2
+	ldbu	$v0,TCBStatus[$s5]
 	and		$v0,$v0,#~TS_WAITMSG	; no longer waiting
-	sb		$v0,TCBStatus[$s5]
+	stb		$v0,TCBStatus[$s5]
 	and		$v0,$v0,#TS_TIMEOUT
-	beq		$v0,$x0,.0003
-	mov		$a0,$s2
+	beqz	$v0,.0003
+	mov		$a0,$s5
 	call	RemoveFromTimeoutList
 .0003:
-	mov		$a0,$s2
-	call	InsertIntoReadyList
+	mov		$a0,$s5
+	call	InsertIntoReadyQueue
 	ldi		$v0,#E_NoMsg					; but no message
-	sw		$v0,64[$s5]						; v0 = E_NoMsg
+	sw		$v0,TCBIntRegs+64[$s5]	; v0 = E_NoMsg
 .0001:
 	srl		$s6,$s6,#1
 	add		$s2,$s2,#1
@@ -139,31 +140,33 @@ FMTK_SendMsg:
 	beq		$t0,$x0,.badMbx
 	sll		$t0,$a1,#4					; convert handle to pointer
 	add		$t0,$t0,#mbxs
-	lw		$t5,MBX_WTIDS[$t0]
+	ldt		$t5,MBX_WTIDS[$t0]
 	beq		$t5,$x0,.noWaiters
 	ldi		$s1,#0
 .0001:
 	and		$s3,$t5,#1					; is tid waiting?
-	beq		$s3,$x0,.nxtTid
-	sll		$s3,$s1,#LOG_TCBSZ	; convert tid to TCB pointer
-	sw		$a2,TCBMsgD1[$s3]		; copy message to TCB
-	sw		$a3,TCBMsgD2[$s3]
-	sw		$a4,TCBMsgD3[$s3]
-	lbu		$t2,TCBStatus[$s3]
+	beqz	$s3,.nxtTid
+	sll   $s1,$s1,#2
+	ldt   $s3,TidTcbMap[$s1]
+	srl   $s1,$s1,#2
+	stt		$a2,TCBMsgD1[$s3]		; copy message to TCB
+	stt		$a3,TCBMsgD2[$s3]
+	stt		$a4,TCBMsgD3[$s3]
+	ldbu	$t2,TCBStatus[$s3]
 	or		$t2,$t2,#TS_MSGRDY
-	sb		$t2,TCBStatus[$s3]
-	mov		$a0,$s1
+	stb		$t2,TCBStatus[$s3]
+	mov		$a0,$s3
 	sub		$sp,$sp,#4
-	sw		$t0,[$sp]						; push t0
-	call	InsertIntoReadyList
-	lw		$t0,[$sp]						; pop t0
+	stt		$t0,[$sp]						; push t0
+	call	InsertIntoReadyQueue
+	ldt		$t0,[$sp]						; pop t0
 	add		$sp,$sp,#4
 .nxtTid:
 	srl		$t5,$t5,#1					; check next task
 	add		$s1,$s1,#1
-	and		$s1,$s1,#15
-	bne		$s1,$x0,.0001
-	sw		$x0,MBX_WTIDS[$t0]	; clear waiters
+	and		$s1,$s1,#31
+	bnez	$s1,.0001
+	stt		$x0,MBX_WTIDS[$t0]	; clear waiters
 	ldi		$v0,#E_Ok
 	bra		.xit
 .noWaiters:
@@ -203,17 +206,17 @@ FMTK_SendMsg:
 ;------------------------------------------------------------------------------
 
 PeekMsg:
-	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
 	slt		$t0,$a1,#32
 	beq		$t0,$x0,.badMbx
 	sll		$t2,$a1,#4					; convert handle to pointer
 	add		$t2,$t2,#mbxs
-	lw		$t1,MBX_MQHEAD[$t2]
+	ldt		$t1,MBX_MQHEAD[$t2]
 	beq		$t1,$x0,.noMsg
 	beq		$a5,$x0,.nodq
-	lw		$t3,MSG_LINK[$t1]
-	sw		$t3,MBX_MQHEAD[$t2]
+	ldt		$t3,MSG_LINK[$t1]
+	stt		$t3,MBX_MQHEAD[$t2]
 	; This is done here only because interrupts are disabled
 	lw		$t3,FreeMsg
 	sw		$t3,MSG_LINK[$t1]

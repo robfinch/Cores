@@ -162,7 +162,6 @@ FMTK_SetDCBField:
 ;------------------------------------------------------------------------------
 
 CopyDevFuncTbl:
-	csrrs $x0,#$004,#1        ; enable gc interrupt
 	sll		$v0,$a0,#7					; each device allowed 32 functions (*128)
 	add		$v0,$v0,#DVF_Base		; base address of function table
 	ldi		$t0,#32							; 32 functions to copy
@@ -178,7 +177,6 @@ CopyDevFuncTbl:
 ;------------------------------------------------------------------------------
 
 CopyDevDCB:
-	csrrs $x0,#$004,#1        ; enable gc interrupt
   ldi   $v0,#DCB_Size
   mul   $v0,$a0,$v0
   add   $v0,$v0,#DCB_Base

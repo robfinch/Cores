@@ -21,9 +21,6 @@
 ;
 ; ============================================================================
 
-IOFocusNdx		EQU		$8C08
-IOFocusTbl		EQU		$8C10
-
 ;-----------------------------------------------------------------------------
 ; IO Focus routines complicated by the fact that the base address of TCB
 ; zero is zero (looks like a null pointer but isn't). So the value -1 is 
@@ -49,7 +46,7 @@ IOFocusTbl		EQU		$8C10
 
 FMTK_HasIOFocus:
 	mGetCurrentTid
-	sll		$v0,$v0,#LOG_TCBSZ
+;	sll		$v0,$v0,#LOG_TCBSZ
 	ldt		$v1,IOFocusNdx
 	beq		$v0,$v1,.hasFocus
 	ldi		$v1,#0
@@ -76,10 +73,10 @@ FMTK_HasIOFocus:
 
 SwitchIOFocusHelper:
 	ldt		$t0,IOFocusNdx			; get focus pointer
-	bltz	$t0,.noFocus		; is it -1?
+	beqz	$t0,.noFocus		    ; is it nullptr?
 	ldt		$t1,IOF_NEXT[$t0]
 	beq		$t1,$t0,.sameFocus
-	bltz	$t1,.noFocus
+	beqz	$t1,.noFocus
 	; swap virtual screens
 	; set vidmem pointer
 	stt		$t1,IOFocusNdx
@@ -103,26 +100,27 @@ FMTK_SwitchIOFocus:
 
 FMTK_RequestIOFocus:
 	ldi		$t0,#1
-	sll		$t0,$t0,$a1
+	ldb   $t1,TCBMap[$a1]
+	sll		$t0,$t0,$t1
 	ldt		$t1,IOFocusTbl			; Is the task already included in the IO focus?
 	and		$t2,$t1,$t0					; test bit
-	bne		$t2,$x0,.ret				; If so, don't add again
+	bnez	$t2,.ret				    ; If so, don't add again
 	or		$t1,$t1,$t0					; set bit indicator
 	stt		$t1,IOFocusTbl
 	ldt		$t0,IOFocusNdx			; get current index
-	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
-	bge		$t0,$x0,.notEmpty		; is there one? (!= -1)
-	stt		$t1,IOFocusNdx			; no current index, so set equal to requester
-	stt		$t1,IOF_NEXT[$t1]		; and loop back to self
-	stt		$t1,IOF_PREV[$t1]
+;	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
+	bnez	$t0,.notEmpty		    ; is there one? (!= 0)
+	stt		$a1,IOFocusNdx			; no current index, so set equal to requester
+	stt		$a1,IOF_NEXT[$a1]		; and loop back to self
+	stt		$a1,IOF_PREV[$a1]
 	bra		.ret
 .notEmpty:
 	ldt		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
-	stt		$t2,IOF_PREV[$t1]
-	stt		$t0,IOF_NEXT[$t1]
+	stt		$t2,IOF_PREV[$a1]
+	stt		$t0,IOF_NEXT[$a1]
 	ldt		$t2,IOF_PREV[$t0]
-	stt		$t1,IOF_NEXT[$t2]
-	stt		$t1,IOF_PREV[$t0]
+	stt		$a1,IOF_NEXT[$t2]
+	stt		$a1,IOF_PREV[$t0]
 .ret:
 	ldi		$v0,#E_Ok
 	jmp		ERETx
@@ -134,7 +132,7 @@ FMTK_RequestIOFocus:
 
 FMTK_ReleaseIOFocus:
 	mGetCurrentTid
-	mov		a1,v0
+	mov		$a1,$v0
 	; fall into ForceReleaseIOFocus
 
 ;-----------------------------------------------------------------------------
@@ -153,7 +151,9 @@ FMTK_ReleaseIOFocus:
 
 FMTK_ForceReleaseIOFocus:
 	ldi		$t0,#1
-	sll		$t0,$t0,$a1
+;	sll		$t0,$t0,$a1
+  ldb   $t1,TCBMap[$a1]
+	sll		$t0,$t0,$t1
 	ldt		$t1,IOFocusTbl
 	and		$t2,$t1,$t0				; test bit for task
 	beq		$t2,$x0,.noFocus	; does it even have the focus?
@@ -161,9 +161,9 @@ FMTK_ForceReleaseIOFocus:
 	and		$t1,$t1,$t0				; clear bit for task
 	stt		$t1,IOFocusTbl
 	ldt		$t1,IOFocusNdx		; check if the focus being released is the current
-	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
-	bne		$t0,$t1,.notSame
-	sub		$sp,$sp,#8
+;	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
+	bne		$a1,$t1,.notSame
+	gcsub	$sp,$sp,#8
 	stt		$t0,[$sp]
 	stt		$t1,4[$sp]
 	call	SwitchIOFocusHelper
@@ -171,20 +171,18 @@ FMTK_ForceReleaseIOFocus:
 	ldt		$t1,4[$sp]
 	add		$sp,$sp,#8
 .notSame:
-	ldt		$t2,IOF_NEXT[$t0]
-	blt		$t2,$x0,.done
+	ldt		$t2,IOF_NEXT[$a1]
+	beqz	$t2,.done
 	beq		$t2,$t0,.pjSame
-	ldt		$t1,IOF_PREV[$t0]
+	ldt		$t1,IOF_PREV[$a1]
 	stt		$t1,IOF_PREV[$t2]
 	stt		$t2,IOF_NEXT[$t1]
 	bra		.0001
 .pjSame:
-	ldi		$t1,#-1
-	stt		$t1,IOFocusNdx
+	stt		$x0,IOFocusNdx
 .0001:
-	ldi		$t1,#-1
-	stt		$t1,IOF_NEXT[$t0]	
-	stt		$t1,IOF_PREV[$t0]	
+	stt		$x0,IOF_NEXT[$a1]	
+	stt		$x0,IOF_PREV[$a1]	
 .done:
 .noFocus:
 	ldi		$v0,#E_Ok
@@ -198,20 +196,24 @@ FMTK_ForceReleaseIOFocus:
 
 _WaitForIOFocus:
 WaitForIOFocus:
-  sub   $sp,$sp,#12
+  gcsub $sp,$sp,#12
   stt   $a0,[$sp]
   stt   $a1,4[$sp]
   stt   $a2,8[$sp]
-	csrrs $x0,#$004,#1      ; enable gc interrupt
 .WFF1:
 	ldi		$a0,#20           ; FMTK Has Focus
 	ecall
+	ldt   $a1,4[$sp]        ; get back I/O channel
 	bnez	$v1,.HasFocus
 	ldi   $a0,#26           ; FMTK_IO
+	ldi   $a1,#5
 	ldi   $a2,#9            ; peekchar function
 	ecall
+	bltz  $v1,.0001
+	stt   $v1,$4378
+.0001:
 	ldi		$a0,#$14					; CTRL-T
-	bne		$v0,$a0,.WFF2
+	bne		$v1,$a0,.WFF2
 	; eat up the CTRL-T
 	ldi		$a0,#26						; FMTK_IO
 	ldi		$a2,#8						; getchar function
@@ -247,4 +249,3 @@ GetUIFlag:
   ldt   $a3,8[$sp]
   add   $sp,$sp,#12
   ret
-s

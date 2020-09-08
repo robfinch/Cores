@@ -2,6 +2,7 @@
 .include "../fmtk/config.r5a"
 .include "../fmtk/device.r5a"
 .include "../fmtk/macro.r5a"
+.include "../fmtk/globals.r5a"
 
 CTRLC				equ		$03
 BS					equ		$08
@@ -27,10 +28,6 @@ UART				equ		$FFDC0A00
 UART_TRB		equ		$00
 UART_STAT		equ		$04
 UART_CMD		equ		$08
-		; First 16kB is for TCB's
-INBUF				equ		$4100
-switchflag	equ		$4200
-milliseconds	equ		$4208
 
 CSR_UIE     equ   $004
 
@@ -55,6 +52,9 @@ MachineStart:
 	call	FMTKInit
 	call	ViaSetup
 	call	SerialInit
+	ldi   $t0,#5          ; set current input and output to serial port
+	stb   $t0,CURIN
+	stb   $t0,CUROUT
 	ldi		$t0,#0
 	csrrw	$x0,#$181,$t0		; set ASID
 	ldi		$t0,#$FFFC0000
@@ -62,7 +62,7 @@ MachineStart:
 	ldi		$t0,#UserStart
 	csrrw	$x0,#$341,$t0		; set mepc
 	stt   $t0,MEPC1
-	jmp   ERETx2  				; switch to user mode
+;	jmp   ERETx2  				; switch to user mode
 UserStart:
 	ldi		$a0,#1					; start TinyBasic
 	ldi		$a1,#32000
@@ -81,10 +81,10 @@ UserStart2:
 	mov		$a1,$v1             ; $a1 = tid
 	ldi		$a0,#24							; RequestIOFocus
 	ecall
-	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
+;	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
 	mov   $a0,$a1             ; $a0 = tid
-	call  AllocStack
-	add   $sp,$v1,#1020       ; place stack pointer at top of allocated region
+;	call  AllocStack
+;	add   $sp,$v1,#1020       ; place stack pointer at top of allocated region
 	ldi		$t0,#$08						; turn on the LED
 	stt		$t0,VIA+VIA_PARAW
 	ldi		$t2,#16							; send an XON just in case
@@ -118,7 +118,7 @@ UserStart2:
 ;	mov		$a3,$v1
 ;	mov   $a0,$a3
 ;	call  PutHexByte
-	bra		.0003
+;	bra		.0003
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -141,8 +141,7 @@ Getch:
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
 	stt		$a1,8[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
-	ldi   $a1,#5
+	ldi   $a1,#5  ;CURIN
 	call  fgetc
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
@@ -161,9 +160,8 @@ Putch:
 	stt		$a3,8[$sp]
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	mov		$a3,$a0
-	ldi		$a1,#5							; serial port
+	ldi		$a1,#5  ;CUROUT    ; serial port
 	call	fputc
 	ldt		$ra,[$sp]
 	ldt		$a3,8[$sp]
@@ -197,7 +195,6 @@ fputc:
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	; If the device is a UI device there may be multiple owning jobs. It doesn't
 	; do any good to check for ownership. Instead the I/O focus is checked to
 	; see if it's present.
@@ -251,7 +248,6 @@ fgetc:
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	call  GetUIFlag
 	beqz  $v1,.checkOwner
 	call  WaitForIOFocus
@@ -371,9 +367,12 @@ Monitor:
 	beqz  $t1,doPStat
 	ldi		$t1,#'B'
 	bne		$t0,$t1,.0006
-	ldi		$a0,#1					; Start task
-	ldi		$a1,#32000			; 32 kB
-	ldi		$a2,#CSTART			; start address
+	call  GetDecNum
+	bnez  $v0,.basSize
+	ldi   $v0,#32000
+.basSize:
+	ldi		$a0,#12					; Start App
+	ldi   $a1,#TBASR
 	ecall
 	mov		$s1,$v1					; save v1
 	ldi		$a0,#msgCRLF
@@ -383,6 +382,12 @@ Monitor:
 	ldi		$a0,#msgTaskStart
 	call	PutString
 	call  DumpReadyList
+	; The monitor is running in machine mode. A return instruction is used to
+	; switch to user mode.
+	csrrc $x0,#$300,#1    ; disable interrupts
+	ldi   $t0,#CSTART
+	csrrw $x0,#$341,$t0
+	eret
 	;ldi		$a0,#5					; Reschedule task
 	;ldi		$a1,#1					; sleep(0)
 	;ecall
@@ -434,8 +439,13 @@ Monitor:
 	bra		Monitor
 
 doMem:
-	sub		$sp,$sp,#4
+	gcsub	$sp,$sp,#4
 	add		$s1,$s1,#1
+	ldb		$t0,INBUF[$s1]
+	xor   $t0,$t0,#'O'
+	bnez  $t0,.0001
+	add		$s1,$s1,#1
+.0001:
 	stt		$s1,[$sp]
 	ldi		$a0,#CR
 	call	Putch
@@ -462,13 +472,21 @@ doMem:
 .loop:
 	ldi		$a0,#' '
 	call	Putch
+	bnez  $t0,.userMem
+	ldi   $a0,#33         ; Fetch memory word
+	mov   $a1,$s3
+	ecall
+	mov   $a0,$v1
+	bra   .0001
+.userMem
 	ldb		$a0,[$s3]
+.0001:
 	call	PutHexByte
 	add		$s3,$s3,#1
 	sub		$s2,$s2,#1
 	bge		$s2,$x0,.loop
 	bltu	$s3,$s4,.loop2
-	bra		Monitor		
+	jmp		Monitor		
 
 EditMem:
 	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
@@ -485,7 +503,7 @@ EditMem:
 ;------------------------------------------------------------------------------
 
 doVMem:
-  call  GetHexNum
+  call  GetDecNum
   ldi   $t1,#0
   sll   $t0,$v0,#16
 .0001:
@@ -496,13 +514,17 @@ doVMem:
   ldi   $a0,#LF
   call  Putch
 .notLF:
+  mov   $a0,$t0
+  call  PutHexWord
+  ldi   $a0,#':'
+  call  Putch
   mvmap $a0,$x0,$t0
   call  PutHexHalf
   ldi   $a0,#' '
   call  Putch
   add   $t0,$t0,#1
   add   $t1,$t1,#1
-  slt   $a0,$t1,#512
+  slt   $a0,$t1,#256
   bnez  $a0,.0001  
   jmp   Monitor
 
@@ -516,18 +538,15 @@ doPStat:
   call  Putch
   ldi   $a0,#LF
   call  Putch
-  ldi   $t0,#0
-  ldi   $t1,#-1
+  ldi   $a1,#0        ; $a1 = bit number
 .0001:
-  pstat $v0,$t0,$t1
-  ldi   $a0,#'0'
-  beqz  $v0,.zero
-  ldi   $a0,#'1'
-.zero:
+  ldi   $a0,#32       ; Get PAM bit
+  ecall
+  add   $a0,$v1,#'0'
   call  Putch
-  add   $t0,$t0,#1
-  slt   $a0,$t0,#512
-  bnez  $a0,.0001
+  add   $a1,$a1,#1
+  slt   $v0,$a1,#512
+  bnez  $v0,.0001
   jmp   Monitor
  
 ;------------------------------------------------------------------------------
@@ -536,7 +555,6 @@ doPStat:
 ;------------------------------------------------------------------------------
 
 FillMem:
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	call	GetHexNum			; get address
 	mov		$s3,$v0
 	add		$s1,$s1,#1
@@ -555,7 +573,6 @@ FillMem:
 ;------------------------------------------------------------------------------
 
 SkipSpaces:
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 .skip2:
 	ldb		$t0,INBUF[$s1]
 	xor		$t1,$t0,#' '
@@ -575,7 +592,6 @@ GetHexNum:
 	ldi		$v0,#0							; v0 = num
 	gcsub	$sp,$sp,#4
 	stt		$ra,[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	call	SkipSpaces
 .next:
 	ldb		$t0,INBUF[$s1]
@@ -617,14 +633,48 @@ GetHexNum:
 	bra		.next
 
 ;------------------------------------------------------------------------------
+; Get a decimal number from the input buffer.
+;------------------------------------------------------------------------------
+
+GetDecNum:
+	ldi		$v0,#0							; v0 = num
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	SkipSpaces
+.next:
+	ldb		$t0,INBUF[$s1]
+	ldi		$t2,#'0'
+	blt		$t0,$t2,.0001
+	ldi		$t2,#'9'+1
+	blt		$t0,$t2,.isDigit
+.0001:
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+.isDigit:
+	sll		$t2,$v0,#1    ; multiply by 10
+	sll   $v0,$v0,#3    ; * 8
+	add   $v0,$v0,$t2   ; + *2
+	sub		$t0,$t0,#'0'
+	add		$v0,$v0,$t0
+	add		$s1,$s1,#1
+	bra		.next
+
+;------------------------------------------------------------------------------
 ; Output a word as a hex string.
+;
+; Parameters:
+;   a0 = contains word to output
+; Registers Affected:
+;   none
+; Returns:
+;   none
 ;------------------------------------------------------------------------------
 
 PutHexWord:
 	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	srl		$a0,$a0,#16
 	call	PutHexHalf
 	ldt		$ra,[$sp]
@@ -639,7 +689,6 @@ PutHexHalf:
 	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	srl		$a0,$a0,#8
 	call	PutHexByte
 	ldt		$ra,[$sp]
@@ -654,7 +703,6 @@ PutHexByte:
 	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	srl		$a0,$a0,#4		; put the high order nybble first
 	call	PutHexNybble
 	ldt		$ra,[$sp]
@@ -663,13 +711,20 @@ PutHexByte:
 
 ;------------------------------------------------------------------------------
 ; Output a nybble as a hex string.
+;
+; Parameters:
+;   a0 = contains nybble to output
+; Registers Affected:
+;   none
+; Returns:
+;   none
 ;------------------------------------------------------------------------------
 
 PutHexNybble:
-	gcsub	$sp,$sp,#8
+	gcsub	$sp,$sp,#12
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	stt   $t0,8[$sp]
 	and		$a0,$a0,#15		; strip off high order bits
 	ldi		$t0,#10
 	blt		$a0,$t0,.lt10
@@ -683,7 +738,8 @@ PutHexNybble:
 .0001:
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
-	add		$sp,$sp,#8
+	ldt   $t0,8[$sp]
+	add		$sp,$sp,#12
 	ret
 
 ;------------------------------------------------------------------------------
@@ -704,12 +760,11 @@ PutString:
 	gcsub	$sp,$sp,#8				; save link register
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]				; and argument
-	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	mov		$t1,$a0						; t1 = pointer to string
 .0001:
 	ldb		$a0,[$t1]
 	add		$t1,$t1,#1				; advance pointer to next byte
-	beq		$a0,$x0,.done			; branch if done
+	beqz	$a0,.done			    ; branch if done
 	call	Putch							; output character
 	bra		.0001
 .done:
@@ -735,12 +790,18 @@ IRQRout:
   sll   $t0,$t0,#3
   csrrw $t1,#$341,$x0   ; get mepc
   stt   $t1,MEPC0[$t0]  ; save it
+  sll   $t2,$t0,#8      ; $t2 = 1024 * register set #
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
+	sub   $sp,$sp,$t2
 	csrrw	$t0,#$342,$x0			; get cause code
 	bltz	$t0,.isIRQ		  ; irq or ecall?
-	ldi		$sp,#$80000-4		; setup machine mode stack pointer
 	jmp		OSCALL					; goto operating system call dispatcher
 .isIRQ:
+  ldt   $t1,IRQFlag     ; update IRQ flag for Tiny Basic
+  add   $t1,$t1,#1
+  stt   $t1,IRQFlag
   and   $t0,$t0,#$FF
+  stt   $t0,IRQCause    ; update cause code for Tiny Basic
   sub   $t1,$t0,#1
   beqz  $t1,.softwareIrq
   sub   $t1,$t1,#1
@@ -752,7 +813,6 @@ IRQRout:
 	add		$t0,$t0,#DVF_Base+22*4	; load IRQ routine vector from device func table
 	ldt		$t0,[$t0]
 	beqz	$t0,.noIRQ	    ; make sure there's an address to go to
-	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
 	jmp		[$t0]						; jump to the IRQ routine
 .noIRQ:
 .softwareIrq:
@@ -762,6 +822,7 @@ IRQRout:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
   call  gcIncrement
 ERETx2:
+  csrrc $x0,#$780,#15   ; select machine regs only
   csrrw $t0,#$780,$x0   ; get register sets
   srl   $t0,$t0,#4      ; extract register set selection
   sll   $t0,$t0,#3
@@ -769,6 +830,30 @@ ERETx2:
   csrrw $x0,#$341,$t1   ; set mepc
 	eret
 
+; Application startup record for Tiny Basic
+TBASR:
+  db    0     ; page size (can't change on this system)
+  db    2     ; priority normal
+  db    0     ; reserved
+  db    0     ; processor affinity
+  dw    0     ; reserved
+  dw    0     ; code size (0 = in ROM, don't move)
+  dw    0     ; reserved
+  dw    0     ; data size (preinitialized data)
+  dw    0     ; reserved
+  dw    32768 ; uninitialized data size
+  dw    0     ; reserved
+  dw    0     ; Heap size
+  dw    0     ; reserved
+  dw    2048  ; stack size
+  dw    0     ; reserved
+  dw    CSTART  ; pointer to code
+  dw    0       ; reserved
+  dw    0     ; pointer to data
+  dw    0     ; reserved
+  dw    0     ; ui data
+  dw    0     ; reserved
+    
 ;------------------------------------------------------------------------------
 ; Message strings
 ;------------------------------------------------------------------------------
@@ -783,7 +868,9 @@ msgMonHelp:
 		db		"F - fill memory",13
 		db		"K <tid> - kill task", 13
 		db		"M <start> <length>	- dump memory",13
+		db    "P - display PAM",13
 		db		"S - switch task",13
+		db    "V <mid> dump virtual memory map",13
 		db		0
 		align 4
 msgTaskStart:
@@ -799,10 +886,12 @@ flt10:
 
 .include "fltToString.r5a"
 .include "cs01Mem.r5a"
+.include "cs01PAM.r5a"
 .include "../fmtk/serial.r5a"
 .include "../fmtk/via.r5a"
 .include "../fmtk/task.r5a"
 .include "../fmtk/msg.r5a"
+.include "../fmtk/app.r5a"
 .include "../fmtk/tcb.r5a"
 .include "../fmtk/iofocus.r5a"
 .include "../fmtk/io.r5a"

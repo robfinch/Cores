@@ -1,7 +1,6 @@
 ;------------------------------------------------------------------------------
 ; Allocate a single page of memory. Available memory is indicated by a bitmmap
 ; called the PAM for page allocation map.
-; There's only eight words to check so an unrolled loop works here.
 ;
 ; Modifies:
 ;		t0,t1,t2
@@ -9,94 +8,26 @@
 ;		v0 = page allocated
 ;------------------------------------------------------------------------------
 ;
-AllocPage:
+PAMMarkPage:
+	stt		$ra,-4[$sp]
 	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
-	lw		$t0,PAM
-	ldi		$t1,#$FFFFFFFF
-	beq		$t0,$t1,.chkPam4
-	call	BitIndex
-	sw		$t0,PAM
-	bra		.0001
-.chkPam4:
-	lw		$t0,PAM+4
-	beq		$t0,$t1,.chkPam8
-	call	BitIndex
-	sw		$t0,PAM+4
-	add		$v0,$v0,#32
-	bra		.0001
-.chkPam8:
-	lw		$t0,PAM+8
-	beq		$t0,$t1,.chkPam12
-	call	BitIndex
-	sw		$t0,PAM+8
-	add		$v0,$v0,#64
-	bra		.0001
-.chkPam12:
-	lw		$t0,PAM+12
-	beq		$t0,$t1,.chkPam16
-	call	BitIndex
-	sw		$t0,PAM+12
-	add		$v0,$v0,#96
-	bra		.0001
-.chkPam16:
-	lw		$t0,PAM+16
-	beq		$t0,$t1,.chkPam20
-	call	BitIndex
-	sw		$t0,PAM+16
-	add		$v0,$v0,#128
-	bra		.0001
-.chkPam20:
-	lw		$t0,PAM+20
-	beq		$t0,$t1,.chkPam24
-	call	BitIndex
-	sw		$t0,PAM+20
-	add		$v0,$v0,#160
-	bra		.0001
-.chkPam24:
-	lw		$t0,PAM+24
-	beq		$t0,$t1,.chkPam28
-	call	BitIndex
-	sw		$t0,PAM+24
-	add		$v0,$v0,#192
-	bra		.0001
-.chkPam28:
-	lw		$t0,PAM+28
-	beq		$t0,$t1,.chkPamDone
-	call	BitIndex
-	sw		$t0,PAM+28
-	add		$v0,$v0,#224
-	bra		.0001
-.chkPamDone:
-	ldi		$v0,#0						; no memory available
+	ldi   $a0,#64
 .0001:
-	lw		$ra,[$sp]
+	call  PAMGetbit
+	beqz  $v0,.gotFree
+	add   $a0,$a0,#1
+	slt   $t0,$a0,#512
+	bnez  $t0,.0001
+	ldi   $v0,#0
+	bra   .xit
+.gotFree:
+  ldi   $a1,#1
+  call  PAMSetbit
+  mov   $v0,$a0
+.xit:
 	add		$sp,$sp,#4
-	ret
-
-; Returns:
-;		v0 = bit index of allocated page
-;
-BitIndex:
-	ldi		$v0,#0
-.0001:
-	and		$t2,$t0,#1
-	beq		$t2,$x0,.foundFree
-	srl		$t0,$t0,#1
-	or		$t0,$t0,#$80000000	; do a rotate, we know bit = 1
-	add		$v0,$v0,#1
-	bra		.0001
-.foundFree:
-	or		$t0,$t0,#1					; mark page allocated
-	mov		$t1,$v0
-	beq		$t1,$x0,.0003
-.0004:
-	sll		$t0,$t0,#1					; do a rotate
-	or		$t0,$t0,#1					; we know bit = 1
-	sub		$t1,$t1,#1
-	bne		$t1,$x0,.0004
-.0003:
-	ret
+	ldt		$ra,-4[$sp]
+  ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -105,19 +36,92 @@ BitIndex:
 ;		v0,v1,t0
 ;------------------------------------------------------------------------------
 
-FreePage:
+PAMUnmarkPage:
 	ldi		$v0,#511						; last page is permanently allocated to system stack
-	bgeu	$a0,$v0,.xit
+	bgeu	$a0,$v0,PAMxit
 	ldi		$v0,#64
-	bltu	$a0,$v0,.xit				; first 64 pages (64kB) allocated permanently to system
-	srl		$v0,$a0,#5					; v0 = word
-	and		$v1,$a0,#31					; v1 = bit no
-	ldi		$t0,#1							; make a bitmask
-	sll		$t0,$t0,$v1
-	xor		$t0,$t0,#-1					; invert mask
-	lw		$v1,PAM[$v0]
-	and		$v1,$v1,$t0					; clear bit
-	sw		$v1,PAM[$v0]				; save PAM word back
-.xit:
+	bltu	$a0,$v0,PAMxit			; first 64 pages (64kB) allocated permanently to system
+	ldi   $a1,#0
+; Tail recursion here
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = bit number to set
+;   a1 = value to set (1 or 0)
+; Modifies:
+;		v0,v1,t0,t1
+;------------------------------------------------------------------------------
+
+PAMSetbit:
+  srl   $v0,$a0,#5          ; v0 = word
+  sll   $v0,$v0,#2          ; v0 = word index
+  and   $v1,$a0,#31         ; v1 = bit no
+  ldi   $t0,#1              ; make a bit mask
+  sll   $t0,$t0,$v1
+  xor   $t0,$t0,#-1         ; get inverted mask
+  sll   $a1,$a1,$v1
+	ldt		$t1,PAM[$v0]        ; get word
+	and		$t0,$t1,$t0					; clear bit
+	or    $t0,$t0,$a1         ; set new bit status
+	stt		$t0,PAM[$v0]        ; store word
+	srl   $a1,$a1,$v1         ; restore $a1
+PAMxit:
 	ret
 
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = bit number to get
+; Modifies:
+;		v1,t0,t1
+; Returns:
+;   v0 = value of bit (1 or 0)
+;------------------------------------------------------------------------------
+
+PAMGetbit:
+  srl   $v0,$a0,#5          ; v0 = word
+  sll   $v0,$v0,#2          ; v0 = word index
+  and   $v1,$a0,#31         ; v1 = bit no
+	ldt		$t0,PAM[$v0]        ; get word
+	srl   $v0,$t0,$v1         ; extract bit
+	and   $v0,$v0,#1          ; return 0 or 1
+	ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+PAMInit:
+  stt   $ra,-4[$sp]
+  sub   $sp,$sp,#4
+  ; First zero out the entire PAM using word stores
+  ldi   $a0,#0
+.0002:
+  stt   $x0,PAM[$a0]
+  add   $a0,$a0,#4
+  slt   $t0,$a0,#512*4
+  bnez  $t0,.0002
+
+  ; Now set bits for preallocated memory pages
+  ldi   $a0,#63         ; OS pages
+  ldi   $a1,#1
+.0001:
+  call  PAMSetbit
+  sub   $a0,$a0,#1
+  bge   $a0,$x0,.0001
+  ldi   $a0,#511        ; OS stack page
+  call  PAMSetbit
+  ldi   $a0,#510        ; OS stack page
+  call  PAMSetbit
+  ldi   $a0,#509        ; OS stack page
+  call  PAMSetbit
+  ldi   $a0,#508        ; OS stack page
+  call  PAMSetbit
+  add   $sp,$sp,#4
+  ldt   $ra,-4[$sp]
+  ret
+
+GetPamBit:
+  mov   $a0,$a1
+  call  PAMGetbit
+  mov   $v1,$v0
+  ldi   $v0,#E_Ok
+  jmp   ERETx
