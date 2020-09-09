@@ -27,62 +27,21 @@
 ; Insert task into ready queue.
 ;
 ; Parameters:
-;		a0 = tid to insert
+;		$a0 = tid to insert
 ; Modifies:
-;		t0
+;	  $t0,$t1
 ; Returns:
-;		v0 = E_Ok
+;		none
 ;------------------------------------------------------------------------------
 
 InsertIntoReadyQueue:
-	ldi		$v0,#E_Ok						; setup for ok
-	ldbu	$t0,TCBStatus[$a0]	; set status to ready
-	or		$t0,$t0,#TS_READY
-	stb		$t0,TCBStatus[$a0]
-	ldb		$t0,TCBPriority[$a0]
-	pushq	$a0,$t0
-	ret
-
-InsertIntoReadyList:
-	ldbu	$t0,TCBStatus[$a0]	; set status to ready
-	or		$t0,$t0,#TS_READY
-	sb		$t0,TCBStatus[$a0]
-	ldb		$t0,TCBPriority[$a0]
-	and		$t0,$t0,#3					; limit to four
-	sll		$t0,$t0,#2					; *4 for indexing
-	ldt		$t1,READYQ[$t0]			; $t1 = get head of queue for that priority
-	bge		$t1,$x0,.insert			; Is there a head?
-	; level 0 insert - nothing in list, create a ring to self
-	stt		$a0,READYQ[$t0]			; no head, simple to insert
-	stt		$a0,TCBNext[$a0]		; remember it's a ring
-	stt		$a0,TCBPrev[$a0]
-	ret
-	; Insert at tail of list, which is just before the head.
-.insert:
-;	sll		$t4,$t1,#LOG_TCBSZ	; tid to pointer
-	ldt		$t2,TCBPrev[$a0]		; t2 = head->prev
-	bne		$t2,$t1,.level2
-	;level 1 insert - only 1 item currently in list, items point to each other
-	; This bit probably redundant code as normal insertion should work as well.
-	stt		$a0,TCBPrev[$t2]		; simple to insert
-	stt		$a0,TCBNext[$t2]		; head->prev = head->next = arg
-	stt		$t1,TCBPrev[$a0]		; arg->prev = arg->next = head
-	stt		$t1,TCBNext[$a0]
-	ret
-	; Here there will be three or more entries in the list. Arg is inserted
-	; between head and head->prev to make it the last on the list.
-.level2:
-	stt		$t2,TCBPrev[$a0]		; arg->prev = head->prev
-	stt		$t1,TCBNext[$a0]		; arg->next = head, arg links are now set
-	; If there's a head there should be a head->prev and head->next at least pointing to the head
-	bltz	$t2,.0001						; head->prev valid?
-;	sll		$t3,$t2,#LOG_TCBSZ	; t3 = head->prev (as a pointer)
-	stt		$a0,TCBNext[$t2]		; head->prev->next = arg
-.0001:
-	stt		$a0,TCBPrev[$t1]		; head->prev = arg
-	ret
-.badTid:
-	ldi		$v0,#E_Arg
+	sll   $t0,$a0,#2
+	ldt   $t0,TidTcbMap[$t0]
+	ldbu	$t1,TCBStatus[$t0]	; set status to ready
+	or		$t1,$t1,#TS_READY
+	stb		$t1,TCBStatus[$t0]
+	ldb		$t1,TCBPriority[$t0]
+	pushq	$a0,$t1
 	ret
 
 ;------------------------------------------------------------------------------
@@ -93,48 +52,17 @@ InsertIntoReadyList:
 ; Parameters:
 ;		a0 = tid to remove
 ; Modifies:
-;		t0,t1,t2,t3,t4,t5
+;		t0,t1
 ; Returns:
 ;		v0 = E_Ok for success
 ;------------------------------------------------------------------------------
 
 RemoveFromReadyQueue:
-	ldb		$t0,TCBStatus[$a0]		; set status no longer ready or running
-	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
-	stb		$t0,TCBStatus[$a0]
-	ret
-
-;------------------------------------------------------------------------------
-; The ready list is a doubly linked list to make it easier and faster to
-; remove items from the list. There's no need to search the list for the item
-; to remove.
-;
-;------------------------------------------------------------------------------
-;RemoveFromReadyList:
-	ldb		$t0,TCBPriority[$a0]	; t0 = priority
-	and		$t0,$t0,#3						; limit to 0-3
-	sll		$t0,$t0,#2						; *4 for indexing
-	ldt		$t1,READYQ[$t0]				; get head tid
-	ldt		$t2,TCBNext[$a0]			; get arg->next
-	bne		$t1,$a0,.0001					; removing head of list?
-	bne		$t2,$a0,.0003					; list emptying? (if arg->next points back to arg)
-	ldi		$t2,#0
-.0003:
-	stt		$t2,READYQ[$t0]				; yes, set new head to arg->next
-.0001:
-	beqz	$t2,.0002							; validate t2 (arg->next)
-	ldt		$t3,TCBPrev[$a0]			; because the list is circular t3=arg->prev
-	stt		$t2,TCBNext[$t3]			; arg->prev->next = arg->next
-	stt		$t3,TCBPrev[$t2]			; arg->next->prev = arg->prev
-	; Now indicate links in TCB are not in use.
-.0002:
-	ldi		$v0,#0
-	stt		$v0,TCBNext[$a0]
-	stt		$v0,TCBPrev[$a0]
-	ldi		$v0,#E_Ok							; we're ok
-	ret
-.badTid:
-	ldi		$v0,#E_Arg
+	sll   $t0,$a0,#2
+	ldt   $t0,TidTcbMap[$t0]
+	ldb		$t1,TCBStatus[$t0]		; set status no longer ready or running
+	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
+	stb		$t1,TCBStatus[$t0]
 	ret
 
 ;------------------------------------------------------------------------------
@@ -145,111 +73,31 @@ RemoveFromReadyQueue:
 ;		t0,t1,t2,t3,t4,t5
 ;------------------------------------------------------------------------------
 
-;InsertIntoTimeoutList:
-	setto	$a0,$a1
-	sll		$t5,$a0,#LOG_TCBSZ		; tid to pointer
-	bra		.0003
 InsertIntoTimeoutList:
-	stt		$x0,TCBNext[$a0]			; initialize indexes to nullptr
-	stt		$x0,TCBPrev[$a0]
-	ldt		$t0,TimeoutList
-	bnez	$t0,.0001
-	; Here the timeout list was empty, easy to insert.
-	stt		$a1,TCBTimeout[$a0]		; set timeout for task
-	stt		$a0,TimeoutList				; set head of list
-	ldi		$v0,#E_Ok							; and return
-	ret
-.0001:
-	ldi		$t1,#0								; t1 used as previous index
-	mov		$t3,$t0								; t3 = head of timeout list pointer
-;	sll		$t3,$t2,#LOG_TCBSZ		; t3 = head of timeout list as a pointer
-	; Search the timeout list for the proper insertion point. The timeouts are
-	; relative, so the requested amount is decremented by the amounts in the
-	; list as it is searched.
-.beginWhile:
-	ldt		$t4,TCBTimeout[$t3]		; get the timeout
-	ble		$a1,$t4,.endWhile			; is it greater than the requested timeout ?
-	sub		$a1,$a1,$t4						; decrement by list amount
-	mov		$t1,$t3								; t1 = pointer to previous entry
-	ldt		$t3,TCBNext[$t3]			; get the next entry in list
-	beqz	$t3,.endOfList				; end of list?
-;	sll		$t3,$t3,#LOG_TCBSZ		; no, set pointer to current entry
-	bne		$t3,$t1,.beginWhile		; list screwed up? (This test should always be true)
-.endOfList:
-	; Here the end of the list was reached, insert as last entry
-	stt		$a0,TCBNext[$t1]			; entry->next = arg
-	stt		$t1,TCBPrev[$a0]			; arg->prev = entry
-	stt		$a1,TCBTimeout[$a0]
-	bra		.0003
-.endWhile:
-	; Here we found a timeout greater than the requested amount. Insert before.
-;	sra		$t2,$t3,#LOG_TCBSZ		; pointer to tid
-	stt		$t3,TCBNext[$a0]			; arg->next = entry
-;	sra		$t2,$t1,#LOG_TCBSZ
-	stt		$t1,TCBPrev[$a0]			; arg->prev = prev entry
-	ldt		$t2,TCBTimeout[$t3]		; update timeout of entry by subtracting off
-	sub		$t2,$t2,$a1						; the arg's timeout
-	stt		$t2,TCBTimeout[$t3]
-	stt		$a0,TCBPrev[$t3]			; entry->prev = arg
-	beqz	$t1,.0002							; previous entry? no - go update list head
-	stt		$a0,TCBNext[$t1]			; prev entry->next = arg
-	bra		.0003
-.0002:
-	stt		$a0,TimeoutList				; list head = arg
-.0003:
-	ldbu	$t2,TCBStatus[$a0]		; set status to timing out
+	setto	$a0,$a1
+	sll   $t5,$a0,#2
+	ldt   $t5,TidTcbMap[$t5]
+	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
-	stb		$t2,TCBStatus[$a0]
+	stb		$t2,TCBStatus[$t5]
 	ldi		$v0,#E_Ok
 	ret
 
 ;------------------------------------------------------------------------------
-; Remove a task from the timeout list. The timeouts of following tasks are
-; adjusted. Called when a mailbox is freed and a task is waiting at the
-; mailbox. From within scheduling code mPopTimeoutList is used instead.
+; Remove a task from the timeout list.
+; Called when a mailbox is freed and a task is waiting at the
+; mailbox.
 ;
 ; Parameters:
-;		a0 = task id to remove
+;		$a0 = task id to remove
 ; Modifies:
-;		t0,t1,t2,t3,t4
+;		none
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
 
-;RemoveFromTimeoutList:
-	setto	$a0,$x0
-	ret
 RemoveFromTimeoutList:
-;	sll		$t3,$a0,#LOG_TCBSZ		; tid to pointer
-	ldbu	$t0,TCBStatus[$a0]		; check if waiting at a mailbox
-	and		$t0,$t0,#TS_WAITMSG
-	beqz	$t0,.noWait				
-	mMbxRemoveTask
-.noWait:
-	ldt		$t1,TimeoutList
-	ldt 	$t0,TCBNext[$a0]			; t0 = arg->next
-	bne		$a0,$t1,.0001					; check removing head of list
-	stt		$t0,TimeoutList				; set new head = arg->next
-.0001:
-	beqz	$t0,.noNext
-;	sll		$t4,$t0,#LOG_TCBSZ
-	ldt		$t1,TCBPrev[$a0]			; next->prev = arg->prev
-	stt		$t1,TCBPrev[$t0]			
-	ldt		$t1,TCBTimeout[$t0]		; next->timeout += arg->timeout
-	ldt		$t2,TCBTimeout[$a0]
-	add		$t1,$t1,$t2
-	stt		$t1,TCBTimeout[$t0]
-.noNext:
-	ldt		$t0,TCBPrev[$a0]			; check for previous
-	beqz	$t0,.noPrev
-	ldt		$t1,TCBNext[$a0]			; prev->next = arg->next
-	stt		$t1,TCBNext[$t0]
-.noPrev:
-	ldb		$t0,TCBStatus[$a0]		; no longer timing out
-	and		$t0,$t0,#~(TS_TIMEOUT|TS_WAITMSG)
-	stb		$t0,TCBStatus[$a0]
-	stt		$x0,TCBNext[$a0]      ; reset links
-	stt		$x0,TCBPrev[$a0]
+	setto	$a0,$x0
 	ret
 
 ;------------------------------------------------------------------------------
@@ -350,7 +198,7 @@ DumpReadyList:
 	mov		$a3,$a2
 .0001:
 	mov		$a0,$a3
-	call	PutHexWord
+	call	PutHexByte
 	ldi		$a0,#' '
 	call	Putch
 	sub   $t2,$t2,#1

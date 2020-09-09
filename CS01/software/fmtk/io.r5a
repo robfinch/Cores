@@ -192,7 +192,7 @@ CopyDevDCB:
 
 
 ;------------------------------------------------------------------------------
-;    Compare the current TID against the device owner to see if the device
+;    Compare the current APPID against the device owner to see if the device
 ; is owned.
 ;------------------------------------------------------------------------------
 
@@ -205,9 +205,9 @@ CheckDevOwner:
   mov   $s1,$v1
   ldi   $a0,#27             ; FMTK Get DCB Field
   ldi   $a2,#DCB_hJob
-  ldi   $a3,#1              ; get byte
+  ldi   $a3,#0              ; get word
   ecall
-  and   $v1,$v1,#15
+  and   $v1,$v1,#$FF
   xor   $v1,$v1,$s1
   bnez  $v1,.notOwner
   ldi   $v0,#E_Ok

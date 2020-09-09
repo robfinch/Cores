@@ -47,13 +47,14 @@ MSG_SIZE	equ		16
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		a1 = task id of owner
+;		a1 = app id of owner
 ;		a2 = pointer where to store handle
 ; Returns:
 ;		v0 = E_Ok
 ;------------------------------------------------------------------------------
 
 FMTK_AllocMbx:
+  csrrs $x0,#$300,#1        ; enable interrupts
 	beq		$a2,$x0,.badArg
 	ldi		$t0,#mbxs
 .nxt:
@@ -65,7 +66,7 @@ FMTK_AllocMbx:
 	ldi		$v0,#E_NoMoreMbx
 	jmp   ERETx
 .noOwner:
-	sb		$a1,MBX_OWNER[$t0]
+	stb		$a1,MBX_OWNER[$t0]
 	sub		$t5,$t0,#mbxs				; convert pointer to handle
 	srl		$t5,$t5,#4
 	mov		$a0,$a2
@@ -81,6 +82,7 @@ FMTK_AllocMbx:
 ;------------------------------------------------------------------------------
 
 FMTK_FreeMbx:
+  csrrs $x0,#$300,#1        ; enable interrupts
 	slt		$s1,$a1,#32
 	beq		$s1,$x0,.badMbx
 	sll		$s1,$a1,#4					; convert handle to pointer
@@ -99,10 +101,11 @@ FMTK_FreeMbx:
 	stb		$v0,TCBStatus[$s5]
 	and		$v0,$v0,#TS_TIMEOUT
 	beqz	$v0,.0003
-	mov		$a0,$s5
-	call	RemoveFromTimeoutList
+	ldbu  $a0,TCBtid[$s5]
+	; Remove from the timeout list
+	setto	$a0,$x0
 .0003:
-	mov		$a0,$s5
+	ldbu  $a0,TCBtid[$s5]
 	call	InsertIntoReadyQueue
 	ldi		$v0,#E_NoMsg					; but no message
 	sw		$v0,TCBIntRegs+64[$s5]	; v0 = E_NoMsg
@@ -136,6 +139,7 @@ FMTK_FreeMbx:
 ;------------------------------------------------------------------------------
 
 FMTK_SendMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
 	slt		$t0,$a1,#32
 	beq		$t0,$x0,.badMbx
 	sll		$t0,$a1,#4					; convert handle to pointer
@@ -155,7 +159,7 @@ FMTK_SendMsg:
 	ldbu	$t2,TCBStatus[$s3]
 	or		$t2,$t2,#TS_MSGRDY
 	stb		$t2,TCBStatus[$s3]
-	mov		$a0,$s3
+	ldbu  $a0,TCBtid[$s3]
 	sub		$sp,$sp,#4
 	stt		$t0,[$sp]						; push t0
 	call	InsertIntoReadyQueue
@@ -218,27 +222,28 @@ PeekMsg:
 	ldt		$t3,MSG_LINK[$t1]
 	stt		$t3,MBX_MQHEAD[$t2]
 	; This is done here only because interrupts are disabled
-	lw		$t3,FreeMsg
-	sw		$t3,MSG_LINK[$t1]
-	sw		$t1,FreeMsg
+	ldt		$t3,FreeMsg
+	stt		$t3,MSG_LINK[$t1]
+	stt		$t1,FreeMsg
 .nodq:
+  ldb   $a0,TCBmid[$t1]   ; $a0 = mid
 	beq		$a2,$x0,.nod1
-	mov		$a0,$a2
-	call	VirtToPhys
-	lw		$t3,MSG_D1[$t1]
-	sw		$t3,[$v0]
+	mov		$a1,$a2
+	call	VirtToPhys2
+	ldt		$t3,MSG_D1[$t1]
+	stt		$t3,[$v0]
 .nod1:
 	beq		$a3,$x0,.nod2
-	mov		$a0,$a3
-	call	VirtToPhys
-	lw		$t3,MSG_D2[$t1]
-	sw		$t3,[$v0]
+	mov		$a1,$a3
+	call	VirtToPhys2
+	ldt		$t3,MSG_D2[$t1]
+	stt		$t3,[$v0]
 .nod2:
 	beq		$a4,$x0,.nod3
-	mov		$a0,$a4
-	call	VirtToPhys
-	lw		$t3,MSG_D3[$t1]
-	sw		$t3,[$v0]
+	mov		$a1,$a4
+	call	VirtToPhys2
+	ldt		$t3,MSG_D3[$t1]
+	stt		$t3,[$v0]
 .nod3:
 	ldi		$v0,#E_Ok
 	bra		.ret
@@ -248,7 +253,7 @@ PeekMsg:
 .badMbx:
 	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
 .ret:
-	lw		$ra,[$sp]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 
@@ -266,6 +271,7 @@ PeekMsg:
 ;------------------------------------------------------------------------------
 
 FMTK_PeekMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
 	call	PeekMsg
 	jmp		ERETx
 
@@ -282,6 +288,7 @@ FMTK_PeekMsg:
 ;------------------------------------------------------------------------------
 
 FMTK_WaitMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
 	mov		s5,a5
 	ldi		a5,#1
 	call	PeekMsg							; check for a message, return if available

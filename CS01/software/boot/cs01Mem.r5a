@@ -35,7 +35,7 @@ MMUInit:
 		; Sets all pages to map to page zero for all tasks, except for the system
 		; task (task #0) which pre-allocates the first 64kB of memory.
 		ldi		$t0,#$00
-		ldi		$t4,#31					; task id
+		ldi		$t4,#31					; app id
 .0004:
 		ldi		$t1,#$000				; regno
 		ldi		$t2,#256				; number of registers to update
@@ -46,8 +46,7 @@ MMUInit:
 		mvmap	$x0,$t0,$s1
 		add		$t0,$t0,#$01
 		add		$t1,$t1,#$01		; increment page number
-		srl   $s2,$t4,#16
-		bgtz  $s2,.0005
+		bgtz  $t4,.0005
 		bltu	$t1,$t3,.0003
 .0005:
 		mov		$t0,$x0					; mark pages unallocated
@@ -198,10 +197,10 @@ Alloc:
 ; virtual address ($7FC00).
 ;
 ; Parameters:
-;		a0 = mid to allocate for
+;		$a0 = mid to allocate for
 ;	Returns:
-;		v0 = physical address, 0 if unsuccessful
-;		v1 = virtual address, not valid unless successful
+;		$v0 = physical address, 0 if unsuccessful
+;		$v1 = virtual address, not valid unless successful
 ;------------------------------------------------------------------------------
 
 AllocStack:
@@ -235,7 +234,7 @@ AllocStack:
 ; the stack.
 ;
 ; Parameters:
-;		a0 = pid to free memory for
+;		$a0 = mid to free memory for
 ;	Modifies:
 ;		a0,t0,t1,t3,t4
 ; Returns:
@@ -271,7 +270,7 @@ FreeAll:
 ; Convert a virtual address to a linear one.
 ;
 ; Parameters:
-;		a0 = virtual address to convert
+;		$a0 = virtual address to convert
 ; Modifies:
 ;		t0
 ; Returns:
@@ -288,14 +287,38 @@ VirtToLinear:
   ret
 
 ;------------------------------------------------------------------------------
-; Convert a virtual address to a physical one
+; Convert a virtual address to a linear one.
 ;
 ; Parameters:
-;		a0 = virtual address to convert
+;   $a0 = tid
+;		$a1 = virtual address to convert
 ; Modifies:
 ;		t0
 ; Returns:
-;		v0 = physical address
+;		$v0 = linear address
+;------------------------------------------------------------------------------
+
+VirtToLinear2:
+	srl   $v0,$a1,#28         ; get segment register of address
+	sll   $v0,$v0,#2          ; convert to index
+	sll   $v1,$a0,#2
+	ldt   $v1,TidTcbMap[$v1]  ; $v1 = pointer to TCB
+	ldt   $v1,TCBsegs[$v0]    ; $v1 = segment register value
+	and   $v0,$v1,#$FFFFFFF0  ; mask off acr bits
+	sll   $v0,$v0,#6          ; shift into position
+	and   $v1,$a1,#$0FFFFFFF  ; mask off segment
+	add   $v0,$v1,$v0         ; v0 = linear address (segment base + address)
+  ret
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a physical one
+;
+; Parameters:
+;		$a0 = virtual address to convert
+; Modifies:
+;		t0
+; Returns:
+;		$v0 = physical address
 ;------------------------------------------------------------------------------
 
 VirtToPhys:
@@ -306,6 +329,42 @@ VirtToPhys:
 	srl		$t0,$v0,#LOG_PGSZ		; convert virt to page
 	mGetCurrentTid
 	sll		$v0,$v0,#16
+	or		$v0,$v0,$t0					; and in tid
+	mvmap	$v0,$x0,$v0					; get the translation
+	sll		$v0,$v0,#LOG_PGSZ		; convert page to address
+	and		$t0,$a0,#$3FF				; insert LSB's
+	or		$v0,$v0,$t0
+.notMapped:
+	ldt   $ra,[$sp]
+	add   $sp,$sp,#4
+	ret
+
+;------------------------------------------------------------------------------
+; VirtToPhys2:
+;   Used by the OS to convert virtual to physcial addresses.
+; Convert a virtual address to a physical one. Slightly tricky as linear
+; addresses are associated with the TID while paged addresses are associated
+; with the MID of the task.
+;
+; Parameters:
+;   $a0 = tid
+;		$a1 = virtual address to convert
+; Modifies:
+;		t0
+; Returns:
+;		$v0 = physical address
+;------------------------------------------------------------------------------
+
+VirtToPhys2:
+	gcsub $sp,$sp,#4
+	stt   $ra,[$sp]
+	call  VirtToLinear2
+	bltz	$v0,.notMapped
+	srl		$t0,$v0,#LOG_PGSZ		; convert virt to page
+	sll   $v1,$a0,#2
+	ldt   $v1,TidTcbMap[$v1]  ; $v1 = pointer to TCB
+	ldbu  $v1,TCBmid[$v1]     ; $v1 = mid
+	sll		$v0,$v1,#16         ; set map id field
 	or		$v0,$v0,$t0					; and in tid
 	mvmap	$v0,$x0,$v0					; get the translation
 	sll		$v0,$v0,#LOG_PGSZ		; convert page to address

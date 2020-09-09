@@ -155,11 +155,12 @@ Getch:
 ;------------------------------------------------------------------------------
 
 Putch:
-	gcsub	$sp,$sp,#20
+	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
 	stt		$a3,8[$sp]
 	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
+	stt   $v0,20[$sp]
 	mov		$a3,$a0
 	ldi		$a1,#5  ;CUROUT    ; serial port
 	call	fputc
@@ -167,7 +168,8 @@ Putch:
 	ldt		$a3,8[$sp]
 	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
-	add		$sp,$sp,#20
+	ldt   $v0,20[$sp]
+	add		$sp,$sp,#24
 	ret
 
 ;------------------------------------------------------------------------------
@@ -360,7 +362,7 @@ Monitor:
 	xor		$t1,$t0,#'\t'
 	beq		$t1,$x0,.skip2
 	xor		$t1,$t0,#'M'
-	beq		$t1,$x0,doMem
+	beqz	$t1,doMem
 	xor   $t1,$t0,#'V'
 	beqz  $t1,doVMem
 	xor   $t1,$t0,#'P'
@@ -412,6 +414,12 @@ Monitor:
 .0008:
 	ldi		$t1,#'F'
 	bne		$t0,$t1,.0009
+	ldb   $t0,INBUF+1[$s1]
+	ldi   $t1,#'I'
+	bne   $t1,$t0,.notFind
+	add   $s1,$s1,#1
+	jmp   Find
+.notFind:
 	jmp		FillMem
 .0009:
 	ldi		$t1,#'S'
@@ -449,7 +457,7 @@ doMem:
 	stt		$s1,[$sp]
 	ldi		$a0,#CR
 	call	Putch
-	ldi		$a0,INBUF
+	ldi		$a0,#INBUF
 	call	PutString
 	ldt		$s1,[$sp]
 	add		$sp,$sp,#4
@@ -477,10 +485,10 @@ doMem:
 	mov   $a1,$s3
 	ecall
 	mov   $a0,$v1
-	bra   .0001
+	bra   .0002
 .userMem
 	ldb		$a0,[$s3]
-.0001:
+.0002:
 	call	PutHexByte
 	add		$s3,$s3,#1
 	sub		$s2,$s2,#1
@@ -503,11 +511,12 @@ EditMem:
 ;------------------------------------------------------------------------------
 
 doVMem:
+  add   $s1,$s1,#1
   call  GetDecNum
   ldi   $t1,#0
   sll   $t0,$v0,#16
 .0001:
-  and   $a0,$t1,#15
+  and   $a0,$t1,#3
   bnez  $a0,.notLF
   ldi   $a0,#CR
   call  Putch
@@ -567,6 +576,53 @@ FillMem:
 	sub		$s4,$s4,#1
 	bgt		$s4,$x0,.0001
 	jmp		Monitor
+
+;------------------------------------------------------------------------------
+; FI Hello
+;------------------------------------------------------------------------------
+
+Find:
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+  call  SkipSpaces
+  mov   $s2,$s1
+  ldi   $a0,#0
+  ldi   $a1,#0
+.loop:
+  ldbu  $t0,[$a0]
+  ldbu  $t1,[$s2]
+  ldi   $t2,#' '
+  beq   $t1,$t2,.found
+  ldi   $t2,#CR
+  beq   $t1,$t2,.found
+  beqz  $t1,.found
+  bne   $t0,$t1,.next
+  add   $a0,$a0,#1
+  add   $s2,$s2,#1
+  bra   .loop
+.next:
+  mov   $s2,$s1         ; start over again with $s2
+  add   $a0,$a1,#1      ; start over again with $a0, but increment by one
+  ldi   $t2,#$80000     ; 512k
+  mov   $a1,$a0         ; remember new starting pos.
+  slt   $t2,$a0,$t2
+  bnez  $t2,.loop
+  bra   .notFound
+.found:
+  call  PutHexWord
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+  bra   .next
+.notFound:
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+  jmp   Monitor
 
 ;------------------------------------------------------------------------------
 ; Skip over spaces and tabs in the input buffer.
@@ -786,7 +842,7 @@ PutString:
 	align	4
 IRQRout:
   csrrw $t0,#$780,$x0   ; get register sets
-  srl   $t0,$t0,#4      ; extract register set selection
+  srl   $t0,$t0,#5      ; extract register set selection
   sll   $t0,$t0,#3
   csrrw $t1,#$341,$x0   ; get mepc
   stt   $t1,MEPC0[$t0]  ; save it
@@ -822,9 +878,9 @@ IRQRout:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
   call  gcIncrement
 ERETx2:
-  csrrc $x0,#$780,#15   ; select machine regs only
+  csrrc $x0,#$780,#31   ; select machine regs only
   csrrw $t0,#$780,$x0   ; get register sets
-  srl   $t0,$t0,#4      ; extract register set selection
+  srl   $t0,$t0,#5      ; extract register set selection
   sll   $t0,$t0,#3
   ldt   $t1,MEPC0[$t0]  ; get it
   csrrw $x0,#$341,$t1   ; set mepc
@@ -866,6 +922,7 @@ msgMonHelp:
 		db		"D - dump ready que",13
 		db		"E - edit memory",13
 		db		"F - fill memory",13
+		db    "FI <string>- find string in memory",13
 		db		"K <tid> - kill task", 13
 		db		"M <start> <length>	- dump memory",13
 		db    "P - display PAM",13

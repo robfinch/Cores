@@ -46,7 +46,8 @@
 
 FMTK_HasIOFocus:
 	mGetCurrentTid
-;	sll		$v0,$v0,#LOG_TCBSZ
+	sll   $v0,$v0,#2
+	ldt   $v0,TidTcbMap[$v0]
 	ldt		$v1,IOFocusNdx
 	beq		$v0,$v1,.hasFocus
 	ldi		$v1,#0
@@ -100,8 +101,7 @@ FMTK_SwitchIOFocus:
 
 FMTK_RequestIOFocus:
 	ldi		$t0,#1
-	ldb   $t1,TCBMap[$a1]
-	sll		$t0,$t0,$t1
+	sll		$t0,$t0,$a1
 	ldt		$t1,IOFocusTbl			; Is the task already included in the IO focus?
 	and		$t2,$t1,$t0					; test bit
 	bnez	$t2,.ret				    ; If so, don't add again
@@ -109,6 +109,8 @@ FMTK_RequestIOFocus:
 	stt		$t1,IOFocusTbl
 	ldt		$t0,IOFocusNdx			; get current index
 ;	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
+  sll   $a1,$a1,#2
+  ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB pointer
 	bnez	$t0,.notEmpty		    ; is there one? (!= 0)
 	stt		$a1,IOFocusNdx			; no current index, so set equal to requester
 	stt		$a1,IOF_NEXT[$a1]		; and loop back to self
@@ -151,9 +153,7 @@ FMTK_ReleaseIOFocus:
 
 FMTK_ForceReleaseIOFocus:
 	ldi		$t0,#1
-;	sll		$t0,$t0,$a1
-  ldb   $t1,TCBMap[$a1]
-	sll		$t0,$t0,$t1
+	sll		$t0,$t0,$a1
 	ldt		$t1,IOFocusTbl
 	and		$t2,$t1,$t0				; test bit for task
 	beq		$t2,$x0,.noFocus	; does it even have the focus?
@@ -162,6 +162,8 @@ FMTK_ForceReleaseIOFocus:
 	stt		$t1,IOFocusTbl
 	ldt		$t1,IOFocusNdx		; check if the focus being released is the current
 ;	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
+  sll   $a1,$a1,#2
+  ldt   $a1,TidTcbMap[$a1]  ; convert TID to pointer
 	bne		$a1,$t1,.notSame
 	gcsub	$sp,$sp,#8
 	stt		$t0,[$sp]

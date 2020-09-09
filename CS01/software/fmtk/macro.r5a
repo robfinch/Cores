@@ -33,7 +33,7 @@ endm
 macro mGetCurrentTid
 ;	csrrw	v0,#$181,x0
 ;	and		v0,v0,#15
-	ldt   $v0,CurrentTid
+	ldbu  $v0,CurrentTid
 endm
 
 macro	mHasFocus
@@ -80,21 +80,24 @@ endm
 ; not to stack the return address. So, it is implemented as a macro.
 ;
 ; Parameters:
-;		a0 = task id
+;		$a0 = task id
 ;------------------------------------------------------------------------------
 
 macro mMbxRemoveTask
-	gcsub	$sp,$sp,#16
+	gcsub	$sp,$sp,#20
 	stt		$s1,[$sp]
 	stt		$t0,4[$sp]
 	stt		$t1,8[$sp]
 	stt		$t2,12[$sp]
+	stt   $a0,16[$sp]
+	sll   $a0,$a0,#2
+	ldt   $a0,TidTcbMap[$a0]
 	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
 	bltz	$t0,.xit@					    ; handle good?
 	sll		$t0,$t0,#4						; convert to pointer
 	add		$t0,$t0,#mbxs					; by adding base address
 	lhu		$t1,MBX_WTIDS[$t0]		; get waiting task list
-	ldb   $s1,TCBMap[$a0]
+	ldb   $s1,TCBtid[$a0]
 	ldi		$t2,#1								; create a mask for given task id
 	sll		$t2,$t2,$s1
 	xor		$t2,$t2,#-1
@@ -105,7 +108,8 @@ macro mMbxRemoveTask
 	ldt		$t0,4[$sp]
 	ldt		$t1,8[$sp]
 	ldt		$t2,12[$sp]
-	add		$sp,$sp,#16
+	ldt   $a0,16[$sp]
+	add		$sp,$sp,#20
 endm
 
 ;------------------------------------------------------------------------------
@@ -118,13 +122,14 @@ endm
 ; Modifies:
 ;		v1,t0,t1,t2,t3
 ;	Returns:
-;		v0 = timeout list entry tid
+;		v0 = timeout list pointer to TCB
 ;------------------------------------------------------------------------------
 
 macro mPopTimeoutList
 	lbu		$v1,TCBStatus[$v0]		; no longer a waiting status
 	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
 	beqz	$t1,.noWait@
+	ldbu  $a0,TCBtid[$v0]
 	mMbxRemoveTask							; remove task from mailbox list
 .noWait@:
 	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)

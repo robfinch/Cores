@@ -188,6 +188,7 @@ INSLINE:
 	; so length needs to be adjusted by 4.
 	call	GetBuflen
 	add		$s4,$v0,#5  ; update length, needed later
+	stb   $s4,-5[$s5] ; put length into buffer
 	mov		$a0,$s7
 	mov		$a1,$s4
 	call	OpenSpace
@@ -198,7 +199,6 @@ INSLINE:
 	mov		$a0,$s7			; target
 	sub		$a1,$s5,#5	; source (incl lineno)
 	mov		$a2,$s4			; length
-	stb   $s4,[$a1]
 	call	InsertLine
 	bra		BASPRMPT
 
@@ -212,20 +212,11 @@ INSLINE:
 ;------------------------------------------------------------------------------
 
 DeleteLine:
-	; Find the end of the line to delete
-	add		$t0,$a0,#4		; t0 = pointer to line past line number
-	ldi		$t2,#CR
+	ldbu  $t0,[$a0]     ; $t0 = length
+	add		$t0,$t0,$a0		; t0 = pointer to line past line number and length
 	ldt		$t3,TXTUNF		; last text address
-.0002:
-	ldbu	$t1,[$t0]
-	beq		$t1,$x0,.0003	; might be null
-	beq		$t1,$t2,.0001	; lines end with CR
-	add		$t0,$t0,#1
-	bltu	$t0,$t3,.0002	; end of program?
-.0001:
-	add		$t0,$t0,#1
-.0003:
 	; pull text after eol overtop
+.0003:
 	ldbu	$t4,[$t0]			; copy from next line
 	stb		$t4,[$a0]			; overtop deleted line
 	add		$t0,$t0,#1		; increment pointers
@@ -256,7 +247,7 @@ InsertLine:
 	add		$a1,$a1,#1			; increment pointers
 	add		$a0,$a0,#1
 	sub		$a2,$a2,#1			; decrement length
-	bgtu	$a2,$x0,.0001
+	bgtz	$a2,.0001
 .done:
 	ret
 
@@ -306,7 +297,7 @@ OpenSpace:
 	bgeu	$t2,$t1,.noSpace	; enough room?
 	stt		$t2,TXTUNF		; yes, set new end of text
 .0003:
-	lbu		$t5,[$t3]			; copy old text
+	ldbu	$t5,[$t3]			; copy old text
 	stb		$t5,[$t2]			; to new text loc
 	sub		$t3,$t3,#1		; decrement pointers
 	sub		$t2,$t2,#1
@@ -641,7 +632,7 @@ RUN3:
 RUN1:
 	mov		$t3,$t2
 	mov		$a0,$x0
-	call	FNDLNP		; else find the next line number
+	call	FNDLNT		; else find the next line number
 	ldt		$t1,TXTUNF	; if we've fallen off the end, stop
 	bgeu	$t3,$t1,RUN2
 
@@ -1033,8 +1024,12 @@ IF1:
 IF2:
   mov		$t3,$t2	; set lookup pointer
 	mov		a0,x0		; find line #0 (impossible)
-	call	FNDSKP		; if so, skip the rest of the line
-	bne		v0,x0,IF3; if no next line, do a warm start
+	ldt   $a0,CURRNT  ; move to the next line
+	ldbu  $a1,[$a0]
+	add   $a1,$a1,$a0
+	stt   $a1,CURRNT
+	ldt   $a0,TXTUNF  ; do a warm start if past end
+	bgeu  $a1,$a0,.IF3
 	jmp		WSTART
 IF3:
 	jmp		RUNTSL		; run the next line
@@ -2389,7 +2384,6 @@ GETLN:
 ; will not initialize $t3 and do the search.
 ; 'FNDLNP' will start with $t3 and search for the line no.
 ; 'FNDNXT' will bump $t3 by 4, find a CR and then start search.
-; 'FNDSKP' uses $t3 to find a CR, and then starts the search.
 ; return Z=1 if line is found, r9 = pointer to line
 ;
 ; Parameters
@@ -2405,6 +2399,9 @@ FNDLN:
 fl1:
 	ldi		$t3,#TXTBGN	; init. the text save pointer
 
+FNDLNT:
+  ldt   $v0,CURRNT
+  stt   $v0,SRCHLN
 FNDLNP:
 	ldt		$t4,TXTUNF	; check if we passed the end
 	bgeu	$t3,$t4,FNDRET1 ; if so, return with r9=0,a0=0
@@ -2421,11 +2418,10 @@ FNDRET2:
 
 ; Move from the current line to the next one.
 FNDNXT:
-FNDSKP:
   ldt   $v0,SRCHLN
 	ldbu	$v1,[$v0]
 	add		$t3,$v0,$v1
-	stt   $v0,SRCHLN
+	stt   $t3,SRCHLN
 	bra   FNDLNP
 
 
@@ -2520,31 +2516,31 @@ PU1:
 
 PRTSTG:
 	gcsub	$sp,$sp,#20
-	sw		r5,[$sp]
-	sw		r6,4[$sp]
-	sw		r7,8[$sp]
-	sw		$ra,12[$sp]
-	sw		$a0,16[$sp]
-	mov   r5,a0	    ; r5 = pointer
-	mov   r6,a1	    ; r6 = stop char
+	stt		x5,[$sp]
+	stt		x6,4[$sp]
+	stt		x7,8[$sp]
+	stt		$ra,12[$sp]
+	stt		$a0,16[$sp]
+	mov   x5,a0	    ; r5 = pointer
+	mov   x6,a1	    ; r6 = stop char
 .PS1:
-  lbu   r7,[r5]     ; get a text character
-	add		r5,r5,#1
-	beq	  r7,r6,.PRTRET	; same as stop character? if so, return
-	mov   a0,r7
+  ldbu  x7,[x5]     ; get a text character
+	add		x5,x5,#1
+	beq	  x7,x6,.PRTRET	; same as stop character? if so, return
+	mov   $a0,x7
 	call	GOOUT		; display the char.
 	ldi		$t1,#CR
-	bne   r7,$t1,.PS1	; is it a C.R.? no, go back for more
-	ldi		a0,#LINEFD  ; yes, add a L.F.
+	bne   x7,$t1,.PS1	; is it a C.R.? no, go back for more
+	ldi		$a0,#LINEFD  ; yes, add a L.F.
 	call	GOOUT
 .PRTRET:
-  mov   v1,r7	    ; return a1 = stop char
-	mov		v0,r5		; return a0 = line pointer
-	lw		$r5,[$sp]
-	lw		$r6,4[$sp]
-	lw		$r7,8[$sp]
-	lw		$ra,12[$sp]
-	lw		$a0,16[$sp]
+  mov   $v1,x7	    ; return a1 = stop char
+	mov		$v0,x5		; return a0 = line pointer
+	ldt		$x5,[$sp]
+	ldt		$x6,4[$sp]
+	ldt		$x7,8[$sp]
+	ldt		$ra,12[$sp]
+	ldt		$a0,16[$sp]
 	add		$sp,$sp,#20
   ret					; then return
 
@@ -2557,8 +2553,8 @@ PRTSTG:
 ; skipped over (usually a branch instruction).
 ;
 QTSTG:
-	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
 	call	TSTC		; *** QTSTG ***
 	dw		'"'
 	bra		QT3
@@ -2594,13 +2590,13 @@ QT5:					; not " ' or _
 ; Output a CR LF sequence
 ;
 prCRLF:
-	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
 	ldi		a0,#CR
 	call	GOOUT
 	ldi		a0,#LINEFD
 	call	GOOUT
-	lw		$ra,[$sp]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 

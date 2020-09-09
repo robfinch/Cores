@@ -46,8 +46,9 @@ TCBPrev			EQU		$318
 TCBTimeout	EQU		$320
 IOF_NEXT		EQU		$328
 IOF_PREV		EQU		$330
-TCBMap      EQU   $338
-TCBName			EQU		$340
+TCBtid      EQU   $338
+TCBmid      EQU   $340
+TCBName			EQU		$342
 
 TS_NONE			EQU		0
 TS_READY		EQU		1
