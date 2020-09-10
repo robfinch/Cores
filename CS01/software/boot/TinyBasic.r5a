@@ -153,12 +153,11 @@ WSTART:
 BASPRMPT:
 	ldi		$a0,#14		; get current tid
 	ecall
-	srl		$a0,$v1,#10 ; 10 LSB's are zero
-	call	PutHexHalf
+	mov		$a0,$v1   ;
+	call	PutHexByte
 	ldi		$a0,#'>'	; Prompt with a '>' and
 	call	GETLN		  ; read a line.
 	call	TOUPBUF 	; convert to upper case
-	mov		$s6,$t2		; save pointer to end of line
 	ldi		$t2,#BUFFER	; point to the beginning of line
 	call	TSTNUM		; is there a number there?
 	call	IGNBLK		; skip trailing blanks
@@ -182,7 +181,7 @@ ST2:
 	call	DeleteLine
 INSLINE:
 	beqz	$s6,BASPRMPT	; line was empty
-	mov		$a0,$s5			; a0 = buffer pointer	
+	mov		$a0,$s5			; a0 = buffer pointer
 	; GetBuflen just get the length of the text.
 	; A line number is stuffed just before the text
 	; so length needs to be adjusted by 4.
@@ -196,6 +195,8 @@ INSLINE:
 	ldi		$a0,#msgTooBig  ; no space available
 	jmp		ERROR
 .0001:
+  mov   $a0,$s5
+	call  PutString	
 	mov		$a0,$s7			; target
 	sub		$a1,$s5,#5	; source (incl lineno)
 	mov		$a2,$s4			; length
@@ -610,6 +611,9 @@ RUNNXL:					; RUN <next line>
 RUN2:
 	jmp		WSTART
 RUN3:
+  stt   $t2,SRCHLN
+  ldbu  $t3,[$t2]
+  add   $t2,$t2,$t3
 	ldt		$a0,IRQROUT		; are we handling IRQ's ?
 	beqz  $a0,RUN1
 	ldi   $a0,#35       ; Get IRQ flag, was there an IRQ?
@@ -632,7 +636,7 @@ RUN3:
 RUN1:
 	mov		$t3,$t2
 	mov		$a0,$x0
-	call	FNDLNT		; else find the next line number
+	call	FNDNXT  		; else find the next line number
 	ldt		$t1,TXTUNF	; if we've fallen off the end, stop
 	bgeu	$t3,$t1,RUN2
 
@@ -654,7 +658,7 @@ RUNSML:                 ; RUN <same line>
 ;
 GOTO:
 	call	OREXPR		;evaluate the following expression
-	mov   $t0,$a0
+	mov   $t0,$v0
 	call 	ENDCHK		;must find end of line
 	mov   $a0,$t0
 	call 	FNDLN		; find the target line
@@ -669,18 +673,18 @@ _clr:
 ; Clear the variable area of memory
 clearVars:
 	gcsub	$sp,$sp,#8
-	sw		r6,[$sp]
-	sw		$ra,4[$sp]
+	stt		r6,[$sp]
+	stt		$ra,4[$sp]
   ldi   r6,#100    	; number of word pairs to clear
-  lw    v0,VARBGN
+  ldt   v0,VARBGN
 .cv1:
-  sw		x0,[$v0]		; variable name
-  sw		x0,4[$v0]		; and value
+  stt		x0,[$v0]		; variable name
+  stt		x0,4[$v0]		; and value
   add		v0,v0,#8
   sub		r6,r6,#1
 	bgt		r6,x0,.cv1
-  lw		r6,[$sp]
-  lw		$ra,4[$sp]
+  ldt		r6,[$sp]
+  ldt		$ra,4[$sp]
   add		$sp,$sp,#8
   ret
 
@@ -734,7 +738,9 @@ LS5:
 LS4:
 	mov		$a0,$t3
 	call	PRTLN		; print the line
-	mov		$t3,$v0		; set pointer for next
+	ldbu  $t3,[$a0]
+	add   $t3,$t3,$a0 ; set pointer for next
+;	mov		$t3,$v0		
 	call	CHKIO		; check for listing halt request
 	beqz	$v0,LS3
 	ldi		$t1,#CTRLS
@@ -812,9 +818,9 @@ PR6:
 	jmp		FINISH
 PR8:
 	call	OREXPR		; evaluate the expression
-	mov		a0,v0
-	ldi		a1,#5		; set the width
-	ldi		a2,#10
+	mov		$a0,$v0
+	ldi		$a1,#5		; set the width
+	ldi		$a2,#10
 	call	PRTNUM		; print its value
 	bra		PR3			; more to print?
 
@@ -1019,30 +1025,31 @@ NXPurge:
 IF0:
   call	OREXPR		; evaluate the expression
 IF1:
-  beq	  v0,x0,IF2	; is it zero? if not, continue
+  beqz	$v0,IF2	; is it zero? if not, continue
   jmp		RUNSML
 IF2:
   mov		$t3,$t2	; set lookup pointer
-	mov		a0,x0		; find line #0 (impossible)
+	mov		$a0,$x0		; find line #0 (impossible)
 	ldt   $a0,CURRNT  ; move to the next line
 	ldbu  $a1,[$a0]
 	add   $a1,$a1,$a0
 	stt   $a1,CURRNT
 	ldt   $a0,TXTUNF  ; do a warm start if past end
-	bgeu  $a1,$a0,.IF3
+	bltu  $a1,$a0,.IF3
 	jmp		WSTART
 IF3:
+  mov   $t3,$a1
 	jmp		RUNTSL		; run the next line
 
 
 ;******************************************************************
 ; INPUT is called first and establishes a stack frame
 INPERR:
-	lw		$sp,STKINP		; restore the old stack pointer
-	lw		a0,[$sp]
+	ldt		$sp,STKINP		; restore the old stack pointer
+	ldt		$a0,[$sp]
 	add		$sp,$sp,#4
-	sw		a0,CURRNT		; and old 'CURRNT'
-	lw		$t2,[$sp]		; and old text pointer
+	stt		$a0,CURRNT		; and old 'CURRNT'
+	ldt		$t2,[$sp]		; and old text pointer
 	add		$sp,$sp,#4
 	add		$sp,$sp,#20	; fall through will subtract 20
 
@@ -1480,7 +1487,7 @@ sysx1:
 ; <OREXPR>::=<ANDEXPR> OR <ANDEXPR> ...
 ;
 OREXPR:
-	sub		$sp,$sp,#12
+	gcsub	$sp,$sp,#12
 	sw		$ra,[$sp]
 	sw		r3,4[$sp]
 	sw		r4,8[$sp]
@@ -1904,7 +1911,7 @@ tstv_notfound:
 ;   v0 = 3 character variable name + type
 ;
 getVarName:
-	sub		$sp,$sp,#12
+	gcsub	$sp,$sp,#12
 	sw		r5,[$sp]
 	sw		$ra,4[$sp]
   lbu   a0,[$t2]		; get first character
@@ -2268,12 +2275,12 @@ ERROR:
 	stb		$x0,[$t2]		; put a zero where the error is
 	ldt		$a0,CURRNT	; point to start of current line
 	call	PRTLN		; display the line in error up to the 0
-	mov     r6,a0	    ; save off end pointer
+	mov     r6,$a0	    ; save off end pointer
 	sb		r5,[$t2]		; restore the character
-	ldi		a0,#'?'		; display a "?"
+	ldi		$a0,#'?'		; display a "?"
 	call	GOOUT
-	mov		a1,r0		; stop char = 0
-	sub		a0,r6,#1	; point back to the error char.
+	mov		$a1,$x0		; stop char = 0
+	sub		$a0,r6,#1	; point back to the error char.
 	call	PRTSTG		; display the rest of the line
 ERROR1:
 	jmp	    WSTART		; and do a warm start
@@ -2390,23 +2397,30 @@ GETLN:
 ;	a0 = line number to find
 ;
 FNDLN:
-  ldt   $t1,CURRNT
-  stt   $t1,SRCHLN
 	ldi		$t1,#$FFFFF
 	blt		$a0,$t1,fl1	; line no. must be < 1048576
 	ldi		$a0,#msgLineRange
 	jmp		ERROR
 fl1:
 	ldi		$t3,#TXTBGN	; init. the text save pointer
-
+	stt   $t3,SRCHLN
+  bra   FNDLNP
 FNDLNT:
-  ldt   $v0,CURRNT
-  stt   $v0,SRCHLN
+  ldt   $t3,CURRNT
+  stt   $t3,SRCHLN
 FNDLNP:
 	ldt		$t4,TXTUNF	; check if we passed the end
 	bgeu	$t3,$t4,FNDRET1 ; if so, return with r9=0,a0=0
 	;call	LoadWord		; get line number
 	ldt   $v0,1[$t3]
+;	gcsub $sp,$sp,#8
+;	stt   $ra,[$sp]
+;	stt   $a0,4[$sp]
+;	mov   $a0,$v0
+;	call  PutHexWord
+;	ldt   $ra,[$sp]
+;	ldt   $a0,4[$sp]
+;	add   $sp,$sp,#8
 	beq		$v0,$a0,FNDRET2
 	bltu	$v0,$a0,FNDNXT	; is this the line we want? no, not there yet
 FNDRET1:
@@ -2461,41 +2475,41 @@ MVDOWN:
 ; done because PUSHA_ / POPA_ is called all the time.
 //message "POPA_"
 POPA_:
-	lw		a0,[$sp]
+	ldt		$a0,[$sp]
 	add		$sp,$sp,#4
-	sw		a0,LOPVAR	; restore LOPVAR, but zero means no more
-	beq		a0,x0,PP1
-	lw		a0,[$sp]
-	sw		a0,LOPPT
-	lw		a0,4[$sp]
-	sw		a0,LOPLN
-	lw		a0,8[$sp]
-	sw		a0,LOPLMT
-	lw		a0,12[$sp]
-	sw		a0,LOPINC
+	stt		$a0,LOPVAR	; restore LOPVAR, but zero means no more
+	beqz	$a0,PP1
+	ldt		$a0,[$sp]
+	stt		$a0,LOPPT
+	ldt		$a0,4[$sp]
+	stt		$a0,LOPLN
+	ldt		$a0,8[$sp]
+	stt		$a0,LOPLMT
+	ldt		$a0,12[$sp]
+	stt		$a0,LOPINC
 	add		$sp,$sp,#16
 PP1:
 	ret
 
 
 PUSHA_:
-	lw		a0,STKBOT	; Are we running out of stack room?
-	add		a0,a0,#20	; we might need this many bytes
-	blt		$sp,a0,QSORRY	; out of stack space
-	lw		a1,LOPVAR		; save loop variables
-	beq		a1,x0,PU1		; if LOPVAR is zero, that's all
+	ldt		$a0,STKBOT	; Are we running out of stack room?
+	add		$a0,$a0,#20	; we might need this many bytes
+	blt		$sp,$a0,QSORRY	; out of stack space
+	ldt		$a1,LOPVAR		; save loop variables
+	beqz	$a1,PU1		; if LOPVAR is zero, that's all
 	sub		$sp,$sp,#16
-	lw		a0,LOPPT
-	sw		a0,[$sp]
-	lw		a0,LOPLN
-	sw		a0,4[$sp]
-	lw		a0,LOPLMT
-	sw		a0,8[$sp]
-	lw		a0,LOPINC
-	sw		a0,12[$sp]
+	ldt		$a0,LOPPT
+	stt		$a0,[$sp]
+	ldt		$a0,LOPLN
+	stt		$a0,4[$sp]
+	ldt		$a0,LOPLMT
+	stt		$a0,8[$sp]
+	ldt		$a0,LOPINC
+	stt		$a0,12[$sp]
 PU1:
 	sub		$sp,$sp,#4
-	sw		a1,[$sp]
+	stt		a1,[$sp]
 	ret
 
 
@@ -2620,31 +2634,31 @@ prCRLF:
 ;-------------------------------------------------------------------------------
 
 public PRTNUM:
-	sub		$sp,$sp,#20
-	sw		$s1,[$sp]
-	sw		$s2,4[$sp]
-	sw		$s3,8[$sp]
-	sw		$s4,12[$sp]
-	sw		$ra,16[$sp]
-	ldi		s4,#NUMWKA	; r7 = pointer to numeric work area
-	mov		s3,a0		; save number for later
-	mov		s2,a1		; s2 = min number of chars
-	bge		a0,x0,.PN2	; is it negative? if not
-	sub		a0,x0,a0	; else make it positive
-	sub		s2,s2,#1	; one less for width count
+	gcsub	$sp,$sp,#20
+	stt		$s1,[$sp]
+	stt		$s2,4[$sp]
+	stt		$s3,8[$sp]
+	stt		$s4,12[$sp]
+	stt		$ra,16[$sp]
+	ldi		$s4,#NUMWKA	; r7 = pointer to numeric work area
+	mov		$s3,$a0		; save number for later
+	mov		$s2,$a1		; s2 = min number of chars
+	bge		$a0,$x0,.PN2	; is it negative? if not
+	sub		$a0,$x0,$a0	; else make it positive
+	sub		$s2,$s2,#1	; one less for width count
 .PN2:
 	ldi		$t1,#10
 .PN1:
-	rem		a1,a0,a2	; a1 = a0 mod 10
-	div		a0,a0,a2	; a0 /= 10 divide by 10
-	bleu	a1,a2,.PN7
-	add		a1,a1,#'A'-10-'0'
+	rem		$a1,$a0,$a2	; a1 = a0 mod base
+	div		$a0,$a0,$a2	; a0 /= divide by base
+	bleu	$a1,$a2,.PN7
+	add		$a1,$a1,#'A'-10-'0'
 .PN7:
-	add		a1,a1,#'0'	; convert remainder to ascii
-	sb		a1,[$s4]		; and store in buffer
-	add		s4,s4,#1
-	sub		s2,s2,#1	; decrement width
-	bne		a0,x0,.PN1
+	add		$a1,$a1,#'0'	; convert remainder to ascii
+	stb		$a1,[$s4]		; and store in buffer
+	add		$s4,$s4,#1
+	sub		$s2,$s2,#1	; decrement width
+	bnez	$a0,.PN1
 	ble		$s2,$x0,.PN4	; test pad count, skip padding if not needed
 .PN3:
 	ldi		$a0,#' '		; display the required leading spaces
@@ -2659,15 +2673,15 @@ public PRTNUM:
 	ldi		$t1,#NUMWKA
 .PN6:
 	sub		$s4,$s4,#1
-	lbu		$a0,[$s4]		; now unstack the digits and display
+	ldbu	$a0,[$s4]		; now unstack the digits and display
 	call	GOOUT
 	bgtu	$s4,$t1,.PN6
 
-	lw		$s1,[$sp]
-	lw		$s2,4[$sp]
-	lw		$s3,8[$sp]
-	lw		$s4,12[$sp]
-	lw		$ra,16[$sp]
+	ldt		$s1,[$sp]
+	ldt		$s2,4[$sp]
+	ldt		$s3,8[$sp]
+	ldt		$s4,12[$sp]
+	ldt		$ra,16[$sp]
 	add		$sp,$sp,#20
 	ret
 
@@ -2695,18 +2709,18 @@ LoadWord:
 
 ;-------------------------------------------------------------------------------
 ; Parameters:
-; 	a0 = pointer to line
+; 	$a0 = pointer to line
 ; Returns:
-;		v0 = pointer to end of line + 1
+;		$v0 = pointer to end of line + 1
 ;-------------------------------------------------------------------------------
 
 PRTLN:
-	sub		$sp,$sp,#16
+	gcsub	$sp,$sp,#16
 	stt		$t0,[$sp]
 	stt		$ra,4[$sp]
 	stt		$a0,8[$sp]
 	stt		$a1,12[$sp]
-  mov		$t0,$a0		; r5 = pointer
+  mov		$t0,$a0		; $t0 = pointer
   ; get the line number stored as binary
   ; assume unaligned loads not allowed
   ;call	LoadWord
@@ -2777,16 +2791,16 @@ TC1:
 TSTNUM:
 	gcsub	$sp,$sp,#8
 	stt		$ra,4[$sp]
-	stt		r3,[$sp]
+	stt		$t0,[$sp]
 	call	IGNBLK		; skip over blanks
 	mov		$v0,$x0		; initialize return parameters
 	mov		$v1,$x0
 TN1:
-	ldbu	r3,[$t2]
+	ldbu	$t0,[$t2]
 	ldi		$t1,#'0'
-	blt		r3,$t1,TSNMRET; is it less than zero?
+	blt		$t0,$t1,TSNMRET; is it less than zero?
 	ldi		$t1,#'9'
-	bgt		r3,$t1,TSNMRET; is it greater than nine?
+	bgt		$t0,$t1,TSNMRET; is it greater than nine?
 	ldi		$t1,#$7FFFFFF
 	bleu	$v0,$t1,TN2; see if there's room for new digit
 	ldi		$a0,#msgNumTooBig
@@ -2795,12 +2809,12 @@ TN2:
 	add		$t2,$t2,#1	; adjust text pointer
 	ldi   $t3,#10
 	mul   $v0,$v0,$t3 ; quickly multiply result by 10
-	and		r3,r3,#$0F	; add in the new digit
-	add		$v0,$v0,r3
+	sub   $t0,$t0,#'0'  ; convert ascii to binary
+	add		$v0,$v0,$t0 ; add in the new digit
 	add		$v1,$v1,#1	; increment the no. of digits
 	bra		TN1
 TSNMRET:
-	ldt		r3,[$sp]
+	ldt		$t0,[$sp]
 	ldt		$ra,4[$sp]
 	add		$sp,$sp,#8
 	ret
@@ -2814,20 +2828,22 @@ TSNMRET:
 ;	$t2 = pointer updateded past any spaces or tabs
 ;
 IGNBLK:
-	sub		$sp,$sp,#4
-	sw		$a0,[$sp]
+	gcsub	$sp,$sp,#8
+	stt		$a0,[$sp]
+	stt   $t1,4[$sp]
 IGB2:
-	lbu		a0,[$t2]			; get char
+	ldbu	$a0,[$t2]			; get char
 	ldi		$t1,#' '
 	beq		$a0,$t1,IGB1	; see if it's a space
 	ldi		$t1,#'\t'
-	bne		a0,$t1,IGBRET	; or a tab
+	bne		$a0,$t1,IGBRET	; or a tab
 IGB1:
 	add		$t2,$t2,#1		; increment the text pointer
 	bra		IGB2
 IGBRET:
-	lw		$a0,[$sp]
-	add		$sp,$sp,#4
+	ldt		$a0,[$sp]
+	ldt   $t1,4[$sp]
+	add		$sp,$sp,#8
 	ret
 
 ; ===== Convert the line of text in the input buffer to upper
@@ -3099,7 +3115,7 @@ BYEBYE:
 	ecall
  
 
-msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.1",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
+msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.2",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
 OKMSG	db	CR,LINEFD,"OK",CR,0
 msgWhat	db	"What?",CR,0
 SRYMSG	db	"Sorry."

@@ -70,6 +70,7 @@
 `define EBREAK	32'h00100073
 `define ECALL		32'h00000073
 `define ERET		32'h10000073
+`define MRET		32'h30200073
 `define WFI			32'h10100073
 `define PFI			32'h10300073
 `define CS_ILLEGALINST	2
@@ -136,7 +137,7 @@ reg [WID-1:0] iregfile [0:127];		// integer / system / interrupt register file
 {+SEG}
 reg [WID-1:0] sregfile [0:15];		// segment registers
 {-SEG}
-reg [3:0] ASID;
+reg [4:0] ASID;
 {+PGMAP}
 reg wrpagemap;
 wire [12:0] pagemap_ndx;
@@ -146,7 +147,7 @@ PagemapRam pagemap (
   .clka(clk_g),
   .ena(1'b1),
   .wea(wrpagemap),
-  .addra(pagemapa),
+  .addra({ib[20:16],ib[7:0]}),
   .dina(ia[8:0]),
   .douta(pagemapoa),
   .clkb(clk_g),
@@ -174,9 +175,9 @@ PAM upam1 (
 	.done(pdone)
 );
 {-PAM}
-reg decto, setto, getto;
+reg decto, setto, getto, getzl;
 wire [31:0] to_out;
-wire [31:0] zl_out;
+wire [7:0] zl_out;
 wire to_done;
 Timeouter utmo1
 (
@@ -185,6 +186,7 @@ Timeouter utmo1
 	.dec_i(decto),
 	.set_i(setto),
 	.qry_i(getto),
+	.pop_i(getzl),
 	.tid_i(ia[4:0]),
 	.timeout_i(ib),
 	.timeout_o(to_out),
@@ -192,13 +194,12 @@ Timeouter utmo1
 	.done_o(to_done)
 );
 reg insrdy, rmvrdy, getrdy;
-wire rdy_done;
 wire [4:0] rdy_out;
 reg readyqins, readyqrmv;
 reg [2:0] readyqpri;
-wire [31:0] queueo;
+wire [7:0] queueo;
 reg pushq, popq;
-ReadyQueues urq1 (rst_i, clk_g, pushq, popq, ia, pushq ? ib[2:0] : ia[2:0], queueo);
+ReadyQueues urq1 (rst_i, clk_g, pushq, popq, ia[7:0], pushq ? ib[2:0] : ia[2:0], queueo);
 /*
 ReadyList url1
 (
@@ -243,7 +244,7 @@ reg illegal_insn;
 // CSRs
 reg [5:0] gcloc;    // garbage collect lockout count
 reg [31:0] uip;     // user interrupt pending
-reg [3:0] regset;
+reg [4:0] regset;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
 reg wc_time_irq;
@@ -262,7 +263,7 @@ reg [31:0] mtvec = 32'hFFFC0000;
 reg [31:0] mie, uie, uip;
 reg [31:0] mscratch;
 reg [31:0] mbadaddr;
-reg [31:0] usema;
+reg [31:0] usema, msema;
 wire [31:0] mip;
 reg msip, ugip;
 assign mip[31:8] = 24'h0;
@@ -330,13 +331,16 @@ reg [31:0] ea;
 wire [3:0] segsel = ea[31:28];
 reg [63:0] dati;
 reg [31:0] datiH;
-wire [31:0] datiL = dat_i >> {ea[1:0],3'b0};
+reg [31:0] datiL;
+always @(posedge clk_g)
+  if (state==MEMORY && ack_i)
+    datiL <= dat_i >> {ea[1:0],3'b0};
 {+F}
 wire [63:0] sdat = (opcode==`STOREF ? fb : ib) << {ea[1:0],3'b0};
 {-F}
 {!F}
 reg [63:0] sdat;
-always @*
+always @(posedge clk_g)
 	case(opcode)
 {+A}
 	`AMO:
@@ -358,7 +362,9 @@ always @*
 		sdat <= ib << {ea[1:0],3'b0};
 	endcase
 {-F}
-wire [7:0] ssel = fnSelect(opcode,funct3) << ea[1:0];
+reg [7:0] ssel;
+always @(posedge clk_g)
+  ssel <= fnSelect(opcode,funct3) << ea[1:0];
 
 reg [4:0] state;
 parameter RESET = 5'd0;
@@ -389,6 +395,8 @@ parameter REGFETCH3 = 5'd24;
 parameter PAGEMAPA = 5'd25;
 parameter CSR = 5'd26;
 parameter CSR2 = 5'd27;
+parameter MEMORY_SETUP = 5'd28;
+parameter MEMORY2_SETUP = 5'd29;
 wire ld = state==EXECUTE;
 
 {+M}
@@ -595,6 +603,7 @@ if (rst_i) begin
 	pc <= RSTPC;
 	mepc <= 32'hFFFC0200;
 	mtvec <= 32'hFFFC0000;
+	ASID <= 5'd0;
 	wrirf <= 1'b0;
 	wrfrf <= 1'b0;
 	// Reset bus
@@ -614,7 +623,7 @@ if (rst_i) begin
 	nmif <= 1'b0;
 	ldd <= 1'b0;
 {+PGMAP}
-	wrpagemap <= 1'b1;
+	wrpagemap <= 1'b0;
 {-PGMAP}
 {+PAM}
 	palloc <= 1'b0;
@@ -625,10 +634,11 @@ if (rst_i) begin
   pagemapa <= 13'd0;
   ia <= 9'd0;
 	crs <= 2'b01;
-	regset <= 4'h0;
+	regset <= 5'h0;
 	setto <= 1'b0;
 	getto <= 1'b0;
 	decto <= 1'b0;
+	getzl <= 1'b0;
 	insrdy <= 1'b0;
 	rmvrdy <= 1'b0;
 	getrdy <= 1'b0;
@@ -640,6 +650,7 @@ if (rst_i) begin
 end
 else begin
 decto <= 1'b0;
+getzl <= 1'b0;
 ldd <= 1'b0;
 {+PGMAP}
 wrpagemap <= 1'b0;
@@ -683,10 +694,10 @@ IFETCH:
 	    gcie[ASID] <= 1'b1;
 	  if (gcloc != 6'd0)
 	    gcloc <= gcloc - 2'd1;
-	  Rdx  <= (regset[0] ? crs - 2'd1 : crs);
-	  Rs1x <= (regset[1] ? crs - 2'd1 : crs);
-	  Rs2x <= (regset[2] ? crs - 2'd1 : crs);
-	  Rs3x <= (regset[3] ? crs - 2'd1 : crs);
+	  Rdx  <= (regset[0] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs1x <= (regset[1] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs2x <= (regset[2] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs3x <= (regset[3] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
 		illegal_insn <= 1'b1;
 		ipc <= pc;
 		wrirf <= 1'b0;
@@ -900,15 +911,15 @@ RFETCH:
 {-FMA}
 {-F}
 {+NSIMM}
-    if (imm[11:0]==12'h800)
+    if (imm[11:0]==12'h800 && opcode!=`JAL)
       state <= NSIMM;
 {-NSIMM}
+    pagemapa <= Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
 	end
 REGFETCH2:
 	goto (REGFETCH3);
 REGFETCH3:
   begin
-    pagemapa <= Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
     ea <= ia + imm;
     goto (EXECUTE);
   end
@@ -1003,7 +1014,7 @@ EXECUTE:
 					begin
 						decto <= 1'b1;
 						illegal_insn <= 1'b0;
-						state <= IFETCH;
+						goto (IFETCH);
 					end
 				7'd12:
 					begin
@@ -1032,7 +1043,7 @@ EXECUTE:
 	          res <= ia - ib;
 			      if (UserMode) begin
   		        gcie[ASID] <= 1'b0;
-  		        gcloc <= ~imm[7:2] + 3'd4;
+  		        gcloc <= ~ib[7:2] + 3'd4;
   		      end
 	          illegal_insn <= 1'b0;
 	        end
@@ -1260,7 +1271,7 @@ EXECUTE:
 				pc <= ipc + imm;
 				pc[0] <= 1'b0;
 //				if (UserMode)
-//				  mie[0] <= 1'b0;
+//				  uie[0] <= 1'b0;
 			end
 		`JALR:
 			begin
@@ -1268,7 +1279,7 @@ EXECUTE:
 				pc <= ia + imm;
 				pc[0] <= 1'b0;
 //				if (UserMode)
-//				  mie[0] <= 1'b0;
+//				  uie[0] <= 1'b0;
 			end
 		`Bcc:
 			case(funct3)
@@ -1280,70 +1291,10 @@ EXECUTE:
 			3'd7:	begin if (ia >= ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
 			default:	;
 			endcase
-		`LOAD:
+		`LOAD,`STORE,`LOADF,`STOREF,`AMO:
 			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				state <= MEMORY;
+				goto (MEMORY_SETUP);
 			end
-		`STORE:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				we_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				dat_o <= sdat[31:0];
-				case(funct3)
-				3'd0,3'd1,3'd2:	illegal_insn <= 1'b0;
-				default:	;
-				endcase
-				state <= MEMORY;
-			end
-{+F}
-		`LOADF:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				state <= MEMORY;
-			end
-		`STOREF:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				we_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				dat_o <= sdat[31:0];
-				case(funct3)
-				3'd2:	illegal_insn <= 1'b0;
-				default:	;
-				endcase
-				state <= MEMORY;
-			end
-{-F}
-{+A}
-		`AMO:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				we_o <= funct5==5'd3;			// SC
-				sel_o <= ssel[3:0];
-				sr_o <= funct5==5'd2;			// LR
-				cr_o <= funct5==5'd3;
-				tEA();
-				dat_o <= sdat[31:0];
-				case(funct3)
-				3'd2:	illegal_insn <= 1'b0;
-				default:	;
-				endcase
-				state <= MEMORY;
-			end
-{-A}
 		7'd115:
 			begin
 				case(ir)
@@ -1355,13 +1306,13 @@ EXECUTE:
 				`ECALL:
 					if (crs != 2'b11)
 					  tException(4'h8 + mstatus[2:1],pc);
-				`ERET:
+				`ERET,`MRET:
 					if (MachineMode) begin
       			if (crs!=2'b00)
       			  crs <= crs - 2'd1;
 //      			if (crs==2'b01)
 //				      regset <= 4'hF;
-            regset <= 4'h0;
+            regset <= 5'h0;
 						pc <= mepc;
 						mstatus[11:0] <= {2'b00,1'b1,mstatus[11:3]};
 						illegal_insn <= 1'b0;
@@ -1392,7 +1343,8 @@ EXECUTE:
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
-						12'h780:	begin res <= {crs,regset}; illegal_insn <= 1'b0; end
+						12'h7C0:	if (MachineMode) begin res <= {crs,regset}; illegal_insn <= 1'b0; end
+						12'h7C1:  if (MachineMode) begin res <= msema; illegal_insn <= 1'b0; end
 //						12'h801:  begin res <= usema; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
@@ -1424,7 +1376,7 @@ EXECUTE:
 CSR:  goto (CSR2);
 CSR2:
   begin
-    res <= queueo;
+    res <= {{24{queueo[7]}},queueo};
     goto (WRITEBACK);
   end
 {+PAM}
@@ -1445,14 +1397,15 @@ PAGEMAPA:
   end
 {-PGMAP}
 TMO:
-	if (to_done&rdy_done) begin
+	if (to_done) begin
 		illegal_insn <= 1'b0;
-		case({getto,getrdy})
-		2'b10:	res <= to_out;
-		2'b01:	res <= {{27{rdy_out[4]}},rdy_out};
+		case({getto,getrdy,getzl})
+		3'b100:	res <= to_out;
+		3'b010:	res <= {{27{rdy_out[4]}},rdy_out};
+		3'b001: begin res <= {{24{zl_out[7]}},zl_out}; getzl <= 1'b1; end
 		default:	res <= {16'd0,zl_out};
 		endcase
-		state <= WRITEBACK;
+  	goto (WRITEBACK);
 	end
 {+M}
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1519,6 +1472,62 @@ MUL2:
 // Load or store the memory value.
 // Wait for operation to complete.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+MEMORY_SETUP:
+  begin
+		goto (MEMORY);
+		lcyc <= HIGH;
+		stb_o <= HIGH;
+		sel_o <= ssel[3:0];
+ 		dat_o <= sdat[31:0];
+		tEA();
+  	case(opcode)
+		`STORE:
+			begin
+    		case(funct3)
+    		`SB,`SH,`SW:
+    		  begin
+        		we_o <= HIGH;
+    		    illegal_insn <= 1'b0;
+    		  end
+    		default:	
+    		  begin
+    		    tPC();
+    		    goto (WRITEBACK); // Illegal instruction
+    		  end
+    		endcase
+			end
+{+F}
+		`STOREF:
+			begin
+				we_o <= HIGH;
+				case(funct3)
+				3'd2:	illegal_insn <= 1'b0;
+				default:
+				  begin
+				    tPC();
+    		    goto (WRITEBACK); // Illegal instruction
+    		  end
+				endcase
+			end
+{-F}
+{+A}
+		`AMO:
+			begin
+				we_o <= funct5==5'd3;			// SC
+				sr_o <= funct5==5'd2;			// LR
+				cr_o <= funct5==5'd3;
+				case(funct3)
+				3'd2:	illegal_insn <= 1'b0;
+				default:
+				  begin
+				    tPC();
+    		    goto (WRITEBACK); // Illegal instruction
+    		  end
+				endcase
+			end
+{-A}
+    endcase
+  end
 MEMORY:
 	if (ack_i) begin
 		stb_o <= LOW;
@@ -1531,46 +1540,56 @@ MEMORY:
 			sr_o <= 1'b0;
 			cr_o <= 1'b0;
 			tPC();
-			state <= WRITEBACK;
-			case(opcode)
-{+A}
-			`AMO:
-				begin
-					if (funct5==5'd3)
-						res <= {31'd0,~rb_i};
-					else
-						res <= dat_i;
-					if (funct5 != 5'd2 && funct5 != 5'd3) // LR / SC
-						state <= MEMORY_WRITE; 
-				end
-{-A}
-			`LOAD:
-				case(funct3)
-				`LB:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
-				`LH:  begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
-				`LW:	begin res <= dat_i; illegal_insn <= 1'b0; end
-				`LBU:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
-				`LHU:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
-				default:	;
-				endcase
-{+F}				
-			`LOADF:	begin res <= dat_i; illegal_insn <= 1'b0; end
-{-F}
-			endcase
+			goto (MEMORY2_SETUP);
 {+U}
 		end
 		else
-			state <= MEMORY2;
+			state <= MEMORY2_SETUP;
 {-U}
 		dati[31:0] <= dat_i;
 	end
 {+U}
 // Run a second bus cycle to handle unaligned access.
-MEMORY2:
+// The paging unit needs a cycle for address lookup on a change of ladr.
+MEMORY2_SETUP:
 	if (~ack_i) begin
+		ladr <= {ladr[31:2]+2'd1,2'd0};
+		case(opcode)
+{+A}
+		`AMO:
+			begin
+				if (funct5==5'd3)
+					res <= {31'd0,~rb_i};
+				else
+					res <= datiL;
+				if (funct5 != 5'd2 && funct5 != 5'd3) // LR / SC
+					state <= MEMORY_WRITE; 
+			end
+{-A}
+		`LOAD:
+			case(funct3)
+			`LB:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
+			`LH:  begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
+			`LW:	begin res <= datiL; illegal_insn <= 1'b0; end
+			`LBU:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
+			`LHU:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
+			default:	;
+			endcase
+{+F}				
+		`LOADF:	begin res <= datiL; illegal_insn <= 1'b0; end
+{-F}
+		endcase
+		if (ssel[7:4]==4'h0) begin
+		  tPC();
+		  goto (WRITEBACK);
+		end
+		else
+  		goto (MEMORY2);
+  end
+MEMORY2:
+	begin
 		stb_o <= HIGH;
 		sel_o <= ssel[7:4];
-		ladr <= {ladr[31:2]+2'd1,2'd0};
 		dat_o <= sdat[63:32];
 		state <= MEMORY2_ACK;
 	end
@@ -1599,20 +1618,20 @@ MEMORY2_ACK:
 MEMORY3:
 	if (~ack_i) begin
 		tPC();
-		state <= MEMORY4;
+		goto (MEMORY4);
 		case(opcode)
 		`LOAD:
 			begin
 				case(funct3)
-				3'd1: begin res <= {{16{datiH[7]}},datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
-				3'd2:
+				`LH: begin res <= {{16{datiH[7]}},datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				`LW:
 					case(ea[1:0])
 					2'd1:	begin res <= {datiH[7:0],dati[31:8]}; illegal_insn <= 1'b0; end
 					2'd2:	begin res <= {datiH[15:0],dati[31:16]}; illegal_insn <= 1'b0; end
 					2'd3:	begin res <= {datiH[23:0],dati[31:24]}; illegal_insn <= 1'b0; end
 					default:	;
 					endcase
-				3'd5:	begin res <= {16'd0,datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				`LHU:	begin res <= {16'd0,datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			end
@@ -1620,9 +1639,9 @@ MEMORY3:
 		`LOADF:
 			begin
 				case(ea[1:0])
-				2'd1:	begin res <= {datiH[15:0],dati[31:8]}; illegal_insn <= 1'b0; end
-				2'd2:	begin res <= {datiH[23:0],dati[31:16]}; illegal_insn <= 1'b0; end
-				2'd3:	begin res <= {datiH[31:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				2'd1:	begin res <= {datiH[ 7:0],dati[31: 8]}; illegal_insn <= 1'b0; end
+				2'd2:	begin res <= {datiH[15:0],dati[31:16]}; illegal_insn <= 1'b0; end
+				2'd3:	begin res <= {datiH[23:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			end
@@ -1633,16 +1652,19 @@ MEMORY3:
 				res <= {31'd0,~rb_i};
 			else	// LR
 				case(ea[1:0])
-				2'd1:	begin res <= {datiH[15:0],dati[31:8]}; illegal_insn <= 1'b0; end
-				2'd2:	begin res <= {datiH[23:0],dati[31:16]}; illegal_insn <= 1'b0; end
-				2'd3:	begin res <= {datiH[31:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				2'd1:	begin res <= {datiH[ 7:0],dati[31: 8]}; illegal_insn <= 1'b0; end
+				2'd2:	begin res <= {datiH[15:0],dati[31:16]}; illegal_insn <= 1'b0; end
+				2'd3:	begin res <= {datiH[23:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 {-A}
 		endcase
 	end
 MEMORY4:
-	state <= WRITEBACK;
+  begin
+    tPC();
+	  goto (WRITEBACK);
+  end
 {+A}
 MEMORY_WRITE:
 	begin
@@ -1892,7 +1914,8 @@ WRITEBACK:
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
-				12'h780:	begin if (MachineMode) begin regset <= ia[3:0]; crs <= ia[5:4]; end end
+				12'h7C0:	begin if (MachineMode) begin regset <= ia[4:0]; crs <= ia[6:5]; end end
+				12'h7C1:  begin if (MachineMode) begin msema <= ia; end end
 //				12'h801:  begin if (UserMode) usema <= ia; end
 				default:	;
 				endcase
@@ -1926,7 +1949,8 @@ WRITEBACK:
 			            end
 				12'h304:	if (MachineMode) mie <= mie | ia;
 				12'h344:	if (MachineMode) msip <= msip | ia[3];
-				12'h780:	if (MachineMode) regset <= regset | ia[3:0];
+				12'h7C0:	if (MachineMode) regset <= regset | ia[4:0];
+				12'h7C1:  if (MachineMode) msema <= msema | ia;
 //				12'h801:  if (UserMode) usema <= usema | ia;
 				default: ;
 				endcase
@@ -1958,14 +1982,15 @@ WRITEBACK:
 				12'h300:  if (MachineMode) mstatus <= mstatus & ~ia;
 				12'h304:	if (MachineMode) mie <= mie & ~ia;
 				12'h344:	if (MachineMode) msip <= msip & ~ia[3];
-				12'h780:	if (MachineMode) regset <= regset & ~ia[3:0];
+				12'h7C0:	if (MachineMode) regset <= regset & ~ia[4:0];
+				12'h7C1:  if (MachineMode) msema <= msema & ~ia;
 //				12'h801:  if (UserMode) usema <= usema & ~ia;
 				default: ;
 				endcase
 			default:	;
 			endcase
 		end
-		state <= IFETCH;
+		goto (IFETCH);
 		instret <= instret + 2'd1;
 	end
 endcase
@@ -2015,7 +2040,7 @@ begin
 	instret <= instret + 2'd1;
 	if (crs != 2'b11)
     crs <= crs + 2'd1;
-	regset <= 4'h0;
+	regset <= 5'h0;
 	goto (IFETCH);
 end
 endtask
