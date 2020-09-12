@@ -70,6 +70,7 @@
 `define EBREAK	32'h00100073
 `define ECALL		32'h00000073
 `define ERET		32'h10000073
+`define MRET		32'h30200073
 `define WFI			32'h10100073
 `define PFI			32'h10300073
 `define CS_ILLEGALINST	2
@@ -129,16 +130,16 @@ wire [2:0] rm3 = ir[14:12];
 reg [1:0] crs;
 reg [WID-1:0] iregfile [0:127];		// integer / system / interrupt register file
 reg [WID-1:0] sregfile [0:15];		// segment registers
-reg [3:0] ASID;
+reg [4:0] ASID;
 reg wrpagemap;
 wire [12:0] pagemap_ndx;
 wire [8:0] pagemapoa, pagemapo;
-wire [12:0] pagemapa;
+reg [12:0] pagemapa;
 PagemapRam pagemap (
   .clka(clk_g),
   .ena(1'b1),
   .wea(wrpagemap),
-  .addra(pagemapa),
+  .addra({ib[20:16],ib[7:0]}),
   .dina(ia[8:0]),
   .douta(pagemapoa),
   .clkb(clk_g),
@@ -148,24 +149,10 @@ PagemapRam pagemap (
   .dinb(9'h00),
   .doutb(pagemapo)
 );
-reg palloc,pfree,pfreeall,pstat;
-wire pdone;
-wire [8:0] pam_pageo;
-PAM upam1 (
-	.rst(rst_i),
-	.clk(clk_g),
-	.alloc_i(palloc),
-	.free_i(pfree),
-	.freeall_i(pfreeall),
-	.stat_i(pstat),
-	.pageno_i(ia[14:0]),
-	.pageno_o(pam_pageo),
-	.val_i(ib[1:0]),
-	.done(pdone)
-);
-reg decto, setto, getto;
+reg decto, setto, getto, getzl;
+wire [5:0] zladr;
 wire [31:0] to_out;
-wire [15:0] zl_out;
+wire [7:0] zl_out;
 wire to_done;
 Timeouter utmo1
 (
@@ -174,15 +161,22 @@ Timeouter utmo1
 	.dec_i(decto),
 	.set_i(setto),
 	.qry_i(getto),
-	.tid_i(ia[3:0]),
+	.pop_i(getzl),
+	.tid_i(ia[4:0]),
 	.timeout_i(ib),
 	.timeout_o(to_out),
 	.zeros_o(zl_out),
+	.qadr(zladr),
 	.done_o(to_done)
 );
 reg insrdy, rmvrdy, getrdy;
-wire rdy_done;
 wire [4:0] rdy_out;
+reg readyqins, readyqrmv;
+reg [2:0] readyqpri;
+wire [15:0] queueo;
+reg pushq, popq;
+ReadyQueues urq1 (rst_i, clk_g, pushq, popq, ia[7:0], pushq ? ib[2:0] : ia[2:0], queueo);
+/*
 ReadyList url1
 (
 	.rst_i(rst_i),
@@ -195,8 +189,7 @@ ReadyList url1
 	.tid_o(rdy_out),
 	.done_o(rdy_done)
 );
-
-reg [FPWID-1:0] fregfile [0:31];		// floating-point register file
+*/
 reg [255:0] gcie;
 reg [31:0] pc;			// generic program counter
 reg [31:0] ipc;			// pc value at instruction
@@ -206,21 +199,16 @@ reg [1:0] Rs1x, Rs2x, Rs3x, Rdx;
 wire [WID-1:0] irfoa = iregfile[{Rs1x,Rs1}];
 wire [WID-1:0] irfob = iregfile[{Rs2x,Rs2}];
 wire [WID-1:0] irfoc = iregfile[{Rs3x,Rs3}];
-assign pagemapa = Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
-wire [FPWID-1:0] frfoa = fregfile[Rs1];
-wire [FPWID-1:0] frfob = fregfile[Rs2];
-wire [FPWID-1:0] frfoc = fregfile[Rs3];
 always @(posedge clk_i)
 if (wrirf && state==WRITEBACK)
 	iregfile[{Rdx,Rd}] <= res[WID-1:0];
-always @(posedge clk_i)
-if (wrfrf && state==WRITEBACK)
-	fregfile[Rd] <= res;
 reg illegal_insn;
 
 // CSRs
+reg [5:0] gcloc;    // garbage collect lockout count
+reg [2:0] mrloc;    // mret lockout
 reg [31:0] uip;     // user interrupt pending
-reg [3:0] regset;
+reg [4:0] regset;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
 reg wc_time_irq;
@@ -239,8 +227,9 @@ reg [31:0] mtvec = 32'hFFFC0000;
 reg [31:0] mie, uie, uip;
 reg [31:0] mscratch;
 reg [31:0] mbadaddr;
-reg [31:0] usema;
+reg [31:0] usema, msema;
 wire [31:0] mip;
+wire mprv;
 reg msip, ugip;
 assign mip[31:8] = 24'h0;
 assign mip[7] = 1'b0;
@@ -251,8 +240,13 @@ assign mip[0] = ugip;
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 wire ie = mstatus[0];
+wire mprv = mstatus[17];
+wire [1:0] memmode;
 assign MachineMode = mstatus[2:1]==2'b11;
 assign UserMode = mstatus[2:1]==2'b00;
+assign memmode = mprv ? mstatus[5:4] : mstatus[2:1];
+wire MMachineMode = memmode==2'b11;
+wire MUserMode = memmode==2'b00;
 
 function [7:0] fnSelect;
 input [6:0] op6;
@@ -266,30 +260,12 @@ case(op6)
 	`LD:			fnSelect = 8'hFF;
 	default:	fnSelect = 8'h0F;	
 	endcase
-`LOADF:
-	case(FPWID)
-	16:	fnSelect = 8'h03;
-	24:	fnSelect = 8'h07;
-	32:	fnSelect = 8'h0F;
-	40:	fnSelect = 8'h1F;
-	64:	fnSelect = 8'hFF;
-	default:	fnSelect = 8'h0F;
-	endcase
 `STORE:
 	case(fn3)
 	`SB:	fnSelect = 8'h01;
 	`SH:	fnSelect = 8'h03;
 	`SW:	fnSelect = 8'h0F;
 	`SD:	fnSelect = 8'hFF;
-	default:	fnSelect = 8'h0F;
-	endcase
-`STOREF:
-	case(FPWID)
-	16:	fnSelect = 8'h03;
-	24:	fnSelect = 8'h07;
-	32:	fnSelect = 8'h0F;
-	40:	fnSelect = 8'h1F;
-	64:	fnSelect = 8'hFF;
 	default:	fnSelect = 8'h0F;
 	endcase
 default:	fnSelect = 8'h00;
@@ -300,11 +276,22 @@ reg [31:0] ea;
 wire [3:0] segsel = ea[31:28];
 reg [63:0] dati;
 reg [31:0] datiH;
-wire [31:0] datiL = dat_i >> {ea[1:0],3'b0};
-wire [63:0] sdat = (opcode==`STOREF ? fb : ib) << {ea[1:0],3'b0};
-wire [7:0] ssel = fnSelect(opcode,funct3) << ea[1:0];
+reg [31:0] datiL;
+always @(posedge clk_g)
+  if (state==MEMORY && ack_i)
+    datiL <= dat_i >> {ea[1:0],3'b0};
+reg [63:0] sdat;
+always @(posedge clk_g)
+	case(opcode)
+	default:
+		sdat <= ib << {ea[1:0],3'b0};
+	endcase
+reg [7:0] ssel;
+always @(posedge clk_g)
+  ssel <= fnSelect(opcode,funct3) << ea[1:0];
 
 reg [4:0] state;
+parameter RESET = 5'd0;
 parameter IFETCH = 5'd1;
 parameter IFETCH2 = 5'd2;
 parameter DECODE = 5'd3;
@@ -329,6 +316,11 @@ parameter TMO = 5'd21;
 parameter NSIMM = 5'd22;
 parameter NSIMM2 = 5'd23;
 parameter REGFETCH3 = 5'd24;
+parameter PAGEMAPA = 5'd25;
+parameter CSR = 5'd26;
+parameter CSR2 = 5'd27;
+parameter MEMORY_SETUP = 5'd28;
+parameter MEMORY2_SETUP = 5'd29;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -351,92 +343,7 @@ fpdivr16 #(WID) u16 (
 	.r(),
 	.done()
 );
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Floating point logic
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [7:0] mathCnt;
-reg [FPWID-1:0] fcmp_res, ftoi_res, itof_res, fres;
-wire [2:0] rmq = rm3==3'b111 ? rm : rm3;
-
-wire [4:0] fcmp_o;
-wire [EX:0] fas_o, fmul_o, fdiv_o, fsqrt_o;
-wire [EX:0] fma_o;
-wire fma_uf;
-wire mul_of, div_of;
-wire mul_uf, div_uf;
-wire norm_nx;
-wire sqrt_done;
-wire cmpnan, cmpsnan;
-reg [EX:0] fnorm_i;
-wire [MSB+3:0] fnorm_o;
-reg ld1;
-wire sqrneg, sqrinf;
-wire fa_inf, fa_xz, fa_vz;
-wire fa_qnan, fa_snan, fa_nan;
-wire fb_qnan, fb_snan, fb_nan;
-wire finf, fdn;
-always @(posedge clk_g)
-	ld1 <= ld;
-fpDecomp #(FPWID) u12 (.i(fa), .sgn(), .exp(), .man(), .fract(), .xz(fa_xz), .mz(), .vz(fa_vz), .inf(fa_inf), .xinf(), .qnan(fa_qnan), .snan(fa_snan), .nan(fa_nan));
-fpDecomp #(FPWID) u13 (.i(fb), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(fb_qnan), .snan(fb_snan), .nan(fb_nan));
-fpCompare #(.FPWID(FPWID)) u1 (.a(fa), .b(fb), .o(fcmp_o), .nan(cmpnan), .snan(cmpsnan));
-assign fcmp_res = fcmp_o[1] ? {FPWID{1'd1}} : fcmp_o[0] ? 1'd0 : 1'd1;
-i2f #(.FPWID(FPWID)) u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
-f2i #(.FPWID(FPWID)) u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(fa), .o(ftoi_res), .overflow());
-fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(funct5==`FSUB), .a(fa), .b(fb), .o(fas_o));
-fpMul #(.FPWID(FPWID)) u5 (.clk(clk_g), .ce(1'b1), .a(fa), .b(fb), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
-fpDiv #(.FPWID(FPWID)) u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
-	.a(fa), .b(fb), .o(fdiv_o), .done(), .sign_exe(), .overflow(div_of), .underflow(div_uf));
-fpSqrt #(.FPWID(FPWID)) u7 (.rst(rst_i), .clk(clk_g), .ce(1'b1), .ld(ld),
-	.a(fa), .o(fsqrt_o), .done(sqrt_done), .sqrinf(sqrinf), .sqrneg(sqrneg));
-fpFMA #(.FPWID(FPWID)) u14
-(
-	.clk(clk_g),
-	.ce(1'b1),
-	.op(opcode==FMS||opcode==FNMS),
-	.rm(rmq),
-	.a(opcode==`FNMA||opcode==`FNMS ? {~fa[FPWID-1],fa[FPWID-2:0]} : fa),
-	.b(fb),
-	.c(fc),
-	.o(fma_o),
-	.under(fma_uf),
-	.over(),
-	.inf(),
-	.zero()
-);
-
-always @(posedge clk_g)
-case(opcode)
-`FMA,`FMS,`FNMA,`FNMS:
-	fnorm_i <= fma_o;
-`FLOAT:
-	case(funct5)
-	`FADD:	fnorm_i <= fas_o;
-	`FSUB:	fnorm_i <= fas_o;
-	`FMUL:	fnorm_i <= fmul_o;
-	`FDIV:	fnorm_i <= fdiv_o;
-	`FSQRT:	fnorm_i <= fsqrt_o;
-	default:	fnorm_i <= 1'd0;
-	endcase
-default:	fnorm_i <= 1'd0;
-endcase
-reg fnorm_uf;
-wire norm_uf;
-always @(posedge clk_g)
-case(opcode)
-`FMA,`FMS,`FNMA,`FNMS:
-	fnorm_uf <= fma_uf;
-`FLOAT:
-	case(funct5)
-	`FMUL:	fnorm_uf <= mul_uf;
-	`FDIV:	fnorm_uf <= div_uf;
-	default:	fnorm_uf <= 1'b0;
-	endcase
-default:	fnorm_uf <= 1'b0;
-endcase
-fpNormalize #(.FPWID(FPWID)) u8 (.clk(clk_g), .ce(1'b1), .i(fnorm_i), .o(fnorm_o), .under_i(fnorm_uf), .under_o(norm_uf), .inexact_o(norm_nx));
-fpRound #(.FPWID(FPWID)) u9 (.clk(clk_g), .ce(1'b1), .rm(rmq), .i(fnorm_o), .o(fres));
-fpDecompReg #(FPWID) u10 (.clk(clk_g), .ce(1'b1), .i(fres), .sgn(), .exp(), .fract(), .xz(fdn), .vz(), .inf(finf), .nan() );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Timers
@@ -488,6 +395,7 @@ BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
 delay2 #(1) udly1 (.clk(clk_g), .ce(1'b1), .i(lcyc), .o(cyc_o));
 assign pagemap_ndx = {ASID,ladr[18:11]};
+wire mloco = mrloc != 3'd0;
 
 always @(posedge clk_g)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -501,6 +409,7 @@ if (rst_i) begin
 	pc <= RSTPC;
 	mepc <= 32'hFFFC0200;
 	mtvec <= 32'hFFFC0000;
+	ASID <= 5'd0;
 	wrirf <= 1'b0;
 	wrfrf <= 1'b0;
 	// Reset bus
@@ -516,25 +425,31 @@ if (rst_i) begin
 	ld_time <= 1'b0;
 	wc_times <= 1'b0;
 	wc_time_irq_clr <= 6'h3F;
-	mstatus <= 9'b001001110;
+	mstatus <= 12'b001001001110;
 	nmif <= 1'b0;
 	ldd <= 1'b0;
 	wrpagemap <= 1'b0;
-	palloc <= 1'b0;
-	pfree <= 1'b0;
-	pfreeall <= 1'b0;
-	pstat <= 1'b0;
+  pagemapa <= 13'd0;
+  ia <= 9'd0;
 	crs <= 2'b01;
-	regset <= 4'h0;
+	regset <= 5'h0;
 	setto <= 1'b0;
 	getto <= 1'b0;
 	decto <= 1'b0;
+	getzl <= 1'b0;
 	insrdy <= 1'b0;
 	rmvrdy <= 1'b0;
 	getrdy <= 1'b0;
+	gcloc <= 6'd0;
+	readyqins <= 1'b0;
+	readyqrmv <= 1'b0;
+	pushq <= 1'b0;
+	popq <= 1'b0;
+	mrloc <= 3'd0;
 end
 else begin
 decto <= 1'b0;
+getzl <= 1'b0;
 ldd <= 1'b0;
 wrpagemap <= 1'b0;
 if (pe_nmi)
@@ -543,10 +458,10 @@ ld_time <= {ld_time[4:0],1'b0};
 wc_times <= wc_time;
 if (wc_time_irq==1'b0)
 	wc_time_irq_clr <= 1'd0;
-palloc <= 1'b0;
-pfree <= 1'b0;
-pfreeall <= 1'b0;
-pstat <= 1'b0;
+readyqins <= 1'b0;
+readyqrmv <= 1'b0;
+pushq <= 1'b0;
+popq <= 1'b0;
 
 if (MachineMode)
 	adr_o <= ladr;
@@ -558,6 +473,7 @@ else begin
 end
 
 case (state)
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Instruction Fetch
 // Get the instruction from the rom.
@@ -565,10 +481,16 @@ case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 IFETCH:
 	begin
-	  Rdx  <= (regset[0] ? 2'b00 : crs);
-	  Rs1x <= (regset[1] ? 2'b00 : crs);
-	  Rs2x <= (regset[2] ? 2'b00 : crs);
-	  Rs3x <= (regset[3] ? 2'b00 : crs);
+	  if (mrloc != 3'd0)
+	    mrloc <= mrloc - 2'd1;
+	  if (gcloc==6'd1)
+	    gcie[ASID] <= 1'b1;
+	  if (gcloc != 6'd0)
+	    gcloc <= gcloc - 2'd1;
+	  Rdx  <= (regset[0] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs1x <= (regset[1] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs2x <= (regset[2] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
+	  Rs3x <= (regset[3] ? (regset[4] ? 2'b00 : crs - 2'd1) : crs);
 		illegal_insn <= 1'b1;
 		ipc <= pc;
 		wrirf <= 1'b0;
@@ -585,19 +507,19 @@ IFETCH:
 			tException(32'h800000FE,pc);
 			pc <= mtvec + 8'hFC;
 		end
- 		else if (irq_i & ie) begin
+ 		else if (irq_i & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000000|cause_i,pc);
 		end
-		else if (mip[7] & mie[7] & ie) begin
+		else if (mip[7] & mie[7] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000001,pc);  // timer IRQ
 		end
-		else if (mip[3] & mie[3] & ie) begin
+		else if (mip[3] & mie[3] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000002, pc); // software IRQ
 		end
-		else if (uip[0] && gcie[ASID] && ie) begin
+		else if (uip[0] & gcie[ASID] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000003, pc); // garbage collect IRQ
 			uip[0] <= 1'b0;
@@ -667,17 +589,6 @@ DECODE:
 				imm <= {{20{ir[31]}},ir[31:20]};
 				wrirf <= 1'b1;
 			end
-		`LOADF:
-			begin
-				Rd <= ir[11:7];
-				Rs2 <= 5'd0;
-				imm <= {{20{ir[31]}},ir[31:20]};
-				wrfrf <= 1'b1;
-			end
-		`STOREF:
-			begin
-				imm <= {{20{ir[31]}},ir[31:25],ir[11:7]};
-			end
 		`STORE:
 			begin
 				imm <= {{20{ir[31]}},ir[31:25],ir[11:7]};
@@ -691,6 +602,7 @@ DECODE:
 						wrirf <= 1'b1;
 						case(funct7)
 						7'd4:	wrirf <= 1'b1;
+						7'd12:  wrirf <= 1'b0; 
 						default:	;
 						endcase
 					end
@@ -722,19 +634,6 @@ DECODE:
 				Rd <= ir[11:7];
 				wrirf <= 1'b1;
 			end
-		`FMA,`FMS,`FNMA,`FNMS:
-			begin
-				Rd <= ir[11:7];
-				wrfrf <= 1'b1;
-			end
-		`FLOAT:
-			begin
-				Rd <= ir[11:7];
-				if (funct5==5'd20 || funct5==5'd24 || funct5==5'd28)
-					wrirf <= 1'b1;
-				else
-					wrfrf <= 1'b1;
-			end
 		`Bcc:
 			imm <= {{WID-13{ir[31]}},ir[31],ir[7],ir[30:25],ir[11:8],1'b0};
 		endcase
@@ -749,20 +648,9 @@ RFETCH:
 		state <= REGFETCH2;
 		ia <= Rs1==5'd0 ? {WID{1'd0}} : irfoa;
 		ib <= Rs2==5'd0 ? {WID{1'd0}} : irfob;
-		fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
-		case(opcode)
-		`FLOAT:
-			case(funct5)
-			`FCVT2F:
-				fa <= Rs1==5'd0 ? {FPWID{1'd0}} : irfoa;
-			default:	fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
-			endcase
-		default:	;
-		endcase
-		fb <= Rs2==5'd0 ? {FPWID{1'd0}} : frfob;
-		fc <= Rs3==5'd0 ? {FPWID{1'd0}} : frfoc;
-    if (imm[11:0]==12'h800)
+    if (imm[11:0]==12'h800 && opcode!=`JAL)
       state <= NSIMM;
+    pagemapa <= Rs2==5'd0 ? {WID{1'd0}} : {irfob[19:16],irfob[8:0]};
 	end
 REGFETCH2:
 	goto (REGFETCH3);
@@ -807,32 +695,8 @@ EXECUTE:
 			3'd0:
 				case(funct7)
 				7'd0:	begin res <= sregfile[ib[3:0]]; illegal_insn <= 1'b0; end
-				7'd1:	begin res <= pagemapoa; illegal_insn <= 1'b0; end
+				7'd1:	begin illegal_insn <= 1'b0; mathCnt <= 8'd2; goto (PAGEMAPA); end
 				7'd2:	begin res <= ia; illegal_insn <= 1'b0; end
-				7'd4:	
-					begin
-						palloc <= 1'b1;
-						state <= PAM;
-						illegal_insn <= 1'b0;
-					end
-				7'd5:
-					begin
-						pfree <= 1'b1;
-						state <= PAM;
-						illegal_insn <= 1'b0;
-					end
-				7'd6:
-					begin
-						pfreeall <= 1'b1;
-						state <= PAM;
-						illegal_insn <= 1'b0;
-					end
-				7'd7:
-					begin
-						pstat <= 1'b1;
-						state <= PAM;
-						illegal_insn <= 1'b0;
-					end
 				7'd8:
 					begin
 						setto <= 1'b1;
@@ -854,19 +718,23 @@ EXECUTE:
 					begin
 						decto <= 1'b1;
 						illegal_insn <= 1'b0;
-						state <= IFETCH;
+						goto (IFETCH);
 					end
 				7'd12:
 					begin
+					  pushq <= 1'b1;
 						insrdy <= 1'b1;
-						state <= TMO;
+//						state <= TMO;
 						illegal_insn <= 1'b0;
+//						goto (IFETCH);
 					end
 				7'd13:
 					begin
+					  popq <= 1'b1;
 						rmvrdy <= 1'b1;
-						state <= TMO;
+//						state <= TMO;
 						illegal_insn <= 1'b0;
+						goto (CSR);
 					end
 				7'd14:
 					begin
@@ -877,8 +745,10 @@ EXECUTE:
 				7'd32:
 				  begin
 	          res <= ia - ib;
-			      if (UserMode)
+			      if (UserMode) begin
   		        gcie[ASID] <= 1'b0;
+  		        gcloc <= ~ib[7:2] + 3'd4;
+  		      end
 	          illegal_insn <= 1'b0;
 	        end
 				default:	;
@@ -886,8 +756,10 @@ EXECUTE:
 		  3'd3:
 		    begin
           res <= ia + imm;
-		      if (UserMode)
+		      if (UserMode) begin
 		        gcie[ASID] <= 1'b0;
+		        gcloc <= ~imm[7:2] + 3'd4;
+		      end
 		      illegal_insn <= 1'b0;
 		    end
 			default:	;
@@ -984,68 +856,13 @@ EXECUTE:
 			3'd6:	begin res <= ia | imm; illegal_insn <= 1'b0; end
 			3'd7:	begin res <= ia & imm; illegal_insn <= 1'b0; end
 			endcase
-		`FMA,`FMS,`FNMA,`FNMS:
-			begin mathCnt <= 45; state <= FLOAT; illegal_insn <= 1'b0; end
-		// The timeouts for the float operations are set conservatively. They may
-		// be adjusted to lower values closer to actual time required.
-		`FLOAT:	// Float
-			case(funct5)
-			`FADD:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FADD
-			`FSUB:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FSUB
-			`FMUL:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FMUL
-			`FDIV:	begin mathCnt <= 8'd40; state <= FLOAT; illegal_insn <= 1'b0; end	// FDIV
-			`FMIN:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FMIN / FMAX
-			`FSQRT:	begin mathCnt <= 8'd160; state <= FLOAT; illegal_insn <= 1'b0; end	// FSQRT
-			`FSGNJ:	
-				case(funct3)
-				3'd0:	begin res <= {fb[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end		// FSGNJ
-				3'd1:	begin res <= {~fb[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end	// FSGNJN
-				3'd2:	begin res <= {fb[FPWID-1]^fa[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end	// FSGNJX
-				default:	;
-				endcase
-			5'd20:
-				case(funct3)
-				3'd0:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FLE
-				3'd1:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FLT
-				3'd2:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FEQ
-				default:	;
-				endcase
-			5'd24:	begin mathCnt <= 8'd05; state <= FLOAT; illegal_insn <= 1'b0; end	// FCVT.T.FT
-			5'd26:	begin mathCnt <= 8'd05; state <= FLOAT; illegal_insn <= 1'b0; end	// FCVT.FT.T
-			5'd28:
-				begin
-					case(funct3)
-					3'd0:	begin res <= fa; illegal_insn <= 1'b0; end	// FMV.X.S
-					3'd1:
-						begin
-							res[0] <= fa[FPWID-1] & fa_inf;
-							res[1] <= fa[FPWID-1] & !fa_xz;
-							res[2] <= fa[FPWID-1] &  fa_xz;
-							res[3] <= fa[FPWID-1] &  fa_vz;
-							res[4] <= ~fa[FPWID-1] &  fa_vz;
-							res[5] <= ~fa[FPWID-1] &  fa_xz;
-							res[6] <= ~fa[FPWID-1] & !fa_xz;
-							res[7] <= ~fa[FPWID-1] & fa_inf;
-							res[8] <= fa_snan;
-							res[9] <= fa_qnan;
-							illegal_insn <= 1'b0;
-						end
-					endcase
-				end
-			5'd30:
-				case(funct3)
-				3'd0:	begin res <= ia; illegal_insn <= 1'b0; end	// FMV.S.X
-				default:	;
-				endcase
-			default:	;
-			endcase
 		`JAL:
 			begin
 				res <= pc;
 				pc <= ipc + imm;
 				pc[0] <= 1'b0;
 //				if (UserMode)
-//				  mie[0] <= 1'b0;
+//				  uie[0] <= 1'b0;
 			end
 		`JALR:
 			begin
@@ -1053,7 +870,7 @@ EXECUTE:
 				pc <= ia + imm;
 				pc[0] <= 1'b0;
 //				if (UserMode)
-//				  mie[0] <= 1'b0;
+//				  uie[0] <= 1'b0;
 			end
 		`Bcc:
 			case(funct3)
@@ -1065,49 +882,9 @@ EXECUTE:
 			3'd7:	begin if (ia >= ib) pc <= ipc + imm; illegal_insn <= 1'b0; end
 			default:	;
 			endcase
-		`LOAD:
+		`LOAD,`STORE,`LOADF,`STOREF,`AMO:
 			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				state <= MEMORY;
-			end
-		`STORE:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				we_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				dat_o <= sdat[31:0];
-				case(funct3)
-				3'd0,3'd1,3'd2:	illegal_insn <= 1'b0;
-				default:	;
-				endcase
-				state <= MEMORY;
-			end
-		`LOADF:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				state <= MEMORY;
-			end
-		`STOREF:
-			begin
-				lcyc <= HIGH;
-				stb_o <= HIGH;
-				we_o <= HIGH;
-				sel_o <= ssel[3:0];
-				tEA();
-				dat_o <= sdat[31:0];
-				case(funct3)
-				3'd2:	illegal_insn <= 1'b0;
-				default:	;
-				endcase
-				state <= MEMORY;
+				goto (MEMORY_SETUP);
 			end
 		7'd115:
 			begin
@@ -1118,17 +895,19 @@ EXECUTE:
 				`ECALL:
 					if (crs != 2'b11)
 					  tException(4'h8 + mstatus[2:1],pc);
-				`ERET:
+				`ERET,`MRET:
 					if (MachineMode) begin
       			if (crs!=2'b00)
       			  crs <= crs - 2'd1;
-      			if (crs==2'b01)
-				      regset <= 4'hF;
+//      			if (crs==2'b01)
+//				      regset <= 4'hF;
+            regset <= 5'h0;
 						pc <= mepc;
-						mstatus[8:0] <= {2'b00,1'b1,mstatus[8:3]};
+						mstatus[11:0] <= {2'b00,1'b1,mstatus[11:3]};
 						illegal_insn <= 1'b0;
 						state <= IFETCH;
 						instret <= instret + 2'd1;
+						mrloc <= 3'd3;
 					end
 				`WFI:
 					set_wfi <= 1'b1;
@@ -1152,7 +931,8 @@ EXECUTE:
 						12'h342:	begin res <= mcause; illegal_insn <= 1'b0; end
 						12'h343:	begin res <= mbadaddr; illegal_insn <= 1'b0; end
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
-						12'h780:	begin res <= {crs,regset}; illegal_insn <= 1'b0; end
+						12'h7C0:	if (MachineMode) begin res <= {crs,regset}; illegal_insn <= 1'b0; end
+						12'h7C1:  if (MachineMode) begin res <= msema; illegal_insn <= 1'b0; end
 //						12'h801:  begin res <= usema; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
@@ -1181,20 +961,30 @@ EXECUTE:
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-PAM:
-	if (pdone) begin
-		res <= {24'h0,pam_pageo};
-		state <= WRITEBACK;
-	end
+CSR:  goto (CSR2);
+CSR2:
+  begin
+    res <= {{16{queueo[15]}},queueo};
+    goto (WRITEBACK);
+  end
+PAGEMAPA:
+  begin
+    mathCnt <= mathCnt - 2'd1;
+    if (mathCnt==8'd0) begin
+      res <= {23'd0,pagemapoa}; 
+      goto (WRITEBACK);
+    end
+  end
 TMO:
-	if (to_done&rdy_done) begin
+	if (to_done) begin
 		illegal_insn <= 1'b0;
-		case({getto,getrdy})
-		2'b10:	res <= to_out;
-		2'b01:	res <= {{27{rdy_out[4]}},rdy_out};
+		case({getto,getrdy,getzl})
+		3'b100:	res <= to_out;
+		3'b010:	res <= {{24{rdy_out[7]}},rdy_out};
+		3'b001: begin res <= {zl_out[7],15'h00,2'b00,zladr,zl_out}; getzl <= 1'b1; end
 		default:	res <= {16'd0,zl_out};
 		endcase
-		state <= WRITEBACK;
+  	goto (WRITEBACK);
 	end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide
@@ -1243,6 +1033,32 @@ MUL2:
 // Load or store the memory value.
 // Wait for operation to complete.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+MEMORY_SETUP:
+  begin
+		goto (MEMORY);
+		lcyc <= HIGH;
+		stb_o <= HIGH;
+		sel_o <= ssel[3:0];
+ 		dat_o <= sdat[31:0];
+		tEA();
+  	case(opcode)
+		`STORE:
+			begin
+    		case(funct3)
+    		`SB,`SH,`SW:
+    		  begin
+        		we_o <= HIGH;
+    		    illegal_insn <= 1'b0;
+    		  end
+    		default:	
+    		  begin
+    		    tPC();
+    		    goto (WRITEBACK); // Illegal instruction
+    		  end
+    		endcase
+			end
+    endcase
+  end
 MEMORY:
 	if (ack_i) begin
 		stb_o <= LOW;
@@ -1253,30 +1069,39 @@ MEMORY:
 			sr_o <= 1'b0;
 			cr_o <= 1'b0;
 			tPC();
-			state <= WRITEBACK;
-			case(opcode)
-			`LOAD:
-				case(funct3)
-				`LB:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
-				`LH:  begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
-				`LW:	begin res <= dat_i; illegal_insn <= 1'b0; end
-				`LBU:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
-				`LHU:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
-				default:	;
-				endcase
-			`LOADF:	begin res <= dat_i; illegal_insn <= 1'b0; end
-			endcase
+			goto (MEMORY2_SETUP);
 		end
 		else
-			state <= MEMORY2;
+			state <= MEMORY2_SETUP;
 		dati[31:0] <= dat_i;
 	end
 // Run a second bus cycle to handle unaligned access.
-MEMORY2:
+// The paging unit needs a cycle for address lookup on a change of ladr.
+MEMORY2_SETUP:
 	if (~ack_i) begin
+		ladr <= {ladr[31:2]+2'd1,2'd0};
+		case(opcode)
+		`LOAD:
+			case(funct3)
+			`LB:	begin res <= {{24{datiL[7]}},datiL[7:0]}; illegal_insn <= 1'b0; end
+			`LH:  begin res <= {{16{datiL[15]}},datiL[15:0]}; illegal_insn <= 1'b0; end
+			`LW:	begin res <= datiL; illegal_insn <= 1'b0; end
+			`LBU:	begin res <= {24'd0,datiL[7:0]}; illegal_insn <= 1'b0; end
+			`LHU:	begin res <= {16'd0,datiL[15:0]}; illegal_insn <= 1'b0; end
+			default:	;
+			endcase
+		endcase
+		if (ssel[7:4]==4'h0) begin
+		  tPC();
+		  goto (WRITEBACK);
+		end
+		else
+  		goto (MEMORY2);
+  end
+MEMORY2:
+	begin
 		stb_o <= HIGH;
 		sel_o <= ssel[7:4];
-		ladr <= {ladr[31:2]+2'd1,2'd0};
 		dat_o <= sdat[63:32];
 		state <= MEMORY2_ACK;
 	end
@@ -1296,154 +1121,30 @@ MEMORY2_ACK:
 MEMORY3:
 	if (~ack_i) begin
 		tPC();
-		state <= MEMORY4;
+		goto (MEMORY4);
 		case(opcode)
 		`LOAD:
 			begin
 				case(funct3)
-				3'd1: begin res <= {{16{datiH[7]}},datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
-				3'd2:
+				`LH: begin res <= {{16{datiH[7]}},datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				`LW:
 					case(ea[1:0])
 					2'd1:	begin res <= {datiH[7:0],dati[31:8]}; illegal_insn <= 1'b0; end
 					2'd2:	begin res <= {datiH[15:0],dati[31:16]}; illegal_insn <= 1'b0; end
 					2'd3:	begin res <= {datiH[23:0],dati[31:24]}; illegal_insn <= 1'b0; end
 					default:	;
 					endcase
-				3'd5:	begin res <= {16'd0,datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
-				default:	;
-				endcase
-			end
-		`LOADF:
-			begin
-				case(ea[1:0])
-				2'd1:	begin res <= {datiH[15:0],dati[31:8]}; illegal_insn <= 1'b0; end
-				2'd2:	begin res <= {datiH[23:0],dati[31:16]}; illegal_insn <= 1'b0; end
-				2'd3:	begin res <= {datiH[31:0],dati[31:24]}; illegal_insn <= 1'b0; end
+				`LHU:	begin res <= {16'd0,datiH[7:0],dati[31:24]}; illegal_insn <= 1'b0; end
 				default:	;
 				endcase
 			end
 		endcase
 	end
 MEMORY4:
-	state <= WRITEBACK;
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Float
-// Wait for floating-point operation to complete.
-// Capture results.
-// Set status flags.
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-FLOAT:
-	begin
-		mathCnt <= mathCnt - 2'd1;
-		if (mathCnt==8'd0) begin
-			case(opcode)
-			`FMA,`FMS,`FNMA,`FNMS:
-				begin
-					res <= fres;
-					if (fdn) fuf <= 1'b1;
-					if (finf) fof <= 1'b1;
-					if (norm_nx) fnx <= 1'b1;
-				end
-			`FLOAT:
-				case(funct5)
-				5'd0:
-					begin
-						res <= fres;	// FADD
-						if (fdn) fuf <= 1'b1;
-						if (finf) fof <= 1'b1;
-						if (norm_nx) fnx <= 1'b1;
-					end
-				5'd1:
-					begin
-						res <= fres;	// FSUB
-						if (fdn) fuf <= 1'b1;
-						if (finf) fof <= 1'b1;
-						if (norm_nx) fnx <= 1'b1;
-					end
-				5'd2:
-					begin
-						res <= fres;	// FMUL
-						if (fdn) fuf <= 1'b1;
-						if (finf) fof <= 1'b1;
-						if (norm_nx) fnx <= 1'b1;
-					end
-				5'd3:	
-					begin
-						res <= fres;	// FDIV
-						if (fdn) fuf <= 1'b1;
-						if (finf) fof <= 1'b1;
-						if (fb[FPWID-2:0]==1'd0)
-							fdz <= 1'b1;
-						if (norm_nx) fnx <= 1'b1;
-					end
-				5'd5:
-					case(funct3)
-					3'd0:	// FMIN	
-						if ((fa_snan|fb_snan)||(fa_qnan&fb_qnan))
-							res <= 32'h7FFFFFFF;	// canonical NaN
-						else if (fa_qnan & !fb_nan)
-							res <= fb;
-						else if (!fa_nan & fb_qnan)
-							res <= fa;
-						else if (fcmp_o[1])
-							res <= fa;
-						else
-							res <= fb;
-					3'd1:	// FMAX
-						if ((fa_snan|fb_snan)||(fa_qnan&fb_qnan))
-							res <= 32'h7FFFFFFF;	// canonical NaN
-						else if (fa_qnan & !fb_nan)
-							res <= fb;
-						else if (!fa_nan & fb_qnan)
-							res <= fa;
-						else if (fcmp_o[1])
-							res <= fb;
-						else
-							res <= fa;
-					default:	;
-					endcase		
-				5'd11:
-					begin
-						res <= fres;	// FSQRT
-						if (fdn) fuf <= 1'b1;
-						if (finf) fof <= 1'b1;
-						if (fa[FPWID-2:0]==1'd0)
-							fdz <= 1'b1;
-						if (sqrinf|sqrneg)
-							fnv <= 1'b1;
-						if (norm_nx) fnx <= 1'b1;
-					end
-				5'd20:
-					case(funct3)
-					3'd0:	
-						begin
-							res <= fcmp_o[2] & ~cmpnan;	// FLE
-							if (cmpnan)
-								fnv <= 1'b1;
-						end
-					3'd1:
-						begin
-							res <= fcmp_o[1] & ~cmpnan;	// FLT
-							if (cmpnan)
-								fnv <= 1'b1;
-						end
-					3'd2:
-						begin
-							res <= fcmp_o[0] & ~cmpnan;	// FEQ
-							if (cmpsnan)
-								fnv <= 1'b1;
-						end
-					default:	;
-					endcase
-				5'd24:	res <= ftoi_res;	// FCVT.W.S
-				5'd26:	res <= itof_res;	// FCVT.S.W
-				default:	;
-				endcase
-			default:	;
-			endcase
-			state <= WRITEBACK;
-		end
-	end
+  begin
+    tPC();
+	  goto (WRITEBACK);
+  end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Writeback stage
 // Update the register file (actual clocking above).
@@ -1475,22 +1176,6 @@ WRITEBACK:
 			3'd1,3'd5:
 				if (Rs1!=5'd0)
 				casez({funct7,Rs2})
-				12'h001:	begin
-										fnx <= ia[0];
-										fuf <= ia[1];
-										fof <= ia[2];
-										fdz <= ia[3];
-										fnv <= ia[4];
-									end
-				12'h002:	rm <= ia[2:0];
-				12'h003:	begin
-										fnx <= ia[0];
-										fuf <= ia[1];
-										fof <= ia[2];
-										fdz <= ia[3];
-										fnv <= ia[4];
-										rm <= ia[7:5];
-									end
 				12'h004:	gcie[ASID] <= ia[0];
 			  12'h044:  uip[0] <= ia[0];
 //				12'h044:	begin if (UserMode) uip <= ia; end
@@ -1504,29 +1189,14 @@ WRITEBACK:
 				12'h342:	begin if (MachineMode) mcause <= ia; end
 				12'h343:  begin if (MachineMode) mbadaddr <= ia; end
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
-				12'h780:	begin if (MachineMode) begin regset <= ia[3:0]; crs <= ia[5:4]; end end
+				12'h7C0:	begin if (MachineMode) begin regset <= ia[4:0]; crs <= ia[6:5]; end end
+				12'h7C1:  begin if (MachineMode) begin msema <= ia; end end
 //				12'h801:  begin if (UserMode) usema <= ia; end
 				default:	;
 				endcase
 			3'd2,3'd6:
 				case({funct7,Rs2})
 				// No setting CSR $000
-				12'h001:	begin
-										if (ia[0]) fnx <= 1'b1;
-										if (ia[1]) fuf <= 1'b1;
-										if (ia[2]) fof <= 1'b1;
-										if (ia[3]) fdz <= 1'b1;
-										if (ia[4]) fnv <= 1'b1;
-									end
-				12'h002:	rm <= rm | ia[2:0];
-				12'h003:	begin
-										if (ia[0]) fnx <= 1'b1;
-										if (ia[1]) fuf <= 1'b1;
-										if (ia[2]) fof <= 1'b1;
-										if (ia[3]) fdz <= 1'b1;
-										if (ia[4]) fnv <= 1'b1;
-										rm <= rm | ia[7:5];
-									end
 			  12'h004:  gcie[ASID] <= gcie[ASID] | ia[0];
 			  12'h044:  uip[0] <= uip[0] | ia[0];
 //				12'h044:	if (UserMode) uip <= uip | ia;
@@ -1536,28 +1206,13 @@ WRITEBACK:
 			            end
 				12'h304:	if (MachineMode) mie <= mie | ia;
 				12'h344:	if (MachineMode) msip <= msip | ia[3];
-				12'h780:	if (MachineMode) regset <= regset | ia[3:0];
+				12'h7C0:	if (MachineMode) regset <= regset | ia[4:0];
+				12'h7C1:  if (MachineMode) msema <= msema | ia;
 //				12'h801:  if (UserMode) usema <= usema | ia;
 				default: ;
 				endcase
 			3'd3,3'd7:
 				case({funct7,Rs2})
-				12'h001:	begin
-										if (ia[0]) fnx <= 1'b0;
-										if (ia[1]) fuf <= 1'b0;
-										if (ia[2]) fof <= 1'b0;
-										if (ia[3]) fdz <= 1'b0;
-										if (ia[4]) fnv <= 1'b0;
-									end
-				12'h002:	rm <= rm & ~ia[2:0];
-				12'h003:	begin
-										if (ia[0]) fnx <= 1'b0;
-										if (ia[1]) fuf <= 1'b0;
-										if (ia[2]) fof <= 1'b0;
-										if (ia[3]) fdz <= 1'b0;
-										if (ia[4]) fnv <= 1'b0;
-										rm <= rm & ~ia[7:5];
-									end
 			  12'h004:  gcie[ASID] <= gcie[ASID] & ~ia[0];
 			  12'h044:  uip[0] <= uip[0] & ~ia[0];
 //				12'h044:	if (UserMode) uip <= uip & ~ia;
@@ -1566,14 +1221,15 @@ WRITEBACK:
 				12'h300:  if (MachineMode) mstatus <= mstatus & ~ia;
 				12'h304:	if (MachineMode) mie <= mie & ~ia;
 				12'h344:	if (MachineMode) msip <= msip & ~ia[3];
-				12'h780:	if (MachineMode) regset <= regset & ~ia[3:0];
+				12'h7C0:	if (MachineMode) regset <= regset & ~ia[4:0];
+				12'h7C1:  if (MachineMode) msema <= msema & ~ia;
 //				12'h801:  if (UserMode) usema <= usema & ~ia;
 				default: ;
 				endcase
 			default:	;
 			endcase
 		end
-		state <= IFETCH;
+		goto (IFETCH);
 		instret <= instret + 2'd1;
 	end
 endcase
@@ -1581,19 +1237,19 @@ end
 
 task tEA;
 begin
-	if (MachineMode || ea[31:24]==8'hFF)
+	if (MMachineMode || ea[WID-1:24]=={WID-24{1'b1}})
 		ladr <= ea;
 	else
-		ladr <= ea[27:0] + {sregfile[segsel][WID-1:4],10'd0};
+		ladr <= ea[WID-4:0] + {sregfile[segsel][WID-1:4],10'd0};
 end
 endtask
 
 task tPC;
 begin
-	if (MachineMode || pc[31:24]==8'hFF)
+	if (MachineMode || pc[WID-1:24]=={WID-24{1'b1}})
 		ladr <= pc;
 	else
-		ladr <= pc[29:0] + {sregfile[{2'b11,pc[31:30]}][WID-1:4],10'd0};
+		ladr <= pc[WID-2:0] + {sregfile[{2'b11,pc[WID-1:WID-2]}][WID-1:4],10'd0};
 end
 endtask
 
@@ -1603,13 +1259,13 @@ input [31:0] tpc;
 begin
 	pc <= mtvec + {mstatus[2:1],6'h00};
 	mepc <= tpc;
-	mstatus[8:0] <= {mstatus[5:0],2'b11,1'b0};
+	mstatus[11:0] <= {mstatus[8:0],2'b11,1'b0};
 	mcause <= cse;
 	illegal_insn <= 1'b0;
 	instret <= instret + 2'd1;
 	if (crs != 2'b11)
     crs <= crs + 2'd1;
-	regset <= 4'h0;
+	regset <= 5'h0;
 	goto (IFETCH);
 end
 endtask

@@ -46,16 +46,16 @@
 
 FMTK_HasIOFocus:
 	mGetCurrentTid
-	sll   $v0,$v0,#2
-	ldt   $v0,TidTcbMap[$v0]
-	ldt		$v1,IOFocusNdx
-	beq		$v0,$v1,.hasFocus
-	ldi		$v1,#0
+	sll   $a0,$a0,#2
+	ldt   $a0,TidTcbMap[$a0]
+	ldt		$a1,IOFocusNdx
+	beq		$a0,$a1,.hasFocus
+	ldi		$a1,#0
 	bra		.xit
 .hasFocus:
-	ldi		$v1,#1
+	ldi		$a1,#1
 .xit:
-	ldi		$v0,#E_Ok
+	ldi		$a0,#E_Ok
 	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
@@ -69,7 +69,7 @@ FMTK_HasIOFocus:
 ;	Modifies:
 ;		none
 ;	Returns:
-;		v0 = E_Ok
+;		a0 = E_Ok
 ;-----------------------------------------------------------------------------
 
 SwitchIOFocusHelper:
@@ -83,7 +83,7 @@ SwitchIOFocusHelper:
 	stt		$t1,IOFocusNdx
 .sameFocus:
 .noFocus:
-	ldi		$v0,E_Ok
+	ldi		$a0,E_Ok
 	ret
 
 FMTK_SwitchIOFocus:
@@ -108,9 +108,10 @@ FMTK_RequestIOFocus:
 	or		$t1,$t1,$t0					; set bit indicator
 	stt		$t1,IOFocusTbl
 	ldt		$t0,IOFocusNdx			; get current index
-;	sll		$t1,$a1,#LOG_TCBSZ	; t1 = pointer to TCB
   sll   $a1,$a1,#2
   ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB pointer
+  and   $t1,$a1,#$FFF803FF  ; bad pointer?
+  bnez  $t1,.ret
 	bnez	$t0,.notEmpty		    ; is there one? (!= 0)
 	stt		$a1,IOFocusNdx			; no current index, so set equal to requester
 	stt		$a1,IOF_NEXT[$a1]		; and loop back to self
@@ -124,7 +125,7 @@ FMTK_RequestIOFocus:
 	stt		$a1,IOF_NEXT[$t2]
 	stt		$a1,IOF_PREV[$t0]
 .ret:
-	ldi		$v0,#E_Ok
+	ldi		$a0,#E_Ok
 	jmp		ERETx
 
 ;-----------------------------------------------------------------------------
@@ -134,7 +135,7 @@ FMTK_RequestIOFocus:
 
 FMTK_ReleaseIOFocus:
 	mGetCurrentTid
-	mov		$a1,$v0
+	mov		$a1,$a0
 	; fall into ForceReleaseIOFocus
 
 ;-----------------------------------------------------------------------------
@@ -187,7 +188,7 @@ FMTK_ForceReleaseIOFocus:
 	stt		$x0,IOF_PREV[$a1]	
 .done:
 .noFocus:
-	ldi		$v0,#E_Ok
+	ldi		$a0,#E_Ok
 	jmp		ERETx
 
 ;------------------------------------------------------------------------------
@@ -205,19 +206,19 @@ WaitForIOFocus:
 .WFF1:
 	ldi		$a0,#20           ; FMTK Has Focus
 	ecall
-	ldt   $a1,4[$sp]        ; get back I/O channel
-	bnez	$v1,.HasFocus
+	bnez	$a1,.HasFocus
 	ldi   $a0,#26           ; FMTK_IO
 	ldi   $a1,#5
 	ldi   $a2,#9            ; peekchar function
 	ecall
-	bltz  $v1,.0001
-	stt   $v1,$4378
+	bltz  $a1,.0001
+	stt   $a1,$4378
 .0001:
 	ldi		$a0,#$14					; CTRL-T
-	bne		$v1,$a0,.WFF2
+	bne		$a1,$a0,.WFF2
 	; eat up the CTRL-T
 	ldi		$a0,#26						; FMTK_IO
+	ldt   $a1,4[$sp]        ; get back device #
 	ldi		$a2,#8						; getchar function
 	ecall
 	ldi		$a0,#21						; switch IO Focus
@@ -239,14 +240,12 @@ WaitForIOFocus:
 
 GetUIFlag:
   gcsub $sp,$sp,#12
-  stt   $a0,[$sp]
   stt   $a2,4[$sp]
   stt   $a3,8[$sp]
   ldi   $a0,#27           ; Get DCB Field
   ldi   $a2,#DCB_fUI      ; Get UI Flag
   ldi   $a3,#1            ; 1 byte
   ecall
-  ldt   $a0,[$sp]
   ldt   $a2,4[$sp]
   ldt   $a3,8[$sp]
   add   $sp,$sp,#12

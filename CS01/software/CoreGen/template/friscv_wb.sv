@@ -176,6 +176,7 @@ PAM upam1 (
 );
 {-PAM}
 reg decto, setto, getto, getzl;
+wire [5:0] zladr;
 wire [31:0] to_out;
 wire [7:0] zl_out;
 wire to_done;
@@ -191,13 +192,14 @@ Timeouter utmo1
 	.timeout_i(ib),
 	.timeout_o(to_out),
 	.zeros_o(zl_out),
+	.qadr(zladr),
 	.done_o(to_done)
 );
 reg insrdy, rmvrdy, getrdy;
 wire [4:0] rdy_out;
 reg readyqins, readyqrmv;
 reg [2:0] readyqpri;
-wire [7:0] queueo;
+wire [15:0] queueo;
 reg pushq, popq;
 ReadyQueues urq1 (rst_i, clk_g, pushq, popq, ia[7:0], pushq ? ib[2:0] : ia[2:0], queueo);
 /*
@@ -243,6 +245,7 @@ reg illegal_insn;
 
 // CSRs
 reg [5:0] gcloc;    // garbage collect lockout count
+reg [2:0] mrloc;    // mret lockout
 reg [31:0] uip;     // user interrupt pending
 reg [4:0] regset;
 reg [63:0] tick;		// cycle counter
@@ -265,6 +268,7 @@ reg [31:0] mscratch;
 reg [31:0] mbadaddr;
 reg [31:0] usema, msema;
 wire [31:0] mip;
+wire mprv;
 reg msip, ugip;
 assign mip[31:8] = 24'h0;
 assign mip[7] = 1'b0;
@@ -275,8 +279,13 @@ assign mip[0] = ugip;
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 wire ie = mstatus[0];
+wire mprv = mstatus[17];
+wire [1:0] memmode;
 assign MachineMode = mstatus[2:1]==2'b11;
 assign UserMode = mstatus[2:1]==2'b00;
+assign memmode = mprv ? mstatus[5:4] : mstatus[2:1];
+wire MMachineMode = memmode==2'b11;
+wire MUserMode = memmode==2'b00;
 
 function [7:0] fnSelect;
 input [6:0] op6;
@@ -590,6 +599,7 @@ BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
 delay2 #(1) udly1 (.clk(clk_g), .ce(1'b1), .i(lcyc), .o(cyc_o));
 assign pagemap_ndx = {ASID,ladr[18:11]};
+wire mloco = mrloc != 3'd0;
 
 always @(posedge clk_g)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -647,6 +657,7 @@ if (rst_i) begin
 	readyqrmv <= 1'b0;
 	pushq <= 1'b0;
 	popq <= 1'b0;
+	mrloc <= 3'd0;
 end
 else begin
 decto <= 1'b0;
@@ -690,6 +701,8 @@ case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 IFETCH:
 	begin
+	  if (mrloc != 3'd0)
+	    mrloc <= mrloc - 2'd1;
 	  if (gcloc==6'd1)
 	    gcie[ASID] <= 1'b1;
 	  if (gcloc != 6'd0)
@@ -714,19 +727,19 @@ IFETCH:
 			tException(32'h800000FE,pc);
 			pc <= mtvec + 8'hFC;
 		end
- 		else if (irq_i & ie) begin
+ 		else if (irq_i & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000000|cause_i,pc);
 		end
-		else if (mip[7] & mie[7] & ie) begin
+		else if (mip[7] & mie[7] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000001,pc);  // timer IRQ
 		end
-		else if (mip[3] & mie[3] & ie) begin
+		else if (mip[3] & mie[3] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000002, pc); // software IRQ
 		end
-		else if (uip[0] && gcie[ASID] && ie) begin
+		else if (uip[0] & gcie[ASID] & ie & ~mloco) begin
 			lcyc <= LOW;
 			tException(32'h80000003, pc); // garbage collect IRQ
 			uip[0] <= 1'b0;
@@ -1022,7 +1035,7 @@ EXECUTE:
 						insrdy <= 1'b1;
 //						state <= TMO;
 						illegal_insn <= 1'b0;
-						goto (IFETCH);
+//						goto (IFETCH);
 					end
 				7'd13:
 					begin
@@ -1318,6 +1331,7 @@ EXECUTE:
 						illegal_insn <= 1'b0;
 						state <= IFETCH;
 						instret <= instret + 2'd1;
+						mrloc <= 3'd3;
 					end
 {+WFI}					
 				`WFI:
@@ -1376,7 +1390,7 @@ EXECUTE:
 CSR:  goto (CSR2);
 CSR2:
   begin
-    res <= {{24{queueo[7]}},queueo};
+    res <= {{16{queueo[15]}},queueo};
     goto (WRITEBACK);
   end
 {+PAM}
@@ -1401,8 +1415,8 @@ TMO:
 		illegal_insn <= 1'b0;
 		case({getto,getrdy,getzl})
 		3'b100:	res <= to_out;
-		3'b010:	res <= {{27{rdy_out[4]}},rdy_out};
-		3'b001: begin res <= {{24{zl_out[7]}},zl_out}; getzl <= 1'b1; end
+		3'b010:	res <= {{24{rdy_out[7]}},rdy_out};
+		3'b001: begin res <= {zl_out[7],15'h00,2'b00,zladr,zl_out}; getzl <= 1'b1; end
 		default:	res <= {16'd0,zl_out};
 		endcase
   	goto (WRITEBACK);
@@ -1999,7 +2013,7 @@ end
 {+SEG}
 task tEA;
 begin
-	if (MachineMode || ea[WID-1:24]=={WID-24{1'b1}})
+	if (MMachineMode || ea[WID-1:24]=={WID-24{1'b1}})
 		ladr <= ea;
 	else
 		ladr <= ea[WID-4:0] + {sregfile[segsel][WID-1:4],10'd0};

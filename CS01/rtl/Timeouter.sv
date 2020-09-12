@@ -22,33 +22,43 @@
 //                                                                          
 // ============================================================================
 
-module Timeouter(rst_i, clk_i, dec_i, set_i, qry_i, tid_i, timeout_i, timeout_o, zeros_o, done_o);
+module Timeouter(rst_i, clk_i, dec_i, set_i, qry_i, pop_i, tid_i, timeout_i, timeout_o, zeros_o, qadr, done_o);
 input rst_i;
 input clk_i;
 input dec_i;
 input set_i;
 input qry_i;
+input pop_i;
 input [4:0] tid_i;
 input [31:0] timeout_i;
 output reg [31:0] timeout_o;
-output reg [31:0] zeros_o;
+output [7:0] zeros_o;
+output reg [5:0] qadr;
 output reg done_o;
 
-reg [31:0] tmo [0:31];
+reg [32:0] tmo [0:63];
 reg [4:0] ndx;
 reg [2:0] state;
 parameter IDLE = 3'd0;
 parameter DEC1 = 3'd1;
 parameter SET1 = 3'd2;
 parameter QRY1 = 3'd3;
+parameter POPZ1 = 3'd4;
+
+reg wrq;
+reg [7:0] qin;
+vtdl #(8,64) uq1 (clk_i, wrq, qadr, qin, zeros_o);
 
 always @(posedge clk_i)
 if (rst_i) begin
-	zeros_o <= 32'hFFFFFFFF;
+  qin <= 8'hFF;
+  wrq <= 1'b1;
 	done_o <= 1'b1;
+	qadr <= 6'd0;
 	goto (IDLE);
 end
 else begin
+wrq <= 1'b0;
 case(state)
 IDLE:
 	begin
@@ -65,20 +75,26 @@ IDLE:
 			ndx <= tid_i;
 			done_o <= 1'b0;
 			goto (QRY1);
-		end		
+		end
+		else if (pop_i) begin
+			done_o <= 1'b0;
+		  goto (POPZ1);
+	  end		
 	end
 DEC1:
 	begin
 		ndx <= ndx + 1;
-		if (tmo[ndx] > 32'd0) begin
-			tmo[ndx] <= tmo[ndx] - 2'd1;
-			zeros_o[ndx] <= 1'b0;
-		end
-		else
-			zeros_o[ndx] <= 1'b1;
-		if (ndx==5'd31) begin
+		if (tmo[ndx][32]==1'b0) begin
+ 			tmo[ndx] <= tmo[ndx] - 2'd1;
+  	  if (tmo[ndx][31:0] == 32'd0) begin
+  		  wrq <= 1'b1;
+  		  qin <= ndx;
+  		  if (~&qadr)
+  		    qadr <= qadr + 2'd1;
+  	  end
+	  end
+		if (ndx==5'd31)
 			goto (IDLE);
-		end
 	end
 SET1:
 	begin
@@ -92,6 +108,17 @@ QRY1:
 		done_o <= 1'b1;
 		goto (IDLE);
 	end
+POPZ1:
+  begin
+    if (|qadr)
+      qadr <= qadr - 2'd1;
+    else begin
+      wrq <= 1'b1;
+      qin <= 8'hFF;
+    end
+		done_o <= 1'b1;
+		goto (IDLE);
+  end
 endcase
 end
 

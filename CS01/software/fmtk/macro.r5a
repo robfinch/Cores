@@ -23,17 +23,27 @@
 
 ; macros have to be defined before they are encountered.
 
+; disable interrupts
+macro mDI
+  csrrc $x0,#$300,#1        ; disable interrupts
+endm
+
+; disable interrupts
+macro mEI
+  csrrs $x0,#$300,#1        ; enable interrupts
+endm
+
 ; unlock the a semaphore	
 macro mUnlockSemaphore (adr)
-	ldi		v0,#-1
-	stt		v0,adr
+	ldi		a0,#-1
+	stt		a0,adr
 endm
 
 ; Look at the asid register for task id
 macro mGetCurrentTid
 ;	csrrw	v0,#$181,x0
 ;	and		v0,v0,#15
-	ldbu  $v0,CurrentTid
+	ldbu  $a0,CurrentTid
 endm
 
 macro	mHasFocus
@@ -54,15 +64,18 @@ endm
 
 macro mWaitForFocus
 .WFF1@:
+  mov   $t2,$a1
 	mHasFocus
-	bnez	$v1,.HasFocus@
+	bnez	$a1,.HasFocus@
 	ldi   $a0,#26             ; FMTK_IO
+	mov   $a1,$t2
 	ldi   $a2,#9              ; peekchar function
 	ecall
-	ldi		$a0,#$14						; CTRL-T
-	bne		$v0,$a0,.WFF2@
+	ldi		$t3,#$14						; CTRL-T
+	bne		$a0,$t3,.WFF2@
 	; eat up the CTRL-T
 	ldi		$a0,#26							; FMTK_IO
+	mov   $a1,$t2
 	ldi		$a2,#8							; getchar function
 	ecall
 	ldi		$a0,#21							; switch IO Focus
@@ -92,17 +105,31 @@ macro mMbxRemoveTask
 	stt   $a0,16[$sp]
 	sll   $a0,$a0,#2
 	ldt   $a0,TidTcbMap[$a0]
+	and   $t0,$a0,#$FFF803FF
+	bnez  $t0,.xit@
+	ldt   $t0,TCBMbxPrev[$a0]
+	ldt   $t1,TCBMbxNext[$a0]
+	beqz  $t0,.atHead@
+	stt   $t1,TCBMbxNext[$t0]
+  stt   $t0,TCBMbxPrev[$t1]
+  bra   .xit@
+.atHead@	
 	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
 	bltz	$t0,.xit@					    ; handle good?
-	sll		$t0,$t0,#4						; convert to pointer
+	sll		$t0,$t0,#5						; convert to pointer
 	add		$t0,$t0,#mbxs					; by adding base address
-	lhu		$t1,MBX_WTIDS[$t0]		; get waiting task list
-	ldb   $s1,TCBtid[$a0]
-	ldi		$t2,#1								; create a mask for given task id
-	sll		$t2,$t2,$s1
-	xor		$t2,$t2,#-1
-	and		$t1,$t1,$t2						; clear bit
-	stw		$t1,MBX_WTIDS[$t0]		; update waiting task list
+	ldt		$t1,MBX_TQHEAD[$t0]		; get waiting task list
+	beqz  $t1,.tqEmpty@
+	ldt   $t1,MBX_TQTAIL[$t0]
+	stt   $a0,TCBMbxNext[$t1]
+	stt   $t1,TCBMbxPrev[$a0]
+	stt   $x0,TCBMbxNext[$a0]
+	bra   .xit@
+.tqEmpty@
+	stt   $a0,MBX_TQHEAD[$t0]
+	stt   $a0,MBX_TQTAIL[$t0]
+	stt   $x0,TCBMbxPrev[$a0]
+	stt   $x0,TCBMbxNext[$a0]
 .xit@:
 	ldt		$s1,[$sp]
 	ldt		$t0,4[$sp]
@@ -125,20 +152,20 @@ endm
 ;		v0 = timeout list pointer to TCB
 ;------------------------------------------------------------------------------
 
-macro mPopTimeoutList
-	lbu		$v1,TCBStatus[$v0]		; no longer a waiting status
-	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
-	beqz	$t1,.noWait@
-	ldbu  $a0,TCBtid[$v0]
-	mMbxRemoveTask							; remove task from mailbox list
+;macro mPopTimeoutList
+;	lbu		$v1,TCBStatus[$v0]		; no longer a waiting status
+;	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
+;	beqz	$t1,.noWait@
+;	ldbu  $a0,TCBtid[$v0]
+;	mMbxRemoveTask							; remove task from mailbox list
 .noWait@:
-	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
-	stb		$v1,TCBStatus[$v0]
-	ldt		$v1,TCBNext[$v0]			; get next task on timeout list
-	stt		$v1,TimeoutList				; update list head
-	beqz	$v1,.done@
-	stt		$x0,TCBPrev[$v1]			; TimeoutList->prev = 0
+;	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
+;	stb		$v1,TCBStatus[$v0]
+;	ldt		$v1,TCBNext[$v0]			; get next task on timeout list
+;	stt		$v1,TimeoutList				; update list head
+;	beqz	$v1,.done@
+;	stt		$x0,TCBPrev[$v1]			; TimeoutList->prev = 0
 .done@:
-	stt		$x0,TCBNext[$v0]
-	stt		$x0,TCBPrev[$v0]
+;	stt		$x0,TCBNext[$v0]
+;	stt		$x0,TCBPrev[$v0]
 endm

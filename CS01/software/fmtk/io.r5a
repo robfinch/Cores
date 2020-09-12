@@ -59,10 +59,10 @@
 ;31		Debug						DBG
 
 ; The following must be at least 128 byte aligned
-DVF_Base		EQU		$A000
-DVF_Limit		EQU		$B000
-DCB_Base    EQU   $B000
-DCB_Limit   EQU   $BC00
+DVF_Base		EQU		$2000
+DVF_Limit		EQU		$3000
+DCB_Base    EQU   $3000
+DCB_Limit   EQU   $3C00
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -72,24 +72,24 @@ DCB_Limit   EQU   $BC00
 ;------------------------------------------------------------------------------
 
 FMTK_IO:
-	ldi		$v0,#32
-	bgeu	$a1,$v0,.badDev
-	ldi		$v1,#32
-	bgeu	$a2,$v1,.badFunc
-	sll		$v0,$a1,#7					; each device allowed 32 functions (*128)
-	sll		$v1,$a2,#2					; function number *4
-	add		$v0,$v0,#DVF_Base		; base address of function table
-	add		$v0,$v0,$v1
-	ldt		$v0,[$v0]
-	beqz	$v0,.badFunc
-	call	[$v0]
+	ldi		$a0,#32
+	bgeu	$a1,$a0,.badDev
+	ldi		$t2,#32
+	bgeu	$a2,$t2,.badFunc
+	sll		$t3,$a1,#7					; each device allowed 32 functions (*128)
+	sll		$t2,$a2,#2					; function number *4
+	add		$t3,$t3,#DVF_Base		; base address of function table
+	add		$t3,$t3,$t2
+	ldt		$t3,[$t3]
+	beqz	$t3,.badFunc
+	call	[$t3]
 .xit:
 	jmp		ERETx
 .badFunc:
-	ldi		$v0,#E_BadDevOp
+	ldi		$a0,#E_BadDevOp
 	bra		.xit
 .badDev:
-	ldi		$v0,#E_BadDevNum
+	ldi		$a0,#E_BadDevNum
 	bra		.xit
 
 ;------------------------------------------------------------------------------
@@ -100,27 +100,27 @@ FMTK_IO:
 ;------------------------------------------------------------------------------
 
 FMTK_GetDCBField:
-	ldi		$v0,#32
-	bgeu	$a1,$v0,.badDev
-	ldi		$v1,#DCB_Size
-	bgeu	$a2,$v1,.badFunc
-	mul		$v0,$a1,$v1		      ; each device allowed (96 bytes)
-	add		$v0,$v0,#DCB_Base		; base address of function table
-	add   $v0,$v0,$a2         ; add field offset
+	ldi		$t2,#32
+	bgeu	$a1,$t2,.badDev
+	ldi		$t3,#DCB_Size
+	bgeu	$a2,$t3,.badFunc
+	mul		$t2,$a1,$t3		      ; each device allowed (96 bytes)
+	add		$t2,$t2,#DCB_Base		; base address of function table
+	add   $t2,$t2,$a2         ; add field offset
 	beqz  $a3,.ldWord
-	ldb   $v1,[$v0]
+	ldb   $t3,[$t2]
 	bra   .ok
 .ldWord:
-  ldt   $v1,[$v0]
+  ldt   $t3,[$t2]
 .ok:
-  ldi   $v0,#E_Ok
+  ldi   $a0,#E_Ok
 .xit:
 	jmp		ERETx
 .badFunc:
-	ldi		$v0,#E_BadDCBOffset
+	ldi		$a0,#E_BadDCBOffset
 	bra		.xit
 .badDev:
-	ldi		$v0,#E_BadDevNum
+	ldi		$a0,#E_BadDevNum
 	bra		.xit
 
 ;------------------------------------------------------------------------------
@@ -132,27 +132,27 @@ FMTK_GetDCBField:
 ;------------------------------------------------------------------------------
 
 FMTK_SetDCBField:
-	ldi		$v0,#32
-	bgeu	$a1,$v0,.badDev
-	ldi		$v1,#DCB_Size
-	bgeu	$a2,$v1,.badFunc
-	mul		$v0,$a1,$v1		      ; each device allowed (96 bytes)
-	add		$v0,$v0,#DCB_Base		; base address of function table
-	add   $v0,$v0,$a2         ; add field offset
+	ldi		$t2,#32
+	bgeu	$a1,$t2,.badDev
+	ldi		$t3,#DCB_Size
+	bgeu	$a2,$t3,.badFunc
+	mul		$t2,$a1,$t3		      ; each device allowed (96 bytes)
+	add		$t2,$t2,#DCB_Base		; base address of function table
+	add   $t2,$t2,$a2         ; add field offset
 	beqz  $a3,.stWord
-	stb   $a4,[$v0]
+	stb   $a4,[$t2]
 	bra   .ok
 .stWord:
-  stt   $a4,[$v0]
+  stt   $a4,[$t2]
 .ok:
-  ldi   $v0,#E_Ok
+  ldi   $a0,#E_Ok
 .xit:
 	jmp		ERETx
 .badFunc:
-	ldi		$v0,#E_BadDCBOffset
+	ldi		$a0,#E_BadDCBOffset
 	bra		.xit
 .badDev:
-	ldi		$v0,#E_BadDevNum
+	ldi		$a0,#E_BadDevNum
 	bra		.xit
 
 ;------------------------------------------------------------------------------
@@ -162,32 +162,32 @@ FMTK_SetDCBField:
 ;------------------------------------------------------------------------------
 
 CopyDevFuncTbl:
-	sll		$v0,$a0,#7					; each device allowed 32 functions (*128)
-	add		$v0,$v0,#DVF_Base		; base address of function table
+	sll		$t2,$a0,#7					; each device allowed 32 functions (*128)
+	add		$t2,$t2,#DVF_Base		; base address of function table
 	ldi		$t0,#32							; 32 functions to copy
 .again:
-	ldt		$t2,[$a1]
-	stt		$t2,[$v0]
+	ldt		$a3,[$a1]
+	stt		$a3,[$t2]
 	add		$a1,$a1,#4
-	add		$v0,$v0,#4
+	add		$t2,$t2,#4
 	sub		$t0,$t0,#1
-	bgt		$t0,$x0,.again
+	bgtz	$t0,.again
 	ret
 
 ;------------------------------------------------------------------------------
 
 CopyDevDCB:
-  ldi   $v0,#DCB_Size
-  mul   $v0,$a0,$v0
-  add   $v0,$v0,#DCB_Base
+  ldi   $t2,#DCB_Size
+  mul   $t2,$a0,$t2
+  add   $t2,$t2,#DCB_Base
 	ldi		$t0,#24							; 24 words to copy
 .again:
-	ldt		$t2,[$a1]
-	stt		$t2,[$v0]
+	ldt		$a3,[$a1]
+	stt		$a3,[$t2]
 	add		$a1,$a1,#4
-	add		$v0,$v0,#4
+	add		$t2,$t2,#4
 	sub		$t0,$t0,#1
-	bgt		$t0,$x0,.again
+	bgtz	$t0,.again
 	ret
 
 
@@ -202,25 +202,26 @@ CheckDevOwner:
 	csrrs $x0,#$004,#1        ; enable gc interrupt
   ldi   $a0,#14             ; FMTK: GetCurrentTid
   ecall
-  mov   $s1,$v1
+  mov   $s1,$a1
   ldi   $a0,#27             ; FMTK Get DCB Field
   ldi   $a2,#DCB_hJob
   ldi   $a3,#0              ; get word
   ecall
-  and   $v1,$v1,#$FF
-  xor   $v1,$v1,$s1
-  bnez  $v1,.notOwner
-  ldi   $v0,#E_Ok
+  and   $a1,$a1,#$FF
+  xor   $a1,$a1,$s1
+  bnez  $a1,.notOwner
+  ldi   $a0,#E_Ok
 .xit:
   ldt   $s1,[$sp]
   add   $sp,$sp,#4
   ret
 .notOwner:
-  ldi   $v0,#E_NotOwner
   ldi   $a0,#28             ; FMTK Set DCB field
+  mov   $a1,$s1
   ldi   $a2,#DCB_LastErc
   ldi   $a3,#0              ; word
-  mov   $a4,$v0             
+  ldi   $a4,#E_NotOwner
   ecall                     
+  mov   $a0,$a4
   bra   .xit
 

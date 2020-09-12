@@ -428,7 +428,7 @@ fltToString:
 .0051:
 		stb		$x0,STRTMP[$t2]
 .0050:
-		mov		$v0,$t2
+		mov		$a0,$t2
 		ret
 
 		align	4

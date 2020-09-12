@@ -1,4 +1,5 @@
 .include "../fmtk/const.r5a"
+.include "../fmtk/types.r5a"
 .include "../fmtk/config.r5a"
 .include "../fmtk/device.r5a"
 .include "../fmtk/macro.r5a"
@@ -43,7 +44,7 @@ CSR_UIE     equ   $004
 	jmp		MachineStart
 
 ;------------------------------------------------------------------------------
-; User mode code starts here
+; Reset starting address.
 ;------------------------------------------------------------------------------
 	org		$FFFC0100
 MachineStart:
@@ -63,26 +64,41 @@ MachineStart:
 	csrrw	$x0,#$341,$t0		; set mepc
 	stt   $t0,MEPC1
 ;	jmp   ERETx2  				; switch to user mode
+;------------------------------------------------------------------------------
+; User mode code starts here
+;------------------------------------------------------------------------------
 UserStart:
-	ldi		$a0,#1					; start TinyBasic
-	ldi		$a1,#32000
-	ldi		$a2,#CSTART
+	ldi		$a0,#1              ; Start idle task, task #0
+	ldi   $a1,#0          ; app id
+	ldi		$a2,#0
+	ldi		$a3,#IdleTask
 	ecall
-	ldi		$a0,#1
-	ldi		$a1,#24000
-	ldi		$a2,#UserStart2
+  mEI
+	ldi		$a0,#1              ; Start finalizer task, task #1
+	ldi   $a1,#0          ; app id
+	ldi		$a2,#0
+	ldi		$a3,#Finalizer
+	ecall
+	ldi		$a0,#1              ; Start task for monitor
+	ldi   $a1,#0          ; app id
+	ldi		$a2,#0
+	ldi		$a3,#UserStart2
+	ecall
+	ldi		$a0,#1					; start TinyBasic
+	ldi   $a1,#0          ; app id
+	ldi		$a2,#32000
+	ldi		$a3,#CSTART
 	ecall
 ;	csrrc $x0,#$300,#1    ; enable interrupts
 ;	wfi
 	
 UserStart2:
-	ldi		$a0,#14							; Get current tid
-	ecall
-	mov		$a1,$v1             ; $a1 = tid
-	ldi		$a0,#24							; RequestIOFocus
-	ecall
+;	ldi		$a0,#14							; Get current tid
+;	ecall
+;	ldi		$a0,#24							; RequestIOFocus
+;	ecall
 ;	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
-	mov   $a0,$a1             ; $a0 = tid
+;	mov   $a0,$a1             ; $a0 = tid
 ;	call  AllocStack
 ;	add   $sp,$v1,#1020       ; place stack pointer at top of allocated region
 	ldi		$t0,#$08						; turn on the LED
@@ -101,7 +117,7 @@ UserStart2:
 ;		ldi		a2,#Monitor
 ;		ecall
 	call	DumpReadyList
-	bra		MonEntry
+	jmp		MonEntry
 
 		; Now a loop to recieve and echo back characters
 .0003:
@@ -133,42 +149,36 @@ IdleTask:
 ; Parameters:
 ;		none
 ; Returns:
-;		v0 = character, -1 if none available
+;		$a0 = character, -1 if none available
 ;------------------------------------------------------------------------------
 
 Getch:
 	gcsub	$sp,$sp,#12
 	stt		$ra,[$sp]
-	stt		$a0,4[$sp]
 	stt		$a1,8[$sp]
 	ldi   $a1,#5  ;CURIN
 	call  fgetc
 	ldt		$ra,[$sp]
-	ldt		$a0,4[$sp]
 	ldt		$a1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;   a0 = chracter to put
+;   $a0 = character to put
 ;------------------------------------------------------------------------------
 
 Putch:
 	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
 	stt		$a3,8[$sp]
-	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
-	stt   $v0,20[$sp]
 	mov		$a3,$a0
 	ldi		$a1,#5  ;CUROUT    ; serial port
 	call	fputc
 	ldt		$ra,[$sp]
 	ldt		$a3,8[$sp]
-	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
-	ldt   $v0,20[$sp]
 	add		$sp,$sp,#24
 	ret
 
@@ -194,35 +204,34 @@ fputc:
 	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
 	stt		$a0,8[$sp]
-	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
 	; If the device is a UI device there may be multiple owning jobs. It doesn't
 	; do any good to check for ownership. Instead the I/O focus is checked to
 	; see if it's present.
 	call  GetUIFlag
-	beqz  $v1,.checkOwner
+	beqz  $a1,.checkOwner
+  ldt   $a1,16[$sp]
 	call  WaitForIOFocus
 	bra   .0001
 .checkOwner:
   call  CheckDevOwner
-  bnez  $v0,.notOwner
+  bnez  $a0,.notOwner
 .0001:
   ldt   $a1,16[$sp]
 	ldi		$a0,#26							; FMTK_IO
 	ldi		$a2,#13							; putchar function
 	ecall
-	mov   $v0,$a3
+	mov   $a0,$a3
 .xit:
 	ldt		$ra,[$sp]
 	ldt		$a0,8[$sp]
-	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
 .notOwner:
-  ldi   $v0,#EOF
+  ldi   $a0,#EOF
   bra   .xit
  
 ;------------------------------------------------------------------------------
@@ -239,40 +248,39 @@ fputc:
 ; Modifies:
 ;		none
 ; Returns:
-;		v0 character, -1 if none available
+;		a0 character, -1 if none available
 ;------------------------------------------------------------------------------
 
 fgetc:
 	gcsub	$sp,$sp,#24
 	stt		$ra,[$sp]
-;	stt		$v0,4[$sp]
 	stt		$a0,8[$sp]
-	stt		$v1,12[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
 	call  GetUIFlag
-	beqz  $v1,.checkOwner
+	beqz  $a1,.checkOwner
+	ldt		$a1,16[$sp]
 	call  WaitForIOFocus
 	bra   .0001
 .checkOwner:
+	ldt		$a1,16[$sp]
   call  CheckDevOwner
-  bnez  $v0,.notOwner
+  bnez  $a0,.notOwner
 .0001:
 	ldi		$a0,#26							; FMTK_IO
+	ldt		$a1,16[$sp]
 	ldi		$a2,#8							; getchar function
 	ecall
-	mov   $v0,$v1
+	mov   $a0,$a1
 .0002:
 	ldt		$ra,[$sp]
-;	ldt		$v0,4[$sp]
 	ldt		$a0,8[$sp]
-	ldt		$v1,12[$sp]
 	ldt		$a1,16[$sp]
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
 	ret
 .notOwner:
-  ldi   $v0,#-1
+  ldi   $a0,#-1
   bra   .0002
 
 ;------------------------------------------------------------------------------
@@ -292,9 +300,17 @@ MonEntry:
 
 Monitor:
 	csrrc	$x0,#$300,#1
+.getFocus:
+;	ldi   $a0,#20       ; has IO focus
+;	ecall
+;	bnez  $v1,.hasFocus
+;	ldi   $a0,#21       ; switch focus
+;	ecall
+;	bra   .getFocus
+.hasFocus:
 ;		call	DumpReadyList
 ;		call	DumpTimeoutList
-	csrrs	$x0,#$300,#1
+	mEI
 	ldi		$s1,#0					; s1 = input pointer
 	ldi		$a0,#CR
 	call	Putch
@@ -304,18 +320,17 @@ Monitor:
 	call	Putch
 .0001:
 	call	Getch						; wait until character pressed
-	bltz	$v0,.0001
-	xor		$t0,$v0,#LF			; ignore line feed
+	bltz	$a0,.0001
+	xor		$t0,$a0,#LF			; ignore line feed
 	beqz	$t0,.procLine
-	xor		$t0,$v0,#CR
+	xor		$t0,$a0,#CR
 	beqz	$t0,.procLine
-	xor		$t0,$v0,#BS
+	xor		$t0,$a0,#BS
 	beqz	$t0,.doBackspace
-	xor		$t0,$v0,#DEL
+	xor		$t0,$a0,#DEL
 	beqz	$t0,.doDelete
-	stb		$v0,INBUF[$s1]
+	stb		$a0,INBUF[$s1]
 	add		$s1,$s1,#1
-	mov		$a0,$v0
 	call	Putch
 	bra		.0001
 .doDelete:
@@ -332,8 +347,7 @@ Monitor:
 	bra		.0001
 .doBackspace:
 	beq		$s1,$x0,.0001		; can't backspace anymore
-	mov		$a0,$v0					; show the backspace
-	call	Putch
+	call	Putch           ; show the backspace
 	sub		$s1,$s1,#1
 	mov		$s2,$s1
 .0003:
@@ -361,6 +375,11 @@ Monitor:
 	beq		$t1,$x0,.skip2
 	xor		$t1,$t0,#'\t'
 	beq		$t1,$x0,.skip2
+	xor   $t1,$t0,#'X'  ; exit from monitor
+	bnez  $t1,.notX
+	ldi   $a0,#E_Ok
+	jmp   ERETx
+.notX:
 	xor		$t1,$t0,#'M'
 	beqz	$t1,doMem
 	xor   $t1,$t0,#'V'
@@ -370,13 +389,13 @@ Monitor:
 	ldi		$t1,#'B'
 	bne		$t0,$t1,.0006
 	call  GetDecNum
-	bnez  $v0,.basSize
-	ldi   $v0,#32000
+	bnez  $a0,.basSize
+	ldi   $a0,#32000
 .basSize:
 	ldi		$a0,#12					; Start App
 	ldi   $a1,#TBASR
 	ecall
-	mov		$s1,$v1					; save v1
+	mov		$s1,$a1					; save v1
 	ldi		$a0,#msgCRLF
 	call	PutString
 	mov		$a0,$s1					; get back v1
@@ -385,11 +404,14 @@ Monitor:
 	call	PutString
 	call  DumpReadyList
 	; The monitor is running in machine mode. A return instruction is used to
-	; switch to user mode.
+	; switch to user mode. The return address must be set to the desired user
+	; code address.
 	csrrc $x0,#$300,#1    ; disable interrupts
-	ldi   $t0,#CSTART
-	csrrw $x0,#$341,$t0
-	eret
+	ldi   $t0,#CSTART       ; pick start of Tiny Basic
+	csrrw $x0,#$341,$t0     ; set as return address
+	ldi   $t0,#$20          ; bits to select register set #1
+	csrrw $x0,#$7C0,$t0     ; select register set #1 (will decrement to zero then on mret)
+	mret                    ; will begin running Tiny Basic in user mode
 	;ldi		$a0,#5					; Reschedule task
 	;ldi		$a1,#1					; sleep(0)
 	;ecall
@@ -432,8 +454,8 @@ Monitor:
 	ldi		$t1,#'K'
 	bne		$t0,$t1,.0011
 	call	GetHexNum
+	mov		$a1,$a0					; a0 = pid
 	ldi		$a0,#3					; kill task
-	mov		$a1,$v0					; a0 = pid
 	ecall
 	jmp		Monitor
 .0011:
@@ -462,14 +484,14 @@ doMem:
 	ldt		$s1,[$sp]
 	add		$sp,$sp,#4
 	call	GetHexNum
-	mov		$s3,$v0
+	mov		$s3,$a0
 	add		$s1,$s1,#1
 	call	GetHexNum
-	add		$s4,$v0,$s3
+	add		$s4,$a0,$s3
 .loop2:
 	call	Getch						; check for ctrl-c
-	xor		$v0,$v0,#3
-	beq		$v0,$x0,Monitor
+	xor		$a0,$a0,#3
+	beq		$a0,$x0,Monitor
 	ldi		$a0,#CR
 	call	Putch
 	mov		$a0,$s3
@@ -484,7 +506,7 @@ doMem:
 	ldi   $a0,#33         ; Fetch memory word
 	mov   $a1,$s3
 	ecall
-	mov   $a0,$v1
+	mov   $a0,$a1
 	bra   .0002
 .userMem
 	ldb		$a0,[$s3]
@@ -499,10 +521,10 @@ doMem:
 EditMem:
 	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	call	GetHexNum			; get address to edit
-	mov		$s3,$v0
+	mov		$s3,$a0
 	add		$s1,$s1,#1
 	call	GetHexNum			; get value to set
-	stb		$s3,[$v0]			; update mem
+	stb		$s3,[$a0]			; update mem
 	jmp		Monitor
 
 ;------------------------------------------------------------------------------
@@ -514,7 +536,7 @@ doVMem:
   add   $s1,$s1,#1
   call  GetDecNum
   ldi   $t1,#0
-  sll   $t0,$v0,#16
+  sll   $t0,$a0,#16
 .0001:
   and   $a0,$t1,#3
   bnez  $a0,.notLF
@@ -551,11 +573,11 @@ doPStat:
 .0001:
   ldi   $a0,#32       ; Get PAM bit
   ecall
-  add   $a0,$v1,#'0'
+  add   $a0,$a1,#'0'
   call  Putch
   add   $a1,$a1,#1
-  slt   $v0,$a1,#512
-  bnez  $v0,.0001
+  slt   $a0,$a1,#512
+  bnez  $a0,.0001
   jmp   Monitor
  
 ;------------------------------------------------------------------------------
@@ -565,14 +587,14 @@ doPStat:
 
 FillMem:
 	call	GetHexNum			; get address
-	mov		$s3,$v0
+	mov		$s3,$a0
 	add		$s1,$s1,#1
 	call	GetHexNum			; get length
-	mov		$s4,$v0
+	mov		$s4,$a0
 	add		$s1,$s1,#1
 	call	GetHexNum			; get byte to use
 .0001:
-	stb		$v0,[$s3]
+	stb		$a0,[$s3]
 	sub		$s4,$s4,#1
 	bgt		$s4,$x0,.0001
 	jmp		Monitor
@@ -588,15 +610,28 @@ Find:
   call  Putch
   call  SkipSpaces
   mov   $s2,$s1
+.fwe:
+  ldbu  $t0,INBUF[$s2]
+  beqz  $t0,.endOfWord
+  ldi   $t1,#' '
+  beq   $t0,$t1,.endOfWord
+  ldi   $t1,#CR
+  beq   $t0,$t1,.endOfWord
+  add   $s2,$s2,#1
+  bra   .fwe
+.endOfWord:
+  stb   $x0,INBUF[$s2]
+  mov   $s2,$s1
   ldi   $a0,#0
   ldi   $a1,#0
 .loop:
+	call	Getch						; check for ctrl-c
+	xor		$a0,$a0,#3
+	bnez	$a0,.0001
+	jmp   Monitor
+.0001:
   ldbu  $t0,[$a0]
-  ldbu  $t1,[$s2]
-  ldi   $t2,#' '
-  beq   $t1,$t2,.found
-  ldi   $t2,#CR
-  beq   $t1,$t2,.found
+  ldbu  $t1,INBUF[$s2]
   beqz  $t1,.found
   bne   $t0,$t1,.next
   add   $a0,$a0,#1
@@ -645,7 +680,7 @@ SkipSpaces:
 ;------------------------------------------------------------------------------
 
 GetHexNum:
-	ldi		$v0,#0							; v0 = num
+	ldi		$a0,#0							; a0 = num
 	gcsub	$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	SkipSpaces
@@ -668,23 +703,23 @@ GetHexNum:
 	add		$sp,$sp,#4
 	ret
 .isHexUpper:
-	sll		$v0,$v0,#4
+	sll		$a0,$a0,#4
 	sub		$t0,$t0,#'A'
 	add		$t0,$t0,#10
-	or		$v0,$v0,$t0
+	or		$a0,$a0,$t0
 	add		$s1,$s1,#1
 	bra		.next
 .isHexLower:
-	sll		$v0,$v0,#4
+	sll		$a0,$a0,#4
 	sub		$t0,$t0,#'a'
 	add		$t0,$t0,#10
-	or		$v0,$v0,$t0
+	or		$a0,$a0,$t0
 	add		$s1,$s1,#1
 	bra		.next
 .isDigit:
-	sll		$v0,$v0,#4
+	sll		$a0,$a0,#4
 	sub		$t0,$t0,#'0'
-	or		$v0,$v0,$t0
+	or		$a0,$a0,$t0
 	add		$s1,$s1,#1
 	bra		.next
 
@@ -693,7 +728,7 @@ GetHexNum:
 ;------------------------------------------------------------------------------
 
 GetDecNum:
-	ldi		$v0,#0							; v0 = num
+	ldi		$a0,#0							; a0 = num
 	gcsub	$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	SkipSpaces
@@ -708,11 +743,11 @@ GetDecNum:
 	add		$sp,$sp,#4
 	ret
 .isDigit:
-	sll		$t2,$v0,#1    ; multiply by 10
-	sll   $v0,$v0,#3    ; * 8
-	add   $v0,$v0,$t2   ; + *2
+	sll		$t2,$a0,#1    ; multiply by 10
+	sll   $a0,$a0,#3    ; * 8
+	add   $a0,$a0,$t2   ; + *2
 	sub		$t0,$t0,#'0'
-	add		$v0,$v0,$t0
+	add		$a0,$a0,$t0
 	add		$s1,$s1,#1
 	bra		.next
 
@@ -841,7 +876,7 @@ PutString:
 	code
 	align	4
 IRQRout:
-  csrrw $t0,#$780,$x0   ; get register sets
+  csrrw $t0,#$7C0,$x0   ; get register sets
   srl   $t0,$t0,#5      ; extract register set selection
   sll   $t0,$t0,#3
   csrrw $t1,#$341,$x0   ; get mepc
@@ -878,13 +913,13 @@ IRQRout:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
   call  gcIncrement
 ERETx2:
-  csrrc $x0,#$780,#31   ; select machine regs only
-  csrrw $t0,#$780,$x0   ; get register sets
+  csrrc $x0,#$7C0,#31   ; select machine regs only
+  csrrw $t0,#$7C0,$x0   ; get register sets
   srl   $t0,$t0,#5      ; extract register set selection
   sll   $t0,$t0,#3
   ldt   $t1,MEPC0[$t0]  ; get it
   csrrw $x0,#$341,$t1   ; set mepc
-	eret
+	mret
 
 ; Application startup record for Tiny Basic
 TBASR:
@@ -952,5 +987,6 @@ flt10:
 .include "../fmtk/tcb.r5a"
 .include "../fmtk/iofocus.r5a"
 .include "../fmtk/io.r5a"
+.include "../fmtk/finalizer.r5a"
 .include "../fmtk/gcIncremental.r5a"
 .include "TinyBasic.r5a"

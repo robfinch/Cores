@@ -54,15 +54,27 @@ RDYQ0		EQU		$0400
 RDYQ1		EQU		$0500
 RDYQ2		EQU		$0600
 RDYQ3		EQU		$0700
-msgs		EQU		$0800
-mbxs		EQU		$4800
-mbxs_end	EQU	$4A00
-FreeMsg	EQU		$4C00
-PAMPtr  EQU   $4FF8
-PAM     EQU   $5000
-PAMend  EQU   $5040
-IOFocusNdx		EQU		$5040
-IOFocusTbl		EQU		$5048
-IRQFlag   EQU $5050
-IRQCause  EQU $5058
+mbxs		EQU		$0800
+mbxs_end	EQU	$0C00
+FreeMsg	EQU		$0C00
+PAMPtr  EQU   $0FF8
+PAM     EQU   $1000
+PAMend  EQU   $1080
+IOFocusNdx		EQU		$1080
+IOFocusTbl		EQU		$1088
+IRQFlag   EQU $1090
+IRQCause  EQU $1098
+
+SerRcvBuf		EQU		$1400
+SerXmitBuf	EQU		$1800
+SerHeadRcv	EQU		$1C00
+SerTailRcv	EQU		$1C04
+SerHeadXmit	EQU		$1C08
+SerTailXmit	EQU		$1C0C
+SerRcvXon		EQU		$1C10
+SerRcvXoff	EQU		$1C11
+
+SysHeapStart  EQU   $2000
+SysHeapEnd    EQU   $20000
+
 

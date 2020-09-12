@@ -158,7 +158,7 @@ assign cs_uart = cyc && stb && adr[31:4]==28'hFFDC0A0;
 assign cs_sema = cyc && stb && adr[31:12]==20'hFFDB0;
 
 (* ram_style="block" *)
-reg [31:0] rommem [0:5119];
+reg [31:0] rommem [0:6143];
 wire [31:0] rom_dato;
 initial begin
 `include "../software/boot/cs01rom.ve0"
@@ -361,7 +361,8 @@ CS01_ILA uila1 (
 	.probe3(ucpu1.we_o), // input wire [0:0]  probe3 
 	.probe4(ucpu1.adr_o), // input wire [31:0]  probe4 
 	.probe5(ucpu1.dat_o), // input wire [31:0]  probe5
-	.probe6({ucpu1.crs,ucpu1.regset})
+	.probe6({ucpu1.pushq,ucpu1.popq,ucpu1.queueo})
+//	.probe6({ucpu1.to_done,ucpu1.state,ucpu1.crs,ucpu1.regset})
 );
 
 

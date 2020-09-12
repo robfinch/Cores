@@ -25,7 +25,7 @@ module cs01memInterface(rst_i, clk_i,
 	cs_i, cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o, 
 	RamCEn, RamWEn, RamOEn, MemAdr, MemDB);
 input rst_i;
-input clk_i;
+input clk_i;          // 100 MHz
 input cs_i;
 input cyc_i;
 input stb_i;
@@ -53,11 +53,10 @@ parameter RWDONE = 4'd5;
 parameter RWNACK = 4'd6;
 parameter RD2 = 4'd7;
 parameter WR0 = 4'd8;
-reg [3:0] memCount;
 reg [31:0] memDat;
 reg [7:0] memDato;
-reg memT;		// tri-state for write
-reg [3:0] sel;
+reg memT;		    // tri-state for write
+reg [3:0] sel;  // ring counter
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -66,7 +65,6 @@ if (rst_i) begin
 	RamOEn <= HIGH;
 	RamCEn <= HIGH;
 	sel <= 4'b0;
-	memCount <= 4'd0;
 	memT <= HIGH;
 	ack_o <= 1'b0;
 end
@@ -81,13 +79,13 @@ IDLE:
 		memT <= HIGH;
 		if (cs_i & cyc_i & stb_i) begin
 			RamCEn <= LOW;											// tell the ram it's selected
-			MemAdr <= {adr_i[31:2],2'b0};
+			MemAdr[18:2] <= adr_i[18:2];
 			memDat <= dat_i;
 			casez(sel_i)
-			4'b???1:	begin memCount <= 4'd0; MemAdr[1:0] <= 2'b00; sel <= sel_i; end
-			4'b??10:	begin memCount <= 4'd1;	MemAdr[1:0] <= 2'b01; sel <= {1'b0,sel_i[3:1]}; end
-			4'b?100:	begin memCount <= 4'd2;	MemAdr[1:0] <= 2'b10; sel <= {2'b0,sel_i[3:2]}; end
-			4'b1000:	begin memCount <= 4'd3; MemAdr[1:0] <= 2'b11; sel <= {3'b0,sel_i[3]}; end
+			4'b???1:	begin MemAdr[1:0] <= 2'b00; sel <= sel_i; end
+			4'b??10:	begin MemAdr[1:0] <= 2'b01; sel <= {1'b0,sel_i[3:1]}; end
+			4'b?100:	begin MemAdr[1:0] <= 2'b10; sel <= {2'b0,sel_i[3:2]}; end
+			4'b1000:	begin MemAdr[1:0] <= 2'b11; sel <= {3'b0,sel_i[3]}; end
 			endcase
 			state <= we_i ? WR0 : RD2;
 			if (!we_i)						// For a read cycle enable the ram's output drivers
@@ -101,39 +99,38 @@ IDLE:
 	// Simply stay in this state until the count expires.
 RD1:
 	begin
-		case(memCount[1:0])
+		case(MemAdr[1:0])
 		2'd0:	dat_o[7:0] <= MemDB;
 		2'd1: dat_o[15:8] <= MemDB;
 		2'd2:	dat_o[23:16] <= MemDB;
 		2'd3:	dat_o[31:24] <= MemDB;
 		endcase
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		memCount <= memCount + 4'd1;
 		sel <= {1'b0,sel[3:1]};
 		if (sel[3:1]==3'b0)
 			state <= RWDONE;
 		else
 			state <= RD2;
 	end
-	// Gives more time for address settling.
+	// Gives more time for address settling, variation in I/O delay.
 RD2:
 	state <= RD1;
 
 WR0:
   begin
-	  case(memCount[1:0])
+	  case(MemAdr[1:0])
 	  2'd0: memDato <= memDat[7:0];
 	  2'd1: memDato <= memDat[15:8];
 	  2'd2: memDato <= memDat[23:16];
 	  2'd3: memDato <= memDat[31:24];
 	  default:  ;
 	  endcase
-	  state <= WR1;
+		RamWEn <= ~sel_i[MemAdr[1:0]];
+	  state <= WR2;
   end
 	// For a write cycle begin by enabling the ram's write input.
 WR1:
 	begin
-		RamWEn <= ~sel_i[memCount];
 		state <= WR2;
 	end
 	// AFter a cycle disable the write input. This will cause the ram to latch
@@ -149,7 +146,6 @@ WR2:
 WR3:
 	begin
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		memCount <= memCount + 2'd1;
 		sel <= {1'b0,sel[3:1]};
 		if (sel[3:1]==3'b0)
 			state <= RWDONE;

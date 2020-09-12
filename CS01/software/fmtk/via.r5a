@@ -118,7 +118,7 @@ ViaInit:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi		$t1,#VIA
-	ldi		$t0,#$000000FF
+	ldi		$t0,#$000000FF      ; low eight bits output
 	stt		$t0,VIA_DDRA[$t1]
 	ldi		$t0,#1							; select timer 3 access
 	stb		$t0,VIA_PCR+1[$t1]
@@ -143,11 +143,11 @@ ViaInit:
 ViaIRQ:
 	ldi		$t1,#VIA
 	ldw		$t0,VIA_IFR[$t1]    ; get the flag register
-	and   $v0,$t0,#$40        ; timer 2? (bit 6)
-	bnez  $v0,.timer2irq
+	and   $a0,$t0,#$40        ; timer 2? (bit 6)
+	bnez  $a0,.timer2irq
 .0001:
-	and   $v0,$t0,#$100       ; timer 3? (bit 8)
-	bnez  $v0,.timer3irq
+	and   $a0,$t0,#$100       ; timer 3? (bit 8)
+	bnez  $a0,.timer3irq
 	jmp   ERETx2
 .timer3irq:
 	ldi		$t2,#1							; assume timer3, select timer 3 access
@@ -157,7 +157,7 @@ ViaIRQ:
 	add		$t2,$t2,#30
 	stt		$t2,milliseconds
 	stt		$t2,switchflag
-;	call  FMTK_SchedulerIRQ
+	call  FMTK_SchedulerIRQ
 .0003:
 	jmp   ERETx2
 	; reset countdown to clear interrupt

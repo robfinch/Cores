@@ -80,7 +80,7 @@ InsertIntoTimeoutList:
 	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
 	stb		$t2,TCBStatus[$t5]
-	ldi		$v0,#E_Ok
+	ldi		$a0,#E_Ok
 	ret
 
 ;------------------------------------------------------------------------------
@@ -118,31 +118,31 @@ RemoveFromTimeoutList:
 
 AllocTCB:
 	ldi		$t1,#0
-	ldt	  $v1,PIDMAP
+	ldt	  $a1,PIDMAP
 .0001:
-	and		$t0,$v1,#1
+	and		$t0,$a1,#1
 	beqz	$t0,.allocTid
-	srl		$v1,$v1,#1
-	or		$v1,$v1,#$80000000
+	srl		$a1,$a1,#1
+	or		$a1,$a1,#$80000000
 	add		$t1,$t1,#1
 	and		$t1,$t1,#31
 	bne		$t1,$x0,.0001
 ; here no tcbs available
-	ldi		$v0,#E_NoMoreTCBs
+	ldi		$a0,#E_NoMoreTCBs
 	ret
 .allocTid:
-	mov		$v0,$t1
-	or		$v1,$v1,#1
+	mov		$a0,$t1
+	or		$a1,$a1,#1
 	beqz	$t1,.0003
 .0002:
-	sll		$v1,$v1,#1
-	or		$v1,$v1,#1
+	sll		$a1,$a1,#1
+	or		$a1,$a1,#1
 	sub		$t1,$t1,#1
 	bnez	$t1,.0002
 .0003:
-	stt		$v1,PIDMAP
-	mov		$v1,$v0
-	ldi		$v0,#E_Ok
+	stt		$a1,PIDMAP
+	mov		$a1,$a0
+	ldi		$a0,#E_Ok
 	ret
 
 ;------------------------------------------------------------------------------
@@ -188,21 +188,35 @@ DumpReadyList:
 	call	PutHexNybble
 	ldi		$a0,#':'
 	call	Putch
-	ldi   $t2,#15
+	popq  $a2,$t1         ; get number of queue entries
+	srl   $t2,$a2,#8
+	and   $t2,$t2,#63
+	ldi		$a0,#'['
+	call	Putch
+	mov		$a0,$t2
+	call	PutHexByte
+	ldi		$a0,#']'
+	call	Putch
+	ldi		$a0,#' '
+	call	Putch
+	and   $a2,$a2,#$FF
+	pushq $a2,$t1         ; put the entry back on the queue
 .0003:
-;	getrdy  $a2,$x0,$t1
 	popq  $a2,$t1
-	pushq $a2,$t1
-;	ldw		$a2,READYQ[$t1]
-;	blt		$a2,$x0,.nxt
-	mov		$a3,$a2
-.0001:
-	mov		$a0,$a3
+	and   $a3,$a2,#$4000  ; empty queue ?
+	bnez  $a3,.nxt        ; if empty get next
+	and   $a3,$a2,#$8000
+	beqz  $a2,.0005       ; valid entry ? no: get next
+	and   $a2,$a2,#$FF
+	pushq $a2,$t1         ; put the entry back on the queue
+	mov		$a0,$a2
 	call	PutHexByte
 	ldi		$a0,#' '
 	call	Putch
+.0005:
 	sub   $t2,$t2,#1
 	bgtz  $t2,.0003
+	bra   .0001
 ;	sll		$a3,$a3,#LOG_TCBSZ
 ;	ldw		$a0,TCBNext[$a3]
 ;	call	PutHexHalf
@@ -210,15 +224,32 @@ DumpReadyList:
 ;	call	Putch
 ;	ldw		$a0,TCBPrev[$a3]
 ;	call	PutHexHalf
+.nxt:
+	mov		$a0,$a2
+	call	PutHexByte
+	ldi		$a0,#' '
+	call	Putch
+	and   $a2,$a2,#$FF
+	pushq $a2,$t1         ; put the entry back on the queue
+.0001:
 	ldi		$a0,#CR
 	call	Putch
 ;	ldw		$a3,TCBNext[$a3]
 ;	bne		$a2,$a3,.0001
-.nxt:
 	add		$t1,$t1,#1
-	slt		$t2,$t1,#4
+	slt		$t2,$t1,#8
 	bnez	$t2,.0002
 .brk:
+  ldi   $t0,#$31
+.0004:
+  sll   $t0,$t0,#2
+  ldt   $a0,TidTcbMap[$t0]
+  srl   $t0,$t0,#2
+  call  PutHexWord
+	ldi		$a0,#CR
+	call	Putch
+  sub   $t0,$t0,#1
+  bge   $t0,$x0,.0004
 	csrrw	$x0,#$300,$s1
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
@@ -248,8 +279,8 @@ DumpTimeoutList:
 	ldi		$a3,#0
 .0002:
 	call	SerialPeekCharDirect
-	xor		$v0,$v0,#CTRLC
-	beqz	$v0,.brk
+	xor		$a0,$a0,#CTRLC
+	beqz	$a0,.brk
 	ldi		$a0,#CR
 	call	Putch
 ;	ldw		$a2,TimeoutList
