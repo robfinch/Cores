@@ -10,19 +10,16 @@ User mode may have it's own dedicated register file along with a separate regist
 The register set is often automatically switched when the processor switches modes of operation.
 Having a separate register set to support interrupts allows high-speed operation of interrupt routines.
 
-## Assumptions
-It is assumed that there is a small number of register sets present (<= 16). So only a nybble field is used to represent the register set. The goal is to efficiently use "extra" registers already available, not to increase the size of the register file by adding additional registers.
-This is primarily an FPGA usage scenario.
-
 ## Proposal
 This proposal proposes a means to access user registers or the prior register set in a register set stack from other modes of operation.
 
 We propose:
 
-* to add a non-standard read/write CSR accessible only to machine mode (CSR $7C0) to contain register set selection bits
-* to add a non-standard read/write CSR accessible only to machine mode (CSR $7C3) to contain the register set selection stack
+* to add a non-standard read/write CSR accessible only to machine mode (CSR $780) to contain register set selection bits
 * to allow the register set in use to be selected independently for each register field of an instruction.
+* that the register set selection of user registers be automatic when the processor is switched to user mode.
 * that the register set selection of machine registers is automatic when an interrupt or exception occurs.
+* and that the register set selection act like a stack of register sets for interrupt or exceptions.
 
 ## Rationale
 Many designs offer ways to move values between register sets. This is often done with dedicated move instructions. Another approach is to have a subset of registers visible to multiple operating modes.
@@ -32,12 +29,7 @@ Automatic register set selection occurring during mode switches adds a safety fa
 Switching the register set using an already available resource local to the processor will be faster and more code dense than spilling and loading registers to and from memory.
 
 ## Operation
-One use of multiple register sets is as a stack of register sets. Whenever an interrupt or exception occurs a register set selector is incremented causing a fresh set of registers to be available. When an exception return is performed the register set selector is decremented causing a switch back to the previous register set. In order to pass data between register sets the CSR is used. When bits in the CSR are set, the previous register set is selected for the register field corresponding to the bit in the CSR. The presence of a register stack allows the operating system to be called invoking a new level of machine mode and allowing operating system calls while running a monitor or debugger. The issue that arises is that user mode register sets would be unavailable to the OS when the intent is to modify user state.
-Transferring to machine mode via an ecall instruction selects register set #13.
-Transferring to debug mode via an ebreak instruction selects register set #15.
-Hardware interrupts automatically select register set #14.
-Register sets #11 and #12 are reserved for supervisor and hypervisor modes respectively.
-The remaining register sets (0 to 10) are available for use for user tasks.
+One use of multiple register sets is as a stack of register sets. Whenever an interrupt or exception occurs a register set selector is incremented causing a fresh set of registers to be available. When an exception return is performed the register set selector is decremented causing a switch back to the previous register set. In order to pass data between register sets the CSR is used. When bits in the CSR are set, the previous register set is selected for the register field corresponding to the bit in the CSR. There is an extra bit in the CSR to force the selection of the user mode register set when the bits are also set for the corresponding register field. The reason this is necessary is that the system may be running in machine mode already when an operating system call is performed. For instance a system monitor program or debugger may be running in machine mode. The presence of a register stack allows the operating system to be called invoking a new level of machine mode and allowing operating system calls while running a monitor or debugger. The issue that arises is that user mode register sets would be unavailable to the OS when the intent is to modify user state.
 
 ## Examples
 Operating system calls often need to transfer data between user and machine mode. Returning a value requires moving values between register sets.
@@ -45,10 +37,10 @@ This can be done by setting a selection bit in a CSR.
 
 ```r5a
 ERETx:
-	csrrs	$x0,#$7C0,#1				; select previous (user) regfile for destination
+	csrrs	$x0,#$780,#17				; select user regfile for destination
 	mov		$v1,$v1							; move return values to user registers
 	mov		$v0,$v0
-	mret											; return (auto selects user registers)
+	eret											; return (auto selects user registers)
 ```
 
 Another frequent operating system requirement is to save the user state. This becomes easy to do with regset selection controlled by a CSR.
@@ -64,7 +56,7 @@ Another frequent operating system requirement is to save the user state. This be
 
 SwapContext:
 	; Save outgoing register set in ACB
-	csrrs	$x0,#$7C0,#4	  ; select user register set for Rs2
+	csrrs	$x0,#$780,#20	; select user register set for Rs2
 	sw		$x1,4[$a0]
 	sw		$x2,8[$a0]
 	sw		$x3,12[$a0]
@@ -74,38 +66,23 @@ SwapContext:
 	sw		$x7,28[$a0]
 ```
 
-## CSR Format - CSR $7C0
-| XLEN - 1            4 |  3  |  2  |  1  |  0 |
-|-----------------------|-----|-----|-----|----|
-| XLEN-1 to 4 reserved  | Rs3 | Rs2 | Rs1 | Rd |
-
-## CSR Format - CSR $7C3
-| XLEN - 1              | ... | 11  8 | 7  4  | 3  0 |
-|-----------------------|-----|-------|-------|------|
-| XLEN-1 to 4 reserved  | ... |  pprs |  prs  |  rs  |
+## CSR Format
+| XLEN - 1            7 | 6  5 |  4  |  3  |  2  |  1  |  0 |
+|-----------------------|------|-----|-----|-----|-----|----|
+| XLEN-1 to 4 reserved  |  rs  |  U  | Rs3 | Rs2 | Rs1 | Rd |
 
 ## Operation / Field Description
-If the bit corresponding to the register field of a instruction is set in the CSR $7C0 then that register field refers to the previous register file of a register file stack (bits 4 to 7 of $7C3).
-Otherwise if the bit is clear then the default register set for the current operating mode of the processor is selected for that register (bit 0 to 3 of $7C3).
-On an exception the register set stack CSR is shifted to the left by four bits and the current register set stored in bits 0 to 3.
-On an exception return the register set stack CSR is shifted to the right by four bits.
+If the bit corresponding to the register field of a instruction is set in the CSR then that register field refers to the previous register file of a register file stack.
+Otherwise if the bit is clear then the default register set for the current operating mode of the processor is selected for that register.
+Additionally, if the U bit is set and if the bit corresponding to the register field of a instruction is set in the CSR then that register field refers to the user register file of a register file stack.
+Bits 5 and 6 of the CSR reflect the current register set selection (assuming only 4 are available). It may be useful to know the stacking depth of the register sets.
 
-## CSR $7C0 Typical Values
-x1 = user mode registers are selected as the destination for all following instructions.
-x4 = user mode registers are selected as the source for Rs2 for all following instructions. This would typically be used to perform a store of user registers.
-
-## Register Set Assignments
-| Regset  | Usage                    |
-|---------|--------------------------|
-| 0 to 10 | User Mode Available      |
-|   11    | Supervisor mode          |
-|   12    | Hypervisor mode          |
-|   13    | Machine mode - ecall     |
-|   14    | Machine mode - interrupt |
-|   15    | Machine mode - debug     |
+## CSR Typical Values
+x17 = user mode registers are selected as the destination for all following instructions.
+x20 = user mode registers are selected as the source for Rs2 for all following instructions. This would typically be used to perform a store of user registers.
 
 ## Hardware Impact
-Two CSRs ($7C0, $7C3) are used. The upper bits of the register file index need to be supplied by a register. Machine exception processing must set the upper bits of the register file index appropriately. Instructions affected are the ecall, ebreak, eret, and mret instructions.
+A CSR ($780) is used. The upper bits of the register file index need to be supplied by a register. Machine exception processing must set the upper bits of the register file index appropriately.
 ### Advanced Pipeline Impact
 While implementing multiple register sets in a simple pipeline is straigtforward doing so in advanced pipelines may be more challenging.
 Forcing the register set to particular values during an exception or exception return may not impact the pipeline as most likely a pipeline flush is occurring anyway. A pipeline flush may be required when switching the register set using a CSR instruction.
