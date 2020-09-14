@@ -56,7 +56,7 @@ FMTK_HasIOFocus:
 	ldi		$a1,#1
 .xit:
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 
 ;-----------------------------------------------------------------------------
 ; First check if it's even possible to switch the focus to another
@@ -88,7 +88,7 @@ SwitchIOFocusHelper:
 
 FMTK_SwitchIOFocus:
 	call	SwitchIOFocusHelper
-	jmp		ERETx
+	jmp		OSExit
 
 ;-----------------------------------------------------------------------------
 ; The I/O focus list is an array indicating which jobs are requesting the
@@ -110,7 +110,7 @@ FMTK_RequestIOFocus:
 	ldt		$t0,IOFocusNdx			; get current index
   sll   $a1,$a1,#2
   ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB pointer
-  and   $t1,$a1,#$FFF803FF  ; bad pointer?
+  and   $t1,$a1,#TCBPTR_MASK  ; bad pointer?
   bnez  $t1,.ret
 	bnez	$t0,.notEmpty		    ; is there one? (!= 0)
 	stt		$a1,IOFocusNdx			; no current index, so set equal to requester
@@ -126,7 +126,7 @@ FMTK_RequestIOFocus:
 	stt		$a1,IOF_PREV[$t0]
 .ret:
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 
 ;-----------------------------------------------------------------------------
 ; ReleaseIOFocus called when the task no longer desires to be on the I/O
@@ -189,7 +189,7 @@ FMTK_ForceReleaseIOFocus:
 .done:
 .noFocus:
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 
 ;------------------------------------------------------------------------------
 ;     Wait for the IO Focus. Returns only when focus is present.
@@ -204,9 +204,11 @@ WaitForIOFocus:
   stt   $a1,4[$sp]
   stt   $a2,8[$sp]
 .WFF1:
+  mEI
 	ldi		$a0,#20           ; FMTK Has Focus
 	ecall
 	bnez	$a1,.HasFocus
+	mEI
 	ldi   $a0,#26           ; FMTK_IO
 	ldi   $a1,#5
 	ldi   $a2,#9            ; peekchar function
@@ -225,6 +227,7 @@ WaitForIOFocus:
 	ecall
 	bra		.WFF1
 .WFF2:
+  mEI
 	ldi		$a0,#5            ; FMTK Sleep() function
 	ldi		$a1,#1
 	ecall

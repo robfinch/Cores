@@ -81,7 +81,7 @@ FMTK_TCBFinalizerExit:
   ldi   $t1,#OST_DEAD
   stb   $t1,OBJState[$a1]
 .0001:
-  jmp   ERETx
+  jmp   OSExit
 
 msgFinalizerRunning:
   db  "Finalizer task running",CR,0

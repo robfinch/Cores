@@ -48,7 +48,7 @@ PAMFindRun:
   stt   $s4,16[$sp]
   mov   $s1,$a0             ; save argument value
   stt   $a0,$4010
-  mov   $a0,$x0
+  ldi   $a0,#OSPAGES
 .nextPage:
   mov   $s4,$a0
   call  PAMGetbitPair
@@ -112,7 +112,7 @@ PAMAlloc:
   bltz  $a0,.xit
   mov   $s1,$a0
   mov   $a3,$a0
-  mov   $s5,$a0
+  mov   $s5,$a0             ; $s5 = start of run
 .markNext:
   mov   $a0,$a3
   slt   $a1,$s4,#2          ; if $s4 <= 1
@@ -320,4 +320,4 @@ GetPamBit:
   call  PAMGetbitPair
   mov   $a1,$a0
   ldi   $a0,#E_Ok
-  jmp   ERETx
+  jmp   OSExit

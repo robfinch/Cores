@@ -43,6 +43,7 @@ OST_DEAD    EQU   128   ; completely dead, finalizer called already
 TCB_MAGIC     EQU   ((' ' << 24) | ('T' << 16) | ('C' << 8) | 'B')
 ACB_MAGIC     EQU   ((' ' << 24) | ('A' << 16) | ('C' << 8) | 'B')
 MSG_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('S' << 8) | 'G')
+MBX_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('B' << 8) | 'X')
 
 UNDEADQ     EQU   7
 
@@ -61,6 +62,7 @@ E_QueStrategy =		0x13
 E_BadDevNum	=		0x18
 E_DCBInUse	=		0x19
 E_BadDCBOffset = 0x1A
+E_Busy = 0x1B
 ; Device driver errors
 E_BadDevNum	=		0x20
 E_NoDev		=		0x21
@@ -70,6 +72,7 @@ E_WriteError =		0x24
 E_BadBlockNum	=	0x25
 E_TooManyBlocks	=	0x26
 E_BadTcbPointer = 0x27
+E_BadTid = 0x28
 
 ; resource errors
 E_NoMoreMbx	=		0x40
@@ -82,3 +85,6 @@ E_NoMem = 0x47
 CSR_MSTATUS = $300
 CSR_REGSET  = $7C0
 CSR_MSEMA   = $7C1
+CSR_TASKID  = $7C2
+
+TCBPTR_MASK = $FFF803FBF

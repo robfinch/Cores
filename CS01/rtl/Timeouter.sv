@@ -33,7 +33,7 @@ input [4:0] tid_i;
 input [31:0] timeout_i;
 output reg [31:0] timeout_o;
 output [7:0] zeros_o;
-output reg [5:0] qadr;
+output [7:0] qadr;
 output reg done_o;
 
 reg [32:0] tmo [0:63];
@@ -45,20 +45,33 @@ parameter SET1 = 3'd2;
 parameter QRY1 = 3'd3;
 parameter POPZ1 = 3'd4;
 
-reg wrq;
+reg wrq, rdq;
 reg [7:0] qin;
-vtdl #(8,64) uq1 (clk_i, wrq, qadr, qin, zeros_o);
+//vtdl #(8,64) uq1 (clk_i, wrq, qadr, qin, zeros_o);
+ReadyFifo uqx (
+  .clk(clk_i),                // input wire clk
+  .srst(rst_i),              // input wire srst
+  .din(qin),                // input wire [7 : 0] din
+  .wr_en(wrq),            // input wire wr_en
+  .rd_en(rdq),            // input wire rd_en
+  .dout(zeros_o),              // output wire [7 : 0] dout
+  .full(),              // output wire full
+  .empty(qadr[6]),            // output wire empty
+  .valid(qadr[7]),            // output wire valid
+  .data_count(qadr[5:0])  // output wire [5 : 0] data_count
+);
 
 always @(posedge clk_i)
 if (rst_i) begin
   qin <= 8'hFF;
-  wrq <= 1'b1;
+  wrq <= 1'b0;
+  rdq <= 1'b0;
 	done_o <= 1'b1;
-	qadr <= 6'd0;
 	goto (IDLE);
 end
 else begin
 wrq <= 1'b0;
+rdq <= 1'b0;
 case(state)
 IDLE:
 	begin
@@ -76,10 +89,8 @@ IDLE:
 			done_o <= 1'b0;
 			goto (QRY1);
 		end
-		else if (pop_i) begin
-			done_o <= 1'b0;
-		  goto (POPZ1);
-	  end		
+		else if (pop_i)
+		  rdq <= 1'b1;
 	end
 DEC1:
 	begin
@@ -89,8 +100,6 @@ DEC1:
   	  if (tmo[ndx][31:0] == 32'd0) begin
   		  wrq <= 1'b1;
   		  qin <= ndx;
-  		  if (~&qadr)
-  		    qadr <= qadr + 2'd1;
   	  end
 	  end
 		if (ndx==5'd31)
@@ -108,17 +117,6 @@ QRY1:
 		done_o <= 1'b1;
 		goto (IDLE);
 	end
-POPZ1:
-  begin
-    if (|qadr)
-      qadr <= qadr - 2'd1;
-    else begin
-      wrq <= 1'b1;
-      qin <= 8'hFF;
-    end
-		done_o <= 1'b1;
-		goto (IDLE);
-  end
 endcase
 end
 

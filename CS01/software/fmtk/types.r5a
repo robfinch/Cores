@@ -29,7 +29,7 @@ OBJState    EQU   24    ; WHITE, GREY, BLACK
 OBJScavcnt  EQU   25    ; scavange count
 OBJOwningMap  EQU   26
 OBJPad1       EQU   27
-OBJPad2       EQU   28
+OBJCollectionIndex  EQU   28
 OBJUsedInMap  EQU   32    ; used in map
 OBJPad3       EQU   36
 OBJFWAddr     EQU   40    ; forwarding address
@@ -161,11 +161,12 @@ ASR_SIZE      EQU   72
 
 MBX_OWNER			equ		0		; tid of owning task
 ;MBX_WTIDS			equ		4		; tasks waiting at mailbox
-MBX_TQHEAD    equ   4
+MBX_LINK      equ   4
+MBX_TQHEAD    equ   4   ; link field for free list shared with task queue head
 MBX_TQTAIL    equ   8
 MBX_MQHEAD		equ		12		
 MBX_MQTAIL		equ		16
-MBX_SIZE			equ		32
+MBX_SIZE			equ		20
 
 MSG_LINK	  equ		0
 MSG_RETADR  equ   4

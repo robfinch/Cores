@@ -43,7 +43,8 @@ endm
 macro mGetCurrentTid
 ;	csrrw	v0,#$181,x0
 ;	and		v0,v0,#15
-	ldbu  $a0,CurrentTid
+  csrrw $a0,#$7C2,$x0
+;	ldbu  $a0,CurrentTid
 endm
 
 macro	mHasFocus

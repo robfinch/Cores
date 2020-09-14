@@ -89,14 +89,16 @@ UserStart:
 	ldi		$a2,#32000
 	ldi		$a3,#CSTART
 	ecall
-;	csrrc $x0,#$300,#1    ; enable interrupts
+  mEI
+;.mywfi:
+;  bra   .mywfi
 ;	wfi
 	
 UserStart2:
-;	ldi		$a0,#14							; Get current tid
-;	ecall
-;	ldi		$a0,#24							; RequestIOFocus
-;	ecall
+	ldi		$a0,#14							; Get current tid
+	ecall
+	ldi		$a0,#24							; RequestIOFocus
+	ecall
 ;	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
 ;	mov   $a0,$a1             ; $a0 = tid
 ;	call  AllocStack
@@ -116,7 +118,7 @@ UserStart2:
 ;		ldi		a1,#24000
 ;		ldi		a2,#Monitor
 ;		ecall
-	call	DumpReadyList
+	call	DumpReadyQueue
 	jmp		MonEntry
 
 		; Now a loop to recieve and echo back characters
@@ -378,7 +380,7 @@ Monitor:
 	xor   $t1,$t0,#'X'  ; exit from monitor
 	bnez  $t1,.notX
 	ldi   $a0,#E_Ok
-	jmp   ERETx
+	jmp   OSExit
 .notX:
 	xor		$t1,$t0,#'M'
 	beqz	$t1,doMem
@@ -402,7 +404,7 @@ Monitor:
 	call	PutHexByte
 	ldi		$a0,#msgTaskStart
 	call	PutString
-	call  DumpReadyList
+	call  DumpReadyQueue
 	; The monitor is running in machine mode. A return instruction is used to
 	; switch to user mode. The return address must be set to the desired user
 	; code address.
@@ -425,7 +427,7 @@ Monitor:
 	call	DumpTimeoutList
 	jmp		Monitor
 .noT:
-	call 	DumpReadyList
+	call 	DumpReadyQueue
 	;ldi		$a0,#15
 	;ecall
 	jmp		Monitor
@@ -466,8 +468,9 @@ Monitor:
 	jmp		Monitor
 .0012:
 .0005:
-	bra		Monitor
+	jmp		Monitor
 
+  align 16
 doMem:
 	gcsub	$sp,$sp,#4
 	add		$s1,$s1,#1
@@ -485,6 +488,7 @@ doMem:
 	add		$sp,$sp,#4
 	call	GetHexNum
 	mov		$s3,$a0
+	mov   $s5,$a0
 	add		$s1,$s1,#1
 	call	GetHexNum
 	add		$s4,$a0,$s3
@@ -516,8 +520,29 @@ doMem:
 	sub		$s2,$s2,#1
 	bge		$s2,$x0,.loop
 	bltu	$s3,$s4,.loop2
+	ldi		$a0,#' '
+	call	Putch
+	ldi		$a0,#' '
+	call	Putch
+	
+	mov   $s3,$s5
+.0004:
+	ldbu  $a0,[$s3]
+	slt   $t0,$a0,#$20
+	bnez  $t0,.unprintable
+	call  Putch
+	bra   .0003
+.unprintable:
+  ldi   $a0,#'.'
+  call  Putch
+.0003:
+  add   $s3,$s3,#1
+  bltu  $s3,$s4,.0004
+  ldi   $a0,#CR
+  call  Putch
 	jmp		Monitor		
 
+  align 16
 EditMem:
 	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
 	call	GetHexNum			; get address to edit
@@ -532,6 +557,7 @@ EditMem:
 ; Displays the virtual memory map for the specified app.
 ;------------------------------------------------------------------------------
 
+  align 16
 doVMem:
   add   $s1,$s1,#1
   call  GetDecNum
@@ -564,19 +590,20 @@ doVMem:
 ; Display the PAM bits status.
 ;------------------------------------------------------------------------------
 
+  align 16
 doPStat:
   ldi   $a0,#CR
   call  Putch
   ldi   $a0,#LF
   call  Putch
-  ldi   $a1,#0        ; $a1 = bit number
+  ldi   $t1,#0        ; $a1 = bit number
 .0001:
-  ldi   $a0,#32       ; Get PAM bit
+  ldi   $a0,#32       ; Get PAM bit pair
   ecall
   add   $a0,$a1,#'0'
   call  Putch
-  add   $a1,$a1,#1
-  slt   $a0,$a1,#512
+  add   $t1,$t1,#1
+  slt   $a0,$t1,#MEMSZ
   bnez  $a0,.0001
   jmp   Monitor
  
@@ -585,6 +612,7 @@ doPStat:
 ; Fills memory beginning at address $1000 for $800 bytes with the value $EE
 ;------------------------------------------------------------------------------
 
+  align 16
 FillMem:
 	call	GetHexNum			; get address
 	mov		$s3,$a0
@@ -603,6 +631,7 @@ FillMem:
 ; FI Hello
 ;------------------------------------------------------------------------------
 
+  align 16
 Find:
   ldi   $a0,#CR
   call  Putch
@@ -679,6 +708,7 @@ SkipSpaces:
 ; Get a hex number from the input buffer.
 ;------------------------------------------------------------------------------
 
+  align 16
 GetHexNum:
 	ldi		$a0,#0							; a0 = num
 	gcsub	$sp,$sp,#4
@@ -726,7 +756,7 @@ GetHexNum:
 ;------------------------------------------------------------------------------
 ; Get a decimal number from the input buffer.
 ;------------------------------------------------------------------------------
-
+  align 16
 GetDecNum:
 	ldi		$a0,#0							; a0 = num
 	gcsub	$sp,$sp,#4
@@ -761,7 +791,7 @@ GetDecNum:
 ; Returns:
 ;   none
 ;------------------------------------------------------------------------------
-
+  align 16
 PutHexWord:
 	gcsub	$sp,$sp,#8
 	stt		$ra,[$sp]
@@ -846,7 +876,7 @@ PutHexNybble:
 ; Stack Space:
 ;		2 words
 ;------------------------------------------------------------------------------
-
+  align 16
 PutString:
 	gcsub	$sp,$sp,#8				; save link register
 	stt		$ra,[$sp]
@@ -874,7 +904,7 @@ PutString:
 ; or the machine mode register file.
 ;------------------------------------------------------------------------------
 	code
-	align	4
+	align	16
 IRQRout:
   csrrw $t0,#$7C0,$x0   ; get register sets
   srl   $t0,$t0,#5      ; extract register set selection
@@ -886,6 +916,17 @@ IRQRout:
 	sub   $sp,$sp,$t2
 	csrrw	$t0,#$342,$x0			; get cause code
 	bltz	$t0,.isIRQ		  ; irq or ecall?
+	xor   $t2,$t0,#2      ; illegal instruction?
+	beqz  $t2,.illegal
+	and   $t2,$t0,#$FFFFFFFC
+	xor   $t2,$t2,#8
+	beqz  $t2,.ecall
+	; Some other cause
+.illegal:
+  stt   $t1,$4018
+.soc:
+  bra   .soc
+.ecall:
 	jmp		OSCALL					; goto operating system call dispatcher
 .isIRQ:
   ldt   $t1,IRQFlag     ; update IRQ flag for Tiny Basic
@@ -913,6 +954,7 @@ IRQRout:
 	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
   call  gcIncrement
 ERETx2:
+  mDI
   csrrc $x0,#$7C0,#31   ; select machine regs only
   csrrw $t0,#$7C0,$x0   ; get register sets
   srl   $t0,$t0,#5      ; extract register set selection
@@ -920,6 +962,12 @@ ERETx2:
   ldt   $t1,MEPC0[$t0]  ; get it
   csrrw $x0,#$341,$t1   ; set mepc
 	mret
+	
+	; In case the pipeline runs ahead into the following table which will
+	; result in illegal instructions.
+	nop
+	nop
+  nop
 
 ; Application startup record for Tiny Basic
 TBASR:

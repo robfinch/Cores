@@ -63,7 +63,7 @@ FMTK_StartApp:
   call  PAMAlloc          ; allocate ACB
   stt   $a1,ACBPtrs[$s2]  ; save off pointer to ACB
   mov   $s3,$a1           ; $s3 = pointer to ACB
-  ldi   $t0,#ACB_Magic
+  ldi   $t0,#ACB_MAGIC
   stt   $t0,ACBMagic[$s3]
   stt   $x0,ACBGarbageList[$s3]
   ; Allocate a virtual screen and set pointers to it.
@@ -150,7 +150,7 @@ FMTK_StartApp:
 .noMoreApps:
   ldi   $a0,#E_NoMoreAppIds
 .noMem
-  jmp   ERETx
+  jmp   OSExit
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -185,9 +185,9 @@ FMTK_KillApp:
 ;	call	FreeAll							; free all the memory associated with the task
 	; Now make task ID available for reuse
 	ldbu  $a0,TCBtid[$a1]
-	call  FreeTCB
+	call  FreeTID
 	mEI
 .immortal:
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 

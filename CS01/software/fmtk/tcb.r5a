@@ -37,11 +37,14 @@
 InsertIntoReadyQueue:
 	sll   $t0,$a0,#2
 	ldt   $t0,TidTcbMap[$t0]
+	and   $t1,$t0,#TCBPTR_MASK  ; valid pointer?
+	bnez  $t1,.badPtr
 	ldbu	$t1,TCBStatus[$t0]	; set status to ready
 	or		$t1,$t1,#TS_READY
 	stb		$t1,TCBStatus[$t0]
 	ldb		$t1,TCBPriority[$t0]
 	pushq	$a0,$t1
+.badPtr:
 	ret
 
 ;------------------------------------------------------------------------------
@@ -50,37 +53,52 @@ InsertIntoReadyQueue:
 ; it and pop the next ready task.
 ;
 ; Parameters:
-;		a0 = tid to remove
+;		$a0 = tid to remove
 ; Modifies:
 ;		t0,t1
 ; Returns:
-;		v0 = E_Ok for success
+;		none
 ;------------------------------------------------------------------------------
 
 RemoveFromReadyQueue:
+  stt   $a0,$4000
+  slt   $t0,$a0,#32
+  beqz  $t0,.badTid
 	sll   $t0,$a0,#2
 	ldt   $t0,TidTcbMap[$t0]
+	and   $t1,$t0,#TCBPTR_MASK  ; valid pointer?
+	bnez  $t1,.badPtr
 	ldb		$t1,TCBStatus[$t0]		; set status no longer ready or running
 	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
 	stb		$t1,TCBStatus[$t0]
+.badTid:
+.badPtr:
 	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		a0 = task id to insert
-;		a1 = timeout value
+;		$a0 = task id to insert
+;		$a1 = timeout value
 ; Modifies:
 ;		t0,t1,t2,t3,t4,t5
 ;------------------------------------------------------------------------------
 
 InsertIntoTimeoutList:
-	setto	$a0,$a1
+  slt   $t0,$a0,#32
+  beqz  $t0,.badTid
 	sll   $t5,$a0,#2
 	ldt   $t5,TidTcbMap[$t5]
+	and   $t1,$t5,#TCBPTR_MASK  ; valid pointer?
+	bnez  $t1,.badPtr
+	setto	$a0,$a1
 	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
 	stb		$t2,TCBStatus[$t5]
 	ldi		$a0,#E_Ok
+	ret
+.badTid:
+.badPtr:
+	ldi   $a0,#E_Arg
 	ret
 
 ;------------------------------------------------------------------------------
@@ -102,23 +120,15 @@ RemoveFromTimeoutList:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;   $a0 = app id
+;   none
 ; Returns:
-;		$v1 = task id (pointer to task control block)
+;   $a0 = E_Ok, E_NoMoreTCBs if none available
+;		$a1 = task id (pointer to task control block)
 ;------------------------------------------------------------------------------
 
-;AllocTCB:
-  gcsub $sp,$sp,#4
-  stt   $ra,[$sp]
-  ldi   $a1,#1024
-  call  Alloc
-  ldt   $ra,[$sp]
-  add   $sp,$sp,#4
-  ret
-
-AllocTCB:
+AllocTID:
 	ldi		$t1,#0
-	ldt	  $a1,PIDMAP
+	ldt	  $a1,TID_POOL
 .0001:
 	and		$t0,$a1,#1
 	beqz	$t0,.allocTid
@@ -126,7 +136,7 @@ AllocTCB:
 	or		$a1,$a1,#$80000000
 	add		$t1,$t1,#1
 	and		$t1,$t1,#31
-	bne		$t1,$x0,.0001
+	bnez	$t1,.0001
 ; here no tcbs available
 	ldi		$a0,#E_NoMoreTCBs
 	ret
@@ -140,7 +150,7 @@ AllocTCB:
 	sub		$t1,$t1,#1
 	bnez	$t1,.0002
 .0003:
-	stt		$a1,PIDMAP
+	stt		$a1,TID_POOL
 	mov		$a1,$a0
 	ldi		$a0,#E_Ok
 	ret
@@ -148,20 +158,20 @@ AllocTCB:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
-FreeTCB:
+FreeTID:
 	ldi		$t0,#1
 	sll		$t0,$t0,$a0
 	xor		$t0,$t0,#-1
-	ldt		$t1,PIDMAP
+	ldt		$t1,TID_POOL
 	and		$t1,$t1,$t0
-	stt		$t1,PIDMAP
+	stt		$t1,TID_POOL
 	ret
 
 ;------------------------------------------------------------------------------
 ; Diagnostics
 ;------------------------------------------------------------------------------
 
-DumpReadyList:
+DumpReadyQueue:
 	sub		$sp,$sp,#32
 	stt		$ra,[$sp]
 	stt		$a0,4[$sp]
@@ -171,7 +181,23 @@ DumpReadyList:
 	stt		$t2,20[$sp]
 	stt		$t3,24[$sp]
 	stt		$s1,28[$sp]
-	ldi		$a0,#msgReadyList
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LF
+  call  Putch
+  ; Display PAM
+  ldi   $t1,#0        ; $a1 = bit number
+.0006:
+  ldi   $a0,#32       ; Get PAM bit pair
+  mov   $a1,$t1
+  ecall
+  add   $a0,$a1,#'0'
+  call  Putch
+  add   $t1,$t1,#1
+  slt   $a0,$t1,#MEMSZ
+  bnez  $a0,.0006
+
+	ldi		$a0,#msgReadyQueue
 	call	PutString
 	ldi		$t1,#0
 	csrrc	$s1,#$300,#1
@@ -240,16 +266,46 @@ DumpReadyList:
 	slt		$t2,$t1,#8
 	bnez	$t2,.0002
 .brk:
-  ldi   $t0,#$31
+	ldi		$a0,#msgTaskInfo
+	call	PutString
+  ldi   $t0,#0
 .0004:
+  ldi   $t2,#1
+  sll   $t2,$t2,$t0
+  ldt   $a0,TID_POOL
+  and   $t2,$t2,$a0
+  beqz  $t2,.nxtT
   sll   $t0,$t0,#2
   ldt   $a0,TidTcbMap[$t0]
+  mov   $t2,$a0
   srl   $t0,$t0,#2
+  call  PutHexWord
+  ldi   $a0,' '
+  call  Putch
+  ldbu  $a0,TCBtid[$t2]
+  call  PutHexByte
+  ldi   $a0,' '
+  call  Putch
+  ldbu  $a0,TCBPriority[$t2]
+  call  PutHexByte
+  ldi   $a0,' '
+  call  Putch
+  ldbu  $a0,TCBStatus[$t2]
+  call  PutHexByte
+  ldi   $a0,' '
+  call  Putch
+  ldt   $a0,TCBTimeout[$t2]
+  call  PutHexWord
+  ldi   $a0,' '
+  call  Putch
+  ldt   $a0,TCBxSP[$t2]
   call  PutHexWord
 	ldi		$a0,#CR
 	call	Putch
-  sub   $t0,$t0,#1
-  bge   $t0,$x0,.0004
+.nxtT:
+  add   $t0,$t0,#1
+  slt   $t1,$t0,#32
+  bnez  $t1,.0004
 	csrrw	$x0,#$300,$s1
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
@@ -315,11 +371,14 @@ DumpTimeoutList:
 	add		$sp,$sp,#32
 	ret
 
-msgReadyList:
-	db	CR,"Ready List",CR
-	db	"Que Tid  Prv  Nxt",CR
-	db	"-----------------",CR,0
-
+msgReadyQueue:
+	db	CR,"Ready Queue",CR
+	db	"Que: Tid List",CR
+	db	"-------------",CR,0
+msgTaskInfo:
+  db  CR,"Task Info",CR
+  db  "TCB Ptr  Tid Pr St Timeout    SP",CR
+  db  0
 msgTimeoutList:
 	db	CR,"Timeout List",CR
 	db	" Tid - Timeout",CR

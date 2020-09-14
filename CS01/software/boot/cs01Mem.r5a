@@ -129,13 +129,13 @@ FindRun:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		a0 = mid
-;		a1 = amount of memory to allocate
+;		$a0 = mid
+;		$a1 = amount of memory to allocate
 ; Modifies:
 ;		t0
 ; Returns:
-;		a1 = pointer to allocated memory in virtual address space.
-;		a0 = E_Ok for success, E_NotAlloc otherwise
+;		$a1 = pointer to allocated memory in virtual address space.
+;		$a0 = E_Ok for success, E_NotAlloc otherwise
 ;------------------------------------------------------------------------------
 ;
 Alloc:
@@ -403,4 +403,4 @@ VirtToPhys2:
 FetchMemoryWord:
   ldt   $a1,[$a1]
   ldi   $a0,#E_Ok
-  jmp   ERETx
+  jmp   OSExit

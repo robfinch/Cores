@@ -329,12 +329,15 @@ SerialPutChar:
 .0002:
 	ldi		$a1,#10
 .0001:
-;	sub		$v1,$v1,#1
-;	beq		$v1,$x0,.goSleep
+  mEI
+;	sub		$a1,$a1,#1
+;	beqz	$a1,.goSleep
+	mDI
 	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
+	mEI
 	ldt		$a0,[$sp]
 	ldt		$ra,4[$sp]
 	ldt		$a1,8[$sp]
@@ -351,7 +354,7 @@ SerialPutChar:
 	ldt		$a1,4[$sp]
 	add		$sp,$sp,#8
 	bra		.0002
-	
+
 ;------------------------------------------------------------------------------
 ; Calculate number of character in input buffer
 ;------------------------------------------------------------------------------

@@ -152,3 +152,9 @@ set_property -dict { PACKAGE_PIN U14   IOSTANDARD LVCMOS33 } [get_ports { MemDB[
 set_property -dict { PACKAGE_PIN P19   IOSTANDARD LVCMOS33 } [get_ports { RamOEn     }]; #IO_L10P_T1_D14_14 Sch=sram-oe
 set_property -dict { PACKAGE_PIN R19   IOSTANDARD LVCMOS33 } [get_ports { RamWEn     }]; #IO_L10N_T1_D15_14 Sch=sram-we
 set_property -dict { PACKAGE_PIN N19   IOSTANDARD LVCMOS33 } [get_ports { RamCEn     }]; #IO_L9N_T1_DQS_D13_14 Sch=sram-ce
+set_output_delay -clock [ get_clocks clk100_cs01clkgen ] -max 2.0 [get_ports {MemAdr[*]} ]
+set_output_delay -clock [ get_clocks clk100_cs01clkgen ] -max 2.0 [get_ports {MemDB[*]} ]
+set_output_delay -clock [ get_clocks clk100_cs01clkgen ] -max 2.0 [get_ports {RamOEn} ]
+set_output_delay -clock [ get_clocks clk100_cs01clkgen ] -max 2.0 [get_ports {RamWEn} ]
+set_output_delay -clock [ get_clocks clk100_cs01clkgen ] -max 2.0 [get_ports {RamCEn} ]
+

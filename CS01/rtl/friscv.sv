@@ -149,8 +149,8 @@ PagemapRam pagemap (
   .dinb(9'h00),
   .doutb(pagemapo)
 );
-reg decto, setto, getto, getzl;
-wire [5:0] zladr;
+reg decto, setto, getto, getzl, popto;
+wire [7:0] zladr;
 wire [31:0] to_out;
 wire [7:0] zl_out;
 wire to_done;
@@ -239,6 +239,7 @@ assign mip[2:1] = 2'b0;
 assign mip[0] = ugip;
 reg fdz,fnv,fof,fuf,fnx;
 wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
+reg [15:0] mtid;      // task id
 wire ie = mstatus[0];
 wire mprv = mstatus[17];
 wire [1:0] memmode;
@@ -437,6 +438,7 @@ if (rst_i) begin
 	getto <= 1'b0;
 	decto <= 1'b0;
 	getzl <= 1'b0;
+	popto <= 1'b0;
 	insrdy <= 1'b0;
 	rmvrdy <= 1'b0;
 	getrdy <= 1'b0;
@@ -446,10 +448,12 @@ if (rst_i) begin
 	pushq <= 1'b0;
 	popq <= 1'b0;
 	mrloc <= 3'd0;
+	msip <= 1'b0;
+	ugip <= 1'b0;
 end
 else begin
 decto <= 1'b0;
-getzl <= 1'b0;
+popto <= 1'b0;
 ldd <= 1'b0;
 wrpagemap <= 1'b0;
 if (pe_nmi)
@@ -686,7 +690,7 @@ NSIMM2:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EXECUTE:
 	begin
-		state <= WRITEBACK;
+		goto (WRITEBACK);
 		case(opcode)
 		`LUI:	begin res <= imm; end
 		`AUIPC:	begin res <= {ipc[31:12],12'd0} + imm; end
@@ -711,6 +715,8 @@ EXECUTE:
 					end
 				7'd10:	// GETZL
 					begin
+					  popto <= 1'b1;
+					  getzl <= 1'b1;
 						state <= TMO;
 						illegal_insn <= 1'b0;
 					end
@@ -903,14 +909,13 @@ EXECUTE:
 //				      regset <= 4'hF;
             regset <= 5'h0;
 						pc <= mepc;
-						mstatus[11:0] <= {2'b00,1'b1,mstatus[11:3]};
 						illegal_insn <= 1'b0;
-						state <= IFETCH;
-						instret <= instret + 2'd1;
-						mrloc <= 3'd3;
 					end
 				`WFI:
-					set_wfi <= 1'b1;
+				  if (MachineMode) begin
+					  set_wfi <= 1'b1;
+					  illegal_insn <= 1'b0;
+				  end
 				default:
 					begin
 					case(funct3)
@@ -933,6 +938,7 @@ EXECUTE:
 						12'h344:	begin res <= mip; illegal_insn <= 1'b0; end
 						12'h7C0:	if (MachineMode) begin res <= {crs,regset}; illegal_insn <= 1'b0; end
 						12'h7C1:  if (MachineMode) begin res <= msema; illegal_insn <= 1'b0; end
+						12'h7C2:  if (MachineMode) begin res <= mtid; illegal_insn <= 1'b0; end
 //						12'h801:  begin res <= usema; illegal_insn <= 1'b0; end
 						12'hC00:	begin res <= tick[31: 0]; illegal_insn <= 1'b0; end
 						12'hC80:	begin res <= tick[63:32]; illegal_insn <= 1'b0; end
@@ -981,8 +987,8 @@ TMO:
 		case({getto,getrdy,getzl})
 		3'b100:	res <= to_out;
 		3'b010:	res <= {{24{rdy_out[7]}},rdy_out};
-		3'b001: begin res <= {zl_out[7],15'h00,2'b00,zladr,zl_out}; getzl <= 1'b1; end
-		default:	res <= {16'd0,zl_out};
+		3'b001: begin res <= {zladr[7],15'h00,zladr,zl_out}; getzl <= 1'b0; end
+		default:	res <= {zladr[7],15'h00,zladr,zl_out};
 		endcase
   	goto (WRITEBACK);
 	end
@@ -1156,6 +1162,13 @@ WRITEBACK:
 		insrdy <= 1'b0;
 		rmvrdy <= 1'b0;
 		getrdy <= 1'b0;
+		case(ir)
+		`ERET,`MRET:
+			if (MachineMode) begin
+				mstatus[11:0] <= {2'b00,1'b1,mstatus[11:3]};
+				mrloc <= 3'd3;
+			end
+		endcase
 		if (illegal_insn)
 		  tException(32'd2, ipc);
 		set_wfi <= 1'b0;
@@ -1191,10 +1204,12 @@ WRITEBACK:
 				12'h344:	begin if (MachineMode) msip <= ia[3]; end
 				12'h7C0:	begin if (MachineMode) begin regset <= ia[4:0]; crs <= ia[6:5]; end end
 				12'h7C1:  begin if (MachineMode) begin msema <= ia; end end
+				12'h7C2:  begin if (MachineMode) begin mtid <= ia; end end
 //				12'h801:  begin if (UserMode) usema <= ia; end
 				default:	;
 				endcase
 			3'd2,3'd6:
+				if (Rs1!=5'd0)
 				case({funct7,Rs2})
 				// No setting CSR $000
 			  12'h004:  gcie[ASID] <= gcie[ASID] | ia[0];
@@ -1212,6 +1227,7 @@ WRITEBACK:
 				default: ;
 				endcase
 			3'd3,3'd7:
+				if (Rs1!=5'd0)
 				case({funct7,Rs2})
 			  12'h004:  gcie[ASID] <= gcie[ASID] & ~ia[0];
 			  12'h044:  uip[0] <= uip[0] & ~ia[0];
@@ -1229,6 +1245,7 @@ WRITEBACK:
 			default:	;
 			endcase
 		end
+		tPC();
 		goto (IFETCH);
 		instret <= instret + 2'd1;
 	end

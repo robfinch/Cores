@@ -58,12 +58,6 @@
 ;30   Random Number		PRNG
 ;31		Debug						DBG
 
-; The following must be at least 128 byte aligned
-DVF_Base		EQU		$2000
-DVF_Limit		EQU		$3000
-DCB_Base    EQU   $3000
-DCB_Limit   EQU   $3C00
-
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = I/O channel
@@ -72,6 +66,7 @@ DCB_Limit   EQU   $3C00
 ;------------------------------------------------------------------------------
 
 FMTK_IO:
+  mEI
 	ldi		$a0,#32
 	bgeu	$a1,$a0,.badDev
 	ldi		$t2,#32
@@ -84,7 +79,7 @@ FMTK_IO:
 	beqz	$t3,.badFunc
 	call	[$t3]
 .xit:
-	jmp		ERETx
+	jmp		OSExit
 .badFunc:
 	ldi		$a0,#E_BadDevOp
 	bra		.xit
@@ -115,7 +110,7 @@ FMTK_GetDCBField:
 .ok:
   ldi   $a0,#E_Ok
 .xit:
-	jmp		ERETx
+	jmp		OSExit
 .badFunc:
 	ldi		$a0,#E_BadDCBOffset
 	bra		.xit
@@ -147,7 +142,7 @@ FMTK_SetDCBField:
 .ok:
   ldi   $a0,#E_Ok
 .xit:
-	jmp		ERETx
+	jmp		OSExit
 .badFunc:
 	ldi		$a0,#E_BadDCBOffset
 	bra		.xit

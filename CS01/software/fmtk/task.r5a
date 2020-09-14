@@ -75,11 +75,12 @@ qToChk:
 
 FMTKInit:
 	stt		$x0,QNDX
-	stt		$x0,PIDMAP
+	stt		$x0,TID_POOL
 	stt   $x0,APPID_POOL
 	stt   $x0,CHAINA0
 	stt		$x0,missed_ticks
-	stb   $x0,CurrentTid
+	ldi   $t0,#0
+	csrrw $x0,#CSR_TASKID,$t0   ; task id = 0
 	stt		$x0,TimeoutList
 	stt		$x0,READYQ
 	stt		$x0,READYQ+4
@@ -102,13 +103,12 @@ FMTKInit:
 	stt		$x0,FreeMsg
 
 	; Initialize mailboxes
-	ldi		$t0,#mbxs
-	ldi		$t1,#32*MBX_SIZE
+	ldi   $t0,#MBX_BLOCKPTR_BUFSZ
 .0001:
-	stt		$x0,[$t0]
-	add		$t0,$t0,#4
-	sub		$t1,$t1,#1
-	bgtz	$t1,.0001
+	stt   $x0,MbxBlockPtr[$t1]
+	add   $t1,$t1,#4
+	sub   $t0,$t0,#1
+	bnez  $t0,.0001
 
 	; unlock the system semaphore	
 	mUnlockSemaphore(SysSema)
@@ -117,7 +117,7 @@ FMTKInit:
 FMTK_Initialize:
   mEI
   call  FMTKInit
-  jmp   ERETx
+  jmp   OSExit
  
 ;------------------------------------------------------------------------------
 ; Get the task id for the currently running task.
@@ -127,9 +127,7 @@ FMTK_Initialize:
 ;------------------------------------------------------------------------------
 
 GetCurrentTid:
-;	csrrw	$v0,#$181,$x0				; get current pid
-;	and		$v0,$v0,#15					; mask off extra bits
-	ldbu  $a0,CurrentTid
+	mGetCurrentTid
 	ret
 
 FMTK_GetCurrentTid:
@@ -137,34 +135,49 @@ FMTK_GetCurrentTid:
 	mGetCurrentTid
 	mov		$a1,$a0
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 
 GetIRQFlag:
   mEI
   ldt   $a1,IRQFlag
   ldi   $a0,#E_Ok
-  jmp   ERETx
+  jmp   OSExit
 
 SetIRQFlag:
   mEI
   stt   $a1,IRQFlag
   ldi   $a0,#E_Ok
-  jmp   ERETx
+  jmp   OSExit
 
 ;------------------------------------------------------------------------------
 ; Setting the task priority will take effect the next time the task is
 ; scheduled.
+;
+; Parameters:
+;   $a1 = new priority to set
+; Returns:
+;   $a0 = E_Ok
 ;------------------------------------------------------------------------------
 
 FMTK_SetTaskPriority:
   mGetCurrentTid
-  ldt   $t0,TidTcbMap[$a0]
-  and   $t1,$t0,#$FFF803FF
-  bnez  $t1,.xit
+  slt   $t0,$a0,#NTASK
+  beqz  $t0,.badTid
+  sll   $t0,$a0,#2
+  ldt   $t0,TidTcbMap[$t0]
+  and   $t1,$t0,#TCBPTR_MASK
+  bnez  $t1,.badPtr
   stb   $a1,TCBPriority[$t0]
   ldi   $a0,#E_Ok
-  jmp   ERETx
-  
+  jmp   OSExit
+.badTid:
+  ldi   $a0,#E_BadTid
+  jmp   OSExit
+.badPtr:
+  call  FreeTID
+  ldi   $a0,#E_BadTcbPointer
+  jmp   OSExit
+ 
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a0 = task id
@@ -207,19 +220,20 @@ SelectTaskToRun:
 	ldi		$t2,#4							; 4 queues to check
 .nxtQ:
   popq  $a0,$a1
-  bltz  $a0,.dq             ; valid queue entry?
+;  bltz  $a0,.dq             ; valid queue entry?
+  and   $t0,$a0,#$4000      ; queue empty?
+  bnez  $t0,.nxtQa
+  srl   $t0,$a0,#8
+  bnez  $t0,.dq
 .nxtQa:
 	add		$a1,$a1,#1					; no, advance to next queue
 	and		$a1,$a1,#3					; 4 max
 	sub		$t2,$t2,#1					;
 	bgtz	$t2,.nxtQ				    ; go back to check next queue
-	; Here, nothing else is actually ready to run
-	; just go back to what we were doing.
-	; Should switch to idle task
-	mGetCurrentTid
-	sll   $t2,$a0,#2
-  ldt   $t2,TidTcbMap[$t2]
-  ldbu  $a1,TCBPriority[$t2]
+	; Here, nothing else is actually ready to run?
+	; Switch to idle task
+	ldi   $a0,#0
+	ldi   $a1,#3
   pushq $a0,$a1
 	ret
 .dq:
@@ -228,10 +242,10 @@ SelectTaskToRun:
   ; queue.
 ;  and   $t2,$v0,#$4000      ; empty flag?
 ;  bnez  $t2,.nxtQa
-  and   $t2,$a0,#$FF
-  sll   $t2,$t2,#2
+  and   $a0,$a0,#$FF
+  sll   $t2,$a0,#2
   ldt   $t2,TidTcbMap[$t2]
-	and   $a1,$t2,#$FFF803FF  ; is it a valid pointer?
+	and   $a1,$t2,#TCBPTR_MASK  ; is it a valid pointer?
 	bnez  $a1,.nxtQ
   ldb   $t0,TCBStatus[$t2]  ;
   and   $t0,$t0,#TS_READY
@@ -257,7 +271,7 @@ SelectTaskToRun:
   align 16
 SwapContext:
 	; Save outgoing register set in TCB
-	csrrs	$x0,#$7C0,#20	; select user register set for Rs2
+	csrrs	$x0,#$7C0,#4	; select prior register set for Rs2
 	stt		$x1,TCBxRA[$s1]
 	stt		$x2,TCBxSP[$s1]
 	stt		$x3,TCBxGP[$s1]
@@ -289,7 +303,7 @@ SwapContext:
 	stt		$x29,TCBxT4[$s1]
 	stt		$x30,TCBxT5[$s1]
 	stt		$x31,TCBxT6[$s1]
-	csrrc	$x0,#$7C0,#20				; select machine register set for Rs2
+	csrrc	$x0,#$7C0,#4				; select machine register set for Rs2
 	csrrw	$t3,#$341,$x0				; save off mepc
 	stt		$t3,TCBepc[$s1]
 	; Now save off segment registers
@@ -309,7 +323,7 @@ SwapContext:
   ldbu  $a0,TCBmid[$s2]
 	csrrw	$x0,#$181,$a0				; set ASID
   ldbu  $a0,TCBtid[$s2]
-	stb   $a0,CurrentTid
+	csrrw $x0,#CSR_TASKID,$a0
 	; User map has now been switched
 
 	; Restore segment register set
@@ -326,7 +340,7 @@ SwapContext:
 	ldt		$t3,TCBepc[$s2]			; restore epc
 	csrrw	$x0,#$341,$t3
 	; Restore incoming registers
-	csrrs	$x0,#$7C0,#17				; select user regset for Rd
+	csrrs	$x0,#$7C0,#1				; select user regset for Rd
 	ldt		$x1,TCBxRA[$s2]
 	ldt		$x2,TCBxSP[$s2]
 	ldt		$x3,TCBxGP[$s2]
@@ -358,7 +372,7 @@ SwapContext:
 	ldt		$x29,TCBxT4[$s2]
 	ldt		$x30,TCBxT5[$s2]
 	ldt		$x31,TCBxT6[$s2]
-	csrrc	$x0,#$7C0,#17				; select machine regset for Rd
+	csrrc	$x0,#$7C0,#1				; select machine regset for Rd
 	ret
 
 ;------------------------------------------------------------------------------
@@ -367,6 +381,7 @@ SwapContext:
 ;------------------------------------------------------------------------------
   align 16
 OSCALL:
+  mEI
   csrrs $x0,#$7C1,#1    ; set OS running semaphore
 	csrrs	$t1,#$7C0,#2		; select user regs for Rs1		
 	mov		$a0,$a0					; move user to machine
@@ -376,13 +391,30 @@ OSCALL:
 	mov		$a4,$a4
 	mov		$a5,$a5
 	csrrc	$x0,#$7C0,#15		; get back machine registers for all
-OSCALL2:
-	and		$a0,$a0,#63
-	add		$a0,$a0,$a0     ; shift left one bit
-	ldwu  $t0,OSCallTbl[$a0]
-	or    $t0,$t0,#$FFFC0000
-	beqz  $t0,ERETx
+;OSCALL2:
+	and		$a0,$a0,#63     ; limit 64 functions
+	; The function address table is compressed by assuming all the code is
+	; located within the same 64kB block of memory. We're really saving bytes
+	; here.
+	add		$a0,$a0,$a0     ; shift left one bit, assume add might be faster
+	ldwu  $t0,OSCallTbl[$a0]  ; get the low order 16 bits of the address
+	or    $t0,$t0,#$FFFC0000  ; add in the high order address bits
+	beqz  $t0,OSExit
 	jmp		[$t0]
+
+;------------------------------------------------------------------------------
+; Exit from the operating system. All operating system routines use this
+; fragment of code to return. Return values are transferred to the previously
+; active register set.
+;------------------------------------------------------------------------------
+
+OSExit:
+  mDI
+	csrrs	$x0,#$7C0,#1				; select user for destination
+	mov		$a1,$a1							; move return values to user registers
+	mov		$a0,$a0
+	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
+	jmp   ERETx2
 
 ;------------------------------------------------------------------------------
 ; Time accounting.
@@ -464,11 +496,16 @@ UpdateMsgFields:
   align 16
 FMTK_Sleep:
   mEI
-	bltz	$a1,ERETx
+	bltz	$a1,OSExit
 	mDI
 	mGetCurrentTid
+	slt   $s1,$a0,#NTASK
+	beqz  $s1,.badCurTid
 	sll   $a0,$a0,#2
 	ldt   $s1,TidTcbMap[$a0]
+	and   $t2,$s1,#TCBPTR_MASK
+	mov   $s2,$s1               ; for bad ppinter processing
+	bnez  $t2,.badPtr
 	beqz	$a1,.0001
 	srl		$a0,$a0,#2						; a0 = current tid
 	call	RemoveFromReadyQueue
@@ -480,9 +517,11 @@ FMTK_Sleep:
 
 	call	AccountTime						; uses s1
 	call	SelectTaskToRun
+  slt   $t2,$a0,#NTASK
+  beqz  $t2,.badTid
   sll   $a0,$a0,#2            ; $a0 = tid
 	ldt		$s2,TidTcbMap[$a0]		; s2 = pointer to incoming TCB
-	and   $t2,$s2,#$FFF803FF  ; is it a valid pointer?
+	and   $t2,$s2,#TCBPTR_MASK  ; is it a valid pointer?
 	bnez  $t2,.badPtr
 	ldbu	$t2,TCBStatus[$s2]		; x2 = incoming status
 	or		$t2,$t2,#TS_RUNNING|TS_READY	; set status = running
@@ -512,11 +551,20 @@ FMTK_Sleep:
 	stt		$t2,TCBStartTick[$s1]
 	mEI
 	ldi   $a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
+.badCurTid:
+  ldi   $a0,#0
+  csrrw $x0,#CSR_TASKID,$a0 ; force the tid to a good value
+.badTid:
+	mEI
+  ldi   $a0,E_BadTid
+  jmp   OSExit
 .badPtr:
+  srl   $a0,$a0,#2
+  call  FreeTID
 	mEI
   ldi   $a0,E_BadTcbPointer
-  jmp   ERETx
+  jmp   OSExit
 
 ;------------------------------------------------------------------------------
 ; SchedulerIRQ meant to be called from the timer ISR. This routine will not
@@ -538,8 +586,12 @@ FMTK_SchedulerIRQ:
 	stt		$ra,[$sp]
   mDI
 	mGetCurrentTid
+	slt   $s1,$a0,#NTASK
+	beqz  $s1,.badTid
 	sll   $a0,$a0,#2
 	ldt   $s1,TidTcbMap[$a0]
+	and   $t5,$s1,#$FFF803BF    ; pointer legal bits
+	bnez  $t5,.badPtr
 ; Might need the following if the external timer isn't used.
 ;	csrrw	$v0,#$701,$x0					; get the time
 ;	add		$v0,$v0,#600000				; wait 600,000 cycles @20MHz (30ms)
@@ -556,26 +608,20 @@ FMTK_SchedulerIRQ:
 	; expired timeouts.
 	ldi		$s5,#0
 	ldi		$s3,#1
-	ldi   $a2,#32
 	; There should be at least 64 clock cycles between the time the decto
 	; instruction is used to decrement timeouts and the getzl instruction
 	; is used to pop tasks that have timed out. The decto instruction runs
 	; in the background.
 .0001:
-  sub   $a2,$a2,#1    ; limit the number pop operations
-  beqz  $a2,.qEmpty
 	getzl	$s4           ; pop task with timeout finished
-	bge   $s4,$x0,.0002 
-	srl   $s4,$s4,#8    ; got an invalid entry
-	and   $s4,$s4,#63   ; so is queue empty?
-	bnez  $s4,.0001     ; no, get another entry from queue
-	bra   .qEmpty
+	and   $a1,$s4,#$4000  ; empty queue?
+	bnez  $a1,.qEmpty
+	bge   $s4,$x0,.0001 ; valid info?
 .0002:
-  srl   $a1,$s4,#8
   and   $s4,$s4,#$1F        ; mask off queue address bits
 	sll   $s4,$s4,#2          ; $s4 = index
 	ldt   $t4,TidTcbMap[$s4]
-	and   $a0,$t4,#$FFF803FF  ; is it a valid pointer?
+	and   $a0,$t4,#TCBPTR_MASK  ; is it a valid pointer?
 	bnez  $a0,.0001
 	ldbu	$t2,TCBStatus[$t4]
 	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG) ; no longer timing out or waiting
@@ -583,14 +629,18 @@ FMTK_SchedulerIRQ:
 	srl   $a0,$s4,#2
 	mMbxRemoveTask
 	call	InsertIntoReadyQueue
-	bnez  $a1,.0001      ; loop back if queue not empty
+	bra   .0001
 .qEmpty:
 .bypass2:
 	; The ready queue was just updated, there could be new tasks
 	; ready to run.
 	call	SelectTaskToRun
+	slt   $t3,$a0,#NTASK
+	beqz  $t3,.badTid
   sll   $a0,$a0,#2
 	ldt		$s2,TidTcbMap[$a0]	; s2 = pointer to incoming TCB
+	and   $t3,$s2,#TCBPTR_MASK
+	bnez  $t3,.badPtr
 	lbu		$t3,TCBStatus[$s2]	; t3 = incoming status
 	or		$t2,$t3,#TS_RUNNING|TS_READY	; status = running
 	ldt		$t3,TCBException[$s2]	;
@@ -614,21 +664,31 @@ FMTK_SchedulerIRQ:
 	stt		$t2,TCBStartTick[$s1] ;[$s1]
   mEI
 	ret
+.badPtr:
+  call  FreeTID
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	mEI
+  ret
+.badTid:
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	mEI
+  ret
 
 ;------------------------------------------------------------------------------
 ; Start a task.
 ;	Task status is set to ready, priority normal, and the task is inserted into
-; the ready list. Segment registers are setup for a flat memory model.
+; the ready queue. Segment registers are setup for a flat memory model.
 ; 
 ;	Parameters:
-;   a1 = app id
-;		a2 = memory required (task's local memory)
-;		a3 = start pc (usually $400)
+;   $a1 = app id
+;		$a2 = memory required (task's local memory)
+;		$a3 = start pc (usually $400)
 ;	Modifies:
-;		a0 = tid
 ;	Returns:
-;		a0 = E_Ok if successful
-;		a1 = tid of started task if successful
+;		$a0 = E_Ok if successful
+;		$a1 = tid of started task if successful
 ;------------------------------------------------------------------------------
   align 16
 FMTK_StartTask:
@@ -639,12 +699,12 @@ FMTK_StartTask:
   ldi   $a0,#1024     ; TCB is 1kB
   mDI
   call  PAMAlloc      ; allocate storage for the TCB
-;  call  AllocTCB
 	bltz	$a0,.err
-	mov   $s4,$a0
-  call  AllocTCB
+	add   $s4,$a0,#64     ; TCB is 64 bytes into allocated memory
+  call  AllocTID
+	bnez	$a0,.err
   stb   $a1,TCBtid[$s4]
-  stb   $s3,TCBmid[$s4]
+  stb   $s3,TCBmid[$s4] ; record the app id (mid)
   sll   $a1,$a1,#2          ; convert Tid to map index
   mov   $s1,$s4             ; $s1 = pointer to TCB
   stt   $s4,TidTcbMap[$a1]  ; store the TCB pointer in the map
@@ -659,6 +719,7 @@ FMTK_StartTask:
 	stb		$t0,TCBStatus[$s1]
 	ldi		$t0,#2					; normal execution priority
 	stb		$t0,TCBPriority[$s1]
+	stt   $x0,TCBTimeout[$s1]
 	; leave segment base at $0, flat memory model
 	ldi		$t0,#6							; read,write
 	stt		$t0,TCBbases[$s1]		; bases 0 to 11
@@ -682,29 +743,17 @@ FMTK_StartTask:
   stt   $x0,TCBMbxNext[$s1]
   stt   $x0,TCBMbxPrev[$s1]
   ldbu  $a0,TCBtid[$s1]
+  ; Don't add the idle task to the queue.
+  beqz  $a0,.idleTask
 	call	InsertIntoReadyQueue
+.idleTask:
 	mEI
 	mov		$a1,$a0
 	ldi   $a0,#E_Ok
-  jmp   ERETx
+  jmp   OSExit
 .err:
 	mEI
-  jmp   ERETx
-
-;------------------------------------------------------------------------------
-; Exit from the operating system. All operating system routines use this
-; fragment of code to return. First a test is made to see if it's necessary
-; to run the scheduler as a scheduler interrupt may have occurred while the
-; OS was running. Next return values are transferred to the previously
-; active register set.
-;------------------------------------------------------------------------------
-
-ERETx:
-	csrrs	$x0,#$7C0,#1				; select user for destination
-	mov		$a1,$a1							; move return values to user registers
-	mov		$a0,$a0
-	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
-	jmp   ERETx2
+  jmp   OSExit
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -717,7 +766,7 @@ ERETx:
 
 FMTK_ExitTask:
 	mGetCurrentTid
-	mov		$a1,$v0
+	mov		$a1,$a0
 	; fall through to KillTask
 	
 ;------------------------------------------------------------------------------
@@ -741,10 +790,10 @@ FMTK_KillTask:
 ;	call	FreeAll							; free all the memory associated with the task
 	; Now make task ID available for reuse
 	ldbu  $a0,TCBtid[$a1]
-	call  FreeTCB
+	call  FreeTID
 	mEI
 .immortal:
 	ldi		$a0,#E_Ok
-	jmp		ERETx
+	jmp		OSExit
 
 	

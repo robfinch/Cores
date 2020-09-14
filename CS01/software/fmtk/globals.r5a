@@ -32,7 +32,7 @@ APPID_POOL  EQU   $02F0
 NPAGES	equ		$0300
 QNDX		EQU		$0304
 READYQ	EQU		$0308
-PIDMAP	EQU		$0310
+TID_POOL  EQU		$0310
 missed_ticks	equ		$0320
 TimeoutList		equ		$0328
 Tick		EQU		$0330
@@ -57,6 +57,7 @@ RDYQ3		EQU		$0700
 mbxs		EQU		$0800
 mbxs_end	EQU	$0C00
 FreeMsg	EQU		$0C00
+FreeMbx EQU   $0C08
 PAMPtr  EQU   $0FF8
 PAM     EQU   $1000
 PAMend  EQU   $1080
@@ -64,7 +65,9 @@ IOFocusNdx		EQU		$1080
 IOFocusTbl		EQU		$1088
 IRQFlag   EQU $1090
 IRQCause  EQU $1098
-
+MbxBlockPtr EQU   $10A0
+MbxBlockPtrEnd  EQU MbxBlockPtr + MBX_BLOCKPTR_BUFSZ * 4
+MbxBlockCounter EQU $10E0
 SerRcvBuf		EQU		$1400
 SerXmitBuf	EQU		$1800
 SerHeadRcv	EQU		$1C00
@@ -73,8 +76,13 @@ SerHeadXmit	EQU		$1C08
 SerTailXmit	EQU		$1C0C
 SerRcvXon		EQU		$1C10
 SerRcvXoff	EQU		$1C11
+; The following must be at least 128 byte aligned
+DVF_Base		EQU		$2000
+DVF_Limit		EQU		$3000
+DCB_Base    EQU   $3000
+DCB_Limit   EQU   $3C00
 
-SysHeapStart  EQU   $2000
+SysHeapStart  EQU   $4000
 SysHeapEnd    EQU   $20000
 
 

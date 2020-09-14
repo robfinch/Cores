@@ -158,7 +158,6 @@ ViaIRQ:
 	stt		$t2,milliseconds
 	stt		$t2,switchflag
 	call  FMTK_SchedulerIRQ
-.0003:
 	jmp   ERETx2
 	; reset countdown to clear interrupt
 .timer2irq:
