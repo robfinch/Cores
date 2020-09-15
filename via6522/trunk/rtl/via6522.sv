@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2004-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2004-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,7 +41,9 @@
 
 module via6522(rst_i, clk_i, irq_o, cs_i,
 	cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o, 
-	pa, pb, ca1, ca2, cb1, cb2);
+	pa, pb, ca1, ca2, cb1, cb2,
+	pa_i, pb_i, pa_o, pb_o
+	);
 input rst_i;
 input clk_i;
 output reg irq_o;
@@ -61,6 +63,10 @@ input ca1;
 inout tri ca2;
 inout tri cb1;
 inout tri cb2;
+input [31:0] pa_i;
+input [31:0] pb_i;
+output [31:0] pa_o;
+output [31:0] pb_o;
 
 integer n;
 
@@ -79,7 +85,8 @@ ack_gen #(
 	.o(ack_o)
 );
 
-reg [8:0] ier;					// interrupt enable register
+reg [5:0] ie_delay;
+reg [8:0] ier, ierd;	  // interrupt enable register / delayed interrupt enable register
 reg [31:0] pai, pbi;		// input registers
 reg [31:0] pao, pbo;		// output latches
 reg [31:0] pal, pbl;		// input latches
@@ -111,6 +118,8 @@ reg sr_if;
 wire ca1_pe, ca1_ne, ca1_ee;
 wire ca2_pe, ca2_ne, ca2_ee;
 wire cb1_pe, cb1_ne, cb1_ee;
+reg ca1_if, cb1_if;
+reg ca2_if, cb2_if;
 wire pb6_ne;
 reg ca1_irq, ca2_irq;
 reg cb1_irq, cb2_irq;
@@ -152,28 +161,34 @@ if (rst_i) begin
 	t3_if <= 1'b0;
 	t3_access <= 1'b0;
 	ier <= 9'h00;
+	ie_delay <= 6'h00;
 end
 else begin
+  
+  if (ie_delay!=6'h00)
+    ie_delay <= ie_delay - 2'd1;
+  if (ie_delay==6'h01)
+    ier <= ierd;
 
 	// Port A,B input latching
 	// Port A input latches always reflect the input pins.
 	if (pa_le) begin
 		if (ca1_trans)
-			pai <= pa;
+			pai <= pa_i;
 	end
 	else
-		pai <= pa;
+		pai <= pa_i;
 
 	// Port B input latches reflect the contents of the output register if the
 	// port pin direction is an output.
 	if (pb_le) begin
 		if (cb1_trans)
 			for (n = 0; n < 32; n = n + 1)
-				pbi <= ddrb[n] ? pbo[n] : pb[n];
+				pbi <= ddrb[n] ? pbo[n] : pb_i[n];
 	end
 	else begin
 		for (n = 0; n < 32; n = n + 1)
-			pbi <= ddrb[n] ? pbo[n] : pb[n];
+			pbi <= ddrb[n] ? pbo[n] : pb_i[n];
 	end
 
  	// Bring ca2 back high on pulse output mode
@@ -245,7 +260,6 @@ else begin
 	3'b100:
 		if (t2[7:0]==8'h00) begin
 			if (cb1_ne) begin
-				cb2o = sr_32 ? sr[31] : sr[7];
 				if (sr_32)
 					sr <= {sr[30:0],sr[31]};
 				else
@@ -253,7 +267,7 @@ else begin
 			end
 		end
 	3'b101:
-		if (t2[7:0]==8'h00)
+		if (t2[7:0]==8'h00) begin
 			if (sr_cnt != 5'd0) begin
 				if (cb1_ne) begin
 					sr_cnt <= sr_cnt - 2'd1;
@@ -302,7 +316,7 @@ else begin
 		if (t2[7:0]==8'h00)
 			cb1o <= ~cb1o;
 	3'b101:
-		if (t2[7:0]==8'h00)
+		if (t2[7:0]==8'h00) begin
 			if (sr_cnt != 5'd0)
 				cb1o <= ~cb1o;
 		end
@@ -322,13 +336,13 @@ else begin
 	3'b100:
 		if (t2[7:0]==8'h00) begin
 			if (cb1_ne)
-				cb2o = sr_32 ? sr[31] : sr[7];
+				cb2o <= sr_32 ? sr[31] : sr[7];
 		end
 	3'b101:
-		if (t2[7:0]==8'h00)
+		if (t2[7:0]==8'h00) begin
 			if (sr_cnt != 5'd0) begin
 				if (cb1_ne)
-					cb2o = sr_32 ? sr[31] : sr[7];
+					cb2o <= sr_32 ? sr[31] : sr[7];
 			end
 			if (sr_cnt==5'd0)
 				cb2o <= cb2_mode[0];
@@ -336,11 +350,11 @@ else begin
 	3'b110:
 		if (sr_cnt != 5'd0) begin
 			if (cb1_ne)
-				cb2o = sr_32 ? sr[31] : sr[7];
+				cb2o <= sr_32 ? sr[31] : sr[7];
 		end
 	3'b111:
 		if (cb1_ne)
-			cb2o = sr_32 ? sr[31] : sr[7];
+			cb2o <= sr_32 ? sr[31] : sr[7];
 	endcase
 
 	if (cs) begin
@@ -359,13 +373,13 @@ else begin
 				end
 			`PB:
 				begin
-					if (sel_i[0]) pab[7:0] <= dat_i[7:0];
-					if (sel_i[1]) pab[15:8] <= dat_i[15:8];
-					if (sel_i[2]) pab[23:16] <= dat_i[23:16];
-					if (sel_i[3]) pab[31:24] <= dat_i[31:24];
+					if (sel_i[0]) pbo[7:0] <= dat_i[7:0];
+					if (sel_i[1]) pbo[15:8] <= dat_i[15:8];
+					if (sel_i[2]) pbo[23:16] <= dat_i[23:16];
+					if (sel_i[3]) pbo[31:24] <= dat_i[31:24];
 			 		if (cb2_mode==3'b100||cb2_mode==3'b101)
 			 			cb2o <= 1'b0;
-			 		cb2_if <= 1'b0;
+			 		cb1_if <= 1'b0;
 			 		cb2_if <= 1'b0;
 				end
 			`DDRA:	
@@ -480,7 +494,7 @@ else begin
 					if (sel_i[3]) sr <= dat_i[31:24];
 					sr_cnt <= sr_32 ? 5'd31 : 5'd7;
 					if (sr_mode==3'b001)
-						cb1 <= 1'b1;
+						cb1o <= 1'b1;
 					sr_if <= 1'b0;						
 				end
 			`ACR:
@@ -503,17 +517,21 @@ else begin
 				begin
 					if (sel_i[0]) begin
 						if (dat_i[7])
-							ier[6:0] <= ier[6:0] | dat_i[6:0];
+							ierd[6:0] <= ier[6:0] | dat_i[6:0];
 						else
-							ier[6:0] <= ier[6:0] & ~dat_i[6:0];
+							ierd[6:0] <= ier[6:0] & ~dat_i[6:0];
 						ier[7] <= 1'b0;
 					end
 					if (sel_i[1]) begin
 						if (dat_i[7])
-							ier[8] <= ier[8] | dat_i[8];
+							ierd[8] <= ier[8] | dat_i[8];
 						else
-							ier[8] <= ier[8] & ~dat_i[8];
+							ierd[8] <= ier[8] & ~dat_i[8];
 					end
+					if (sel_i[3])
+					  ie_delay <= dat_i[29:24];
+					else
+					  ie_delay <= 6'h01;
 				end
 			`ORA:
 				begin
@@ -530,7 +548,7 @@ else begin
 				begin
 					dat_o <= pai;
 			 		if (ca2_mode==3'b100||ca2_mode==3'b101)
-			 			ca2 <= 1'b0;
+			 			ca2o <= 1'b0;
 			 		ca1_if <= 1'b0;
 			 		ca2_if <= 1'b0;
 				end
@@ -586,7 +604,7 @@ else begin
 				begin	
 					dat_o <= sr;
 					if (sr_mode==3'b001)
-						cb1 <= 1'b1;
+						cb1o <= 1'b1;
 					sr_cnt <= sr_32 ? 5'd31 : 5'd7;
 					sr_if <= 1'b0;
 				end
@@ -629,49 +647,44 @@ end
 
 // Outputs
 
-always @*
-	for (n = 0; n < 32; n = n + 1)
-		pa[n] = ddra[n] ? pao[n] : 1'bz;
+genvar g;
+generate begin : gPorts
+	for (g = 0; g < 32; g = g + 1)
+		assign pa[g] = ddra[g] ? pao[g] : 1'bz;
 		
-always @*
-	for (n = 0; n < 32; n = n + 1)
-		pb[n] = ddrb[n] ? pbo[n] : 1'bz;
+	for (g = 0; g < 32; g = g + 1)
+		assign pb[g] = ddrb[g] ? pbo[g] : 1'bz;
+end
+endgenerate
 
 // CA1 is always an input
 
 // CA2,CB1,CB2 output enables
-always @*
-	casez(ca2_mode)
-	3'b0??:	ca2 = 1'bz;
- 	3'b100:	ca2 = ca2o;
- 	3'b101:	ca2 = ca2o;
- 	3'b110:	ca2 = 1'b0;
- 	3'b111:	ca2 = 1'b1;
-	endcase
 
-always @*
-	casez(sr_mode)
-	3'b000:	cb1 = 1'bz;
-	3'b001:	cb1 = cb1o;
-	3'b010:	cb1 = cb1o;
-	3'b011:	cb1 = 1'bz;
-	3'b100:	cb1 = cb1o;
-	3'b101:	cb1 = cb1o;
-	3'b110:	cb1 = cb1o;
-	3'b111:	cb1 = 1'bz;
-	endcase
+assign ca2 = ca2_mode[2]==1'b0 ? 1'bz :
+						 ca2_mode==3'b100 ? ca2o :
+						 ca2_mode==3'b101 ? ca2o :
+						 ca2_mode==3'b110 ? 1'b0 :
+						 1'b1;
 
-always @*
-	casez(sr_mode)
-	3'b000,3'b001,3'b010,3'b011:
-		casez(cb2_mode)
-		3'b0??:	cb2 = 1'bz;
-	 	3'b100:	cb2 = cb2o;
-	 	3'b101:	cb2 = cb2o;
-	 	3'b110:	cb2 = 1'b0;
-	 	3'b111:	cb2 = 1'b1;
-		endcase
-	3'b1??:	cb2	= cb2o;
-	endcase
+assign cb1 = 	sr_mode==3'b000 ? 1'bz :
+							sr_mode==3'b001 ? cb1o :
+							sr_mode==3'b010 ? cb1o :
+							sr_mode==3'b011 ? 1'bz :
+							sr_mode==3'b100 ? cb1o :
+							sr_mode==3'b101 ? cb1o :
+							sr_mode==3'b110 ? cb1o :
+							1'bz;
 
+assign cb2 = sr_mode[2]==1'b0 ? (
+							cb2_mode[2]==1'b0 ? 1'bz :
+							cb2_mode==3'b100 ? cb2o :
+							cb2_mode==3'b101 ? cb2o :
+							cb2_mode==3'b110 ? 1'b0 :
+							1'b1) :
+							cb2o;
+
+assign pa_o = pao;
+assign pb_o = pbo;
+							
 endmodule
