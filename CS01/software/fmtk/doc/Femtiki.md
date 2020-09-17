@@ -2,7 +2,7 @@
 
 ## Overview
 Femtiki is a modern operating system kernel.
-All FMTK functions return a status in $v0 which is normally E_Ok if the function performed successfully or one of the error codes if the function failed. A second return value is return in $v1 for some functions.
+All FMTK functions return a status in $a0 which is normally E_Ok if the function performed successfully or one of the error codes if the function failed. A second return value is return in $a1 for some functions.
 Arguments to Femtiki functions are passed in $a1 to $a6. The function call number is specified in $a0. The Femtiki OS dispatch function will copy user argument registers to machine mode registers for use by the OS.
 Function call numbers in the range $000 to $3FF are reserved for the Femtiki OS.
 Femtiki function calls are performed by loading the function number into $a0 and function arguments into registers $a1 to $a6, then issuing an environment call (ecall) instruction.
@@ -52,7 +52,9 @@ The mailbox allocate function does just that. Mailboxes are associated with appl
 Tasks queue at mailboxes while waiting for messages to arrive. Messages queue at mailboxes if there are no waiting tasks.
 #### Parameters:
 * $a1 = app id of owning app
-* $a2 = pointer to storage location for mailbox handle
+#### Returns:
+* $a0 = E_Ok if successful
+* $a1 = mailbox handle
 
 ### Free Mailbox = function 7
 This function causes waiting tasks to be dequeued from the mailbox and waiting messages to be dequeued as well. The mailbox is then returned to the pool of available mailboxes.
@@ -171,4 +173,16 @@ Threads are light-weight objects storing state on the stack. Femtiki does not it
 
 ### Device Control Block (DCB)
 Each device in the system has a control block associated with it.
+
+## Inner Workings
+### Task Id
+The task id is a hash of the task control block address. The hash is defined to be able to find the TCB in operating system memory in a fast and efficient manner.
+Since TCB's are 1kB aligned the lower 10 bits of the address are always zero. The upper 13 bits of the address are also zero as there's only 512k ram in the system.
+That means a simple right shift of the address by 10 bits gives a 9-bit value which is probably adequate for a task id.
+
+### Mailboxes
+Mailboxes are allocated in groups of 48 with a group header which fit nicely into a 1kB block of memory.
+#### Mailbox handle hash
+Mailbox handles are a hash code that allows a quick means for the OS to identify where in memory the mailbox is located.
+Since mailboxes are located in 1kB blocks of memory and are at least word aligned, the lower 10 bits of the address shifted right twice forms the low byte of the mailbox handle hash. The OS keeps a small list of mailbox groups, the list contains the addresses of each 1kB group of mailboxes. The index into this list is used for the higher order bits of the mailbox handle hash.
 

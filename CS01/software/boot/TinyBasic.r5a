@@ -1031,7 +1031,7 @@ IF2:
 	add   $a1,$a1,$a0
 	stt   $a1,CURRNT
 	ldt   $a0,TXTUNF  ; do a warm start if past end
-	bltu  $a1,$a0,.IF3
+	bltu  $a1,$a0,IF3
 	jmp		WSTART
 IF3:
   mov   $t3,$a1

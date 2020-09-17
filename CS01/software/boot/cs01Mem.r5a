@@ -238,7 +238,7 @@ AllocStack:
 	and			$s1,$s1,#511
 	sll			$a0,$a0,#LOG_PGSZ			; convert pages to addresses
 	sll			$s1,$s1,#LOG_PGSZ
-	beqz    $s2,.xit
+;	beqz    $s2,.xit
 	or      $a1,$s1,#$A0000000    ; set stack segment
 .xit:
   ldt     $ra,[$sp]

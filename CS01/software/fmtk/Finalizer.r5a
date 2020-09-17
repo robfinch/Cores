@@ -44,14 +44,17 @@ Finalizer:
   ldi   $a1,#0                ; 0 to yeild
   ecall
 .nxt2:
-  mEI
+  ldi   $a0,#17               ; RunAsOS
+  ldi   $a1,.oscode
+  ecall
+  bra   .nxt2
+.oscode:
   ldi   $t0,#UNDEADQ
   popq  $a0,$t0
   bge   $a0,$x0,.nxt2         ; valid entry?
   and   $t1,$a0,#$4000        ; queue empty?
   bnez  $t1,.yield            ; go back to yield
   and   $t1,$a0,#$FF
-  mDI
   ldt   $a1,TidTcbMap[$t1]    ; get pointer to task
   and   $t1,$t1,#$FFF803FF    ; valid task pointer
   bnez  $t1,.nxt2
@@ -68,6 +71,8 @@ Finalizer:
   stb   $t1,TCBStatus[$a1]
   ldi   $t1,#OST_DEAD
   stb   $t1,OBJState[$a1]
+  ldi   $a0,#E_Ok
+  jmp   OSExit
   bra   .nxt2
 
 FMTK_TCBFinalizerExit:

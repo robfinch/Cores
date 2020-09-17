@@ -322,6 +322,7 @@ SerialPeekCharDirect:
 ;------------------------------------------------------------------------------
 
 SerialPutChar:
+  mDI
 	sub		$sp,$sp,#12
 	stt		$a0,[$sp]
 	stt		$ra,4[$sp]
@@ -329,21 +330,22 @@ SerialPutChar:
 .0002:
 	ldi		$a1,#10
 .0001:
-  mEI
+;  mEI
 ;	sub		$a1,$a1,#1
 ;	beqz	$a1,.goSleep
-	mDI
+;	mDI
 	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
-	mEI
+;	mEI
 	ldt		$a0,[$sp]
 	ldt		$ra,4[$sp]
 	ldt		$a1,8[$sp]
 	add		$sp,$sp,#12
 	ret
 .goSleep:
+  mEI
 	sub		$sp,$sp,#8
 	stt		$a0,[$sp]
 	stt		$a1,4[$sp]
@@ -353,6 +355,7 @@ SerialPutChar:
 	ldt		$a0,[$sp]
 	ldt		$a1,4[$sp]
 	add		$sp,$sp,#8
+	mDI
 	bra		.0002
 
 ;------------------------------------------------------------------------------

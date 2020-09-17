@@ -361,7 +361,7 @@ CS01_ILA uila1 (
 	.probe3(ucpu1.we_o), // input wire [0:0]  probe3 
 	.probe4(ucpu1.adr_o), // input wire [31:0]  probe4 
 	.probe5(ucpu1.dat_o), // input wire [31:0]  probe5
-	.probe6({ucpu1.illegal_insn,ucpu1.mtid[7:0],ucpu1.irq_i,ucpu1.mstatus[2:1],ucpu1.pushq,ucpu1.popq,ucpu1.queueo})
+	.probe6({ucpu1.illegal_insn,ucpu1.irq_i,ucpu1.rsStack[7:0],ucpu1.mtid})
 //	.probe6({ucpu1.to_done,ucpu1.state,ucpu1.crs,ucpu1.regset})
 );
 

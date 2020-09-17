@@ -55,19 +55,17 @@ AllocAppId:
   align 16
 FMTK_StartApp:
   mov   $s1,$a1
-  call  AllocAppId
-  bltz  $a0,.noMoreApps
-  sll   $s2,$v0,#2        ; $s2 = index into ACB pointer table
   mov   $a0,$x0           ; OS owns the ACB
   ldi   $a1,#4096         ; size of application control block
   call  PAMAlloc          ; allocate ACB
-  stt   $a1,ACBPtrs[$s2]  ; save off pointer to ACB
   mov   $s3,$a1           ; $s3 = pointer to ACB
   ldi   $t0,#ACB_MAGIC
   stt   $t0,ACBMagic[$s3]
   stt   $x0,ACBGarbageList[$s3]
+  ldb   $t0,ASRmid[$s1]
+  stb   $t0,ACBmid[$s3]
   ; Allocate a virtual screen and set pointers to it.
-  srl   $a0,$s2,#2        ; App owns the screen
+  srl   $a0,$s3,#LOG_PGSZ ; App owns the screen
   ldi   $a1,#8192         ; size of virtual screen
   call  PAMAlloc
   bltz  $a0,.noMem
@@ -142,10 +140,25 @@ FMTK_StartApp:
   stt   $a1,ACBHeap[$s3]
 
 .0007:
-  srl   $a0,$s2,#2        ; $a0 = app id
-  ldi   $a1,#1024         ; task local memory
-  ldt   $a2,ASRpCode[$s1] ; get pointer to code area
-  jmp   FMTK_StartTask    ; start the initial app task
+  srl   $a1,$s3,#LOG_PGSZ ; $a1 = app id
+  ldi   $a2,#1024         ; task local memory
+  ldt   $a3,ASRpCode[$s1] ; get pointer to code area
+  ldi   $a4,#$04
+  call  IStartTask        ; start the initial app task
+  bnez  $a0,.tskErr       ; error?
+  stw   $a1,ACBTask[$s3]
+  sll   $t0,$a1,#LOG_PGSZ
+  ldt   $t1,pACBpUIData[$s3]
+  stt   $t1,TCBxGP[$t0]   ; set global pointer to UI data area
+  ldi   $t1,#AS_LIVE
+  stb   $t1,ACBStatus[$s3]
+  srl   $a1,$s3,#LOG_PGSZ ; return app id
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+.tskErr:
+  ldi   $t1,#AS_UNDEAD
+  stb   $t1,ACBStatus[$s3]
+  jmp   OSExit
 
 .noMoreApps:
   ldi   $a0,#E_NoMoreAppIds
@@ -163,8 +176,7 @@ FMTK_StartApp:
 
 FMTK_ExitApp:
 	mGetCurrentTid
-	mov		$a1,$a0
-	ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB address
+	sll		$a1,$a0,#LOG_TCBSZ  ; convert TID to TCB address
 	ldb   $a1,TCBmid[$a1]     ; get the mid
 	; fall through to KillApp
 	
@@ -174,19 +186,15 @@ FMTK_ExitApp:
 ;------------------------------------------------------------------------------
   align 16
 FMTK_KillApp:
-  mEI
-	beqz	$a1,.immortal		    ; mid #0 is immortal (the system)
-	ldi		$t0,#TS_DEAD				; flag task as dead (prevents it from being re-queued)
+	beqz	$a1,.immortal		    ; app #0 is immortal (the system)
+	ldi		$t0,#TS_DEAD				; flag app as dead (prevents it from being re-queued)
 	sll		$a1,$a1,#2	        
-	mDI
 	ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB address
 	stb		$t0,TCBStatus[$a1]
 ;	ldbu  $a0,TCBmid[$a1]
 ;	call	FreeAll							; free all the memory associated with the task
 	; Now make task ID available for reuse
 	ldbu  $a0,TCBtid[$a1]
-	call  FreeTID
-	mEI
 .immortal:
 	ldi		$a0,#E_Ok
 	jmp		OSExit

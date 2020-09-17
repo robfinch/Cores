@@ -157,7 +157,8 @@ ViaIRQ:
 	add		$t2,$t2,#30
 	stt		$t2,milliseconds
 	stt		$t2,switchflag
-	call  FMTK_SchedulerIRQ
+	ldi   $a0,#0
+	call  OSOCall
 	jmp   ERETx2
 	; reset countdown to clear interrupt
 .timer2irq:

@@ -31,6 +31,11 @@ TS_PREEMPT	EQU		32
 TS_UNDEAD   EQU   64
 TS_RUNNING	EQU		128
 
+AS_NONE     EQU   0
+AS_LIVE     EQU   1
+AS_DEAD     EQU   2
+AS_UNDEAD   EQU   4
+
 PRI_NORMAL  EQU   2
 PRI_LOW     EQU   3
 
@@ -50,6 +55,7 @@ UNDEADQ     EQU   7
 ; error codes
 E_Ok		=		0x00
 E_Arg		=		0x01
+E_Func  =   0x02
 E_BadMbx	=		0x04
 E_QueFull	=		0x05
 E_NoThread	=		0x06
@@ -83,8 +89,14 @@ E_NoMoreAppIds = 0x46
 E_NoMem = 0x47
 
 CSR_MSTATUS = $300
+CSR_MEPC    = $341
 CSR_REGSET  = $7C0
 CSR_MSEMA   = $7C1
 CSR_TASKID  = $7C2
+CSR_RSSTACK = $7C3
+CSR_PMSTACK = $7C4
+TCBPTR_MASK = $FFF803FF
 
-TCBPTR_MASK = $FFF803FBF
+; Message types
+MT_ANNOUNCE = $00000010
+MT_IRQ      = $FFFFFFFF

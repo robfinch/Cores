@@ -25,12 +25,12 @@
 
 ; disable interrupts
 macro mDI
-  csrrc $x0,#$300,#1        ; disable interrupts
+  csrrc $x0,#CSR_PMSTACK,#1        ; disable interrupts
 endm
 
 ; disable interrupts
 macro mEI
-  csrrs $x0,#$300,#1        ; enable interrupts
+  csrrs $x0,#CSR_PMSTACK,#1        ; enable interrupts
 endm
 
 ; unlock the a semaphore	
@@ -39,12 +39,8 @@ macro mUnlockSemaphore (adr)
 	stt		a0,adr
 endm
 
-; Look at the asid register for task id
 macro mGetCurrentTid
-;	csrrw	v0,#$181,x0
-;	and		v0,v0,#15
-  csrrw $a0,#$7C2,$x0
-;	ldbu  $a0,CurrentTid
+  csrrw $a0,#CSR_TASKID,$x0
 endm
 
 macro	mHasFocus
@@ -89,55 +85,21 @@ macro mWaitForFocus
 endm
 
 ;------------------------------------------------------------------------------
-; Remove the task from the list of tasks waiting at the mailbox.
-; This routine is only called from a couple of places and it is convenient
-; not to stack the return address. So, it is implemented as a macro.
-;
 ; Parameters:
-;		$a0 = task id
+;   $a0 = mailbox handle
+; Modifies:
+;   $t0
+; Returns:
+;   $a0 = mailbox pointer
 ;------------------------------------------------------------------------------
 
-macro mMbxRemoveTask
-	gcsub	$sp,$sp,#20
-	stt		$s1,[$sp]
-	stt		$t0,4[$sp]
-	stt		$t1,8[$sp]
-	stt		$t2,12[$sp]
-	stt   $a0,16[$sp]
-	sll   $a0,$a0,#2
-	ldt   $a0,TidTcbMap[$a0]
-	and   $t0,$a0,#$FFF803FF
-	bnez  $t0,.xit@
-	ldt   $t0,TCBMbxPrev[$a0]
-	ldt   $t1,TCBMbxNext[$a0]
-	beqz  $t0,.atHead@
-	stt   $t1,TCBMbxNext[$t0]
-  stt   $t0,TCBMbxPrev[$t1]
-  bra   .xit@
-.atHead@	
-	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
-	bltz	$t0,.xit@					    ; handle good?
-	sll		$t0,$t0,#5						; convert to pointer
-	add		$t0,$t0,#mbxs					; by adding base address
-	ldt		$t1,MBX_TQHEAD[$t0]		; get waiting task list
-	beqz  $t1,.tqEmpty@
-	ldt   $t1,MBX_TQTAIL[$t0]
-	stt   $a0,TCBMbxNext[$t1]
-	stt   $t1,TCBMbxPrev[$a0]
-	stt   $x0,TCBMbxNext[$a0]
-	bra   .xit@
-.tqEmpty@
-	stt   $a0,MBX_TQHEAD[$t0]
-	stt   $a0,MBX_TQTAIL[$t0]
-	stt   $x0,TCBMbxPrev[$a0]
-	stt   $x0,TCBMbxNext[$a0]
-.xit@:
-	ldt		$s1,[$sp]
-	ldt		$t0,4[$sp]
-	ldt		$t1,8[$sp]
-	ldt		$t2,12[$sp]
-	ldt   $a0,16[$sp]
-	add		$sp,$sp,#20
+macro mMbxHandleToPointer
+  srl   $t0,$a0,#8    ; extract collection index
+  sll   $t0,$t0,#2
+  ldt   $t0,MbxBlockPtr[$t0]
+  and   $a0,$a0,#$FF
+  sll   $a0,$a0,#2
+  or    $a0,$a0,$t0
 endm
 
 ;------------------------------------------------------------------------------
@@ -169,4 +131,18 @@ endm
 .done@:
 ;	stt		$x0,TCBNext[$v0]
 ;	stt		$x0,TCBPrev[$v0]
+endm
+
+macro mGetAppMid
+  sll   $a0,$a0,#LOG_PGSZ
+  ldb   $a0,ACBmid[$a0]
+endm
+
+macro mInsertIntoReadyQueue
+	sll   $t0,$a0,#LOG_TCBSZ
+	ldbu	$t1,TCBStatus[$t0]	; set status to ready
+	or		$t1,$t1,#TS_READY
+	stb		$t1,TCBStatus[$t0]
+	ldb		$t1,TCBPriority[$t0]
+	pushq	$a0,$t1
 endm

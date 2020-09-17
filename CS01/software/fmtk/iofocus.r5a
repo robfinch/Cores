@@ -22,9 +22,6 @@
 ; ============================================================================
 
 ;-----------------------------------------------------------------------------
-; IO Focus routines complicated by the fact that the base address of TCB
-; zero is zero (looks like a null pointer but isn't). So the value -1 is 
-; used to indicate no focus index.
 ;-----------------------------------------------------------------------------
 
 	code
@@ -34,22 +31,33 @@
 ; Determine if the currently running task has the I/O focus.
 ;
 ; Stack Space:
-;		2 words
+;		none
 ; Parameters:
 ;		none
 ; Modifies:
 ;		none
 ; Returns:
-;		v0 = E_Ok
-;		v1 = 1 if task has IO focus, 0 otherwise
+;		$a0 = E_Ok
+;		$a1 = 1 if task has IO focus, 0 otherwise
 ;-----------------------------------------------------------------------------
 
 FMTK_HasIOFocus:
 	mGetCurrentTid
-	sll   $a0,$a0,#2
-	ldt   $a0,TidTcbMap[$a0]
-	ldt		$a1,IOFocusNdx
-	beq		$a0,$a1,.hasFocus
+	sll   $t1,$a0,#LOG_TCBSZ
+	ldb   $a0,TCBmid[$a0]
+.nxt:
+	ldi   $t1,#6
+	peekq $t0,$t1
+	bltz  $t0,.empty
+	srl   $t1,$t0,#30
+	bnez  $t1,.valid
+	ldi   $t1,#6
+	popq  $t0,$t1
+	bra   .nxt
+.valid:
+  and   $t1,$t0,#$3F
+	beq		$a0,$t1,.hasFocus
+.empty:
 	ldi		$a1,#0
 	bra		.xit
 .hasFocus:
@@ -73,15 +81,23 @@ FMTK_HasIOFocus:
 ;-----------------------------------------------------------------------------
 
 SwitchIOFocusHelper:
-	ldt		$t0,IOFocusNdx			; get focus pointer
-	beqz	$t0,.noFocus		    ; is it nullptr?
-	ldt		$t1,IOF_NEXT[$t0]
-	beq		$t1,$t0,.sameFocus
-	beqz	$t1,.noFocus
+chknxt:
+  ldi   $t0,#6
+  peekq $t1,$t0
+  bltz  $t1,.noFocus
+  srl   $t0,$t1,#30
+  beqz  $t0,.nxt
+  and   $t0,$t1,#$3F
+	sll   $t0,$t1,#LOG_PGSZ
+	ldb   $t1,ACBHasFocus[$t0]
+	bnez	$t1,.hasFocus
+.nxt:
+	ldi   $t0,#6
+	popq  $t1,$t0
+	bra   .chknxt
+.hasFocus:
 	; swap virtual screens
 	; set vidmem pointer
-	stt		$t1,IOFocusNdx
-.sameFocus:
 .noFocus:
 	ldi		$a0,E_Ok
 	ret
@@ -91,39 +107,29 @@ FMTK_SwitchIOFocus:
 	jmp		OSExit
 
 ;-----------------------------------------------------------------------------
-; The I/O focus list is an array indicating which jobs are requesting the
+; RequestIOFocus requests that the task receive the I/O focus. It does not
+; mean the task will receive the focus immediately. Instead it is placed
+; on a list of requesters. Which task has the I/O focus is determined from
+; user input.
+; The I/O focus list is an array indicating which apps are requesting the
 ; I/O focus. The I/O focus is user controlled by pressing CNTRL-T on the
 ; keyboard.
 ;
 ; Parameters:
-;		a1 = task id requesting focus for
+;		$a1 = app id requesting focus for
+; Returns:
+;   $a0 = E_Ok
+;   $a1 (unmodified)
 ;-----------------------------------------------------------------------------
 
 FMTK_RequestIOFocus:
-	ldi		$t0,#1
-	sll		$t0,$t0,$a1
-	ldt		$t1,IOFocusTbl			; Is the task already included in the IO focus?
-	and		$t2,$t1,$t0					; test bit
-	bnez	$t2,.ret				    ; If so, don't add again
-	or		$t1,$t1,$t0					; set bit indicator
-	stt		$t1,IOFocusTbl
-	ldt		$t0,IOFocusNdx			; get current index
-  sll   $a1,$a1,#2
-  ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB pointer
-  and   $t1,$a1,#TCBPTR_MASK  ; bad pointer?
-  bnez  $t1,.ret
+  sll   $t2,$a1,#LOG_PGSZ
+	ldb		$t1,ACBHasFocus[$t2]  ; Is the task already included in the IO focus?
+	bnez	$t1,.ret				    ; If so, don't add again
+	ldw		$t0,IOFocusNdx			; get current index
 	bnez	$t0,.notEmpty		    ; is there one? (!= 0)
-	stt		$a1,IOFocusNdx			; no current index, so set equal to requester
-	stt		$a1,IOF_NEXT[$a1]		; and loop back to self
-	stt		$a1,IOF_PREV[$a1]
-	bra		.ret
-.notEmpty:
-	ldt		$t2,IOF_PREV[$t0]		; insert t1 into focus ring
-	stt		$t2,IOF_PREV[$a1]
-	stt		$t0,IOF_NEXT[$a1]
-	ldt		$t2,IOF_PREV[$t0]
-	stt		$a1,IOF_NEXT[$t2]
-	stt		$a1,IOF_PREV[$t0]
+	ldi   $a2,#6              ; queue #6 = focus queue
+	pushq $a1,$a2
 .ret:
 	ldi		$a0,#E_Ok
 	jmp		OSExit
@@ -135,13 +141,14 @@ FMTK_RequestIOFocus:
 
 FMTK_ReleaseIOFocus:
 	mGetCurrentTid
-	mov		$a1,$a0
+	sll   $a1,$a0,#LOG_TCBSZ
+	ldb   $a1,TCBmid[$a1]
 	; fall into ForceReleaseIOFocus
 
 ;-----------------------------------------------------------------------------
-; Releasing the I/O focus causes the focus to switch if the running job
+; Releasing the I/O focus causes the focus to switch if the running app
 ; had the I/O focus.
-; ForceReleaseIOFocus forces the release of the IO focus for a job
+; ForceReleaseIOFocus forces the release of the IO focus for a app
 ; different than the one currently running.
 ; 
 ; Stack Space:
@@ -149,23 +156,29 @@ FMTK_ReleaseIOFocus:
 ; Parameters:
 ;		a1 = task id to release
 ; Returns:
-;		v0 = E_Ok
+;		a0 = E_Ok
 ;-----------------------------------------------------------------------------
 
 FMTK_ForceReleaseIOFocus:
-	ldi		$t0,#1
-	sll		$t0,$t0,$a1
-	ldt		$t1,IOFocusTbl
-	and		$t2,$t1,$t0				; test bit for task
-	beq		$t2,$x0,.noFocus	; does it even have the focus?
-	xor		$t0,$t0,#-1				; get inverted mask
-	and		$t1,$t1,$t0				; clear bit for task
-	stt		$t1,IOFocusTbl
-	ldt		$t1,IOFocusNdx		; check if the focus being released is the current
-;	sll		$t0,$a1,#LOG_TCBSZ	; io focus. If so, switch focus
-  sll   $a1,$a1,#2
-  ldt   $a1,TidTcbMap[$a1]  ; convert TID to pointer
-	bne		$a1,$t1,.notSame
+	sll		$t0,$a1,#LOG_PGSZ
+	ldb		$t1,ACBHasFocus[$t0]
+	beqz	$t1,.noFocus	    ; does it even have the focus?
+	stb   $x0,ACBHasFocus[$t0]
+.nxtQ:
+	ldi   $a2,#6
+	peekq $a0,$a2
+	bltz  $a0,.done         ; queue empty ?
+	srl   $a2,$a0,#30       ; extract valid bit
+	bnez  $a2,.valid
+	ldi   $a2,#6
+	popq  $a0,$a2           ; get rid of invalid queue entry
+	bra   .nxtQ
+.valid:
+  and   $a0,$a0,#$3F
+  xor   $a0,$a0,$a1       ; same as one being released?
+  bnez  $a0,.done
+  ; Was the one with the focus, so switch focus
+	popq  $a0,$a2           ; get rid of queue entry
 	gcsub	$sp,$sp,#8
 	stt		$t0,[$sp]
 	stt		$t1,4[$sp]
@@ -173,19 +186,6 @@ FMTK_ForceReleaseIOFocus:
 	ldt		$t0,[$sp]
 	ldt		$t1,4[$sp]
 	add		$sp,$sp,#8
-.notSame:
-	ldt		$t2,IOF_NEXT[$a1]
-	beqz	$t2,.done
-	beq		$t2,$t0,.pjSame
-	ldt		$t1,IOF_PREV[$a1]
-	stt		$t1,IOF_PREV[$t2]
-	stt		$t2,IOF_NEXT[$t1]
-	bra		.0001
-.pjSame:
-	stt		$x0,IOFocusNdx
-.0001:
-	stt		$x0,IOF_NEXT[$a1]	
-	stt		$x0,IOF_PREV[$a1]	
 .done:
 .noFocus:
 	ldi		$a0,#E_Ok
@@ -204,17 +204,14 @@ WaitForIOFocus:
   stt   $a1,4[$sp]
   stt   $a2,8[$sp]
 .WFF1:
-  mEI
 	ldi		$a0,#20           ; FMTK Has Focus
 	ecall
 	bnez	$a1,.HasFocus
-	mEI
 	ldi   $a0,#26           ; FMTK_IO
 	ldi   $a1,#5
 	ldi   $a2,#9            ; peekchar function
 	ecall
 	bltz  $a1,.0001
-	stt   $a1,$4378
 .0001:
 	ldi		$a0,#$14					; CTRL-T
 	bne		$a1,$a0,.WFF2
@@ -227,7 +224,6 @@ WaitForIOFocus:
 	ecall
 	bra		.WFF1
 .WFF2:
-  mEI
 	ldi		$a0,#5            ; FMTK Sleep() function
 	ldi		$a1,#1
 	ecall

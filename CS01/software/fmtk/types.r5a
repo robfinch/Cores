@@ -76,10 +76,12 @@ TCBRegsEnd  EQU   $240
 ; Second 128 bytes are for float register set
 ; Leave some room for 64-bit regs
 TCBbases  	EQU		$240		; base register storage
-TCBepc			EQU		$2C0
+TCBepc  		EQU		$2C0
 TCBStatus		EQU		$2C8
 TCBPriority	EQU		$2C9
 TCBWaitMbx	EQU		$2CA
+TCBRegset   EQU   $2CB
+TCBHasFocus EQU   $2CC
 TCBStackBot	EQU		$2D0
 TCBMsgD1		EQU		$2D8
 TCBMsgD2		EQU		$2E0
@@ -95,10 +97,11 @@ IOF_NEXT		EQU		$328
 IOF_PREV		EQU		$330
 TCBtid      EQU   $338
 TCBmid      EQU   $340
-TCBOMode    EQU   $342
+TCBOpMode   EQU   $342
 TCBMbxNext  EQU   $348
 TCBMbxPrev  EQU   $350
-TCBName			EQU		$358
+TCBTaskNum  EQU   $358
+TCBName			EQU		$360
 
 ; Application Control Block
 ACBObject     EQU   0
@@ -139,6 +142,9 @@ ACBKeybdBuffer  EQU   880
 ACBnumber     EQU   944
 ACBNext       EQU   952
 ACBTask       EQU   960
+ACBHasFocus   EQU   962
+ACBmid        EQU   964
+ACBStatus     EQU   966
 ACBTemplates  EQU   968   ; 256 * 8 bytes reserved for template pointers
 ACBPad        EQU   3016
 ACBStrings    EQU   3072  ; start of 1kB string area
@@ -147,7 +153,8 @@ ACBEnd        EQU   4096
 ; Application startup record
 ASRPageSize   EQU   0
 ASRPriority   EQU   1
-ASRReserved   EQU   2
+ASRRegset     EQU   2
+ASRmid        EQU   3
 ASRAffinity   EQU   4
 ASRCodeSize   EQU   8
 ASRDataSize   EQU   16
