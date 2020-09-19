@@ -143,7 +143,6 @@ Alloc:
 	stt			$ra,[$sp]
 	stt			$s1,4[$sp]			; these regs must be saved
 	stt			$s2,8[$sp]
-	stt     $a1,12[$sp]
 	stt			$s3,16[$sp]
 	stt     $s4,20[$sp]
 	beqz    $a1,.allocZero
@@ -195,7 +194,6 @@ Alloc:
 	ldt			$ra,[$sp]
 	ldt			$s1,4[$sp]			; restore regs
 	ldt			$s2,8[$sp]
-	ldt     $a1,12[$sp]
 	ldt			$s3,16[$sp]
 	ldt     $s4,20[$sp]
 	add			$sp,$sp,#24

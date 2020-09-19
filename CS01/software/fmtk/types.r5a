@@ -97,7 +97,8 @@ IOF_NEXT		EQU		$328
 IOF_PREV		EQU		$330
 TCBtid      EQU   $338
 TCBmid      EQU   $340
-TCBOpMode   EQU   $342
+TCBappid    EQU   $342
+TCBOpMode   EQU   $344
 TCBMbxNext  EQU   $348
 TCBMbxPrev  EQU   $350
 TCBTaskNum  EQU   $358

@@ -25,7 +25,9 @@
 	align	4
 OSCallTbl:
   dh    SchedulerIRQ
+  dh    IStartTask
   dh    ISendMsg
+  dh    ISleep
 
 OSEcallTbl:
 	dh		FMTK_Initialize					; 0
@@ -46,7 +48,7 @@ OSEcallTbl:
 	dh		FMTK_TCBFinalizerExit   ; 15
 	dh		FMTK_KillApp
 	dh		FMTK_RunAsOS            ; 17
-	dh		FMTK_GetAppId           ; 18
+	dh		FMTK_GetTaskAppId       ; 18
 	dh		FMTK_SetTaskId          ; 19
 	dh		FMTK_HasIOFocus					; 20
 	dh		FMTK_SwitchIOFocus			; 21
@@ -57,7 +59,7 @@ OSEcallTbl:
 	dh		FMTK_IO									; 26
 	dh    FMTK_GetDCBField        ; 27
 	dh    FMTK_SetDCBField        ; 28
-	dh    0
+	dh    FMTK_GetAppTaskId       ; 29
 	dh    0
 	dh    0
 	dh    GetPamBit               ; 32
@@ -102,7 +104,7 @@ FMTKInit:
 	stt		$x0,READYQ+8
 	stt		$x0,READYQ+12
 	
-	stw		$x0,IOFocusNdx
+	stt		$x0,IOFocusNdx
 
   ; one out the register set last tid
   ldi   $t0,#$FFFFFFFF
@@ -126,6 +128,7 @@ FMTKInit:
 	; Initialize mailboxes
 	stt   $x0,FreeMbx
 	stw   $x0,IdleTaskMbx
+	stw   $x0,IdleTaskId
 	stb   $x0,MbxBlockCounter
 	ldi   $t0,#MBX_BLOCKPTR_BUFSZ
 	ldi   $t1,#MbxBlockPtr
@@ -174,10 +177,17 @@ SetIRQFlag:
   ldi   $a0,#E_Ok
   jmp   OSExit
 
-FMTK_GetAppId:
-  stt   $a1,$3F10
+; Accessors
+
+FMTK_GetTaskAppId:
   sll   $a1,$a1,#LOG_PGSZ
-  ldb   $a1,TCBmid[$a1]
+  ldwu  $a1,TCBappid[$a1]
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+
+FMTK_GetAppTaskId:
+  sll   $a1,$a1,#LOG_PGSZ
+  ldwu  $a1,ACBTask[$a1]
   ldi   $a0,#E_Ok
   jmp   OSExit
 
@@ -278,6 +288,7 @@ SelectTaskToRun:
 	; chosen isn't the highest priority one in order to 
 	; prevent starvation of lower priority tasks.
 .checkAgain:
+  mEI
 	ldbu	$a1,QNDX						; get index into que check table
 	add		$a1,$a1,#1					; increment it, and limit
 	and		$a1,$a1,#31
@@ -285,7 +296,8 @@ SelectTaskToRun:
 	ldbu	$a1,qToChk[$a1]			; assume this will be valid
 	ldi		$t2,#5							; 5 queues to check
 .nxtQ:
-  popq  $a0,$a1
+  mEI
+  peekq $a0,$a1
   bltz  $a0,.nxtQa          ; queue empty?
   srl   $t0,$a0,#16
   and   $t0,$t0,#$3F        ; check data count
@@ -304,8 +316,10 @@ SelectTaskToRun:
 	; ready to run.
 	wfi
 	ldwu  $a0,IdleTaskId
+	beqz  $a0,.checkAgain
 	ldi   $a1,#4
-	pushq $a0,$a1
+  call  InsertIntoReadyQueue
+;	pushq $a0,$a1
 	bra   .checkAgain
 .dq:
   ; If we got a task but it isn't actually ready anymore go back
@@ -313,6 +327,7 @@ SelectTaskToRun:
   ; queue.
 ;  and   $t2,$v0,#$4000      ; empty flag?
 ;  bnez  $t2,.nxtQa
+  popq  $a0,$a1
   and   $a0,$a0,#$1FF
   beqz  $a0,.nxtQ             ; zero is not accepted
   sll   $t1,$a0,#LOG_PGSZ
@@ -398,7 +413,7 @@ SwapContext:
 ;	and		$v0,$v0,#$F					; mask to 16 task
   ldbu  $a0,TCBmid[$s2]
 	csrrw	$x0,#$181,$a0				; set ASID
-  ldwu  $a0,TCBtid[$s2]
+  srl   $a0,$s2,#LOG_PGSZ
 	csrrw $x0,#CSR_TASKID,$a0
 	; User map has now been switched
 
@@ -429,26 +444,34 @@ SwapContext:
 	sll   $t0,$t0,#4
 	or    $t1,$t1,$t0
 	csrrw $x0,#CSR_RSSTACK,$t1
+	; We can skip over a bunch of load operations if the last task to use the
+	; register set is the same task that wants it. In that event there are no
+	; registers to reload other than the return value ones.
+	srl   $t0,$t0,#4              ; position $t0 as index
+	ldbu  $t1,RegsetTid[$t0]
+	beq   $t1,$t0,.0001:
+	stb   $t0,RegsetTid[$t0]      ; flag as the last user
+	ldi   $t1,#1
+	jmp   .0002
+.0001:
+  ldi   $t1,#0
+.0002:
 	csrrs $x0,#CSR_REGSET,#1      ; select task's register set
 	; These two registers always need to be loaded so that the OS return values
 	; can be transferred.
+	ldt		$x10,TCBxA0[$s2]
 	ldt		$x11,TCBxA1[$s2]
-	ldt		$x12,TCBxA2[$s2]
-	; We can skip over a bunch of load operations if the last task to use the
-	; register set is the same task that wants it.
-;	ldbu  $t1,RegsetTid[$t0]      ; use ot $t1 here is invalid
-;	beq   $t1,$t0,.skipCtxLoad
-;	stb   $t1,RegsetTid[$t0]      ; flag as the last user
+	ldt		$x3,TCBxGP[$s2]         ; manipulated by StartApp
+	beqz  $t1,.skipCtxLoad
 	ldt		$x1,TCBxRA[$s2]
 	ldt		$x2,TCBxSP[$s2]
-	ldt		$x3,TCBxGP[$s2]
 	ldt		$x4,TCBxTP[$s2]
 	ldt		$x5,TCBxT0[$s2]
 	ldt		$x6,TCBxT1[$s2]
 	ldt		$x7,TCBxT2[$s2]
 	ldt		$x8,TCBxFP[$s2]
 	ldt		$x9,TCBxS1[$s2]
-	ldt		$x10,TCBxA0[$s2]
+	ldt		$x12,TCBxA2[$s2]
 	ldt		$x13,TCBxA3[$s2]
 	ldt		$x14,TCBxA4[$s2]
 	ldt		$x15,TCBxA5[$s2]
@@ -505,11 +528,7 @@ OSOCall:
   align 16
 OSECALL:
   csrrs $x0,#$7C1,#1    ; set OS running semaphore
-	ldi		$t0,#$100						; disable timer3 (time slice) interrupts
-	stt		$t0,VIA_IER+VIA
-	nop                   ; make sure disable has time for effect
-	nop
-	mEI
+  mTimeSliceDI
 	csrrs	$x0,#CSR_REGSET,#2  ; get register sets
 	mov		$a0,$a0					; move user to machine
 	mov		$a1,$a1
@@ -518,8 +537,9 @@ OSECALL:
 	mov		$a4,$a4
 	mov		$a5,$a5
 	csrrc	$x0,#CSR_REGSET,#15 ; get back current registers for all
-	stt   $a0,$4320
-;OSCALL2:
+  ; Enable other kinds of interrupts. While accessing the previous register set
+  ; we cannot be interrupted because the regset would be in flux.
+  mEI
   slt   $t0,$a0,#47     
 	beqz  $t0,.badFunc
 	; The function address table is compressed by assuming all the code is
@@ -541,13 +561,17 @@ OSECALL:
 ;------------------------------------------------------------------------------
   align 16
 OSExit:
+  mDI
+  nop                       ; landing zone for interrupts
+  nop
 	csrrs	$x0,#CSR_REGSET,#1		; get register sets
 	mov		$a1,$a1							; move return values to user registers
 	mov		$a0,$a0
 	csrrc $x0,#CSR_REGSET,#15 ; restore register set selection
+	mEI
 	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
-	ldi		$t0,#$14000180			; enable timer3 interrupts after 20 cycles
-	stt		$t0,VIA_IER+VIA
+	mTimeSliceEI
+	csrrc $x0,#CSR_MSEMA,#2   ; open egate
 	mret
 
 ;------------------------------------------------------------------------------
@@ -608,7 +632,7 @@ UpdateMsgFields:
 	call  PeekMsg
 	mov   $a1,$t4                 ; restore $a1
 	ldi		$t3,#E_Ok						    ; setup to return E_Ok
-	stt		$t3,TCBxA0[$s2]					; in v0
+	stt		$t3,TCBxA0[$s2]					; in a0
 .noMsg:
 	and		$t2,$t2,#~(TS_WAITMSG|TS_MSGRDY)  ; mask out message ready status
 	stb		$t2,TCBStatus[$s2]
@@ -628,10 +652,15 @@ UpdateMsgFields:
 ;   $v1 = 1 = context switched, 0 = same context
 ;------------------------------------------------------------------------------
   align 16
-FMTK_Sleep:
+ISleep:
+  gcsub $sp,$sp,#12
+  stt   $ra,[$sp]
+  stt   $s1,4[$sp]
+  stt   $s2,8[$sp]
 	bltz	$a1,OSExit
 	mGetCurrentTid
-	sll   $s1,$a0,#LOG_TCBSZ
+	beqz  $a0,.xit
+	sll   $s1,$a0,#LOG_PGSZ
 	mov   $s2,$s1               ; for bad ppinter processing
 	beqz	$a1,.0001             ; zero timeout?
 	call	RemoveFromReadyQueue
@@ -646,7 +675,7 @@ FMTK_Sleep:
   sll   $s2,$a0,#LOG_TCBSZ    ; $a0 = tid
   stt   $s2,$3F00
 	ldbu	$t2,TCBStatus[$s2]		; x2 = incoming status
-	or		$t2,$t2,#TS_RUNNING|TS_READY	; set status = running
+	or		$t2,$t2,#TS_RUNNING	  ; set status = running
 	stb   $t2,TCBStatus[$s2]
 	ldt		$t3,TCBException[$s2]	;
 	beqz	$t3,.noException
@@ -671,9 +700,18 @@ FMTK_Sleep:
 	call  UpdateMsgFields       ; must be after context is set
 	ldt		$t2,Tick						; get tick
 	stt		$t2,TCBStartTick[$s1]
+.xit:
 	mEI
 	ldi   $a0,#E_Ok
-	jmp		OSExit
+  ldt   $ra,[$sp]
+  ldt   $s1,4[$sp]
+  ldt   $s2,8[$sp]
+  add   $sp,$sp,#12
+	ret
+
+FMTK_Sleep:
+  call  ISleep
+  jmp   OSExit
 
 ;------------------------------------------------------------------------------
 ; SchedulerIRQ meant to be called from the timer ISR. This routine will not
@@ -683,16 +721,17 @@ FMTK_Sleep:
 ;------------------------------------------------------------------------------
   align 16
 SchedulerIRQ:
-	; See if the OS was interrupted. Done by getting the register set stacking
-	; depth.
+	; See if the OS was interrupted.
 	csrrw $a0,#$7C1,$x0   ; Is the OS running?
 	and   $a0,$a0,#1
 	beqz  $a0,.noOS
 	ret                   ; refuse to continue this function
 .noOS:
 	decto                 ; decrement timeouts for tasks on timeout list
-	gcsub	$sp,$sp,#4
+	gcsub	$sp,$sp,#12
 	stt		$ra,[$sp]
+	stt   $s1,4[$sp]
+	stt   $s2,8[$sp]
 	mGetCurrentTid
 	sll   $s1,$a0,#LOG_TCBSZ
 ; Might need the following if the external timer isn't used.
@@ -755,7 +794,9 @@ SchedulerIRQ:
 .noCtxSwitch:
 	call  UpdateMsgFields       ; must be after context set
 	ldt		$ra,[$sp]
-	add		$sp,$sp,#4
+	ldt   $s1,4[$sp]
+	ldt   $s2,8[$sp]
+	add		$sp,$sp,#12
 	ldt		$t2,Tick					; get tick
 	stt		$t2,TCBStartTick[$s1] ;[$s1]
 	ret
@@ -769,7 +810,7 @@ SchedulerIRQ:
 ;   $a1 = app id
 ;		$a2 = memory required (task's local memory)
 ;		$a3 = start pc (usually $400)
-;   $a4 = register set
+;   $a4 = register set, operating mode
 ;	Modifies:
 ;	Returns:
 ;		$a0 = E_Ok if successful
@@ -777,23 +818,29 @@ SchedulerIRQ:
 ;------------------------------------------------------------------------------
   align 16
 IStartTask:
-  gcsub $sp,$sp,#4
+  gcsub $sp,$sp,#24
   stt   $ra,[$sp]
-  mov   $s3,$a1       ; $s3 = mid
+  stt   $s1,4[$sp]
+  stt   $s2,8[$sp]
+  stt   $s3,12[$sp]
+  stt   $s4,16[$sp]
+  stt   $s5,20[$sp]
+  mov   $s3,$a1       ; $s3 = app id
   mov   $s2,$a2       ; $s2 = memory required
   mov   $s5,$a3       ; $s5 = start address
   ldi   $a0,#1024     ; TCB is 1kB
   call  PAMAlloc      ; allocate storage for the TCB
 	bltz	$a0,.err
 	mov   $s4,$a0
-	srl   $a1,$a0,#LOG_TCBSZ
+	srl   $a1,$a0,#LOG_PGSZ
   stw   $a1,TCBtid[$s4]
-  stw   $s3,TCBmid[$s4] ; record the app id (mid)
   mov   $s1,$a0         ; $s1 = pointer to TCB
 ;	call	FreeAll
 ;	call	MapOSPages			; Map OS pages into address space
-  mov   $a0,$s3         ; $a0 = mid
+  mov   $a0,$s3         ; $a0 = app id
+  stw   $a0,TCBappid[$s4]
   mGetAppMid
+  stw   $a0,TCBmid[$s4] ; record the mid
 	call	AllocStack
 	beqz  $a0,.err
 	or		$t0,$a0,#$A0000FFC	; set stack pointer
@@ -827,8 +874,7 @@ IStartTask:
   stt   $x0,TCBMbxNext[$s1]
   stt   $x0,TCBMbxPrev[$s1]
   srl   $a0,$s1,#LOG_TCBSZ  ; a0 = tid
-  mov   $t0,$a4
-  and   $t0,#15
+  and   $t0,$a4,#15
   stb   $t0,TCBRegset[$s1]
   and   $t0,$a4,#$30
   or    $t0,$t0,#$08        ; enable interrupts at startup
@@ -850,7 +896,12 @@ IStartTask:
 	ldi   $a0,#E_Ok
 .xit:
 	ldt   $ra,[$sp]
-	add   $sp,$sp,#4
+  ldt   $s1,4[$sp]
+  ldt   $s2,8[$sp]
+  ldt   $s3,12[$sp]
+  ldt   $s4,16[$sp]
+  ldt   $s5,20[$sp]
+	add   $sp,$sp,#24
   ret
 .err:
   ldi   $a0,#E_NoMem

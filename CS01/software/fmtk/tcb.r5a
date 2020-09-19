@@ -52,7 +52,7 @@ InsertIntoReadyQueue:
 ;------------------------------------------------------------------------------
 
 RemoveFromReadyQueue:
-	sll   $t0,$a0,#LOG_TCBSZ
+	sll   $t0,$a0,#LOG_PGSZ
 	ldb		$t1,TCBStatus[$t0]		; set status no longer ready or running
 	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
 	stb		$t1,TCBStatus[$t0]
@@ -192,14 +192,16 @@ DumpReadyQueue:
 .brk:
 	ldi		$a0,#msgTaskInfo
 	call	PutString
-  ldi   $t0,#0
+  ldi   $t0,#$4000
 .0004:
-  ldi   $t2,#1
-  sll   $t2,$t2,$t0
-  ldt   $a0,TID_POOL
-  and   $t2,$t2,$a0
-  beqz  $t2,.nxtT
-  sll   $a0,$t0,#LOG_TCBSZ
+  ldt   $a0,[$t0]
+  xor   $a0,$a0,#TCB_MAGIC
+  bnez  $a0,.nxtT
+;  ldi   $t2,#1
+;  sll   $t2,$t2,$t0
+;  ldt   $a0,TID_POOL
+;  and   $t2,$t2,$a0
+;  beqz  $t2,.nxtT
   mov   $t2,$a0
   srl   $t0,$t0,#2
   call  PutHexWord
@@ -226,8 +228,8 @@ DumpReadyQueue:
 	ldi		$a0,#CR
 	call	Putch
 .nxtT:
-  add   $t0,$t0,#1
-  slt   $t1,$t0,#32
+  add   $t0,$t0,#$400
+  slt   $t1,$t0,#$80000
   bnez  $t1,.0004
 	csrrw	$x0,#$300,$s1
 	ldt		$ra,[$sp]

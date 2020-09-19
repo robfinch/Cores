@@ -138,6 +138,23 @@ macro mGetAppMid
   ldb   $a0,ACBmid[$a0]
 endm
 
+; Macros to enable and disable time-slice interrupts
+macro mTimeSliceEI
+	ldi		$t0,#$1A000180			; enable timer3 interrupts after 26 cycles
+	stt		$t0,VIA_IER+VIA
+endm
+
+macro mTimeSliceDI
+	ldi		$t0,#$100						; disable timer3 (time slice) interrupts
+	stt		$t0,VIA_IER+VIA
+	nop                   ; make sure disable has time for effect
+	nop
+endm
+
+; Inserting into the ready queue is done by both OS ecall functions and
+; interrupt driven scheduling. It's important to have interrupts disabled
+; so that there is no contention for the ready queue.
+
 macro mInsertIntoReadyQueue
 	sll   $t0,$a0,#LOG_TCBSZ
 	ldbu	$t1,TCBStatus[$t0]	; set status to ready
@@ -146,3 +163,4 @@ macro mInsertIntoReadyQueue
 	ldb		$t1,TCBPriority[$t0]
 	pushq	$a0,$t1
 endm
+

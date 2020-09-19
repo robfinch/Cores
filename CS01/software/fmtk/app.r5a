@@ -60,7 +60,7 @@ FMTK_StartApp:
   call  PAMAlloc          ; allocate ACB
   mov   $s3,$a1           ; $s3 = pointer to ACB
   ldi   $t0,#ACB_MAGIC
-  stt   $t0,ACBMagic[$s3]
+  stt   $t0,OBJMagic[$s3]
   stt   $x0,ACBGarbageList[$s3]
   ldb   $t0,ASRmid[$s1]
   stb   $t0,ACBmid[$s3]
@@ -104,31 +104,41 @@ FMTK_StartApp:
 
 .0003:
   ; Allocate memory for application data and copy data into position
+  ; The memory requirements for both initialized and uninitialized data are
+  ; summed and a single block of memory allocated for both.
+  ; Vars will then be accessed via a global pointer offset from the start
+  ; of the data area.
   stt   $x0,ACBpData[$s3]
+  stt   $x0,ACBpUIData[$s3]
   ldt   $a1,ASRDataSize[$s1]
-  beqz  $a1,.0005         ; no pre-initialized data?
+  ldt   $a2,ASRIUDataSize[$s1]
+  add   $a1,$a1,$a2
+  beqz  $a1,.0005         ; no data?
   call  Alloc
   bltz  $a0,.noMem
   stt   $a1,ACBpData[$s3]
 
-  mov   $s4,$v1           ; $s4 = pointer to application data
-  mov   $t0,ASRDataSize[$s1]  ; $t0 = data size
+  ; Copy pre-initialized data to data area.
+  mov   $s4,$a1           ; $s4 = pointer to application data
+  ldt   $t0,ASRDataSize[$s1]  ; $t0 = data size
+  add   $t0,$t0,#3        ; round to whole words
+  and   $t0,$t0,#$FFFFFFFC
   ldt   $s5,ASRpData[$s1] ; $s5 = pointer to application data
 .0002:
   ldt   $t1,[$s5]
   stt   $t1,[$s4]
   add   $s5,$s5,#4
   add   $s4,$s4,#4
-  sub   $t0,$t0,#1
+  sub   $t0,$t0,#4
   bgtz  $t0,.0002
 
 .0005:
-  ; Allocate memory for uninitialized data
-  stt   $x0,ACBpUIData[$s3]
-  ldt   $a1,ASRUIDataSize[$s1]
-  beqz  $a1,.0006         ; no uninitialized data?
-  call  Alloc
-  bltz  $a0,.noMem
+  ; Record pointer to uninitialized data
+  ldt   $a0,ASRDataSize[$s1]
+  ldt   $a1,ACBpData[$s1]
+  add   $a1,$a0,$a1
+  add   $a1,$a1,#3
+  and   $a1,$a1,#$FFFFFFFC
   stt   $a1,ACBpUIData[$s3]
 
 .0006:
@@ -140,16 +150,18 @@ FMTK_StartApp:
   stt   $a1,ACBHeap[$s3]
 
 .0007:
+  ldi   $a0,#1            ; IStartTask
   srl   $a1,$s3,#LOG_PGSZ ; $a1 = app id
   ldi   $a2,#1024         ; task local memory
   ldt   $a3,ASRpCode[$s1] ; get pointer to code area
   ldi   $a4,#$04
-  call  IStartTask        ; start the initial app task
+  call  OSOCall           ; start the initial app task
   bnez  $a0,.tskErr       ; error?
   stw   $a1,ACBTask[$s3]
+  stw   $a1,$3F48
   sll   $t0,$a1,#LOG_PGSZ
-  ldt   $t1,pACBpUIData[$s3]
-  stt   $t1,TCBxGP[$t0]   ; set global pointer to UI data area
+  ldt   $t1,ACBpData[$s3]
+  stt   $t1,TCBxGP[$t0]   ; set global pointer to data area
   ldi   $t1,#AS_LIVE
   stb   $t1,ACBStatus[$s3]
   srl   $a1,$s3,#LOG_PGSZ ; return app id

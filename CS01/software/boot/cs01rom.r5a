@@ -57,7 +57,9 @@ MachineStart:
 	stb   $t0,CURIN
 	stb   $t0,CUROUT
 	ldi		$t0,#0
-	csrrw	$x0,#$181,$t0		; set ASID
+	csrrw $x0,#CSR_MSEMA,$t0  ; turn off semaphores
+	csrrw	$x0,#$181,$t0		    ; set ASID
+	csrrw $x0,#CSR_TASKID,$t0 ; clear task id
 	ldi		$t0,#$FFFC0000
 	csrrw $x0,#$301,$t0		; set tvec
 	ldi   $t0,#$FFFFFF0D  ; run user mode in register set #0
@@ -75,27 +77,28 @@ UserStart:
   ecall
 .appBad:
   bnez  $a0,.appBad
-  mov   $s1,$a1
+
+  mov   $s1,$a1         ; s1 = app id
 	ldi		$sp,#$A0080000-4  ; setup user mode stack pointer
+	ldi   $a0,#29         ; get app task id
+	ecall
+
   ldi   $a0,#19         ; set task id
   ecall
+
   ldi   $a0,#12         ; start app
   ldi   $a1,#TinyBasicASR
   ecall
-	ldi   $a0,#18         ; get app id
-	mov   $a1,$s1
-	ecall
-	mov   $s2,$a1
 	ldi		$a0,#1          ; Start finalizer task, task #1
-	mov   $a1,$s2
+	mov   $a1,$s1
 	ldi		$a2,#0
 	ldi		$a3,#Finalizer
 	ldi   $a4,#$0B        ; machine mode, regset 11
 	ecall
 	ldi		$a0,#1          ; Start task for monitor, task #2
-	mov   $a1,$s2
+	mov   $a1,$s1
 	ldi		$a2,#0
-	ldi		$a3,#UserStart2
+	ldi		$a3,#MonEntry
 	ldi   $a4,#$0A        ; machine mode, regset 10
 	ecall
   ldi   $a0,#25         ; map OS vars
@@ -103,15 +106,16 @@ UserStart:
   mov   $gp,$a1
 
 .mywfi:
-	wfi
-  bra   .mywfi
+;	wfi
+;  bra   .mywfi
 	
 UserStart2:
 	ldi		$sp,#$A0080000-4  ; setup user mode stack pointer
 	ldi		$a0,#14							; Get current tid
+	ecall                     ; $a1 = task id
+	ldi   $a0,#18             ; Get task app id
 	ecall
 	ldi		$a0,#24							; RequestIOFocus
-	ldi   $a1,#2
 	ecall
 ;	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
 ;	mov   $a0,$a1             ; $a0 = tid
@@ -126,14 +130,17 @@ UserStart2:
 	sub		$t2,$t2,#1
 	bnez	$t2,.0004
 .0002:
+;  ldi   $a0,#25             ; Map OS vars
+;  ecall
+;  mov   $gp,$a1
   ; Request that the idle task announce itself.
-  ldi   $a0,#9              ; SendMsg
-  ldwu  $a1,IdleTaskMbx
-  beqz  $a1,.noMbx
-  ldi   $a2,#MT_ANNOUNCE
-  ldi   $a3,#0
-  ldi   $a4,#0
-  ecall
+;  ldi   $a0,#9              ; SendMsg
+;  ldwu  $a1,IdleTaskMbx[$gp]
+;  beqz  $a1,.noMbx
+;  ldi   $a2,#MT_ANNOUNCE
+;  ldi   $a3,#0
+;  ldi   $a4,#0
+;  ecall
 .noMbx:
 	ldi		$a0,#msgStart				; spit out a startup message
 	call	PutString
@@ -377,7 +384,6 @@ MonEntry:
 ;		call	PutString
 
 Monitor:
-	mDI
 .getFocus:
 ;	ldi   $a0,#20       ; has IO focus
 ;	ecall
@@ -388,7 +394,6 @@ Monitor:
 .hasFocus:
 ;		call	DumpReadyList
 ;		call	DumpTimeoutList
-	mEI
 	ldi		$s1,#0					; s1 = input pointer
 	ldi		$a0,#CR
 	call	Putch
@@ -982,17 +987,13 @@ PutString:
 	code
 	align	16
 IRQRout:
-  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
-  and   $t0,$t0,#15     ; extract register set selection (will be 13,14, or 15)
-;  sll   $t0,$t0,#3
-;  csrrw $t1,#$341,$x0   ; get mepc
-;  stt   $t1,MEPC0[$t0]  ; save it
-  sub   $t0,$t0,#13
-  sll   $t2,$t0,#10      ; $t2 = 1024 * register set #
-	ldi		$sp,#$80000-4		; setup machine mode stack pointer
-	sub   $sp,$sp,$t2
 	csrrw	$t0,#$342,$x0			; get cause code
 	bltz	$t0,.isIRQ		  ; irq or ecall?
+	; spinlock waiting for ecall gate to open
+.spinlocke:
+	csrrs $t1,#CSR_MSEMA,#2 ; ecall semaphore
+	and   $t1,$t1,#2
+	bnez  $t1,.spinlocke
 	xor   $t2,$t0,#2      ; illegal instruction?
 	beqz  $t2,.illegal
 	and   $t2,$t0,#$FFFFFFFC
@@ -1004,8 +1005,27 @@ IRQRout:
 .soc:
   bra   .soc
 .ecall:
-	jmp		OSECALL					; goto operating system call dispatcher
+  ; We reset the stack pointer at each call to the OS in case an error causes
+  ; it to be messed up.
+  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
+  and   $t0,$t0,#15       ; extract register set selection (will be 13,14, or 15)
+  sub   $t0,$t0,#13
+  sll   $t2,$t0,#10       ; $t2 = 1024 * register set #
+	ldi		$sp,#$80000-4		  ; setup machine mode stack pointer
+	sub   $sp,$sp,$t2
+	jmp		OSECALL					  ; goto operating system call dispatcher
 .isIRQ:
+.spinlocki:
+	csrrs $t1,#CSR_MSEMA,#4 ; igate semaphore
+	and   $t1,$t1,#4
+	bnez  $t1,.spinlocki
+  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
+  and   $t0,$t0,#15     ; extract register set selection (will be 13,14, or 15)
+  sub   $t0,$t0,#13
+  sll   $t2,$t0,#10      ; $t2 = 1024 * register set #
+	ldi		$sp,#$80000-4		; setup machine mode stack pointer
+	sub   $sp,$sp,$t2
+
   ldt   $t1,IRQFlag     ; update IRQ flag for Tiny Basic
   add   $t1,$t1,#1
   stt   $t1,IRQFlag
@@ -1065,6 +1085,7 @@ ERETx2:
 ;  sll   $t0,$t0,#3
 ;  ldt   $t1,MEPC0[$t0]  ; get it
 ;  csrrw $x0,#$341,$t1   ; set mepc
+  csrrc $x0,#CSR_MSEMA,#4   ; open igate
 	mret
 
 	; In case the pipeline runs ahead into the following table which will

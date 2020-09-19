@@ -32,7 +32,7 @@
 Finalizer:
   ldi   $a0,#24               ; request I/O focus
   ecall
-  ldi   $a0,$msgFinalizerRunning
+  ldi   $a0,#msgFinalizerRunning
   call  PutString
   ldi   $a0,#22               ; release I/O focus
   ecall

@@ -349,9 +349,9 @@ SerialPutChar:
 	sub		$sp,$sp,#8
 	stt		$a0,[$sp]
 	stt		$a1,4[$sp]
-	ldi		$a0,#5								; sleep function
+	ldi		$a0,#3								; ISleep function
 	ldi		$a1,#1								; 1 tick
-	ecall
+	call  OSOCall
 	ldt		$a0,[$sp]
 	ldt		$a1,4[$sp]
 	add		$sp,$sp,#8

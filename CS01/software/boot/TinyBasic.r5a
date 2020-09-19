@@ -111,6 +111,8 @@ public CSTART:
 	stt		$sp,OSSP
 	ldi		$sp,#STACKOFFS	; initialize stack pointer
 	ldi		$a0,#14							; Get current tid
+	ecall                     ; $a1 = task id
+	ldi   $a0,#18             ; Get task app id
 	ecall
 	ldi		$a0,#24							; RequestIOFocus
 	ecall
