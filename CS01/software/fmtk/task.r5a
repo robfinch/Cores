@@ -60,7 +60,7 @@ OSEcallTbl:
 	dh    FMTK_GetDCBField        ; 27
 	dh    FMTK_SetDCBField        ; 28
 	dh    FMTK_GetAppTaskId       ; 29
-	dh    0
+	dh    FMTK_SetTaskAppId       ; 30
 	dh    0
 	dh    GetPamBit               ; 32
 	dh    FetchMemoryWord         ; 33
@@ -182,6 +182,13 @@ SetIRQFlag:
 FMTK_GetTaskAppId:
   sll   $a1,$a1,#LOG_PGSZ
   ldwu  $a1,TCBappid[$a1]
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+
+FMTK_SetTaskAppId:
+  sll   $a1,$a1,#LOG_PGSZ
+  stw   $a2,TCBappid[$a1]
+  srl   $a1,$a1,#LOG_PGSZ ; be nice, return what was passed
   ldi   $a0,#E_Ok
   jmp   OSExit
 
@@ -459,12 +466,12 @@ SwapContext:
 	csrrs $x0,#CSR_REGSET,#1      ; select task's register set
 	; These two registers always need to be loaded so that the OS return values
 	; can be transferred.
+	ldt		$x2,TCBxSP[$s2]         ; manipulated by StartTask
+	ldt		$x3,TCBxGP[$s2]         ; manipulated by StartApp
 	ldt		$x10,TCBxA0[$s2]
 	ldt		$x11,TCBxA1[$s2]
-	ldt		$x3,TCBxGP[$s2]         ; manipulated by StartApp
-	beqz  $t1,.skipCtxLoad
+;	beqz  $t1,.skipCtxLoad
 	ldt		$x1,TCBxRA[$s2]
-	ldt		$x2,TCBxSP[$s2]
 	ldt		$x4,TCBxTP[$s2]
 	ldt		$x5,TCBxT0[$s2]
 	ldt		$x6,TCBxT1[$s2]
@@ -571,8 +578,7 @@ OSExit:
 	mEI
 	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
 	mTimeSliceEI
-	csrrc $x0,#CSR_MSEMA,#2   ; open egate
-	mret
+	jmp   ERETx2
 
 ;------------------------------------------------------------------------------
 ; Time accounting.
@@ -701,7 +707,6 @@ ISleep:
 	ldt		$t2,Tick						; get tick
 	stt		$t2,TCBStartTick[$s1]
 .xit:
-	mEI
 	ldi   $a0,#E_Ok
   ldt   $ra,[$sp]
   ldt   $s1,4[$sp]
@@ -839,7 +844,9 @@ IStartTask:
 ;	call	MapOSPages			; Map OS pages into address space
   mov   $a0,$s3         ; $a0 = app id
   stw   $a0,TCBappid[$s4]
+  beqz  $a0,.appidZero
   mGetAppMid
+.appidZero:
   stw   $a0,TCBmid[$s4] ; record the mid
 	call	AllocStack
 	beqz  $a0,.err

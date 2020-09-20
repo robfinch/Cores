@@ -152,6 +152,8 @@ FMTK_StartApp:
 .0007:
   ldi   $a0,#1            ; IStartTask
   srl   $a1,$s3,#LOG_PGSZ ; $a1 = app id
+  stt   $a1,$3F48
+  stt   $s3,$3F50
   ldi   $a2,#1024         ; task local memory
   ldt   $a3,ASRpCode[$s1] ; get pointer to code area
   ldi   $a4,#$04

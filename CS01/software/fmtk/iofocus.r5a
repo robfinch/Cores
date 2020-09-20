@@ -52,7 +52,7 @@ FMTK_HasIOFocus:
 	ldi		$a0,#E_Ok
 	jmp		OSExit
 .notEqual:
-  ldi   $a1,#1
+  ldi   $a1,#0
 	ldi		$a0,#E_Ok
 	jmp		OSExit
 	
