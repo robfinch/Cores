@@ -103,12 +103,14 @@
 `define LDTU  8'h85
 `define LDO   8'h86
 `define LDOR  8'h87
+`define LDX   8'h8F
 `define STB   8'hA0
 `define STW   8'hA1
 `define STT   8'hA2
 `define STO   8'hA3
 `define STOC  8'hA4
 `define STPTR 8'hA5
+`define STX   8'hAF
 
 // Shift operations
 `define ASL   4'h0
@@ -186,6 +188,24 @@
 `define EXTUR3B  3'h5
 `define BLENDR3B 3'h6
 `define RGFR3B   3'h7
+
+// 2r Loads
+`define LDBX   5'd0
+`define LDBUX  5'd1
+`define LDWX   5'd2
+`define LDWUX  5'd3
+`define LDTX   5'd4
+`define LDTUX  5'd5
+`define LDOX   5'd6
+`define LDORX 5'd7
+
+// 2r Stores
+`define STBX    5'd0
+`define STWX    5'd1
+`define STTX    5'd2
+`define STOX    5'd3
+`define STOCX   5'd4
+`define STPTRX  5'd5
 
 `define SEG_SHIFT   14'd0
 
@@ -313,6 +333,9 @@ reg [31:0] cregfile [0:31];
 reg [31:0] sregfile [0:15];
 wire [64:0] difi = ia - imm;
 wire [64:0] difr = ia - ib;
+wire [63:0] andi = ia & imm;
+wire [63:0] andr = ia & ib;
+
 wire [15:0] blendR1 = ia[23:16] * ic[7:0];
 wire [15:0] blendG1 = ia[15: 8] * ic[7:0];
 wire [15:0] blendB1 = ia[ 7: 0] * ic[7:0];
@@ -348,6 +371,7 @@ wire hie = status[5][2];
 wire mie = status[5][3];
 wire iie = status[5][4];
 wire die = status[5][5];
+reg [31:0] gcie;
 reg [63:0] scratch [0:7];
 reg [39:0] instret;
 reg [31:0] epc [0:31];
@@ -447,30 +471,6 @@ default:	fnSelect = 8'h00;
 endcase
 endfunction
 
-function [7:0] fnSelect;
-input [6:0] op6;
-input [2:0] fn3;
-case(op6)
-`LOAD:
-	case(fn3)
-	`LB,`LBU:	fnSelect = 8'h01;
-	`LH,`LHU:	fnSelect = 8'h03;
-	`LW,`LWU:	fnSelect = 8'h0F;
-	`LD:			fnSelect = 8'hFF;
-	default:	fnSelect = 8'h0F;	
-	endcase
-`STORE:
-	case(fn3)
-	`SB:	fnSelect = 8'h01;
-	`SH:	fnSelect = 8'h03;
-	`SW:	fnSelect = 8'h0F;
-	`SD:	fnSelect = 8'hFF;
-	default:	fnSelect = 8'h0F;
-	endcase
-default:	fnSelect = 8'h00;
-endcase
-endfunction
-
 reg [15:0] sel;
 reg [95:0] dat, dati;
 reg [31:0] ea;
@@ -553,9 +553,12 @@ always @(posedge clk_g)
 if (rst_i) begin
 	state <= IFETCH;
 	pc <= RSTPC;
-	for (n = 0; n < 8; n = n + 1)
+	for (n = 0; n < 8; n = n + 1) begin
 	  tvec[n] <= 32'hFFFC0000;
+	  status[n] <= 32'h0;
+  end
 	ASID <= 5'd0;
+	gcie <= 32'h0;
 	wrirf <= 1'b0;
 	wrfrf <= 1'b0;
 	wrcrf <= 1'b0;
@@ -649,20 +652,20 @@ IFETCH1:
     tPC();
 		if (nmif) begin
 			nmif <= 1'b0;
-			tException(32'h800000FE,pc,5'd30);
+			tException(32'h800000FE,pc);
 			pc <= mtvec + 8'hFC;
 		end
- 		else if (irq_i & ie & ~mloco) begin
-			tException(32'h80000000|cause_i,pc,5'd30);
+ 		else if (irq_i & die) begin
+			tException({24'h800000,cause_i},pc);
 		end
-		else if (mip[7] & mie[7] & ie & ~mloco) begin
-			tException(32'h80000001,pc,5'd30);  // timer IRQ
+		else if (mip[7] & mie[7] & die) begin
+			tException(32'h80000001,pc);  // timer IRQ
 		end
-		else if (mip[3] & mie[3] & ie & ~mloco) begin
-			tException(32'h80000002, pc, 5'd30); // software IRQ
+		else if (mip[3] & mie[3] & die) begin
+			tException(32'h80000002, pc); // software IRQ
 		end
-		else if (uip[0] & gcie[ASID] & ie & ~mloco) begin
-			tException(32'h80000003, pc, 5'd30); // garbage collect IRQ
+		else if (uip[0] & gcie[ASID] & die) begin
+			tException(32'h80000003, pc); // garbage collect IRQ
 			uip[0] <= 1'b0;
 		end
 		else
@@ -711,105 +714,115 @@ DECODE:
         `NANDR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
         `NORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
         `ENORR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
-        `BITR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `BITR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1;  illegal_insn <= 1'b0; end
         `R1:
           case(ir[22:18])
-          `CNTLZR1: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-          `CNTLOR1: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-          `CNTPOPR1:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-          `COMR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-          `NOTR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-          `NEGR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `CNTLZR1: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `CNTLOR1: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `CNTPOPR1:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `COMR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `NOTR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `NEGR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
           default:  ;                                    
           endcase
-        `MULR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `CMPR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `DIVR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `DIVUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `DIVSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `REMR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `REMUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `REMSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `PERMR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `PTRDIFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `DIFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `BYTNDX:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `WYDNDX:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULSUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `MULUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `RGFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `CMPR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `MULUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PERMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PTRDIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BYTNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `WYDNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RGFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MOV:
           begin
             d_mov <= 1'b1;
-            Rd <= ir[12:8];
+            wrcrf <= ir[31];
             case(ir[19:18])
             2'b00:  wrirf <= 1'b1;
             2'b01:  wrfrf <= 1'b1;
             2'b10:  ;
             2'b11:
               casez(ir[12:8])
-              5'b0000?: wrcrf <= 1'b1;
+              5'b0000?: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
               5'b11101: wrcrf2 <= 1'b1;
               default:  ;
               endcase
             endcase
-            wrcrf <= ir[31];             
             illegal_insn <= 1'b0;
           end
         default:  ;
         endcase
       end
     `R3A:
-      case(ir[30:28])
-      `MINR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `MAXR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `MAJR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `MUXR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ADDR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `SUBR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `FLIPR3A:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      default:  ;
-      endcase
+      begin
+        Rd <= ir[12:8];
+        case(ir[30:28])
+        `MINR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MAXR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MAJR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MUXR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ADDR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `SUBR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `FLIPR3A:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        default:  ;
+        endcase
+      end
     `R3B:
-      case(ir[30:28])
-      `ANDR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ORR3B:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `EORR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `DEPR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `EXTR3B:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `EXTUR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `BLENDR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `RGFR3B:  begin illegal_insn <= 1'b0; end
-      default:  ;
-      endcase
+      begin
+        Rd <= ir[12:8];
+        case(ir[30:28])
+        `ANDR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ORR3B:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `EORR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DEPR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `EXTR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `EXTUR3B: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BLENDR3: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RGFR3B:  begin illegal_insn <= 1'b0; end
+        default:  ;
+        endcase
+      end
     `SHIFT:
-      case(ir[27:24])
-      `ASL: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LSR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ROL: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ROR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ASR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ASLI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LSRI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ROLI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `RORI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `ASRI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      default:  ;
-      endcase
+      begin
+        Rd <= ir[12:8];
+        case(ir[27:24])
+        `ASL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LSR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ROL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ROR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ASR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ASLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LSRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ROLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RORI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ASRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        default:  ;
+        endcase
+      end
+
     `SET:
       begin
         d_set <= 1'b1;
+        Cd <= ir[9:8];
         case(ir[30:28])
-        `SEQR2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-        `SNER2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-        `SLTR2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-        `SGER2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-        `SLTUR2:begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-        `SGEUR2:begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SEQR2: begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SNER2: begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SLTR2: begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SGER2: begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SLTUR2:begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SGEUR2:begin wrcrf <= 1'b1; illegal_insn <= 1'b0; end
         default:  ;
       endcase
       end
@@ -823,14 +836,15 @@ DECODE:
     `SGEU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
     `SLEU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
     `SGTU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+
     `ADD: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `SUBF:begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `MUL: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `CMP: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `CMP: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
     `AND: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b1}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `OR:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `EOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
     `LUI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
     `LMI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
     `AUIPC: begin Rd <= ir[9] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
@@ -883,6 +897,28 @@ DECODE:
     `STO:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STOC: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STPTR: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
+    `LDX:
+      case(ir[22:18])
+      `LDBX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDBUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDWX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDWUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDTX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDTUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDOX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDORX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      default:  ;
+      endcase
+    `STX:
+      case(ir[12:8])
+      `STBX: illegal_insn <= 1'b0;
+      `STWX: illegal_insn <= 1'b0;
+      `STTX: illegal_insn <= 1'b0;
+      `STOX: illegal_insn <= 1'b0;
+      `STOCX: illegal_insn <= 1'b0;
+      `STPTRX: illegal_insn <= 1'b0;
+      default:  ;
+      endcase
     endcase
   end
 // Need a state to read Rd from block ram.
@@ -904,10 +940,72 @@ EXECUTE:
     casez(opcode)
     `R2:
       case(ir[31:26])
+      `ANDR2: res <= ia & ib;
+      `ORR2:  res <= ia | ib;
+      `EORR2: res <= ia ^ ib;
       `NANDR2:res <= ~(ia & ib);
       `NORR2: res <= ~(ia | ib);
       `ENORR2:res <= ~(ia ^ ib);
-      `MULR2: res <= $signed(ia) * $signed(ib);
+      `BITR2:
+        case(mop)
+        `CMP_CPY:
+          begin
+            cres[0] <= 1'b0;
+            cres[1] <= bitr==64'd0;
+            cres[2] <= 1'b0;
+            cres[3] <= 1'b0;
+            cres[4] <= ^bitr;
+            cres[5] <= bitr[0];
+            cres[6] <= 1'b0;
+            cres[7] <= bitr[63];
+          end
+        `CMP_AND:
+          begin
+            cres[0] <= 1'b0;
+            cres[1] <= cd && bitr==64'd0;
+            cres[2] <= 1'b0;
+            cres[3] <= 1'b0;
+            cres[4] <= cd & ^bitr;
+            cres[5] <= cd & bitr[0];
+            cres[6] <= 1'b0;
+            cres[7] <= cd & bitr[63];
+          end
+        `CMP_OR:
+          begin
+            cres[0] <= 1'b0;
+            cres[1] <= cd || bitr==64'd0;
+            cres[2] <= 1'b0;
+            cres[3] <= 1'b0;
+            cres[4] <= cd | ^bitr;
+            cres[5] <= cd | bitr[0];
+            cres[6] <= 1'b0;
+            cres[7] <= cd | bitr[63];
+          end
+        `CMP_ANDCM:
+          begin
+            cres[0] <= 1'b0;
+            cres[1] <= cd && !(bitr==64'd0);
+            cres[2] <= 1'b0;
+            cres[3] <= 1'b0;
+            cres[4] <= cd & ~^bitr;
+            cres[5] <= cd & ~bitr[0];
+            cres[6] <= 1'b0;
+            cres[7] <= cd & ~bitr[63];
+          end
+        `CMP_ORCM:
+          begin
+            cres[0] <= 1'b0;
+            cres[1] <= cd || !(bitr==64'd0);
+            cres[2] <= 1'b0;
+            cres[3] <= 1'b0;
+            cres[4] <= cd | ~^bitr;
+            cres[5] <= cd | ~bitr[0];
+            cres[6] <= 1'b0;
+            cres[7] <= cd | ~bitr[63];
+          end
+        default:  ;
+        endcase
+      `MULR2: begin goto (MUL1); mathCnt <= 8'd0; end
       `CMPR2:
         begin
           d_cmp <= 1'b1;
@@ -970,7 +1068,85 @@ EXECUTE:
           default:  crres[7:0] <= 8'h00;
           endcase
         end
-      `MULUR2: res <= ia * ib;
+      `MULUR2: begin goto (MUL1); mathCnt <= 8'd0; end;
+      `MULSUR2: begin goto (MUL1); mathCnt <= 8'd0; end;
+      `MULHR2: begin goto (MUL1); mathCnt <= 8'd0; end;
+      `MULUHR2: begin goto (MUL1); mathCnt <= 8'd0; end;
+      `MULSUHR2: begin goto (MUL1); mathCnt <= 8'd0; end;
+      `DIVR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `DIVUR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `DIVSUR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `REMR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `REMUR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `REMSUR2: begin goto (MUL1); mathCnt <= 8'd20; end;
+      `PERMR2:
+        begin
+          wrirf <= 1'b1;
+          wrcrf <= ir[31];
+          illegal_insn <= 1'b0;
+          res[ 7: 0] <= ia >> {ib[2:0],3'b0};
+          res[15: 8] <= ia >> {ib[5:3],3'b0};
+          res[23:16] <= ia >> {ib[8:6],3'b0};
+          res[31:24] <= ia >> {ib[11:9],3'b0};
+          res[39:32] <= ia >> {ib[14:12],3'b0};
+          res[47:40] <= ia >> {ib[17:15],3'b0};
+          res[55:48] <= ia >> {ib[20:18],3'b0};
+          res[63:56] <= ia >> {ib[23:21],3'b0};
+        end
+      `PTRDIFR2:
+        begin
+          wrirf <= 1'b1;
+          wrcrf <= ir[31];
+          res <= (ia - ib) >> ir[24:23];
+          illegal_insn <= 1'b0;
+        end
+      `DIFR2:
+        begin
+          wrirf <= 1'b1;
+          wrcrf <= ir[31];
+          res <= $signed(ia) < $signed(ib) ? ib - ia : ia - ib;
+          illegal_insn <= 1'b0;
+        end
+      `BYTNDX:
+        begin
+          wrirf <= 1'b1;
+          wrcrf <= ir[31];
+          illegal_insn <= 1'b0;
+          if (ia[7:0]==ib[7:0])
+            res <= 64'd0;
+          else if (ia[15:8]==ib[7:0])
+            res <= 64'd1;
+          else if (ia[23:16]==ib[7:0])
+            res <= 64'd2;
+          else if (ia[31:24]==ib[7:0])
+            res <= 64'd3;
+          else if (ia[39:32]==ib[7:0])
+            res <= 64'd4;
+          else if (ia[47:40]==ib[7:0])
+            res <= 64'd5;
+          else if (ia[55:40]==ib[7:0])
+            res <= 64'd6;
+          else if (ia[63:56]==ib[7:0])
+            res <= 64'd7;
+          else
+            res <= {64{1'b1}};  // -1
+        end
+      `WYDNDX:
+        begin
+          wrirf <= 1'b1;
+          wrcrf <= ir[31];
+          illegal_insn <= 1'b0;
+          if (ia[15:0]==ib[15:0])
+            res <= 64'd0;
+          else if (ia[31:16]==ib[15:0])
+            res <= 64'd1;
+          else if (ia[47:32]==ib[15:0])
+            res <= 64'd2;
+          else if (ia[63:48]==ib[15:0])
+            res <= 64'd3;
+          else
+            res <= {64{1'b1}};  // -1
+        end
       `MOV:
         begin
           case(ir[21:20])
@@ -1098,6 +1274,65 @@ EXECUTE:
         default:  ;
         endcase
       end
+    `BIT:
+      case(mop)
+      `CMP_CPY:
+        begin
+          cres[0] <= 1'b0;
+          cres[1] <= biti==64'd0;
+          cres[2] <= 1'b0;
+          cres[3] <= 1'b0;
+          cres[4] <= ^biti;
+          cres[5] <= biti[0];
+          cres[6] <= 1'b0;
+          cres[7] <= biti[63];
+        end
+      `CMP_AND:
+        begin
+          cres[0] <= 1'b0;
+          cres[1] <= cd && biti==64'd0;
+          cres[2] <= 1'b0;
+          cres[3] <= 1'b0;
+          cres[4] <= cd & ^biti;
+          cres[5] <= cd & biti[0];
+          cres[6] <= 1'b0;
+          cres[7] <= cd & biti[63];
+        end
+      `CMP_OR:
+        begin
+          cres[0] <= 1'b0;
+          cres[1] <= cd || biti==64'd0;
+          cres[2] <= 1'b0;
+          cres[3] <= 1'b0;
+          cres[4] <= cd | ^biti;
+          cres[5] <= cd | biti[0];
+          cres[6] <= 1'b0;
+          cres[7] <= cd | biti[63];
+        end
+      `CMP_ANDCM:
+        begin
+          cres[0] <= 1'b0;
+          cres[1] <= cd && !(biti==64'd0);
+          cres[2] <= 1'b0;
+          cres[3] <= 1'b0;
+          cres[4] <= cd & ~^biti;
+          cres[5] <= cd & ~biti[0];
+          cres[6] <= 1'b0;
+          cres[7] <= cd & ~biti[63];
+        end
+      `CMP_ORCM:
+        begin
+          cres[0] <= 1'b0;
+          cres[1] <= cd || !(biti==64'd0);
+          cres[2] <= 1'b0;
+          cres[3] <= 1'b0;
+          cres[4] <= cd | ~^biti;
+          cres[5] <= cd | ~biti[0];
+          cres[6] <= 1'b0;
+          cres[7] <= cd | ~biti[63];
+        end
+      default:  ;
+      endcase
     `SEQ: setcr(ia==imm);
     `SNE: setcr(ia!=imm);
     `SLT: setcr($signed(ia) < $signed(imm));
@@ -1223,12 +1458,34 @@ EXECUTE:
     `LDTU: begin ea <= ia + imm; goto (MEMORY1); end
     `LDO:  begin ea <= ia + imm; goto (MEMORY1); end
     `LDOR: begin ea <= ia + imm; goto (MEMORY1); end
+    `LDX:
+      case(ir[22:18])
+      `LDBX:    begin ea <= ia + ic; goto (MEMORY1); end
+      `LDBUX:   begin ea <= ia + ic; goto (MEMORY1); end
+      `LDWX:    begin ea <= ia + ic << (ir[28] ? 2'd1 : 2'd0); goto (MEMORY1); end
+      `LDWUX:   begin ea <= ia + ic << (ir[28] ? 2'd1 : 2'd0); goto (MEMORY1); end
+      `LDTX:    begin ea <= ia + ic << (ir[28] ? 2'd2 : 2'd0); goto (MEMORY1); end
+      `LDTUX:   begin ea <= ia + ic << (ir[28] ? 2'd2 : 2'd0); goto (MEMORY1); end
+      `LDOX:    begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `LDORX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      default:  ;
+      endcase
     `STB:  begin ea <= ia + imm; goto (MEMORY1); end
     `STW:  begin ea <= ia + imm; goto (MEMORY1); end
     `STT:  begin ea <= ia + imm; goto (MEMORY1); end
     `STO:  begin ea <= ia + imm; goto (MEMORY1); end
     `STOC: begin ea <= ia + imm; goto (MEMORY1); end
     `STPTR: begin ea <= ia + imm; goto (MEMORY1); end
+    `STX:
+      case(ir[12:8])
+      `STBX:    begin ea <= ia + ic; goto (MEMORY1); end
+      `STWX:    begin ea <= ia + ic << (ir[28] ? 2'd1 : 2'd0); goto (MEMORY1); end
+      `STTX:    begin ea <= ia + ic << (ir[28] ? 2'd2 : 2'd0); goto (MEMORY1); end
+      `STOX:    begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `STOCX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `STPTRX:  begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      default:  ;
+      endcase
     endcase
   end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1458,7 +1715,7 @@ WRITEBACK:
       crres[7] <= res[63];
     end
 		if (illegal_insn)
-		  tException(32'd2, ipc, 5'd31);
+		  tException(32'd2, ipc);
     else
     case (opcode)
     `R2:
@@ -1647,20 +1904,19 @@ end
 task tException;
 input [31:0] cse;
 input [31:0] tpc;
-input [4:0] rs;
 begin
 	pc <= tvec[3'd5] + {omode,6'h00};
-	epc[rs] <= tpc;
+	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
 	illegal_insn <= 1'b0;
 	instret <= instret + 2'd1;
   rprv <= 5'h0;
-  Rdx1 <= rs;
-  Rs1x1 <= rs;
-  Rs2x1 <= rs;
-  Rs3x1 <= rs;
-  rsStack <= {rsStack[24:0],rs};
+  Rdx1 <= 5'd31;
+  Rs1x1 <= 5'd31;
+  Rs2x1 <= 5'd31;
+  Rs3x1 <= 5'd31;
+  rsStack <= {rsStack[24:0],5'd31};
 	goto (IFETCH);
 end
 endtask
