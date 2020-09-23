@@ -23,8 +23,9 @@
 // ============================================================================
 
 `define BRK   8'h00
+`define R3A   8'h01
 `define R2    8'h02
-`define R3    8'h03
+`define R3B   8'h03
 `define ADD   8'h04
 `define SUB   8'h05
 `define SUBF  8'h05
@@ -109,6 +110,17 @@
 `define STOC  8'hA4
 `define STPTR 8'hA5
 
+// Shift operations
+`define ASL   4'h0
+`define LSR   4'h1
+`define ROL   4'h2
+`define ROR   4'h3
+`define ASR   4'h5
+`define ASLI  4'h8
+`define LSRI  4'h9
+`define ROLI  4'hA
+`define RORI  4'hB
+`define ASRI  4'hC
 // 1r operations
 `define CNTLZR1 5'h00
 `define CNTLOR1 5'h01
@@ -169,11 +181,11 @@
 `define ANDR3B 3'h0
 `define ORR3B  3'h1
 `define EORR3B 3'h2
-`define DEP3B   3'h3
-`define EXT3B   3'h4
-`define EXTU3B  3'h5
+`define DEPR3B   3'h3
+`define EXTR3B   3'h4
+`define EXTUR3B  3'h5
 `define BLENDR3B 3'h6
-`define RGF3B   3'h7
+`define RGFR3B   3'h7
 
 `define SEG_SHIFT   14'd0
 
@@ -245,6 +257,8 @@ reg [4:0] Rdx, Rs1x, Rs2x, Rs3x;
 reg [4:0] Rdx1, Rs1x1, Rs2x1, Rs3x1;
 wire [63:0] irfoRs1, irfoRs2, irfoRs3, irfoRd;
 reg [63:0] ia,ib,ic,id;
+reg [64:0] res;
+reg [7:0] crres;
 reg wrirf,wrcrf,wrcrf32,wrfrf;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
 
@@ -312,10 +326,10 @@ always @(posedge clk_g)
   if (state==WRITEBACK)
     if (wrcrf)
       case(Cd)
-      2'd0: cregfile[Rdx] <= {cd32[31:8],res[7:0]};
-      2'd1: cregfile[Rdx] <= {cd32[31:16],res[7:0],cd32[7:0]};
-      2'd2: cregfile[Rdx] <= {cd32[31:24],res[7:0],cd32[15:0]};
-      2'd3: cregfile[Rdx] <= {res[7:0],cd32[23:0]};
+      2'd0: cregfile[Rdx] <= {cd32[31:8],crres[7:0]};
+      2'd1: cregfile[Rdx] <= {cd32[31:16],crres[7:0],cd32[7:0]};
+      2'd2: cregfile[Rdx] <= {cd32[31:24],crres[7:0],cd32[15:0]};
+      2'd3: cregfile[Rdx] <= {crres[7:0],cd32[23:0]};
       endcase
     else if (wrcrf32)
       cregfile[Rdx] <= res[31:0];
@@ -464,7 +478,7 @@ wire [3:0] segsel = ea[31:28];
 
 wire [63:0] datis = dati >> {ea[1:0],3'b0};
 
-reg d_mov;
+reg d_cmp,d_mov;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -621,8 +635,8 @@ case (state)
 IFETCH1:
   begin
     wrirf <= 1'b0;
-    wrcrf <= 1'b0;
     wrcrf2 <= 1'b0;
+    d_cmp <= 1'b0;
     d_mov <= 1'b0;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
@@ -635,7 +649,7 @@ IFETCH1:
     tPC();
 		if (nmif) begin
 			nmif <= 1'b0;
-			tException(32'h800000FE,pc,4'd14);
+			tException(32'h800000FE,pc,5'd30);
 			pc <= mtvec + 8'hFC;
 		end
  		else if (irq_i & ie & ~mloco) begin
@@ -657,6 +671,7 @@ IFETCH1:
   end
 IFETCH2:
   begin
+    wrcrf <= 1'b0;
     goto (IFETCH3);
   end
 IFETCH3:
@@ -683,55 +698,139 @@ DECODE:
     Cd <= ir[9:8];
     casez(opcode)
     `R2:
-      case(ir[31:26])
-      `NANDR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `NORR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `ENORR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `MULR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `CMPR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-      `MULUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `DIVR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `DIVUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `MOV:
-        begin
-          d_mov <= 1'b1;
-          Rd <= ir[12:8];
-          case(ir[19:18])
-          2'b00:  wrirf <= 1'b1;
-          2'b01:  wrfrf <= 1'b1;
-          2'b10:  ;
-          2'b11:
-            casez(ir[12:8])
-            5'b0000?: wrcrf <= 1'b1;
-            5'b11101: wrcrf2 <= 1'b1;
-            default:  ;
-            endcase
+      begin
+        Rd <= ir[12:8];
+        Cd <= 2'b00;
+        case(ir[31:26])
+        `ANDR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ORR2:  begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `EORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `BMMR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `ADDR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `SUBR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `NANDR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `NORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `ENORR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `BITR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `R1:
+          case(ir[22:18])
+          `CNTLZR1: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `CNTLOR1: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `CNTPOPR1:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `COMR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `NOTR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `NEGR1:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          default:  ;                                    
           endcase
-          illegal_insn <= 1'b0;
-        end
+        `MULR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `CMPR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVR2: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PERMR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PTRDIFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BYTNDX:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `WYDNDX:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RGFR2:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MOV:
+          begin
+            d_mov <= 1'b1;
+            Rd <= ir[12:8];
+            case(ir[19:18])
+            2'b00:  wrirf <= 1'b1;
+            2'b01:  wrfrf <= 1'b1;
+            2'b10:  ;
+            2'b11:
+              casez(ir[12:8])
+              5'b0000?: wrcrf <= 1'b1;
+              5'b11101: wrcrf2 <= 1'b1;
+              default:  ;
+              endcase
+            endcase
+            wrcrf <= ir[31];             
+            illegal_insn <= 1'b0;
+          end
+        default:  ;
+        endcase
+      end
+    `R3A:
+      case(ir[30:28])
+      `MINR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `MAXR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `MAJR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `MUXR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ADDR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `SUBR3A: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `FLIPR3A:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      default:  ;
       endcase
-    `R3:
-      case(ir[31:28])
-      `MINR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `MAXR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `MAJR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `MUXR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `ADDR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `SUBR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `ANDR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `ORR3:  begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `EORR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-      `BITR3: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
-      `BLENDR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; end
+    `R3B:
+      case(ir[30:28])
+      `ANDR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ORR3B:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `EORR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `DEPR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `EXTR3B:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `EXTUR3B: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `BLENDR3: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `RGFR3B:  begin illegal_insn <= 1'b0; end
+      default:  ;
       endcase
-    `ADD: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `SUBF:begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `MUL: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `CMP: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `AND: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b1}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `OR:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `EOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
+    `SHIFT:
+      case(ir[27:24])
+      `ASL: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LSR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ROL: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ROR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ASR: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ASLI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LSRI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ROLI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `RORI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `ASRI: begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      default:  ;
+      endcase
+    `SET:
+      begin
+        d_set <= 1'b1;
+        case(ir[30:28])
+        `SEQR2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SNER2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SLTR2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SGER2: begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SLTUR2:begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `SGEUR2:begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        default:  ;
+      endcase
+      end
+    `SEQ: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SNE: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SLT: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SGE: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SLE: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SGT: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SLTU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SGEU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SLEU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `SGTU: begin d_set <= 1'b1; Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+    `ADD: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `SUBF:begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `MUL: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `CMP: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `AND: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b1}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `OR:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `EOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `LUI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
     `LMI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
     `AUIPC: begin Rd <= ir[9] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
@@ -770,14 +869,14 @@ DECODE:
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
       illegal_insn <= 1'b0;
     // Memory Ops
-    `LDB:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDBU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDW:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDWU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDT:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDTU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDO:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LDOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
+    `LDB:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDBU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDW:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDWU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDT:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDTU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDO:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `STB:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STW:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
@@ -811,63 +910,64 @@ EXECUTE:
       `MULR2: res <= $signed(ia) * $signed(ib);
       `CMPR2:
         begin
+          d_cmp <= 1'b1;
           case(mop)
           `CMP_CPY:
             begin
-              res[0] <= difr[64];
-              res[1] <= ~|difr[63:0];
-              res[2] <= 1'b0;
-              res[3] <= 1'b0;
-              res[4] <= ^difr[63:0];
-              res[5] <= difr[0];
-              res[6] <= difr[64]^difr[63];
-              res[7] <= difr[63];
+              crres[0] <= difr[64];
+              crres[1] <= ~|difr[63:0];
+              crres[2] <= 1'b0;
+              crres[3] <= 1'b0;
+              crres[4] <= ^difr[63:0];
+              crres[5] <= difr[0];
+              crres[6] <= difr[64]^difr[63];
+              crres[7] <= difr[63];
             end
           `CMP_AND:
             begin
-              res[0] <= cd[0] & difr[64];
-              res[1] <= cd[1] & ~|difr[63:0];
-              res[2] <= 1'b0;
-              res[3] <= 1'b0;
-              res[4] <= cd[4] & ^difr[63:0];
-              res[5] <= cd[5] & difr[0];
-              res[6] <= cd[6] & difr[64]^difr[63];
-              res[7] <= cd[7] & difr[63];
+              crres[0] <= cd[0] & difr[64];
+              crres[1] <= cd[1] & ~|difr[63:0];
+              crres[2] <= 1'b0;
+              crres[3] <= 1'b0;
+              crres[4] <= cd[4] & ^difr[63:0];
+              crres[5] <= cd[5] & difr[0];
+              crres[6] <= cd[6] & difr[64]^difr[63];
+              crres[7] <= cd[7] & difr[63];
             end
           `CMP_OR:
             begin
-              res[0] <= cd[0] | difr[64];
-              res[1] <= cd[1] | ~|difr[63:0];
-              res[2] <= 1'b0;
-              res[3] <= 1'b0;
-              res[4] <= cd[4] | ^difr[63:0];
-              res[5] <= cd[5] | difr[0];
-              res[6] <= cd[6] | difr[64]^difr[63];
-              res[7] <= cd[7] | difr[63];
+              crres[0] <= cd[0] | difr[64];
+              crres[1] <= cd[1] | ~|difr[63:0];
+              crres[2] <= 1'b0;
+              crres[3] <= 1'b0;
+              crres[4] <= cd[4] | ^difr[63:0];
+              crres[5] <= cd[5] | difr[0];
+              crres[6] <= cd[6] | difr[64]^difr[63];
+              crres[7] <= cd[7] | difr[63];
             end
           `CMP_ANDCM:
             begin
-              res[0] <= cd[0] & ~difr[64];
-              res[1] <= cd[1] & |difr[63:0];
-              res[2] <= 1'b0;
-              res[3] <= 1'b0;
-              res[4] <= cd[4] & ~^difr[63:0];
-              res[5] <= cd[5] & ~difr[0];
-              res[6] <= cd[6] & ~(difr[64]^difr[63]);
-              res[7] <= cd[7] & ~difr[63];
+              crres[0] <= cd[0] & ~difr[64];
+              crres[1] <= cd[1] & |difr[63:0];
+              crres[2] <= 1'b0;
+              crres[3] <= 1'b0;
+              crres[4] <= cd[4] & ~^difr[63:0];
+              crres[5] <= cd[5] & ~difr[0];
+              crres[6] <= cd[6] & ~(difr[64]^difr[63]);
+              crres[7] <= cd[7] & ~difr[63];
             end
           `CMP_ORCM:
             begin
-              res[0] <= cd[0] | ~difr[64];
-              res[1] <= cd[1] | |difr[63:0];
-              res[2] <= 1'b0;
-              res[3] <= 1'b0;
-              res[4] <= cd[4] | ~^difr[63:0];
-              res[5] <= cd[5] | ~difr[0];
-              res[6] <= cd[6] | ~(difr[64]^difr[63]);
-              res[7] <= cd[7] | ~difr[63];
+              crres[0] <= cd[0] | ~difr[64];
+              crres[1] <= cd[1] | |difr[63:0];
+              crres[2] <= 1'b0;
+              crres[3] <= 1'b0;
+              crres[4] <= cd[4] | ~^difr[63:0];
+              crres[5] <= cd[5] | ~difr[0];
+              crres[6] <= cd[6] | ~(difr[64]^difr[63]);
+              crres[7] <= cd[7] | ~difr[63];
             end
-          default:  res[7:0] <= 8'h00;
+          default:  crres[7:0] <= 8'h00;
           endcase
         end
       `MULUR2: res <= ia * ib;
@@ -926,65 +1026,88 @@ EXECUTE:
     `MUL: res <= $signed(ia) * $signed(imm);
     `CMP:
       begin
+        d_cmp <= 1'b1;
         case(mop)
         `CMP_CPY:
           begin
-            res[0] <= difi[64];
-            res[1] <= ~|difi[63:0];
-            res[2] <= 1'b0;
-            res[3] <= 1'b0;
-            res[4] <= ^difi[63:0];
-            res[5] <= difi[0];
-            res[6] <= difi[64]^difi[63];
-            res[7] <= difi[63];
+            crres[0] <= difi[64];
+            crres[1] <= ~|difi[63:0];
+            crres[2] <= 1'b0;
+            crres[3] <= 1'b0;
+            crres[4] <= ^difi[63:0];
+            crres[5] <= difi[0];
+            crres[6] <= difi[64]^difi[63];
+            crres[7] <= difi[63];
           end
         `CMP_AND:
           begin
-            res[0] <= cd[0] & difi[64];
-            res[1] <= cd[1] & ~|difi[63:0];
-            res[2] <= 1'b0;
-            res[3] <= 1'b0;
-            res[4] <= cd[4] & ^difi[63:0];
-            res[5] <= cd[5] & difi[0];
-            res[6] <= cd[6] & difi[64]^difi[63];
-            res[7] <= cd[7] & difi[63];
+            crres[0] <= cd[0] & difi[64];
+            crres[1] <= cd[1] & ~|difi[63:0];
+            crres[2] <= 1'b0;
+            crres[3] <= 1'b0;
+            crres[4] <= cd[4] & ^difi[63:0];
+            crres[5] <= cd[5] & difi[0];
+            crres[6] <= cd[6] & difi[64]^difi[63];
+            crres[7] <= cd[7] & difi[63];
           end
         `CMP_OR:
           begin
-            res[0] <= cd[0] | difi[64];
-            res[1] <= cd[1] | ~|difi[63:0];
-            res[2] <= 1'b0;
-            res[3] <= 1'b0;
-            res[4] <= cd[4] | ^difi[63:0];
-            res[5] <= cd[5] | difi[0];
-            res[6] <= cd[6] | difi[64]^difi[63];
-            res[7] <= cd[7] | difi[63];
+            crres[0] <= cd[0] | difi[64];
+            crres[1] <= cd[1] | ~|difi[63:0];
+            crres[2] <= 1'b0;
+            crres[3] <= 1'b0;
+            crres[4] <= cd[4] | ^difi[63:0];
+            crres[5] <= cd[5] | difi[0];
+            crres[6] <= cd[6] | difi[64]^difi[63];
+            crres[7] <= cd[7] | difi[63];
           end
         `CMP_ANDCM:
           begin
-            res[0] <= cd[0] & ~difi[64];
-            res[1] <= cd[1] & |difi[63:0];
-            res[2] <= 1'b0;
-            res[3] <= 1'b0;
-            res[4] <= cd[4] & ~^difi[63:0];
-            res[5] <= cd[5] & ~difi[0];
-            res[6] <= cd[6] & ~(difi[64]^difi[63]);
-            res[7] <= cd[7] & ~difi[63];
+            crres[0] <= cd[0] & ~difi[64];
+            crres[1] <= cd[1] & |difi[63:0];
+            crres[2] <= 1'b0;
+            crres[3] <= 1'b0;
+            crres[4] <= cd[4] & ~^difi[63:0];
+            crres[5] <= cd[5] & ~difi[0];
+            crres[6] <= cd[6] & ~(difi[64]^difi[63]);
+            crres[7] <= cd[7] & ~difi[63];
           end
         `CMP_ORCM:
           begin
-            res[0] <= cd[0] | ~difi[64];
-            res[1] <= cd[1] | |difi[63:0];
-            res[2] <= 1'b0;
-            res[3] <= 1'b0;
-            res[4] <= cd[4] | ~^difi[63:0];
-            res[5] <= cd[5] | ~difi[0];
-            res[6] <= cd[6] | ~(difi[64]^difi[63]);
-            res[7] <= cd[7] | ~difi[63];
+            crres[0] <= cd[0] | ~difi[64];
+            crres[1] <= cd[1] | |difi[63:0];
+            crres[2] <= 1'b0;
+            crres[3] <= 1'b0;
+            crres[4] <= cd[4] | ~^difi[63:0];
+            crres[5] <= cd[5] | ~difi[0];
+            crres[6] <= cd[6] | ~(difi[64]^difi[63]);
+            crres[7] <= cd[7] | ~difi[63];
           end
-        default:  res[7:0] <= 8'h00;
+        default:  crres[7:0] <= 8'h00;
         endcase
       end
+    `SET:
+      begin
+        case(ir[30:28])
+        `SEQR2: setcr(ia==ib);
+        `SNER2: setcr(ia!=ib);
+        `SLTR2: setcr($signed(ia) < $signed(ib));
+        `SGER2: setcr($signed(ia) >= $signed(ib));
+        `SLTUR2: setcr(ia <  ib);
+        `SGEUR2: setcr(ia >= ib);
+        default:  ;
+        endcase
+      end
+    `SEQ: setcr(ia==imm);
+    `SNE: setcr(ia!=imm);
+    `SLT: setcr($signed(ia) < $signed(imm));
+    `SGE: setcr($signed(ia) >= $signed(imm));
+    `SLE: setcr($signed(ia) <= $signed(imm));
+    `SGT: setcr($signed(ia) > $signed(imm));
+    `SLTU: setcr(ia <  imm);
+    `SGEU: setcr(ia >= imm);
+    `SLEU: setcr(ia <= imm);
+    `SGTU: setcr(ia >  imm);
     `AND: res <= ia & imm;
     `OR:  res <= ia | imm;
     `EOR: res <= ia ^ imm;
@@ -1323,6 +1446,17 @@ DATA_ALIGN:
   end
 WRITEBACK:
   begin
+    // Compares and sets already update crres
+    if (~d_cmp & ~d_set & ~illegal_insn & wrcrf) begin
+      crres[0] <= res[64];
+      crres[1] <= res[63:0]==64'd0;
+      crres[2] <= 1'b0;
+      crres[3] <= 1'b0;
+      crres[4] <= ^res[63:0];
+      crres[5] <= res[0];
+      crres[6] <= res[64]^res[63];
+      crres[7] <= res[63];
+    end
 		if (illegal_insn)
 		  tException(32'd2, ipc, 5'd31);
     else
@@ -1426,6 +1560,89 @@ begin
 		ladr <= pc[WID-2:0] + {sregfile[{2'b11,pc[WID-1:WID-2]}][WID-1:4],`SEG_SHIFT};
 end
 endtask
+
+task setbool;
+input bool;
+begin
+  crres[0] <= bool;
+  crres[1] <= bool;
+  crres[2] <= 1'b0;
+  crres[3] <= 1'b0;
+  crres[4] <= bool;
+  crres[5] <= bool;
+  crres[6] <= 1'b0;
+  crres[7] <= 1'b0;
+end
+endtask
+
+task setboolAnd;
+input bool;
+begin
+  crres[0] <= bool & cd[0];
+  crres[1] <= bool & cd[1];
+  crres[2] <= 1'b0;
+  crres[3] <= 1'b0;
+  crres[4] <= bool & cd[4];
+  crres[5] <= bool & cd[5];
+  crres[6] <= 1'b0;
+  crres[7] <= 1'b0;
+end
+endtask
+
+task setboolOr;
+input bool;
+begin
+  crres[0] <= bool | cd[0];
+  crres[1] <= bool | cd[1];
+  crres[2] <= 1'b0;
+  crres[3] <= 1'b0;
+  crres[4] <= bool | cd[4];
+  crres[5] <= bool | cd[5];
+  crres[6] <= 1'b0;
+  crres[7] <= 1'b0;
+end
+endtask
+
+task setboolAndcm;
+input bool;
+begin
+  crres[0] <= bool & ~cd[0];
+  crres[1] <= bool & ~cd[1];
+  crres[2] <= 1'b0;
+  crres[3] <= 1'b0;
+  crres[4] <= bool & ~cd[4];
+  crres[5] <= bool & ~cd[5];
+  crres[6] <= 1'b0;
+  crres[7] <= 1'b0;
+end
+endtask
+
+task setboolOrcm;
+input bool;
+begin
+  crres[0] <= bool | ~cd[0];
+  crres[1] <= bool | ~cd[1];
+  crres[2] <= 1'b0;
+  crres[3] <= 1'b0;
+  crres[4] <= bool | ~cd[4];
+  crres[5] <= bool | ~cd[5];
+  crres[6] <= 1'b0;
+  crres[7] <= 1'b0;
+end
+endtask
+
+task setcr;
+input bool;
+begin
+  case (mop)
+  `CMP_CPY: setbool(bool);
+  `CMP_AND: setboolAnd(bool);
+  `CMP_OR:  setboolOr(bool);
+  `CMP_ANDCM: setboolAndcm(bool);
+  `CMP_ORCM:  setboolOrcm(bool);
+  default:  ;
+  endcase
+end
 
 task tException;
 input [31:0] cse;
