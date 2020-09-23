@@ -103,6 +103,7 @@
 `define LDTU  8'h85
 `define LDO   8'h86
 `define LDOR  8'h87
+`define LDOT  8'h88
 `define LDX   8'h8F
 `define STB   8'hA0
 `define STW   8'hA1
@@ -110,6 +111,7 @@
 `define STO   8'hA3
 `define STOC  8'hA4
 `define STPTR 8'hA5
+`define STOT  8'hA8
 `define STX   8'hAF
 
 // Shift operations
@@ -197,7 +199,8 @@
 `define LDTX   5'd4
 `define LDTUX  5'd5
 `define LDOX   5'd6
-`define LDORX 5'd7
+`define LDORX  5'd7
+`define LDOTX  5'd8
 
 // 2r Stores
 `define STBX    5'd0
@@ -206,6 +209,7 @@
 `define STOX    5'd3
 `define STOCX   5'd4
 `define STPTRX  5'd5
+`define STOTX   5'd8
 
 `define FLOAT   8'hF2
 `define FMA     8'hF4
@@ -291,24 +295,25 @@ parameter DATA_ALIGN = 6'd33;
 `include "../fpu/fpSize.sv"
 
 reg [31:0] pc, ipc, ret_pc;
-reg [31:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
 reg illegal_insn;
 reg [31:0] ir;
 wire [7:0] opcode = ir[7:0];
 wire [2:0] mop = ir[12:10];
 wire [2:0] rm3 = ir[31:29];
 reg [4:0] Rd;
-reg [1:0] Cd;
+reg [1:0] Cd, Cs;
 wire [4:0] Rs1 = ir[17:13];
 wire [4:0] Rs2 = ir[22:18];
 wire [4:0] Rd3 = ir[27:23];
 reg [4:0] Rdx, Rs1x, Rs2x, Rs3x;
 reg [4:0] Rdx1, Rs1x1, Rs2x1, Rs3x1;
+reg rad;
 wire [63:0] irfoRs1, irfoRs2, irfoRs3, irfoRd;
 reg [63:0] ia,ib,ic,id,imm;
 reg [63:0] fa, fb, fc;
 reg [64:0] res;
 reg [7:0] crres;
+reg wrra;
 reg wrirf,wrcrf,wrcrf32,wrfrf;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
 
@@ -359,6 +364,7 @@ regfile64 uirfRs3 (
   .doutb(irfoRs3)  // output wire [63 : 0] doutb
 );
 
+reg [31:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
 reg [31:0] cregfile [0:31];
 reg [31:0] sregfile [0:15];
 wire [64:0] difi = ia - imm;
@@ -374,6 +380,13 @@ wire [15:0] blendB1 = ia[ 7: 0] * ic[7:0];
 wire [15:0] blendR2 = ib[23:16] * ~ic[7:0];
 wire [15:0] blendG2 = ib[15: 8] * ~ic[7:0];
 wire [15:0] blendB2 = ib[ 7: 0] * ~ic[7:0];
+wire [4:0] crs;
+reg [AWID-1:0] rares;
+
+always @(posedge clk_g)
+  if (state==WRITEBACK)
+    if (wrra)
+      ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
 
 wire [31:0] cd32 = cregfile[Rdx];
 wire [31:0] cds32 = cregfile[Rs1x];
@@ -388,7 +401,7 @@ always @(posedge clk_g)
       endcase
     else if (wrcrf32)
       cregfile[Rdx] <= res[31:0];
-wire [7:0] cd = cd32 >> {Cd,3'b0};
+wire [7:0] cd = cd32 >> {Cs,3'b0};
 wire [7:0] cds = cds32 >> {Rs1[1:0],3'b0};
 
 // CSRs
@@ -418,7 +431,7 @@ reg [2:0] mrloc;    // mret lockout
 reg [31:0] uip;     // user interrupt pending
 reg [4:0] regset;
 reg [31:0] rsStack;
-wire [4:0] crs = rsStack[4:0];
+assign crs = rsStack[4:0];
 reg [31:0] pmStack;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
@@ -514,7 +527,7 @@ wire [3:0] segsel = ea[31:28];
 
 wire [63:0] datis = dati >> {ea[1:0],3'b0};
 
-reg d_cmp,d_set,d_mov;
+reg d_cmp,d_set,d_mov,d_stot;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -761,8 +774,11 @@ IFETCH1:
   begin
     wrirf <= 1'b0;
     wrcrf32 <= 1'b0;
+    wrra <= 1'b0;
     d_cmp <= 1'b0;
+    d_set <= 1'b0;
     d_mov <= 1'b0;
+    d_stot <= 1'b0;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -821,6 +837,8 @@ DECODE:
     goto (REGFETCH1);
     Rd <= 5'd0;
     Cd <= ir[9:8];
+    Cs <= ir[9:8];
+    rad <= ir[8];
     casez(opcode)
     `R2:
       begin
@@ -866,7 +884,7 @@ DECODE:
         `WYDNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `RGFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RGFR2:begin illegal_insn <= 1'b0; end
         `MOV:
           begin
             d_mov <= 1'b1;
@@ -877,7 +895,8 @@ DECODE:
             2'b10:  ;
             2'b11:
               casez(ir[12:8])
-              5'b0000?: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+              5'b0000?: begin rad <= ir[8];  wrra <= 1'b1; end
+              5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
               5'b11101: wrcrf32 <= 1'b1;
               default:  ;
               endcase
@@ -886,6 +905,42 @@ DECODE:
           end
         default:  ;
         endcase
+      end
+    `R2B:
+      begin
+        Rd <= ir[12:8];
+        Cs <= ir[19:18];
+        case(ir[31:26])
+        `ANDR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ORR2:  begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `EORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `BMMR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `ADDR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `SUBR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `NANDR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `NORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `ENORR2:begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
+        `BITR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1;  illegal_insn <= 1'b0; end
+        `MULR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `CMPR2: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
+        `MULUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIVSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `REMSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PERMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `PTRDIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BYTNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `WYDNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `RGFR2:begin illegal_insn <= 1'b0; end
       end
     `R3A:
       begin
@@ -977,7 +1032,8 @@ DECODE:
       begin
         // Assume instruction will not crap out and write ra0,ra1 here rather
         // than at WRITEBACK.
-        ra[{ir[8],rprv[0] ? rsStack[9:5] : crs}] <= ipc;
+        rares <= ipc;
+        wrra <= 1'b1;
         wrirf <= 1'b1;
         pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
         res <= ipc;
@@ -1013,12 +1069,23 @@ DECODE:
     `LDTU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `LDO:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `LDOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDOT:
+      begin
+        casez(ir[12:8])
+        5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
+        5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+        5'b11101: begin wrcrf32 <= 1'b1; end
+        endcase
+        imm <= {{50{ir[31]}},ir[31:18]};
+        illegal_insn <= 1'b0;
+      end
     `STB:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STW:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STO:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STOC: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STPTR: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
+    `STOT: begin d_stot <= 1'b1; Cs <= ir[22:18]; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `LDX:
       case(ir[22:18])
       `LDBX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
@@ -1029,6 +1096,16 @@ DECODE:
       `LDTUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
       `LDOX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
       `LDORX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+      `LDOTX:
+        begin
+          casez(ir[12:8])
+          5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
+          5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+          5'b11101: begin wrcrf32 <= 1'b1; end
+          endcase
+          imm <= {{50{ir[31]}},ir[31:18]};
+          illegal_insn <= 1'b0;
+        end
       default:  ;
       endcase
     `STX:
@@ -1039,29 +1116,61 @@ DECODE:
       `STOX: illegal_insn <= 1'b0;
       `STOCX: illegal_insn <= 1'b0;
       `STPTRX: illegal_insn <= 1'b0;
+      `STOTX: begin d_stot <= 1'b1; Cs <= ir[22:18]; illegal_insn <= 1'b0; end
       default:  ;
       endcase
     endcase
   end
 // Need a state to read Rd from block ram.
 REGFETCH1:
-  goto (REGFETCH2);
+  begin
+    if (d_stot) begin
+      casez(Rs2)
+      5'b0000?: ib <= ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
+      5'b00111: ib <= epc[crs];
+      5'b100??: ib <= cd;
+      5'b11101: ib <= cd32;
+      default:  ib <= 64'd0;
+      endcase
+    end
+    else if (opcode==`R2B)
+      ib <= cd;
+    else
+      ib <= 64'd0;
+    goto (REGFETCH2);
+  end
 REGFETCH2:
   begin
     goto (EXECUTE);
     ia <= Rs1==5'd0 ? 64'd0 : irfoRs1;
-    ib <= Rs2==5'd0 ? 64'd0 : irfoRs2;
+    if (d_stot)
+      ib <= ib;
+    else if (opcode==`R2B)
+      ib <= ib;
+    else
+      ib <= Rs2==5'd0 ? 64'd0 : irfoRs2;
     ic <= Rs3==5'd0 ? 64'd0 : irfoRs3;
     id <= Rd==5'd0 ? 64'd0 : irfoRd;
-    ret_pc <= ra[{d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
+    ret_pc <= ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
   end
 EXECUTE:
   begin
     goto (WRITEBACK);
     res <= 64'd0;
     casez(opcode)
-    `R2:
-      case(ir[31:26])
+		`BRK:
+		  case(ir[15:8])
+		  8'd3: tException(ir[15:8], pc);
+		  8'd8: tException(ir[15:8]+pmStack[3:1], pc);
+		  default:  tException(ir[15:8], pc);
+		  endcase
+		`WFI:
+		  begin
+			  set_wfi <= 1'b1;
+			  illegal_insn <= 1'b0;
+		  end
+    `R2,`R2B:
+      case(ir[30:26])
       `ANDR2: res <= ia & ib;
       `ORR2:  res <= ia | ib;
       `EORR2: res <= ia ^ ib;
@@ -1583,6 +1692,7 @@ EXECUTE:
     `LDTU: begin ea <= ia + imm; goto (MEMORY1); end
     `LDO:  begin ea <= ia + imm; goto (MEMORY1); end
     `LDOR: begin ea <= ia + imm; goto (MEMORY1); end
+    `LDOT: begin ea <= ia + imm; goto (MEMORY1); end
     `LDX:
       case(ir[22:18])
       `LDBX:    begin ea <= ia + ic; goto (MEMORY1); end
@@ -1593,6 +1703,7 @@ EXECUTE:
       `LDTUX:   begin ea <= ia + ic << (ir[28] ? 2'd2 : 2'd0); goto (MEMORY1); end
       `LDOX:    begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `LDORX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `LDOTX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       default:  ;
       endcase
     `STB:  begin ea <= ia + imm; goto (MEMORY1); end
@@ -1601,6 +1712,15 @@ EXECUTE:
     `STO:  begin ea <= ia + imm; goto (MEMORY1); end
     `STOC: begin ea <= ia + imm; goto (MEMORY1); end
     `STPTR: begin ea <= ia + imm; goto (MEMORY1); end
+    `STOT: 
+      begin
+        ea <= ia + imm; goto (MEMORY1);
+        casez(ir[22:18])
+        5'b0000?: ib <= ret_pc;
+        5'b00111: ib <= epc[crs];
+        5'b100??: ib <= 
+        endcase
+      end
     `STX:
       case(ir[12:8])
       `STBX:    begin ea <= ia + ic; goto (MEMORY1); end
@@ -1609,6 +1729,7 @@ EXECUTE:
       `STOX:    begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `STOCX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `STPTRX:  begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `STOTX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       default:  ;
       endcase
     endcase
@@ -1815,6 +1936,18 @@ DATA_ALIGN:
   begin
     goto (WRITEBACK);
     case(opcode)
+    `LDX:
+      case(ir[22:18])
+      `LDBX:   res <= {{56{datis[7]}},datis[7:0]};
+      `LDBUX:  res <= {{56{1'b0}},datis[7:0]};
+      `LDWX:   res <= {{48{datis[15]}},datis[15:0]};
+      `LDWUX:  res <= {{48{1'b0}},datis[15:0]};
+      `LDTX:   res <= {{32{datis[31]}},datis[31:0]};
+      `LDTUX:  res <= {{32{1'b0}},datis[31:0]};
+      `LDOX:   res <= datis[63:0];
+      `LDOTX:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
+      `LDORX:  res <= datis[63:0];
+      endcase
     `LDB:   res <= {{56{datis[7]}},datis[7:0]};
     `LDBU:  res <= {{56{1'b0}},datis[7:0]};
     `LDW:   res <= {{48{datis[15]}},datis[15:0]};
@@ -1822,6 +1955,7 @@ DATA_ALIGN:
     `LDT:   res <= {{32{datis[31]}},datis[31:0]};
     `LDTU:  res <= {{32{1'b0}},datis[31:0]};
     `LDO:   res <= datis[63:0];
+    `LDOT:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
     `LDOR:  res <= datis[63:0];
     default:  ;
     endcase
