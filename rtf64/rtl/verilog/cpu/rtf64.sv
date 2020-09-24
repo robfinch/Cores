@@ -569,7 +569,8 @@ KeyMemory ukm1 (
 
 wire keymem_cs = adr_o[31:28]==4'h0;
 
-wire [31:0] card21o, card22o, card1o, cardmem0o;
+wire [31:0] card21o, card22o, card1o;
+wire [63:0] cardmem0o;
 reg [63:0] cardmem0;
 always @(posedge clk_g)
   if (d_gcclr & ~ia[31] && ia[30:28]==3'd0)
@@ -611,14 +612,14 @@ CardMemory1 ucard3 (
   .ena(d_stptr),      // input wire ena
   .wea(d_stptr),      // input wire [0 : 0] wea
   .addra(adr_o[27:16]),  // input wire [11 : 0] addra
-  .dina(8'hFF),    // input wire [0 : 0] dina
+  .dina(1'b1),    // input wire [0 : 0] dina
   .douta(),  // output wire [0 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(d_gcclr && ia[30:28]==3'd1),      // input wire enb
   .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
-  .addrb(ia[11:3]),  // input wire [8 : 0] addrb
-  .dinb(ib[63:0]),    // input wire [63 : 0] dinb
-  .doutb(card1o)  // output wire [63 : 0] doutb
+  .addrb(ia[9:3]),  // input wire [6 : 0] addrb
+  .dinb(ib[31:0]),    // input wire [31 : 0] dinb
+  .doutb(card1o)  // output wire [31 : 0] doutb
 );
 
 wire acki = ack_i;
@@ -709,6 +710,7 @@ reg [7:0] mathCnt;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Floating point logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg d_fltcmp;
 wire [4:0] fltfunct5 = ir[27:23];
 reg [FPWID-1:0] fcmp_res, ftoi_res, itof_res, fres;
 wire [2:0] rmq = rm3==3'b111 ? rm : rm3;
@@ -942,6 +944,7 @@ IFETCH1:
     d_stptr <= 1'b0;
     d_setkey <= 1'b0;
     d_gcclr <= 1'b0;
+    d_fltcmp <= 1'b0;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -1311,9 +1314,10 @@ DECODE:
 		`FLT2:
 			begin
 				Rd <= ir[12:8];
+        Cd <= ir[9:8];
 				case(fltfunct5)
 				5'd20,5'd24,5'd28:  wrirf <= 1'b1;
-				`FSEQ,`FSLT,`FSLE,`FCMP:  wrcrf <= 1'b1;
+				`FSEQ,`FSLT,`FSLE,`FCMP:  begin d_fltcmp <= 1'b1; wrcrf <= 1'b1; end
 				default:  wrfrf <= 1'b1;
 			  endcase
 			end
@@ -1857,7 +1861,7 @@ EXECUTE:
   		  begin
   		    case(ia[30:28])
   		    3'd0: res <= cardmem0o;
-  		    3'd1: res <= card1o;
+  		    3'd1: res <= {32'd0,card1o};
   		    3'd2: res <= {card22o,card21o};
   		    default:  ;
   		    endcase
@@ -2326,51 +2330,251 @@ FLOAT:
 						res <= fa;
 			  `FCMP:
 			    begin
-			      crres[0] <= 1'b0;
-			      crres[1] <= fcmp_o[0] & ~cmpnan;
-			      crres[2] <= 1'b0;
-			      crres[3] <= 1'b0;
-			      crres[4] <= 1'b0;
-			      crres[5] <= 1'b0;
-			      crres[6] <= finf;
-			      crres[7] <= fcmp_o[1] & ~cmpnan;
+			      case(mop)
+			      `CMP_CPY:
+			        begin
+    			      crres[0] <= 1'b0;
+    			      crres[1] <= fcmp_o[0] & ~cmpnan;
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= finf;
+    			      crres[7] <= fcmp_o[1] & ~cmpnan;
+			        end
+			      `CMP_AND:
+			        begin
+    			      crres[0] <= 1'b0;
+    			      crres[1] <= cd[1] & fcmp_o[0] & ~cmpnan;
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & finf;
+    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+			        end
+			      `CMP_OR:
+			        begin
+    			      crres[0] <= cd[0];
+    			      crres[1] <= cd[1] | (fcmp_o[0] & ~cmpnan);
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | finf;
+    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+			        end
+			      `CMP_ANDCM:
+			        begin
+    			      crres[0] <= cd[0];
+    			      crres[1] <= cd[1] & ~(fcmp_o[0] & ~cmpnan);
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~finf;
+    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+			        end
+			      `CMP_ORCM:
+			        begin
+    			      crres[0] <= cd[0];
+    			      crres[1] <= cd[1] | ~(fcmp_o[0] & ~cmpnan);
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~finf;
+    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+			        end
+			      default:  crres <= cd;
+			      endcase
 			    end
 				`FSLE:
 					begin
-						crres[0] <= fcmp_o[2] & ~cmpnan;	// FSLE
-						crres[1] <= fcmp_o[2] & ~cmpnan;	// FSLE
-			      crres[2] <= 1'b0;
-			      crres[3] <= 1'b0;
-			      crres[4] <= 1'b0;
-			      crres[5] <= 1'b0;
-			      crres[6] <= finf;
-			      crres[7] <= fcmp_o[1] & ~cmpnan;
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= fcmp_o[2] & ~cmpnan;	// FSLE
+    						crres[1] <= fcmp_o[2] & ~cmpnan;	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= finf;
+    			      crres[7] <= fcmp_o[1] & ~cmpnan;
+					    end
+					  `CMP_AND:
+					    begin
+    						crres[0] <= cd[0] & fcmp_o[2] & ~cmpnan;	// FSLE
+    						crres[1] <= cd[1] & fcmp_o[2] & ~cmpnan;	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & finf;
+    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+					    end
+					  `CMP_OR:
+					    begin
+    						crres[0] <= cd[0] | (fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] | (fcmp_o[2] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | finf;
+    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+					    end
+					  `CMP_ANDCM:
+					    begin
+    						crres[0] <= cd[0] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~finf;
+    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+					    end
+					  `CMP_ORCM:
+					    begin
+    						crres[0] <= cd[0] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~finf;
+    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+					    end
+			      default:  crres <= cd;
+					  endcase
 						if (cmpnan)
 							fnv <= 1'b1;
 					end
 			  `FSLT:
 					begin
-						crres[0] <= fcmp_o[1] & ~cmpnan;	// FSLE
-						crres[1] <= fcmp_o[1] & ~cmpnan;	// FSLE
-			      crres[2] <= 1'b0;
-			      crres[3] <= 1'b0;
-			      crres[4] <= 1'b0;
-			      crres[5] <= 1'b0;
-			      crres[6] <= finf;
-			      crres[7] <= fcmp_o[1] & ~cmpnan;
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= fcmp_o[1] & ~cmpnan;	// FSLE
+    						crres[1] <= fcmp_o[1] & ~cmpnan;	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= finf;
+    			      crres[7] <= fcmp_o[1] & ~cmpnan;
+					    end
+					  `CMP_AND:
+					    begin
+    						crres[0] <= cd[0] & fcmp_o[1] & ~cmpnan;	// FSLE
+    						crres[1] <= cd[1] & fcmp_o[1] & ~cmpnan;	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & finf;
+    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+					    end
+					  `CMP_OR:
+					    begin
+    						crres[0] <= cd[0] | (fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] | (fcmp_o[1] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | finf;
+    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+					    end
+					  `CMP_ANDCM:
+					    begin
+    						crres[0] <= cd[0] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~finf;
+    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+					    end
+					  `CMP_ORCM:
+					    begin
+    						crres[0] <= cd[0] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cd[1] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~finf;
+    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+					    end
+			      default:  crres <= cd;
+					  endcase
 						if (cmpnan)
 							fnv <= 1'b1;
 					end
 				`FSEQ:
 					begin
-						crres[0] <= fcmp_o[0] & ~cmpnan;	// FSEQ
-						crres[1] <= fcmp_o[0] & ~cmpnan;	// FSEQ
-			      crres[2] <= 1'b0;
-			      crres[3] <= 1'b0;
-			      crres[4] <= 1'b0;
-			      crres[5] <= 1'b0;
-			      crres[6] <= finf;
-			      crres[7] <= fcmp_o[1] & ~cmpnan;
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= fcmp_o[0] & ~cmpnan;	// FSEQ
+    						crres[1] <= fcmp_o[0] & ~cmpnan;	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= finf;
+    			      crres[7] <= fcmp_o[1] & ~cmpnan;
+			        end
+			      `CMP_AND:
+			        begin
+    						crres[0] <= cd[0] & fcmp_o[0] & ~cmpnan;	// FSEQ
+    						crres[1] <= cd[1] & fcmp_o[0] & ~cmpnan;	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & finf;
+    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+			        end
+			      `CMP_OR:
+			        begin
+    						crres[0] <= cd[0] | (fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cd[1] | (fcmp_o[0] & ~cmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | finf;
+    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+			        end
+			      `CMP_ANDCM:
+			        begin
+    						crres[0] <= cd[0] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cd[1] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~finf;
+    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+			        end
+			      `CMP_ORCM:
+			        begin
+    						crres[0] <= cd[0] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cd[1] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~finf;
+    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+			        end
+			      default:  crres <= cd;
+			      endcase
 						if (cmpsnan)
 							fnv <= 1'b1;
 					end
@@ -2401,7 +2605,7 @@ FLOAT:
 WRITEBACK:
   begin
     // Compares and sets already update crres
-    if (~d_cmp & ~d_set & ~illegal_insn & wrcrf) begin
+    if (~d_cmp & ~d_set & ~d_fltcmp & ~illegal_insn & wrcrf) begin
       crres[0] <= res[64];
       crres[1] <= res[63:0]==64'd0;
       crres[2] <= 1'b0;
