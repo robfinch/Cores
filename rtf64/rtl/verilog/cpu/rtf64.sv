@@ -95,6 +95,10 @@
 `define OSR2  8'h7A
 `define CACHE 8'h7B
 `define REX     5'h08
+`define SETKEY  5'h0C
+`define GCCLR   5'h0D
+`define PFI     5'h11
+`define WFI     5'h12
 `define LDB   8'h80
 `define LDBU  8'h81
 `define LDW   8'h82
@@ -104,6 +108,7 @@
 `define LDO   8'h86
 `define LDOR  8'h87
 `define LDOT  8'h88
+`define FLDO  8'h8E
 `define LDX   8'h8F
 `define STB   8'hA0
 `define STW   8'hA1
@@ -112,6 +117,7 @@
 `define STOC  8'hA4
 `define STPTR 8'hA5
 `define STOT  8'hA8
+`define FSTO  8'hAB
 `define STX   8'hAF
 
 // Shift operations
@@ -201,6 +207,7 @@
 `define LDOX   5'd6
 `define LDORX  5'd7
 `define LDOTX  5'd8
+`define FLDOX	 5'd14
 
 // 2r Stores
 `define STBX    5'd0
@@ -210,20 +217,48 @@
 `define STOCX   5'd4
 `define STPTRX  5'd5
 `define STOTX   5'd8
+`define FSTOX		5'd11
 
 `define FLOAT   8'hF2
+`define FLT2    8'hF2
 `define FMA     8'hF4
 `define FMS     8'hF5
 `define FNMA    8'hF6
 `define FNMS    8'hF7
-`define FMIN    8'hF8
-`define FMAX    8'hF9
-`define FADD      5'h04
-`define FSUB      5'h05
-`define FMUL      5'h08
-`define FDIV      5'h09
-`define FCMP      5'h10
-`define FSQRT     5'h0D
+// {FLT2} 2r
+`define FLT1    5'h01
+`define FMIN    5'h02
+`define FMAX    5'h03
+`define FADD    5'h04
+`define FSUB    5'h05
+`define FMUL    5'h08
+`define FDIV    5'h09
+`define FCMP    5'h10
+`define FSEQ    5'h11
+`define FSLT    5'h12
+`define FSLE    5'h13
+`define CPYSGN  5'h18
+`define SGNINV  5'h19
+`define SGNAND  5'h1A
+`define SGNOR   5'h1B
+`define SGNEOR  5'h1C
+`define SGNENOR 5'h1D
+// {FLT1} 1r
+`define FMOV    5'h00
+`define FTOI    5'h02
+`define ITOF    5'h03
+`define FCVT2I	5'h02
+`define FCVT2F	5'h03
+`define FSIGN   5'h06
+`define FMAN    5'h07
+`define FS2D		5'h09
+`define FSTAT   5'h0C
+`define FSQRT		5'h0D
+`define ISNAN   5'h0E
+`define FINITE  5'h0F
+`define FD2S		5'h19
+`define FCLASS	5'h1E
+`define UNORD   5'h1F
 
 `define SEG_SHIFT   14'd0
 
@@ -254,6 +289,8 @@ output reg sr_o;
 output reg cr_o;
 input rb_i;
 
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 parameter LOW = 1'b0;
 parameter HIGH = 1'b1;
 
@@ -291,6 +328,10 @@ parameter PAGEMAPA = 6'd30;
 parameter CSR1 = 6'd31;
 parameter CSR2 = 6'd32;
 parameter DATA_ALIGN = 6'd33;
+parameter MEMORY_KEYCHK1 = 6'd34;
+parameter MEMORY_KEYCHK2 = 6'd35;
+parameter MEMORY_KEYCHK3 = 6'd36;
+parameter FLOAT = 6'd37;
 
 `include "../fpu/fpSize.sv"
 
@@ -298,6 +339,7 @@ reg [31:0] pc, ipc, ret_pc;
 reg illegal_insn;
 reg [31:0] ir;
 wire [7:0] opcode = ir[7:0];
+wire [4:0] funct5 = ir[30:26];
 wire [2:0] mop = ir[12:10];
 wire [2:0] rm3 = ir[31:29];
 reg [4:0] Rd;
@@ -309,6 +351,7 @@ reg [4:0] Rdx, Rs1x, Rs2x, Rs3x;
 reg [4:0] Rdx1, Rs1x1, Rs2x1, Rs3x1;
 reg rad;
 wire [63:0] irfoRs1, irfoRs2, irfoRs3, irfoRd;
+wire [63:0] frfoa, frfob, frfoc;
 reg [63:0] ia,ib,ic,id,imm;
 reg [63:0] fa, fb, fc;
 reg [64:0] res;
@@ -364,6 +407,14 @@ regfile64 uirfRs3 (
   .doutb(irfoRs3)  // output wire [63 : 0] doutb
 );
 
+reg [WID-1:0] fregfile [0:31];
+assign frfoa = fregfile[Rs1];
+assign frfob = fregfile[Rs2];
+assign frfoc = fregfile[Rs3];
+always @(posedge clk_g)
+  if (state==WRITEBACK && wrfrf)
+    fregfile[Rd] <= res;
+
 reg [31:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
 reg [31:0] cregfile [0:31];
 reg [31:0] sregfile [0:15];
@@ -387,9 +438,11 @@ always @(posedge clk_g)
   if (state==WRITEBACK)
     if (wrra)
       ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
+wire [AWID-1:0] rao = ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
 
 wire [31:0] cd32 = cregfile[Rdx];
 wire [31:0] cds32 = cregfile[Rs1x];
+wire [31:0] cds322 = cregfile[Rs2x];
 always @(posedge clk_g)
   if (state==WRITEBACK)
     if (wrcrf)
@@ -402,6 +455,7 @@ always @(posedge clk_g)
     else if (wrcrf32)
       cregfile[Rdx] <= res[31:0];
 wire [7:0] cd = cd32 >> {Cs,3'b0};
+wire [7:0] cd2 = cds322 >> {Cs,3'b0};
 wire [7:0] cds = cds32 >> {Rs1[1:0],3'b0};
 
 // CSRs
@@ -462,13 +516,17 @@ wire [31:0] fscsr = {rm,fnv,fdz,fof,fuf,fnx};
 reg [15:0] mtid;      // task id
 wire ie = pmStack[0];
 reg [31:0] miex;
+reg [19:0] key [0:8];
+
 // Debug
 reg [31:0] dbadr [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
+reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
 reg setto, getto, decto, getzl, popto;
 reg pushq, popq, peekq; 
+reg keyViolation;
 
 reg [31:0] ladr;
 reg wrpagemap;
@@ -492,6 +550,79 @@ PagemapRam upageram (
   .doutb(pagemapo)  // output wire [13 : 0] doutb
 );
 
+reg memaccess;
+wire [19:0] keyo, keyoa;
+KeyMemory ukm1 (
+  .clka(clk_g),    // input wire clka
+  .ena(d_setkey),      // input wire ena
+  .wea(state==WRITEBACK && !ia[31]),      // input wire [0 : 0] wea
+  .addra(ia[45:32]),  // input wire [13 : 0] addra
+  .dina(ia[19:0]),    // input wire [19 : 0] dina
+  .douta(keyoa),  // output wire [19 : 0] douta
+  .clkb(clk_g),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .web(1'b0),      // input wire [0 : 0] web
+  .addrb(adr_o[27:14]),  // input wire [13 : 0] addrb
+  .dinb(20'h0),    // input wire [19 : 0] dinb
+  .doutb(keyo)  // output wire [19 : 0] doutb
+);
+
+wire keymem_cs = adr_o[31:28]==4'h0;
+
+wire [31:0] card21o, card22o, card1o, cardmem0o;
+reg [63:0] cardmem0;
+always @(posedge clk_g)
+  if (d_gcclr & ~ia[31] && ia[30:28]==3'd0)
+    cardmem0 <= ib[63:0];
+  else if (d_stptr)
+    cardmem0[adr_o[27:22]] <= 1'b1;
+assign cardmem0o = cardmem0;
+
+CardMemory2 ucard1 (
+  .clka(clk_g),    // input wire clka
+  .ena(d_stptr & ~adr_o[9]),      // input wire ena
+  .wea(d_stptr & ~adr_o[9]),      // input wire [0 : 0] wea
+  .addra(adr_o[27:10]),  // input wire [17 : 0] addra
+  .dina(1'b1),    // input wire [0 : 0] dina
+  .douta(),  // output wire [0 : 0] douta
+  .clkb(clk_g),    // input wire clkb
+  .enb(d_gcclr && ia[30:28]==3'd2),      // input wire enb
+  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .addrb(ia[15:3]),  // input wire [11 : 0] addrb
+  .dinb(ib[31:0]),    // input wire [31 : 0] dinb
+  .doutb(card21o)  // output wire [31 : 0] doutb
+);
+CardMemory2 ucard2 (
+  .clka(clk_g),    // input wire clka
+  .ena(d_stptr & adr_o[9]),      // input wire ena
+  .wea(d_stptr & adr_o[9]),      // input wire [0 : 0] wea
+  .addra(adr_o[27:10]),  // input wire [17 : 0] addra
+  .dina(1'b1),    // input wire [0 : 0] dina
+  .douta(),  // output wire [0 : 0] douta
+  .clkb(clk_g),    // input wire clkb
+  .enb(d_gcclr && ia[30:28]==3'd2),      // input wire enb
+  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .addrb(ia[15:3]),  // input wire [11 : 0] addrb
+  .dinb(ib[63:32]),    // input wire [31 : 0] dinb
+  .doutb(card22o)  // output wire [31 : 0] doutb
+);
+CardMemory1 ucard3 (
+  .clka(clk_g),    // input wire clka
+  .ena(d_stptr),      // input wire ena
+  .wea(d_stptr),      // input wire [0 : 0] wea
+  .addra(adr_o[27:16]),  // input wire [11 : 0] addra
+  .dina(8'hFF),    // input wire [0 : 0] dina
+  .douta(),  // output wire [0 : 0] douta
+  .clkb(clk_g),    // input wire clkb
+  .enb(d_gcclr && ia[30:28]==3'd1),      // input wire enb
+  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .addrb(ia[11:3]),  // input wire [8 : 0] addrb
+  .dinb(ib[63:0]),    // input wire [63 : 0] dinb
+  .doutb(card1o)  // output wire [63 : 0] doutb
+);
+
+wire acki = ack_i;
+
 wire [2:0] omode = pmStack[3:1];
 assign DebugMode = omode==3'b101;
 assign InterruptMode = omode==3'b100;
@@ -504,18 +635,42 @@ wire MMachineMode = memmode==3'b011;
 wire MUserMode = memmode==3'b000;
 
 function [7:0] fnSelect;
-input [7:0] opcode;
+input [31:0] ins;
+reg [7:0] opcode = ins[7:0];
+reg [4:0] Rd = ins[12:8];
+reg [4:0] Rs2 = ins[22:18];
 case(opcode)
 `LDB,`LDBU:	fnSelect = 8'h01;
 `LDW,`LDWU:	fnSelect = 8'h03;
 `LDT,`LDTU:	fnSelect = 8'h0F;
 `LDO,`LDOR:	fnSelect = 8'hFF;
+`FLDO:      fnSelect = 8'hFF;
+`LDX:
+  case(Rs2)
+  `LDBX,`LDBUX: fnSelect = 8'h01;
+  `LDWX,`LDWUX: fnSelect = 8'h03;
+  `LDTX,`LDTUX: fnSelect = 8'h0F;
+  `LDOX,`LDORX: fnSelect = 8'hFF;
+  `FLDOX:       fnSelect = 8'hFF;
+  default:  fnSelect = 8'h00;
+  endcase
 `STB:	fnSelect = 8'h01;
 `STW:	fnSelect = 8'h03;
 `STT:	fnSelect = 8'h0F;
 `STO:	fnSelect = 8'hFF;
 `STOC:	fnSelect = 8'hFF;
 `STPTR:	fnSelect = 8'hFF;
+`FSTO:  fnSelect = 8'hFF;
+`STX:
+  case(Rd)
+  `STBX:  fnSelect = 8'h01;
+  `STWX:  fnSelect = 8'h03;
+  `STTX:  fnSelect = 8'h0F;
+  `STOX:  fnSelect = 8'hFF;
+  `STOCX: fnSelect = 8'hFF;
+  `STPTRX: fnSelect = 8'hFF;
+  `FSTOX: fnSelect = 8'hFF;
+  endcase
 default:	fnSelect = 8'h00;
 endcase
 endfunction
@@ -527,7 +682,6 @@ wire [3:0] segsel = ea[31:28];
 
 wire [63:0] datis = dati >> {ea[1:0],3'b0};
 
-reg d_cmp,d_set,d_mov,d_stot;
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -555,7 +709,7 @@ reg [7:0] mathCnt;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Floating point logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-wire [4:0] funct5 = ir[27:23];
+wire [4:0] fltfunct5 = ir[27:23];
 reg [FPWID-1:0] fcmp_res, ftoi_res, itof_res, fres;
 wire [2:0] rmq = rm3==3'b111 ? rm : rm3;
 
@@ -584,7 +738,7 @@ fpCompare #(.FPWID(FPWID)) u1 (.a(fa), .b(fb), .o(fcmp_o), .nan(cmpnan), .snan(c
 assign fcmp_res = fcmp_o[1] ? {FPWID{1'd1}} : fcmp_o[0] ? 1'd0 : 1'd1;
 i2f #(.FPWID(FPWID)) u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
 f2i #(.FPWID(FPWID)) u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(fa), .o(ftoi_res), .overflow());
-fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(funct5==`FSUB), .a(fa), .b(fb), .o(fas_o));
+fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(fltfunct5==`FSUB), .a(fa), .b(fb), .o(fas_o));
 fpMul #(.FPWID(FPWID)) u5 (.clk(clk_g), .ce(1'b1), .a(fa), .b(fb), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
 fpDiv #(.FPWID(FPWID)) u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
 	.a(fa), .b(fb), .o(fdiv_o), .done(), .sign_exe(), .overflow(div_of), .underflow(div_uf));
@@ -610,8 +764,8 @@ always @(posedge clk_g)
 case(opcode)
 `FMA,`FMS,`FNMA,`FNMS:
 	fnorm_i <= fma_o;
-`FLOAT:
-	case(funct5)
+`FLT2:
+	case(fltfunct5)
 	`FADD:	fnorm_i <= fas_o;
 	`FSUB:	fnorm_i <= fas_o;
 	`FMUL:	fnorm_i <= fmul_o;
@@ -627,8 +781,8 @@ always @(posedge clk_g)
 case(opcode)
 `FMA,`FMS,`FNMA,`FNMS:
 	fnorm_uf <= fma_uf;
-`FLOAT:
-	case(funct5)
+`FLT2:
+	case(fltfunct5)
 	`FMUL:	fnorm_uf <= mul_uf;
 	`FDIV:	fnorm_uf <= div_uf;
 	default:	fnorm_uf <= 1'b0;
@@ -767,6 +921,12 @@ else begin
 		adr_o <= {pagemapo & 14'h3FFF,ladr[13:0]};
 end
 
+// Check the memory keys
+keyViolation = TRUE;
+for (n = 0; n < 9; n = n + 1)
+  if (keyo==key[n] || keyo==20'h0)
+    keyViolation <= FALSE;
+
 case (state)
 // It takes two clocks to read the pagemap ram, this is after the linear
 // address is set, which also takes a clock cycle.
@@ -779,6 +939,9 @@ IFETCH1:
     d_set <= 1'b0;
     d_mov <= 1'b0;
     d_stot <= 1'b0;
+    d_stptr <= 1'b0;
+    d_setkey <= 1'b0;
+    d_gcclr <= 1'b0;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -840,6 +1003,26 @@ DECODE:
     Cs <= ir[9:8];
     rad <= ir[8];
     casez(opcode)
+    `OSR2:
+      case(ir[30:26])
+		  `PFI: 
+		    begin
+		      if (irq_i != 1'b0)
+		        tException(32'h80000000|cause_i,ipc);
+		      illegal_insn <= 1'b0;
+		    end
+		  `SETKEY:  
+	      if (omode != 3'd0) begin
+	        d_setkey <= 1'b1;
+	        illegal_insn <= 1'b0;
+	      end
+	    `GCCLR:
+	      begin
+	        d_gcclr <= 1'b1;
+	        illegal_insn <= 1'b0;
+	      end
+		  default:  ;
+		  endcase
     `R2:
       begin
         Rd <= ir[12:8];
@@ -941,6 +1124,7 @@ DECODE:
         `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `RGFR2:begin illegal_insn <= 1'b0; end
+        endcase
       end
     `R3A:
       begin
@@ -1084,7 +1268,7 @@ DECODE:
     `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STO:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STOC: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STPTR: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
+    `STPTR: begin d_stptr <= 1'b1; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `STOT: begin d_stot <= 1'b1; Cs <= ir[22:18]; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
     `LDX:
       case(ir[22:18])
@@ -1115,10 +1299,24 @@ DECODE:
       `STTX: illegal_insn <= 1'b0;
       `STOX: illegal_insn <= 1'b0;
       `STOCX: illegal_insn <= 1'b0;
-      `STPTRX: illegal_insn <= 1'b0;
+      `STPTRX: begin d_stptr <= 1'b1; illegal_insn <= 1'b0; end
       `STOTX: begin d_stot <= 1'b1; Cs <= ir[22:18]; illegal_insn <= 1'b0; end
       default:  ;
       endcase
+		`FMA,`FMS,`FNMA,`FNMS:
+			begin
+				Rd <= ir[12:8];
+				wrfrf <= 1'b1;
+			end
+		`FLT2:
+			begin
+				Rd <= ir[12:8];
+				case(fltfunct5)
+				5'd20,5'd24,5'd28:  wrirf <= 1'b1;
+				`FSEQ,`FSLT,`FSLE,`FCMP:  wrcrf <= 1'b1;
+				default:  wrfrf <= 1'b1;
+			  endcase
+			end
     endcase
   end
 // Need a state to read Rd from block ram.
@@ -1126,15 +1324,15 @@ REGFETCH1:
   begin
     if (d_stot) begin
       casez(Rs2)
-      5'b0000?: ib <= ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
+      5'b0000?: ib <= rao;
       5'b00111: ib <= epc[crs];
-      5'b100??: ib <= cd;
-      5'b11101: ib <= cd32;
+      5'b100??: ib <= cd2;
+      5'b11101: ib <= cds322;
       default:  ib <= 64'd0;
       endcase
     end
     else if (opcode==`R2B)
-      ib <= cd;
+      ib <= cd2;
     else
       ib <= 64'd0;
     goto (REGFETCH2);
@@ -1151,7 +1349,28 @@ REGFETCH2:
       ib <= Rs2==5'd0 ? 64'd0 : irfoRs2;
     ic <= Rs3==5'd0 ? 64'd0 : irfoRs3;
     id <= Rd==5'd0 ? 64'd0 : irfoRd;
-    ret_pc <= ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
+		fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
+		case(opcode)
+		`FSTO:  ib <= Rs2==5'd0 ? 64'd0 : frfob;
+		`STX:
+		  case(ir[12:8])
+		  `FSTO:  ib <= Rs2==5'd0 ? 64'd0 : frfob;
+		  default:  ;
+		  endcase
+		`FLT2:
+			case(fltfunct5)
+			`FLT1:
+			  case(Rs2)
+			  `ITOF: fa <= Rs1==5'd0 ? {FPWID{1'd0}} : irfoRs1;
+			  default:  ;
+				endcase
+			default:	fa <= Rs1==5'd0 ? {FPWID{1'd0}} : frfoa;
+			endcase
+		default:	;
+		endcase
+		fb <= Rs2==5'd0 ? {FPWID{1'd0}} : frfob;
+		fc <= Rs3==5'd0 ? {FPWID{1'd0}} : frfoc;
+    ret_pc <= rao;
   end
 EXECUTE:
   begin
@@ -1164,11 +1383,6 @@ EXECUTE:
 		  8'd8: tException(ir[15:8]+pmStack[3:1], pc);
 		  default:  tException(ir[15:8], pc);
 		  endcase
-		`WFI:
-		  begin
-			  set_wfi <= 1'b1;
-			  illegal_insn <= 1'b0;
-		  end
     `R2,`R2B:
       case(ir[30:26])
       `ANDR2: res <= ia & ib;
@@ -1595,6 +1809,9 @@ EXECUTE:
         11'b???_0000_0010:  res <= tick;
         11'b001_0001_0000:  res <= TaskId;
         11'b001_0001_1111:  res <= ASID;
+        11'b001_0010_0000:  res <= {key[2],key[1],key[0]};
+        11'b001_0010_0001:  res <= {key[3],key[4],key[5]};
+        11'b001_0010_0010:  res <= {key[6],key[7],key[8]};
         11'b011_0000_0001:  res <= hartid_i;
         11'b???_0000_0110:  res <= cause[ir[28:26]];
         11'b???_0000_0111:  res <= badaddr[ir[28:26]];
@@ -1630,6 +1847,21 @@ EXECUTE:
     `BPS: begin if ( cd[4]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
     `OSR2:
       case(ir[30:26])
+  		`WFI:
+  		  begin
+  			  set_wfi <= 1'b1;
+  			  illegal_insn <= 1'b0;
+  		  end
+  		`SETKEY:  if (!illegal_insn) res <= {18'd0,ia[45:32],12'd0,keyoa};
+  		`GCCLR:
+  		  begin
+  		    case(ia[30:28])
+  		    3'd0: res <= cardmem0o;
+  		    3'd1: res <= card1o;
+  		    3'd2: res <= {card22o,card21o};
+  		    default:  ;
+  		    endcase
+  		  end
       `REX:
         if (ir[10:8] < omode) begin
           illegal_insn <= 1'b0;
@@ -1693,6 +1925,7 @@ EXECUTE:
     `LDO:  begin ea <= ia + imm; goto (MEMORY1); end
     `LDOR: begin ea <= ia + imm; goto (MEMORY1); end
     `LDOT: begin ea <= ia + imm; goto (MEMORY1); end
+    `FLDO: begin ea <= ia + imm; goto (MEMORY1); end
     `LDX:
       case(ir[22:18])
       `LDBX:    begin ea <= ia + ic; goto (MEMORY1); end
@@ -1704,6 +1937,7 @@ EXECUTE:
       `LDOX:    begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `LDORX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `LDOTX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `FLDOX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       default:  ;
       endcase
     `STB:  begin ea <= ia + imm; goto (MEMORY1); end
@@ -1712,15 +1946,8 @@ EXECUTE:
     `STO:  begin ea <= ia + imm; goto (MEMORY1); end
     `STOC: begin ea <= ia + imm; goto (MEMORY1); end
     `STPTR: begin ea <= ia + imm; goto (MEMORY1); end
-    `STOT: 
-      begin
-        ea <= ia + imm; goto (MEMORY1);
-        casez(ir[22:18])
-        5'b0000?: ib <= ret_pc;
-        5'b00111: ib <= epc[crs];
-        5'b100??: ib <= 
-        endcase
-      end
+    `STOT: begin ea <= ia + imm; goto (MEMORY1); end
+    `FSTO: begin ea <= ia + imm; goto (MEMORY1); end
     `STX:
       case(ir[12:8])
       `STBX:    begin ea <= ia + ic; goto (MEMORY1); end
@@ -1730,8 +1957,56 @@ EXECUTE:
       `STOCX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `STPTRX:  begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `STOTX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `FSTOX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       default:  ;
       endcase
+		`FMA,`FMS,`FNMA,`FNMS:
+			begin mathCnt <= 45; state <= FLOAT; illegal_insn <= 1'b0; end
+		// The timeouts for the float operations are set conservatively. They may
+		// be adjusted to lower values closer to actual time required.
+		`FLT2:	// Float
+			case(fltfunct5)
+			`FLT1:
+			  case(Rs2)
+  	    `FMOV:  begin mathCnt <= 8'd00; state <= FLOAT; illegal_insn <= 1'b0; end	// FMOV
+  	    `FTOI:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end
+  	    `ITOF:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end
+  	    `FS2D:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end
+  	    `FD2S:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end
+				`CPYSGN:  begin res <= {fb[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+				`SGNINV:  begin res <= {~fb[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+				`SGNAND:  begin res <= {fb[FPWID-1]&fa[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+				`SGNOR:   begin res <= {fb[FPWID-1]|fa[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+				`SGNEOR:  begin res <= {fb[FPWID-1]^fa[FPWID-1],fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+				`SGNENOR: begin res <= {~(fb[FPWID-1]^fa[FPWID-1]),fa[FPWID-1:0]}; illegal_insn <= 1'b0; end
+  	    `FCLASS:
+						begin
+							res[0] <= fa[FPWID-1] & fa_inf;
+							res[1] <= fa[FPWID-1] & !fa_xz;
+							res[2] <= fa[FPWID-1] &  fa_xz;
+							res[3] <= fa[FPWID-1] &  fa_vz;
+							res[4] <= ~fa[FPWID-1] &  fa_vz;
+							res[5] <= ~fa[FPWID-1] &  fa_xz;
+							res[6] <= ~fa[FPWID-1] & !fa_xz;
+							res[7] <= ~fa[FPWID-1] & fa_inf;
+							res[8] <= fa_snan;
+							res[9] <= fa_qnan;
+							illegal_insn <= 1'b0;
+						end
+			  endcase
+			`FADD:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FADD
+			`FSUB:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FSUB
+			`FMUL:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FMUL
+			`FDIV:	begin mathCnt <= 8'd40; state <= FLOAT; illegal_insn <= 1'b0; end	// FDIV
+			`FCMP:	begin mathCnt <= 8'd40; state <= FLOAT; illegal_insn <= 1'b0; end	// FDIV
+			`FSQRT:	begin mathCnt <= 8'd160; state <= FLOAT; illegal_insn <= 1'b0; end	// FSQRT
+			`FSLE:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FSLE
+		  `FSLT:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FSLT
+			`FSEQ:	begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FSEQ
+  	  `FMIN:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FMIN / FMAX
+  	  `FMAX:  begin mathCnt <= 8'd03; state <= FLOAT; illegal_insn <= 1'b0; end	// FMIN / FMAX
+			default:	;
+			endcase
     endcase
   end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1743,7 +2018,7 @@ MUL1:
 		ldd <= 1'b1;
     goto (MUL2);
 		case(opcode)
-		`R2:
+		`R2,`R2B:
 	    case(ir[30:26])
 	    `MULR2,`DIVR2,`REMR2,`MULHR2:
   		  begin
@@ -1755,7 +2030,6 @@ MUL1:
   			begin
   				sgn <= ia[WID-1];
   				if (ia[WID-1]) ia <= -ia;
-  				goto (MUL2);
   			end
   	  default:  ;
 	    endcase
@@ -1777,7 +2051,7 @@ MUL2:
 		if (mathCnt==8'd0) begin
 			state <= WRITEBACK;
 			case(opcode)
-			`R2:
+			`R2,`R2B:
 			  case(ir[30:26])
 			  `MULR2:   res <= sgn ? nprod[WID-1:0] : prod[WID-1:0];
 			  `MULUR2:  res <= prod[WID-1:0];
@@ -1814,13 +2088,19 @@ MEMORY1:
   begin
     goto (MEMORY2);
     tEA();
-    sel <= fnSelect(opcode) << ea[1:0];
+    sel <= fnSelect(ir) << ea[1:0];
     dat <= ib << {ea[1:0],3'b0};
   end
 // This cycle for pageram access
 MEMORY2:
   begin
+    goto (keymem_cs ? MEMORY_KEYCHK1 : MEMORY3);
+  end
+MEMORY_KEYCHK1:
+  begin
     goto (MEMORY3);
+    if (keyViolation)
+			tException(32'h80000031,ipc);
   end
 MEMORY3:
   begin
@@ -1836,7 +2116,7 @@ MEMORY3:
     endcase
   end
 MEMORY4:
-  if (ack_i) begin
+  if (acki) begin
     goto (MEMORY5);
     stb_o <= LOW;
     dati <= {64'd0,dat_i};
@@ -1847,7 +2127,7 @@ MEMORY4:
     end
   end
 MEMORY5:
-  if (~ack_i) begin
+  if (~acki) begin
     ea <= {ea[31:2]+2'd1,2'b00};
     if (sel[7:4])
       goto (MEMORY6);
@@ -1866,7 +2146,13 @@ MEMORY6:
     tEA();
   end
 MEMORY7:
-  goto (MEMORY8);
+  goto (keymem_cs ? MEMORY_KEYCHK2 : MEMORY8);
+MEMORY_KEYCHK2:
+  begin
+    goto (MEMORY8);
+    if (keyViolation)
+			tException(32'h80000031,ipc);
+  end
 MEMORY8:
   begin
     goto (MEMORY9);
@@ -1875,7 +2161,7 @@ MEMORY8:
     dat_o <= dat[63:31];
   end
 MEMORY9:
-  if (ack_i) begin
+  if (acki) begin
     goto (MEMORY10);
     stb_o <= LOW;
     dati[63:32] <= dat_i;
@@ -1886,7 +2172,7 @@ MEMORY9:
     end
   end
 MEMORY10:
-  if (~ack_i) begin
+  if (~acki) begin
     ea <= {ea[31:2]+2'd1,2'b00};
     if (sel[11:8])
       goto (MEMORY11);
@@ -1905,7 +2191,13 @@ MEMORY11:
     tEA();
   end
 MEMORY12:
-  goto (MEMORY13);
+  goto (keymem_cs ? MEMORY_KEYCHK3 : MEMORY13);
+MEMORY_KEYCHK3:
+  begin
+    goto (MEMORY13);
+    if (keyViolation)
+			tException(32'h80000031,ipc);
+  end
 MEMORY13:
   begin
     goto (MEMORY14);
@@ -1914,7 +2206,7 @@ MEMORY13:
     dat_o <= dat[95:64];
   end
 MEMORY14:
-  if (ack_i) begin
+  if (acki) begin
     goto (MEMORY15);
     cyc_o <= LOW;
     stb_o <= LOW;
@@ -1923,7 +2215,7 @@ MEMORY14:
     dati[95:64] <= dat_i;
   end
 MEMORY15:
-  if (~ack_i) begin
+  if (~acki) begin
     ea <= {ea[31:2]+2'd1,2'b00};
     case(opcode)
     `STB,`STW,`STT,`STO,`STOC,`STPTR:
@@ -1960,6 +2252,152 @@ DATA_ALIGN:
     default:  ;
     endcase
   end
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Float
+// Wait for floating-point operation to complete.
+// Capture results.
+// Set status flags.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+FLOAT:
+	begin
+		mathCnt <= mathCnt - 2'd1;
+		if (mathCnt==8'd0) begin
+			case(opcode)
+			`FMA,`FMS,`FNMA,`FNMS:
+				begin
+					res <= fres;
+					if (fdn) fuf <= 1'b1;
+					if (finf) fof <= 1'b1;
+					if (norm_nx) fnx <= 1'b1;
+				end
+			`FLT2:
+				case(fltfunct5)
+				`FADD:
+					begin
+						res <= fres;	// FADD
+						if (fdn) fuf <= 1'b1;
+						if (finf) fof <= 1'b1;
+						if (norm_nx) fnx <= 1'b1;
+					end
+				`FSUB:
+					begin
+						res <= fres;	// FSUB
+						if (fdn) fuf <= 1'b1;
+						if (finf) fof <= 1'b1;
+						if (norm_nx) fnx <= 1'b1;
+					end
+				`FMUL:
+					begin
+						res <= fres;	// FMUL
+						if (fdn) fuf <= 1'b1;
+						if (finf) fof <= 1'b1;
+						if (norm_nx) fnx <= 1'b1;
+					end
+				`FDIV:	
+					begin
+						res <= fres;	// FDIV
+						if (fdn) fuf <= 1'b1;
+						if (finf) fof <= 1'b1;
+						if (fb[FPWID-2:0]==1'd0)
+							fdz <= 1'b1;
+						if (norm_nx) fnx <= 1'b1;
+					end
+				`FMIN:	// FMIN	
+					if ((fa_snan|fb_snan)||(fa_qnan&fb_qnan))
+						res <= 32'h7FFFFFFF;	// canonical NaN
+					else if (fa_qnan & !fb_nan)
+						res <= fb;
+					else if (!fa_nan & fb_qnan)
+						res <= fa;
+					else if (fcmp_o[1])
+						res <= fa;
+					else
+						res <= fb;
+				`FMAX:	// FMAX
+					if ((fa_snan|fb_snan)||(fa_qnan&fb_qnan))
+						res <= 32'h7FFFFFFF;	// canonical NaN
+					else if (fa_qnan & !fb_nan)
+						res <= fb;
+					else if (!fa_nan & fb_qnan)
+						res <= fa;
+					else if (fcmp_o[1])
+						res <= fb;
+					else
+						res <= fa;
+			  `FCMP:
+			    begin
+			      crres[0] <= 1'b0;
+			      crres[1] <= fcmp_o[0] & ~cmpnan;
+			      crres[2] <= 1'b0;
+			      crres[3] <= 1'b0;
+			      crres[4] <= 1'b0;
+			      crres[5] <= 1'b0;
+			      crres[6] <= finf;
+			      crres[7] <= fcmp_o[1] & ~cmpnan;
+			    end
+				`FSLE:
+					begin
+						crres[0] <= fcmp_o[2] & ~cmpnan;	// FSLE
+						crres[1] <= fcmp_o[2] & ~cmpnan;	// FSLE
+			      crres[2] <= 1'b0;
+			      crres[3] <= 1'b0;
+			      crres[4] <= 1'b0;
+			      crres[5] <= 1'b0;
+			      crres[6] <= finf;
+			      crres[7] <= fcmp_o[1] & ~cmpnan;
+						if (cmpnan)
+							fnv <= 1'b1;
+					end
+			  `FSLT:
+					begin
+						crres[0] <= fcmp_o[1] & ~cmpnan;	// FSLE
+						crres[1] <= fcmp_o[1] & ~cmpnan;	// FSLE
+			      crres[2] <= 1'b0;
+			      crres[3] <= 1'b0;
+			      crres[4] <= 1'b0;
+			      crres[5] <= 1'b0;
+			      crres[6] <= finf;
+			      crres[7] <= fcmp_o[1] & ~cmpnan;
+						if (cmpnan)
+							fnv <= 1'b1;
+					end
+				`FSEQ:
+					begin
+						crres[0] <= fcmp_o[0] & ~cmpnan;	// FSEQ
+						crres[1] <= fcmp_o[0] & ~cmpnan;	// FSEQ
+			      crres[2] <= 1'b0;
+			      crres[3] <= 1'b0;
+			      crres[4] <= 1'b0;
+			      crres[5] <= 1'b0;
+			      crres[6] <= finf;
+			      crres[7] <= fcmp_o[1] & ~cmpnan;
+						if (cmpsnan)
+							fnv <= 1'b1;
+					end
+				`FLT1:
+				  case(Rs2)
+					`FSQRT:
+  					begin
+  						res <= fres;	// FSQRT
+  						if (fdn) fuf <= 1'b1;
+  						if (finf) fof <= 1'b1;
+  						if (fa[FPWID-2:0]==1'd0)
+  							fdz <= 1'b1;
+  						if (sqrinf|sqrneg)
+  							fnv <= 1'b1;
+  						if (norm_nx) fnx <= 1'b1;
+  					end
+				  `FTOI:	res <= ftoi_res;	// FCVT.W.S
+				  `ITOF:	res <= itof_res;	// FCVT.S.W
+  				default:	;
+  				endcase // FLT1
+  			default:  ;
+  		  endcase   // FLT2
+			default:	;
+			endcase     // opcode
+			state <= WRITEBACK;
+		end
+	end
 WRITEBACK:
   begin
     // Compares and sets already update crres
@@ -1974,7 +2412,7 @@ WRITEBACK:
       crres[7] <= res[63];
     end
 		if (illegal_insn)
-		  tException(32'd2, ipc);
+		  tException(32'd37, ipc);
     else
     case (opcode)
     `R2:
@@ -1987,8 +2425,10 @@ WRITEBACK:
           2'b10:  ;
           2'b11:
             casez(Rd)
-            5'b0000?: ra[{ir[8],rprv[0] ? rsStack[9:5] : crs}] <= res;
+            5'b0000?: wrra <= 1'b1;
             5'b00111: epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]] <= res;
+            5'b100??: wrcrf <= 1'b1;
+            5'b11101: wrcrf32 <= 1'b1;
             default:  ;
             endcase
           endcase
@@ -2004,6 +2444,9 @@ WRITEBACK:
           casez(ir[28:18])
           11'b001_0001_0000:  TaskId <= ia;
           11'b001_0001_1111:  ASID <= ia;
+          11'b001_0010_0000:  begin key[0] <= ia[19:0]; key[1] <= ia[39:20]; key[2] <= ia[59:40]; end
+          11'b001_0010_0001:  begin key[3] <= ia[19:0]; key[4] <= ia[39:20]; key[5] <= ia[59:40]; end
+          11'b001_0010_0010:  begin key[6] <= ia[19:0]; key[7] <= ia[39:20]; key[8] <= ia[59:40]; end
           11'b???_0000_0110:  cause[ir[28:26]] <= ia;
           11'b???_0000_0111:  badaddr[ir[28:26]] <= ia;
           11'b???_0000_1001:  scratch[ir[28:26]] <= ia;
