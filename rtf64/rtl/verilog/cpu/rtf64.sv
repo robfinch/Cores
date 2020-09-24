@@ -686,6 +686,14 @@ wire [63:0] datis = dati >> {ea[1:0],3'b0};
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Shift
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+wire [127:0] shlr = ia << ib[5:0];
+wire [127:0] shrr = {ia,64'd0} >> ib[5:0];
+wire [127:0] shli = ia << imm[5:0];
+wire [127:0] shri = {ia,64'd0} >> imm[5:0];
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide support logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg sgn;
@@ -1167,11 +1175,11 @@ DECODE:
         `ROL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ROR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ASR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ASLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `LSRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ROLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `RORI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ASRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ASLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `LSRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `ROLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `RORI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `ASRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         default:  ;
         endcase
       end
@@ -1714,6 +1722,23 @@ EXECUTE:
         default:  crres[7:0] <= 8'h00;
         endcase
       end
+    `SHIFT:
+      begin
+        Rd <= ir[12:8];
+        case(ir[27:24])
+        `ASL:  res <= shlr[63:0];
+        `LSR:  res <= shrr[127:64];
+        `ROL:  res <= shlr[63:0]|shlr[127:64];
+        `ROR:  res <= shrr[127:64]|shrr[63:0];
+        `ASR:  res <= ia[63] ? {{64{1'b1}},ia} >> ib[5:0] : shlr[63:0];
+        `ASLI: res <= shli[63:0];
+        `LSRI: res <= shri[127:64];
+        `ROLI: res <= shli[63:0]|shli[127:64];
+        `RORI: res <= shri[127:64]|shri[63:0];
+        `ASRI: res <= ia[63] ? {{64{1'b1}},ia} >> imm[5:0] : shli[63:0];
+        default:  ;
+        endcase
+      end
     `SET:
       begin
         case(ir[30:28])
@@ -1742,48 +1767,48 @@ EXECUTE:
       `CMP_AND:
         begin
           crres[0] <= 1'b0;
-          crres[1] <= cd && biti==64'd0;
+          crres[1] <= cd[1] && biti==64'd0;
           crres[2] <= 1'b0;
           crres[3] <= 1'b0;
-          crres[4] <= cd & ^biti;
-          crres[5] <= cd & biti[0];
+          crres[4] <= cd[4] & ^biti;
+          crres[5] <= cd[5] & biti[0];
           crres[6] <= 1'b0;
-          crres[7] <= cd & biti[63];
+          crres[7] <= cd[7] & biti[63];
         end
       `CMP_OR:
         begin
-          crres[0] <= 1'b0;
-          crres[1] <= cd || biti==64'd0;
-          crres[2] <= 1'b0;
-          crres[3] <= 1'b0;
-          crres[4] <= cd | ^biti;
-          crres[5] <= cd | biti[0];
-          crres[6] <= 1'b0;
-          crres[7] <= cd | biti[63];
+          crres[0] <= cd[0];
+          crres[1] <= cd[1] || biti==64'd0;
+          crres[2] <= cd[2];
+          crres[3] <= cd[3];
+          crres[4] <= cd[4] | ^biti;
+          crres[5] <= cd[5] | biti[0];
+          crres[6] <= cd[6];
+          crres[7] <= cd[7] | biti[63];
         end
       `CMP_ANDCM:
         begin
-          crres[0] <= 1'b0;
-          crres[1] <= cd && !(biti==64'd0);
-          crres[2] <= 1'b0;
-          crres[3] <= 1'b0;
-          crres[4] <= cd & ~^biti;
-          crres[5] <= cd & ~biti[0];
-          crres[6] <= 1'b0;
-          crres[7] <= cd & ~biti[63];
+          crres[0] <= cd[0];
+          crres[1] <= cd[1] && !(biti==64'd0);
+          crres[2] <= cd[2];
+          crres[3] <= cd[3];
+          crres[4] <= cd[4] & ~^biti;
+          crres[5] <= cd[5] & ~biti[0];
+          crres[6] <= cd[6];
+          crres[7] <= cd[7] & ~biti[63];
         end
       `CMP_ORCM:
         begin
-          crres[0] <= 1'b0;
-          crres[1] <= cd || !(biti==64'd0);
-          crres[2] <= 1'b0;
-          crres[3] <= 1'b0;
-          crres[4] <= cd | ~^biti;
-          crres[5] <= cd | ~biti[0];
-          crres[6] <= 1'b0;
-          crres[7] <= cd | ~biti[63];
+          crres[0] <= cd[0];
+          crres[1] <= cd[1] || !(biti==64'd0);
+          crres[2] <= cd[2];
+          crres[3] <= cd[3];
+          crres[4] <= cd[4] | ~^biti;
+          crres[5] <= cd[5] | ~biti[0];
+          crres[6] <= cd[6];
+          crres[7] <= cd[7] | ~biti[63];
         end
-      default:  ;
+      default:  crres <= cd;
       endcase
     `SEQ: setcr(ia==imm);
     `SNE: setcr(ia!=imm);
@@ -1814,8 +1839,8 @@ EXECUTE:
         11'b001_0001_0000:  res <= TaskId;
         11'b001_0001_1111:  res <= ASID;
         11'b001_0010_0000:  res <= {key[2],key[1],key[0]};
-        11'b001_0010_0001:  res <= {key[3],key[4],key[5]};
-        11'b001_0010_0010:  res <= {key[6],key[7],key[8]};
+        11'b001_0010_0001:  res <= {key[5],key[4],key[3]};
+        11'b001_0010_0010:  res <= {key[8],key[7],key[6]};
         11'b011_0000_0001:  res <= hartid_i;
         11'b???_0000_0110:  res <= cause[ir[28:26]];
         11'b???_0000_0111:  res <= badaddr[ir[28:26]];
@@ -1850,7 +1875,7 @@ EXECUTE:
     `BOD: begin if ( cd[5]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
     `BPS: begin if ( cd[4]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
     `OSR2:
-      case(ir[30:26])
+      case(funct5)
   		`WFI:
   		  begin
   			  set_wfi <= 1'b1;
@@ -2769,12 +2794,12 @@ endtask
 task setboolAndcm;
 input bool;
 begin
-  crres[0] <= bool & ~cd[0];
-  crres[1] <= bool & ~cd[1];
+  crres[0] <= ~bool & cd[0];
+  crres[1] <= ~bool & cd[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= bool & ~cd[4];
-  crres[5] <= bool & ~cd[5];
+  crres[4] <= ~bool & cd[4];
+  crres[5] <= ~bool & cd[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end
@@ -2783,12 +2808,12 @@ endtask
 task setboolOrcm;
 input bool;
 begin
-  crres[0] <= bool | ~cd[0];
-  crres[1] <= bool | ~cd[1];
+  crres[0] <= ~bool | cd[0];
+  crres[1] <= ~bool | cd[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= bool | ~cd[4];
-  crres[5] <= bool | ~cd[5];
+  crres[4] <= ~bool | cd[4];
+  crres[5] <= ~bool | cd[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end
