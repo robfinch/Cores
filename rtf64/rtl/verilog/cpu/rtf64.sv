@@ -57,6 +57,7 @@
 `define EXT   8'h1C
 `define DEP   8'h1D
 `define DEPI  8'h1E
+`define FFO   8'h1F
 `define REMSU 8'h21
 `define SEQ   8'h26
 `define SNE   8'h27
@@ -90,7 +91,7 @@
 `define BCC   8'h3D
 `define LMI   8'b01001???
 `define LUI   8'b010100??
-`define AUIPC 8'b010101??
+`define AMIPC 8'b010101??
 `define GCSUB 8'h75
 `define OSR2  8'h7A
 `define CACHE 8'h7B
@@ -99,6 +100,7 @@
 `define GCCLR   5'h0D
 `define PFI     5'h11
 `define WFI     5'h12
+`define MVMAP   5'h1C
 `define LDB   8'h80
 `define LDBU  8'h81
 `define LDW   8'h82
@@ -524,10 +526,15 @@ reg [63:0] dbcr;
 reg [3:0] dbsr;
 
 reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
+reg d_shiftr, d_st, d_ld, d_exti;
 reg setto, getto, decto, getzl, popto;
 reg pushq, popq, peekq; 
-reg keyViolation;
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// MMU
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+reg keyViolation;
 reg [31:0] ladr;
 reg wrpagemap;
 wire [13:0] pagemapoa, pagemapo;
@@ -538,7 +545,7 @@ wire [16:0] pagemap_ndx = {ASID,ladr[25:14]};
 PagemapRam upageram (
   .clka(clk_g),   // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrpgmap),      // input wire [0 : 0] wea
+  .wea(wrpagemap),      // input wire [0 : 0] wea
   .addra({ib[20:16],ib[11:0]}),  // input wire [16 : 0] addra
   .dina(ia[13:0]),    // input wire [13 : 0] dina
   .douta(pagemapoa),  // output wire [13 : 0] douta
@@ -567,7 +574,8 @@ KeyMemory ukm1 (
   .doutb(keyo)  // output wire [19 : 0] doutb
 );
 
-wire keymem_cs = adr_o[31:28]==4'h0;
+wire MUserMode;
+wire keymem_cs = MUserMode && adr_o[31:28]==4'h0;
 
 wire [31:0] card21o, card22o, card1o;
 wire [63:0] cardmem0o;
@@ -622,6 +630,42 @@ CardMemory1 ucard3 (
   .doutb(card1o)  // output wire [31 : 0] doutb
 );
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// PMA Checker
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg [AWID-4:0] PMA_LB [0:7];
+reg [AWID-4:0] PMA_UB [0:7];
+reg [15:0] PMA_AT [0:7];
+
+initial begin
+  PMA_LB[7] = 28'hFFFC000;
+  PMA_UB[7] = 28'hFFFFFFF;
+  PMA_AT[7] = 16'h000D;       // rom, byte addressable, cache-read-execute
+  PMA_LB[6] = 28'hFFD0000;
+  PMA_UB[6] = 28'hFFD1FFF;
+  PMA_AT[6] = 16'h0206;       // io, (screen) byte addressable, read-write
+  PMA_LB[5] = 28'hFFD2000;
+  PMA_UB[5] = 28'hFFDFFFF;
+  PMA_AT[5] = 16'h0206;       // io, byte addressable, read-write
+  PMA_LB[4] = 28'hFFFFFFF;
+  PMA_UB[4] = 28'hFFFFFFF;
+  PMA_AT[4] = 16'hFF00;       // vacant
+  PMA_LB[3] = 28'hFFFFFFF;
+  PMA_UB[3] = 28'hFFFFFFF;
+  PMA_AT[3] = 16'hFF00;       // vacant
+  PMA_LB[2] = 28'hFFFFFFF;
+  PMA_UB[2] = 28'hFFFFFFF;
+  PMA_AT[2] = 16'hFF00;       // vacant
+  PMA_LB[1] = 28'h1000000;
+  PMA_UB[1] = 28'hFFCFFFF;
+  PMA_AT[1] = 16'hFF00;       // vacant
+  PMA_LB[0] = 28'h0000000;
+  PMA_UB[0] = 28'h0FFFFFF;
+  PMA_AT[0] = 16'h010F;       // ram, byte addressable, cache-read-write-execute
+end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 wire acki = ack_i;
 
 wire [2:0] omode = pmStack[3:1];
@@ -633,7 +677,7 @@ assign SupervisorMode = omode==3'b001;
 assign UserMode = omode==3'b000;
 assign memmode = mprv ? pmStack[7:5] : omode;
 wire MMachineMode = memmode==3'b011;
-wire MUserMode = memmode==3'b000;
+assign MUserMode = memmode==3'b000;
 
 function [7:0] fnSelect;
 input [31:0] ins;
@@ -686,12 +730,63 @@ wire [63:0] datis = dati >> {ea[1:0],3'b0};
 wire ld = state==EXECUTE;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Shift
+// Shift / Bitfield
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 wire [127:0] shlr = ia << ib[5:0];
 wire [127:0] shrr = {ia,64'd0} >> ib[5:0];
 wire [127:0] shli = ia << imm[5:0];
 wire [127:0] shri = {ia,64'd0} >> imm[5:0];
+
+reg d_exti, d_extr, d_extur, d_extui, d_depi, d_depr, d_depii, d_flipi, d_flipr;
+reg d_ffoi, d_ffor;
+wire [5:0] mb = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[23:18] : ib[5:0];
+wire [5:0] mw = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[29:24] : ic[5:0];
+wire [5:0] me = mb + mw;
+reg [63:0] bfo1, bfo2, bfo, mask;
+integer nn;
+always @*
+	for (nn = 0; nn < 64; nn = nn + 1)
+		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
+
+always @*
+if (d_depi|d_depr) begin
+	bfo2 = ia << mb;
+	for (n = 0; n < 64; n = n + 1)
+	  bfo[n] = (mask[n] ? bfo2[n] : id[n]);
+end
+else if (d_depii) begin
+	bfo2 = imm << mb;
+	for (n = 0; n < 64; n = n + 1)
+	  bfo[n] = (mask[n] ? bfo2[n] : id[n]);
+end
+else if (d_flipr|d_flipi) begin
+  for (n = 0; n < 64; n = n + 1)
+    bfo[n] = mask[n] ? ia[n]^id[n] : id[n];
+end
+else if (d_extr|d_exti) begin
+	for (n = 0; n < 64; n = n + 1)
+		bfo1[n] = mask[n] ? ia[n] : 1'b0;
+	bfo2 = bfo1 >> mb;
+	for (n = 0; n < 64; n = n + 1)
+		bfo[n] = n > mw ? bfo2[mw] : bfo2[n];
+end
+else if (d_extur|d_extui) begin
+	for (n = 0; n < 64; n = n + 1)
+		bfo1[n] = mask[n] ? ia[n] : 1'b0;
+	bfo = bfo1 >> mb;
+end
+else if (d_ffoi|d_ffor) begin
+  bfo2 = {64{1'b1}};
+	for (n = 0; n < 64; n = n + 1)
+		bfo1[n] = mask[n] ? ia[n] : 1'b0;
+  for (n = 0; n < 64; n = n + 1)
+    if (bfo1[n]==1'b1)
+      bfo2 = n;
+	bfo = bfo2[63] ? bfo2 : bfo2 - mb;
+end
+else
+	bfo = {64{1'b0}};
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide support logic
@@ -849,6 +944,9 @@ end
 
 BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
+wire [3:0] ea_acr = sregfile[segsel][3:0];
+wire [3:0] pc_acr = sregfile[pc[AWID-1:AWID-4]][3:0];
+
 always @(posedge clk_g)
 if (rst_i) begin
 	state <= IFETCH1;
@@ -953,6 +1051,20 @@ IFETCH1:
     d_setkey <= 1'b0;
     d_gcclr <= 1'b0;
     d_fltcmp <= 1'b0;
+    d_shiftr <= 1'b0;
+    d_st <= FALSE;
+    d_ld <= FALSE;
+    d_depi <= FALSE;
+    d_depr <= FALSE;
+    d_depii <= FALSE;
+    d_extr <= FALSE;
+    d_exti <= FALSE;
+    d_extui <= FALSE;
+    d_extur <= FALSE;
+    d_flipr <= FALSE;
+    d_flipi <= FALSE;
+    d_ffoi <= FALSE;
+    d_ffor <= FALSE;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -971,13 +1083,13 @@ IFETCH1:
 			tException({24'h800000,cause_i},pc);
 		end
 		else if (mip[7] & miex[7] & die) begin
-			tException(32'h80000001,pc);  // timer IRQ
+			tException(32'h800000F2,pc);  // timer IRQ
 		end
 		else if (mip[3] & miex[3] & die) begin
-			tException(32'h80000002, pc); // software IRQ
+			tException(32'h800000F0, pc); // software IRQ (SYS)
 		end
 		else if (uip[0] & gcie[ASID] & die) begin
-			tException(32'h80000003, pc); // garbage collect IRQ
+			tException(32'h800000F3, pc); // garbage collect IRQ
 			uip[0] <= 1'b0;
 		end
 		else
@@ -991,20 +1103,23 @@ IFETCH2:
   end
 IFETCH3:
   begin
+		goto (IFETCH4);
     cyc_o <= HIGH;
 		stb_o <= HIGH;
 		vpa_o <= HIGH;
 		sel_o <= 4'hF;
-		goto (IFETCH4);
   end
 IFETCH4:
-  if (ack_i) begin
-    cyc_o <= LOW;
-    stb_o <= LOW;
-    vpa_o <= LOW;
-    sel_o <= 4'h0;
-    ir <= dat_i;
-    goto (DECODE);
+  begin
+    if (ack_i) begin
+      cyc_o <= LOW;
+      stb_o <= LOW;
+      vpa_o <= LOW;
+      sel_o <= 4'h0;
+      ir <= dat_i;
+      goto (DECODE);
+    end
+		tPMAPC(); // must have adr_o valid for PMA
   end
 DECODE:
   begin
@@ -1030,6 +1145,10 @@ DECODE:
 	    `GCCLR:
 	      begin
 	        d_gcclr <= 1'b1;
+	        illegal_insn <= 1'b0;
+	      end
+	    `MVMAP:
+	      begin
 	        illegal_insn <= 1'b0;
 	      end
 		  default:  ;
@@ -1147,7 +1266,7 @@ DECODE:
         `MUXR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ADDR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `SUBR3A: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `FLIPR3A:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `FLIPR3A:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_flipr <= 1'b1; end
         default:  ;
         endcase
       end
@@ -1158,23 +1277,25 @@ DECODE:
         `ANDR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ORR3B:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `EORR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `DEPR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `EXTR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `EXTUR3B: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `DEPR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_depr <= 1'b1; end
+        `EXTR3B:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_extr <= 1'b1; end
+        `EXTUR3B: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_extur <= 1'b1; end
         `BLENDR3B: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `RGFR3B:  begin illegal_insn <= 1'b0; end
         default:  ;
         endcase
       end
+
     `SHIFT:
       begin
         Rd <= ir[12:8];
+        Cs <= ir[19:18];
         case(ir[27:24])
-        `ASL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `LSR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ROL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ROR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `ASR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `ASL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `LSR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `ROL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `ROR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `ASR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
         `ASLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `LSRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `ROLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
@@ -1217,9 +1338,13 @@ DECODE:
     `OR:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `EOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{1'b0}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; illegal_insn <= 1'b0; end
-    `LUI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-    `LMI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
-    `AUIPC: begin Rd <= ir[9] ? 5'd1 : 5'd2; wrirf <= 1'b1; illegal_insn <= 1'b0; end
+    `DEP: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depi <= ~ir[30]; d_flipi <= ir[30]; end
+    `DEPI: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depii <= TRUE; end
+    `EXT: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; d_exti <= ~ir[30]; d_extui <= ir[30]; end
+    `FFO: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; d_ffoi <= ~ir[30]; d_ffor <= ir[30]; end
+    `LUI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; imm <= {ir[31:9],ir[1:0],38'd0}; illegal_insn <= 1'b0; end
+    `LMI: begin Rd <= ir[8] ? 5'd1 : 5'd2; wrirf <= 1'b1; imm <= {{25{ir[31]}},ir[31:9],ir[2:0],13'd0}; illegal_insn <= 1'b0; end
+    `AMIPC: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{30{ir[31]}},ir[31:13],ir[1:0],13'd0}; illegal_insn <= 1'b0; end
     `CSR: if (omode >= ir[28:26]) begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= ir[17:13]; illegal_insn <= 1'b0; end
     // Flow Control
     `JMP: begin pc <= {pc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); illegal_insn <= 1'b0; end
@@ -1256,14 +1381,14 @@ DECODE:
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
       illegal_insn <= 1'b0;
     // Memory Ops
-    `LDB:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDBU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDW:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDWU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDT:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDTU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDO:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `LDOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `LDB:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDBU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDW:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDWU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDT:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDTU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDO:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
+    `LDOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
     `LDOT:
       begin
         casez(ir[12:8])
@@ -1272,48 +1397,55 @@ DECODE:
         5'b11101: begin wrcrf32 <= 1'b1; end
         endcase
         imm <= {{50{ir[31]}},ir[31:18]};
+        d_ld <= TRUE; 
         illegal_insn <= 1'b0;
       end
-    `STB:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STW:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STO:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STOC: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STPTR: begin d_stptr <= 1'b1; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
-    `STOT: begin d_stot <= 1'b1; Cs <= ir[22:18]; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; end
+    `STB:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STW:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STO:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STOC: begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STPTR: begin d_stptr <= 1'b1; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
+    `STOT: begin d_stot <= 1'b1; Cs <= ir[22:18]; imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
     `LDX:
-      case(ir[22:18])
-      `LDBX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDBUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDWX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDWUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDTX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDTUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDOX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDORX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-      `LDOTX:
-        begin
-          casez(ir[12:8])
-          5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
-          5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
-          5'b11101: begin wrcrf32 <= 1'b1; end
-          endcase
-          imm <= {{50{ir[31]}},ir[31:18]};
-          illegal_insn <= 1'b0;
-        end
-      default:  ;
-      endcase
+      begin
+        d_ld <= TRUE; 
+        case(ir[22:18])
+        `LDBX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDBUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDWX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDWUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDTX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDTUX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDOX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDORX:  begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `LDOTX:
+          begin
+            casez(ir[12:8])
+            5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
+            5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+            5'b11101: begin wrcrf32 <= 1'b1; end
+            endcase
+            imm <= {{50{ir[31]}},ir[31:18]};
+            illegal_insn <= 1'b0;
+          end
+        default:  ;
+        endcase
+      end
     `STX:
-      case(ir[12:8])
-      `STBX: illegal_insn <= 1'b0;
-      `STWX: illegal_insn <= 1'b0;
-      `STTX: illegal_insn <= 1'b0;
-      `STOX: illegal_insn <= 1'b0;
-      `STOCX: illegal_insn <= 1'b0;
-      `STPTRX: begin d_stptr <= 1'b1; illegal_insn <= 1'b0; end
-      `STOTX: begin d_stot <= 1'b1; Cs <= ir[22:18]; illegal_insn <= 1'b0; end
-      default:  ;
-      endcase
+      begin
+        d_st <= TRUE; 
+        case(ir[12:8])
+        `STBX: illegal_insn <= 1'b0;
+        `STWX: illegal_insn <= 1'b0;
+        `STTX: illegal_insn <= 1'b0;
+        `STOX: illegal_insn <= 1'b0;
+        `STOCX: illegal_insn <= 1'b0;
+        `STPTRX: begin d_stptr <= 1'b1; illegal_insn <= 1'b0; end
+        `STOTX: begin d_stot <= 1'b1; Cs <= ir[22:18]; illegal_insn <= 1'b0; end
+        default:  ;
+        endcase
+      end
 		`FMA,`FMS,`FNMA,`FNMS:
 			begin
 				Rd <= ir[12:8];
@@ -1343,8 +1475,8 @@ REGFETCH1:
       default:  ib <= 64'd0;
       endcase
     end
-    else if (opcode==`R2B)
-      ib <= cd2;
+    else if (opcode==`R2B || (d_shiftr & ir[23]))
+      ib <= cd2[0];
     else
       ib <= 64'd0;
     goto (REGFETCH2);
@@ -1356,6 +1488,8 @@ REGFETCH2:
     if (d_stot)
       ib <= ib;
     else if (opcode==`R2B)
+      ib <= ib;
+    else if (d_shiftr & ir[23])
       ib <= ib;
     else
       ib <= Rs2==5'd0 ? 64'd0 : irfoRs2;
@@ -1643,6 +1777,7 @@ EXECUTE:
           res[n] <= ia[n] ? ib[n] : ic[n];
       `ADDR3A: res <= ia + ib + ic;
       `SUBR3A: res <= ia - ib - ic;
+      `FLIPR3A:  res <= bfo;
       endcase
     `R3B:
     	case(ir[30:28])
@@ -1656,6 +1791,9 @@ EXECUTE:
           res[23:16] <= blendR1[15:8] + blendR2[15:8];
           res[63:24] <= ia[63:24];
         end
+      `EXTR3B: res <= bfo;
+      `EXTUR3B:  res <= bfo;
+      `DEPR3B: res <= bfo;
       endcase
     `ADD: res <= ia + imm;
     `SUBF: res <= imm - ia;
@@ -1823,9 +1961,15 @@ EXECUTE:
     `AND: res <= ia & imm;
     `OR:  res <= ia | imm;
     `EOR: res <= ia ^ imm;
-    `LUI: res <= {ir[31:9],ir[1:0],id[38:0]};
-    `LMI: res <= {{25{ir[31]}},ir[31:9],ir[2:0],13'd0};
-    `AUIPC: res <= ipc + {{26{ir[31]}},ir[31:9],ir[1:0],13'd0};
+    // Bitfield
+    `EXT: res <= bfo;
+    `DEP: res <= bfo;
+    `DEPI:  res <= bfo;
+    `FFO: res <= bfo;
+    
+    `LUI: res <= {imm[63:39],id[38:0]};
+    `LMI: res <= imm;
+    `AMIPC: res <= ipc + imm;
     `CSR:
       begin
         res <= 64'd0;
@@ -1943,6 +2087,7 @@ EXECUTE:
           default:  ;
           endcase
         end
+      `MVMAP: begin mathCnt <= 8'd2; goto (PAGEMAPA); end
       endcase
     // Memory Ops
     `LDB:  begin ea <= ia + imm; goto (MEMORY1); end
@@ -2113,6 +2258,14 @@ MUL2:
 // Load or store the memory value.
 // Wait for operation to complete.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+PAGEMAPA:
+  begin
+    mathCnt <= mathCnt - 2'd1;
+    if (mathCnt==8'd0) begin
+      res <= {50'd0,pagemapoa}; 
+      goto (WRITEBACK);
+    end
+  end
 MEMORY1:
   begin
     goto (MEMORY2);
@@ -2123,13 +2276,12 @@ MEMORY1:
 // This cycle for pageram access
 MEMORY2:
   begin
-    goto (keymem_cs ? MEMORY_KEYCHK1 : MEMORY3);
+    goto (MEMORY_KEYCHK1);
   end
 MEMORY_KEYCHK1:
   begin
     goto (MEMORY3);
-    if (keyViolation)
-			tException(32'h80000031,ipc);
+    tPMAEA();
   end
 MEMORY3:
   begin
@@ -2139,7 +2291,7 @@ MEMORY3:
     sel_o <= sel[3:0];
     dat_o <= dat[31:0];
     case(opcode)
-    `STB,`STW,`STT,`STO,`STOC,`STPTR:
+    `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
       we_o <= HIGH;
     default:  ;
     endcase
@@ -2162,7 +2314,7 @@ MEMORY5:
       goto (MEMORY6);
     else begin
       case(opcode)
-      `STB,`STW,`STT,`STO,`STOC,`STPTR:
+      `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
         goto (IFETCH1);
       default:
         goto (DATA_ALIGN);
@@ -2175,12 +2327,11 @@ MEMORY6:
     tEA();
   end
 MEMORY7:
-  goto (keymem_cs ? MEMORY_KEYCHK2 : MEMORY8);
+  goto (MEMORY_KEYCHK2);
 MEMORY_KEYCHK2:
   begin
     goto (MEMORY8);
-    if (keyViolation)
-			tException(32'h80000031,ipc);
+    tPMAEA();
   end
 MEMORY8:
   begin
@@ -2207,7 +2358,7 @@ MEMORY10:
       goto (MEMORY11);
     else begin
       case(opcode)
-      `STB,`STW,`STT,`STO,`STOC,`STPTR:
+      `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
         goto (IFETCH1);
       default:
         goto (DATA_ALIGN);
@@ -2220,12 +2371,11 @@ MEMORY11:
     tEA();
   end
 MEMORY12:
-  goto (keymem_cs ? MEMORY_KEYCHK3 : MEMORY13);
+  goto (MEMORY_KEYCHK3);
 MEMORY_KEYCHK3:
   begin
     goto (MEMORY13);
-    if (keyViolation)
-			tException(32'h80000031,ipc);
+    tPMAEA();
   end
 MEMORY13:
   begin
@@ -2247,7 +2397,7 @@ MEMORY15:
   if (~acki) begin
     ea <= {ea[31:2]+2'd1,2'b00};
     case(opcode)
-    `STB,`STW,`STT,`STO,`STOC,`STPTR:
+    `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
       goto (IFETCH1);
     default:
       goto (DATA_ALIGN);
@@ -2268,6 +2418,8 @@ DATA_ALIGN:
       `LDOX:   res <= datis[63:0];
       `LDOTX:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
       `LDORX:  res <= datis[63:0];
+      `FLDOX:  res <= datis[63:0];
+      default:  ;
       endcase
     `LDB:   res <= {{56{datis[7]}},datis[7:0]};
     `LDBU:  res <= {{56{1'b0}},datis[7:0]};
@@ -2278,6 +2430,7 @@ DATA_ALIGN:
     `LDO:   res <= datis[63:0];
     `LDOT:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
     `LDOR:  res <= datis[63:0];
+    `FLDO:  res <= datis[63:0];
     default:  ;
     endcase
   end
@@ -2719,9 +2872,12 @@ WRITEBACK:
 				pmStack <= {4'b1010,pmStack[31:4]};
       end
     `OSR2:
-      case(ir[30:26])
+      case(funct5)
       `REX:
         epc[crs] <= next_epc;
+      `MVMAP:
+        if (Rs1 != 5'd0)
+          wrpagemap <= 1'b1;
       default:  ;
       endcase
     endcase
@@ -2733,6 +2889,10 @@ end
 
 task tEA;
 begin
+  if (MUserMode && d_st && !ea_acr[1])
+    tException(32'h80000032,ipc);
+  else if (MUserMode && d_ld && !ea_acr[2])
+    tException(32'h80000033,ipc);
 	if (!MUserMode || ea[AWID-1:24]=={AWID-24{1'b1}})
 		ladr <= ea;
 	else
@@ -2742,10 +2902,42 @@ endtask
 
 task tPC;
 begin
+  if (UserMode & !pc_acr[0])
+    tException(32'h80000002,pc);
 	if (!UserMode || pc[AWID-1:24]=={AWID-24{1'b1}})
 		ladr <= pc;
 	else
-		ladr <= pc[AWID-2:0] + {sregfile[{2'b11,pc[AWID-1:AWID-2]}][AWID-1:4],`SEG_SHIFT};
+		ladr <= pc[AWID-2:0] + {sregfile[pc[AWID-1:AWID-4]][AWID-1:4],`SEG_SHIFT};
+end
+endtask
+
+task tPMAEA;
+begin
+  if (keyViolation)
+		tException(32'h80000031,ipc);
+  // PMA Check
+  for (n = 0; n < 8; n = n + 1)
+    if (adr_o[31:4] >= PMA_LB[n] && adr_o[31:4] <= PMA_UB[n]) begin
+      if ((d_st && !PMA_AT[n][1]) || (d_ld && !PMA_AT[n][2]))
+        tException(32'h8000003D,ipc);
+    end
+end
+endtask
+
+task tPMAPC;
+begin
+  // PMA Check
+  // Abort cycle that has already started.
+  for (n = 0; n < 8; n = n + 1)
+    if (adr_o[31:4] >= PMA_LB[n] && adr_o[31:4] <= PMA_UB[n]) begin
+      if (!PMA_AT[n][0]) begin
+        tException(32'h8000003D,ipc);
+        cyc_o <= LOW;
+    		stb_o <= LOW;
+    		vpa_o <= LOW;
+    		sel_o <= 4'h0;
+    	end
+    end
 end
 endtask
 
