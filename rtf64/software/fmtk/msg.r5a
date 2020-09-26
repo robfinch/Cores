@@ -1,0 +1,554 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;	bss
+;	align 4
+;FreeMsg	dw	0
+;msgs:
+;	fill.b	MSG_SIZE*1024,0
+;mbxs:
+;	fill.b	MBX_SIZE*32,0
+;mbxs_end:
+
+	code  18 bits
+;------------------------------------------------------------------------------
+; Remove the task from the list of tasks waiting at the mailbox.
+;
+; Parameters:
+;		$a0 = task id
+;------------------------------------------------------------------------------
+  align  16
+MbxRemoveTask:
+	gcsub	$sp,$sp,#20
+	stt		$s1,[$sp]
+	stt		$t0,4[$sp]
+	stt		$t1,8[$sp]
+	stt		$t2,12[$sp]
+	stt   $a0,16[$sp]
+	sll   $a0,$a0,#LOG_PGSZ
+	mDI
+	ldt   $t0,TCBMbxPrev[$a0]
+	ldt   $t1,TCBMbxNext[$a0]
+	beqz  $t0,.atHead
+	stt   $t1,TCBMbxNext[$t0]
+  stt   $t0,TCBMbxPrev[$t1]
+  bra   .xit
+.atHead:
+	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
+	ble	  $t0,$x0,.xit  		    ; handle good?
+	sll		$t0,$t0,#LOG_PGSZ			; convert to pointer
+	ldt		$t1,MBX_TQHEAD[$t0]		; get waiting task list
+	beqz  $t1,.tqEmpty
+	ldt   $t1,MBX_TQTAIL[$t0]
+	stt   $a0,TCBMbxNext[$t1]
+	stt   $t1,TCBMbxPrev[$a0]
+	stt   $x0,TCBMbxNext[$a0]
+	bra   .xit
+.tqEmpty
+	stt   $a0,MBX_TQHEAD[$t0]
+	stt   $a0,MBX_TQTAIL[$t0]
+	stt   $x0,TCBMbxPrev[$a0]
+	stt   $x0,TCBMbxNext[$a0]
+.xit:
+  mEI
+	ldt		$s1,[$sp]
+	ldt		$t0,4[$sp]
+	ldt		$t1,8[$sp]
+	ldt		$t2,12[$sp]
+	ldt   $a0,16[$sp]
+	add		$sp,$sp,#20
+  ret
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = app id of owner
+;		a2 = pointer where to store handle
+; Returns:
+;		a0 = E_Ok
+;------------------------------------------------------------------------------
+  align 16
+FMTK_AllocMbx_Old:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	beq		$a2,$x0,.badArg
+	ldi		$t0,#mbxs
+  mDI
+.nxt:
+	lbu		$t1,MBX_OWNER[$t0]
+	beq		$t1,$x0,.noOwner
+	add		$t0,$t0,#MBX_SIZE
+	slt		$t1,$t0,#mbxs_end
+	bne		$t1,$x0,.nxt
+	ldi		$a0,#E_NoMoreMbx
+	jmp   OSExit
+.noOwner:
+	stb		$a1,MBX_OWNER[$t0]
+	stt   $x0,MBX_TQHEAD[$t0]
+	stt   $x0,MBX_TQTAIL[$t0]
+	stt   $x0,MBX_MQHEAD[$t0]
+	stt   $x0,MBX_MQTAIL[$t0]
+	sub		$t5,$t0,#mbxs				; convert pointer to handle
+	srl		$t5,$t5,#5
+	mov   $a0,$a1             ; $a0 = mid
+	mov		$a1,$a2
+	call	VirtToPhys2
+	stw		$t5,[$a0]
+  mEI
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+.badArg:
+	ldi		$a0,#E_Arg
+	jmp		OSExit
+
+;------------------------------------------------------------------------------
+; FMTK_AllocMbx
+;   Allocate a mailbox. Get the mailbox off the free list. If there are no
+; free mailboxes then allocate a block of new mailboxes.
+;
+; Parameters:
+;		$a1 = app id of owner
+; Returns:
+;		$a0 = E_Ok
+;   $a1 = mailbox handle
+;------------------------------------------------------------------------------
+FMTK_AllocMbx:
+  ldt   $a0,FreeMbx
+  bnez  $a0,.gotMbx
+  ; no free mailboxes?
+  ldi   $a0,#1024         ; 1 page
+  call  PAMAlloc
+  bltz  $a0,.outOfMem
+  ldbu  $t0,MbxBlockCounter
+  stb   $t0,OBJCollectionIndex[$a0] ; store which index of the collection we are
+  sll   $t0,$t0,#2
+  stt   $a0,MbxBlockPtr[$t0]
+  srl   $t0,$t0,#2
+  add   $t0,$t0,#1
+  stb   $t0,MbxBlockCounter
+  ldi   $t0,#47           ; 48 mailboxes in block
+  ; Initialize object fields
+  ldi   $t1,#MBX_MAGIC
+  stt   $t1,OBJMagic[$a0]
+  ldi   $t1,#960
+  stt   $t1,OBJSize[$a0]
+  stb   $x0,OBJState[$a0]
+  stb   $x0,OBJScavcnt[$a0]
+  stb   $x0,OBJOwningMap[$a0]
+  ldi   $t1,#MbxFinalizer
+  stt   $t1,OBJFinalizer[$a0]
+  mDI
+  add   $t1,$a0,#64       ; point to first mailbox
+  stt   $t1,FreeMbx
+  mov   $a0,$t1
+.0001:
+  add   $t2,$t1,#MBX_SIZE
+  stt   $t2,MBX_LINK[$t1]
+  mov   $t1,$t2
+  sub   $t0,$t0,#1
+  bgtz  $t0,.0001
+  stt   $x0,MBX_LINK[$t1]
+.gotMbx:
+  ldt   $t0,MBX_LINK[$a0]
+  stt   $t0,FreeMbx
+  stt   $x0,MBX_LINK[$a0]
+	stb		$a1,MBX_OWNER[$a0]
+	stt   $x0,MBX_TQHEAD[$a0]
+	stt   $x0,MBX_TQTAIL[$a0]
+	stt   $x0,MBX_MQHEAD[$a0]
+	stt   $x0,MBX_MQTAIL[$a0]
+	; Create an id that is a hash code representing the location of the mailbox.
+	; Given the hash code the mailbox pointer can be recreated easily.
+	and   $t0,$a0,#$FFFFFC00    ; get pointer to block object
+	ldbu  $t1,OBJCollectionIndex[$t0]
+	mEI
+	and   $t2,$a0,#$3FF         ; get offset of mailbox in block
+	sll   $t1,$t1,#10           ; make an id hash
+	or    $a1,$t1,$t2
+	srl   $a1,$a1,#2            ; 2 LSB's will be zero
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+.outOfMem:
+  ldi   $a0,#E_NoMem
+  jmp   OSExit
+
+;------------------------------------------------------------------------------
+; Dequeue any waiting tasks returning to them a E_NoMsg status and removing
+; them from the timeout list as well. Then move any messages that are queued
+; back to the free message list.
+;------------------------------------------------------------------------------
+  align 16
+FMTK_FreeMbx_Old:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	slt		$s1,$a1,#32
+	beq		$s1,$x0,.badMbx
+	sll		$s1,$a1,#4					; convert handle to pointer
+	add		$s1,$s1,#mbxs
+	bra   FreeMbx1
+
+  align 16
+FMTK_FreeMbx:
+  mov   $a0,$a1
+  mMbxHandleToPointer
+  mDI
+  ldt   $t0,FreeMbx
+  stt   $t0,MBX_LINK[$a0]
+  stt   $a0,FreeMbx
+
+  mov   $s1,$a0
+FreeMbx1:
+	ldi		$s2,#0
+	ldi		$s4,#NTASK							; possibly 32 tasks
+	ldt		$s6,MBX_TQHEAD[$s1]
+.0002:
+	beqz	$s6,.0001
+	ldbu	$t2,TCBStatus[$s6]
+	and		$t2,$t2,#~TS_WAITMSG	; no longer waiting
+	stb		$t2,TCBStatus[$s6]
+	and		$t2,$t2,#TS_TIMEOUT   ; Is the task timing out?
+	ldt   $a0,TCBTaskNum[$s6]
+	beqz	$t2,.0003
+	setto	$a0,$x0           ; Remove from the timeout list
+.0003:
+  ldwu  $a0,TCBtid[$s6]
+	call	InsertIntoReadyQueue
+	ldi		$t2,#E_NoMsg					; but no message
+	stt		$t2,TCBxA0[$s6]	; a0 = E_NoMsg
+	ldt   $s5,TCBMbxNext[$s6]
+	stt   $x0,TCBMbxNext[$s6]
+	stt   $x0,TCBMbxPrev[$s6]
+	mov   $s6,$s5
+	bra   .0002
+.0001:
+  stt   $x0,MBX_TQHEAD[$s1]
+  stt   $x0,MBX_TQTAIL[$s1]
+  ; Now free any messages queued at the mailbox. We are crafty here and
+  ; don't follow any links. Instead the entire chain of messages queued
+  ; is transferred to the free message list.
+  ldt   $s6,MBX_MQTAIL[$s1] ; get pointer to last message
+  ldt   $s5,FreeMsg
+  stt   $s5,MSG_LINK[$s6]   ; link current free list onto it
+  ldt   $s6,MBX_MQHEAD[$s1]
+  stt   $s6,FreeMsg         ; set new head of free list
+  mEI
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+.badMbx:
+	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
+	jmp		OSExit
+
+
+;------------------------------------------------------------------------------
+; AllocMsg
+;
+; This internally used routine to provide message space to store data in.
+; First the free list is checked to see if any messages are available.
+; If there are no message available then a block of 48 messages is allocated
+; and added to the free list. 48 messages fit nicely into a 1kB memory page.
+;
+; Parameters:
+;   none
+; Returns:
+;   $a0 = status (E_Ok)
+;   $a1 = pointer to message
+;------------------------------------------------------------------------------
+  align 16
+AllocMsg:
+  mDI
+  ldt   $a0,FreeMsg
+  bnez  $a0,.gotMsg
+  ; no free messages?
+  ldi   $a0,#1024         ; 1 page
+  call  PAMAlloc
+  bltz  $a0,.outOfMem
+  ldi   $t0,#47           ; 48 messages in block
+  ; Initialize object fields
+  ldi   $t1,#MSG_MAGIC
+  stt   $t1,OBJMagic[$a0]
+  ldi   $t1,#960
+  stt   $t1,OBJSize[$a0]
+  stb   $x0,OBJState[$a0]
+  stb   $x0,OBJScavcnt[$a0]
+  stb   $x0,OBJOwningMap[$a0]
+  ldi   $t1,#MsgFinalizer
+  stt   $t1,OBJFinalizer[$a0]
+ 
+  add   $t1,$a0,#64       ; point to first message
+  stt   $t1,FreeMsg
+  mov   $a0,$t1
+.0001:
+  add   $t2,$t1,#MSG_SIZE
+  stt   $t2,MSG_LINK[$t1]
+  mov   $t1,$t2
+  sub   $t0,$t0,#1
+  bgtz  $t0,.0001
+  stt   $x0,MSG_LINK[$t1]
+.gotMsg:
+  ldt   $t0,MSG_LINK[$a0]
+  stt   $t0,FreeMsg
+  stt   $x0,MSG_LINK[$a0]
+  mEI
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+  ret
+.outOfMem:
+  mEI
+  ldi   $a0,#E_NoMem
+  ret
+
+;------------------------------------------------------------------------------
+; FreeMsg
+;
+; This internally used routine frees a message previously allocated with
+; AllocMsg. The message is added to the free list.
+;
+; Parameters:
+;   $a0 = pointer to message.
+; Returns:
+;   $a0 = E_Ok
+;------------------------------------------------------------------------------
+  align 16
+FreeMsgRout:
+  mDI
+  ldt   $t0,FreeMsg
+  stt   $t0,MSG_LINK[$a0]
+  stt   $a0,FreeMsg
+  mEI
+  ldi   $a0,#E_Ok
+  ret
+
+;------------------------------------------------------------------------------
+; Send a message to a mailbox.
+; The message will be broadcast to any waiting tasks. Waiting tasks will then
+; be moved to the ready list. If there are no waiting tasks then the message
+; is queued at the mailbox.
+;
+; Register Usage:
+;		$t0 = mailbox pointer
+;		$t1 = message pointer
+;		$s1 = task id of waiting task
+; Modifies:
+;		$a0
+; Parameters:
+;		$a1 = mailbox handle
+;		$a2 = message d1
+;		$a3 = message d2
+;		$a4 = message d3
+;------------------------------------------------------------------------------
+  align 16
+ISendMsg:
+  sub   $sp,$sp,#4
+  stt   $ra,[$sp]
+;  mEI
+;	slt		$t0,$a1,#32
+;	beq		$t0,$x0,.badMbx
+;	sll		$t0,$a1,#4					; convert handle to pointer
+;	add		$t0,$t0,#mbxs
+  mov   $a0,$a1
+  mMbxHandleToPointer
+  mov   $t0,$a0
+	ldt		$s3,MBX_TQHEAD[$t0]
+	beq		$s3,$x0,.noWaiters
+	stt		$a2,TCBMsgD1[$s3]		; copy message to TCB
+	stt		$a3,TCBMsgD2[$s3]
+	stt		$a4,TCBMsgD3[$s3]
+	ldbu	$t2,TCBStatus[$s3]
+	or		$t2,$t2,#TS_MSGRDY
+	stb		$t2,TCBStatus[$s3]
+	ldwu  $a0,TCBtid[$s3]
+	sub		$sp,$sp,#4
+	stt		$t0,[$sp]						; push t0
+	call	InsertIntoReadyQueue
+	ldt		$t0,[$sp]						; pop t0
+	add		$sp,$sp,#4
+	ldt   $s5,TCBMbxNext[$s3]
+	stt   $x0,TCBMbxNext[$s3]
+	stt   $x0,TCBMbxPrev[$s3]
+	stt   $s5,MBX_TQHEAD[$t0]
+	ldi		$a0,#E_Ok
+	bra   .xit
+.noWaiters:
+  call  AllocMsg
+	bnez	$a0,.noMsg			    ; message available?
+	stt		$a2,MSG_D1[$a1]
+	stt		$a3,MSG_D2[$a1]
+	stt		$a4,MSG_D3[$a1]
+	ldt		$t3,MBX_MQTAIL[$t0]
+	beqz	$t3,.mbxEmpty
+	stt		$a1,MSG_LINK[$t3]
+	stt		$a1,MBX_MQTAIL[$t0]
+	ldi		$a0,#E_Ok
+	bra   .xit
+.mbxEmpty:
+	stt		$a1,MBX_MQHEAD[$t0]
+	stt		$a1,MBX_MQTAIL[$t0]
+	ldi		$a0,#E_Ok
+	bra   .xit
+.noMsg:
+	ldi		$a0,#E_NoMsg
+	bra   .xit
+.badMbx:
+	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
+.xit
+	ldt   $ra,[$sp]
+	add   $sp,$sp,#4
+	ret
+
+  align 16
+FMTK_SendMsg:
+  mDI
+  call  ISendMsg
+  mEI
+  jmp   OSExit
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a1 = mailbox handle
+;		$a2 = pointer where to put message D1
+;		$a3 = pointer where to put message D2
+;		$a4 = pointer where to put message D3
+;		$a5 = 1 = remove from queue
+;------------------------------------------------------------------------------
+  align 16
+PeekMsg:
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
+;	slt		$t0,$a1,#32
+;	beq		$t0,$x0,.badMbx
+;	sll		$t2,$a1,#4					; convert handle to pointer
+;	add		$t2,$t2,#mbxs
+	mov   $a0,$a1
+	mMbxHandleToPointer
+	mov   $t2,$a0
+	mDI
+	ldt		$t1,MBX_MQHEAD[$t2]
+	beqz	$t1,.noMsg
+	beqz	$a5,.nodq
+	ldt		$t3,MSG_LINK[$t1]
+	stt		$t3,MBX_MQHEAD[$t2]
+	; This is done here only because interrupts are disabled
+	mov   $a0,$t3
+	call  FreeMsgRout
+.nodq:
+  ; Makes use of the MPRV feature. PeekMsg() or WaitMsg() will be running in
+  ; the task context expecting to receive a message. That means the base
+  ; registers and ASID should be set appropriately.
+	ldi   $a1,#$20000       ; bit 17 = mprv
+  ldb   $a0,TCBmid[$t1]   ; $a0 = mid
+	beqz  $a2,.nod1
+	ldt		$t3,MSG_D1[$t1]
+	csrrs $x0,#CSR_MSTATUS,$a1
+	stt		$t3,[$a2]
+	csrrc $x0,#CSR_MSTATUS,$a1
+.nod1:
+	beqz	$a3,.nod2
+	ldt		$t3,MSG_D2[$t1]
+	csrrs $x0,#CSR_MSTATUS,$a1
+	stt		$t3,[$a3]
+	csrrc $x0,#CSR_MSTATUS,$a1
+.nod2:
+	beqz	$a4,.nod3
+	ldt		$t3,MSG_D3[$t1]
+	csrrs $x0,#CSR_MSTATUS,$a1
+	stt		$t3,[$a4]
+	csrrc $x0,#CSR_MSTATUS,$a1
+.nod3:
+	ldi		$a0,#E_Ok
+	bra		.ret
+.noMsg:
+	ldi		$a0,#E_NoMsg
+	bra		.ret
+.badMbx:
+	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
+.ret:
+  mEI
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+;------------------------------------------------------------------------------
+; PeekMsg will check for a message at a mailbox optionally dequeuing it.
+; If no message is available PeekMsg returns to the caller with a E_NoMsg
+; status.
+;
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = pointer where to put message D1
+;		a3 = pointer where to put message D2
+;		a4 = pointer where to put message D3
+;		a5 = 1 = remove from queue
+;------------------------------------------------------------------------------
+
+FMTK_PeekMsg:
+	call	PeekMsg
+	jmp		OSExit
+
+;------------------------------------------------------------------------------
+; Calling WaitMsg will cause the task to be queued at the mailbox and a task
+; switch to occur if there are no messages at the mailbox.
+;
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = pointer where to put message D1
+;		a3 = pointer where to put message D2
+;		a4 = pointer where to put message D3
+;		a5 = time limit
+;------------------------------------------------------------------------------
+  align 16
+FMTK_WaitMsg:
+	mov		$s5,$a5
+	ldi		$a5,#1              ; dequeue messages
+	call	PeekMsg							; check for a message, return if available
+	ldi		$t1,#E_NoMsg
+	beq		$a0,$t1,.qt					; no message? Then go queue task
+	jmp		OSExit
+.qt:
+  mov   $a0,$a1
+  mMbxHandleToPointer
+  mov   $t3,$a0
+	mGetCurrentTid
+	sll		$t1,$a0,#LOG_TCBSZ  ; $t1 = tcb pointer
+;	sll		$t3,$a1,#5					; convert handle to pointer
+;	add		$t3,$t3,#mbxs
+  mDI
+	ldt		$t4,MBX_TQTAIL[$t3]	; get waiting task list tail
+	beqz  $t4,.qempty
+  stt   $t4,TCBMbxPrev[$t1] ; add task onto tail of waiting list
+  stt   $t1,TCBMbxNext[$t4] ; tail->next = tid tcb pointer
+  stt   $t1,MBX_TQTAIL[$t3]
+  bra   .setA
+.qempty:
+  stt   $t1,MBX_TQHEAD[$t3]
+  stt   $t1,MBX_TQTAIL[$t3]
+.setA:
+  stt   $a2,TCBxA2[$t1]   ; save pointers for data in task regs
+  stt   $a3,TCBxA3[$t1]
+  stt   $a4,TCBxA4[$t1]
+	ldbu	$t3,TCBStatus[$t1]
+	or		$t3,$t3,#TS_WAITMSG	; set waiting for message status
+	and		$t3,$t3,#~TS_READY	; not ready
+	stb		$t3,TCBStatus[$t1]
+	stb		$a1,TCBWaitMbx[$t1]	; set mailbox task is waiting for
+	mEI
+	jmp		FMTK_Sleep          ; Continue by switching tasks
+
+MsgFinalizer:
+  ret

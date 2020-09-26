@@ -1,0 +1,94 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+INBUF				equ		$0100
+switchflag	equ		$0200
+milliseconds	equ		$0208
+CurrentTid  equ   $210
+TaskNum     equ   $220
+
+ACBPtrs EQU $0280
+APPID_POOL  EQU   $02F0
+NPAGES	equ		$0300
+QNDX		EQU		$0304
+READYQ	EQU		$0308
+TID_POOL  EQU		$0310
+missed_ticks	equ		$0320
+TimeoutList		equ		$0328
+Tick		EQU		$0330
+SysSema	EQU		$0340
+MEPC0   EQU   $0350
+MEPC1   EQU   $0358
+MEPC2   EQU   $0360
+MEPC3   EQU   $0368
+CURIN   EQU   $0370
+CUROUT  EQU   $0371
+CHAINA0 EQU   $0378
+CHAINA1 EQU   $0380
+CHAINA2 EQU   $0388
+CHAINA3 EQU   $0390
+CHAINA4 EQU   $0398
+CHAINA5 EQU   $03A0
+READYQ  EQU   $0400
+RDYQ0		EQU		$0400
+RDYQ1		EQU		$0500
+RDYQ2		EQU		$0600
+RDYQ3		EQU		$0700
+mbxs		EQU		$0800
+mbxs_end	EQU	$0C00
+FreeMsg	EQU		$0C00
+FreeMbx EQU   $0C08
+IdleTaskMbx EQU   $0C10
+IdleTaskMsgD1 EQU   $0C18
+IdleTaskMsgD2 EQU   $0C20
+IdleTaskMsgD3 EQU   $0C28
+IdleTaskId    EQU   $0C2A
+PAMPtr  EQU   $0FF8
+PAM     EQU   $1000
+PAMend  EQU   $1080
+IOFocusNdx		EQU		$1080
+IOFocusTbl		EQU		$1088
+IRQFlag   EQU $1090
+IRQCause  EQU $1098
+MbxBlockPtr EQU   $10A0
+MbxBlockPtrEnd  EQU MbxBlockPtr + MBX_BLOCKPTR_BUFSZ * 4
+MbxBlockCounter EQU $10E0
+RegsetTid   EQU   $10F0
+SerRcvBuf		EQU		$1400
+SerXmitBuf	EQU		$1800
+SerHeadRcv	EQU		$1C00
+SerTailRcv	EQU		$1C04
+SerHeadXmit	EQU		$1C08
+SerTailXmit	EQU		$1C0C
+SerRcvXon		EQU		$1C10
+SerRcvXoff	EQU		$1C11
+; The following must be at least 128 byte aligned
+DVF_Base		EQU		$2000
+DVF_Limit		EQU		$3000
+DCB_Base    EQU   $3000
+DCB_Limit   EQU   $3C00
+
+SysHeapStart  EQU   $4000
+SysHeapEnd    EQU   $20000
+
+

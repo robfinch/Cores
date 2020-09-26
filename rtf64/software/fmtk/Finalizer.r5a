@@ -1,0 +1,92 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+; The Finalizer task examines the undead queue looking for tasks that haven't
+; been finalized yet. If there is no finalizer the task is marked dead, 
+; otherwise the task's execution point is changed to the task finalizer and
+; the task is placed back into the ready queue. The task finalizer should
+; exit by invoking the FinalizerExit routine of the OS.
+
+  code  18 bits
+  align 4
+Finalizer:
+  ldi   $a0,#24               ; request I/O focus
+  ecall
+  ldi   $a0,#msgFinalizerRunning
+  call  PutString
+  ldi   $a0,#22               ; release I/O focus
+  ecall
+  ldi   $a0,#4                ; set task priority
+  ldi   $a1,#PRI_LOW
+  ecall
+.yield:
+  ldi   $a0,#5                ; Sleep
+  ldi   $a1,#0                ; 0 to yeild
+  ecall
+.nxt2:
+  ldi   $a0,#17               ; RunAsOS
+  ldi   $a1,.oscode
+  ecall
+  bra   .nxt2
+.oscode:
+  ldi   $t0,#UNDEADQ
+  popq  $a0,$t0
+  bge   $a0,$x0,.nxt2         ; valid entry?
+  and   $t1,$a0,#$4000        ; queue empty?
+  bnez  $t1,.yield            ; go back to yield
+  and   $t1,$a0,#$FF
+  ldt   $a1,TidTcbMap[$t1]    ; get pointer to task
+  and   $t1,$t1,#$FFF803FF    ; valid task pointer
+  bnez  $t1,.nxt2
+  ldt   $t1,OBJFinalizer[$a1] ; Finalizer code?
+  beqz  $t1,.noFinalizer
+  ; If there is finalizer code to run, the task is placed back into the ready
+  ; queue with the operating address set to the finalizer code.
+  stt   $t1,TCBepc[$a1]       ; Cause task to return to finalizer
+  ldi   $t1,#PRI_LOW
+  ldbu  $a0,TCBtid[$a1]
+  pushq $a0,$t1
+.noFinalizer:
+  ldi   $t1,#TS_DEAD
+  stb   $t1,TCBStatus[$a1]
+  ldi   $t1,#OST_DEAD
+  stb   $t1,OBJState[$a1]
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+  bra   .nxt2
+
+FMTK_TCBFinalizerExit:
+  mGetCurrentTid
+  and   $t1,$a0,#$FF
+  ldt   $a1,TidTcbMap[$t1]    ; get pointer to task
+  and   $t1,$t1,#$FFF803FF    ; valid task pointer
+  bnez  $t1,.0001
+  ldi   $t1,#TS_DEAD
+  stb   $t1,TCBStatus[$a1]
+  ldi   $t1,#OST_DEAD
+  stb   $t1,OBJState[$a1]
+.0001:
+  jmp   OSExit
+
+msgFinalizerRunning:
+  db  "Finalizer task running",CR,0

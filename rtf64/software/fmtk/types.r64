@@ -1,0 +1,185 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+OBJMagic    EQU   0
+OBJSize     EQU   8
+OBJTypenum  EQU   16
+OBJID       EQU   20
+OBJState    EQU   24    ; WHITE, GREY, BLACK
+OBJScavcnt  EQU   25    ; scavange count
+OBJOwningMap  EQU   26
+OBJPad1       EQU   27
+OBJCollectionIndex  EQU   28
+OBJUsedInMap  EQU   32    ; used in map
+OBJPad3       EQU   36
+OBJFWAddr     EQU   40    ; forwarding address
+OBJFinalizer  EQU   48
+OBJ_SIZE      EQU   64
+
+; Task Control Block
+TCBObject   EQU   $000    ; Object structure, state
+TCBIntRegs  EQU   $040    ; integer register set storage area (room for 64-bit)
+TCBxRA      EQU   $048
+TCBxSP      EQU   $050
+TCBxGP      EQU   $058
+TCBxTP      EQU   $060
+TCBxT0      EQU   $068
+TCBxT1      EQU   $070
+TCBxT2      EQU   $078
+TCBxFP      EQU   $080
+TCBxS1      EQU   $088
+TCBxA0      EQU   $090
+TCBxA1      EQU   $098
+TCBxA2      EQU   $0A0
+TCBxA3      EQU   $0A8
+TCBxA4      EQU   $0B0
+TCBxA5      EQU   $0B8
+TCBxA6      EQU   $0C0
+TCBxA7      EQU   $0C8
+TCBxS2      EQU   $0D0
+TCBxS3      EQU   $0D8
+TCBxS4      EQU   $0E0
+TCBxS5      EQU   $0E8
+TCBxS6      EQU   $0F0
+TCBxS7      EQU   $0F8
+TCBxS8      EQU   $100
+TCBxS9      EQU   $108
+TCBxS10     EQU   $110
+TCBxS11     EQU   $118
+TCBxT3      EQU   $120
+TCBxT4      EQU   $128
+TCBxT5      EQU   $130
+TCBxT6      EQU   $138
+TCBFltRegs  EQU   $140    ; float register set storage area
+TCBRegsEnd  EQU   $240
+; First 128 bytes are for integer register set
+; Second 128 bytes are for float register set
+; Leave some room for 64-bit regs
+TCBbases  	EQU		$240		; base register storage
+TCBepc  		EQU		$2C0
+TCBStatus		EQU		$2C8
+TCBPriority	EQU		$2C9
+TCBWaitMbx	EQU		$2CA
+TCBRegset   EQU   $2CB
+TCBHasFocus EQU   $2CC
+TCBStackBot	EQU		$2D0
+TCBMsgD1		EQU		$2D8
+TCBMsgD2		EQU		$2E0
+TCBMsgD3		EQU		$2E8
+TCBStartTick	EQU	$2D0
+TCBEndTick	EQU		$2D8
+TCBTicks		EQU		$300
+TCBException	EQU	$308
+TCBNext			EQU		$310
+TCBPrev			EQU		$318
+TCBTimeout	EQU		$320
+TCBtid      EQU   $338
+TCBmid      EQU   $340
+TCBappid    EQU   $342
+TCBOpMode   EQU   $344
+TCBMbxNext  EQU   $348
+TCBMbxPrev  EQU   $350
+TCBTaskNum  EQU   $358
+TCBName			EQU		$360
+
+; Application Control Block
+ACBObject     EQU   0
+ACBpData      EQU   64
+ACBDataSize   EQU   72
+ACBpUIData    EQU   80
+ACBUIDataSize EQU   88
+ACBGCRoots    EQU   96
+ACBGCRootCnt  EQU   104
+ACBGCNdx      EQU   112
+ACBGCMarkingQue EQU   120
+ACBGCMarkingQueFull   EQU   128
+ACBGCMarkingQueEmpty  EQU   129
+ACBGCOverflow EQU   130
+ACBpCode      EQU   134
+ACBObjectList EQU   144
+ACBGarbageList  EQU   152
+ACBHeap       EQU   160   ; 640+ bytes for heap object info
+ACBiofNext    EQU   824
+ACBiofPrev    EQU   832
+ACBUserName   EQU   840   ; 2 byte index of string in string area
+ACBPath       EQU   842   ; 2 byte index of string in string area
+ACBExitRunFile  EQU   844 ; 2 byte index of string in string area
+ACBCommandLine  EQU   846 ; 2 byte index of string in string area
+ACBpVidMem    EQU   848
+ACBpVirtVidMem  EQU 856
+ACBVideoRows  EQU   864
+ACBVideoCols  EQU   865
+ACBCursorRow  EQU   866
+ACBCursorCol  EQU   867
+ACBNormAttr   EQU   868
+ACBKeyState1  EQU   872
+ACBKeyState2  EQU   874
+ACBKeybdWaitFlag  EQU   876
+ACBKeybdHead  EQU   878
+ACBKeybdTail  EQU   879
+ACBKeybdBuffer  EQU   880
+ACBnumber     EQU   944
+ACBNext       EQU   952
+ACBTask       EQU   960
+ACBHasFocus   EQU   962
+ACBmid        EQU   964
+ACBStatus     EQU   966
+ACBTemplates  EQU   968   ; 256 * 8 bytes reserved for template pointers
+ACBPad        EQU   3016
+ACBStrings    EQU   3072  ; start of 1kB string area
+ACBEnd        EQU   4096
+
+; Application startup record
+ASRPageSize   EQU   0
+ASRPriority   EQU   1
+ASRRegset     EQU   2
+ASRmid        EQU   3
+ASRAffinity   EQU   4
+ASRCodeSize   EQU   8
+ASRDataSize   EQU   16
+ASRUIDataSize EQU   24
+ASRHeapSize   EQU   32
+ASRStackSize  EQU   40
+ASRpCode      EQU   48
+ASRpData      EQU   56
+ASRpUIData    EQU   64
+ASR_SIZE      EQU   72
+
+MBX_OWNER			equ		0		; tid of owning task
+;MBX_WTIDS			equ		4		; tasks waiting at mailbox
+MBX_LINK      equ   4
+MBX_TQHEAD    equ   4   ; link field for free list shared with task queue head
+MBX_TQTAIL    equ   8
+MBX_MQHEAD		equ		12		
+MBX_MQTAIL		equ		16
+MBX_SIZE			equ		20
+
+MSG_LINK	  equ		0
+MSG_RETADR  equ   4
+MSG_TGTADR  equ   5
+MSG_TYPE    equ   6
+MSG_D1		  equ		8
+MSG_D2		  equ		12
+MSG_D3		  equ		16
+MSG_SIZE	  equ		20
+

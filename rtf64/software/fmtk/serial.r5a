@@ -1,0 +1,424 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	code
+	align	8
+SerialFuncTbl:
+	dw		SerialNOP			; no operation
+	dw		0							; setup
+	dw		0							; initialize
+	dw		0							; status
+	dw		0							; media check
+	dw		0							; build BPB
+	dw		0							; open
+	dw		0							; close
+	dw		SerialGetChar	; get char
+	dw		SerialPeekChar
+	dw		0							; get char direct
+	dw		SerialPeekCharDirect	; peek char direct
+	dw		0							; input status
+	dw		SerialPutChar
+	dw		0							; reserved
+	dw		0							; set position
+	dw		0							; read block
+	dw		0							; write block
+	dw		0							; verify block
+	dw		0							; output status
+	dw		0							; flush input
+	dw		0							; flush output
+	dw		SerialIRQ			; IRQ routine
+	dw		0							; Is removable
+	dw		0							; ioctrl read
+	dw		0							; ioctrl write
+	dw		0							; output until busy
+	dw		SerialGetUI		; get ui flag
+	dw		0
+	dw		0
+	dw		0
+	dw		0							; 31
+
+MAX_DEV_OP			EQU		31
+
+  align 8
+SerialDCB:
+  db    4,"COM1       "
+  dw    0     ; type
+  dw    0     ; nBPB
+  dw    0
+  dw    0     ; last error code
+  dw    0
+  dw    0     ; starting block number
+  dw    0
+  dw    0     ; number of blocks
+  dw    0
+  dw    0     ; command processing routine
+  dw    0
+  db    0     ; reentrancy count
+  db    0     ; single user flag
+  db    1     ; user interface device flag
+  db    0
+  dw    0
+  dw    0     ; hJob
+  dw    0
+  dw    0     ; Mailbox handle
+  dw    0
+  dw    0     ; pointer to device semaphore
+  dw    0
+  dw    0     ; reserved
+  dw    0
+;  dw    0     ; reserved
+;  dw    0
+
+;------------------------------------------------------------------------------
+; Initialize serial port.
+;
+; Modifies:
+;		$t0
+;------------------------------------------------------------------------------
+
+SerialInit:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	ldi		$a0,#5							; serial device
+	ldi		$a1,#SerialFuncTbl
+	call	CopyDevFuncTbl
+	ldi		$a0,#5							; serial device
+	ldi   $a1,#SerialDCB
+	call  CopyDevDCB
+	stt		$x0,SerHeadRcv
+	stt		$x0,SerTailRcv
+	stt		$x0,SerHeadXmit
+	stt		$x0,SerTailXmit
+	stb		$x0,SerRcvXon
+	stb		$x0,SerRcvXoff
+	ldi		$t0,#$09						; dtr,rts active, rxint enabled, no parity
+	stt		$t0,UART+8
+	ldi		$t0,#$0006001E			; reset the fifo's
+	stt		$t0,UART+12
+	ldi		$t0,#$0000001E			; baud 9600, 1 stop bit, 8 bit, internal baud gen
+	stt		$t0,UART+12
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+SerialNOP:
+	ret
+		
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+SerialServiceInit:
+	ldi		$a0,#1			; start task
+	ldi		$a1,#1024		; memory required
+	ldi		$a2,#SerialService
+	ecall
+	ret
+SerialService:
+	sub		$sp,$sp,#512+24
+	ldi		$a0,#14			; get current tid
+	ecall
+	add		$a2,$sp,#516
+	mov		$a1,$a0
+	ldi		$a0,#6			; alloc mailbox
+	ecall
+
+SerialServiceLoop:
+	ldi		$a0,#10			; waitmsg
+	add		$a1,$sp,#516
+	add		$a2,$sp,#520
+	add		$a3,$sp,#524
+	add		$a4,$sp,#528
+	ldi		$a5,#-1
+	ecall
+
+	lw		$t0,[$sp]
+	and		$t0,$t0,#31
+	sll		$t0,$t0,#1
+	lw		$t0,SerialFuncTbl[$t0]
+	jmp		[$t0]
+
+SerialFinishCmd:
+	lw		$a1,12[$sp]		; reply mbx
+	add		$a1,$a1,#1		; -1 = no reply requested
+	beq		$a1,$a0,.0001
+	sub		$a1,$a1,#1
+	ldi		$a0,#9				; sendmsg
+	ldi		$a2,#-1
+	ldi		$a3,#-1
+	ldi		$a4,#-1
+	ecall
+.0001:
+	jmp		SerialServiceLoop
+
+;------------------------------------------------------------------------------
+; SerialGetChar
+;
+; Check the serial port buffer to see if there's a char available. If there's
+; a char available then return it. If the buffer is almost empty then send an
+; XON.
+;
+; Stack Space:
+;		4 words
+; Parameters:
+;		none
+; Modifies:
+;		none
+; Returns:
+;   $v0 = E_Ok
+;		$v1 = character or -1
+;------------------------------------------------------------------------------
+
+SerialGetChar:
+		gcsub	$sp,$sp,#16
+		stt		$ra,[$sp]
+		stt		$s1,8[$sp]          ; XON status
+		stt   $s2,12[$sp]         ; interrupt state
+		ldb		$s1,SerRcvXon				; skip sending XON if already sent
+		csrrc	$s2,#$300,#1				; disable interrupts
+		call	SerialRcvCount			; check number of chars in receive buffer
+		slt		$a0,$a0,#8					; less than 8?
+		beqz	$a0,.0002
+		bnez	$s1,.0002           ; XON already sent?
+		ldi		$a0,#XON						; if <8 send an XON
+		stb		$x0,SerRcvXoff			; clear XOFF status
+		stb		$a0,SerRcvXon				; flag so we don't send it multiple times
+		stb		$a0,UART+UART_TRB
+.0002:
+		ldbu	$a1,SerHeadRcv			; check if anything is in buffer
+		ldbu	$a0,SerTailRcv
+		beq		$a0,$a1,.noChars		; no?
+		ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
+		add		$a1,$a1,#1					; update head index
+		and   $a1,$a1,#255        ; ring buffer wrapping
+		stb		$a1,SerHeadRcv
+		bra		.xit
+.noChars:
+.0001:
+		ldi		$a0,#-1
+.xit:
+    mov   $a1,$a0
+    ldi   $a0,#E_Ok
+		csrrw	$x0,#$300,$s2				; restore interrupts
+		csrrc $x0,#$004,#1
+		ldt		$ra,[$sp]
+		ldt		$s1,8[$sp]
+		ldt   $s2,12[$sp]
+		add		$sp,$sp,#16
+		ret
+
+;------------------------------------------------------------------------------
+; SerialPeekChar
+;
+; Check the serial port buffer to see if there's a char available. If there's
+; a char available then return it. But don't update the buffer indexes. No need
+; to send an XON here.
+;
+; Stack Space:
+;		2 words
+; Parameters:
+;		none
+; Modifies:
+;		none
+; Returns:
+;   $v0 = E_Ok
+;		$v1 = character or -1
+;------------------------------------------------------------------------------
+
+SerialPeekChar:
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$s1,4[$sp]
+	csrrc	$s1,#$300,#1				; disable interrupts
+	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
+	ldbu	$a0,SerTailRcv
+	beq		$a0,$a1,.noChars		; no?
+	ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
+	bra		.xit
+.noChars:
+.0001:
+	ldi		$a0,#-1
+.xit
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+	csrrw	$x0,#$300,$s1				; restore interrupts
+	ldt		$ra,[$sp]
+	ldt		$s1,4[$sp]
+	add		$sp,$sp,#8
+	ret
+
+;------------------------------------------------------------------------------
+; SerialPeekChar
+;		Get a character directly from the I/O port. This bypasses the input
+; buffer.
+;
+; Stack Space:
+;		3 words
+; Parameters:
+;		none
+; Modifies:
+;		none
+; Returns:
+;   $v0 = E_Ok
+;		$v1 = character or -1
+;------------------------------------------------------------------------------
+
+SerialPeekCharDirect:
+	gcsub	$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$s1,4[$sp]
+	csrrc	$s1,#$300,#1				; disable interrupts
+	ldb		$a0,UART+UART_STAT
+	and		$a0,$a0,#8					; look for Rx not empty
+	beqz	$a0,.0001
+	ldb		$a1,UART+UART_TRB
+	bra		.xit
+.0001:
+	ldi		$a1,#-1
+.xit:
+  ldi   $a0,#E_Ok
+	csrrw	$x0,#$300,$s1				; restore interrupts
+	csrrs $x0,#$004,#1
+	ldt		$ra,[$sp]
+	ldt		$s1,4[$sp]
+	add		$sp,$sp,#8
+	ret
+
+;------------------------------------------------------------------------------
+; SerialPutChar
+;    Put a character to the serial transmitter. This routine blocks until the
+; transmitter is empty. The routine will attempt to transmit the char up to 
+; 10 times. If it still can't transmit the char then sleep is called and the
+; task is put to sleep for a tick. When it wakes up the routine continues to
+; try and send a character.
+;
+; Stack Space
+;		5 words
+; Parameters:
+;		$a3 = character to put
+; Modifies:
+;		none
+;------------------------------------------------------------------------------
+
+SerialPutChar:
+  mDI
+	sub		$sp,$sp,#12
+	stt		$a0,[$sp]
+	stt		$ra,4[$sp]
+	stt		$a1,8[$sp]
+.0002:
+	ldi		$a1,#10
+.0001:
+;  mEI
+;	sub		$a1,$a1,#1
+;	beqz	$a1,.goSleep
+;	mDI
+	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
+	and		$a0,$a0,#16					; bit #4 of the status reg
+	beqz	$a0,.0001				    ; branch if transmitter is not empty
+	stb		$a3,UART+UART_TRB		; send the byte
+;	mEI
+	ldt		$a0,[$sp]
+	ldt		$ra,4[$sp]
+	ldt		$a1,8[$sp]
+	add		$sp,$sp,#12
+	ret
+.goSleep:
+  mEI
+	sub		$sp,$sp,#8
+	stt		$a0,[$sp]
+	stt		$a1,4[$sp]
+	ldi		$a0,#3								; ISleep function
+	ldi		$a1,#1								; 1 tick
+	call  OSOCall
+	ldt		$a0,[$sp]
+	ldt		$a1,4[$sp]
+	add		$sp,$sp,#8
+	mDI
+	bra		.0002
+
+;------------------------------------------------------------------------------
+; Calculate number of character in input buffer
+;------------------------------------------------------------------------------
+
+SerialRcvCount:
+	ldbu	$a0,SerTailRcv	; v0 = tail index
+	ldbu	$a1,SerHeadRcv	; v1 = head index
+	sub		$t0,$a0,$a1
+	bge		$t0,$x0,.xit
+	ldi		$t0,#256
+	sub		$t0,$t0,$a1
+	add		$t0,$t0,$a0
+.xit:
+	mov		$a0,$t0
+	ret
+	
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+SerialIRQ:
+.nxtByte:
+	ldt		$a0,UART+UART_STAT	; check the status
+	and		$t0,$a0,#$08				; bit 3 = rx full
+	beqz	$t0,.notRxInt
+	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	xor   $t2,$a1,#CTRLT
+	bnez  $t2,.0001
+	mov   $s1,$a1
+	call  DumpTraceQueue
+	mov   $a1,$s1
+.0001:
+	ldbu	$t2,SerHeadRcv			; get buffer indexes
+	ldbu	$t3,SerTailRcv
+	mov   $t4,$t3
+	add		$t3,$t3,#1					; see if buffer full
+	and		$t3,$t3,#255
+	beq		$t2,$t3,.rxFull
+	stb		$t3,SerTailRcv			; update tail pointer
+	stb		$a1,SerRcvBuf[$t4]	; store recieved byte in buffer
+	ldb		$a0,SerRcvXoff			; check if xoff already sent
+	bnez	$a0,.nxtByte
+	call	SerialRcvCount			; if more than 240 chars in buffer
+	slt		$a0,$a0,#240				; send an XOFF
+	bnez	$a0,.nxtByte
+	ldi		$a0,#XOFF
+	stb		$x0,SerRcvXon				; clear XON status
+	stb		$a0,SerRcvXoff			; set XOFF status
+	stb		$a0,UART+UART_TRB
+	bra		.nxtByte            ; check the status for another byte
+;	ldi		$a0,#$0B						; dtr,rts active, rxint disabled, no parity
+;	sw		$a0,UART+UART_CMD
+.rxFull:
+.notRxInt:
+	jmp   ERETx2
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+SerialGetUI:
+  ldi   $a0,#E_Ok           ; no errors
+  ldi   $a1,#1              ; yes this is a UI device
+  ret
+
+nmeSerial:
+	db		"Serial",0

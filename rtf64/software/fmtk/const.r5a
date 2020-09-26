@@ -1,0 +1,103 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+TS_NONE			EQU		0
+TS_READY		EQU		1
+TS_DEAD			EQU		2
+TS_MSGRDY		EQU		4
+TS_WAITMSG	EQU		8
+TS_TIMEOUT	EQU		16
+TS_PREEMPT	EQU		32
+TS_UNDEAD   EQU   64
+TS_RUNNING	EQU		128
+
+AS_NONE     EQU   0
+AS_LIVE     EQU   1
+AS_DEAD     EQU   2
+AS_UNDEAD   EQU   4
+
+PRI_NORMAL  EQU   2
+PRI_LOW     EQU   3
+
+OST_WHITE   EQU   0
+OST_GREY    EQU   1
+OST_BLACK   EQU   2
+OST_UNDEAD  EQU   64    ; no longer alive, but not dead yet (finalizer hasn't been called)
+OST_DEAD    EQU   128   ; completely dead, finalizer called already
+
+TCB_MAGIC     EQU   ((' ' << 24) | ('T' << 16) | ('C' << 8) | 'B')
+ACB_MAGIC     EQU   ((' ' << 24) | ('A' << 16) | ('C' << 8) | 'B')
+MSG_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('S' << 8) | 'G')
+MBX_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('B' << 8) | 'X')
+
+UNDEADQ     EQU   7
+
+; error codes
+E_Ok		=		0x00
+E_Arg		=		0x01
+E_Func  =   0x02
+E_BadMbx	=		0x04
+E_QueFull	=		0x05
+E_NoThread	=		0x06
+E_NotAlloc	=		0x09
+E_NoMsg		=		0x0b
+E_Timeout	=		0x10
+E_BadAlarm	=		0x11
+E_NotOwner	=		0x12
+E_QueStrategy =		0x13
+E_BadDevNum	=		0x18
+E_DCBInUse	=		0x19
+E_BadDCBOffset = 0x1A
+E_Busy = 0x1B
+; Device driver errors
+E_BadDevNum	=		0x20
+E_NoDev		=		0x21
+E_BadDevOp	=		0x22
+E_ReadError	=		0x23
+E_WriteError =		0x24
+E_BadBlockNum	=	0x25
+E_TooManyBlocks	=	0x26
+E_BadTcbPointer = 0x27
+E_BadTid = 0x28
+
+; resource errors
+E_NoMoreMbx	=		0x40
+E_NoMoreMsgBlks	=	0x41
+E_NoMoreAlarmBlks	= 0x44
+E_NoMoreTCBs	=	0x45
+E_NoMoreAppIds = 0x46
+E_NoMem = 0x47
+
+CSR_MSTATUS = $300
+CSR_MEPC    = $341
+CSR_TRACECTRL = $7A0
+CSR_REGSET  = $7C0
+CSR_MSEMA   = $7C1
+CSR_TASKID  = $7C2
+CSR_RSSTACK = $7C3
+CSR_PMSTACK = $7C4
+TCBPTR_MASK = $FFF803FF
+
+; Message types
+MT_ANNOUNCE = $00000010
+MT_IRQ      = $FFFFFFFF

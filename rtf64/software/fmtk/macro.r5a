@@ -1,0 +1,166 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+; macros have to be defined before they are encountered.
+
+; disable interrupts
+macro mDI
+  csrrc $x0,#CSR_PMSTACK,#1        ; disable interrupts
+endm
+
+; disable interrupts
+macro mEI
+  csrrs $x0,#CSR_PMSTACK,#1        ; enable interrupts
+endm
+
+; unlock the a semaphore	
+macro mUnlockSemaphore (adr)
+	ldi		a0,#-1
+	stt		a0,adr
+endm
+
+macro mGetCurrentTid
+  csrrw $a0,#CSR_TASKID,$x0
+endm
+
+macro	mHasFocus
+	ldi		$a0,#20
+	ecall
+endm
+
+macro mSleep(tm)
+	ldi		$a0,#5            ; FMTK Sleep() function
+	ldi		$a1,#tm
+	ecall
+endm
+
+;------------------------------------------------------------------------------
+; Parameters:
+;   a1 = device # to check
+;------------------------------------------------------------------------------
+
+macro mWaitForFocus
+.WFF1@:
+  mov   $t2,$a1
+	mHasFocus
+	bnez	$a1,.HasFocus@
+	ldi   $a0,#26             ; FMTK_IO
+	mov   $a1,$t2
+	ldi   $a2,#9              ; peekchar function
+	ecall
+	ldi		$t3,#$14						; CTRL-T
+	bne		$a0,$t3,.WFF2@
+	; eat up the CTRL-T
+	ldi		$a0,#26							; FMTK_IO
+	mov   $a1,$t2
+	ldi		$a2,#8							; getchar function
+	ecall
+	ldi		$a0,#21							; switch IO Focus
+	ecall
+	bra		.WFF1@
+.WFF2@:
+	mSleep(1)
+	bra		.WFF1@
+.HasFocus@:
+endm
+
+;------------------------------------------------------------------------------
+; Parameters:
+;   $a0 = mailbox handle
+; Modifies:
+;   $t0
+; Returns:
+;   $a0 = mailbox pointer
+;------------------------------------------------------------------------------
+
+macro mMbxHandleToPointer
+  srl   $t0,$a0,#8    ; extract collection index
+  sll   $t0,$t0,#2
+  ldt   $t0,MbxBlockPtr[$t0]
+  and   $a0,$a0,#$FF
+  sll   $a0,$a0,#2
+  or    $a0,$a0,$t0
+endm
+
+;------------------------------------------------------------------------------
+; Pop an entry off the timeout list. It is assumed the entry is popped when
+; its timeout reached zero. Hence there is no adjustment of the following
+; timeout made. Routine used only in the schedulerIRQ, so written as a macro.
+;
+; Parameters:
+;		v0 = top timeout list
+; Modifies:
+;		v1,t0,t1,t2,t3
+;	Returns:
+;		v0 = timeout list pointer to TCB
+;------------------------------------------------------------------------------
+
+;macro mPopTimeoutList
+;	lbu		$v1,TCBStatus[$v0]		; no longer a waiting status
+;	and		$t1,$v1,#TS_WAITMSG		; check if waiting for a message
+;	beqz	$t1,.noWait@
+;	ldbu  $a0,TCBtid[$v0]
+;	mMbxRemoveTask							; remove task from mailbox list
+.noWait@:
+;	and		$v1,$v1,#~(TS_WAITMSG|TS_TIMEOUT)
+;	stb		$v1,TCBStatus[$v0]
+;	ldt		$v1,TCBNext[$v0]			; get next task on timeout list
+;	stt		$v1,TimeoutList				; update list head
+;	beqz	$v1,.done@
+;	stt		$x0,TCBPrev[$v1]			; TimeoutList->prev = 0
+.done@:
+;	stt		$x0,TCBNext[$v0]
+;	stt		$x0,TCBPrev[$v0]
+endm
+
+macro mGetAppMid
+  sll   $a0,$a0,#LOG_PGSZ
+  ldb   $a0,ACBmid[$a0]
+endm
+
+; Macros to enable and disable time-slice interrupts
+macro mTimeSliceEI
+	ldi		$t0,#$1A000180			; enable timer3 interrupts after 26 cycles
+	stt		$t0,VIA_IER+VIA
+endm
+
+macro mTimeSliceDI
+	ldi		$t0,#$100						; disable timer3 (time slice) interrupts
+	stt		$t0,VIA_IER+VIA
+	nop                   ; make sure disable has time for effect
+	nop
+endm
+
+; Inserting into the ready queue is done by both OS ecall functions and
+; interrupt driven scheduling. It's important to have interrupts disabled
+; so that there is no contention for the ready queue.
+
+macro mInsertIntoReadyQueue
+	sll   $t0,$a0,#LOG_TCBSZ
+	ldbu	$t1,TCBStatus[$t0]	; set status to ready
+	or		$t1,$t1,#TS_READY
+	stb		$t1,TCBStatus[$t0]
+	ldb		$t1,TCBPriority[$t0]
+	pushq	$a0,$t1
+endm
+

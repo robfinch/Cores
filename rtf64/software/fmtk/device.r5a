@@ -1,0 +1,119 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2014-2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; DeviceDriver.inc
+; - Device driver structures and constants                                                                         
+; ============================================================================
+
+;	.global			; global constants
+
+; Device Control Block
+;
+DCB_Name			EQU		0		; string: first byte is length, 11 chars max
+DCB_Type			EQU		0x0C
+DCB_nBPB			EQU		0x10
+DCB_LastErc			EQU		0x18		; last error code
+DCB_StartBlock		EQU		0x20		; starting block number (partitioned devices)
+DCB_nBlocks			EQU		0x28		; number of blocks on device
+DCB_pCmdProc		EQU		0x30		; pointer to command processor routine
+DCB_ReentCount		EQU		0x38		; re-entrancy count (1 to 255)
+DCB_fSingleUser		EQU		0x39
+DCB_fUI       EQU   0x3A    ; user interface device
+DCB_hJob			EQU		0x40		; handle to associated job
+DCB_Mbx				EQU		0x48
+DCB_pSema			EQU		0x50		; pointer to device semaphore
+DCB_Resv1			EQU		0x58		; reserved
+DCB_Resv2			EQU		0x60		; reserved
+DCB_Size			EQU		0x60
+
+; Device command opcodes
+;
+DVC_Nop				EQU		0
+DVC_Setup			EQU		1
+DVC_Initialize		EQU		2
+DVC_Status			EQU		3
+DVC_MediaCheck		EQU		4
+DVC_BuildBPB		EQU		5
+DVC_Open			EQU		6
+DVC_Close			EQU		7
+DVC_GetChar			EQU		8
+DVC_PeekChar		EQU		9
+DVC_GetCharDirect	EQU		10
+DVC_PeekCharDirect	EQU		11
+DVC_InputStatus		EQU		12
+DVC_PutChar			EQU		13
+DVC_SetPosition		EQU		15
+DVC_ReadBlock		EQU		16
+DVC_WriteBlock		EQU		17
+DVC_VerifyBlock		EQU		18
+DVC_OutputStatus	EQU		19
+DVC_FlushInput		EQU		20
+DVC_FlushOutput		EQU		21
+DVC_IRQ				EQU		22
+DVC_IsRemoveable	EQU		23
+DVC_IOCTRL_READ		EQU		24
+DVC_IOCTRL_WRITE	EQU		25
+DVC_OutputUntilBusy	EQU		26
+DVC_IsUI          EQU   27
+
+MAX_DEV_OP			EQU		31
+
+
+DRSP_DONE			EQU		1
+
+;Standard Devices are:
+
+;#		Device					Standard name
+
+;0		NULL device 			NUL		(OS built-in)
+;1		Keyboard (sequential)	KBD		(OS built-in)
+;2		Video (sequential)		VID		(OS built-in)
+;3		Printer (parallel 1)	LPT
+;4		Printer (parallel 2)	LPT2
+;5		RS-232 1				COM1	(OS built-in)
+;6		RS-232 2				COM2
+;7		RS-232 3				COM3
+;8		RS-232 4				COM4
+;9		Parallel xfer	  PTI
+;10		Front Panel 		FP
+;11
+;12		Hard disk				HD1
+;13		Hard disk				HD2
+;14
+;15   Time slice / GP	VIA
+;16		SDCard					CARD1 	(OS built-in)
+;17
+;18
+;19
+;20
+;21
+;22
+;23
+;24
+;25
+;26
+;27
+;28		Audio						PSG1	(OS built-in)
+;29
+;30   Random Number		PRNG
+;31		Debug						DBG
+
+NR_DCB			EQU		32

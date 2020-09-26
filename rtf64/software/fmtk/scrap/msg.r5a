@@ -1,0 +1,330 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+MBX_OWNER			equ		0		; tid of owning task
+;MBX_WTIDS			equ		4		; tasks waiting at mailbox
+MBX_TQHEAD    equ   4
+MBX_TQTAIL    equ   8
+MBX_MQHEAD		equ		12		
+MBX_MQTAIL		equ		16
+MBX_SIZE			equ		32
+
+MSG_LINK	equ		0
+MSG_D1		equ		4
+MSG_D2		equ		8
+MSG_D3		equ		12
+MSG_SIZE	equ		16
+
+;	bss
+;	align 4
+;FreeMsg	dw	0
+;msgs:
+;	fill.b	MSG_SIZE*1024,0
+;mbxs:
+;	fill.b	MBX_SIZE*32,0
+;mbxs_end:
+
+	code
+	align	4
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = app id of owner
+;		a2 = pointer where to store handle
+; Returns:
+;		v0 = E_Ok
+;------------------------------------------------------------------------------
+
+FMTK_AllocMbx:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	beq		$a2,$x0,.badArg
+	ldi		$t0,#mbxs
+  csrrc $x0,#$300,#1        ; disable interrupts
+.nxt:
+	lbu		$t1,MBX_OWNER[$t0]
+	beq		$t1,$x0,.noOwner
+	add		$t0,$t0,#MBX_SIZE
+	slt		$t1,$t0,#mbxs_end
+	bne		$t1,$x0,.nxt
+	ldi		$v0,#E_NoMoreMbx
+	jmp   ERETx
+.noOwner:
+	stb		$a1,MBX_OWNER[$t0]
+	sub		$t5,$t0,#mbxs				; convert pointer to handle
+	srl		$t5,$t5,#5
+	mov   $a0,$a1             ; $a0 = mid
+	mov		$a1,$a2
+	call	VirtToPhys2
+	stw		$t5,[$v0]
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_Ok
+	jmp		ERETx
+.badArg:
+	ldi		$v0,#E_Arg
+	jmp		ERETx
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FMTK_FreeMbx:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	slt		$s1,$a1,#32
+	beq		$s1,$x0,.badMbx
+	sll		$s1,$a1,#4					; convert handle to pointer
+	add		$s1,$s1,#mbxs
+	ldi		$s2,#0
+	ldi		$s4,#32							; possibly 32 tasks
+  csrrc $x0,#$300,#1        ; disable interrupts
+	ldt		$s6,MBX_TQHEAD[$s1]
+.0002:
+	and		$s3,$s6,#1
+	beqz	$s6,.0001
+	sll   $s2,$s2,#2
+	ldt   $s5,TidTcbMap[$s2]
+	srl   $s2,$s2,#2
+	ldbu	$v0,TCBStatus[$s5]
+	and		$v0,$v0,#~TS_WAITMSG	; no longer waiting
+	stb		$v0,TCBStatus[$s5]
+	and		$v0,$v0,#TS_TIMEOUT
+	beqz	$v0,.0003
+	ldbu  $a0,TCBtid[$s5]
+	; Remove from the timeout list
+	setto	$a0,$x0
+.0003:
+	ldbu  $a0,TCBtid[$s5]
+	call	InsertIntoReadyQueue
+	ldi		$v0,#E_NoMsg					; but no message
+	sw		$v0,TCBIntRegs+64[$s5]	; v0 = E_NoMsg
+.0001:
+	srl		$s6,$s6,#1
+	add		$s2,$s2,#1
+	bltu	$s2,$s4,.0002
+.0001:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_Ok
+	jmp		ERETx
+.badMbx:
+	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
+	jmp		ERETx
+
+;------------------------------------------------------------------------------
+; Send a message to a mailbox.
+; The message will be broadcast to any waiting tasks. Waiting tasks will then
+; be moved to the ready list. If there are no waiting tasks then the message
+; is queued at the mailbox.
+;
+; Register Usage:
+;		t0 = mailbox pointer
+;		t1 = message pointer
+;		s1 = task id of waiting task
+; Modifies:
+;		a0
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = message d1
+;		a3 = message d2
+;		a4 = message d3
+;------------------------------------------------------------------------------
+
+FMTK_SendMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	slt		$t0,$a1,#32
+	beq		$t0,$x0,.badMbx
+	sll		$t0,$a1,#4					; convert handle to pointer
+	add		$t0,$t0,#mbxs
+  csrrc $x0,#$300,#1        ; disable interrupts
+	ldt		$t5,MBX_WTIDS[$t0]
+	beq		$t5,$x0,.noWaiters
+	ldi		$s1,#0
+.0001:
+	and		$s3,$t5,#1					; is tid waiting?
+	beqz	$s3,.nxtTid
+	sll   $s1,$s1,#2
+	ldt   $s3,TidTcbMap[$s1]
+	srl   $s1,$s1,#2
+	stt		$a2,TCBMsgD1[$s3]		; copy message to TCB
+	stt		$a3,TCBMsgD2[$s3]
+	stt		$a4,TCBMsgD3[$s3]
+	ldbu	$t2,TCBStatus[$s3]
+	or		$t2,$t2,#TS_MSGRDY
+	stb		$t2,TCBStatus[$s3]
+	ldbu  $a0,TCBtid[$s3]
+	sub		$sp,$sp,#4
+	stt		$t0,[$sp]						; push t0
+	call	InsertIntoReadyQueue
+	ldt		$t0,[$sp]						; pop t0
+	add		$sp,$sp,#4
+.nxtTid:
+	srl		$t5,$t5,#1					; check next task
+	add		$s1,$s1,#1
+	and		$s1,$s1,#31
+	bnez	$s1,.0001
+	stt		$x0,MBX_WTIDS[$t0]	; clear waiters
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_Ok
+	bra		.xit
+.noWaiters:
+	ldt		$t1,FreeMsg
+	beqz	$t1,.noMsg			    ; message available?
+	ldt		$t2,MSG_LINK[$t1]
+	stt		$t2,FreeMsg
+	stt		$a2,MSG_D1[$t1]
+	stt		$a3,MSG_D2[$t1]
+	stt		$a4,MSG_D3[$t1]
+	ldt		$t3,MBX_MQTAIL[$t0]
+	beqz	$t3,.mbxEmpty
+	stt		$t1,MSG_LINK[$t3]
+	stt		$t1,MBX_MQTAIL[$t0]
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_Ok
+	bra		.xit
+.mbxEmpty:
+	stt		$t1,MBX_MQHEAD[$t0]
+	stt		$t1,MBX_MQTAIL[$t0]
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_Ok
+	bra		.xit
+.noMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	ldi		$v0,#E_NoMsg
+	bra		.xit
+.badMbx:
+	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
+.xit:
+	jmp		ERETx
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = pointer where to put message D1
+;		a3 = pointer where to put message D2
+;		a4 = pointer where to put message D3
+;		a5 = 1 = remove from queue
+;------------------------------------------------------------------------------
+
+PeekMsg:
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
+	slt		$t0,$a1,#32
+	beq		$t0,$x0,.badMbx
+	sll		$t2,$a1,#4					; convert handle to pointer
+	add		$t2,$t2,#mbxs
+	ldt		$t1,MBX_MQHEAD[$t2]
+	beq		$t1,$x0,.noMsg
+	beq		$a5,$x0,.nodq
+	ldt		$t3,MSG_LINK[$t1]
+	stt		$t3,MBX_MQHEAD[$t2]
+	; This is done here only because interrupts are disabled
+	ldt		$t3,FreeMsg
+	stt		$t3,MSG_LINK[$t1]
+	stt		$t1,FreeMsg
+.nodq:
+  ldb   $a0,TCBmid[$t1]   ; $a0 = mid
+	beq		$a2,$x0,.nod1
+	mov		$a1,$a2
+	call	VirtToPhys2
+	ldt		$t3,MSG_D1[$t1]
+	stt		$t3,[$v0]
+.nod1:
+	beq		$a3,$x0,.nod2
+	mov		$a1,$a3
+	call	VirtToPhys2
+	ldt		$t3,MSG_D2[$t1]
+	stt		$t3,[$v0]
+.nod2:
+	beq		$a4,$x0,.nod3
+	mov		$a1,$a4
+	call	VirtToPhys2
+	ldt		$t3,MSG_D3[$t1]
+	stt		$t3,[$v0]
+.nod3:
+	ldi		$v0,#E_Ok
+	bra		.ret
+.noMsg:
+	ldi		$v0,#E_NoMsg
+	bra		.ret
+.badMbx:
+	ldi		$v0,#E_BadMbx				; return null pointer if bad mailbox
+.ret:
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+;------------------------------------------------------------------------------
+; PeekMsg will check for a message at a mailbox optionally dequeuing it.
+; If no message is available PeekMsg returns to the caller with a E_NoMsg
+; status.
+;
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = pointer where to put message D1
+;		a3 = pointer where to put message D2
+;		a4 = pointer where to put message D3
+;		a5 = 1 = remove from queue
+;------------------------------------------------------------------------------
+
+FMTK_PeekMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	call	PeekMsg
+	jmp		ERETx
+
+;------------------------------------------------------------------------------
+; Calling WaitMsg will cause the task to be queued at the mailbox and a task
+; switch to occur if there are no messages at the mailbox.
+;
+; Parameters:
+;		a1 = mailbox handle
+;		a2 = pointer where to put message D1
+;		a3 = pointer where to put message D2
+;		a4 = pointer where to put message D3
+;		a5 = time limit
+;------------------------------------------------------------------------------
+
+FMTK_WaitMsg:
+  csrrs $x0,#$300,#1        ; enable interrupts
+	mov		s5,a5
+	ldi		a5,#1
+	call	PeekMsg							; check for a message, return if available
+	ldi		$t1,#E_NoMsg
+	beq		$v0,$t1,.qt					; no message? Then go queue task
+	jmp		ERETx
+.qt:
+	mGetCurrentTid
+	ldi		$t2,#1
+	sll		$t2,$t2,$v0
+	sll		$t3,$a1,#4					; convert handle to pointer
+	add		$t3,$t3,#mbxs
+	ldt		$t4,MBX_WTIDS[$t3]	; get waiting task list
+	or		$t4,$t4,$t2					; set bit for tid
+	stt		$t4,MBX_WTIDS[$t3]	; save task list
+	sll		$t4,$v0,#LOG_TCBSZ	; convert tid to TCB pointer
+	ldbu	$t3,TCBStatus[$t4]
+	or		$t3,$t3,#TS_WAITMSG	; set waiting for message status
+	and		$t3,$t3,#~TS_READY	; not ready
+	stb		$t3,TCBStatus[$t4]
+	stb		$a1,TCBWaitMbx[$t4]	; set mailbox task is waiting for
+	mov		$a1,$a5
+	; Continue by switching tasks
+	jmp		FMTK_Sleep
+
+	

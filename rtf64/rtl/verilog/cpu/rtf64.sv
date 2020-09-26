@@ -87,6 +87,8 @@
 `define BVC   8'h41
 `define BOD   8'h42
 `define BPS   8'h44
+`define BEQZ  8'h46
+`define BNEZ  8'h47
 `define BCS   8'h3C
 `define BCC   8'h3D
 `define LMI   8'b01001???
@@ -98,6 +100,7 @@
 `define PUSHQ   5'h08
 `define POPQ    5'h09
 `define PEEKQ   5'h0A
+`define STATQ   5'h0B
 `define SETKEY  5'h0C
 `define GCCLR   5'h0D
 `define REX     5'h10
@@ -143,6 +146,7 @@
 `define COMR1   5'h03
 `define NOTR1   5'h04
 `define NEGR1   5'h05
+`define TST1    5'h0B
 
 // 2r operations
 `define ANDR2   5'h00
@@ -527,20 +531,16 @@ reg [15:0] mtid;      // task id
 wire ie = pmStack[0];
 reg [31:0] miex;
 reg [19:0] key [0:8];
-reg [31:0] dbad [0:3];
-reg [63:0] dbcr;
-reg [3:0] dbstat;
-
 // Debug
-reg [31:0] dbadr [0:3];
+reg [31:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
 reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
 reg d_shiftr, d_st, d_ld, d_exti, d_cbranch, d_wha;
-reg d_pushq, d_popq, d_peekq;
+reg d_pushq, d_popq, d_peekq, d_statq;
 reg setto, getto, decto, getzl, popto;
-reg pushq, popq, peekq; 
+reg pushq, popq, peekq, statq; 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // MMU
@@ -697,6 +697,8 @@ case(opcode)
 `BGTU:  takb = ~(cd[1] | cd[0]);
 `BOD:   takb = cd[5];
 `BPS:   takb = cd[4];
+`BEQZ:  takb = id==64'd0;
+`BNEZ:  takb = id!=64'd0;
 default:  takb = 1'b0;
 endcase
 
@@ -713,14 +715,19 @@ wire trace_full;
 wire trace_empty;
 wire trace_valid;
 reg tron;
-
+wire [3:0] trace_match;
+assign trace_match[0] = (dbad[0]==ipc && dbcr[19:16]==4'b1000 && dbcr[32]);
+assign trace_match[1] = (dbad[1]==ipc && dbcr[23:20]==4'b1000 && dbcr[33]);
+assign trace_match[2] = (dbad[2]==ipc && dbcr[27:24]==4'b1000 && dbcr[34]);
+assign trace_match[3] = (dbad[3]==ipc && dbcr[31:28]==4'b1000 && dbcr[35]);
 wire trace_on = 
-  (dbad[0]==ipc && dbcr[19:16]==4'b1000 && dbcr[32]) ||
-  (dbad[1]==ipc && dbcr[23:20]==4'b1000 && dbcr[33]) ||
-  (dbad[2]==ipc && dbcr[27:24]==4'b1000 && dbcr[34]) ||
-  (dbad[3]==ipc && dbcr[31:28]==4'b1000 && dbcr[35])
+  trace_match[0] ||
+  trace_match[1] ||
+  trace_match[2] ||
+  trace_match[3]
   ;
 wire trace_off = trace_full;
+wire trace_compress = dbcr[36];
 
 always @(posedge clk_g)
 if (rst_i) begin
@@ -736,7 +743,9 @@ else begin
     tron <= TRUE;
   wr_trace <= 1'b0;
   if (tron) begin
-    if (st_writeback) begin
+    if (!trace_compress)
+      wr_whole_address <= TRUE;
+    if (st_writeback & trace_compress) begin
       if (d_cbranch) begin
         if (br_hcnt < 6'h3E) begin
           br_history[br_hcnt] <= takb;
@@ -848,6 +857,15 @@ wire [3:0] segsel = ea[31:28];
 wire [63:0] datis = dati >> {ea[1:0],3'b0};
 
 wire ld = state==EXECUTE;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Count: leading zeros, leading ones, population.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+wire [6:0] cntlzo, cntloo, cntpopo;
+
+cntlz64 uclz1 (ia, cntlzo);
+cntlo64 uclz1 (ia, cntloo);
+cntpop64 ucpop1 (ia, cntpopo);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Shift / Bitfield
@@ -1110,6 +1128,7 @@ if (rst_i) begin
 	pushq <= 1'b0;
 	popq <= 1'b0;
 	peekq <= 1'b0;
+	statq <= 1'b0;
 	mrloc <= 3'd0;
 	rprv <= 5'd0;
 	Rdx <= 5'd31;
@@ -1126,7 +1145,10 @@ if (rst_i) begin
 	instret <= 40'd0;
 end
 else begin
-
+if (trace_match[0]) dbsr[0] <= TRUE;
+if (trace_match[1]) dbsr[1] <= TRUE;
+if (trace_match[2]) dbsr[2] <= TRUE;
+if (trace_match[3]) dbsr[3] <= TRUE;
 decto <= 1'b0;
 popto <= 1'b0;
 ldd <= 1'b0;
@@ -1140,6 +1162,7 @@ if (wc_time_irq==1'b0)
 pushq <= 1'b0;
 popq <= 1'b0;
 peekq <= 1'b0;
+statq <= 1'b0;
 rd_trace <= 1'b0;
 
 if (!UserMode)
@@ -1192,6 +1215,7 @@ IFETCH1:
     d_pushq <= FALSE;
     d_popq <= FALSE;
     d_peekq <= FALSE;
+    d_statq <= FALSE;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -1281,6 +1305,7 @@ DECODE:
 	    `PUSHQ: begin d_pushq <= TRUE; illegal_insn <= FALSE; end
 	    `POPQ:  begin d_popq <= TRUE; illegal_insn <= FALSE; end
 	    `PEEKQ: begin d_peekq <= TRUE; illegal_insn <= FALSE; end 
+	    `STATQ: begin d_statq <= TRUE; illegal_insn <= FALSE; end
 		  default:  ;
 		  endcase
     `R2:
@@ -1306,6 +1331,7 @@ DECODE:
           `COMR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
           `NOTR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
           `NEGR1:   begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+          `TST1:    begin Cd <= ir[9:8]; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
           default:  ;                                    
           endcase
         `MULR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
@@ -1513,7 +1539,13 @@ DECODE:
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
       begin
-        d_cbranch = TRUE;
+        d_cbranch <= TRUE;
+        illegal_insn <= 1'b0;
+      end
+    `BEQZ,`BNEZ:
+      begin
+        Rd <= {3'b101,ir[9:8]};
+        d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
       end
     // Memory Ops
@@ -1889,6 +1921,18 @@ EXECUTE:
             endcase
           endcase
         end
+      `R1:
+        case(ir[22:18])
+        `CNTLZR1: res <= cntlzo;
+        `CNTLOR1: res <= cntloo;
+        `CNTPOPR1:res <= cntpopo;
+        `COMR1:   res <= ~ia;
+        `NOTR1:   res <= ia==64'd0;
+        `NEGR1:   res <= -ia;
+        `TST1:    res <= ia;
+        default:  ;                                    
+        endcase
+      default:  ;
       endcase
     `R3A:
       case(ir[30:28])
@@ -2128,7 +2172,7 @@ EXECUTE:
         11'b???_0100_0000:  res <= pmStack;
         11'b???_0100_0011:  res <= rsStack;
         11'b???_0100_1000:  res <= epc[rprv[4] ? rsStack[9:5] : rsStack[4:0]];
-        11'b101_0001_10??:  res <= dbadr[ir[19:18]];
+        11'b101_0001_10??:  res <= dbad[ir[19:18]];
         11'b101_0001_1100:  res <= dbcr;
         11'b101_0001_1101:  res <= dbsr;
         default:  ;
@@ -2139,20 +2183,22 @@ EXECUTE:
         res <= ia + imm;
         pc <= ret_pc + {ir[12:9],2'b00};
       end
-    `BEQ: begin if ( cd[1]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BNE: begin if (~cd[1]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BMI: begin if ( cd[7]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BPL: begin if (~cd[7]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BVS: begin if ( cd[6]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BVC: begin if (~cd[6]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BCS: begin if ( cd[0]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BCC: begin if (~cd[0]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BLE: begin if ( cd[1] | cd[7]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BGT: begin if (~(cd[1] | cd[7])) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BLEU: begin if ( cd[1] | cd[0]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BGTU: begin if (~(cd[1] | cd[0])) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BOD: begin if ( cd[5]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BPS: begin if ( cd[4]) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BEQ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BNE: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BMI: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BPL: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BVS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BVC: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BCS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BCC: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BLE: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BGT: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BLEU: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BGTU: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BOD: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BPS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BEQZ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BNEZ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
     `OSR2:
       case(funct5)
   		`WFI:
@@ -2225,12 +2271,15 @@ EXECUTE:
       `MVMAP: begin mathCnt <= 8'd2; goto (PAGEMAPA); end
       `PEEKQ:
         case(ia[3:0])
-        4'd14:  res <= {trace_empty,trace_valid,52'd0,trace_data_count};
         4'd15:  res <= trace_dout;
         endcase
       `POPQ:
         case(ia[3:0])
         4'd15:  begin rd_trace <= 1'b1; res <= trace_dout; end
+        endcase
+      `STATQ:
+        case(ia[3:0])
+        4'd15:  res <= {trace_empty,trace_valid,52'd0,trace_data_count};
         endcase
       endcase
     // Memory Ops
@@ -2988,7 +3037,7 @@ WRITEBACK:
   			      Rs2x1 <= ia[2] ? rsStack[9:5] : rsStack[4:0];
   			      Rs3x1 <= ia[3] ? rsStack[9:5] : rsStack[4:0];
   			    end
-          11'b101_0001_10??:  dbadr[ir[19:18]] <= ia;
+          11'b101_0001_10??:  dbad[ir[19:18]] <= ia;
           11'b101_0001_1100:  dbcr <= ia;
           11'b101_0001_1101:  dbsr <= ia;
           default:  ;

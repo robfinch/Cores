@@ -1,0 +1,5 @@
+; Garbage Collector
+
+gcIncrement:
+  rts
+
