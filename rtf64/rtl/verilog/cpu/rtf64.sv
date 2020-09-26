@@ -361,13 +361,14 @@ reg [7:0] crres;
 reg wrra;
 reg wrirf,wrcrf,wrcrf32,wrfrf;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
+wire st_writeback = state==WRITEBACK;
 
 // It takes 6 block rams to get triple output ports with 32 sets of 32 regs.
 
 regfile64 uirfRs1 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf),      // input wire [0 : 0] wea
+  .wea(wrirf & st_writeback),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(irfoRd),  // output wire [63 : 0] douta
@@ -382,7 +383,7 @@ regfile64 uirfRs1 (
 regfile64 uirfRs2 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf),      // input wire [0 : 0] wea
+  .wea(wrirf & st_writeback),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
@@ -397,7 +398,7 @@ regfile64 uirfRs2 (
 regfile64 uirfRs3 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf),      // input wire [0 : 0] wea
+  .wea(wrirf & st_writeback),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
@@ -414,7 +415,7 @@ assign frfoa = fregfile[Rs1];
 assign frfob = fregfile[Rs2];
 assign frfoc = fregfile[Rs3];
 always @(posedge clk_g)
-  if (state==WRITEBACK && wrfrf)
+  if (st_writeback & wrfrf)
     fregfile[Rd] <= res;
 
 reg [31:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
@@ -437,7 +438,7 @@ wire [4:0] crs;
 reg [AWID-1:0] rares;
 
 always @(posedge clk_g)
-  if (state==WRITEBACK)
+  if (st_writeback)
     if (wrra)
       ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
 wire [AWID-1:0] rao = ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
@@ -446,16 +447,19 @@ wire [31:0] cd32 = cregfile[Rdx];
 wire [31:0] cds32 = cregfile[Rs1x];
 wire [31:0] cds322 = cregfile[Rs2x];
 always @(posedge clk_g)
-  if (state==WRITEBACK)
-    if (wrcrf)
-      case(Cd)
-      2'd0: cregfile[Rdx] <= {cd32[31:8],crres[7:0]};
-      2'd1: cregfile[Rdx] <= {cd32[31:16],crres[7:0],cd32[7:0]};
-      2'd2: cregfile[Rdx] <= {cd32[31:24],crres[7:0],cd32[15:0]};
-      2'd3: cregfile[Rdx] <= {crres[7:0],cd32[23:0]};
-      endcase
-    else if (wrcrf32)
-      cregfile[Rdx] <= res[31:0];
+  if (wrcrf && state==IFETCH1)
+    case(Cd)
+    2'd0: cregfile[Rdx] <= {cd32[31:8],crres[7:0]};
+    2'd1: cregfile[Rdx] <= {cd32[31:16],crres[7:0],cd32[7:0]};
+    2'd2: cregfile[Rdx] <= {cd32[31:24],crres[7:0],cd32[15:0]};
+    2'd3: cregfile[Rdx] <= {crres[7:0],cd32[23:0]};
+    endcase
+  else if (wrcrf32 & st_writeback)
+    cregfile[Rdx] <= res[31:0];
+initial begin
+  for (n = 0; n < 32; n = n + 1)
+    cregfile[n] <= 32'h0;
+end
 wire [7:0] cd = cd32 >> {Cs,3'b0};
 wire [7:0] cd2 = cds322 >> {Cs,3'b0};
 wire [7:0] cds = cds32 >> {Rs1[1:0],3'b0};
@@ -562,7 +566,7 @@ wire [19:0] keyo, keyoa;
 KeyMemory ukm1 (
   .clka(clk_g),    // input wire clka
   .ena(d_setkey),      // input wire ena
-  .wea(state==WRITEBACK && !ia[31]),      // input wire [0 : 0] wea
+  .wea(st_writeback & ~ia[31]),      // input wire [0 : 0] wea
   .addra(ia[45:32]),  // input wire [13 : 0] addra
   .dina(ia[19:0]),    // input wire [19 : 0] dina
   .douta(keyoa),  // output wire [19 : 0] douta
@@ -596,7 +600,7 @@ CardMemory2 ucard1 (
   .douta(),  // output wire [0 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(d_gcclr && ia[30:28]==3'd2),      // input wire enb
-  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .web(st_writeback & d_gcclr & ~ia[31]),      // input wire [0 : 0] web
   .addrb(ia[15:3]),  // input wire [11 : 0] addrb
   .dinb(ib[31:0]),    // input wire [31 : 0] dinb
   .doutb(card21o)  // output wire [31 : 0] doutb
@@ -610,7 +614,7 @@ CardMemory2 ucard2 (
   .douta(),  // output wire [0 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(d_gcclr && ia[30:28]==3'd2),      // input wire enb
-  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .web(st_writeback & d_gcclr & ~ia[31]),      // input wire [0 : 0] web
   .addrb(ia[15:3]),  // input wire [11 : 0] addrb
   .dinb(ib[63:32]),    // input wire [31 : 0] dinb
   .doutb(card22o)  // output wire [31 : 0] doutb
@@ -624,7 +628,7 @@ CardMemory1 ucard3 (
   .douta(),  // output wire [0 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(d_gcclr && ia[30:28]==3'd1),      // input wire enb
-  .web(state==WRITEBACK && d_gcclr && ~ia[31]),      // input wire [0 : 0] web
+  .web(st_writeback & d_gcclr & ~ia[31]),      // input wire [0 : 0] web
   .addrb(ia[9:3]),  // input wire [6 : 0] addrb
   .dinb(ib[31:0]),    // input wire [31 : 0] dinb
   .doutb(card1o)  // output wire [31 : 0] doutb
@@ -950,6 +954,7 @@ wire [3:0] pc_acr = sregfile[pc[AWID-1:AWID-4]][3:0];
 always @(posedge clk_g)
 if (rst_i) begin
 	state <= IFETCH1;
+	ir <= 32'h000000EA;
 	pc <= RSTPC;
 	for (n = 0; n < 8; n = n + 1) begin
 	  tvec[n] <= 32'hFFFC0000;
@@ -991,15 +996,15 @@ if (rst_i) begin
 	peekq <= 1'b0;
 	mrloc <= 3'd0;
 	rprv <= 5'd0;
-	Rdx <= 5'd29;
-	Rs1x <= 5'd29;
-	Rs2x <= 5'd29;
-	Rs3x <= 5'd29;
-	Rdx1 <= 5'd29;
-	Rs1x1 <= 5'd29;
-	Rs2x1 <= 5'd29;
-	Rs3x1 <= 5'd29;
-	rsStack <= 32'hFFFFFFFD;
+	Rdx <= 5'd31;
+	Rs1x <= 5'd31;
+	Rs2x <= 5'd31;
+	Rs3x <= 5'd31;
+	Rdx1 <= 5'd31;
+	Rs1x1 <= 5'd31;
+	Rs2x1 <= 5'd31;
+	Rs3x1 <= 5'd31;
+	rsStack <= 32'hFFFFFFFF;
 	set_wfi <= 1'b0;
 	next_epc <= 32'hFFFFFFFF;
 	instret <= 40'd0;
@@ -1125,7 +1130,7 @@ DECODE:
   begin
     goto (REGFETCH1);
     Rd <= 5'd0;
-    Cd <= ir[9:8];
+    Cd <= 2'd0;
     Cs <= ir[9:8];
     rad <= ir[8];
     casez(opcode)
@@ -1454,10 +1459,9 @@ DECODE:
 		`FLT2:
 			begin
 				Rd <= ir[12:8];
-        Cd <= ir[9:8];
 				case(fltfunct5)
 				5'd20,5'd24,5'd28:  wrirf <= 1'b1;
-				`FSEQ,`FSLT,`FSLE,`FCMP:  begin d_fltcmp <= 1'b1; wrcrf <= 1'b1; end
+				`FSEQ,`FSLT,`FSLE,`FCMP:  begin Cd <= ir[9:8]; d_fltcmp <= 1'b1; wrcrf <= 1'b1; end
 				default:  wrfrf <= 1'b1;
 			  endcase
 			end
@@ -2913,7 +2917,7 @@ endtask
 
 task tPMAEA;
 begin
-  if (keyViolation)
+  if (keyViolation && omode == 3'd0)
 		tException(32'h80000031,ipc);
   // PMA Check
   for (n = 0; n < 8; n = n + 1)
@@ -3041,6 +3045,9 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+  $display("**********************");
+  $display("** Exception: %d    **", cse);
+  $display("**********************");
 	goto (IFETCH1);
 end
 endtask

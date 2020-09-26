@@ -1,0 +1,94 @@
+                        	.file "fibonacci.r64",1
+                        	.file "fibonacci.r64",1
+                        	; Fibonacci calculator Gambit v5 asm
+                        	; r1 in the end will hold the Nth fibonacci number
+                        	.file "fibonacci.r64",4
+                        	  code 24 bits
+                        		org	$FFFC0100
+                        	
+                        	start:
+FFFC0100 04 05 F4 03                 		ldi	  $t2,#$FD
+FFFC0104 04 05 04 00                 		ldi	  $t2,#$01	; x = 1
+FFFC0108 A3 00 14 00                 		sto	  $t2,$00
+                        	
+FFFC010C 04 06 40 00                 		ldi	  $t3,#$10		; calculates 16th fibonacci number (13 = D in hex) (CHANGE HERE IF YOU WANT TO CALCULATE ANOTHER NUMBER)
+FFFC0110 02 C4 80 05                 		or	  $t1,$t3,$x0	; transfer y register to accumulator
+FFFC0114 04 C6 F4 7F                 		sub	  $t3,$t3,#3	; handles the algorithm iteration counting
+                        	
+FFFC0118 04 04 08 00                 		ldi	  $t1,#2		  ; a = 2
+FFFC011C A3 04 10 00                 		sto	  $t1,$04		  ; stores a
+                        	
+                        	loop: 
+FFFC0120 86 05 10 00                 		ldo	  $t2,$04		  ; x = a
+FFFC0124 02 84 94 11                 		add	  $t1,$t1,$t2	; a += x
+FFFC0128 A3 04 10 00                 		sto	  $t1,$04		  ; stores a
+FFFC012C A3 00 14 00                 		sto	  $t2,$00		  ; stores x
+FFFC0130 04 C6 FC FF                 		sub.  $t3,$t3,#1	; y -= 1
+FFFC0134 37 20 01 FC                 	  bne   cr0,loop	  ; jumps back to loop if Z bit != 0 (y's decremention isn't zero yet)
+FFFC0138 EA 00 00 00                 	  nop
+FFFC013C EA 00 00 00                 	  nop
+FFFC0140 EA 00 00 00                 	  nop
+FFFC0144 EA 00 00 00                 	  nop
+FFFC0148 EA 00 00 00                 	  nop
+FFFC014C EA 00 00 00                 		nop  
+                        	
+                        	.file "fibonacci.r64",1
+                        	.file "fibonacci.r64",1
+                        	
+                        		rodata
+                        		align 8
+                        	begin_init_data:
+                        	_begin_init_data:
+                        	
+                        		rodata
+                        		align 8
+                        	end_init_data:
+                        	_end_init_data:
+5 symbols
+  Symbol Name                              seg     address bits
+* _end_init_data                           rodata  fffffffffffc1000 32
+* begin_init_data                          rodata  fffffffffffc1000 32
+* end_init_data                            rodata  fffffffffffc1000 32
+* loop                                       code  fffffffffffc0120 24
+* start                                      code  fffffffffffc0100 24
+
+Undefined Symbols
+
+  Macro Name
+0 compressable instructions
+The top 1024 are:
+Comp  Opcode  Count
+
+Instruction Statistics
+Loads:         1 (5.000000%)
+Stores:        4 (20.000000%)
+  Indexed:     0 (0.000000%)
+Pushes:        0 (0.000000%)
+Branches:      0 (0.000000%)
+  BEQI:		     0 (0.000000%)
+  BNEI:		     0 (0.000000%)
+  BBc:		     0 (0.000000%)
+  BLcc:		     0 (0.000000%)
+Calls:		     0 (0.000000%)
+Returns:	     0 (0.000000%)
+Adds:	         6 (30.000000%)
+Ands:	         0 (0.000000%)
+Ors:	         0 (0.000000%)
+Xors:	         0 (0.000000%)
+Lshifts:       0 (0.000000%)
+shifts:	       0 (0.000000%)
+Luis:	         0 (0.000000%)
+Moves:	       0 (0.000000%)
+CMoves:	       0 (0.000000%)
+Sets:	         0 (0.000000%)
+Ptrdif:        0 (0.000000%)
+Floatops:      0 (0.000000%)
+others:        9 (45.000000%)
+Total:        20
+
+number of bytes: 80.000000
+number of instructions: 20
+number of compressed instructions: 0
+4.000000 bytes (32 bits) per instruction
+Compression ratio: 0.000000%
+Number of long branches: 0

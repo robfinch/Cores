@@ -373,7 +373,8 @@ int processOptions(int argc, char **argv)
 								gCanCompress = 0;
 							}
 							if (argv[nn][2] == 'R') {
-								gCpu = 'R';	// NVIO3
+								gCpu = 'R';	// RTF64
+								vebits = 32;
 								if (argv[nn][3] == 'n')
 									vebits = 256;
 								gCanCompress = 0;
@@ -2614,7 +2615,7 @@ int main(int argc, char *argv[])
 			}
             else
 			*/
-			if (gCpu=='F' || gCpu=='G' || gCpu=='J') {
+			if (gCpu=='F' || gCpu=='G' || gCpu=='J' || gCpu=='R') {
 				if (vebits == 256) {
 					for (kk = 0; kk < binndx; kk += 32) {
 						fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",

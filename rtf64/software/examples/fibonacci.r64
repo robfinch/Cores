@@ -1,0 +1,31 @@
+; Fibonacci calculator Gambit v5 asm
+; r1 in the end will hold the Nth fibonacci number
+  code 24 bits
+	org	$FFFC0100
+
+start:
+	ldi	  $t2,#$FD
+	ldi	  $t2,#$01	; x = 1
+	sto	  $t2,$00
+
+	ldi	  $t3,#$10		; calculates 16th fibonacci number (13 = D in hex) (CHANGE HERE IF YOU WANT TO CALCULATE ANOTHER NUMBER)
+	or	  $t1,$t3,$x0	; transfer y register to accumulator
+	sub	  $t3,$t3,#3	; handles the algorithm iteration counting
+
+	ldi	  $t1,#2		  ; a = 2
+	sto	  $t1,$04		  ; stores a
+
+loop: 
+	ldo	  $t2,$04		  ; x = a
+	add	  $t1,$t1,$t2	; a += x
+	sto	  $t1,$04		  ; stores a
+	sto	  $t2,$00		  ; stores x
+	sub.  $t3,$t3,#1	; y -= 1
+  bne   cr0,loop	  ; jumps back to loop if Z bit != 0 (y's decremention isn't zero yet)
+  nop
+  nop
+  nop
+  nop
+  nop
+	nop  
+

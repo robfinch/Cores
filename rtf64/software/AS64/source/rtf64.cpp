@@ -268,9 +268,9 @@ static int regCnst;
 #define FUNC5(x)	(((x) & 0x1fLL) << 26LL)
 #define FUNC6(x)	(((x) & 0x3FLL) << 23LL)
 #define FMT(x)	(((x) & 7LL) << 23LL)
-#define IMM(x)	(((x) & 0x1fffffLL) << 18LL)
+#define IMM(x)	(((x) & 0x1fffLL) << 18LL)
 #define SHI7(x)	((((x) & 0x60LL) << 29LL) | RB(((x) & 0x1fLL)))
-#define STDISP(x)	((((x) & 0x1fLL) << 8LL) | (((x) & 0x3ffE0LL) << 18LL))
+#define STDISP(x)	((((x) & 0x1fLL) << 8LL) | (((x) & 0x1fE0LL) << 23LL))
 #define LDDISP(x)	(((x) & 0x3ffffLL) << 13LL)
 #define AM(x)		(((x) & 1LL << 38LL))
 #define RETIMM(x)	(((x) & 0x1ffff0LL) << 18LL)
@@ -1680,9 +1680,9 @@ static void getSz(int *sz)
 	case 'i': case 'I': *sz = 0x43; break;
   default: 
     error("Bad size");
-    *sz = 3;
+		inptr--;
+    *sz = 0;
   }
-  inptr += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1729,8 +1729,10 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
   p = inptr;
 	if (*p == '.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = TRUE;
+	}
 	Rt = getRegisterX();
   need(',');
   Ra = getRegisterX();
@@ -1930,25 +1932,12 @@ static void process_rrop()
 
 	instr = 0LL;
   p = inptr;
-	// fxdiv, transform
-	// - check for writeback indicator
-	if (gpu && (funct6 == 0x2B || funct6 == 0x11)) {
-		if (*p == '.') {
-			if (p[1] == 'w' || p[1] == 'W') {	// .wr or .write
-				instr = (1 << 25);
-				p++;
-				NextToken();
-			}
-			else if (p[1] == 's' || p[1] == 'S') {	// .st or .start
-				p++;
-				NextToken();
-			}
-		}
-	}
 	if (*p=='.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = TRUE;
+	}
   Rt = getRegisterX();
   need(',');
   Ra = getRegisterX();
@@ -1978,10 +1967,10 @@ static void process_rrop()
 	Rb = Rb & 0x1f;
 	Rt = Rt & 0x1f;
 	if (funct6==0x3C || funct6==0x3D || funct6==0x3E) {
-	    emit_insn(RCF(recflag)|FUNC6(funct6)||FMT(sz)|RB(Rb)|RT(Rt)|RA(Ra)|opcode);
+	    emit_insn(RCF(recflag)|FUNC5(funct6)|FMT(sz)|RB(Rb)|RT(Rt)|RA(Ra)|opcode);
 			goto xit;
 	}
-    emit_insn(RCF(recflag) | FUNC6(funct6)|FMT(sz)|RB(Rb)|RT(Rt)|RA(Ra)|opcode);
+    emit_insn(RCF(recflag) | FUNC5(funct6)|FMT(sz)|RS2(Rb)|RD(Rt)|RS1(Ra)|opcode);
 	xit:
 		prevToken();
 		ScanToEOL();
@@ -2644,6 +2633,7 @@ static void process_bcc()
 	if (Cr < 112 || Cr > 119)
 		error("Need condition register for branch");
 	need(',');
+	NextToken();
 	val = expr();
 	emit_insn(
 		((val >> 2LL) << 10LL) |
@@ -3229,7 +3219,7 @@ static void process_store()
 		return;
 	}
 	emit_insn(
-		IMM(val) |
+		STDISP(val) |
 		RS2(Rs) |
 		RS1(Ra) |
 		opcode6);
@@ -3397,6 +3387,10 @@ static void process_load()
 
 	GetFPSize();
 	GetArBits(&aq, &rl);
+	if (*inptr == '.') {
+		inptr++;
+		recflag = true;
+	}
 	ar = (int)((aq << 1LL) | rl);
 	p = inptr;
 	Rt = getRegisterX();
@@ -3429,6 +3423,7 @@ static void process_load()
 	if (!IsNBit(val, 13)) {
 		LoadConstant(val, 2);
 		emit_insn(
+			RCF(recflag) |
 			RS3(2) |
 			RD(Rt) |
 			RS1(Ra) |
@@ -3437,6 +3432,7 @@ static void process_load()
 		return;
 	}
 	emit_insn(
+		RCF(recflag) |
 		IMM(val) |
 		RD(Rt) |
 		RS1(Ra) |
