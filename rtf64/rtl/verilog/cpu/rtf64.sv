@@ -95,9 +95,12 @@
 `define GCSUB 8'h75
 `define OSR2  8'h7A
 `define CACHE 8'h7B
-`define REX     5'h08
+`define PUSHQ   5'h08
+`define POPQ    5'h09
+`define PEEKQ   5'h0A
 `define SETKEY  5'h0C
 `define GCCLR   5'h0D
+`define REX     5'h10
 `define PFI     5'h11
 `define WFI     5'h12
 `define MVMAP   5'h1C
@@ -362,6 +365,7 @@ reg wrra;
 reg wrirf,wrcrf,wrcrf32,wrfrf;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
 wire st_writeback = state==WRITEBACK;
+wire st_ifetch2 = state==IFETCH2;
 
 // It takes 6 block rams to get triple output ports with 32 sets of 32 regs.
 
@@ -523,6 +527,9 @@ reg [15:0] mtid;      // task id
 wire ie = pmStack[0];
 reg [31:0] miex;
 reg [19:0] key [0:8];
+reg [31:0] dbad [0:3];
+reg [63:0] dbcr;
+reg [3:0] dbstat;
 
 // Debug
 reg [31:0] dbadr [0:3];
@@ -530,7 +537,8 @@ reg [63:0] dbcr;
 reg [3:0] dbsr;
 
 reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
-reg d_shiftr, d_st, d_ld, d_exti;
+reg d_shiftr, d_st, d_ld, d_exti, d_cbranch, d_wha;
+reg d_pushq, d_popq, d_peekq;
 reg setto, getto, decto, getzl, popto;
 reg pushq, popq, peekq; 
 
@@ -667,6 +675,114 @@ initial begin
   PMA_UB[0] = 28'h0FFFFFF;
   PMA_AT[0] = 16'h010F;       // ram, byte addressable, cache-read-write-execute
 end
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Evaluate branch condition
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg takb;
+always @*
+case(opcode)
+`BEQ: takb =  cd[1];
+`BNE: takb = ~cd[1];
+`BMI: takb =  cd[7];
+`BPL: takb = ~cd[7];
+`BVS: takb =  cd[6];
+`BVC: takb = ~cd[6];
+`BCS: takb =  cd[0];
+`BCC: takb = ~cd[0];
+`BLE: takb = cd[1] | cd[7];
+`BGT: takb = ~(cd[1] | cd[7]);
+`BLEU:  takb = cd[1] | cd[0];
+`BGTU:  takb = ~(cd[1] | cd[0]);
+`BOD:   takb = cd[5];
+`BPS:   takb = cd[4];
+default:  takb = 1'b0;
+endcase
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Trace
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg wr_trace, rd_trace;
+reg wr_whole_address;
+reg [5:0] br_hcnt;
+reg [5:0] br_rcnt;
+reg [63:0] br_history;
+wire [63:0] trace_dout;
+wire trace_full;
+wire trace_empty;
+wire trace_valid;
+reg tron;
+
+wire trace_on = 
+  (dbad[0]==ipc && dbcr[19:16]==4'b1000 && dbcr[32]) ||
+  (dbad[1]==ipc && dbcr[23:20]==4'b1000 && dbcr[33]) ||
+  (dbad[2]==ipc && dbcr[27:24]==4'b1000 && dbcr[34]) ||
+  (dbad[3]==ipc && dbcr[31:28]==4'b1000 && dbcr[35])
+  ;
+wire trace_off = trace_full;
+
+always @(posedge clk_g)
+if (rst_i) begin
+  wr_trace <= 1'b0;
+  br_hcnt <= 6'd8;
+  br_rcnt <= 6'd0;
+  tron <= FALSE;
+end
+else begin
+  if (trace_off)
+    tron <= FALSE;
+  else if (trace_on)
+    tron <= TRUE;
+  wr_trace <= 1'b0;
+  if (tron) begin
+    if (st_writeback) begin
+      if (d_cbranch) begin
+        if (br_hcnt < 6'h3E) begin
+          br_history[br_hcnt] <= takb;
+          br_hcnt <= br_hcnt + 2'd1;
+        end
+        else begin
+          br_rcnt <= br_rcnt + 2'd1;
+          br_history[7:0] <= {br_hcnt-4'd8,2'b01};
+          if (br_rcnt==6'd3) begin
+            br_rcnt <= 6'd0;
+            wr_whole_address <= 1'b1;
+          end
+          wr_trace <= 1'b1;
+          br_hcnt <= 6'd8;
+        end
+      end
+      else if (d_wha) begin
+        br_history[7:0] <= {br_hcnt-4'd8,2'b01};
+        br_rcnt <= 6'd0;
+        wr_whole_address <= 1'b1;
+        wr_trace <= 1'b1;
+        br_hcnt <= 6'd8;
+      end
+    end
+    else if (st_ifetch2) begin
+      if (wr_whole_address) begin
+        wr_whole_address <= 1'b0;
+        br_history[63:0] <= {ipc[31:2],2'b00};
+        wr_trace <= 1'b1;
+      end
+    end
+  end
+end
+
+TraceFifo utf1 (
+  .clk(clk_g),                // input wire clk
+  .srst(rst_i),              // input wire srst
+  .din(br_history),                // input wire [63 : 0] din
+  .wr_en(wr_trace),            // input wire wr_en
+  .rd_en(rd_trace),            // input wire rd_en
+  .dout(trace_dout),              // output wire [63 : 0] dout
+  .full(trace_full),              // output wire full
+  .empty(trace_empty),            // output wire empty
+  .valid(trace_valid),            // output wire valid
+  .data_count(trace_data_count)  // output wire [9 : 0] data_count
+);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1024,6 +1140,7 @@ if (wc_time_irq==1'b0)
 pushq <= 1'b0;
 popq <= 1'b0;
 peekq <= 1'b0;
+rd_trace <= 1'b0;
 
 if (!UserMode)
 	adr_o <= ladr;
@@ -1070,6 +1187,11 @@ IFETCH1:
     d_flipi <= FALSE;
     d_ffoi <= FALSE;
     d_ffor <= FALSE;
+    d_cbranch = FALSE;
+    d_wha <= FALSE;
+    d_pushq <= FALSE;
+    d_popq <= FALSE;
+    d_peekq <= FALSE;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -1156,6 +1278,9 @@ DECODE:
 	      begin
 	        illegal_insn <= 1'b0;
 	      end
+	    `PUSHQ: begin d_pushq <= TRUE; illegal_insn <= FALSE; end
+	    `POPQ:  begin d_popq <= TRUE; illegal_insn <= FALSE; end
+	    `PEEKQ: begin d_peekq <= TRUE; illegal_insn <= FALSE; end 
 		  default:  ;
 		  endcase
     `R2:
@@ -1352,7 +1477,7 @@ DECODE:
     `AMIPC: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{30{ir[31]}},ir[31:13],ir[1:0],13'd0}; illegal_insn <= 1'b0; end
     `CSR: if (omode >= ir[28:26]) begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= ir[17:13]; illegal_insn <= 1'b0; end
     // Flow Control
-    `JMP: begin pc <= {pc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); illegal_insn <= 1'b0; end
+    `JMP: begin pc <= {pc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); d_wha <= TRUE; illegal_insn <= 1'b0; end
     `JSR:
       begin
         // Assume instruction will not crap out and write ra0,ra1 here rather
@@ -1362,6 +1487,7 @@ DECODE:
         wrirf <= 1'b1;
         pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
         res <= ipc;
+        d_wha <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTS:
@@ -1369,6 +1495,7 @@ DECODE:
         Rd = 5'd31;
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
+        d_wha <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTE:
@@ -1381,10 +1508,14 @@ DECODE:
 			  Rs2x1 <= rsStack[9:5];
 			  Rs3x1 <= rsStack[9:5];
 				pc <= epc[rsStack[4:0]];
+				d_wha <= TRUE;
 				illegal_insn <= 1'b0;
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
-      illegal_insn <= 1'b0;
+      begin
+        d_cbranch = TRUE;
+        illegal_insn <= 1'b0;
+      end
     // Memory Ops
     `LDB:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
     `LDBU: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; end
@@ -2092,6 +2223,15 @@ EXECUTE:
           endcase
         end
       `MVMAP: begin mathCnt <= 8'd2; goto (PAGEMAPA); end
+      `PEEKQ:
+        case(ia[3:0])
+        4'd14:  res <= {trace_empty,trace_valid,52'd0,trace_data_count};
+        4'd15:  res <= trace_dout;
+        endcase
+      `POPQ:
+        case(ia[3:0])
+        4'd15:  begin rd_trace <= 1'b1; res <= trace_dout; end
+        endcase
       endcase
     // Memory Ops
     `LDB:  begin ea <= ia + imm; goto (MEMORY1); end
