@@ -124,6 +124,9 @@
 #define I_FNMA	0xF6
 #define I_FNMS	0xF7
 
+// 1r operations
+#define	I_TST		0x0B
+
 // 3r Operations
 #define I_MIN		0x0
 #define I_MAX		0x1
@@ -603,6 +606,26 @@ static int getRegisterX()
 				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
 					reg = inptr[2] - '0' + 112;
 					inptr += 3;
+					NextToken();
+					return (reg);
+				}
+				if (!isIdentChar(inptr[2])) {
+					reg = 125;
+					inptr += 2;
+					NextToken();
+					return (reg);
+				}
+			}
+			if (inptr[1] == 'N' || inptr[1] == 'n') {
+				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
+					reg = inptr[2] - '0' + 114;
+					inptr += 3;
+					NextToken();
+					return (reg);
+				}
+				else if (!isIdentChar(inptr[2])) {
+					reg = 114;
+					inptr += 2;
 					NextToken();
 					return (reg);
 				}
@@ -1796,11 +1819,16 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 		mop = getMergeOp();
 	if (*inptr == '.')
 		getSz(&sz);
+	p = inptr;
 	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 115)
-		error("Need condition register for compare");
-	Cr &= 3;
-	need(',');
+	if (Cr < 112 || Cr > 115) {
+		Cr = 0;
+		inptr = p;
+	}
+	else {
+		Cr &= 3;
+		need(',');
+	}
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
@@ -1848,11 +1876,16 @@ static void process_setiop(int64_t opcode6, int64_t func6, int64_t bit23)
 		mop = getMergeOp();
 	if (inptr[0] == '.')
 		getSz(&sz);
+	p = inptr;
 	Rt = getRegisterX();
 	if (Rt >= 112 && Rt <= 115) {
 		Rt &= 3;
+		need(',');
 	}
-	need(',');
+	else {
+		Rt = 0;
+		inptr = p;
+	}
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
@@ -1890,14 +1923,16 @@ static void process_setop(int64_t funct6, int64_t opcode6, int64_t bit23)
 	if (*inptr == '.')
 		getSz(&sz);
 	sz &= 7;
+	p = inptr;
 	Rt = getRegisterX();
 	if (Rt >= 112 && Rt <= 115) {
 		Rt &= 3;
+		need(',');
 	}
 	else {
-		Rt &= 3;
+		Rt = 0;
+		inptr = p;
 	}
-	need(',');
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
@@ -1938,7 +1973,7 @@ static void process_rrop()
 {
   int Ra,Rb,Rt,Rbp,Rtp;
   char *p;
-	int sz = 3;
+	int sz = 0;
 	int64_t instr;
 	int64_t funct6 = parm1[token];
 	int64_t iop = parm2[token];
@@ -2014,11 +2049,16 @@ static void process_cmp()
 		getSz(&sz);
 	if (*inptr == '.')
 		recflag = TRUE;
+	p = inptr;
 	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 119)
-		error("Need condition register for compare");
-	Cr &= 3;
-	need(',');
+	if (Cr < 112 || Cr > 119) {
+		Cr = 0;
+		inptr = p;
+	}
+	else {
+		Cr &= 3;
+		need(',');
+	}
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
@@ -2225,16 +2265,21 @@ static void process_cmovf(int64_t funct6)
 
 static void process_jal(int64_t oc)
 {
-  int64_t addr, val;
-  int Ra;
-  int Rt;
+	int64_t addr, val;
+	int Ra;
+	int Rt;
 	bool noRt;
 	char *p;
+	bool rel = false;
 
 	noRt = false;
 	Ra = 0;
-  Rt = 0;
+	Rt = 0;
 	p = inptr;
+	if (*inptr == '*') {
+		inptr++;
+		rel = true;
+	}
   NextToken();
 	if (token == '(' || token == '[') {
 	j1:
@@ -2583,8 +2628,19 @@ static void process_rop(int oc)
 		recflag = TRUE;
 	}
 	Rt = getRegisterX();
-  need(',');
-  Ra = getRegisterX();
+	if (token == ',') {
+		Ra = getRegisterX();
+	}
+	else {
+		Ra = Rt;
+		if (oc == I_TST) {
+			Rt = 0;
+		}
+		else {
+			error("Target register is required for R1 op");
+			Rt = 0;
+		}
+	}
 	emit_insn(
 		RCF(recflag)|
 		(sz << 23) |
@@ -2630,13 +2686,13 @@ static int InvertBranchOpcode(int opcode4)
 }
 
 // ---------------------------------------------------------------------------
-// beq cr1,label
-//
+//  beq		cr1,label
+//	bne		label2	; assumes cr0
 // ---------------------------------------------------------------------------
 
 static void process_bcc()
 {
-	int Cr;
+	int Cr = 0;
 	int Ra, Rb, Rc;
 	int64_t val;
 	int64_t disp;
@@ -2648,10 +2704,15 @@ static void process_bcc()
 	char *p = inptr;
 
 	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 119)
+	if (Cr < 0) { // no register
+		Cr = 0;
+	}
+	else if (Cr < 112 || Cr > 115)
 		error("Need condition register for branch");
-	need(',');
-	NextToken();
+	else {
+		need(',');
+		NextToken();
+	}
 	val = expr();
 	emit_insn(
 		((val >> 2LL) << 10LL) |
@@ -2878,7 +2939,9 @@ static void process_call(int opcode, int opt)
 	int64_t val;
 	int Ra = 0;
 	int lk = -1;
+	char *p;
 
+	p = inptr;
 	lk = getRegisterX();
 	if (lk < 0) {
 		lk = opt ? 1 : 0;
@@ -2900,8 +2963,8 @@ static void process_call(int opcode, int opt)
 	if (token=='[') {
 		Ra = getRegisterX();
 		need(']');
-		if (Ra==31) {
-			val -= code_address;
+		if (Ra != 114) {
+			error("Illegal register in JMP/JSR, register must be $cn");
 		}
 	}
 	if (val==0) {
@@ -2937,6 +3000,7 @@ static void process_call(int opcode, int opt)
 	}
 	emit_insn(
 		((val >> 2LL) << 10LL) |
+		((Ra==114 ? 1 : 0) << 9) |
 		RD(lk) |
 		opcode
 		);
@@ -3856,8 +3920,6 @@ static void process_mov(int64_t oc, int64_t fn)
 	d3 = 7;	// current to current
 	p = inptr;
   Rt = getRegisterX();
-	if (Rt < 0)
-		printf("hi");
 	if (Rt==-1) {
 		inptr = p;
 		Rt = getFPRegister();
@@ -4680,8 +4742,8 @@ static void process_default()
 	case tk_end_expand: expandedBlock = 0; break;
 	case tk_endpublic: break;
 	case tk_eori: process_riop(I_EORI,I_EOR2,0); break;
-	case tk_ext: process_bitfield(0x1C,0x00);
-	case tk_extu: process_bitfield(0x1C, 0x01);
+	case tk_ext: process_bitfield(0x1C, 0x00); break;
+	case tk_extu: process_bitfield(0x1C, 0x01); break;
 	case tk_extern: process_extern(); break;
 	case tk_file:
 		NextToken();
@@ -5126,7 +5188,7 @@ void rtf64_processMaster()
 	num_insns = 0;
 	num_cinsns = 0;
 	num_bytes = 0;
-  NextToken();
+  rtf64_NextToken();
   while (token != tk_eof && token != tk_end) {
 		recflag = FALSE;
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
@@ -5134,7 +5196,7 @@ void rtf64_processMaster()
     if (expandedBlock)
       expand_flag = 1;
 		(*jumptbl[token])();
-    NextToken();
+    rtf64_NextToken();
   }
 j1:
   ;

@@ -127,8 +127,6 @@ extern void FT64v8_processMaster();
 extern void FT8088_processMaster();
 extern void Itanium_processMaster();
 extern void nvio3_processMaster();
-extern void Gambit_processMaster();
-extern void Gambit_v5_processMaster();
 extern void rtf64_processMaster();
 extern void SymbolInit();
 extern void dsd9_VerilogOut(FILE *fp);
@@ -149,9 +147,8 @@ void displayHelp()
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
      printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64 T=Thor\r\n");
-     printf("                  I=Itanium  D=DSD6 7=DSD7 A=DSD9 F=FT64 G=FT64x36 X=FT8088 N=NVIO3\r\n");
-		 printf("                  O=Gambit  O5=Gambit_v5 R=RTF64\r\n");
-		 printf("    -o[bvlc] = suppress output file b=binary, v=verilog, l=listing, c=coe\r\n");
+     printf("                  I=Itanium  D=DSD6 7=DSD7 A=DSD9 F=FT64 G=FT64x36 X=FT8088 N=NVIO3 R=RTF64\r\n");
+     printf("    -o[bvlc] = suppress output file b=binary, v=verilog, l=listing, c=coe\r\n");
 }
 
 int hcmp(const void *a1, const void *b1)
@@ -375,15 +372,9 @@ int processOptions(int argc, char **argv)
 									vebits = 256;
 								gCanCompress = 0;
 							}
-							if (argv[nn][2] == 'O') {
-								gCpu = GAMBIT;
-								if (argv[nn][3] == '5')
-									gCpu = GAMBIT_V5;
-								gCanCompress = 0;
-							}
 							if (argv[nn][2] == 'R') {
 								gCpu = 'R';	// RTF64
-								vebits = 128;
+								vebits = 32;
 								if (argv[nn][3] == 'n')
 									vebits = 256;
 								gCanCompress = 0;
@@ -398,36 +389,27 @@ int processOptions(int argc, char **argv)
 
 // ---------------------------------------------------------------------------
 // Emit a byte, for DSD7 a byte is 16 bits.
-// For Gambit a byte is 13 bits.
 // ---------------------------------------------------------------------------
 
 void emitByte(int64_t cd)
 {
-	if (segment < 5) {
-		if (gCpu == GAMBIT || gCpu==GAMBIT_V5)
-			sections[segment].AddChar(cd & 0x1fffLL);
-		 else if (gCpu==7)
+     if (segment < 5) {
+		 if (gCpu==7)
 			sections[segment].AddChar(cd);
 		 else
 			sections[segment].AddByte(cd);
 	 }
     if (segment == codeseg || segment == rodataseg) {
-			if (gCpu == GAMBIT || gCpu==GAMBIT_V5) {
-				binfile[binndx] = cd & 255LL;
-				binndx++;
-				binfile[binndx] = (cd >> 8) & 0x1fLL;
-				binndx++;
-			}
-			else if (gCpu==7) {
-				binfile[binndx] = cd & 255LL;
-				binndx++;
-				binfile[binndx] = (cd >> 8) & 255LL;
-				binndx++;
-			}
-			else {
-				binfile[binndx] = cd & 255LL;
-				binndx++;
-			}
+		if (gCpu==7) {
+			binfile[binndx] = cd & 255LL;
+			binndx++;
+			binfile[binndx] = (cd >> 8) & 255LL;
+			binndx++;
+		}
+		else {
+			binfile[binndx] = cd & 255LL;
+			binndx++;
+		}
     }
     if (segment==bssseg) {
        bss_address++;
@@ -471,11 +453,7 @@ void emitChar(int64_t cd)
 
 void emitHalf(int64_t cd)
 {
-	if (gCpu == GAMBIT || gCpu==GAMBIT_V5) {
-		emitByte(cd & 0x1fffLL);
-		emitByte((cd >> 13) & 0x1fffLL);
-	}
-	else if (gCpu==7) {
+	if (gCpu==7) {
 		emitByte(cd & 65535LL);
 		//emitByte((cd >> 16) & 65535LL);
 	}
@@ -494,11 +472,7 @@ void emitHalf(int64_t cd)
 
 void emitWord(int64_t cd)
 {
-	if (gCpu == GAMBIT || gCpu==GAMBIT_V5) {
-		emitHalf(cd & 0x3FFFFFFLL);
-		emitHalf((cd >> 26) & 0x3FFFFFFLL);
-	}
-  else if (gCpu==RISCV || gCpu==7) {
+  if (gCpu==RISCV || gCpu==7) {
      emitHalf(cd & 0xFFFFLL);
      emitHalf((cd >> 16) & 0xFFFFLL);
   }
@@ -554,108 +528,107 @@ void emitCode(int cd)
 
 void process_public()
 {
-  SYM *sym;
-  int64_t ca;
+    SYM *sym;
+    int64_t ca;
 	int div = 1;
 
-	if (gCpu==7 || gCpu==GAMBIT_V5)
+	if (gCpu==7)
 		div = 2;
 
-  NextToken();
-  if (token==tk_code) {
-    segment = codeseg;
-  }
-  else if (token==tk_rodata) {
-    segment = rodataseg;
-  }
-  else if (token==tk_data) {
-    if (isInitializationData)
-      segment = rodataseg;
+    NextToken();
+    if (token==tk_code) {
+        segment = codeseg;
+    }
+    else if (token==tk_rodata) {
+         segment = rodataseg;
+    }
+    else if (token==tk_data) {
+         if (isInitializationData)
+             segment = rodataseg;
+         else
+             segment = dataseg;
+    }
+    else if (token==tk_bss) {
+         segment = bssseg;
+    }
     else
-      segment = dataseg;
-  }
-  else if (token==tk_bss) {
-    segment = bssseg;
-  }
-  else
-      prevToken();
-  bump_address();
+        prevToken();
+    bump_address();
 //    if (segment==bssseg)
 //        ca = bss_address;
 //    else
 //        ca = code_address;
-  switch(segment) {
-  case codeseg:
-    ca = code_address/div;
-    ca = sections[0].address/div;
-    break;
-  case rodataseg:
-    ca = sections[1].address/div;
-    break;
-  case dataseg:
-    ca = sections[2].address/div;
-    break;
-  case bssseg:
-    ca = sections[3].address/div;
-    break;
-  case tlsseg:
-    ca = sections[4].address/div;
-    break;
-  }
-  NextToken();
-  if (token != tk_id) {
-    printf("Identifier expected. Token %d\r\n", token);
-    printf("Line:%.60s", stptr);
-		goto xit2;
-	}
-  if (isInitializationData) {
-		goto xit2;
-  }
-  sym = find_symbol(lastid);
-  if (pass == 4) {
-    if (sym) {
-			if (sym->defined) {
-				printf("Symbol (%s) already defined.\r\n", lastid);
-				goto xit1;
-			}
+    switch(segment) {
+    case codeseg:
+         ca = code_address/div;
+         ca = sections[0].address/div;
+         break;
+    case rodataseg:
+         ca = sections[1].address/div;
+         break;
+    case dataseg:
+         ca = sections[2].address/div;
+         break;
+    case bssseg:
+         ca = sections[3].address/div;
+         break;
+    case tlsseg:
+         ca = sections[4].address/div;
+         break;
+    }
+    NextToken();
+    if (token != tk_id) {
+        printf("Identifier expected. Token %d\r\n", token);
+        printf("Line:%.60s", stptr);
     }
     else {
-      sym = new_symbol(lastid);
+         if (isInitializationData) {
+             ScanToEOL();
+             inptr++;
+             return;
+         }
+        sym = find_symbol(lastid);
+        if (pass == 4) {
+            if (sym) {
+                if (sym->defined)
+                    printf("Symbol (%s) already defined.\r\n", lastid);
+            }
+            else {
+                sym = new_symbol(lastid);
+            }
+            if (sym) {
+                sym->defined = 1;
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
+				sym->value.high = 0;
+                sym->segment = segment;
+                sym->scope = 'P';
+            }
+        }
+        else if (pass > 4) {
+			if (!sym)
+			    printf("Symbol (%s) not defined.\r\n", lastid);
+			else {
+	            if (sym->value.low != ca) {
+	                phasing_errors++;
+	                sym->phaserr = '*';
+	                 //if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+	            }
+	            else
+	                 sym->phaserr = ' ';
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
+				sym->value.high = 0;
+        	}
+        }
+        strcpy_s(current_label, sizeof(current_label), lastid);
     }
-		if (!sym)
-			goto xit1;
-    sym->defined = 1;
-		if (gCpu=='G')
-			sym->value.low = ca & -4LL;
-		else
-			sym->value.low = ca;
-		sym->value.high = 0;
-    sym->segment = segment;
-    sym->scope = 'P';
-  }
-	else if (pass > 4) {
-		if (!sym) {
-			printf("Symbol (%s) not defined.\r\n", lastid);
-			goto xit1;
-		}
-		if (sym->value.low != ca) {
-			phasing_errors++;
-			sym->phaserr = '*';
-			//if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
-		}
-		else
-			sym->phaserr = ' ';
-		if (gCpu == 'G')
-			sym->value.low = ca & -4LL;
-		else
-			sym->value.low = ca;
-		sym->value.high = 0;
-	}
-xit1:
-  strcpy_s(current_label, sizeof(current_label), lastid);
-xit2:
-  ScanToEOL();
-  inptr++;
+    ScanToEOL();
+    inptr++;
 }
 
 // ----------------------------------------------------------------------------
@@ -718,7 +691,7 @@ void process_org()
     int64_t new_address;
 	int mul = 1;
 
-	if (gCpu==7 || gCpu==GAMBIT || gCpu==GAMBIT_V5)
+	if (gCpu==7)
 		mul = 2;
     NextToken();
     new_address = expr();
@@ -778,21 +751,9 @@ void process_align()
 		}
 	}
 	else if (segment == codeseg || segment == rodataseg || segment == dataseg || segment==bssseg || segment==tlsseg) {
-		if (gCpu == RTF64) {
-			if (segment == codeseg) {
-				while (sections[segment].address % v)
-					emitByte(0xEA);	// NOP instruction
-			}
-			else {
-				while (sections[segment].address % v)
-					emitByte(0x00);
-			}
-		}
-		else {
-			while (sections[segment].address % v)
-				emitByte(0x00);
-		}
-  }
+        while (sections[segment].address % v)
+            emitByte(0x00);
+    }
 //    if (segment==bssseg) {
 //        while (bss_address % v)
 //            emitByte(0x00);
@@ -1301,7 +1262,7 @@ void process_macro()
 		getIdentifier();
 		sym = find_symbol(lastid);
 		if (sym != nullptr) {
-			printf("Macro %s already defined %d.", lastid, lineno);
+			printf("Macro already defined %d.", lineno);
 			alreadyDef = true;
 		}
 		else {
@@ -1310,16 +1271,11 @@ void process_macro()
 			sym->isMacro = true;
 			sym->macro = macr;
 		}
-		p = inptr;
 		NextToken();
 		if (token == '(') {
 			macr->GetParmList();
 			NextToken();
 			need(')');
-		}
-		else {
-			inptr = p;
-			ScanToEOL();
 		}
 		p = inptr;
 		macr->GetBody();
@@ -1330,16 +1286,11 @@ void process_macro()
 		Macro mthrowaway;
 		SkipSpaces();
 		getIdentifier();
-		p = inptr;
 		NextToken();
 		if (token == '(') {
 			mthrowaway.GetParmList();
 			NextToken();
 			need(')');
-		}
-		else {
-			inptr = p;
-			ScanToEOL();
 		}
 		mthrowaway.GetBody();
 	}
@@ -1376,14 +1327,13 @@ void process_label()
   SYM *sym;
   static char nm[500];
   int64_t ca;
-	uint64_t mask;
   Int128 val;
   int isEquate;
   int shft = 0;
 
 	val.low = 0;
 	val.high = 0;
-	if (gCpu==7 || gCpu==GAMBIT || gCpu == GAMBIT_V5)
+	if (gCpu==7)
 		shft = 1;
 
 //    printf("<process_label>");
@@ -1416,17 +1366,14 @@ void process_label()
 //       ca = bss_address;
 //    else
 //        ca = code_address;
-  if (lastid[0]=='.')
+  if (lastid[0]=='.') {
     sprintf_s(nm, sizeof(nm), "%s%s", current_label, lastid);
-  else
+  }
+  else { 
+    strcpy_s(current_label, sizeof(current_label), lastid);
     strcpy_s(nm, sizeof(nm), lastid);
-	sym = find_symbol(nm);
-	if (sym == nullptr && lastid[0]!='.')
-		strcpy_s(current_label, sizeof(current_label), lastid);
-	if (lastid[0]!='.' && sym)
-		if (!sym->isMacro)
-			strcpy_s(current_label, sizeof(current_label), lastid);
-	if (strcmp("end_init_data", nm)==0)
+  }
+  if (strcmp("end_init_data", nm)==0)
     isInitializationData = 0;
   NextToken();
 //    SkipSpaces();
@@ -1445,7 +1392,7 @@ void process_label()
   // ignore the labels in initialization data
   if (isInitializationData)
     return;
-//  sym = find_symbol(nm);
+  sym = find_symbol(nm);
   if (pass==4 || pass==3) {
     if (sym) {
       if (sym->defined) {
@@ -1499,17 +1446,15 @@ void process_label()
   }
   else if (pass>4) {
     if (!sym) {
-      //printf("Internal error: SYM is NULL.\r\n");
-      //printf("Couldn't find <%s>\r\n", nm);
+      printf("Internal error: SYM is NULL.\r\n");
+      printf("Couldn't find <%s>\r\n", nm);
     }
     else {
       if (isEquate) {
         sym->value = val;
       }
       else {
-				mask = 0xFFFFFFFFFFFFFFFFLL;
-				mask = mask >> (64LL - (int64_t)code_bits);
-				if (((sym->value.low & mask) != (ca & mask) && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
+				if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
 					//if (verbose)
 					//	printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
           phasing_errors++;
@@ -1848,7 +1793,7 @@ void skipif(int64_t val)
 	memmove(pif1,pif2,sizeof(masterFile)-(pif2-masterFile));
 
 	p1 = inptr = pif1;
-	while(*inptr && inptr-masterFile < sizeof(masterFile)) {
+	while(*inptr) {
 		SkipSpaces();
 		p2 = inptr;
 		NextToken();
@@ -1869,7 +1814,6 @@ void skipif(int64_t val)
 					// remove endif but leave remaining text
 					memmove(p2,inptr,masterFileLength-(inptr-masterFile));
 					inptr = p2;
-					return;
 				}
 			}
 		}
@@ -2103,9 +2047,7 @@ void processMaster()
 	case 'I': FT64v8_processMaster(); break;
 	case 'J': Itanium_processMaster(); break;
 	case 'N': nvio3_processMaster(); break;
-	case GAMBIT: Gambit_processMaster(); break;
-	case GAMBIT_V5: Gambit_v5_processMaster(); break;
-	case RTF64: rtf64_processMaster(); break;
+	case 'R': rtf64_processMaster(); break;
 	default:	FT64v8_processMaster();
 	}
 }
@@ -2673,31 +2615,7 @@ int main(int argc, char *argv[])
 			}
             else
 			*/
-			if (gCpu == GAMBIT || gCpu == GAMBIT_V5) {
-				for (kk = 0; kk < binndx; kk += 64) {
-					fprintf(vfp, "\trommem[%d] = 512'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X"
-						"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",
-						((((unsigned int)start_address + kk/2) / 32) % 4096), //checksum64((int64_t *)&binfile[kk]),
-						binfile[kk + 63], binfile[kk + 62], binfile[kk + 61], binfile[kk + 60],
-						binfile[kk + 59], binfile[kk + 58], binfile[kk + 57], binfile[kk + 56],
-						binfile[kk + 55], binfile[kk + 54], binfile[kk + 53], binfile[kk + 52],
-						binfile[kk + 51], binfile[kk + 50], binfile[kk + 49], binfile[kk + 48],
-						binfile[kk + 47], binfile[kk + 46], binfile[kk + 45], binfile[kk + 44],
-						binfile[kk + 43], binfile[kk + 42], binfile[kk + 41], binfile[kk + 40],
-						binfile[kk + 39], binfile[kk + 38], binfile[kk + 37], binfile[kk + 36],
-						binfile[kk + 35], binfile[kk + 34], binfile[kk + 33], binfile[kk + 32],
-						binfile[kk + 31], binfile[kk + 30], binfile[kk + 29], binfile[kk + 28],
-						binfile[kk + 27], binfile[kk + 26], binfile[kk + 25], binfile[kk + 24],
-						binfile[kk + 23], binfile[kk + 22], binfile[kk + 21], binfile[kk + 20],
-						binfile[kk + 19], binfile[kk + 18], binfile[kk + 17], binfile[kk + 16],
-						binfile[kk + 15], binfile[kk + 14], binfile[kk + 13], binfile[kk + 12],
-						binfile[kk + 11], binfile[kk + 10], binfile[kk + 9], binfile[kk + 8],
-						binfile[kk + 7], binfile[kk + 6], binfile[kk + 5], binfile[kk + 4],
-						binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
-				}
-				//fprintf(vfp, "\trommem[511] = 512'h00000000%08X%08X00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;\n", binlen, checksum);
-			}
-			else if (gCpu == 'F' || gCpu == 'G' || gCpu == 'J' || gCpu==RTF64) {
+			if (gCpu=='F' || gCpu=='G' || gCpu=='J' || gCpu=='R') {
 				if (vebits == 256) {
 					for (kk = 0; kk < binndx; kk += 32) {
 						fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",

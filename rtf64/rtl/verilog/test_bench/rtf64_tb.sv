@@ -35,23 +35,23 @@ initial begin
   #150 rst = 0;
 end
 
-always #5 clk = ~clk;
-always #20 wc_clk = ~wc_clk;
+always @* #5 clk = ~clk;
+always @* #20 wc_clk = ~wc_clk;
 
 wire cyc, stb, we;
-wire [3:0] sel;
+wire [15:0] sel;
 wire [31:0] adr;
-wire [31:0] dato;
-reg [31:0] dati;
+wire [127:0] dato;
+reg [127:0] dati;
 
 wire br_ack;
-wire [31:0] br_dato;
+wire [127:0] br_dato;
 wire scratch_ack;
-wire [31:0] scratch_dato;
+wire [127:0] scratch_dato;
 wire cs_rom = adr[31:22]==10'b1111111111;
 wire cs_scratchmem = adr[31:22]==10'd0;
 
-scratchmem32 uscrath1 (
+scratchmem128 uscrath1 (
   .rst_i(rst),
   .clk_i(clk),
   .cs_i(cs_scratchmem),
@@ -66,7 +66,7 @@ scratchmem32 uscrath1 (
   .sp()
 );
 
-bootrom32 ubr (
+bootrom128 ubr (
   .rst_i(rst),
   .clk_i(clk),
   .cs_i(cs_rom),

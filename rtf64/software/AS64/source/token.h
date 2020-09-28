@@ -492,6 +492,8 @@ enum {
      tk_sxb,
      tk_sxc,
      tk_sxh,
+		 tk_sxt,
+		 tk_sxw,
      tk_sync,
      tk_sys,
 	 tk_tgt,
@@ -544,6 +546,8 @@ enum {
      tk_zxb,
      tk_zxc,
      tk_zxh,
+		tk_zxt,
+		tk_zxw,
 		tk_last_token
 };
 

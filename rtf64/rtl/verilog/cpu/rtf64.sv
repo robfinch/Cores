@@ -273,6 +273,8 @@
 `define FCLASS	5'h1E
 `define UNORD   5'h1F
 
+`define FLT_BT  8'd55
+
 `define SEG_SHIFT   14'd0
 `define CPU_B128    1'b1
 `ifdef CPU_B128
@@ -398,7 +400,7 @@ reg [63:0] fa, fb, fc;
 reg [64:0] res;
 reg [7:0] crres;
 reg pc_reload;
-reg wrra;
+reg wrra, wrca;
 reg wrirf,wrcrf,wrcrf32,wrfrf;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
 wire st_writeback = state==WRITEBACK;
@@ -460,7 +462,8 @@ always @(posedge clk_g)
   if (st_writeback & wrfrf)
     fregfile[Rd] <= res;
 
-reg [31:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
+reg [AWID-1:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
+reg [AWID-1:0] ca [0:63];
 reg [31:0] cregfile [0:31];
 reg [31:0] sregfile [0:15];
 wire [64:0] difi = ia - imm;
@@ -577,6 +580,12 @@ always @(posedge clk_g)
     if (wrra)
       ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
 wire [AWID-1:0] rao = ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
+
+always @(posedge clk_g)
+  if (st_writeback)
+    if (wrca)
+      ca[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
+wire [AWID-1:0] cao = ca[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // MMU
@@ -1219,6 +1228,7 @@ if (trace_match[3]) dbsr[3] <= TRUE;
 decto <= 1'b0;
 popto <= 1'b0;
 ldd <= 1'b0;
+wrca <= 1'b0;
 wrpagemap <= 1'b0;
 if (pe_nmi)
 	nmif <= 1'b1;
@@ -1517,17 +1527,14 @@ DECODE:
           begin
             d_mov <= 1'b1;
             wrcrf <= ir[31];
-            case(ir[19:18])
-            2'b00:  wrirf <= 1'b1;
-            2'b01:  wrfrf <= 1'b1;
-            2'b10:  ;
+            case(ir[21:20])
             2'b11:
-              casez(ir[12:8])
-              5'b0000?: begin rad <= ir[8];  wrra <= 1'b1; end
-              5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
-              5'b11101: wrcrf32 <= 1'b1;
+              casez(Rs1)
+              5'b000??: rad = ir[13];
+              5'b100??: Cs <= ir[14:13];
               default:  ;
               endcase
+            default:  ;
             endcase
             illegal_insn <= 1'b0;
           end
@@ -1669,10 +1676,12 @@ DECODE:
     // Flow Control
     `JMP:
       begin
-        pc <= {pc[AWID-1:24],ir[31:10],2'b00};
+        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
         goto (IFETCH1);
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
+        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
+          tException(`FLT_BT, ipc);
       end
     `JSR:
       begin
@@ -1681,32 +1690,13 @@ DECODE:
         rares <= ipc;
         wrra <= 1'b1;
         wrirf <= 1'b1;
-        pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
+        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
         res <= ipc;
         d_wha <= TRUE;
         pc_reload <= TRUE; 
         illegal_insn <= 1'b0;
-      end
-    `JMPR:
-      begin
-        pc <= ia + {{51{ir[30]}},ir[30:20],2'b00};
-        goto (IFETCH1);
-        d_wha <= TRUE;
-        pc_reload <= TRUE;
-        illegal_insn <= 1'b0;
-      end
-    `JSRR:
-      begin
-        // Assume instruction will not crap out and write ra0,ra1 here rather
-        // than at WRITEBACK.
-        rares <= ipc;
-        wrra <= 1'b1;
-        wrirf <= 1'b1;
-        pc <= ia + {{51{ir[30]}},ir[30:20],2'b00};
-        res <= ipc;
-        d_wha <= TRUE;
-        pc_reload <= TRUE; 
-        illegal_insn <= 1'b0;
+        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
+          tException(`FLT_BT, ipc);
       end
     `RTS:
       begin
@@ -1832,6 +1822,7 @@ REGFETCH1:
     if (d_stot) begin
       casez(Rs2)
       5'b0000?: ib <= rao;
+      5'b0001?: ib <= cao;
       5'b00111: ib <= epc[crs];
       5'b100??: ib <= cd2;
       5'b11101: ib <= cds322;
@@ -2091,15 +2082,29 @@ EXECUTE:
       `MOV:
         begin
           case(ir[21:20])
-          2'b00:  res <= ia;
+          2'b00:  begin res <= ia; rares <= ia; end
           2'b01:  ;
           2'b10:  ;
           2'b11:
             casez(Rs1)
-            5'b0000?: res <= ret_pc;
-            5'b00111: res <= epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]];
-            5'b100??: res <= cds;
-            5'b11101: res <= cds32;
+            5'b0000?: begin res <= ret_pc; rares <= ret_pc; end
+            5'b0001?: begin res <= cao; rares <= cao; end
+            5'b00111: begin res <= epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]]; rares <= epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]]; end
+            5'b100??: begin res <= cds; rares <= cds; end
+            5'b11101: begin res <= cds32; rares <= cds32; end
+            default:  ;
+            endcase
+          endcase
+          case (ir[19:18])
+          2'b00:  wrirf <= 1'b1;
+          2'b01:  wrfrf <= 1'b1;
+          2'b10:  ;
+          2'b11:  
+            casez(ir[12:8])
+            5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
+            5'b0001?: begin rad <= ir[8]; wrca <= 1'b1; end
+            5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+            5'b11101: wrcrf32 <= 1'b1;
             default:  ;
             endcase
           endcase
@@ -2419,22 +2424,15 @@ EXECUTE:
         res <= ia + imm;
         pc <= ret_pc + {ir[12:9],2'b00};
       end
-    `BEQ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BNE: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BMI: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BPL: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BVS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BVC: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BCS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BCC: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BLE: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BGT: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BLEU: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BGTU: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BOD: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BPS: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BEQZ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
-    `BNEZ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
+    `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS,`BEQZ,`BNEZ:
+      begin
+        goto (IFETCH1);
+        if (takb) begin
+          pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
+          if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
+            tException(`FLT_BT, ipc);
+        end
+      end
     `OSR2:
       case(funct5)
       `CACHE: begin ea <= ia; goto (MEMORY1); end
@@ -3286,7 +3284,7 @@ WRITEBACK:
     else
     case (opcode)
     `R2:
-      case(ir[30:26])
+      case(funct5)
       `MOV:
         begin
           case(ir[21:20])
@@ -3296,6 +3294,7 @@ WRITEBACK:
           2'b11:
             casez(Rd)
             5'b0000?: wrra <= 1'b1;
+            5'b0001?: wrca <= 1'b1;
             5'b00111: epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]] <= res;
             5'b100??: wrcrf <= 1'b1;
             5'b11101: wrcrf32 <= 1'b1;
