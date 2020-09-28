@@ -98,7 +98,7 @@
 `define AMIPC 8'b010101??
 `define GCSUB 8'h75
 `define OSR2  8'h7A
-`define CACHE 8'h7B
+`define CACHE   5'h02
 `define PUSHQ   5'h08
 `define POPQ    5'h09
 `define PEEKQ   5'h0A
@@ -118,6 +118,7 @@
 `define LDO   8'h86
 `define LDOR  8'h87
 `define LDOT  8'h88
+`define LEA   8'h89
 `define FLDO  8'h8E
 `define LDX   8'h8F
 `define STB   8'hA0
@@ -177,8 +178,8 @@
 `define PERMR2  5'h17
 `define PTRDIFR2  5'h18
 `define DIFR2   5'h19
-`define BYTNDX  5'h1A
-`define WYDNDX  5'h1B
+`define BYTNDX2  5'h1A
+`define WYDNDX2  5'h1B
 `define MULSUHR2 5'h1D
 `define MULUHR2 5'h1E
 `define RGFR2   5'h1F
@@ -218,6 +219,7 @@
 `define LDOX   5'd6
 `define LDORX  5'd7
 `define LDOTX  5'd8
+`define LEAX   5'd9
 `define FLDOX	 5'd14
 
 // 2r Stores
@@ -293,6 +295,8 @@ parameter WID = 64;
 parameter AWID = 32;
 parameter FPWID = 64;
 parameter RSTPC = 32'hFFFC0100;
+parameter pL1CacheLines = 128;
+localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
 input [7:0] hartid_i;
 input rst_i;
 input clk_i;
@@ -475,12 +479,6 @@ wire [15:0] blendB2 = ib[ 7: 0] * ~ic[7:0];
 wire [4:0] crs;
 reg [AWID-1:0] rares;
 
-always @(posedge clk_g)
-  if (st_writeback)
-    if (wrra)
-      ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
-wire [AWID-1:0] rao = ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
-
 wire [31:0] cd32 = cregfile[Rdx];
 wire [31:0] cds32 = cregfile[Rs1x];
 wire [31:0] cds322 = cregfile[Rs2x];
@@ -528,9 +526,7 @@ reg [5:0] gcloc;    // garbage collect lockout count
 reg [2:0] mrloc;    // mret lockout
 reg [31:0] uip;     // user interrupt pending
 reg [4:0] regset;
-reg [31:0] rsStack;
 assign crs = rsStack[4:0];
-reg [31:0] pmStack;
 reg [63:0] tick;		// cycle counter
 reg [63:0] wc_time;	// wall-clock time
 reg wc_time_irq;
@@ -539,10 +535,8 @@ reg [5:0] wc_time_irq_clr;
 reg wfi;
 reg set_wfi = 1'b0;
 reg [31:0] mtimecmp;
-reg [63:0] instret;	// instructions completed.
 reg [31:0] mcpuid = 32'b000000_00_00000000_00010001_00100001;
 reg [31:0] mimpid = 32'h01108000;
-reg [31:0] uip;
 reg [31:0] mscratch;
 reg [31:0] mbadaddr;
 reg [31:0] usema, msema;
@@ -566,11 +560,23 @@ reg [31:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
+reg d_lea, d_cache;
 reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
-reg d_shiftr, d_st, d_ld, d_exti, d_cbranch, d_wha;
+reg d_shiftr, d_st, d_ld, d_cbranch, d_wha;
 reg d_pushq, d_popq, d_peekq, d_statq;
 reg setto, getto, decto, getzl, popto;
 reg pushq, popq, peekq, statq; 
+reg d_exti, d_extr, d_extur, d_extui, d_depi, d_depr, d_depii, d_flipi, d_flipr;
+reg d_ffoi, d_ffor;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+always @(posedge clk_g)
+  if (st_writeback)
+    if (wrra)
+      ra[{rad,rprv ? rsStack[9:5] : crs}] <= rares;
+wire [AWID-1:0] rao = ra[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStack[9:5] : crs}];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // MMU
@@ -826,11 +832,17 @@ TraceFifo utf1 (
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [3:0] icnt;
-reg [255:0] icache [0:63];
-reg [31:0] ictag [0:63];
-wire ihit = ictag[adr_o[10:5]][31:5]==adr_o[31:5];
+(* ram_style="distributed" *)
+reg [255:0] icache [0:pL1CacheLines-1];
+(* ram_style="distributed" *)
+reg [31:0] ictag [0:pL1CacheLines-1];
+(* ram_style="distributed" *)
+reg [pL1CacheLines-1:0] icvalid;
+reg ic_invline;
+wire ihit = ictag[adr_o[pL1msb:5]][31:5]==adr_o[31:5] && icvalid[adr_o[pL1msb:5]];
 initial begin
-  for (n = 0; n < 64; n = n + 1)
+  icvalid = {pL1CacheLines{1'd0}};
+  for (n = 0; n < pL1CacheLines; n = n + 1)
     ictag[n] = 32'd1;
 end
 
@@ -928,8 +940,6 @@ wire [127:0] shrr = {ia,64'd0} >> ib[5:0];
 wire [127:0] shli = ia << imm[5:0];
 wire [127:0] shri = {ia,64'd0} >> imm[5:0];
 
-reg d_exti, d_extr, d_extur, d_extui, d_depi, d_depr, d_depii, d_flipi, d_flipr;
-reg d_ffoi, d_ffor;
 wire [5:0] mb = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[23:18] : ib[5:0];
 wire [5:0] mw = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[29:24] : ic[5:0];
 wire [5:0] me = mb + mw;
@@ -1141,6 +1151,8 @@ wire [3:0] pc_acr = sregfile[pc[AWID-1:AWID-4]][3:0];
 always @(posedge clk_g)
 if (rst_i) begin
 	state <= IFETCH1;
+	icvalid <= 64'd0;
+	ic_invline <= 1'b0;
 	ir <= 32'h000000EA;
 	pc <= RSTPC;
 	ipc <= 32'h0;
@@ -1230,7 +1242,7 @@ else begin
 end
 
 // Check the memory keys
-keyViolation = TRUE;
+keyViolation <= TRUE;
 for (n = 0; n < 9; n = n + 1)
   if (keyo==key[n] || keyo==20'h0)
     keyViolation <= FALSE;
@@ -1271,6 +1283,7 @@ IFETCH1:
     d_popq <= FALSE;
     d_peekq <= FALSE;
     d_statq <= FALSE;
+    d_cache <= FALSE;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -1320,7 +1333,7 @@ IFETCH2:
 IFETCH3:
   begin
 		if (ihit) begin
-		  iri <= icache[adr_o[10:5]];
+		  iri <= icache[adr_o[pL1msb:5]];
 		  goto (INSTRUCTION_ALIGN);
 	  end
 	  else begin
@@ -1385,17 +1398,18 @@ IFETCH5:
   begin
 `ifdef CPU_B128
     if (icnt[0]==1'd1)
-      ictag[adr_o[10:5]] <= adr_o[31:0];
+      ictag[adr_o[pL1msb:5]] <= adr_o[31:0];
 `endif
 `ifdef CPU_B64
     if (icnt[1:0]==2'd3)
-      ictag[adr_o[10:5]] <= adr_o[31:0];
+      ictag[adr_o[pL1msb:5]] <= adr_o[31:0];
 `endif
 `ifdef CPU_B32
     if (icnt[2:0]==3'd7)
-      ictag[adr_o[10:5]] <= adr_o[31:0];
+      ictag[adr_o[pL1msb:5]] <= adr_o[31:0];
 `endif
-    icache[adr_o[10:5]] <= ici;
+    icvalid[adr_o[pL1msb:5]] <= 1'b1;
+    icache[adr_o[pL1msb:5]] <= ici;
     if (~ack_i) begin
       icnt <= icnt + 2'd1;
       goto (IFETCH3);
@@ -1415,7 +1429,18 @@ DECODE:
     rad <= ir[8];
     casez(opcode)
     `OSR2:
-      case(ir[funct5])
+      case(funct5)
+      `CACHE:
+        begin
+          d_cache <= TRUE;
+          case(ir[9:8])
+          2'd0: ;
+          2'd1: ic_invline <= 1'b1;
+          2'd2: begin icvalid <= 64'd0; goto (IFETCH1); end
+          3'd3: ;
+          endcase
+		      illegal_insn <= 1'b0;
+        end
 		  `PFI: 
 		    begin
 		      if (irq_i != 1'b0)
@@ -1446,7 +1471,7 @@ DECODE:
       begin
         Rd <= ir[12:8];
         Cd <= 2'b00;
-        case(ir[funct5])
+        case(funct5)
         `ANDR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ORR2:  begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
         `EORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
@@ -1483,8 +1508,8 @@ DECODE:
         `PERMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `PTRDIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `DIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `BYTNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `WYDNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BYTNDX2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `WYDNDX2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `RGFR2:begin illegal_insn <= 1'b0; end
@@ -1513,7 +1538,7 @@ DECODE:
       begin
         Rd <= ir[12:8];
         Cs <= ir[19:18];
-        case(ir[funct5])
+        case(funct5)
         `ANDR2: begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `ORR2:  begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
         `EORR2: begin wrirf <= 1'b1; wrcrf <= ir[31];  illegal_insn <= 1'b0; end
@@ -1539,11 +1564,12 @@ DECODE:
         `PERMR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `PTRDIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `DIFR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `BYTNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-        `WYDNDX:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `BYTNDX2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+        `WYDNDX2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULSUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `MULUHR2:begin wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
         `RGFR2:begin illegal_insn <= 1'b0; end
+        default:  ;
         endcase
       end
     `R3A:
@@ -1628,6 +1654,8 @@ DECODE:
     `OR:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{51{1'b0}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `EOR: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{51{1'b0}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; imm <= {{51{ir[30]}},ir[30:18]}; illegal_insn <= 1'b0; end
+    `BYTNDX: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
+    `WYDNDX: begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
 
     `PERM:begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `DEP: begin Rd <= ir[12:8]; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depi <= ~ir[30]; d_flipi <= ir[30]; end
@@ -1682,7 +1710,7 @@ DECODE:
       end
     `RTS:
       begin
-        Rd = 5'd31;
+        Rd <= 5'd31;
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
         d_wha <= TRUE;
@@ -1734,6 +1762,7 @@ DECODE:
         d_ld <= TRUE; 
         illegal_insn <= 1'b0;
       end
+    `LEA:  begin Rd <= ir[12:8]; wrirf <= 1'b1; imm <= {{50{ir[31]}},ir[31:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_ld <= TRUE; d_lea <= TRUE; end
     `STB:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
     `STW:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
     `STT:  begin imm <= {{50{ir[31]}},ir[31:23],ir[12:8]}; illegal_insn <= 1'b0; d_st <= TRUE; end
@@ -1763,6 +1792,7 @@ DECODE:
             imm <= {{50{ir[31]}},ir[31:18]};
             illegal_insn <= 1'b0;
           end
+        `LEAX:   begin Rd <= ir[12:8]; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; d_lea <= TRUE; end
         default:  ;
         endcase
       end
@@ -1833,7 +1863,7 @@ REGFETCH2:
 		`FSTO:  ib <= Rs2==5'd0 ? 64'd0 : frfob;
 		`STX:
 		  case(ir[12:8])
-		  `FSTO:  ib <= Rs2==5'd0 ? 64'd0 : frfob;
+		  `FSTOX:  ib <= Rs2==5'd0 ? 64'd0 : frfob;
 		  default:  ;
 		  endcase
 		`FLT2:
@@ -2024,7 +2054,7 @@ EXECUTE:
         begin
           res <= $signed(ia) < $signed(ib) ? ib - ia : ia - ib;
         end
-      `BYTNDX:
+      `BYTNDX2:
         begin
           if (ia[7:0]==ib[7:0])
             res <= 64'd0;
@@ -2045,7 +2075,7 @@ EXECUTE:
           else
             res <= {64{1'b1}};  // -1
         end
-      `WYDNDX:
+      `WYDNDX2:
         begin
           if (ia[15:0]==ib[15:0])
             res <= 64'd0;
@@ -2317,6 +2347,40 @@ EXECUTE:
     `DEP: res <= bfo;
     `DEPI:  res <= bfo;
     `FFO: res <= bfo;
+    `BYTNDX:
+      begin
+        if (ia[7:0]==imm[7:0])
+          res <= 64'd0;
+        else if (ia[15:8]==imm[7:0])
+          res <= 64'd1;
+        else if (ia[23:16]==imm[7:0])
+          res <= 64'd2;
+        else if (ia[31:24]==imm[7:0])
+          res <= 64'd3;
+        else if (ia[39:32]==imm[7:0])
+          res <= 64'd4;
+        else if (ia[47:40]==imm[7:0])
+          res <= 64'd5;
+        else if (ia[55:40]==imm[7:0])
+          res <= 64'd6;
+        else if (ia[63:56]==imm[7:0])
+          res <= 64'd7;
+        else
+          res <= {64{1'b1}};  // -1
+      end
+    `WYDNDX:
+      begin
+        if (ia[15:0]==imm[15:0])
+          res <= 64'd0;
+        else if (ia[31:16]==imm[15:0])
+          res <= 64'd1;
+        else if (ia[47:32]==imm[15:0])
+          res <= 64'd2;
+        else if (ia[63:48]==imm[15:0])
+          res <= 64'd3;
+        else
+          res <= {64{1'b1}};  // -1
+      end
     
     `LUI: res <= {imm[63:39],id[38:0]};
     `LMI: res <= imm;
@@ -2373,6 +2437,7 @@ EXECUTE:
     `BNEZ: begin if (takb) pc <= {ipc[AWID-1:24],ir[31:10],2'b00}; goto (IFETCH1); end
     `OSR2:
       case(funct5)
+      `CACHE: begin ea <= ia; goto (MEMORY1); end
   		`WFI:
   		  begin
   			  set_wfi <= 1'b1;
@@ -2444,14 +2509,17 @@ EXECUTE:
       `PEEKQ:
         case(ia[3:0])
         4'd15:  res <= trace_dout;
+        default: ;
         endcase
       `POPQ:
         case(ia[3:0])
         4'd15:  begin rd_trace <= 1'b1; res <= trace_dout; end
+        default: ;
         endcase
       `STATQ:
         case(ia[3:0])
         4'd15:  res <= {trace_empty,trace_valid,52'd0,trace_data_count};
+        default: ;
         endcase
       endcase
     // Memory Ops
@@ -2465,6 +2533,7 @@ EXECUTE:
     `LDOR: begin ea <= ia + imm; goto (MEMORY1); end
     `LDOT: begin ea <= ia + imm; goto (MEMORY1); end
     `FLDO: begin ea <= ia + imm; goto (MEMORY1); end
+    `LEA:  begin res <= ia + imm; end
     `LDX:
       case(ir[22:18])
       `LDBX:    begin ea <= ia + ic; goto (MEMORY1); end
@@ -2477,6 +2546,7 @@ EXECUTE:
       `LDORX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `LDOTX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
       `FLDOX:   begin ea <= ia + ic << (ir[28] ? 2'd3 : 2'd0); goto (MEMORY1); end
+      `LEAX:    begin res <= ia + ic << (ir[28] ? 2'd3 : 2'd0); end
       default:  ;
       endcase
     `STB:  begin ea <= ia + imm; goto (MEMORY1); end
@@ -2532,6 +2602,7 @@ EXECUTE:
 							res[9] <= fa_qnan;
 							illegal_insn <= 1'b0;
 						end
+        default: ;
 			  endcase
 			`FADD:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FADD
 			`FSUB:	begin mathCnt <= 8'd30; state <= FLOAT; illegal_insn <= 1'b0; end	// FSUB
@@ -2656,11 +2727,13 @@ MEMORY2:
 MEMORY_KEYCHK1:
   begin
     goto (MEMORY3);
-    tPMAEA();
+    if (d_cache)
+      tPMAEA();
   end
 MEMORY3:
   begin
     goto (MEMORY4);
+    if (~d_cache) begin
     cyc_o <= HIGH;
     stb_o <= HIGH;
 `ifdef CPU_B128
@@ -2680,16 +2753,23 @@ MEMORY3:
       we_o <= HIGH;
     default:  ;
     endcase
+    end
   end
 MEMORY4:
-  if (acki) begin
-    goto (MEMORY5);
-    stb_o <= LOW;
-    dati <= dat_i;
-    if (sel[`SELH]==1'h0) begin
-      cyc_o <= LOW;
-      we_o <= LOW;
-      sel_o <= 1'h0;
+  begin
+    if (d_cache) begin
+      icvalid[adr_o[pL1msb:5]] <= 1'b0;
+      goto (IFETCH1);
+    end
+    else if (acki) begin
+      goto (MEMORY5);
+      stb_o <= LOW;
+      dati <= dat_i;
+      if (sel[`SELH]==1'h0) begin
+        cyc_o <= LOW;
+        we_o <= LOW;
+        sel_o <= 1'h0;
+      end
     end
   end
 MEMORY5:
