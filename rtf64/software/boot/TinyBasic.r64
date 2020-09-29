@@ -1,0 +1,3076 @@
+;****************************************************************;
+;                                                                ;
+;		Tiny BASIC for the RTF64                                     ;
+;                                                                ;
+; Derived from a 68000 derivative of Palo Alto Tiny BASIC as     ;
+; published in the May 1976 issue of Dr. Dobb's Journal.         ;
+; Adapted to the 68000 by:                                       ;
+;	Gordon brndly						                         ;
+;	12147 - 51 Street					                         ;
+;	Edmonton AB  T5W 3G8					                     ;
+;	Canada							                             ;
+;	(updated mailing address for 1996)			                 ;
+;                                                                ;
+; Adapted to the RTF64 by:                                       ;
+;    Robert Finch                                                ;
+;    Ontario, Canada                                             ;
+;	 robfinch<remove>@finitron.ca    	                             ;  
+;****************************************************************;
+;  Copyright (C) 2016-2020 by Robert Finch. This program may be	 ;
+;    freely distributed for personal use only. All commercial	 ;
+;		       rights are reserved.			                     ;
+;****************************************************************;
+;
+; Register Usage
+; $t2 = text pointer (global usage)
+; r3,r4 = inputs parameters to subroutines
+; a1 = return value
+;
+;* Vers. 1.0  1984/7/17	- Original version by Gordon brndly
+;*	1.1  1984/12/9	- Addition of '0x' print term by Marvin Lipford
+;*	1.2  1985/4/9	- Bug fix in multiply routine by Rick Murray
+
+CR		EQU	0x0D		;ASCII equates
+LINEFD	EQU	0x0A		; Don't use LF (same as load float instruction)
+TAB		EQU	0x09
+CTRLC	EQU	0x03
+CTRLH	EQU	0x08
+CTRLI	EQU	0x09
+CTRLJ	EQU	0x0A
+CTRLK	EQU	0x0B
+CTRLM   EQU 0x0D
+CTRLS	EQU	0x13
+CTRLX	EQU	0x18
+XON		EQU	0x11
+XOFF	EQU	0x13
+
+FILENAME	EQU		0x6C0
+FILEBUF		EQU		0x07F600
+OSSP		EQU		0x700
+TXTUNF		EQU		OSSP+8
+VARBGN		EQU		TXTUNF+8
+VAREND		EQU		VARBGN+8
+LOPVAR		EQU		VAREND+8
+STKGOS		EQU		LOPVAR+8
+CURRNT		EQU		STKGOS+8
+SRCHLN    EQU   CURRNT+8
+; Reserved four byte area before BUFFER in case line number stuffed into it
+; is less than four digits.
+BUFFER		EQU		SRCHLN+8
+BUFLEN		EQU		84
+LOPPT		EQU		BUFFER+88
+LOPLN		EQU		LOPPT+8
+LOPINC		EQU		LOPLN+8
+LOPLMT		EQU		LOPINC+8
+NUMWKA		EQU		LOPLMT+24
+STKINP		EQU		NUMWKA+8
+STKBOT		EQU		STKINP+8
+usrJmp		EQU		STKBOT+8
+IRQROUT		EQU		usrJmp+8
+
+OUTPTR		EQU		IRQROUT+8
+INPPTR		EQU		OUTPTR+8
+CursorFlash	EQU		INPPTR+8
+
+;
+; Modifiable system constants:
+;
+;THRD_AREA	dw	0x04000000	; threading switch area 0x04000000-0x40FFFFF
+;bitmap dw	0x00100000	; bitmap graphics memory 0x04100000-0x417FFFF
+TXTBGN		EQU		0x001800	;TXT ;beginning of program memory
+ENDMEM		EQU		0x00F000	; end of available memory
+STACKOFFS	EQU		0x07FFFC	; stack offset
+
+
+		code
+		align	256
+;
+; Standard jump table. You can change these addresses if you are
+; customizing this interpreter for a different environment.
+;
+TinyBasic:
+GOSTART:	
+		jmp	CSTART	;	Cold Start entry point
+GOWARM:	
+		jmp	WSTART	;	Warm Start entry point
+GOOUT:	
+		jmp	OUTC	;	Jump to character-out routine
+GOIN:	
+		jmp	INCH	;Jump to character-in routine
+GOAUXO:	
+		jmp	AUXOUT	;	Jump to auxiliary-out routine
+GOAUXI:	
+		jmp	AUXIN	;	Jump to auxiliary-in routine
+GOBYE:	
+		jmp	BYEBYE	;	Jump to monitor, DOS, etc.
+
+	align	16
+//message "CSTART"
+public CSTART:
+	; First save off the link register and OS sp value
+	sto		$sp,OSSP
+	ldi		$sp,#STACKOFFS	; initialize stack pointer
+	ldi		$a0,#14							; Get current tid
+	brk   #240                ; $a1 = task id
+	ldi   $a0,#18             ; Get task app id
+	brk   #240
+	ldi		$a0,#24							; RequestIOFocus
+	brk   #240
+;	jsr	_DBGHomeCursor[pc]
+	mov		a0,r0			; turn off keyboard echoing
+//	jsr	SetKeyboardEcho
+//	stz		CursorFlash
+//	ldx		#0x10000020	; black chars, yellow background
+;	stx		charToPrint
+;	jsr	_DBGClearScreen[pc]
+	ldi		$a0,#msgInit  ;	tell who we are
+	jsr 	PRMESG
+	ldi		$a0,#TXTBGN	;	init. end-of-program pointer
+	sto		$a0,TXTUNF
+	ldi		$a0,#ENDMEM	;	get address of end of memory
+	ldi		$a0,#$7F800 ; 2k stack
+	sto		$a0,STKBOT
+	ldi		$a0,#ENDMEM
+	sto		$a0,VAREND
+	sub		$a0,$a0,#800  ;   100 vars
+	sto   $a0,VARBGN
+	jsr   clearVars   ; clear the variable area
+	sto		$x0,IRQROUT
+	ldo   $a0,VARBGN   ; calculate number of bytes free
+	ldo		$a1,TXTUNF
+	sub   $a0,$a0,$a1
+	ldi		$a1,#6		; max 6 digits
+	ldi		$a2,#10	  ; base 10
+	jsr   PRTNUM
+	ldi		$a0,#msgBytesFree
+	jsr	PRMESG
+WSTART:
+	stt		$x0,LOPVAR  ; initialize internal variables
+	stt		$x0,STKGOS
+	stt		$x0,CURRNT	;	current line number pointer = 0
+	ldi		$sp,#STACKOFFS	;	init S.P. again, just in case
+	ldi		$a0,#msgReady	;	display "Ready"
+	jsr	  PRMESG
+BASPRMPT:
+	ldi		$a0,#14		; get current tid
+	brk   #240
+	mov		$a0,$a1   ;
+	jsr	  PutHexByte
+	ldi		$a0,#'>'	; Prompt with a '>' and
+	jsr	  GETLN		  ; read a line.
+	jsr	  TOUPBUF 	; convert to upper case
+	ldi		$t2,#BUFFER	; point to the beginning of line
+	jsr	  TSTNUM		; is there a number there?
+	jlr	  IGNBLK		; skip trailing blanks
+	ldbu	$s6,[$t2]
+	xor		$s6,$s6,#CR	; s6 = flag empty line
+; does line no. exist? (or nonzero?)
+  tst   $s9
+	beqz	$s9,DIRECT		; if not, it's a direct statement ($s9 = num digits)
+	ldi		$t1,#$FFFFF
+	cmp   $s8,$t1
+	bleu	ST2	      ; see if line no. is <= 20 bits
+	ldi		$a0,#msgLineRange	; if not, we've overflowed
+	jmp		ERROR
+ST2:
+  mov		$a0,$s8		; a0 = line number
+  mov		$s5,$t2			; save line buffer pointer
+	sub		$t2,$t2,#5
+  stt		$a0,1[$t2]  ;	This will end up in buffer (requires unaligned store capability)
+	jsr	  FNDLN		; find this line in save area
+	mov		$s7,$t3		; $s7 = save possible line pointer
+	tst   $s8
+	beq	  INSLINE	; if not found, insert
+	mov		$a0,$t3
+	jlr	  DeleteLine
+INSLINE:
+  tst   $s6
+	beq 	BASPRMPT	; line was empty
+	mov		$a0,$s5			; a0 = buffer pointer
+	; GetBuflen just get the length of the text.
+	; A line number is stuffed just before the text
+	; so length needs to be adjusted by 4.
+	jlr	  GetBuflen
+	add		$s4,$s8,#5  ; update length, needed later
+	stb   $s4,-5[$s5] ; put length into buffer
+	mov		$a0,$s7
+	mov		$a1,$s4
+	jlr	  OpenSpace
+	tst   $s8
+	bne	  .0001	  ; space available?
+	ldi		$a0,#msgTooBig  ; no space available
+	jmp		ERROR
+.0001:
+  mov   $a0,$s5
+	jsr   PutString	
+	mov		$a0,$s7			; target
+	sub		$a1,$s5,#5	; source (incl lineno)
+	mov		$a2,$s4			; length
+	jlr	  InsertLine
+	jmp		BASPRMPT
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = pointer to line to delete
+; Modifies:
+;		t0,t1,t2,t3
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+DeleteLine:
+	ldbu  $t0,[$a0]     ; $t0 = length
+	add		$t0,$t0,$a0		; t0 = pointer to line past line number and length
+	ldo		$t3,TXTUNF		; last text address
+	; pull text after eol overtop
+.0003:
+	ldbu	$t4,[$t0]			; copy from next line
+	stb		$t4,[$a0]			; overtop deleted line
+	add		$t0,$t0,#1		; increment pointers
+	add		$a0,$a0,#1
+	cmp   $t0,$t3
+	bleu	.0003	        ; to end of program
+	; update end of text
+	sub		$a0,$t0,$a0		; difference of pointers = length
+	sub		$t3,$t3,$a0		
+	sto		$t3,TXTUNF
+	rtl
+
+;------------------------------------------------------------------------------
+; Parameters:
+; 	a0 = insertion point
+; 	a1 = source buffer
+; 	a2 = length
+; Modifies:
+;		a0,a1,a2,t1
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+InsertLine:
+  tst   $a2
+	beq	  .done		    ; zero length? Probably a SW error
+.0001:
+	ldbu	$t1,[$a1]				; get from source text
+	stb		$t1,[$a0]				; store to insertion point
+	add		$a1,$a1,#1			; increment pointers
+	add		$a0,$a0,#1
+	sub.	$a2,$a2,#1			; decrement length
+	bgt	  .0001
+.done:
+	rtl
+
+;------------------------------------------------------------------------------
+; GetBuflen - get the length of text in a buffer. The length is taken up to
+; the first null character or carriage return character encountered.
+;
+; Parameters:
+;		a0 = pointer to buffer
+; Modifies:
+;		t2,t3,t5
+; Returns:
+;		s8 = length of data in buffer
+;------------------------------------------------------------------------------
+
+GetBuflen:
+	ldi		$s8,#0
+	ldi		$t3,#CR
+	ldi   $t5,#0
+.0002:
+  ldo     $t2,[$a0+$t5]   ; search eight characters at a time
+  bytndx. $t3,$t2,#CR     ; search for CR
+  bpl     .done2
+  bytndx. $t3,$t2,#0      ; or null
+  bpl     .done
+  add     $t5,$t5,#8
+  jmp     .0002
+.done:
+  add     $s8,$t5,$t3
+	rtl
+.done2:
+  add     $s8,$t5,$t3
+  add     $s8,$s8,#1      ; include CR in length
+	rtl
+
+;------------------------------------------------------------------------------
+; Parameters:
+; 	a0 = place to insert line
+; 	a1 = buffer length
+; Modifies:
+;		t1,t2,t3,t5
+; Returns:
+;		s8 = 1 if successful, 0 if not enough room available
+;------------------------------------------------------------------------------
+
+OpenSpace:
+	ldo		$t2,TXTUNF
+	mov		$t3,$t2				; t3 = old end of text
+	add		$t2,$t2,$a1		; increment end of text by buffer length
+	ldo		$t1,VARBGN		; compare to start of variables
+	cmp   $t2,$t1
+	bgeu	.noSpace	    ; enough room?
+	sto		$t2,TXTUNF		; yes, set new end of text
+.0003:
+	ldbu	$t5,[$t3]			; copy old text
+	stb		$t5,[$t2]			; to new text loc
+	sub		$t3,$t3,#1		; decrement pointers
+	sub		$t2,$t2,#1
+	cmp   $t3,$t0
+	bgeu	.0003	        ; until insert point reached
+	ldi		$s8,#1				; return success
+	rtl
+.noSpace:
+	ldi		$s8,#0
+	rtl	
+
+;******************************************************************
+;
+; *** Tables *** DIRECT *** EXEC ***
+;
+; This section of the code tests a string against a table. When
+; a match is found, control is transferred to the section of
+; code according to the table.
+;
+; At 'EXEC', r8 should point to the string, r9 should point to
+; the character table, and r10 should point to the execution
+; table. At 'DIRECT', r8 should point to the string, r9 and
+; r10 will be set up to point to TAB1 and TAB1_1, which are
+; the tables of all direct and statement commands.
+;
+; A '.' in the string will terminate the test and the partial
+; match will be considered as a match, e.g. 'P.', 'PR.','PRI.',
+; 'PRIN.', or 'PRINT' will all match 'PRINT'.
+;
+; There are two tables: the character table and the execution
+; table. The character table consists of any number of text items.
+; Each item is a string of characters with the last character's
+; high bit set to one. The execution table holds a 32-bit
+; execution addresses that correspond to each entry in the
+; character table.
+;
+; The end of the character table is a 0 byte which corresponds
+; to the default routine in the execution table, which is
+; executed if none of the other table items are matched.
+;
+; Character-matching tables:
+TAB1:
+	db	"LIS",'T'+0x80        ; Direct commands
+	db	"LOA",'D'+0x80
+	db	"NE",'W'+0x80
+	db	"RU",'N'+0x80
+	db	"SAV",'E'+0x80
+	db  "SLEE",'P'+0x80
+TAB2:
+	db	"NEX",'T'+0x80         ; Direct / statement
+	db	"LE",'T'+0x80
+	db	"I",'F'+0x80
+	db	"GOT",'O'+0x80
+	db	"GOSU",'B'+0x80
+	db	"RETUR",'N'+0x80
+	db	"RE",'M'+0x80
+	db	"FO",'R'+0x80
+	db	"INPU",'T'+0x80
+	db	"PRIN",'T'+0x80
+	db	"POK",'E'+0x80
+	db	"POKE",'W'+0x80
+	db	"POKE",'H'+0x80
+	db	"YIEL",'D'+0x80
+	db	"STO",'P'+0x80
+	db	"BY",'E'+0x80
+	db	"SY",'S'+0x80
+	db	"CL",'S'+0x80
+    db  "CL",'R'+0x80
+    db	"RDC",'F'+0x80
+    db	"ONIR",'Q'+0x80
+    db	"WAI",'T'+0x80
+	db	0
+TAB4:
+	db	"PEE",'K'+0x80         ;Functions
+	db	"PEEK",'W'+0x80
+	db	"PEEK",'H'+0x80
+	db	"RN",'D'+0x80
+	db	"AB",'S'+0x80
+	db  "SG",'N'+0x80
+	db	"TIC",'K'+0x80
+	db	"SIZ",'E'+0x80
+	db  "US",'R'+0x80
+  db	"ALLOCMB",'X'+0x80
+  db	"SENDMS",'G'+0x80
+  db	"WAITMS",'G'+0x80
+	db	0
+TAB5:
+	db	"T",'O'+0x80           ;"TO" in "FOR"
+	db	0
+TAB6:
+	db	"STE",'P'+0x80         ;"STEP" in "FOR"
+	db	0
+TAB8:
+	db	'>','='+0x80           ;Relational operators
+	db	'<','>'+0x80
+	db	'>'+0x80
+	db	'='+0x80
+	db	'<','='+0x80
+	db	'<'+0x80
+	db	0
+TAB9:
+    db  "AN",'D'+0x80
+    db  0
+TAB10:
+    db  "O",'R'+0x80
+    db  0
+
+;* Execution address tables:
+; We save some bytes by specifiying only the low order 16 bits of the address
+;
+	align	2
+TAB1_1:
+	dh	LISTX			;Direct commands
+	dh	LOAD3
+	dh	NEW
+	dh	RUN
+	dh	SAVE3
+	dh  SLEEP
+TAB2_1:
+	dh	NEXT		;	Direct / statement
+	dh	LET
+	dh	IF0
+	dh	GOTO
+	dh	GOSUB
+	dh	RETURN
+	dh	IF2			; REM
+	dh	FOR
+	dh	INPUT
+	dh	PRINT
+	dh	POKE
+	dh	POKEW
+	dh	POKEH
+	dh	YIELD0
+	dh	STOP
+	dh	GOBYE
+	dh	SYSX
+	dh	_cls
+	dh  _clr
+	dh	_rdcf
+	dh  ONIRQ
+	dh	WAITIRQ
+	dh	DEFLT
+TAB4_1:
+	dh	PEEK			;Functions
+	dh	PEEKW
+	dh	PEEKH
+	dh	RND
+	dh	ABS
+	dh  SGN
+	dh	TICKX
+	dh	SIZEX
+	dh  USRX
+	dh	ALLOCMBX
+	dh	SENDMSG
+	dh	WAITMSG
+	dh	XP40
+TAB5_1
+	dh	FR1			;"TO" in "FOR"
+	dh	QWHAT
+TAB6_1
+	dh	FR2			;"STEP" in "FOR"
+	dh	FR3
+TAB8_1
+	dh	XP11	;>=		Relational operators
+	dh	XP12	;<>
+	dh	XP13	;>
+	dh	XP15	;=
+	dh	XP14	;<=
+	dh	XP16	;<
+	dh	XP17
+TAB9_1
+    dh  XP_AND
+    dh  XP_ANDX
+TAB10_1
+    dh  XP_OR
+    dh  XP_ORX
+
+;*
+; r3 = match flag (trashed)
+; r9 = text table
+; r10 = exec table
+; r11 = trashed
+	align	16
+//message "DIRECT"
+DIRECT:
+	ldi		$t3,#TAB1
+	ldi		$t4,#TAB1_1
+EXEC:
+	jlr	  IGNBLK		; ignore leading blanks
+	mov		$t5,$t2		; save the pointer
+	mov		$a3,$x0		; clear match flag
+EXLP:
+	ldbu	$a0,[$t2]		; get the program character
+	add		$t2,$t2,#1
+	ldbu.	$a1,[$t3]		; get the table character
+	bne	  EXNGO		  ; If end of table,
+	mov		$t2,$t5		;	restore the text pointer and...
+	bra		EXGO		;   execute the default.
+EXNGO:
+  cmp   $a0,$a3
+	beq		EXGO	  ; Else check for period... if so, execute
+	and		$a1,$a1,#$7f  ; ignore the table's high bit
+	cmp   $a1,$a0
+	beq		EXMAT	  ;		is there a match?
+	add		$t4,$t4,#2	;if not, try the next entry
+	mov		$t2,$t5		; reset the program pointer
+	mov		$a3,$x0		; sorry, no match
+EX1:
+	ldb.  $a0,[$t3]		; get to the end of the entry
+	add		$t3,$t3,#1
+	bge   EX1
+;	and		$t1,$a0,#$80
+;	beq		$t1,$r0,EX1	; test for bit 7 set
+	jmp		EXLP		; back for more matching
+EXMAT:
+	ldi		$a3,#'.'		; we've got a match so far
+	ldb.  $a0,[$t3]		; end of table entry?
+	add		$t3,$t3,#1
+	bge   EXLP
+;	and		$t1,$a0,#$80
+;	beq		$t1,$r0,EXLP		; test for bit 7 set, if not, go back for more
+EXGO:
+	; execute the appropriate routine
+	ldwu	$a0,[$t4]	; get the low mid order byte
+	or		$a0,$a0,#$FFFC0000  ; add in ROM base
+	mov   $cn,$a0
+	jmp		[$cn]
+
+    
+;******************************************************************
+;
+; What follows is the code to execute direct and statement
+; commands. Control is transferred to these points via the command
+; table lookup code of 'DIRECT' and 'EXEC' in the last section.
+; After the command is executed, control is transferred to other
+; sections as follows:
+;
+; For 'LISTX', 'NEW', and 'STOP': go back to the warm start point.
+; For 'RUN': go execute the first stored line if any; else go
+; back to the warm start point.
+; For 'GOTO' and 'GOSUB': go execute the target line.
+; For 'RETURN' and 'NEXT'; go back to saved return line.
+; For all others: if 'CURRNT' is 0, go to warm start; else go
+; execute next command. (This is done in 'FINISH'.)
+;
+;******************************************************************
+;
+; *** NEW *** STOP *** RUN (& friends) *** GOTO ***
+;
+; 'NEW<CR>' sets TXTUNF to point to TXTBGN
+;
+
+NEW:
+	jsr	  ENDCHK
+	ldi		$s8,#TXTBGN
+	sto		$s8,TXTUNF	;	set the end pointer
+	jsr   clearVars
+
+; 'STOP<CR>' goes back to WSTART
+;
+STOP:
+	jsr	  ENDCHK
+	jmp		WSTART		; WSTART will reset the stack
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+SLEEP:
+	jsr	  OREXPR		;evaluate the following expression
+	mov   $s1,$s8
+  jsr   ENDCHK
+SLEEP1:
+  ldi   $a0,#22   ; FMTK release I/O focus
+  brk   #240
+  ldi   $a0,#5    ; FMTK sleep function
+  mov   $a1,$s1
+  brk   #240
+  ldi   $a0,#14   ; FMTK get current tid
+  brk   #240
+  ldi   $a0,#24   ; FMTK request I/O focus
+  brk   #240
+  jmp   FINISH
+
+;------------------------------------------------------------------------------
+; YIELD suspends execution of TinyBasic by switching to the next ready task.
+;------------------------------------------------------------------------------
+
+YIELD0:
+  ldi   $s1,#0
+  jmp   SLEEP1
+	
+;------------------------------------------------------------------------------
+; 'RUN<CR>' finds the first stored line, stores its address
+; in CURRNT, and starts executing it. Note that only those
+; commands in TAB2 are legal for a stored program.
+;
+; There are 3 more entries in 'RUN':
+; 'RUNNXL' finds next line, stores it's address and executes it.
+; 'RUNTSL' stores the address of this line and executes it.
+; 'RUNSML' continues the execution on same line.
+;
+RUN:
+	jsr	  ENDCHK
+	ldi		$t2,#TXTBGN	;	set pointer to beginning
+	sto		$t2,CURRNT
+	jsr   clearVars
+
+RUNNXL:					; RUN <next line>
+	ldo.	$t2,CURRNT	; executing a program?
+	bne	  RUN3	  ; if not, we've finished a direct stat.
+RUN2:
+	jmp		WSTART
+RUN3:
+  sto   $t2,SRCHLN
+  ldbu  $t3,[$t2]
+  add   $t2,$t2,$t3
+	ldt.	$a0,IRQROUT		; are we handling IRQ's ?
+	beq   RUN1
+	ldi   $a0,#35       ; Get IRQ flag, was there an IRQ?
+	brk   #240
+	tst   $a0
+	beq 	RUN1
+	ldi   $a0,#36       ; Set IRQ flag
+	ldi   $a1,#0        ; set the flag to zero
+	brk   #240
+	jlr	  PUSHA_		; the same code as a GOSUB
+	gcsub	$sp,$sp,#24
+	ldo		$a0,STKGOS
+	sto		$a0,[$sp]
+	ldo		$a0,CURRNT
+	sto		$a0,8[$sp]
+	sto		$t2,16[$sp]
+	sto		$x0,LOPVAR		; load new values
+	sto		$sp,STKGOS
+	ldo		$t3,IRQROUT
+	jmp		RUNTSL
+RUN1:
+	mov		$t3,$t2
+	mov		$a0,$x0
+	jsr	  FNDNXT  		; else find the next line number
+	ldt		$t1,TXTUNF	; if we've fallen off the end, stop
+	cmp   $t3,$t1
+	bgeu	RUN2
+
+RUNTSL:					; RUN <this line>
+	sto		$t3,CURRNT	; set CURRNT to point to the line no.
+	add		$t2,$t3,#5	; set the text pointer to
+
+RUNSML:                 ; RUN <same line>
+	jsr	  CHKIO		; see if a control-C was pressed
+	ldi		$t3,#TAB2		; find command in TAB2
+	ldi		$t4,#TAB2_1
+	jmp		EXEC		; and execute it
+
+
+;******************************************************************
+; 'GOTO expr<CR>' evaluates the expression, finds the target
+; line, and jumps to 'RUNTSL' to do it.
+;******************************************************************
+;
+GOTO:
+	jsr	  OREXPR		;evaluate the following expression
+	mov   $t0,$s8
+	jsr 	ENDCHK		;must find end of line
+	mov   $a0,$t0
+	jsr 	FNDLN		; find the target line
+	tst   $s8
+	bne 	RUNTSL  ; go do it
+	ldi		$a0,#msgBadGotoGosub
+	jmp		ERROR		; no such line no.
+
+_clr:
+  jsr     clearVars
+  jmp     FINISH
+
+; Clear the variable area of memory
+clearVars:
+	gcsub	$sp,$sp,#8
+	sto		$a3,[$sp]
+  ldi   $a3,#100    	; number of word pairs to clear
+  ldo   $s8,VARBGN
+.cv1:
+  sto		$x0,[$s8]		; variable name
+  sto		$x0,8[$s8]		; and value
+  add		$s8,$s8,#16
+  sub.	$a3,$a3,#1
+	bgt		.cv1
+  ldo		$a3,[$sp]
+  rts   #8
+
+;******************************************************************
+; ONIRQ <line number>
+; ONIRQ sets up an interrupt handler which acts like a specialized
+; subroutine jsr. ONIRQ is coded like a GOTO that never executes.
+;******************************************************************
+;
+ONIRQ:
+	jsr	  OREXPR		;evaluate the following expression
+	mov   $t0,$s8
+	jsr 	ENDCHK		;must find end of line
+	mov   $a0,$t0
+	jsr 	FNDLN		; find the target line
+	tst   $s8
+	bne	  ONIRQ1
+	stt		$x0,IRQROUT
+	jmp		FINISH
+ONIRQ1:
+	stt		$t3,IRQROUT
+	jmp		FINISH
+
+WAITIRQ:
+	jsr	  CHKIO		; see if a control-C was pressed
+	ldi   $a0,#35
+	brk   #240
+	tst   $a0
+	beq	  WAITIRQ
+	jmp		FINISH
+
+
+;******************************************************************
+; LIST
+;
+; LISTX has two forms:
+; 'LIST<CR>' lists all saved lines
+; 'LIST #<CR>' starts listing at the line #
+; Control-S pauses the listing, control-C stops it.
+;******************************************************************
+;
+LISTX:
+	jsr		TSTNUM		; see if there's a line no.
+	mov   $a3,$s8
+	jsr		ENDCHK		; if not, we get a zero
+	mov   $a0,$a3
+	jsr		FNDLN		; find this or next line
+LS1:
+  tst   $s8
+	bne	  LS4
+LS5:
+	ldt		$t1,TXTUNF
+	cmp   $t3,$t1
+	bgeu	WSTART	; warm start if we passed the end
+LS4:
+	mov		$a0,$t3
+	jsr	  PRTLN		; print the line
+	ldbu  $t3,[$a0]
+	add   $t3,$t3,$a0 ; set pointer for next
+;	mov		$t3,$s8		
+	jsr	  CHKIO		; check for listing halt request
+	tst   $a0
+	beq 	LS3
+	ldi		$t1,#CTRLS
+	cmp   $a0,$t1
+	bne		LS3     ; pause the listing?
+LS2:
+	jsr 	CHKIO		; if so, wait for another keypress
+	tst   $a0
+	beq	  LS2
+LS3:
+;	mov		$s8,$x0
+	jmp		LS5
+;	mov		a0,r0
+;	jsr	FNDSKP	;FNDLNP		; find the next line
+;	bra		LS1
+
+
+;******************************************************************
+; PRINT command is 'PRINT ....:' or 'PRINT ....<CR>'
+; where '....' is a list of expressions, formats, back-arrows,
+; and strings.	These items a separated by commas.
+;
+; A format is a pound sign followed by a number.  It controls
+; the number of spaces the value of an expression is going to
+; be printed in.  It stays effective for the rest of the print
+; command unless changed by another format.  If no format is
+; specified, 11 positions will be used.
+;
+; A string is quoted in a pair of single- or double-quotes.
+;
+; An underline (back-arrow) means generate a <CR> without a <LF>
+;
+; A <CR LF> is generated after the entire list has been printed
+; or if the list is empty.  If the list ends with a semicolon,
+; however, no <CR LF> is generated.
+;******************************************************************
+;
+PRINT:
+	ldi	  $a3,#11		; D4 = number of print spaces
+	jlr   TSTC		; if null list and ":"
+	dw		':'
+	jmp		PR2
+	jsr	  CRLF		; give CR-LF and continue
+	jmp		RUNSML		;		execution on the same line
+PR2:
+	jlr   TSTC		;if null list and <CR>
+	dw		CR
+	jmp		PR0
+	jsr	  CRLF		;also give CR-LF and
+	jmp		RUNNXL		;execute the next line
+PR0:
+	jlr 	TSTC		;else is it a format?
+	dw		'#'
+	jmp		PR1
+	jsr	  OREXPR		; yes, evaluate expression
+	mov		$a3,$s8	; and save it as print width
+	jmp		PR3		; look for more to print
+PR1:
+	jlr   TSTC	;	is character expression? (MRL)
+	dw		'$'
+	jmp		PR4
+	jsr	  OREXPR	;	yep. Evaluate expression (MRL)
+	jsr	  GOOUT	;	print low byte (MRL)
+	jmp		PR3		;look for more. (MRL)
+PR4:
+	jsr	  QTSTG	;	is it a string?
+	; the following branch must occupy only 1 word!
+	jmp		PR8		;	if not, must be an expression
+PR3:
+	jlr   TSTC	;	if ",", go find next
+	dw		','
+	jmp		PR6
+	jsr		FIN		;in the list.
+	jmp		PR0
+PR6:
+	jsr		CRLF		;list ends here
+	jmp		FINISH
+PR8:
+	jsr	  OREXPR		; evaluate the expression
+	mov		$a0,$s8
+	ldi		$a1,#5		; set the width
+	ldi		$a2,#10
+	jsr	  PRTNUM		; print its value
+	jmp		PR3			; more to print?
+
+
+FINISH:
+	jsr	  FIN		; Check end of command
+	jmp		QWHAT	; print "What?" if wrong
+
+
+;*******************************************************************
+;
+; *** GOSUB *** & RETURN ***
+;
+; 'GOSUB expr:' or 'GOSUB expr<CR>' is like the 'GOTO' command,
+; except that the current text pointer, stack pointer, etc. are
+; saved so that execution can be continued after the subroutine
+; 'RETURN's.  In order that 'GOSUB' can be nested (and even
+; recursive), the save area must be stacked.  The stack pointer
+; is saved in 'STKGOS'.  The old 'STKGOS' is saved on the stack.
+; If we are in the main routine, 'STKGOS' is zero (this was done
+; in the initialization section of the interpreter), but we still
+; save it as a flag for no further 'RETURN's.
+;******************************************************************
+;
+GOSUB:
+	jlr	  PUSHA_		; save the current 'FOR' parameters
+	jsr	  OREXPR		; get line number
+	mov		$a0,$s8
+	jsr	  FNDLN		; find the target line
+	tst   $s8
+	bne	  gosub1
+	ldi		$a0,#msgBadGotoGosub
+	jmp		ERROR		; if not there, say "How?"
+gosub1:
+	sub		$sp,$sp,#24
+	ldo		$a0,STKGOS	; 'STKGOS'
+	sto		$a0,[$sp]
+	ldo		$a0,CURRNT	; found it, save old 'CURRNT'...
+	sto		$a0,8[$sp]
+	sto		$t2,16[$sp]
+	sto		$x0,LOPVAR		; load new values
+	sto		$sp,STKGOS
+	jmp		RUNTSL
+
+
+;******************************************************************
+; 'RETURN<CR>' undoes everything that 'GOSUB' did, and thus
+; returns the execution to the command after the most recent
+; 'GOSUB'.  If 'STKGOS' is zero, it indicates that we never had
+; a 'GOSUB' and is thus an error.
+;******************************************************************
+;
+RETURN:
+	jsr	  ENDCHK		; there should be just a <CR>
+	ldo.	$a1,STKGOS		; get old stack pointer
+	bne		return1
+	ldi		$a0,#msgRetWoGosub
+	jmp		ERROR		; if zero, it doesn't exist
+return1:
+	mov		$sp,a1		; else restore it
+	ldo		$a0,[$sp]
+	add		$sp,$sp,#8
+	sto		$a0,STKGOS	; and the old 'STKGOS'
+	ldo		$a0,[$sp]
+	add		$sp,$sp,#8
+	sto		$a0,CURRNT	; and the old 'CURRNT'
+	ldo		$t2,[$sp]	; and the old text pointer
+	add		$sp,$sp,#8
+	jlr	  POPA_		;and the old 'FOR' parameters
+	jmp		FINISH		;and we are back home
+
+;******************************************************************
+; *** FOR *** & NEXT ***
+;
+; 'FOR' has two forms:
+; 'FOR var=exp1 TO exp2 STEP exp1' and 'FOR var=exp1 TO exp2'
+; The second form means the same thing as the first form with a
+; STEP of positive 1.  The interpreter will find the variable 'var'
+; and set its value to the current value of 'exp1'.  It also
+; evaluates 'exp2' and 'exp1' and saves all these together with
+; the text pointer, etc. in the 'FOR' save area, which consists of
+; 'LOPVAR', 'LOPINC', 'LOPLMT', 'LOPLN', and 'LOPPT'.  If there is
+; already something in the save area (indicated by a non-zero
+; 'LOPVAR'), then the old save area is saved on the stack before
+; the new values are stored.  The interpreter will then dig in the
+; stack and find out if this same variable was used in another
+; currently active 'FOR' loop.  If that is the case, then the old
+; 'FOR' loop is deactivated. (i.e. purged from the stack)
+;******************************************************************
+;
+FOR:
+	jlr	  PUSHA_		; save the old 'FOR' save area
+	jsr	  SETVAL		; set the control variable
+	sto		$s8,LOPVAR		; save its address
+	ldi		$t3,#TAB5
+	ldi		$t4,#TAB5_1	; use 'EXEC' to test for 'TO'
+	jmp		EXEC
+FR1:
+	jsr	  OREXPR		; evaluate the limit
+	sto		$s8,LOPLMT	; save that
+	ldi		$t3,#TAB6
+	ldi		$t4,#TAB6_1	; use 'EXEC' to test for the word 'STEP
+	jmp		EXEC
+FR2:
+	jsr	  OREXPR		; found it, get the step value
+	jmp		FR4
+FR3:
+	ldi		$s8,#1		; not found, step defaults to 1
+FR4:
+	sto		$s8,LOPINC	; save that too
+FR5:
+	ldo		$a1,CURRNT
+	sto		$a1,LOPLN	; save address of current line number
+	sto		$t2,LOPPT	; and text pointer
+	mov		$a3,$sp		; dig into the stack to find 'LOPVAR'
+	ldo		$a6,LOPVAR
+	jmp		FR7
+FR6:
+	add		$a3,$a3,#40	; look at next stack frame
+FR7:
+	ldo.	$a1,[$a3]		; is it zero?
+	beq		FR8	    ; if so, we're done
+	cmp   $a1,$a6
+	bne		FR6	    ; same as current LOPVAR? nope, look some more
+
+  mov		$a0,$a3	   ; Else remove 5 words from...
+	mov		$a1,$sp
+	add		$a2,$a3,#40  ; inside the stack.
+	jsr	  MVDOWN
+	add		$sp,$sp,#40	; set the SP 5 long words up
+;	lw		a0,[$sp]		; ???
+;	add		$sp,$sp,#4
+FR8:
+  jmp	    FINISH		; and continue execution
+
+
+;******************************************************************
+; 'NEXT var' serves as the logical (not necessarily physical) end
+; of the 'FOR' loop.  The control variable 'var' is checked with
+; the 'LOPVAR'.  If they are not the same, the interpreter digs in
+; the stack to find the right one and purges all those that didn't
+; match.  Either way, it then adds the 'STEP' to that variable and
+; checks the result with against the limit value.  If it is within
+; the limit, control loops back to the command following the
+; 'FOR'.  If it's outside the limit, the save area is purged and
+; execution continues.
+;******************************************************************
+;
+NEXT:
+	mov		$a0,$x0		; don't allocate it
+	jsr	  TSTV		; get address of variable
+	tst   $s8
+	bne		NX4
+	ldi		$a0,#msgNextVar
+	jmp		ERROR		; if no variable, say "What?"
+NX4:
+	mov		$t3,$s8	; save variable's address
+NX0:
+	ldo.	$a0,LOPVAR	; If 'LOPVAR' is zero, we never...
+	bne		NX5	; had a FOR loop
+	ldi		$a0,#msgNextFor
+	jmp		ERROR
+NX5:
+  cmp   $a0,$t3
+	beq		NX2	; else we check them OK, they agree
+	jlr	  POPA_		; nope, let's see the next frame
+	jmp		NX0
+NX2:
+	ldo		$a0,[$t3]		; get control variable's value
+	ldo.	$a1,LOPINC
+	add		$a0,$a0,$a1	; add in loop increment
+;	BVS.L	QHOW		say "How?" for 32-bit overflow
+	sto		$a0,[$t3]		; save control variable's new value
+	lw		$a3,LOPLMT	; get loop's limit value
+	bge		NX1	        ; check loop increment, branch if loop increment is positive
+	cmp   $a0,$a3
+	blt		NXPurge	; test against limit
+	jmp   NX3
+NX1:
+  cmp   $a0,$a3
+	bgt		NXPurge
+NX3:
+	ldo		$t2,LOPLN	; Within limit, go back to the...
+	sto		$t2,CURRNT
+	ldo		$t2,LOPPT	; saved 'CURRNT' and text pointer.
+	jmp		FINISH
+NXPurge:
+  jlr   POPA_        ; purge this loop
+  jmp   FINISH
+
+
+;******************************************************************
+; *** REM *** IF *** INPUT *** LET (& DEFLT) ***
+;
+; 'REM' can be followed by anything and is ignored by the
+; interpreter.
+;
+;REM
+;    br	    IF2		    ; skip the rest of the line
+; 'IF' is followed by an expression, as a condition and one or
+; more commands (including other 'IF's) separated by colons.
+; Note that the word 'THEN' is not used.  The interpreter evaluates
+; the expression.  If it is non-zero, execution continues.  If it
+; is zero, the commands that follow are ignored and execution
+; continues on the next line.
+;******************************************************************
+;
+IF0:
+  jsr	  OREXPR		; evaluate the expression
+IF1:
+  tst   $s8
+  beq 	IF2	; is it zero? if not, continue
+  jmp		RUNSML
+IF2:
+  mov		$t3,$t2	; set lookup pointer
+	mov		$a0,$x0		; find line #0 (impossible)
+	ldo   $a0,CURRNT  ; move to the next line
+	ldbu  $a1,[$a0]
+	add   $a1,$a1,$a0
+	sto   $a1,CURRNT
+	ldo   $a0,TXTUNF  ; do a warm start if past end
+	cmp   $a1,$a0
+	bltu  IF3
+	jmp		WSTART
+IF3:
+  mov   $t3,$a1
+	jmp		RUNTSL		; run the next line
+
+
+;******************************************************************
+; INPUT is called first and establishes a stack frame
+INPERR:
+	ldo		$sp,STKINP		; restore the old stack pointer
+	ldo		$a0,[$sp]
+	add		$sp,$sp,#8
+	sto		$a0,CURRNT		; and old 'CURRNT'
+	ldo		$t2,[$sp]		; and old text pointer
+	add		$sp,$sp,#8
+	add		$sp,$sp,#40	; fall through will subtract 40
+
+; 'INPUT' is like the 'PRINT' command, and is followed by a list
+; of items.  If the item is a string in single or double quotes,
+; or is an underline (back arrow), it has the same effect as in
+; 'PRINT'.  If an item is a variable, this variable name is
+; printed out followed by a colon, then the interpreter waits for
+; an expression to be typed in.  The variable is then set to the
+; value of this expression.  If the variable is preceeded by a
+; string (again in single or double quotes), the string will be
+; displayed followed by a colon.  The interpreter the waits for an
+; expression to be entered and sets the variable equal to the
+; expression's value.  If the input expression is invalid, the
+; interpreter will print "What?", "How?", or "Sorry" and reprint
+; the prompt and redo the input.  The execution will not terminate
+; unless you press control-C.  This is handled in 'INPERR'.
+;
+INPUT:
+	gcsub	$sp,$sp,#40	; allocate five words on stack
+	sto		$a5,32[$sp]	; save off r5 into stack var
+IP6:
+	sto		$t2,[$sp]	; save in case of error
+	jsr	  QTSTG		; is next item a string?
+	jmp		IP2			; nope - this branch must take only 1 word
+	ldi		$a0,#1		; allocate var
+	jsr	  TSTV		; yes, but is it followed by a variable?
+	tst   $a0
+	beq   IP4     ; if not, brnch
+	mov		$t4,$a0		; put away the variable's address
+	jmp		IP3			; if so, input to variable
+IP2:
+	sto		$t2,8[$sp]	; save off in stack var for 'PRTSTG'
+	ldi		$a0,#1
+	jsr	  TSTV		; must be a variable now
+	tst   $a0
+	bne		IP7
+	ldi		$a0,#msgInputVar
+	add		$sp,$sp,#40	; cleanup stack
+	jmp		ERROR		; "What?" it isn't?
+IP7:
+	mov		$t4,$a0		; put away the variable's address
+	lbu		$a5,[$t2]		; get ready for 'PRTSTG' by null terminating
+	stb		$x0,[$t2]
+	mov		$a1,$x0
+	ldo		$a0,8[$sp]	; get back text pointer
+	jsr	  PRTSTG		; print string as prompt
+	stb		$a5,[$t2]		; un-null terminate
+IP3
+	sto		$t2,8[$sp]	; save in case of error
+	ldo		$a0,CURRNT
+	sto		$a0,16[$sp]	; also save 'CURRNT'
+	ldi		$a0,#-1
+	sto		$a0,CURRNT	; flag that we are in INPUT
+	sto		$sp,STKINP	; save the stack pointer too
+	sto		$t4,24[$sp]	; save the variable address
+	ldi		a0,#':'		; print a colon first
+	jsr	  GETLN		; then get an input line
+	ldi		$t2,#BUFFER	; point to the buffer
+	jsr	  OREXPR		; evaluate the input
+	ldo		$t4,24[$sp]	; restore the variable address
+	sto		$a0,[$t4]	; save value in variable
+	ldo		$a0,16[$sp]	; restore old 'CURRNT'
+	sto		$a0,CURRNT
+	ldo		$t2,8[$sp]	; and the old text pointer
+IP4:
+	jlr   TSTC
+	dw		','
+	jmp		IP5
+	jmp		IP6			; yes, more items
+IP5:
+	ldo		$a5,32[$sp]
+	add		$sp,$sp,#40	; cleanup stack
+ 	jmp		FINISH
+
+
+DEFLT:
+  lbu    	$a0,[$t2]
+  ldi			$t1,#CR
+  cmp     $a0,$t1
+	beq	    FINISH	    ; empty line is OK else it is 'LET'
+
+
+;******************************************************************
+; 'LET' is followed by a list of items separated by commas.
+; Each item consists of a variable, an equals sign, and an
+; expression.  The interpreter evaluates the expression and sets
+; the variable to that value.  The interpreter will also handle
+; 'LET' commands without the word 'LET'.  This is done by 'DEFLT'.
+;******************************************************************
+;
+LET:
+  jsr	  SETVAL		; do the assignment
+	jlr   TSTC		; check for more 'LET' items
+	dw		','
+	jmp		FINISH
+	jmp   LET
+LT1:
+  jmp   FINISH		; until we are finished.
+
+
+;******************************************************************
+; *** LOAD *** & SAVE ***
+;
+; These two commands transfer a program to/from an auxiliary
+; device such as a cassette, another computer, etc.  The program
+; is converted to an easily-stored format: each line starts with
+; a colon, the line no. as 4 hex digits, and the rest of the line.
+; At the end, a line starting with an '@' sign is sent.  This
+; format can be read back with a minimum of processing time by
+; the RTF65002
+;******************************************************************
+;
+LOAD
+	ldi		$t2,#TXTBGN	; set pointer to start of prog. area
+	ldi		$a0,#CR		; For a CP/M host, tell it we're ready...
+	jsr	  GOAUXO		; by sending a CR to finish PIP command.
+LOD1:
+	jsr	  GOAUXI		; look for start of line
+	tst   $a0
+	ble		LOD1
+	cmp		$a0,#'@'
+	beq		LODEND	  ; end of program?
+	cmp		$a0,#$1A
+	beq		LODEND	  ; or EOF marker
+	cmp		$a0,#':'
+	bne		LOD1	    ; if not, is it start of line? if not, wait for it
+	jsr	  GCHAR		  ; get line number
+	stt		$a0,[$t2]		; store it
+	add		$t2,$t2,#4
+LOD2:
+	jsr	  GOAUXI		; get another text char.
+	tst   $a0
+	ble	  LOD2
+	stb		$a0,[$t2]		; store it
+	add		$t2,$t2,#1
+	cmp		$a0,#CR
+	bne		LOD2		; is it the end of the line? if not, go back for more
+	jmp		LOD1		; if so, start a new line
+LODEND:
+	sto		$t2,TXTUNF	; set end-of program pointer
+	jmp		WSTART		; back to direct mode
+
+
+; get character from input (32 bit value)
+GCHAR:
+	sub		$sp,$sp,#16
+	sto		$a5,[$sp]
+	sto		$a6,8[$sp]
+	ldi		$a6,#8       ; repeat ten times
+	ldi		$a5,#0
+GCHAR1:
+	jsr	  GOAUXI		; get a char
+	tst   $a0
+	ble		GCHAR1
+	jlr	  asciiToHex
+	asl		$a5,$a5,#4
+	or		$a5,$a5,$a0
+	sub.	$a6,$a6,#1
+	bgtu	GCHAR1
+	mov		$a0,$a5
+	ldo		$a5,[$sp]
+	ldo		$a6,8[$sp]
+	rts   #16
+
+; convert an ascii char to hex code
+; input
+;	a0 = char to convert
+
+asciiToHex:
+	cmp		$a0,#'9'
+	bleu	.a2h1       ; less than '9'
+	sub		$a0,$a0,#7	; shift 'A' to '9'+1
+.a2h1:
+	sub		$a0,$a0,#'0'
+	and		$a0,$a0,#15	; make sure a nybble
+	rtl
+
+GetFilename:
+	jlr   TSTC
+	dw		'"'
+	jmp		.gfn1
+	mov		$a3,$x0
+.gfn2:
+	lbu		$a0,[$t2]		; get text character
+	add		$t2,$t2,#1
+	cmp		$a0,#'"'
+	beq		.gfn3
+	tst   $a0
+	beq		.gfn3
+	stb		$a0,FILENAME[r3]
+	add		$a3,$a3,#1
+	cmp		$a3,#64
+	bltu	.gfn2
+	rts
+.gfn3:
+	ldi		$a0,#' '
+	stb		$a0,FILENAME[$a3]
+	add		r3,r3,#1
+	cmp		$a3,#64
+	bltu	.gfn3
+	rts
+.gfn1:
+	jmp		WSTART
+
+LOAD3:
+	jsr	  GetFilename
+	jsr	  AUXIN_INIT
+	jmp		LOAD
+
+;	jsr		OREXPR		;evaluate the following expression
+;	ld		a0,#5000
+	ldi		$a1,#$E00
+	jsr	  SDReadSector
+	add		$a0,$a0,#1
+	ldi		$a1,#TXTBGN
+LOAD4:
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]
+	jsr	  SDReadSector
+	add		$a1,$a1,#512
+	ldo		$a0,[$sp]
+	add		$sp,$sp,#8
+	add		$a0,$a0,#1
+	ldi		$a4,#TXTBGN
+	add		$a4,$a4,#65536
+	cmp   $a1,$a4
+	blt		LOAD4
+LOAD5:
+	jmp		WSTART
+
+
+SAVE3:
+	jsr	  GetFilename
+	jsr	  AUXOUT_INIT
+	jmp		SAVE
+
+	jsr	  OREXPR		;evaluate the following expression
+;	lda		#5000		; starting sector
+	ldi		$a1,#$E00	; starting address to write
+	jsr	  SDWriteSector
+	add		$a0,$a0,#1
+	ldi		$a1,#TXTBGN
+SAVE4:
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]
+	jsr	  SDWriteSector
+	add		$a1,$a1,#512
+	ldo		$a0,[$sp]
+	add		$sp,$sp,#8
+	add		$a0,$a0,#1
+	ldi		$a4,#TXTBGN
+	add		$a4,$a4,#65536
+	cmp   $a1,$a4
+	blt		SAVE4
+	jmp		WSTART
+
+SAVE:
+	ldi		$t2,#TXTBGN	;set pointer to start of prog. area
+	ldo		$t3,TXTUNF	;set pointer to end of prog. area
+SAVE1:
+	jsr	  AUXOCRLF    ; send out a CR & LF (CP/M likes this)
+	cmp   $t2,$t3
+	bgt		SAVEND; are we finished?
+	ldi		$a0,#':'		; if not, start a line
+	jsr	  GOAUXO
+	ldt		$a0,[$t2]		; get line number
+	add		$t2,$t2,#4
+	jsr	  PWORD       ; output line number as 5-digit hex
+SAVE2:
+	lbu		$a0,[$t2]		; get a text char.
+	add		$t2,$t2,#1
+	cmp		$a0,#CR
+	beq		SAVE1	; is it the end of the line? if so, send CR & LF and start new line
+	jsr	  GOAUXO		; send it out
+	jmp		SAVE2		; go back for more text
+SAVEND:
+	ldi		$a0,#'@'		; send end-of-program indicator
+	jsr	  GOAUXO
+	jsr	  AUXOCRLF    ; followed by a CR & LF
+	ldi		$a0,#$1A		; and a control-Z to end the CP/M file
+	jsr	  GOAUXO
+	jsr	  AUXOUT_FLUSH
+	jmp		WSTART		; then go do a warm start
+
+; output a CR LF sequence to auxillary output
+; Registers Affected
+;   r3 = LF
+AUXOCRLF:
+  ldi		$a0,#CR
+  jsr	  GOAUXO
+  ldi		$a0,#LINEFD
+  jmp	  GOAUXO
+
+
+; output a word in hex format
+; tricky because of the need to reverse the order of the chars
+PWORD:
+	gcsub	$sp,$sp,#8
+	sto		$a5,[$sp]
+	ldi		$a5,#NUMWKA+14
+	mov		$a4,$a0		; r4 = value
+.pword1:
+  mov   $a0,$a4	    ; a0 = value
+  lsr		$a4,$a4,#4	; shift over to next nybble
+  jlr	  toAsciiHex  ; convert LS nybble to ascii hex
+  stb   $a0,[$a5]		; save in work area
+  sub		$a5,$a5,#1
+  cmp		$a5,#NUMWKA
+	bge		.pword1
+.pword2:
+  add		$a5,$a5,#1
+  lbu   $a0,[$a5]     ; get char to output
+	jsr	  GOAUXO		; send it
+	cmp   $a5,#NUMWKA+14
+	blt		.pword2
+	ldo		$a5,[$sp]
+	rts   #8
+
+; convert nybble in a1 to ascii hex chaa1
+; a1 = character to convert
+
+toAsciiHex:
+	and		$a0,$a0,#15	; make sure it's a nybble
+	cmp   $a0,#10
+	blt		.tah1	    ; > 10 ?
+	add		$a0,$a0,#7	; bump it up to the letter 'A'
+.tah1:
+	add		$a0,$a0,#'0'	; bump up to ascii '0'
+	rtl
+
+
+;******************************************************************
+; *** POKE ***
+;
+; 'POKE expr1,expa1' stores the byte from 'expa1' into the memory
+; address specified by 'expr1'.
+; 'POKEW expr1,expa1' stores the word from 'expa1' into the memory
+; address specified by 'expr1'.
+; 'POKEH expr1,expa1' stores the half-word from 'expa1' into the memory
+; address specified by 'expr1'.
+;******************************************************************
+;
+POKE:
+	jsr	  OREXPR		; get the memory address
+	jlr   TSTC		; it must be followed by a comma
+	dw		','
+	jmp		PKER
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]	; save the address
+	jsr	  OREXPR		; get the byte to be POKE'd
+	ldo		$a1,[$sp]	; get the address back
+	add		$sp,$sp,#8
+	stb		$a0,[$a1]		; store the byte in memory
+	jmp		FINISH
+
+POKEW:
+	jsr	  OREXPR		; get the memory address
+	jlr   TSTC		; it must be followed by a comma
+	dw		','
+	jmp		PKER
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]	; save the address
+	jsr	  OREXPR		; get the byte to be POKE'd
+	ldo		$a1,[$sp]	; get the address back
+	add		$sp,$sp,#8
+	stw		$a0,[$a1]		; store the byte in memory
+	jmp		FINISH
+
+POKET:
+	jsr	  OREXPR		; get the memory address
+	jlr   TSTC		; it must be followed by a comma
+	dw		','
+	jmp		PKER
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]	; save the address
+	jsr	  OREXPR		; get the byte to be POKE'd
+	ldo		$a1,[$sp]	; get the address back
+	add		$sp,$sp,#8
+	stt		$a0,[$a1]		; store the byte in memory
+	jmp		FINISH
+
+POKEO:
+	jsr	  OREXPR		; get the memory address
+	jlr   TSTC		; it must be followed by a comma
+	dw		','
+	jmp		PKER
+	sub		$sp,$sp,#8
+	sto		$a0,[$sp]	; save the address
+	jsr	  OREXPR		; get the byte to be POKE'd
+	ldo		$a1,[$sp]	; get the address back
+	add		$sp,$sp,#8
+	sto		$a0,[$a1]		; store the byte in memory
+	jmp		FINISH
+
+PKER:
+	ldi		$a0,#msgComma
+	jmp		ERROR		; if no comma, say "What?"
+
+;******************************************************************
+; 'SYSX expr' jumps to the machine language subroutine whose
+; starting address is specified by 'expr'.  The subroutine can use
+; all registers but must leave the stack the way it found it.
+; The subroutine returns to the interpreter by executing an RTS.
+;******************************************************************
+
+SYSX:
+	jsr	  OREXPR		; get the subroutine's address
+	tst   $s8
+	bne		.sysx1; make sure we got a valid address
+	ldi		$a0,#msgSYSBad
+	jmp		ERROR
+.sysx1:
+	sub		$sp,$sp,#8
+	sto		$t2,[$sp]	; save the text pointer
+	mov   $cn,$s8
+	jsr	  [$cn]			; jump to the subroutine
+	ldo		$t2,[$sp]	; restore the text pointer
+	add		$sp,$sp,#8
+	jmp		FINISH
+
+;******************************************************************
+; *** EXPR ***
+;
+; 'EXPR' evaluates arithmetical or logical expressions.
+; <OREXPR>::= <ANDEXPR> OR <ANDEXPR> ...
+; <ANDEXPR>::=<EXPR> AND <EXPR> ...
+; <EXPR>::=<ADDEXPR>
+;	   <ADDEXPR><rel.op.><ADDEXPR>
+; where <rel.op.> is one of the operators in TAB8 and the result
+; of these operations is 1 if true and 0 if false.
+; <ADDEXPR>::=(+ or -)<MULEXPR>(+ or -)<MULEXPR>(...
+; where () are optional and (... are optional repeats.
+; <MULEXPR>::=<FUNCEXPR>( <* or /><FUNCEXPR> )(...
+; <FUNCEXPR>::=<variable>
+;	    <function>
+;	    (<EXPR>)
+; <EXPR> is recursive so that the variable '@' can have an <EXPR>
+; as an index, functions can have an <EXPR> as arguments, and
+; <FUNCEXPR> can be an <EXPR> in parenthesis.
+;
+
+; <OREXPR>::=<ANDEXPR> OR <ANDEXPR> ...
+;
+OREXPR:
+	gcsub	$sp,$sp,#24
+	sto		$a3,8[$sp]
+	sto		$a4,16[$sp]
+	jsr	  ANDEXPR		; get first <ANDEXPR>
+XP_OR1:
+	sub		$sp,$sp,#16
+	sto		$s8,[$sp]		; save <ANDEXPR> value
+	sto		$s9,8[$sp]	; save type
+	ldi		$t3,#TAB10	; look up a logical operator
+	ldi		$t4,#TAB10_1
+	jmp		EXEC		; go do it
+XP_OR:
+  jsr	  ANDEXPR
+  ldo		$a0,[$sp]
+  add		$sp,$sp,#16
+  or    $s8,$s8,$a0
+  jmp   XP_OR1
+XP_ORX:
+  ldo		$s8,[$sp]
+  ldo		$s9,8[$sp]
+  add		$sp,$sp,#16
+	ldo		$a3,8[$sp]
+	ldo		$a4,16[$sp]
+  rts   #24
+
+
+; <ANDEXPR>::=<EXPR> AND <EXPR> ...
+;
+ANDEXPR:
+	jsr	  EXPR		; get first <EXPR>
+XP_AND1:
+	sub		$sp,$sp,#16
+	sto		$s8,[$sp]		; save <EXPR> value
+	sto		$s9,8[$sp]	; save type
+	ldi		$t3,#TAB9		; look up a logical operator
+	ldi		$t4,#TAB9_1
+	jmp		EXEC		; go do it
+XP_AND:
+  jsr	  EXPR
+  ldo		$a0,[$sp]
+  add		$sp,$sp,#16
+  and   $s8,$s8,$a0
+  jmp   XP_AND1
+XP_ANDX:
+  ldo		$s8,[$sp]
+  ldo		$s9,8[$sp]
+  add		$sp,$sp,#16
+  rts
+
+
+; Determine if the character is a digit
+;   Parameters
+;       a0 = char to test
+;   Returns
+;       a0 = 1 if digit, otherwise 0
+;
+isDigit:
+	cmp		$a0,#'0'
+	blt		.isDigitFalse
+	cmp		$a0,#'9'
+	bgt		.isDigitFalse
+	ldi		$s8,#1
+  rtl
+.isDigitFalse:
+  mov		$s8,$x0
+  rtl
+
+
+; Determine if the character is a alphabetic
+;   Parameters
+;       a0 = char to test
+;   Returns
+;       a0 = 1 if alpha, otherwise 0
+;
+isAlpha:
+	cmp		$a0,#'A'
+	blt		.isAlphaFalse
+	cmp		$a0,#'Z'
+	ble		.isAlphaTrue
+	cmp		$a0,#'a'
+	blt		.isAlphaFalse
+	cmp		$a0,#'z'
+	bgt		.isAlphaFalse
+.isAlphaTrue:
+  ldi		$s8,#1
+  rtl
+.isAlphaFalse:
+  mov		$s8,$x0
+  rtl
+
+
+; Determine if the character is a alphanumeric
+;   Parameters
+;       a0 = char to test
+;   Returns
+;       a0 = 1 if alpha, otherwise 0
+;
+isAlnum:
+  jlr	  isDigit
+  tst   $s8
+	bne		.isDigitx	; if it is a digit
+  jlr   isAlpha
+.isDigitx:
+  rts
+
+FORCEFIT:
+  cmp   $a1,$s9
+	beq		.0001				; types match
+	tst   $a1
+	beq		.intAnd
+;	itof	$f1,$s8
+	ldi		$a0,#1
+	rtl
+.intAnd:
+	cmp   $s9,#1
+	bne		.0001
+;	itof	$f2,$a1
+	ldi		$a1,#1
+	rtl
+.0001:
+	rtl
+
+EXPR:
+	jsr	  ADDEXPR
+	gcsub	$sp,$sp,#16				; save <ADDEXPR> value
+	sto		$s8,[$sp]
+	sto		$s9,8[$sp]					; save type
+	ldi		$t3,#TAB8		; look up a relational operator
+	ldi		$t4,#TAB8_1
+	jmp		EXEC		; go do it
+XP11:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it ">="?
+	cmp   $a0,$s8
+	bge		XPRT1	; no, return s8=1
+	jmp		XPRT0	; else return s8=0
+XP12:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it "<>"?
+	cmp   $a0,$s8
+	bne		XPRT1	; no, return a1=1
+	jmp		XPRT0	; else return a1=0
+XP13:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it ">"?
+	cmp   $a0,$s8
+	bgt		XPRT1	; no, return a1=1
+	jmp		XPRT0	; else return a1=0
+XP14:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it "<="?
+	cmp   $a0,$s8
+	ble		XPRT1	; no, return a1=1
+	jmp		XPRT0	; else return a1=0
+XP15:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it "="?
+	cmp   $a0,$s8
+	beq		XPRT1	; if not, return a1=1
+	jmp		XPRT0	; else return a1=0
+XP16:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	jsr	  XP18	; is it "<"?
+	cmp   $a0,$s8
+	blt		XPRT1	; if not, return a1=1
+	jmp		XPRT0	; else return a1=0
+XPRT0:
+	mov		$s8,$x0   ; return a0=0 (false)
+	mov		$s9,$x0		; type = int
+	rts
+XPRT1:
+	ldi		$s8,#1	; return a0=1 (true)
+	ldi		$s9,#0	; type = int
+	rts
+
+XP17:				; it's not a rel. operator
+	ldo		$s8,[$sp] ; return a1=<ADDEXPR>
+	ldo		$s9,8[$sp]
+	add		$sp,$sp,#16
+	rts
+
+XP18:
+	sub		$sp,$sp,#24
+	sto		$s8,8[$sp]
+	sto		$s9,16[$sp]
+	jsr	  ADDEXPR		; do a second <ADDEXPR>
+	ldo		$a0,8[$sp]
+	ldo		$a1,16[$sp]
+	rts   #24
+
+; <ADDEXPR>::=(+ or -)<MULEXPR>(+ or -)<MULEXPR>(...
+//message "ADDEXPR"
+ADDEXPR:
+	jlr   TSTC		; negative sign?
+	dw		'-'
+	jmp		XP21
+	mov		$s8,$x0		; yes, fake '0-'
+	sub		$sp,$sp,#16
+	sto		$s8,[$sp]
+	sto		$s9,8[$sp]
+	jmp		XP26
+XP21:
+	jlr   TSTC		; positive sign? ignore it
+	dw		'+'
+	jmp		XP22
+XP22:
+	jsr	  MULEXPR		; first <MULEXPR>
+XP23:
+	gcsub	$sp,$sp,#16; yes, save the value
+	sto		$s8,[$sp]
+	sto	  $s9,8[$sp]	; and type
+	jlr   TSTC		; add?
+	dw		'+'
+	jmp		XP25
+	jsr	  MULEXPR		; get the second <MULEXPR>
+XP24:
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	add		$s8,$s8,$a0	; add it to the first <MULEXPR>
+;	BVS.L	QHOW		brnch if there's an overflow
+	jmp		XP23		; else go back for more operations
+XP25:
+	jlr   TSTC		; subtract?
+	dw		'-'
+	jmp		XP45
+XP26:
+	jsr	  MULEXPR		; get second <MULEXPR>
+	sub		$s8,$x0,$s8	; change its sign
+	jmp		XP24		; and do an addition
+XP45:
+	ldo		$s8,[$sp]
+	ldo		$s9,8[$sp]
+	add		$sp,$sp,#16
+	rts
+
+
+; <MULEXPR>::=<FUNCEXPR>( <* or /><FUNCEXPR> )(...
+
+MULEXPR:
+	jsr	  FUNCEXPR		; get first <FUNCEXPR>
+XP31:
+	sub		$sp,$sp,#16
+	sto		$s8,[$sp]  ; yes, save that first result
+	sto		$s9,8[$sp]
+	jlr   TSTC		; multiply?
+	dw		'*'
+	jmp		XP34
+	jsr	  FUNCEXPR		; get second <FUNCEXPR>
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	mul		$s8,$s8,$a0	; multiply the two
+	jmp		XP31        ; then look for more terms
+XP34:
+	jlr   TSTC		; divide?
+	dw		'/'
+	jmp		XP35
+	jsr	  FUNCEXPR		; get second <FUNCEXPR>
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	div		$s8,$s8,$a0	; do the division
+	jmp		XP31		; go back for any more terms
+XP35:
+	jlr   TSTC
+	dw		'%'
+	jmp		XP47
+	jsr	  FUNCEXPR
+	ldo		$a0,[$sp]
+	ldo		$a1,8[$sp]
+	add		$sp,$sp,#16
+	rem		$s8,$s8,$a0
+	jmp		XP31
+XP47:
+	ldo		$s8,[$sp]
+	ldo		$s9,8[$sp]
+	add		$sp,$sp,#16
+	rts
+
+
+; Functions are called through FUNCEXPR
+; <FUNCEXPR>::=<variable>
+;	    <function>
+;	    (<EXPR>)
+
+FUNCEXPR:
+  ldi		$t3,#TAB4		; find possible function
+  ldi		$t4,#TAB4_1
+	jmp		EXEC        ; branch to function which does subsequent ret for FUNCEXPR
+XP40:                   ; we get here if it wasn't a function
+	mov		$a0,$x0
+	jsr	  TSTV
+	tst   $s8
+	beq   XP41	  ; not a variable
+	ldo		$s8,[$s8]		; if a variable, return its value in s8
+	rts
+XP41:
+	jsr	  TSTNUM		; or is it a number?
+	tst   $s9
+	bne	  XP46	; (if not, # of digits will be zero) if so, return it in s8
+	jsr	  PARN        ; check for (EXPR)
+XP46:
+	rts
+
+
+; Check for a parenthesized expression
+PARN:
+	jlr   TSTC		; else look for ( OREXPR )
+	dw		'('
+	jmp		XP43
+	jsr	  OREXPR
+	jlr   TSTC
+	dw		')'
+	jmp		XP43
+XP42:
+	rts
+XP43:
+	add		$sp,$sp,#8		; get rid of return address
+	ldi		$a0,#msgWhat
+	jmp		ERROR
+
+
+; ===== Test for a valid variable name.  Returns Z=1 if not
+;	found, else returns Z=0 and the address of the
+;	variable in a0.
+; Parameters
+;		a0 = 1 = allocate if not found
+; Returns
+;		s8 = address of variable, zero if not found
+
+TSTV:
+	gcsub	$sp,$sp,#8
+	sto		$a5,[$sp]
+	mov		$a5,$a0		; r5=allocate flag
+	jlr	  IGNBLK
+	lbu		$a0,[$t2]		; look at the program text
+	cmp		$a0,#'@'
+	blt		tstv_notfound	; C=1: not a variable
+	bne		TV1				; brnch if not "@" array
+	add		$t2,$t2,#1	; If it is, it should be
+	jsr	  PARN		; followed by (EXPR) as its index.
+;	BCS.L	QHOW		say "How?" if index is too big
+	jmp		TV3
+TV3:
+	gcsub	$sp,$sp,#8	; save the index
+	sto		$s8,[$sp]
+	jsr	  SIZEX		; get amount of free memory
+	ldo		$a1,[$sp]
+	add		$sp,$sp,#8	; get back the index
+	cmp   $a1,$s8
+	blt		TV2		  ; see if there's enough memory
+	add		$sp,$sp,#16
+	jmp   QSORRY		; if not, say "Sorry"
+TV2:
+	ldo		$a0,VARBGN	; put address of array element...
+	sub   $s8,$a0,$a1    ; into a0 (neg. offset is used)
+	jmp   TSTVRT
+TV1:	
+  jsr	  getVarName      ; get variable name
+  tst   $s8
+  beq   TSTVRT    ; if not, return s8=0
+  mov		$a0,$s8
+  mov		$a1,$a5
+  jsr	  findVar     ; find or allocate
+TSTVRT:
+	ldo		$a5,[$sp]
+	rts   #8								; s8<>0 (if found)
+tstv_notfound:
+	mov.	$s8,$x0				; s8=0 if not found
+	ldo		$a5,[$sp]
+  rts   #8
+
+; Get a variable name. Called after blanks have been ignored.
+;
+; Returns
+;   s8 = 3 character variable name + type
+;
+getVarName:
+	gcsub	$sp,$sp,#24
+	sto		$a5,[$sp]
+  lbu   $a0,[$t2]		; get first character
+  sto		$a0,16[$sp]		; save off current name
+  jlr	  isAlpha
+  tst   $s8
+  beq   gvn1
+  ldi	  $a5,#6       ; loop six more times
+
+	; check for second/third character
+gvn4:
+	add		$t2,$t2,#1
+	lbu   $a0,[$t2]		; do we have another char ?
+	jsr	  isAlnum
+	tst   $s8
+	beq   gvn2	      ; nope
+	ldo		$a0,16[$sp]		; get varname
+	asl		$a0,$a0,#8
+	lbu   $a1,[$t2]
+	or    $a0,$a0,$a1   	; add in new char
+  sto		$a0,16[$sp]		; save off current name again
+  sub.	$a5,$a5,#1
+  bgt		gvn4
+
+ 	; now ignore extra variable name characters
+gvn6:
+	add		$t2,$t2,#1
+	lbu   $a0,[$t2]		; do we have another char ?
+  jsr   isAlnum
+  tst   $s8
+  bne   gvn6	; keep looping as long as we have identifier chars
+
+  ; check for a variable type
+gvn2:
+	lbu     $a1,[$t2]
+	cmp		  $a1,#'%'
+	cmp.or	$a1,#'$'
+	beq		  gvn3
+  sub		  $t2,$t2,#1
+  ldi		  $a1,#'.'		; if no variable type assume float
+
+  ; insert variable type indicator and return
+gvn3:
+	add		$t2,$t2,#1
+	ldo		$a0,16[$sp]		; get varname
+	asl		$a0,$a0,#8
+  or    $s8,$a0,$a1    ; add in variable type
+  ldo		$a5,[$sp]
+  rts   #24						; return a0 = varname
+
+  ; not a variable name
+gvn1:
+  mov		$s8,$x0       ; return s8 = 0 if not a varname
+	ldo		$a5,[$sp]
+  rts   #24
+
+
+; Find variable
+;   a0 = varname
+;		a1 = allocate flag
+; Returns
+;   s8 = variable address, Z =0 if found / allocated, Z=1 if not found
+
+findVar:
+	sub		$sp,$sp,#16
+	sto		$s0,[$sp]
+	sto		$a3,8[$sp]
+  ldo   $a3,VARBGN
+fv4:
+  ldo.  $s0,[$a3]     ; get varname / type
+  beq   fv3		      ; no more vars ?
+  cmp   $a0,$s0
+  beq   fv1		      ; match ?
+	add		$a3,$a3,#16		; move to next var
+  ldo   $s0,VAREND		; 
+  cmp   $a3,$s0
+  blt   fv4		; loop back to look at next var
+
+  ; variable not found
+  ; no more memory
+  ldo		$s0,[$sp]
+  ldo		$a3,8[$sp]
+  add		$sp,$sp,#16
+  ldi		$a0,#msgVarSpace
+  jmp   ERROR
+
+  ; variable not found
+  ; allocate new ?
+fv3:
+  tst   $a1
+	beq		fv2
+  sto   $a0,[$a3]     ; save varname / type
+  ; found variable
+  ; return address
+fv1:
+  add		$s8,$a3,#8
+  ldo		$s0,[$sp]
+  ldo		$a3,8[$sp]
+  rts   #16			    			; s8 = address
+
+  ; didn't find var and not allocating
+fv2:
+	mov		$s8,$x0				; s8 = nullptr
+  ldo		$s0,[$sp]
+  ldo		$a3,8[$sp]
+  rts   #16
+
+; The following functions are entered via a jump instruction with
+; the return address already saved.
+
+; ===== The PEEK function returns the byte stored at the address
+;	contained in the following expression.
+;
+PEEK:
+	jsr	  PARN		; get the memory address
+	ldb		$s8,[$s8]	; get the addressed byte
+	jmp   PEEK_RET
+PEEKW:
+	jsr	  PARN		; get the memory address
+	ldw		$s8,[$s8]		; get the addressed word
+	jmp   PEEK_RET
+PEEKT:
+	jsr	  PARN		; get the memory address
+	ldt		$s8,[$s8]		; get the addressed byte
+	jmp   PEEK_RET
+PEEKO:
+	jsr	  PARN		; get the memory address
+	ldo		$s8,[$s8]		; get the addressed byte
+PEEK_RET:
+	mov		$s9,$x0			; type = int
+	rts
+
+
+; user function jsr
+; jsr the user function with argument in a0, type in a1
+USRX:
+	gcsub	$sp,$sp,#8
+	sto		$t0,[$sp]
+	jsr	  PARN		; get expression value
+	mov		$a0,$s8
+	mov		$a1,$s9
+	gcsub	$sp,$sp,#8	; save the text pointer
+	sto		$t2,[$sp]
+	ldo		$cn,usrJmp
+	jsr	  [$cn]			; get usr vector, jump to the subroutine
+	ldo		$t2,[$sp]	; restore the text pointer
+	add		$sp,$sp,#8
+	ldo		$t0,[$sp]
+	add		$sp,$sp,#8
+	rts
+
+
+; ===== The RND function returns a random number from 1 to
+;	the value of the following expression in D0.
+;
+RND:
+	jsr	  PARN		; get the upper limit
+	tst   $s8
+	beq		.rnd2	; it must be positive and non-zero
+	blt		.rnd1
+	mov		$a1,$s8
+	mov		$s9,$s8
+	jsr	  gen_rand	; generate a random number
+	rem		$s8,$s8,$s9
+	add		$s8,$s8,#1
+	mov		$s9,$x0
+	rts
+.rnd1:
+	ldi		$a0,#msgRNDBad
+	add		$sp,$sp,#8
+	jmp		ERROR
+.rnd2:
+	jsr	  gen_rand	; generate a random number
+	mov		$s9,$x0
+	rts
+
+; ===== The ABS function returns an absolute value in a1.
+;
+ABS:
+	jsr	  PARN		; get the following expr.'s value
+	tst   $s8
+	blt		.ABS1
+	rts
+.ABS1:
+	neg		$s8,$s8
+	rts
+
+
+;==== The TICK function returns the cpu tick value in a0.
+;
+TICKX:
+	csrrw	s8,#$C00,x0
+	mov		s9,x0
+	rts
+
+; ===== The SGN function returns the sign in a0. +1,0, or -1
+;
+SGN:
+	jsr	  PARN		; get the following expr.'s value
+	mov		$s9,$x0
+	tst   $s8
+	beq		SGN1
+	blt		SGN2
+	ldi		$s8,#1
+	rts
+SGN2:
+	ldi		$s8,#-1
+SGN1:
+	rts
+
+; ===== The SIZE function returns the size of free memory in s8.
+; does not consider memory used by @()
+;
+SIZEX:
+	ldo		$s8,VARBGN	; get the number of free bytes...
+	ldo		$s9,TXTUNF	; between 'TXTUNF' and 'VARBGN'
+	sub		$s8,$s8,$s9
+	mov		$s9,$x0			; type = int
+	rts				; return the number in s8
+
+
+;******************************************************************
+;
+; *** SETVAL *** FIN *** ENDCHK *** ERROR (& friends) ***
+;
+; 'SETVAL' expects a variable, followed by an equal sign and then
+; an expression.  It evaluates the expression and sets the variable
+; to that value.
+;
+; returns
+; a1 = variable's address
+;
+SETVAL:
+  ldi		$a0,#1		; allocate var
+  jsr	  TSTV		; variable name?
+  tst   $s8
+  bne		.sv2
+ 	ldi		$a0,#msgVar
+	add		$sp,$sp,#8
+ 	jmp		ERROR 
+.sv2:
+	sub		$sp,$sp,#8
+	sto		$s8,[$sp]	; save the variable's address
+	jlr   TSTC			; get past the "=" sign
+	dw		'='
+	jmp		SV1
+	jsr	  OREXPR		; evaluate the expression
+	ldo		$a1,[$sp]	; get back the variable's address
+	add		$sp,$sp,#8
+	sto   $s8,[$a1]   ; and save value in the variable
+	mov		$s8,$a1			; return s8 = variable address
+	ldo	  $s9,-8[$a1]
+	and		$s9,$s9,#$FF
+	rts
+SV1:
+	add		$sp,$sp,#8
+  jmp	  QWHAT		; if no "=" sign
+
+
+; 'FIN' checks the end of a command.  If it ended with ":",
+; execution continues.	If it ended with a CR, it finds the
+; the next line and continues from there.
+;
+FIN:
+	jlr   TSTC		; *** FIN ***
+	dw		':'
+	jmp		FI1
+	add		$sp,$sp,#8	; if ":", discard return address
+	jmp		RUNSML		; continue on the same line
+FI1:
+	jlr   TSTC		; not ":", is it a CR?
+	dw		CR
+	jmp		FI2
+						; else return to the caller
+	add		$sp,$sp,#8	; yes, purge return address
+	jmp		RUNNXL		; execute the next line
+FI2:
+	rts		; else return to the caller
+
+
+; 'ENDCHK' checks if a command is ended with a CR. This is
+; required in certain commands, such as GOTO, RETURN, STOP, etc.
+;
+; Check that there is nothing else on the line
+; Registers Affected
+;   a0
+;
+ENDCHK:
+	jlr	  IGNBLK
+	ldbu	$a0,[$t2]
+	cmp		$a0,#CR
+	beq		.ec1	; does it end with a CR?
+	ldi		$a0,#msgExtraChars
+	jmp		ERROR
+.ec1:
+	rts
+
+; 'ERROR' prints the string pointed to by a0. It then prints the
+; line pointed to by CURRNT with a "?" inserted at where the
+; old text pointer (should be on top of the stack) points to.
+; Execution of Tiny BASIC is stopped and a warm start is done.
+; If CURRNT is zero (indicating a direct command), the direct
+; command is not printed. If CURRNT is -1 (indicating
+; 'INPUT' command in progress), the input line is not printed
+; and execution is not terminated but continues at 'INPERR'.
+;
+; Related to 'ERROR' are the following:
+; 'QWHAT' saves text pointer on stack and gets "What?" message.
+; 'AWHAT' just gets the "What?" message and jumps to 'ERROR'.
+; 'QSORRY' and 'ASORRY' do the same kind of thing.
+; 'QHOW' and 'AHOW' also do this for "How?".
+;
+TOOBIG:
+	ldi		$a0,#msgTooBig
+	jmp		ERROR
+QSORRY:
+  ldi		$a0,#SRYMSG
+	jmp   ERROR
+QWHAT:
+	ldi		$a0,#msgWhat
+ERROR:
+	jsr	  PRMESG		; display the error message
+	ldo.	$a0,CURRNT	; get the current line pointer
+	beq	  ERROR1	; if zero, do a warm start
+	cmp		$a0,#-1
+	beq		INPERR	; is the line no. pointer = -1? if so, redo input
+	ldbu	$a5,[$t2]		; save the char. pointed to
+	stb		$x0,[$t2]		; put a zero where the error is
+	ldt		$a0,CURRNT	; point to start of current line
+	jsr	  PRTLN		; display the line in error up to the 0
+	mov   $a6,$a0	    ; save off end pointer
+	stb		$a5,[$t2]		; restore the character
+	ldi		$a0,#'?'		; display a "?"
+	jsr	  GOOUT
+	mov		$a1,$x0		; stop char = 0
+	sub		$a0,$a6,#1	; point back to the error char.
+	jsr	  PRTSTG		; display the rest of the line
+ERROR1:
+	jmp	  WSTART		; and do a warm start
+
+;******************************************************************
+;
+; *** GETLN *** FNDLN (& friends) ***
+;
+; 'GETLN' reads in input line into 'BUFFER'. It first prompts with
+; the character in r3 (given by the caller), then it fills the
+; buffer and echos. It ignores LF's but still echos
+; them back. Control-H is used to delete the last character
+; entered (if there is one), and control-X is used to delete the
+; whole line and start over again. CR signals the end of a line,
+; and causes 'GETLN' to return.
+;
+;
+GETLN:
+	gcsub	$sp,$sp,#8
+	sto		$a5,[$sp]
+	jsr	  GOOUT		; display the prompt
+	ldi		$a0,#1
+;	sw		a0,CursorFlash	; turn on cursor flash
+	ldi		$a0,#' '		; and a space
+	jsr	  GOOUT
+	ldi		$t2,#BUFFER	; $t2 is the buffer pointer
+.GL1:
+	jsr	  CHKIO		; check keyboard
+	tst   $a0
+	beq	  .GL1	; wait for a char. to come in
+	cmp		$a0,#CTRLH
+	beq		.GL3	; delete last character? if so
+	cmp		$a0,#CTRLX
+	beq		.GL4	; delete the whole line?
+	cmp		$a0,#CR
+	beq		.GL2		; accept a CR
+	cmp		$a0,#' '
+	blt		.GL1	; if other control char., discard it
+.GL2:
+	stb		$a0,[$t2]		; save the char.
+	add		$t2,$t2,#1
+	gcsub	$sp,$sp,#8
+	sto		$a0,[$sp]
+	jsr	  GOOUT		  ; echo the char back out
+	ldo		$a0,[$sp] ; get char back (GOOUT destroys a0)
+	add		$sp,$sp,#8
+	cmp		$a0,#CR
+	beq		.GL7			; if it's a CR, end the line
+	cmp		$t2,#BUFFER+BUFLEN-1
+	blt		.GL1		; any more room? ; yes: get some more, else delete last char.
+.GL3:
+	ldi		$a0,#CTRLH	; delete a char. if possible
+	jsr	  GOOUT
+	ldi		$a0,#' '
+	jsr	  GOOUT
+	cmp   $t2,#BUFFER
+	ble		.GL1	      ; any char.'s left?	; if not
+	ldi		$a0,#CTRLH	; if so, finish the BS-space-BS sequence
+	jsr	  GOOUT
+	sub		$t2,$t2,#1	; decrement the text pointer
+	jmp		.GL1		    ; back for more
+.GL4:
+	mov		$a0,$t2		; delete the whole line
+	sub.	$a5,$a0,#BUFFER   ; figure out how many backspaces we need
+	beq	  .GL6		  ; if none needed, branch
+	sub		$a5,$a5,#1		; loop count is one less
+.GL5:
+	ldi		$a0,#CTRLH		; and display BS-space-BS sequences
+	jsr	  GOOUT
+	ldi		$a0,#' '
+	jsr	  GOOUT
+	ldi		$a0,#CTRLH
+	jsr	  GOOUT
+	sub.	$a5,$a5,#1
+	bne		.GL5
+.GL6:
+	ldi		$t2,#BUFFER	; reinitialize the text pointer
+	jmp		.GL1		; and go back for more
+.GL7:
+	stb		$x0,[$t2]		; null terminate line
+;	sw		x0,CursorFlash	; turn off cursor flash
+	ldi		$a0,#LINEFD	; echo a LF for the CR
+	jsr	  GOOUT
+	ldo		$a5,[$sp]
+	rts   #8
+
+
+; 'FNDLN' finds a line with a given line no. (in a0) in the
+; text save area.  $t3 is used as the text pointer. If the line
+; is found, $t3 will point to the beginning of that line
+; (i.e. the high byte of the line no.), and $s8 = 1.
+; If that line is not there and a line with a higher line no.
+; is found, $t3 points there and $s8 = 0. If we reached
+; the end of the text save area and cannot find the line, flags
+; $t3 = 0, $s8 = 0.
+; $s8=1 if line found
+; r0 = 1	<= line is found
+;	$t3 = pointer to line
+; r0 = 0    <= line is not found
+;	r9 = zero, if end of text area
+;	r9 = otherwise higher line number
+;
+; 'FNDLN' will initialize $t3 to the beginning of the text save
+; area to start the search. Some other entries of this routine
+; will not initialize $t3 and do the search.
+; 'FNDLNP' will start with $t3 and search for the line no.
+; 'FNDNXT' will bump $t3 by 4, find a CR and then start search.
+; return Z=1 if line is found, r9 = pointer to line
+;
+; Parameters
+;	a0 = line number to find
+;
+FNDLN:
+	cmp   $a0,#$FFFFF
+	blt		fl1	        ; line no. must be < 1048576
+	ldi		$a0,#msgLineRange
+	jmp		ERROR
+fl1:
+	ldi		$t3,#TXTBGN	; init. the text save pointer
+	sto   $t3,SRCHLN
+  jmp   FNDLNP
+FNDLNT:
+  ldo   $t3,CURRNT
+  sto   $t3,SRCHLN
+FNDLNP:
+	ldt		$t4,TXTUNF	; check if we passed the end
+	cmp   $t3,$t4
+	bgeu	FNDRET1     ; if so, return with r9=0,a0=0
+	;jsr	LoadWord		; get line number
+	ldt   $s8,1[$t3]
+;	gcsub $sp,$sp,#8
+;	stt   $ra,[$sp]
+;	stt   $a0,4[$sp]
+;	mov   $a0,$s8
+;	jsr  PutHexWord
+;	ldt   $ra,[$sp]
+;	ldt   $a0,4[$sp]
+;	add   $sp,$sp,#8
+  cmp   $s8,$a0
+	beq	  FNDRET2
+	cmp   $s8,$a0
+	bltu	FNDNXT	; is this the line we want? no, not there yet
+FNDRET1:
+	mov		$s8,$x0	; line not found, but $t3=next line pointer
+	rts
+FNDRET2:
+	ldi		$s8,#1	; line found
+	rts
+
+; Move from the current line to the next one.
+FNDNXT:
+  ldo   $s8,SRCHLN
+	ldbu	$s9,[$s8]
+	add		$t3,$s8,$s9
+	sto   $t3,SRCHLN
+	jmp   FNDLNP
+
+
+;******************************************************************
+; 'MVUP' moves a block up from where a0 points to where a1 points
+; until a0=a2
+;
+MVUP1:
+  sub   $a5,$a2,$a0 ; get number of bytes to move
+.MVUP2:
+  sub.  $a5,$a5,#1
+	ldb		$a4,[$a0+$a5]
+	stb		$a4,[$a1+$a5]
+	bne		.MVUP2
+	rtl
+
+
+; 'MVDOWN' moves a block down from where a0 points to where a1
+; points until a0=a2
+;
+MVDOWN1:
+	sub		$a0,$a0,#1
+	sub		$a1,$a1,#1
+	ldb		$a4,[$a0]
+	stb		$a4,[$a1]
+.MVDOWN:
+  cmp   $a0,$a2
+	bne		.MVDOWN1
+	rtl
+
+
+; 'POPA_' restores the 'FOR' loop variable save area from the stack
+;
+; 'PUSHA_' stacks for 'FOR' loop variable save area onto the stack
+;
+; Note: a single zero word is stored on the stack in the
+; case that no FOR loops need to be saved. This needs to be
+; done because PUSHA_ / POPA_ is called all the time.
+//message "POPA_"
+POPA_:
+	ldo.	$a0,[$sp]
+	add		$sp,$sp,#8
+	sto	  $a0,LOPVAR	; restore LOPVAR, but zero means no more
+	beq	  .PP1
+	ldo		$a0,[$sp]
+	sto		$a0,LOPPT
+	ldo		$a0,8[$sp]
+	sto		$a0,LOPLN
+	ldo		$a0,16[$sp]
+	sto		$a0,LOPLMT
+	ldo		$a0,24[$sp]
+	sto		$a0,LOPINC
+	add		$sp,$sp,#32
+.PP1:
+	rtl
+
+
+PUSHA_:
+	ldo		$a0,STKBOT	; Are we running out of stack room?
+	add		$a0,$a0,#40	; we might need this many bytes
+	cmp   $sp,$a0
+	blt		QSORRY	    ; out of stack space
+	ldo.	$a1,LOPVAR		; save loop variables
+	beq	  .PU1		; if LOPVAR is zero, that's all
+	sub		$sp,$sp,#32
+	ldo		$a0,LOPPT
+	sto		$a0,[$sp]
+	ldo		$a0,LOPLN
+	sto		$a0,8[$sp]
+	ldo		$a0,LOPLMT
+	sto		$a0,16[$sp]
+	ldo		$a0,LOPINC
+	sto		$a0,24[$sp]
+.PU1:
+	sub		$sp,$sp,#8
+	sto		$a1,[$sp]
+	rtl
+
+
+;******************************************************************
+;
+; 'PRTSTG' prints a string pointed to by a0. It stops printing
+; and returns to the caller when either a CR is printed or when
+; the next byte is the same as what was passed in a1 by the
+; caller.
+;
+; 'PRTLN' prints the saved text line pointed to by r3
+; with line no. and all.
+;
+
+; a0 = pointer to string
+; a1 = stop character
+; return s8 = pointer to end of line + 1
+
+PRTSTG:
+	gcsub	$sp,$sp,#40
+	sto		$a5,[$sp]
+	sto		$a6,8[$sp]
+	sto		$s0,16[$sp]
+	sto		$a0,16[$sp]
+	mov   $a5,$a0	    ; r5 = pointer
+	mov   $a6,$a1	    ; r6 = stop char
+.PS1:
+  ldbu  $s0,[$a5]     ; get a text character
+	add		$a5,$a5,#1
+	cmp   $s0,$a6
+	beq	  .PRTRET	; same as stop character? if so, return
+	mov   $a0,$s0
+	jsr	  GOOUT		; display the char.
+	cmp		$s0,#CR
+	bne   .PS1	; is it a C.R.? no, go back for more
+	ldi		$a0,#LINEFD  ; yes, add a L.F.
+	jsr	  GOOUT
+.PRTRET:
+  mov   $s9,$s0	    ; return a1 = stop char
+	mov		$s8,$a5		; return a0 = line pointer
+	ldo		$a5,[$sp]
+	ldo		$a6,8[$sp]
+	ldo		$s0,16[$sp]
+	ldo		$a0,32[$sp]
+  rts   #40					; then return
+
+
+; 'QTSTG' looks for an underline (back-arrow on some systems),
+; single-quote, or double-quote.  If none of these are found, returns
+; to the caller.  If underline, outputs a CR without a LF.  If single
+; or double quote, prints the quoted string and demands a matching
+; end quote.  After the printing, the next i-word of the caller is
+; skipped over (usually a branch instruction).
+;
+QTSTG:
+	jlr   TSTC		; *** QTSTG ***
+	dw		'"'
+	bra		.QT3
+	ldi		$a1,#'"'		; it is a "
+.QT1:
+	mov		$a0,$t2
+	jsr	  PRTSTG		; print until another
+	mov		$t2,$s8
+	cmp		$s9,#CR
+	bne		.QT2	; was last one a CR?
+	jmp		RUNNXL		; if so run next line
+.QT3:
+	jlr   TSTC		; is it a single quote?
+	dw		'\''    ; '
+	jmp		.QT4
+	ldi		$a1,#'\''  ; ' if so, do same as above
+	jmp		.QT1
+.QT4:
+	jlr   TSTC		; is it an underline?
+	dw		'_'
+	jmp		.QT5
+	ldi		$a0,#CR		; if so, output a CR without LF
+	jsr	  GOOUT
+.QT2:
+	ldo		$cn,[$sp]		; get return address
+	add		$sp,$sp,#8
+	jmp		8[$cn]	    ; skip following branch
+.QT5:					      ; not " ' or _
+	rts
+
+; Output a CR LF sequence
+;
+prCRLF:
+	gcsub	$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#CR
+	jsr	  GOOUT
+	ldi		$a0,#LINEFD
+	jsr	  GOOUT
+	ldo		$ra,[$sp]
+	rts   #8
+
+;-------------------------------------------------------------------------------
+; 'PRTNUM' prints the 32 bit number in a0, leading blanks are added if
+; needed to pad the number of spaces to the number in a1.
+; However, if the number of digits is larger than the no. in
+; a1, all digits are printed anyway. Negative sign is also
+; printed and counted in, positive sign is not.
+;
+; Parameters
+; 	a0 = number to print
+; 	a1 = number of digits
+;		a2 = base (eg 10, 16)
+; Register Usage
+;		s2 = number of padding spaces
+; Modifies:
+;		a0,a1,t1
+; Returns:
+;		none
+;-------------------------------------------------------------------------------
+
+public PRTNUM:
+	gcsub	$sp,$sp,#32
+	sto		$s1,[$sp]
+	sto		$s2,8[$sp]
+	sto		$s3,16[$sp]
+	sto		$s4,24[$sp]
+	ldi		$s4,#NUMWKA	; r7 = pointer to numeric work area
+	mov.	$s3,$a0		; save number for later
+	mov		$s2,$a1		; s2 = min number of chars
+	bge		.PN2	      ; is it negative? if not
+	neg		$a0,$a0	    ; else make it positive
+	sub		$s2,$s2,#1	; one less for width count
+.PN2:
+	ldi		$t1,#10
+.PN1:
+	rem		$a1,$a0,$a2	; a1 = a0 mod base
+	div		$a0,$a0,$a2	; a0 /= divide by base
+	cmp   $a1,$a2
+	bleu	.PN7
+	add		$a1,$a1,#'A'-10-'0'
+.PN7:
+	add		$a1,$a1,#'0'	; convert remainder to ascii
+	stb		$a1,[$s4]		; and store in buffer
+	add		$s4,$s4,#1
+	sub		$s2,$s2,#1	; decrement width
+	tst   $a0
+	bne	  .PN1
+	tst   $s2
+	ble		.PN4	      ; test pad count, skip padding if not needed
+.PN3:
+	ldi		$a0,#' '		; display the required leading spaces
+	jsr	  GOOUT
+	sub.	$s2,$s2,#1
+	bgt		.PN3
+.PN4:
+  tst   $s3
+	bge		.PN5	      ; is number negative?
+	ldi		$a0,#'-'		; if so, display the sign
+	jsr	  GOOUT
+.PN5:
+	ldi		$t1,#NUMWKA
+.PN6:
+	sub		$s4,$s4,#1
+	ldbu	$a0,[$s4]		; now unstack the digits and display
+	jsr	  GOOUT
+	cmp   $s4,$t1
+	bgtu	.PN6
+
+	ldo		$s1,[$sp]
+	ldo		$s2,8[$sp]
+	ldo		$s3,16[$sp]
+	ldo		$s4,24[$sp]
+	rts   #32
+
+;-------------------------------------------------------------------------------
+; Parameters:
+; 	$a0 = pointer to line
+; Returns:
+;		$s8 = pointer to end of line + 1
+;-------------------------------------------------------------------------------
+
+PRTLN:
+	gcsub	$sp,$sp,#32
+	sto		$t0,[$sp]
+	sto		$a0,16[$sp]
+	sto		$a1,24[$sp]
+  mov		$t0,$a0		; $t0 = pointer
+  ; get the line number stored as binary
+  ; assume unaligned loads not allowed
+  ;jsr	LoadWord
+  ldt   $s8,1[$t0]    ; we can do unaligned loads
+	add		$t0,$t0,#5
+  mov		$a0,$s8
+  ldi		$a1,#5       ; display a 0 or more digit line no.
+  ldi		$a2,#10
+	jsr	  PRTNUM
+	ldi		$a0,#' '     ; followed by a blank
+	jsr	  GOOUT
+	mov		$a1,$x0     ; stop char. is a zero
+	mov		$a0,$t0
+	jsr   PRTSTG		  ; display the rest of the line
+	ldo		$t0,[$sp]
+	ldo		$a0,16[$sp]
+	ldo		$a1,24[$sp]
+	rts   #32
+
+
+; ===== Test text byte following the jsr to this subroutine. If it
+;	equals the byte pointed to by t2, return to the code following
+;	the jsr. 
+;
+; Parameters:
+;		<static> word byte to look for
+;		<static> branch if not found
+; Registers Affected
+;   none
+; Returns
+;		t2 = updated text pointer
+;
+TSTC:
+	gcsub	$sp,$sp,#24
+	sto		$a0,[$sp]
+	sto		$ra,8[$sp]
+	sto		$a1,16[$sp]
+	jlr	  IGNBLK		; ignore leading blanks
+	ldo		$ra,8[$sp]	; get return address, it's needed for a reference
+	ldbu	$a0,[$t2]
+	ldbu	$a1,[$ra]
+	cmp   $a0,$a1
+	beq		.TC1	; is it = to what t2 points to? if so
+	ldo		$a0,[$sp]
+	ldo		$ra,8[$sp]
+	ldo		$a1,16[$sp]
+	add		$sp,$sp,#24
+	mov   $cn,$ra
+	jmp		8[$cn]		  ; jump back, skip parm
+.TC1:
+	add		$t2,$t2,#1	; if equal, bump text pointer
+	ldo		$a0,[$sp]
+	ldo		$ra,8[$sp]
+	ldo		$a1,16[$sp]
+	add		$sp,$sp,#24
+	mov   $cn,$ra
+	jmp		12[$cn]		  ; jump back, skip parm and branch
+
+
+; ===== See if the text pointed to by $t2 is a number. If so,
+;	return the number in $s8 and the number of digits in $s9,
+;	else return zero in $s8 and $s9.
+; Registers Affected
+;   a0,a1,r3,r4
+; Returns
+; 	s8 = number
+;		s9 = number of digits in number
+;	t2 = updated text pointer
+;
+TSTNUM:
+	gcsub	$sp,$sp,#8
+	sto		$t0,[$sp]
+	jlr	  IGNBLK		; skip over blanks
+	mov		$s8,$x0		; initialize return parameters
+	mov		$s9,$x0
+.TN1:
+	ldbu	$t0,[$t2]
+	cmp		$t0,#'0'
+	blt		.TSNMRET; is it less than zero?
+	cmp		$t0,#'9'
+	bgt		.TSNMRET; is it greater than nine?
+	cmp		$s8,#$7FFFFFFFFFFFFFF
+	bleu	.TN2      ; see if there's room for new digit
+	ldi		$a0,#msgNumTooBig
+	jmp		ERROR		; if not, we've overflowd
+.TN2:
+	add		$t2,$t2,#1	; adjust text pointer
+	mul   $s8,$s8,#10 ; quickly multiply result by 10
+	sub   $t0,$t0,#'0'  ; convert ascii to binary
+	add		$s8,$s8,$t0 ; add in the new digit
+	add		$s9,$s9,#1	; increment the no. of digits
+	jmp		.TN1
+.TSNMRET:
+	ldo		$t0,[$sp]
+	rts   #8
+
+
+;===== Skip over blanks in the text pointed to by $t2.
+;
+; Registers Affected:
+;	$t2
+; Returns
+;	$t2 = pointer updateded past any spaces or tabs
+;
+IGNBLK:
+	gcsub	  $sp,$sp,#16
+	sto		  $a0,[$sp]
+	sto     $t1,8[$sp]
+.IGB2:
+	ldbu	  $a0,[$t2]			; get char
+	cmp		  $a0,#' '      ; space
+	cmp.or	$a0,#'\t'     ; or tab
+	bne		  .IGBRET	      ; see if it's a space
+	add		  $t2,$t2,#1		; increment the text pointer
+	jmp		  .IGB2
+IGBRET:
+	ldo		$a0,[$sp]
+	ldo   $t1,4[$sp]
+	rtl   #16
+
+; ===== Convert the line of text in the input buffer to upper
+;	case (except for stuff between quotes).
+;
+; Registers Affected
+;   a0,r3
+; Returns
+;	r8 = pointing to end of text in buffer
+;
+TOUPBUF:
+	ldi		  $t2,#BUFFER	; set up text pointer
+	mov		  $a3,$x0		; clear quote flag
+.TOUPB1:
+	lbu		  $a0,[$t2]		; get the next text char.
+	add		  $t2,$t2,#1
+	cmp		  $a0,#CR
+	beq		  .TOUPBRT		; is it end of line?
+	cmp		  $a0,#'"'
+	cmp.or	$a0,#'\''     ; '
+	beq		  DOQUO	; a single/double quote?
+	tst     $a3
+	bne		  .TOUPB1	; inside quotes?
+	jlr	    toUpper 	; convert to upper case
+	stb		  $a0,-1[$t2]	; store it
+	jmp		  .TOUPB1		; and go back for more
+.DOQUO:
+  tst   $a3
+	bne		.DOQUO1; are we inside quotes?
+	mov		$a3,$a0		; if not, toggle inside-quotes flag
+	jmp		.TOUPB1
+.DOQUO1:
+  cmp   $a3,$a0
+	bne		.TOUPB1 ; make sure we're ending proper quote
+	mov		$a3,$x0		; else clear quote flag
+	jmp		.TOUPB1
+.TOUPBRT:
+	rts
+
+
+; ===== Convert the character in a0 to upper case
+;
+;toUpper:
+;  sge     $cr0,$a0,#'a'
+;  sle.and $cr0,$a0,#'z'
+;  asl     $t1,$cr0.C,#5
+;  sub     $a0,$a0,$t1
+;  ret
+
+toUpper:
+	slt		$t1,$a0,#'a'
+	cmp   $a0,#'a'
+	blt   .TOUPRET	    ; is it < 'a'?
+	ldi		$t1,#'z'+1
+	slt   $a0,$t1       ; >= 'a' and <= 'z'?
+	asl   $t1,$cr0,#5   ; subtract $20 if in range
+	sub		$a0,$a0,$t1	    ; if not, make it upper case
+.TOUPRET:
+	rtl
+
+; 'CHKIO' checks the input. If there's no input, it will return
+; to the caller with the a0=0. If there is input, the input byte is in a0.
+; However, if a control-C is read, 'CHKIO' will warm-start BASIC and will
+; not return to the caller.
+;
+//message "CHKIO"
+CHKIO:
+	jsr	  INCH		    ; get input if possible
+	tst   $a0
+	beq	  .CHKRET  ; if Zero, no input
+	cmp   $a0,#CTRLC
+	bne	  .CHKRET  ; is it control-C?
+	jmp		WSTART		  ; if so, do a warm start
+.CHKRET:
+	rts
+
+; ===== Display a CR-LF sequence
+;
+CRLF:
+	ldi		a0,#CLMSG
+
+; ===== Display a zero-ended string pointed to by register a0
+; Registers Affected
+;   a0,a1,r4
+;
+PRMESG:
+	jmp	  PutString
+
+;------------------------------------------------------------------------------
+;	erc = ALLOCMBX (<handle var>)
+;------------------------------------------------------------------------------
+
+ALLOCMBX:
+	jlr	  TSTC		; else look for ( OREXPR )
+	dw		'('
+	bra		.paren
+	ldi		$a0,#1
+	jsr	  TSTV
+	tst   $s8
+	bne		.0001
+	ldi		$a0,#msgVar
+	jmp		ERROR
+.0001:
+	jlr	  TSTC		; else look for ( OREXPR )
+	dw		')'
+	jmp		.paren
+	mov		$s1,$s8
+	ldi		$a0,#14			; get current tid
+	brk   #240
+	mov		$a2,$s1
+	ldi		$a0,#6
+	brk   #240
+	tst   $a0
+	bne		.0002
+	sto		$s9,[s1]				; save handle in variable
+.0002:
+	mov		$s9,$x0
+	rts
+.paren:
+	ldi		$a0,#msgParen
+	jmp		ERROR
+
+;------------------------------------------------------------------------------
+; erc = SENDMSG (<handle var>, <msg data 1>, <msg data 2>, <msg data 3>)
+;------------------------------------------------------------------------------
+
+SENDMSG:
+	jlr	  TSTC		; else look for ( OREXPR )
+	dw		'('
+	jmp		.paren
+	jsr	  OREXPR	; get the mailbox handle
+	mov		$s1,$s8
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	jsr	  OREXPR	; get the memory address
+	mov		$s2,$s8
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	jsr	  OREXPR	; get the memory address
+	mov		$s3,$s8
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	jsr	  OREXPR	; get the memory address
+	mov		$s4,$s8
+	jlr	  TSTC		; else look for ( OREXPR )
+	dw		')'
+	jmp		.paren
+	ldi		$a0,#9		; SendMsg
+	mov		$a1,$s1
+	mov		$a2,$s2
+	mov		$a3,$s3
+	mov		$a4,$4
+	brk   #240
+	mov		$s9,$x0
+	rts
+.err:
+	ldi		$a0,#msgComma
+	jmp		ERROR
+.paren:
+	ldi		$a0,#msgParen
+	jmp		ERROR
+
+;------------------------------------------------------------------------------
+; WAITMSG <handle var>, <var for data 1>, <var for data 2>, <var for data 3>,
+;		<expr>
+;------------------------------------------------------------------------------
+
+WAITMSG:
+	jlr	  TSTC		; else look for ( OREXPR )
+	dw		'('
+	jmp		.paren
+	jsr	  OREXPR	; get the mailbox handle
+	mov		$s1,$s8
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	ldi		a0,#1
+	jsr	  TSTV
+	tst   $s8
+	bne		.0001
+.0002:
+	ldi		$a0,#msgVar
+	jmp		ERROR
+.0001:
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	mov		$s2,$s8
+	ldi		$a0,#1
+	jsr	  TSTV
+	tst   $s8
+	beq		.0002
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	mov		$s3,$s8
+	ldi		$a0,#1
+	jsr	  TSTV
+	tst   $s8
+	beq		.0002
+	mov		$s4,$s8
+	jlr	  TSTC		; it must be followed by a comma
+	dw		','
+	jmp		.err
+	jsr	  OREXPR	; get queue remove flag
+	mov		$a5,$s8
+	mov		$s4,$s8
+	jlr   TSTC		; else look for ( OREXPR )
+	dw		')'
+	jmp		.paren
+	ldi		$a0,#10		; WaitMsg
+	mov		$a1,$s1
+	mov		$a2,$s2
+	mov		$a3,$s3
+	mov		$a4,$s4
+	brk   #240
+	mov		$s9,$x0
+	rts
+.err:
+	ldi		$a0,#msgComma
+	jmp		ERROR
+.paren:
+	ldi		$a0,#msgParen
+	jmp		ERROR
+	
+;*****************************************************
+; The following routines are the only ones that need *
+; to be changed for a different I/O environment.     *
+;*****************************************************
+
+; ===== Output character to the console (Port 1) from register a0
+;	(Preserves all registers.)
+;
+OUTC:
+	jmp		Putch
+
+; ===== Input a character from the console into register s8 (or
+;	return Zero status if there's no character available).
+;
+INCH:
+	jsr	  Getch
+	add.	$a0,$a0,#1			; prepare test -1
+	beq	  .INCH1			  ; was = -1
+	sub		$a0,$a0,#1			; get char back
+.INCH1:
+	rts
+
+; ===== Return to the resident monitor, operating system, etc.
+;
+;message "BYEBYE"
+BYEBYE:
+;	jsr	ReleaseIOFocus
+  ldi   $a0,#22     ; release I/O focus
+  brk   #240
+	ldt		$sp,OSSP
+	ldi   $a0,#34     ; activate Monitor
+	brk   #240
+ 
+
+msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.3",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
+OKMSG	db	CR,LINEFD,"OK",CR,0
+msgWhat	db	"What?",CR,0
+SRYMSG	db	"Sorry."
+CLMSG	db	CR,0
+msgReadError	db	"Compact FLASH read error",CR,0
+msgNumTooBig	db	"Number is too big",CR,0
+msgDivZero		db	"Division by zero",CR,0
+msgVarSpace     db  "Out of variable space",CR,0
+msgBytesFree	db	" bytes free",CR,0
+msgReady		db	CR,"Ready",CR,0
+msgComma		db	"Expecting a comma",CR,0
+msgLineRange	db	"Line number too big",CR,0
+msgVar			db "Expecting a variable",CR,0
+msgRNDBad		db	"RND bad parameter",CR,0
+msgSYSBad		db	"SYS bad address",CR,0
+msgInputVar		db	"INPUT expecting a variable",CR,0
+msgNextFor		db	"NEXT without FOR",CR,0
+msgNextVar		db	"NEXT expecting a defined variable",CR,0
+msgBadGotoGosub	db	"GOTO/GOSUB bad line number",CR,0
+msgRetWoGosub   db	"RETURN without GOSUB",CR,0
+msgTooBig		db	"Program is too big",CR,0
+msgExtraChars	db	"Extra characters on line ignored",CR,0
+msgEnvFail		db	" Environment jsr failed",CR,0
+msgParen		db	"Expecting parenthesis",CR,0
+
+LSTROM	equ	*		; end of possible ROM area
+;	END
+

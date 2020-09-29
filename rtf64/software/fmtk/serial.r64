@@ -133,16 +133,16 @@ SerialServiceInit:
 	ldi		$a0,#1			; start task
 	ldi		$a1,#1024		; memory required
 	ldi		$a2,#SerialService
-	ecall
-	ret
+	brk   #240
+	rts
 SerialService:
 	sub		$sp,$sp,#512+24
 	ldi		$a0,#14			; get current tid
-	ecall
+	brk   #240
 	add		$a2,$sp,#516
 	mov		$a1,$a0
 	ldi		$a0,#6			; alloc mailbox
-	ecall
+	brk   #240
 
 SerialServiceLoop:
 	ldi		$a0,#10			; waitmsg
@@ -151,24 +151,26 @@ SerialServiceLoop:
 	add		$a3,$sp,#524
 	add		$a4,$sp,#528
 	ldi		$a5,#-1
-	ecall
+	brk   #240
 
-	lw		$t0,[$sp]
+	ldo		$t0,[$sp]
 	and		$t0,$t0,#31
-	sll		$t0,$t0,#1
-	lw		$t0,SerialFuncTbl[$t0]
-	jmp		[$t0]
+	asl		$t0,$t0,#1
+	ldt		$t0,SerialFuncTbl[$t0]
+	mov   $cn,$t0
+	jmp		[$cn]
 
 SerialFinishCmd:
-	lw		$a1,12[$sp]		; reply mbx
+	ldo		$a1,12[$sp]		; reply mbx
 	add		$a1,$a1,#1		; -1 = no reply requested
-	beq		$a1,$a0,.0001
+	cmp   $cr0,$a1,$a0
+	beq		$cr0,.0001
 	sub		$a1,$a1,#1
 	ldi		$a0,#9				; sendmsg
 	ldi		$a2,#-1
 	ldi		$a3,#-1
 	ldi		$a4,#-1
-	ecall
+	brk   #240
 .0001:
 	jmp		SerialServiceLoop
 

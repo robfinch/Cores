@@ -1,0 +1,304 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+	code
+	align	4
+;------------------------------------------------------------------------------
+; Insert task into ready queue.
+;
+; Parameters:
+;		$a0 = tid to insert
+; Modifies:
+;	  $t0,$t1
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+InsertIntoReadyQueue:
+  mInsertIntoReadyQueue
+	rts
+
+;------------------------------------------------------------------------------
+; Removal from the ready queue is easy. Just flag the task status as no longer
+; ready or running. The next time it appears in a dequeue the code will ignore
+; it and pop the next ready task.
+;
+; Parameters:
+;		$a0 = tid to remove
+; Modifies:
+;		t0,t1
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+RemoveFromReadyQueue:
+	asl   $t0,$a0,#LOG_PGSZ
+	ldb		$t1,TCBStatus[$t0]		; set status no longer ready or running
+	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
+	stb		$t1,TCBStatus[$t0]
+	rts
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a0 = task id to insert
+;		$a1 = timeout value
+; Modifies:
+;		t0,t1,t2,t3,t4,t5
+;------------------------------------------------------------------------------
+
+InsertIntoTimeoutList:
+	asl   $t5,$a0,#LOG_TCBSZ
+	setto	$a0,$a1
+	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
+	or		$t2,$t2,#TS_TIMEOUT
+	stb		$t2,TCBStatus[$t5]
+	ldi		$a0,#E_Ok
+	rts
+
+;------------------------------------------------------------------------------
+; Remove a task from the timeout list.
+; Called when a mailbox is freed and a task is waiting at the
+; mailbox.
+;
+; Parameters:
+;		$a0 = task id to remove
+; Modifies:
+;		none
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+RemoveFromTimeoutList:
+	setto	$a0,$x0
+	rts
+
+;------------------------------------------------------------------------------
+; Diagnostics
+;------------------------------------------------------------------------------
+
+DumpReadyQueue:
+	sub		$sp,$sp,#64
+	sto		$ra,[$sp]
+	sto		$a0,8[$sp]
+	sto		$a2,16[$sp]
+	sto		$a3,24[$sp]
+	sto		$t1,32[$sp]
+	sto		$t2,40[$sp]
+	sto		$t3,48[$sp]
+	sto		$s1,56[$sp]
+	jsr   PutInlineString
+	db    CR,LNFD,0,0
+  ; Display PAM
+  ldi   $t1,#0        ; $a1 = bit number
+.0006:
+  ldi   $a0,#32       ; Get PAM bit pair
+  mov   $a1,$t1
+  brk   #240
+  add   $a0,$a1,#'0'
+  jsr   Putch
+  add   $t1,$t1,#1
+  cmp   $t1,#MEMSZ
+  blt   .0006
+
+	ldi		$a0,#msgReadyQueue
+	jsr	  PutString
+	ldi		$t1,#0
+	csrrc	$s1,#$300,#1
+.0002:
+;	call	SerialPeekCharDirect
+;	xor		$v0,$v0,#CTRLC
+;	beqz	$v0,.brk
+  jsr   PutInlineString
+  db    CR,'Q',0,0
+	;srl		$a0,$t1,#1
+	mov   $a0,$t1
+	jsr	  PutHexNybble
+	ldi		$a0,#':'
+	call	Putch
+	popq  $a2,$t1         ; get number of queue entries
+	lsr   $t2,$a2,#16
+	and   $t2,$t2,#63
+	ldi		$a0,#'['
+	jsr	  Putch
+	mov		$a0,$t2
+	jsr	  PutHexByte
+	jsr   PutInlineString
+	db    ']',' ',0,0
+	and   $a2,$a2,#$1FF
+	pushq $a2,$t1         ; put the entry back on the queue
+.0003:
+	popq. $a2,$t1
+	bmi   .nxt            ; if empty get next
+	lsr.  $a3,$a2,#62     ; extract valid bit
+	beq   .0005       ; valid entry ? no: get next
+	and   $a2,$a2,#$1FF
+	pushq $a2,$t1         ; put the entry back on the queue
+	mov		$a0,$a2
+	jsr	  PutHexHalf
+	ldi		$a0,#' '
+	jsr	  Putch
+.0005:
+	sub.  $t2,$t2,#1
+	bgt   .0003
+	jmp   .0001
+;	sll		$a3,$a3,#LOG_TCBSZ
+;	ldw		$a0,TCBNext[$a3]
+;	call	PutHexHalf
+;	ldi		$a0,#' '
+;	call	Putch
+;	ldw		$a0,TCBPrev[$a3]
+;	call	PutHexHalf
+.nxt:
+	mov		$a0,$a2
+	jsr 	PutHexByte
+	ldi		$a0,#' '
+	jsr 	Putch
+	and   $a2,$a2,#$1FF
+	pushq $a2,$t1         ; put the entry back on the queue
+.0001:
+	ldi		$a0,#CR
+	jsr 	Putch
+;	ldw		$a3,TCBNext[$a3]
+;	bne		$a2,$a3,.0001
+	add		$t1,$t1,#1
+	cmp		$t1,#8
+	blt	  .0002
+.brk:
+	ldi		$a0,#msgTaskInfo
+	jsr	  PutString
+  ldi   $t0,#$4000
+.0004:
+  ldo   $a0,[$t0]
+  cmp   $a0,#TCB_MAGIC
+  bne   .nxtT
+;  ldi   $t2,#1
+;  sll   $t2,$t2,$t0
+;  ldt   $a0,TID_POOL
+;  and   $t2,$t2,$a0
+;  beqz  $t2,.nxtT
+  mov   $t2,$a0
+  lsr   $t0,$t0,#2
+  jsr   PutHexTetra
+  ldi   $a0,' '
+  jsr   Putch
+  ldwu  $a0,TCBtid[$t2]
+  jsr   PutHexTetra
+  ldi   $a0,' '
+  jsr   Putch
+  ldbu  $a0,TCBPriority[$t2]
+  jsr   PutHexByte
+  ldi   $a0,' '
+  jsr   Putch
+  ldbu  $a0,TCBStatus[$t2]
+  jsr   PutHexByte
+  ldi   $a0,' '
+  jsr   Putch
+  ldt   $a0,TCBTimeout[$t2]
+  jsr   PutHexOcta
+  ldi   $a0,' '
+  jsr   Putch
+  ldt   $a0,TCBxSP[$t2]
+  jsr   PutHexOcta
+	ldi		$a0,#CR
+	jsr	  Putch
+.nxtT:
+  add   $t0,$t0,#$400
+  cmp   $t0,#$80000
+  bne   .0004
+	csrrw	$x0,#$300,$s1
+	ldo		$ra,[$sp]
+	ldo		$a0,8[$sp]
+	ldo		$a2,16[$sp]
+	ldo		$a3,24[$sp]
+	ldo		$t1,32[$sp]
+	ldo		$t2,40[$sp]
+	ldo		$t3,48[$sp]
+	ldo		$s1,56[$sp]
+	rts   #64
+
+DumpTimeoutList:
+	sub		$sp,$sp,#64
+	sto		$ra,[$sp]
+	sto		$a0,4[$sp]
+	sto		$a2,8[$sp]
+	sto		$a3,12[$sp]
+	sto		$t1,16[$sp]
+	sto		$t2,20[$sp]
+	sto		$t3,24[$sp]
+	sto		$s1,28[$sp]
+	ldi		$a0,#msgTimeoutList
+	jsr	  PutString
+	ldi		$t1,#0
+	csrrc	$s1,#$300,#1
+	ldi		$a3,#0
+.0002:
+	jsr	  SerialPeekCharDirect
+	cmp		$a0,#CTRLC
+	beq	  .brk
+	ldi		$a0,#CR
+	jsr	  Putch
+;	ldw		$a2,TimeoutList
+;	bltz	$a2,.brk
+;	mov		$a3,$a2
+;.0001:
+	mov		$a0,$a3
+	jsr	  PutHexTetra
+	ldi		$a0,#'-'
+	jsr	  Putch
+	getto	$a0,$t1
+;	sll		$a3,$a3,#LOG_TCBSZ
+;	ldt		$a0,TCBTimeout[$a3]
+	jsr	  PutHexOcta
+;	ldi		$a0,#CR
+;	call	Putch
+	add		$a3,$a3,#1
+	and.	$a3,$a3,#15
+	bgt		.0002
+;	ldw		$a3,TCBNext[$a3]
+;	bge		$a3,$x0,.0001
+.brk:
+	csrrw	$x0,#$300,$s1
+	ldo		$ra,[$sp]
+	ldo		$a0,8[$sp]
+	ldo		$a2,16[$sp]
+	ldo		$a3,24[$sp]
+	ldo		$t1,32[$sp]
+	ldo		$t2,40[$sp]
+	ldo		$t3,48[$sp]
+	ldo		$s1,56[$sp]
+	rts   #64
+
+msgReadyQueue:
+	db	CR,"Ready Queue",CR
+	db	"Que: Tid List",CR
+	db	"-------------",CR,0
+msgTaskInfo:
+  db  CR,"Task Info",CR
+  db  "TCB Ptr   Tid  Pr St Timeout    SP",CR
+  db  0
+msgTimeoutList:
+	db	CR,"Timeout List",CR
+	db	" Tid - Timeout",CR
+	db	"--------------",CR,0
+
+	align 4

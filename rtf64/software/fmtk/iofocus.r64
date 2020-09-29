@@ -1,0 +1,249 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;-----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
+
+	code
+	align	4
+
+;-----------------------------------------------------------------------------
+; Determine if the currently running app has the I/O focus.
+;
+; Stack Space:
+;		none
+; Parameters:
+;		none
+; Modifies:
+;		none
+; Returns:
+;		$a0 = E_Ok
+;		$a1 = 1 if task has IO focus, 0 otherwise
+;-----------------------------------------------------------------------------
+
+FMTK_HasIOFocus:
+	mGetCurrentTid
+	asl   $a0,$a0,#LOG_TCBSZ
+	ldwu. $a0,TCBappid[$a0]
+	beq   .hasFocus           ; startup appid = zero
+	asl   $a0,$a0,#LOG_PGSZ   ; $a0 = ACB pointer
+	ldt   $a1,IOFocusNdx
+	cmp   $a1,$a0
+	bne   .notEqual
+.hasFocus:
+	ldi   $a1,#1
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+.notEqual:
+  ldi   $a1,#1
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+	
+;-----------------------------------------------------------------------------
+; First check if it's even possible to switch the focus to another
+; app. The I/O focus list could be empty or there may be only a
+; single task in the list. In either case it's not possible to
+; switch.
+;
+;	Parameters:
+;		none
+;	Modifies:
+;		none
+;	Returns:
+;		a0 = E_Ok
+;-----------------------------------------------------------------------------
+
+SwitchIOFocusHelper:
+  ldo   $t0,IOFocusNdx
+  ldo.  $t1,ACBiofNext[$t0]
+  beq   .zeroAppid
+  sto   $t1,IOFocusNdx
+  cmp   $t0,$t1
+  bne   .notSame
+.zeroAppid:
+	ldi		$a0,E_Ok
+	rts
+.notSame:
+	; swap virtual screens
+	; set vidmem pointer
+	ldi		$a0,E_Ok
+	rts
+    
+FMTK_SwitchIOFocus:
+	jsr	  SwitchIOFocusHelper
+	jmp		OSExit
+
+;-----------------------------------------------------------------------------
+; RequestIOFocus requests that the task receive the I/O focus. It does not
+; mean the task will receive the focus immediately. Instead it is placed
+; on a list of requesters. Which task has the I/O focus is determined from
+; user input.
+; The I/O focus list is an array indicating which apps are requesting the
+; I/O focus. The I/O focus is user controlled by pressing CNTRL-T on the
+; keyboard.
+;
+; Parameters:
+;		$a1 = app id requesting focus for
+; Returns:
+;   $a0 = E_Ok
+;   $a1 (unmodified)
+;-----------------------------------------------------------------------------
+
+FMTK_RequestIOFocus:
+	ldi   $a2,#1
+  asl   $t2,$a1,#LOG_ACBSZ
+	ldb.	$t1,ACBHasFocus[$t2]  ; Is the task already included in the IO focus?
+	bne	  .ret				          ; If so, don't add again
+	ldo.  $t0,IOFocusNdx			  ; get current index
+	bne	  .notEmpty		          ; is there one? (!= 0)
+	sto   $t2,IOFocusNdx
+	sto   $t2,ACBiofNext[$t2]
+	sto   $t2,ACBiofPrev[$t2]
+	jmp   .ret
+.notEmpty:
+  ; Insert just before head which is end of queue
+  ldo   $t1,ACBiofPrev[$t0]
+  sto   $t2,ACBiofPrev[$t0]     ; head->prev = new
+  sto   $t2,ACBiofNext[$t1]     ; head->prev->next = new
+  sto   $t0,ACBiofNext[$t2]     ; new->next = head
+  sto   $t1,ACBiofPrev[$t2]     ; new->prev = head->prev
+.ret:
+	stb   $a2,ACBHasFocus[$t2]  ; set has focus flag
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+
+;-----------------------------------------------------------------------------
+; ReleaseIOFocus called when the app no longer desires to be on the I/O
+; focus list.
+;-----------------------------------------------------------------------------
+
+FMTK_ReleaseIOFocus:
+	mGetCurrentTid
+	asl   $a1,$a0,#LOG_TCBSZ
+	ldwu  $a1,TCBappid[$a1]
+	; fall into ForceReleaseIOFocus
+
+;-----------------------------------------------------------------------------
+; Releasing the I/O focus causes the focus to switch if the running app
+; had the I/O focus.
+; ForceReleaseIOFocus forces the release of the IO focus for a app
+; different than the one currently running.
+; 
+; Stack Space:
+;		2 words
+; Parameters:
+;		$a1 = app id to release
+; Returns:
+;		$a0 = E_Ok
+;-----------------------------------------------------------------------------
+
+FMTK_ForceReleaseIOFocus:
+	asl		$t0,$a1,#LOG_ACBSZ
+	ldb.	$t1,ACBHasFocus[$t0]
+	beq	  .noFocus	    ; does it even have the focus?
+	stb   $x0,ACBHasFocus[$t0]
+	ldo   $t1,IOFocusNdx
+	cmp   $t0,$t1
+	bne   .notAtTop
+	ldo   $t1,ACBiofNext[$t0]
+	cmp   $t0,$t1
+	bne   .0001
+	; removing last entry
+	sto   $x0,IOFocusNdx
+	sto   $x0,ACBiofNext[$t0]
+	sto   $x0,ACBiofPrev[$t0]
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+.0001:	
+	sto   $t1,IOFocusNdx
+.notAtTop:
+	ldo   $t1,ACBiofNext[$t0]
+	ldo   $t2,ACBiofPrev[$t0]
+	sto   $t2,ACBiofPrev[$t1]
+	sto   $t1,ACBiofNext[$t2]
+	sto   $x0,ACBiofNext[$t0]
+	sto   $x0,ACBiofPrev[$t0]
+	ldi		$a0,#E_Ok
+	jmp		OSExit
+
+;------------------------------------------------------------------------------
+;     Wait for the IO Focus. Returns only when focus is present. This function
+; calls PeekChar() to see if there's a CTRL-T in the buffer which means to
+; switch the I/O focus.
+;
+; Parameters:
+;   a1 = device # to check, 5 = COM1 serial port, 1 = KBD keyboard
+;------------------------------------------------------------------------------
+
+_WaitForIOFocus:
+WaitForIOFocus:
+  gcsub $sp,$sp,#24
+  sto   $a0,[$sp]
+  sto   $a1,8[$sp]
+  sto   $a2,16[$sp]
+.WFF1:
+	ldi		$a0,#20           ; FMTK Has Focus
+	brk   #240
+	tst   $a1
+	bne 	.HasFocus
+	ldi   $a0,#26           ; FMTK_IO
+	ldi   $a1,#5            ; hardcoded to serial port for now
+	ldi   $a2,#9            ; peekchar function
+	brk   #240
+	tst   $a1
+	bmi   .0001
+.0001:
+	cmp   $a1,#$14          ; CTRL-T
+	bne		.WFF2
+	; eat up the CTRL-T
+	ldi		$a0,#26						; FMTK_IO
+	ldi   $a1,#5  ;4[$sp]        ; get back device #
+	ldi		$a2,#8						; getchar function
+	brk   #240
+	ldi		$a0,#21						; switch IO Focus
+	brk   #240
+	jmp		.WFF1
+.WFF2:
+	ldi		$a0,#5            ; FMTK Sleep() function
+	ldi		$a1,#1
+	brk   #240
+	jmp		.WFF1
+.HasFocus:
+  ldo   $a0,[$sp]
+  ldo   $a1,8[$sp]
+  ldo   $a2,16[$sp]
+  rts   #24
+
+;------------------------------------------------------------------------------
+
+GetUIFlag:
+  gcsub $sp,$sp,#24
+  sto   $a2,8[$sp]
+  sto   $a3,16[$sp]
+  ldi   $a0,#27           ; Get DCB Field
+  ldi   $a2,#DCB_fUI      ; Get UI Flag
+  ldi   $a3,#1            ; 1 byte
+	brk   #240
+  ldo   $a2,8[$sp]
+  ldo   $a3,16[$sp]
+  rts   #24

@@ -69,11 +69,11 @@
 `define SGEU  8'h2D
 `define SLEU  8'h2E
 `define SGTU  8'h2F
-`define JSR   8'h30
+`define JLR   8'h30
 `define JMP   8'h31
-`define JSRR  8'h32
-`define JMPR  8'h33
-`define RTS   8'h34
+`define JSR   8'h32
+`define RTS   8'h33
+`define RTL   8'h34
 `define RTE   8'h35
 `define BEQ   8'h36
 `define BNE   8'h37
@@ -387,7 +387,7 @@ wire [2:0] mop = ir[12:10];
 wire [2:0] rm3 = ir[31:29];
 reg [4:0] Rd;
 reg [1:0] Cd, Cs;
-wire [4:0] Rs1 = ir[17:13];
+reg [4:0] Rs1;
 wire [4:0] Rs2 = ir[22:18];
 wire [4:0] Rd3 = ir[27:23];
 reg [4:0] Rdx, Rs1x, Rs2x, Rs3x;
@@ -563,7 +563,7 @@ reg [31:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
-reg d_lea, d_cache;
+reg d_lea, d_cache, d_jsr, d_rts;
 reg d_cmp,d_set,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
 reg d_shiftr, d_st, d_ld, d_cbranch, d_wha;
 reg d_pushq, d_popq, d_peekq, d_statq;
@@ -907,6 +907,8 @@ case(opcode)
   `STPTRX: fnSelect = 8'hFF;
   `FSTOX: fnSelect = 8'hFF;
   endcase
+`JSR: fnSelect = 8'hFF;
+`RTS: fnSelect = 8'hFF;
 default:	fnSelect = 8'h00;
 endcase
 endfunction
@@ -1294,6 +1296,8 @@ IFETCH1:
     d_peekq <= FALSE;
     d_statq <= FALSE;
     d_cache <= FALSE;
+    d_jsr <= FALSE;
+    d_rts <= FALSE;
 	  Rdx <= Rdx1;
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
@@ -1437,6 +1441,7 @@ DECODE:
     Cd <= 2'd0;
     Cs <= ir[9:8];
     rad <= ir[8];
+    Rs1 <= ir[17:13];
     casez(opcode)
     `OSR2:
       case(funct5)
@@ -1683,28 +1688,49 @@ DECODE:
         if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
           tException(`FLT_BT, ipc);
       end
-    `JSR:
+    `JLR:
       begin
         // Assume instruction will not crap out and write ra0,ra1 here rather
         // than at WRITEBACK.
         rares <= ipc;
         wrra <= 1'b1;
-        wrirf <= 1'b1;
         pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
-        res <= ipc;
         d_wha <= TRUE;
-        pc_reload <= TRUE; 
         illegal_insn <= 1'b0;
         if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
           tException(`FLT_BT, ipc);
       end
-    `RTS:
+    `JSR:
+      begin
+        // Assume instruction will not crap out and write ra0,ra1 here rather
+        // than at WRITEBACK.
+        d_jsr <= TRUE;
+        Rd <= 5'd31;
+        Rs1 <= 5'd31;
+        wrirf <= 1'b1;
+        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
+        d_wha <= TRUE;
+        illegal_insn <= 1'b0;
+        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
+          tException(`FLT_BT, ipc);
+      end
+    `RTL:
       begin
         Rd <= 5'd31;
+        Rs1 <= 5'd31;
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
         d_wha <= TRUE;
-        pc_reload <= TRUE; 
+        illegal_insn <= 1'b0;
+      end
+    `RTS:
+      begin
+        d_rts <= TRUE;
+        Rd <= 5'd31;
+        Rs1 <= 5'd31;
+        wrirf <= 1'b1;
+        imm <= {{51{ir[31]}},ir[30:21],3'b00};
+        d_wha <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTE:
@@ -1718,7 +1744,6 @@ DECODE:
 			  Rs3x1 <= rsStack[9:5];
 				pc <= epc[rsStack[4:0]];
 				d_wha <= TRUE;
-				pc_reload <= TRUE; 
 				illegal_insn <= 1'b0;
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
@@ -1831,6 +1856,8 @@ REGFETCH1:
     end
     else if (opcode==`R2B || (d_shiftr & ir[23]))
       ib <= cd2[0];
+    else if (d_jsr)
+      ib <= ipc;
     else
       ib <= 64'd0;
     goto (REGFETCH2);
@@ -1839,7 +1866,7 @@ REGFETCH2:
   begin
     goto (EXECUTE);
     ia <= Rs1==5'd0 ? 64'd0 : irfoRs1;
-    if (d_stot)
+    if (d_stot | d_jsr)
       ib <= ib;
     else if (opcode==`R2B)
       ib <= ib;
@@ -2419,10 +2446,22 @@ EXECUTE:
         default:  ;
         endcase
       end
-    `RTS: 
+    `JSR:
+      begin
+        res <= ia - 4'd8; // decrement sp
+        ea <= ia - 4'd8;
+        goto (MEMORY1);
+      end
+    `RTL: 
       begin
         res <= ia + imm;
         pc <= ret_pc + {ir[12:9],2'b00};
+      end
+    `RTS: 
+      begin
+        res <= ia + imm;
+        ea <= ia;
+        goto (MEMORY1);
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS,`BEQZ,`BNEZ:
       begin
@@ -2787,6 +2826,8 @@ MEMORY5:
       case(opcode)
       `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
         goto (IFETCH1);
+      `JSR:
+        goto (WRITEBACK);
       default:
         goto (DATA_ALIGN);
       endcase
@@ -2846,6 +2887,8 @@ MEMORY10:
       case(opcode)
       `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
         goto (IFETCH1);
+      `JSR:
+        goto (WRITEBACK);
       default:
         goto (DATA_ALIGN);
       endcase
@@ -2885,6 +2928,8 @@ MEMORY15:
     case(opcode)
     `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
       goto (IFETCH1);
+    `JSR:
+      goto (WRITEBACK);
     default:
       goto (DATA_ALIGN);
     endcase
@@ -2917,6 +2962,7 @@ DATA_ALIGN:
     `LDOT:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
     `LDOR:  res <= datis[63:0];
     `FLDO:  res <= datis[63:0];
+    `RTS:   pc <= datis[63:0] + {ir[12:9],2'b00};
     default:  ;
     endcase
   end

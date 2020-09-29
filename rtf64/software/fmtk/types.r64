@@ -167,19 +167,19 @@ ASR_SIZE      EQU   72
 
 MBX_OWNER			equ		0		; tid of owning task
 ;MBX_WTIDS			equ		4		; tasks waiting at mailbox
-MBX_LINK      equ   4
-MBX_TQHEAD    equ   4   ; link field for free list shared with task queue head
-MBX_TQTAIL    equ   8
-MBX_MQHEAD		equ		12		
-MBX_MQTAIL		equ		16
-MBX_SIZE			equ		20
+MBX_LINK      equ   8
+MBX_TQHEAD    equ   8   ; link field for free list shared with task queue head
+MBX_TQTAIL    equ   16
+MBX_MQHEAD		equ		24		
+MBX_MQTAIL		equ		32
+MBX_SIZE			equ		40
 
 MSG_LINK	  equ		0
-MSG_RETADR  equ   4
-MSG_TGTADR  equ   5
-MSG_TYPE    equ   6
-MSG_D1		  equ		8
-MSG_D2		  equ		12
-MSG_D3		  equ		16
-MSG_SIZE	  equ		20
+MSG_RETADR  equ   8
+MSG_TGTADR  equ   10
+MSG_TYPE    equ   12
+MSG_D1		  equ		16
+MSG_D2		  equ		24
+MSG_D3		  equ		32
+MSG_SIZE	  equ		40
 

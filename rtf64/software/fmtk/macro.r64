@@ -63,13 +63,14 @@ macro mWaitForFocus
 .WFF1@:
   mov   $t2,$a1
 	mHasFocus
-	bnez	$a1,.HasFocus@
+	tst   $a1
+	bne 	.HasFocus@
 	ldi   $a0,#26             ; FMTK_IO
 	mov   $a1,$t2
 	ldi   $a2,#9              ; peekchar function
 	brk   #240
-	ldi		$t3,#$14						; CTRL-T
-	bne		$a0,$t3,.WFF2@
+	cmp		$a0,#$14						; CTRL-T
+	bne		.WFF2@
 	; eat up the CTRL-T
 	ldi		$a0,#26							; FMTK_IO
 	mov   $a1,$t2
@@ -77,10 +78,10 @@ macro mWaitForFocus
 	brk   #240
 	ldi		$a0,#21							; switch IO Focus
 	brk   #240
-	bra		.WFF1@
+	jmp		.WFF1@
 .WFF2@:
 	mSleep(1)
-	bra		.WFF1@
+	jmp		.WFF1@
 .HasFocus@:
 endm
 

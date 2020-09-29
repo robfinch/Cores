@@ -1,0 +1,396 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+		code	18 bits
+		align	4
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+MMUInit:
+	ldi		$t0,#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
+	stt		$t0,NPAGES
+	; Free all memory for all tasks
+	; Sets all pages to map to page zero for all tasks, except for the system
+	; task (task #0) which pre-allocates the first 16kB of memory.
+	ldi		$t0,#$00
+	ldi		$t4,#31					; app id
+.0004:
+	ldi		$t1,#$000				; regno
+	ldi		$t2,#4096				; number of registers to update
+	ldi		$t3,#16					; number of pages pre-allocated
+.0001:
+	asl		$s1,$t4,#16			; put app id in place
+	or		$s1,$s1,$t1			; or in page number
+	mvmap	$x0,$t0,$s1
+	add		$t0,$t0,#$01
+	add		$t1,$t1,#$01		; increment page number
+	tst   $cr0,$t4
+	bgt   $cr0,.0005
+	cmp   $cr0,$t1,$t3
+	bltu	$cr0,.0003
+.0005:
+	mov		$t0,$x0					; mark pages unallocated
+.0003:
+	sub.	$t2,$t2,#1
+	bne	  $cr0,.0001
+	sub.	$t4,$t4,#1      ; next app id
+	bge		$cr0,.0004
+	; Now ensure all pages in PAM are marked as free or OS allocated
+	jsr   PAMInit
+
+	; allocate last 4 pages for system stacks
+	ldi		$t1,#$FFF				
+	ldi		$t0,#$3FFF
+	mvmap	$x0,$t0,$t1
+	ldi		$t1,#$FFE
+	ldi		$t0,#$3FFE
+	mvmap	$x0,$t0,$t1
+	ldi		$t1,#$FFD			
+	ldi		$t0,#$3FFD
+	mvmap	$x0,$t0,$t1
+	ldi		$t1,#$FFC			
+	ldi		$t0,#$3FFC
+	mvmap	$x0,$t0,$t1
+
+	; Now setup segment registers
+	ldi		$t0,#$0
+	ldi		$t1,#$07				; t1 = value to load RWX=111, base = 0
+.0002:
+	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
+	add		$t0,$t0,#1			; pick next segment register
+	cmp		$cr0,$t0,#16			; 16 segment regs
+	blt	  $cr0,.0002
+	rts
+
+;------------------------------------------------------------------------------
+; Find a run of buckets available for mapping virtual to physical addresses.
+;
+; Parameters:
+;		a0 = mid
+;		a1 = number of pages required.
+; Modifies:
+;		t1,t2,t3,t5
+; Returns:
+;		a0 = starting bucket number (includes ASID), -1 if no run found
+;------------------------------------------------------------------------------
+
+FindRun:
+	and			$t3,$a0,#$1F			; t3 = mid
+	asl			$t3,$t3,#16				; shift into usable position
+	ldi			$t1,#0						; t1 = count of consecutive empty buckets
+	mov			$t2,$t3						; t2 = map entry number
+	or			$t2,$t2,#OSPAGES	; start looking at page 32 (others are for OS)
+	ldi			$t5,#MAXVPG				; max number of page
+	or			$t5,$t5,$t3				; t5 = max in ASID
+	align   16
+.0001:
+	mvmap.	$a0,$x0,$t2				; get map entry into a0
+	beq			$cr0,.empty0		  ; is it empty?
+	add			$t2,$t2,#1
+	cmp     $cr0,$t2,$t5
+	bltu		$cr0,.0001
+.0002:
+	ldi			$a0,#-1						; got here so no run was found
+	rtl
+.empty0:
+	mov			$t3,$t2						; save first empty bucket
+.empty1:
+  cmp     $cr0,$t2,$t5
+	bgeu		$cr0,.0002
+	add			$t1,$t1,#1
+	cmp     $cr0,$t1,$a1
+	bgeu		$cr0,.foundEnough
+	add			$t2,$t2,#1				; next bucket
+	mvmap.	$a0,$x0,$t2				; get map entry
+	beq			$cr0,.empty1
+	mov			$t1,$x0						; reset counter
+	jmp			.0001							; go back and find another run
+.foundEnough:
+	mov			$a0,$t3						; v0 = start of run
+	rtl
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a0 = mid
+;		$a1 = amount of memory to allocate
+; Modifies:
+;		t0
+; Returns:
+;		$a1 = pointer to allocated memory in virtual address space.
+;		$a0 = E_Ok for success, E_NotAlloc otherwise
+;------------------------------------------------------------------------------
+;
+Alloc:
+	gcsub		$sp,$sp,#40
+	sto			$s1,8[$sp]			; these regs must be saved
+	sto			$s2,16[$sp]
+	sto			$s3,24[$sp]
+	sto     $s4,32[$sp]
+	tst     $cr0,$a1
+	beq     $cr0,.allocZero
+	; First check if there are enough pages available in the system.
+	add			$s4,$a1,#PAGESZ-1	; v0 = round memory request
+	lsr			$s4,$s4,#LOG_PGSZ	; v0 = convert to pages required
+	ldt			$t0,NPAGES				; check number of pages available
+	cmp     $cr0,$s4,$t0
+	bleu		$cr0,.enough
+.noRun2:
+	ldi			$a1,#0						; not enough, return null
+	jmp			.noRun
+.enough:
+	mov			$s1,$a0
+	; There are enough pages, but is there a run long enough in map space?
+	mov			$s2,$s4				    ; save required # pages
+	mov			$a1,$s4
+	jlr 		FindRun						; find a run of available slots
+	tst     $cr0,$a0
+	bmi		  $cr0,.noRun2
+	; Now there are enough pages, and a run available, so allocate
+	mov			$s1,$a0						; s1 = start of run
+	ldt			$s3,NPAGES				; decrease number of pages available in system
+	sub			$s3,$s3,$s2
+	stt			$s3,NPAGES
+	mov			$s3,$a0						; s3 = start of run
+.0001:
+  jsr     PAMMarkPage       ; allocates a page
+;	palloc	$v0								; allocate a page (cheat and use hardware)
+	;call		AllocPage
+	tst     $cr0,$a0
+	beq		  $cr0,.noRun       ; shouldn't get an error here
+	mvmap		$x0,$a0,$s3				; map the page
+	add			$s3,$s3,#1				; next bucket
+	sub.		$s2,$s2,#1
+	bne		  $cr0,.0001
+	and     $a1,$s1,#$FFFF    ; strip out ASID
+	asl			$a1,$a1,#LOG_PGSZ	; $a1 = virtual address of allocated mem.
+	ldo     $s1,24[$sp]
+	; Clear the allocated memory
+  mov     $s4,$a1
+  align   16
+.zm:
+  sto     $x0,[$s4]
+  add     $s4,$s4,#8
+  sub.    $s1,$s1,#8
+  bge     $cr0,.zm	
+	ldi			$a0,#E_Ok
+	jmp			.xit
+.noRun:
+	ldi			$a0,#E_NotAlloc
+.xit:
+	ldo			$s1,8[$sp]			; restore regs
+	ldo			$s2,16[$sp]
+	ldo			$s3,24[$sp]
+	ldo     $s4,32[$sp]
+	rts     #40
+.allocZero:
+  ldi     $a1,#0
+	ldi			$a0,#E_Ok
+  jmp     .xit
+
+;------------------------------------------------------------------------------
+; Allocate the stack page for a task. The stack is located at the highest
+; virtual address ($3FFC000).
+;
+; Parameters:
+;		$a0 = mid to allocate for
+;	Returns:
+;		$a0 = physical address, 0 if unsuccessful
+;		$a1 = virtual address, not valid unless successful
+;------------------------------------------------------------------------------
+
+AllocStack:
+  gcsub   $sp,$sp,#24
+  sto     $s1,8[$sp]
+  sto     $s2,16[$sp]
+  mov     $s2,$a0
+	asl			$s1,$a0,#16			; 
+	or			$s1,$s1,#MAXVPG ; last page of memory is for stack
+	mvmap.	$a0,$x0,$s1			; check if stack already allocated
+	bne		  $cr0,.0001
+  sub     $sp,$sp,#8
+	sto     $s1,[$sp]
+	jsr     PAMMarkPage
+	ldo     $s1,[$sp]
+  add     $sp,$sp,#8
+;	palloc	$v0							; allocate a page
+  tst     $cr0,$a0
+	beq		  $cr0,.xit		    ; success?
+	mvmap		$x0,$a0,$s1
+.0001:
+	and			$s1,$s1,#4095
+	asl			$a0,$a0,#LOG_PGSZ			; convert pages to addresses
+	asl			$s1,$s1,#LOG_PGSZ
+;	beqz    $s2,.xit
+	or      $a1,$s1,#$A0000000    ; set stack segment
+.xit:
+  ldo     $s1,8[$sp]
+  ldo     $s2,16[$sp]
+	rts     #24
+
+;------------------------------------------------------------------------------
+; This routine will de-allocate all the pages associated with a task including
+; the stack.
+;
+; Parameters:
+;		$a0 = mid to free memory for
+;	Modifies:
+;		a0,t0,t1,t3,t4
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+FreeAll:
+	ldi			$t3,#0
+	asl			$t4,$a0,#16
+.nxt:
+	slt			$cr0,$t3,#MAXVPG+1  ; number of buckets to check
+	beq 		$cr0,.0001
+	and			$t4,$t4,#$1F0000
+	or			$t4,$t4,$t3			; combine pid and bucket number
+	ldi			$a0,#0					; new page number to set (indicates free)
+	mvmap.	$a0,$a0,$t4			; get page mapping and set to zero
+	add			$t3,$t3,#1			; advance to next bucket
+	beq		  $cr0,.nxt				; 0 = no map in this bucket
+	jsr     PAMUnmarkPage
+;	pfree		$t0							; free the page
+	ldt			$t0,NPAGES			; update the number of available pages
+	add			$t0,$t0,#1
+	stt			$t0,NPAGES
+	jmp			.nxt
+.0001:
+	rts
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a linear one.
+;
+; Parameters:
+;		$a0 = virtual address to convert
+; Modifies:
+;		$a1,$t0
+; Returns:
+;		$a0 = linear address
+;------------------------------------------------------------------------------
+
+VirtToLinear:
+	lsr   $a1,$a0,#28         ; get segment register of address
+	mvseg $a1,$x0,$a1         ; get segment register value
+	and   $a1,$a1,#$FFFFFFF0  ; mask off acr bits
+	asl   $a1,$a1,#10         ; shift into position
+	and   $t0,$a0,#$0FFFFFFF  ; mask off segment
+	add   $a0,$a1,$t0         ; v0 = linear address (segment base + address)
+  rtl
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a linear one.
+;
+; Parameters:
+;   $a0 = tid
+;		$a1 = virtual address to convert
+; Modifies:
+;		$v1
+; Returns:
+;		$v0 = linear address
+;------------------------------------------------------------------------------
+
+;VirtToLinear2:
+;	srl   $v0,$a1,#28         ; get base register selector of address
+;	sll   $v0,$v0,#2          ; convert to index
+;	sll   $v1,$a0,#2
+;	ldt   $v1,TidTcbMap[$v1]  ; $v1 = pointer to TCB
+;	add   $v0,$v0,$v1
+;	ldt   $v1,TCBbases[$v0]   ; $v1 = base register value
+;	and   $v0,$v1,#$FFFFFFF0  ; mask off acr bits
+;	sll   $v0,$v0,#6          ; shift into position
+;	and   $v1,$a1,#$0FFFFFFF  ; mask off base selector
+;	add   $v0,$v1,$v0         ; v0 = linear address (base + address)
+;  ret
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a physical one
+;
+; Parameters:
+;		$a0 = virtual address to convert
+; Modifies:
+;		$t0, $t1
+; Returns:
+;		$a0 = physical address
+;------------------------------------------------------------------------------
+
+VirtToPhys:
+	gcsub $sp,$sp,#16
+	sto   $s1,8[$sp]
+	mov   $s1,$a0
+	jlr   VirtToLinear
+	tst   $cr0,$a0
+	blt	  $cr0,.notMapped
+	lsr		$t0,$a0,#LOG_PGSZ		; convert virt to page
+	mGetCurrentTid
+	asl		$a0,$a0,#16
+	or		$a0,$a0,$t0					; and in tid
+	mvmap	$a0,$x0,$a0					; get the translation
+	asl		$a0,$a0,#LOG_PGSZ		; convert page to address
+	and		$t0,$s1,#$3FFF			; insert LSB's
+	or		$a0,$a0,$t0
+.notMapped:
+	ldo   $s1,8[$sp]
+	rts   #16
+
+;------------------------------------------------------------------------------
+; VirtToPhys2:
+;   Used by the OS to convert virtual to physcial addresses.
+; Convert a virtual address to a physical one. Slightly tricky as linear
+; addresses are associated with the TID while paged addresses are associated
+; with the MID of the task.
+;
+; Parameters:
+;   $a0 = tid
+;		$a1 = virtual address to convert
+; Modifies:
+;		t0
+; Returns:
+;		$v0 = physical address
+;------------------------------------------------------------------------------
+
+VirtToPhys2:
+;	call  VirtToLinear2
+;	bltz	$v0,.notMapped
+;	srl		$t0,$v0,#LOG_PGSZ		; convert virt to page
+;	sll   $v1,$a0,#2
+;	ldt   $v1,TidTcbMap[$v1]  ; $v1 = pointer to TCB
+;	ldbu  $v1,TCBmid[$v1]     ; $v1 = mid
+;	sll		$v0,$v1,#16         ; set map id field
+;	or		$v0,$v0,$t0					; and in tid
+;	mvmap	$v0,$x0,$v0					; get the translation
+;	sll		$v0,$v0,#LOG_PGSZ		; convert page to address
+;	and		$t0,$a0,#$3FF				; insert LSB's
+;	or		$v0,$v0,$t0
+.notMapped:
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FetchMemoryWord:
+  ldt   $a1,[$a1]
+  ldi   $a0,#E_Ok
+  jmp   OSExit

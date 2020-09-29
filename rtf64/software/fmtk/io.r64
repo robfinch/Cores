@@ -1,0 +1,241 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;Standard Devices are:
+
+;#		Device					Standard name
+
+;0		NULL device 			NUL		(OS built-in)
+;1		Keyboard (sequential)	KBD		(OS built-in)
+;2		Video (sequential)		VID		(OS built-in)
+;3		Printer (parallel 1)	LPT
+;4		Printer (parallel 2)	LPT2
+;5		RS-232 1				COM1	(OS built-in)
+;6		RS-232 2				COM2
+;7		RS-232 3				COM3
+;8		RS-232 4				COM4
+;9		Parallel xfer	  PTI
+;10		Floppy					FD0
+;11		Floppy					FD1
+;12		Hard disk				HD0
+;13		Hard disk				HD1
+;14
+;15   VIA							VIA1
+;16		SDCard					CARD1 	(OS built-in)
+;17
+;18
+;19
+;20
+;21
+;22
+;23
+;24
+;25
+;26
+;27
+;28		Audio						PSG1	(OS built-in)
+;29
+;30   Random Number		PRNG
+;31		Debug						DBG
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = I/O channel
+;		a2 = function
+;		a3 = data
+;------------------------------------------------------------------------------
+
+FMTK_IO:
+;  mEI
+	cmp   $a1,#32
+	bgeu	.badDev
+	cmp   $a2,#32
+	bgeu	.badFunc
+	asl		$t3,$a1,#7					; each device allowed 32 functions (*128)
+	asl		$t2,$a2,#2					; function number *4
+	add		$t3,$t3,#DVF_Base		; base address of function table
+	add		$t3,$t3,$t2
+	ldt.	$t3,[$t3]
+	beq	  .badFunc
+	mov   $cn,$t3
+	jsr 	[$cn]
+.xit:
+	jmp		OSExit
+.badFunc:
+	ldi		$a0,#E_BadDevOp
+	jmp		.xit
+.badDev:
+	ldi		$a0,#E_BadDevNum
+	jmp		.xit
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = I/O channel
+;		a2 = field offset
+;   a3 = 0 = get word, 3 = get byte
+;------------------------------------------------------------------------------
+
+FMTK_GetDCBField:
+	cmp   $a1,#32
+	bgeu	.badDev
+	cmp		$a2,#DCB_Size
+	bgeu	.badFunc
+	mul		$t2,$a1,$t3		      ; each device allowed (96 bytes)
+	add		$t2,$t2,#DCB_Base		; base address of function table
+	add   $t2,$t2,$a2         ; add field offset
+	asl   $t1,$a3,#3
+	and   $t1,$t1,#$18
+	mov   $cn,$t1
+	jmp   .ldOcta[$cn]
+	align 8
+.ldOcta:
+  ldo   $a1,[$t2]
+  jmp   .ok
+.ldTetra:
+  ldt   $a1,[$t2]
+  jmp   .ok
+.ldWyde:
+  ldw   $a1,[$t2]
+  jmp   .ok
+.ldByte:
+  ldb   $a1,[$t2]
+.ok:
+  ldi   $a0,#E_Ok
+.xit:
+	jmp		OSExit
+.badFunc:
+	ldi		$a0,#E_BadDCBOffset
+	jmp		.xit
+.badDev:
+	ldi		$a0,#E_BadDevNum
+	jmp		.xit
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a1 = I/O channel
+;		a2 = field offset
+;   a3 = 0 = get word, 3 = get byte
+;   a4 = value to set
+;------------------------------------------------------------------------------
+
+FMTK_SetDCBField:
+	cmp   $a1,#32
+	bgeu	.badDev
+	cmp   $a2,#DCB_Size
+	bgeu	.badFunc
+	mul		$t2,$a1,$t3		      ; each device allowed (96 bytes)
+	add		$t2,$t2,#DCB_Base		; base address of function table
+	add   $t2,$t2,$a2         ; add field offset
+	asl   $t1,$a3,#3
+	and   $t1,$t1,#$18
+	mov   $cn,$t1
+	jmp   .stOcta[$cn]
+	align 8
+.stOcta:
+  sto   $a4,[$t2]
+  jmp   .ok
+.stTetra:
+  stt   $a4,[$t2]
+  jmp   .ok
+.stWyde:
+  stw   $a4,[$t2]
+  jmp   .ok
+.stByte:
+  stb   $a4,[$t2]
+.ok:
+  ldi   $a0,#E_Ok
+.xit:
+	jmp		OSExit
+.badFunc:
+	ldi		$a0,#E_BadDCBOffset
+	jmp		.xit
+.badDev:
+	ldi		$a0,#E_BadDevNum
+	jmp		.xit
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		a0 = I/O channel
+;		a1 = points to function table
+;------------------------------------------------------------------------------
+
+CopyDevFuncTbl:
+	asl		$t2,$a0,#7					; each device allowed 32 functions (*128)
+	add		$t2,$t2,#DVF_Base		; base address of function table
+	ldi		$t0,#32							; 32 functions to copy
+.again:
+	sub.	$t0,$t0,#1
+	ldo		$a3,[$a1+$t0*8]
+	sto		$a3,[$t2+$t0*8]
+	bgt	  .again
+	rtl
+
+;------------------------------------------------------------------------------
+
+CopyDevDCB:
+  ldi   $t2,#DCB_Size
+  mul   $t2,$a0,$t2
+  add   $t2,$t2,#DCB_Base
+	ldi		$t0,#24							; 24 words to copy
+.again:
+	sub.	$t0,$t0,#1
+	ldo		$a3,[$a1+$t0*8]
+	sto		$a3,[$t2+$t0*8]
+	bgt	  .again
+	rtl
+
+
+;------------------------------------------------------------------------------
+;    Compare the current APPID against the device owner to see if the device
+; is owned.
+;------------------------------------------------------------------------------
+
+CheckDevOwner:
+  sub   $sp,$sp,#8
+  sto   $s1,[$sp]
+	csrrs $x0,#$004,#1        ; enable gc interrupt
+  ldi   $a0,#14             ; FMTK: GetCurrentTid
+  brk   #240
+  mov   $s1,$a1
+  ldi   $a0,#27             ; FMTK Get DCB Field
+  ldi   $a2,#DCB_hJob
+  ldi   $a3,#0              ; get word
+  brk   #240
+  and   $a1,$a1,#$FF
+  cmp   $a1,$s1
+  bne   .notOwner
+  ldi   $a0,#E_Ok
+.xit:
+  ldo   $s1,[$sp]
+  add   $sp,$sp,#8
+  rts
+.notOwner:
+  ldi   $a0,#28             ; FMTK Set DCB field
+  mov   $a1,$s1
+  ldi   $a2,#DCB_LastErc
+  ldi   $a3,#0              ; word
+  ldi   $a4,#E_NotOwner
+  brk   #240
+  mov   $a0,$a4
+  jmp   .xit
+

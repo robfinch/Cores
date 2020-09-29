@@ -1,0 +1,168 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Device command 
+;
+	align	8
+ViaFuncTbl:
+	dw		ViaNOP				; no operation
+	dw		ViaSetup			; setup
+	dw		0							; initialize
+	dw		0							; status
+	dw		0							; media check
+	dw		0							; build BPB
+	dw		0							; open
+	dw		0							; close
+	dw		0							; get char
+	dw		0							; Peek char
+	dw		0							; get char direct
+	dw		0							; peek char direct
+	dw		0							; input status
+	dw		0							; Put char
+	dw		0							; reserved
+	dw		0							; set position
+	dw		0							; read block
+	dw		0							; write block
+	dw		0							; verify block
+	dw		0							; output status
+	dw		0							; flush input
+	dw		0							; flush output
+	dw		ViaIRQ				; IRQ routine
+	dw		0							; Is removable
+	dw		0							; ioctrl read
+	dw		0							; ioctrl write
+	dw		0							; output until busy
+	dw		0							; 27
+	dw		0
+	dw		0
+	dw		0
+	dw		0							; 31
+
+  align 8
+ViaDCB:
+  db    3,"VIA        "
+  dw    0     ; type
+  dw    0     ; nBPB
+  dw    0
+  dw    0     ; last error code
+  dw    0
+  dw    0     ; starting block number
+  dw    0
+  dw    0     ; number of blocks
+  dw    0
+  dw    0     ; command processing routine
+  dw    0
+  db    0     ; reentrancy count
+  db    0     ; single user flag
+  db    0     ; user interface device flag
+  db    0
+  dw    0
+  dw    0     ; hJob
+  dw    0
+  dw    0     ; Mailbox handle
+  dw    0
+  dw    0     ; pointer to device semaphore
+  dw    0
+  dw    0     ; reserved
+  dw    0
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ViaSetup:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$a0,#15							; VIA device
+	ldi		$a1,#ViaFuncTbl
+	jsr	  CopyDevFuncTbl
+	ldi		$a0,#15							; VIA device
+	ldi		$a1,#ViaDCB
+	jsr 	CopyDevDCB
+	jsr   ViaInit
+	ldo		$ra,[$sp]
+	add		$sp,$sp,#8
+ViaNOP:
+	rts
+
+;------------------------------------------------------------------------------
+; ViaInit
+;
+; Initialize the versatile interface adapter.
+; Initialize port A low order eight bits as output, the remaining bits as
+; input. Setup timer #3 as the system time slice (30ms).
+;------------------------------------------------------------------------------
+
+ViaInit:
+	sub		$sp,$sp,#8
+	sto		$ra,[$sp]
+	ldi		$t1,#VIA
+	ldi		$t0,#$000000FF      ; low eight bits output
+	stt		$t0,VIA_DDRA[$t1]
+	ldi		$t0,#1							; select timer 3 access
+	stb		$t0,VIA_PCR+1[$t1]
+	ldi		$t0,#$1F00
+	stw		$t0,VIA_ACR[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
+	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
+	stt		$t0,VIA_T1CL[$t1]
+	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
+	ldi   $t0,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	stt   $t0,VIA_T2CL[$t1]
+	stt   $x0,VIA_T2CH[$t1]
+	ldi		$t0,#$1C0						; emable timer3/timer2 interrupts
+	stt		$t0,VIA_IER[$t1]
+	ldo		$ra,[$sp]
+	rts   #8
+
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ViaIRQ:
+	ldi		$t1,#VIA
+	ldw		$t0,VIA_IFR[$t1]    ; get the flag register
+	bit   $t0,#$40            ; timer 2? (bit 6)
+	bne   .timer2irq
+.0001:
+	bit   $t0,#$100       ; timer 3? (bit 8)
+	bne   .timer3irq
+	jmp   ERETx2
+.timer3irq:
+	ldi		$t2,#1							; assume timer3, select timer 3 access
+	stb		$t2,VIA_PCR+1[$t1]
+	ldt		$t2,VIA_T1CL[$t1]		; yes, clear interrupt
+	ldt		$t2,milliseconds
+	add		$t2,$t2,#30
+	stt		$t2,milliseconds
+	stt		$t2,switchflag
+	ldi   $a0,#0
+	jsr   OSOCall
+	jmp   ERETx2
+	; reset countdown to clear interrupt
+.timer2irq:
+	ldi   $t2,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	stt   $t2,VIA_T2CL[$t1]
+	stt   $x0,VIA_T2CH[$t1]
+	csrrs $x0,#$044,#1        ; set GC interrupt pending bit
+	jmp   .0001               ; there might be a timer 3 irq too
