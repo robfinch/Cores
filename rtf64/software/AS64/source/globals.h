@@ -1,6 +1,7 @@
 #pragma once
 #include "stdafx.h"
 
+extern SYM* current_symbol;
 extern int64_t tokenBuffer[5000000];
 extern char litpool[10000000];
 extern char *pinptr;

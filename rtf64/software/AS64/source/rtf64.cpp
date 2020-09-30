@@ -71,11 +71,11 @@
 #define I_SGEUI	0x2D
 #define I_SLEUI 0x2E
 #define I_SGTUI 0x2F
-#define I_JSR		0x30
+#define I_JLR		0x30
 #define I_JMP		0x31
-#define I_JSRR	0x32
-#define I_JMPR	0x33
-#define I_RTS		0x34
+#define I_JSR		0x32
+#define I_RTS		0x33
+#define I_RTL		0x34
 #define I_RTE		0x35
 #define I_BEQ		0x36
 #define I_BNE		0x37
@@ -108,6 +108,7 @@
 #define I_LDO		0x86
 #define I_LDOR	0x87
 #define I_LDOT	0x88
+#define I_FLDO	0x8E
 #define I_LDX		0x8F
 #define I_STB		0xA0
 #define I_STW		0xA1
@@ -116,6 +117,7 @@
 #define I_STOC	0xA4
 #define I_STPTR	0xA5
 #define I_STOT	0xA8
+#define I_FSTO	0xAB
 #define I_STX		0xAF
 
 #define I_FLT2	0xF2
@@ -211,11 +213,16 @@
 #define I_REX		0x10
 #define I_PFI		0x11
 #define I_WAI		0x12
+#define I_SETTO 0x18
+#define I_GETTO	0x19
+#define I_GETZL 0x1A
 #define I_MVMAP	0x1C
 #define I_MVSEG	0x1D
 
-#define I_FLT1	0xE1
-#define I_FLT2	0xE2
+#define I_FCMP	0x10
+#define I_FSEQ	0x11
+#define I_FSLT	0x12
+#define I_FSLE	0x13
 
 static void (*jumptbl[tk_last_token])();
 static int64_t parm1[tk_last_token];
@@ -264,6 +271,7 @@ static int regCnst;
 
 #define RT(x)		((x) << 8LL)
 #define RD(x)		((x) << 8LL)
+#define CN(x)		(((x) & 1LL) << 9LL)
 #define RA(x)		((x) << 13LL)
 #define RS1(x)	((x) << 13LL)
 #define RB(x)		((x) << 18LL)
@@ -273,6 +281,7 @@ static int regCnst;
 #define RCF(x)	((x) << 31LL)
 #define RO(x)		((x) << 9LL)
 #define FUNC5(x)	(((x) & 0x1fLL) << 26LL)
+#define FUNC5B(x)	(((x) & 0x1fLL) << 23LL)
 #define FUNC6(x)	(((x) & 0x3FLL) << 23LL)
 #define FMT(x)	(((x) & 7LL) << 23LL)
 #define IMM(x)	(((x) & 0x1fffLL) << 18LL)
@@ -600,35 +609,31 @@ static int getRegisterX()
 					}
         }
         break;
-	// cr0 to cr7
+	// cr, cr0 to cr3, cn0 to cn1
 		case 'c': case 'C':
 			if (inptr[1] == 'R' || inptr[1] == 'r') {
+				reg = 125;
 				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
 					reg = inptr[2] - '0' + 112;
 					inptr += 3;
-					NextToken();
-					return (reg);
 				}
-				if (!isIdentChar(inptr[2])) {
-					reg = 125;
+				else if (!isIdentChar(inptr[2])) {
 					inptr += 2;
-					NextToken();
-					return (reg);
 				}
+				NextToken();
+				return (reg);
 			}
-			if (inptr[1] == 'N' || inptr[1] == 'n') {
+			else if (inptr[1] == 'N' || inptr[1] == 'n') {
+				reg = 114;
 				if (isdigit(inptr[2]) && !isIdentChar(inptr[3])) {
 					reg = inptr[2] - '0' + 114;
 					inptr += 3;
-					NextToken();
-					return (reg);
 				}
 				else if (!isIdentChar(inptr[2])) {
-					reg = 114;
 					inptr += 2;
-					NextToken();
-					return (reg);
 				}
+				NextToken();
+				return (reg);
 			}
 			break;
 		// xlr
@@ -651,7 +656,7 @@ static int getRegisterX()
 				}
 				return (-1);
 			}
-        if ((inptr[1]=='L' || inptr[1]=='l') && (inptr[2]=='R' || inptr[2]=='r') && 
+      if ((inptr[1]=='L' || inptr[1]=='l') && (inptr[2]=='R' || inptr[2]=='r') && 
 			!isIdentChar(inptr[3])) {
             inptr += 3;
             NextToken();
@@ -1381,7 +1386,7 @@ static int GetFPSize()
 		else {
 			inptr--;
 			return (-1);
-			error("Illegal float size");
+//			error("Illegal float size");
 		}
   }
 	switch(sz) {
@@ -1491,6 +1496,7 @@ static void emit_insn(int64_t oc)
 
 	if (1) {
 		switch (opmajor) {
+		case I_R2B:
 		case I_R2A:
 			if ((oc >> 6) & 1) {
 				/*
@@ -1502,9 +1508,12 @@ static void emit_insn(int64_t oc)
 				}
 				*/
 			}
-			switch ((oc >> 23LL) & 0x3fLL) {
+			switch ((oc >> 26LL) & 0x1fLL) {
 			case I_R1:
-				switch ((oc >> 23LL) & 0x3fLL) {
+				switch ((oc >> 18LL) & 0x1fLL) {
+				case I_TST:
+					insnStats.tsts++;
+					break;
 				}
 				break;
 			case I_MOV:
@@ -1522,8 +1531,14 @@ static void emit_insn(int64_t oc)
 			case I_XOR2:
 				insnStats.xors++;
 				break;
+			case I_BIT:
+				insnStats.bits++;
+				break;
 			case I_PTRDIF:
 				insnStats.ptrdif++;
+				break;
+			case I_CMP:
+				insnStats.compares++;
 				break;
 			}
 			break;
@@ -1540,7 +1555,7 @@ static void emit_insn(int64_t oc)
 			}
 			break;
 		case I_SHIFT:
-			switch ((oc >> 23) & 0x3fLL) {
+			switch ((oc >> 24) & 0xfLL) {
 			case I_ASL:
 			case I_ASLI:
 				insnStats.shls++;
@@ -1570,6 +1585,8 @@ static void emit_insn(int64_t oc)
 		case I_XORI:
 			insnStats.xors++;
 			break;
+		case I_BITI:
+			insnStats.bits++;
 		case I_LUI:
 		case I_LMI:
 			insnStats.luis++;
@@ -1578,8 +1595,11 @@ static void emit_insn(int64_t oc)
 		case I_STW:
 		case I_STT:
 		case I_STO:
-			if (oc & 0x4000000000LL)
-				insnStats.indexed++;
+		case I_STOT:
+			insnStats.stores++;
+			break;
+		case I_STX:
+			insnStats.indexed++;
 			insnStats.stores++;
 			break;
 		case I_LDB:
@@ -1589,15 +1609,19 @@ static void emit_insn(int64_t oc)
 		case I_LDT:
 		case I_LDTU:
 		case I_LDO:
-			if (oc & 0x4000000000LL)
-				insnStats.indexed++;
+		case I_LDOT:
+			insnStats.loads++;
+			break;
+		case I_LDX:
+			insnStats.indexed++;
 			insnStats.loads++;
 			break;
 		case I_JSR:
-		case I_JSRR:
+		case I_JLR:
 			insnStats.calls++;
 			break;
 		case I_RTS:
+		case I_RTL:
 			insnStats.rets++;
 			break;
 		case I_SLTI:
@@ -1612,7 +1636,29 @@ static void emit_insn(int64_t oc)
 		case I_SNEI:
 			insnStats.sets++;
 			break;
-		case I_FLT1:
+		case I_BEQ:
+		case I_BNE:
+		case I_BCC:
+		case I_BCS:
+		case I_BVS:
+		case I_BVC:
+		case I_BLT:
+		case I_BGE:
+		case I_BLE:
+		case I_BGT:
+		case I_BLEU:
+		case I_BGTU:
+		case I_BOD:
+		case I_BPS:
+		case I_JMP:
+			insnStats.branches++;
+			break;
+		case I_CSR:
+			insnStats.csrs++;
+			break;
+		case I_CMPI:
+			insnStats.compares++;
+			break;
 		case I_FLT2:
 			insnStats.floatops++;
 			break;
@@ -1748,6 +1794,27 @@ static void GetArBits(int64_t *aq, int64_t *rl)
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void process_getzl(int oc)
+{
+	int Rd;
+
+	if (*inptr == '.') {
+		inptr++;
+		recflag = true;
+	}
+	Rd = getRegisterX();
+	emit_insn(
+		RCF(recflag) |
+		FUNC5(oc) |
+		RD(Rd) |
+		I_OSR2
+	);
+	prevToken();
+}
+
+// ---------------------------------------------------------------------------
 // addi r1,r2,#1234
 //
 // A value that is too large has to be loaded into a register then the
@@ -1759,14 +1826,14 @@ static void GetArBits(int64_t *aq, int64_t *rl)
 
 static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
 {
-  int Ra;
-  int Rt, Rtp;
-  char *p;
-  int64_t val;
+	int Ra;
+	int Rt, Rtp;
+	char *p;
+	int64_t val;
 	int sz = 3;
 	bool li = false;
-    
-  p = inptr;
+
+	p = inptr;
 	if (*p == '.')
 		getSz(&sz);
 	if (*inptr == '.') {
@@ -1774,11 +1841,26 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
 		recflag = TRUE;
 	}
 	Rt = getRegisterX();
-  need(',');
-  Ra = getRegisterX();
-  need(',');
-  NextToken();
-  val = expr();
+	need(',');
+	p = inptr;
+	Ra = getRegisterX();
+	if (Ra < 0) {
+		if (opcode6 == I_BITI) {
+			Ra = Rt;
+			Rt = 0;
+			inptr = p;
+		}
+		else {
+			error("A source register is needed for RI operation");
+			Ra = 0;
+		}
+	}
+	else {
+		need(',');
+	}
+	NextToken();
+	val = expr();
+
 	if (opcode6==-I_ADDI)	{ // subi
 		val = -val;
 		opcode6 = I_ADDI;	// change to addi
@@ -1965,6 +2047,49 @@ static void process_setop(int64_t funct6, int64_t opcode6, int64_t bit23)
 	ScanToEOL();
 }
 
+static void process_fsetop(int64_t funct6)
+{
+	int Ra, Rb, Rt;
+	char* p, * q;
+	int sz = 3;
+	int64_t val;
+	int mop = 0;
+	int rm = 0;
+	int fmt;
+
+	p = inptr;
+	if (inptr[0] == '.')
+		mop = getMergeOp();
+	if (*inptr == '.')
+		fmt = GetFPSize();
+	sz &= 7;
+	p = inptr;
+	Rt = getRegisterX();
+	if (Rt >= 112 && Rt <= 115) {
+		Rt &= 3;
+		need(',');
+	}
+	else {
+		Rt = 1;
+		inptr = p;
+	}
+	Ra = getFPRegister();
+	need(',');
+	NextToken();
+	q = inptr;
+	Rb = getFPRegister();
+	emit_insn(
+		(rm << 28LL) |
+		FUNC5B(funct6) |
+		RS2(Rb) |
+		RD((mop << 3) | Rt) |
+		RS1(Ra) |
+		I_FLT2
+	);
+	prevToken();
+	ScanToEOL();
+}
+
 // ---------------------------------------------------------------------------
 // add r1,r2,r3
 // ---------------------------------------------------------------------------
@@ -1991,18 +2116,30 @@ static void process_rrop()
   Rt = getRegisterX();
   need(',');
   Ra = getRegisterX();
-  need(',');
-  NextToken();
-  if (token=='#') {
-	if (iop < 0 && iop!=-I_ADDI)
-		error("Immediate mode not supported");
-		//printf("Insn:%d\n", token);
-    inptr = p;
-    process_riop(iop,funct6,bit23);
-    return;
-  }
-  prevToken();
-  Rb = getRegisterX();
+	if (token == ',') {
+		NextToken();
+		if (token == '#') {
+			if (iop < 0 && iop != -I_ADDI)
+				error("Immediate mode not supported");
+			//printf("Insn:%d\n", token);
+			inptr = p;
+			process_riop(iop, funct6, bit23);
+			return;
+		}
+		prevToken();
+		Rb = getRegisterX();
+	}
+	else {
+		if (funct6 == I_BIT) {
+			Rb = Ra;
+			Ra = Rt;
+			Rt = 0;
+		}
+		else {
+			error("R2 operation needs two source operands");
+			Rb = 0;
+		}
+	}
 	if (Rb >= 112 && Rb <= 115) {
 		Rb &= 3;
 		opcode = I_R2B;
@@ -2291,7 +2428,7 @@ static void process_jal(int64_t oc)
 		// Simple jmp [Rn]
 		if (token != ')' && token != ']')
 			printf("Missing close bracket %d\n", lineno);
-		emit_insn(RA(Ra) | RD(Rt) | I_JSRR);
+		emit_insn(RA(Ra) | RD(Rt) | I_JSR);
 		goto xit;
 	}
 	else
@@ -2547,7 +2684,11 @@ static void process_fprrop(int64_t oc)
     rm = 0;
     fmt = GetFPSize();
     p = inptr;
-    if (oc==0x01)        // fcmp
+		if (*inptr == '.') {
+			inptr++;
+			recflag = true;
+		}
+    if (oc==I_FCMP)        // fcmp
         Rt = getRegisterX();
     else
         Rt = getFPRegister();
@@ -2558,26 +2699,13 @@ static void process_fprrop(int64_t oc)
     if (token==',')
        rm = getFPRoundMode();
 //    prevToken();
-	if (fmt != 2) {
-		emit_insn(
-			(oc << 42LL) |
-			((int64_t)fmt << 31LL) |
-			(rm << 28LL) |
-			RT(Rt) |
-			RB(Rb) |
-			RA(Ra) |
-			(1 << 6) |
-			I_FLT2
-		);
-		return;
-	}
-
   emit_insn(
-		(oc << 26LL)|
-		(rm << 23LL)|
-		RT(Rt)|
-		RB(Rb)|
-		RA(Ra) |
+		RCF(recflag) |
+		FUNC5B(oc)|
+		(rm << 28LL)|
+		RD(Rt)|
+		RS2(Rb)|
+		RS1(Ra) |
 		I_FLT2
 	);
 }
@@ -2637,6 +2765,7 @@ static void process_rop(int oc)
 			Rt = 0;
 		}
 		else {
+			NextToken();
 			error("Target register is required for R1 op");
 			Rt = 0;
 		}
@@ -2650,6 +2779,49 @@ static void process_rop(int oc)
 		RS2(oc) |
 		I_R2A
 		);
+	prevToken();
+}
+
+// ---------------------------------------------------------------------------
+// popq r3,r3
+// ---------------------------------------------------------------------------
+
+static void process_popq(int oc)
+{
+	int Ra;
+	int Rt;
+	int sz = 0;
+	char *p;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+	if (*inptr == '.') {
+		inptr++;
+		recflag = TRUE;
+	}
+	Rt = getRegisterX();
+	if (token == ',') {
+		Ra = getRegisterX();
+	}
+	else {
+		Ra = Rt;
+		if (oc == I_TST) {
+			Rt = 0;
+		}
+		else {
+			NextToken();
+			error("Target register is required for R1 op");
+			Rt = 0;
+		}
+	}
+	emit_insn(
+		RCF(recflag) |
+		FUNC5(oc) |
+		RD(Rt) |
+		RS1(Ra) |
+		I_OSR2
+	);
 	prevToken();
 }
 
@@ -2711,8 +2883,8 @@ static void process_bcc()
 		error("Need condition register for branch");
 	else {
 		need(',');
-		NextToken();
 	}
+	NextToken();
 	val = expr();
 	emit_insn(
 		((val >> 2LL) << 10LL) |
@@ -2723,7 +2895,7 @@ static void process_bcc()
 }
 
 // ---------------------------------------------------------------------------
-// beq cr1,label
+// beqz $a0,label
 //
 // ---------------------------------------------------------------------------
 
@@ -2883,52 +3055,40 @@ static void process_chki(int opcode6)
 
 
 // ---------------------------------------------------------------------------
-// fbeq.q fp1,fp0,label
+// Same as bcc except assumes cr1
+// fbeq label
 // ---------------------------------------------------------------------------
 
-static void process_fbcc(int64_t opcode3)
+static void process_fbcc()
 {
+	int Cr = 0;
 	int Ra, Rb, Rc;
 	int64_t val;
 	int64_t disp;
-	int sz;
-	bool ins48 = false;
-	char *p;
+	int encode;
+	int ins48 = 0;
+	int64_t opcode6 = parm1[token];
+	int64_t opcode4 = parm2[token];
+	int64_t op4 = parm3[token];
+	char* p = inptr;
 
-	sz = GetFPSize();
-	Ra = getFPRegister();
-	need(',');
-	Rb = getFPRegister();
-	need(',');
-	p = inptr;
-	Rc = getRegisterX();
-	if (Rc == -1) {
-		inptr = p;
-		NextToken();
-		val = expr();
+	Cr = getRegisterX();
+	if (Cr < 0) { // no register
+		Cr = 113;
 	}
-	if (Rc == -1) {
-		disp = (val - code_address) >> 1LL;
-		if (!IsNBit(disp, 11)) {
-			ins48 = true;
-		}
-		emit_insn(
-			((disp >> 2) << 23LL) |
-			((disp & 3LL) << 11LL) |
-			(opcode3 << 8) |
-			RB(Rb) |
-			RA(Ra) |
-			((ins48 ? 1 : 0) << 6) |
-			0x05
-		);
-		return;
+	else if (Cr < 112 || Cr > 115)
+		error("Need condition register for branch");
+	else {
+		need(',');
 	}
+	NextToken();
+	val = expr();
 	emit_insn(
-		RC(Rc) |
-		RB(Rb) |
-		((opcode3 + 8) << 8) |
-		RA(Ra) |
-	0x11);
+		((val >> 2LL) << 10LL) |
+		((Cr & 3LL) << 8LL) |
+		opcode6
+	);
+	return;
 }
 
 // ---------------------------------------------------------------------------
@@ -2938,31 +3098,43 @@ static void process_call(int opcode, int opt)
 {
 	int64_t val;
 	int Ra = 0;
-	int lk = -1;
+	int lk = 0;
 	char *p;
 
 	p = inptr;
-	lk = getRegisterX();
-	if (lk < 0) {
-		lk = opt ? 1 : 0;
-	}
-	else if (lk < 96 || lk > 97) {
-		error("Link register must be specified.");
-		lk = 1;
-	}
-	else
-		lk = lk - 96;
+	if (opcode == I_JLR) {
+		lk = getRegisterX();
+		if (lk < 0) {
+			lk = opt ? 1 : 0;
+		}
+		else if (lk < 96 || lk > 97) {
+			error("Link register must be specified.");
+			lk = 1;
+		}
+		else
+			lk = lk - 96;
 
-  NextToken();
-	if (token == tk_comma)
 		NextToken();
-	if (token == '[')
-		val = 0;
-	else
-		val = expr();
+		if (token == tk_comma)
+			NextToken();
+		if (token == '[')
+			val = 0;
+		else {
+			val = expr();
+		}
+	}
+	else {
+		if (token == '[')
+			val = 0;
+		else {
+			NextToken();
+			val = expr();
+		}
+	}
 	if (token=='[') {
 		Ra = getRegisterX();
 		need(']');
+		NextToken();
 		if (Ra != 114) {
 			error("Illegal register in JMP/JSR, register must be $cn");
 		}
@@ -2971,9 +3143,9 @@ static void process_call(int opcode, int opt)
 			// JMP [Ra]
 			// jrl r0,[Ra]
 			emit_insn(
-				RA(Ra) |
+				CN(Ra) |
 				RT(lk) |
-				(opt ? I_JMPR : I_JSRR)
+				opcode
 			);
 		return;
 	}
@@ -2989,12 +3161,19 @@ static void process_call(int opcode, int opt)
 				I_R2A
 				);
 		}
-		// JMP or CALL
-		// jal r0,[r23]
+		// MOV $cn,$x2
 		emit_insn(
+			(3LL<<20LL) |
 			RA(2) |
+			RT(2) |
+			I_MOV
+		);
+		// JMP or JSR
+		// jxx [$cn]
+		emit_insn(
+			RA(1) |
 			RT(lk) |
-			I_JSRR
+			opcode
 			);
 		return;
 	}
@@ -3031,7 +3210,7 @@ static void process_iret(int64_t op)
 	);
 }
 
-static void process_ret()
+static void process_ret(int64_t opcode)
 {
 	int64_t val = 0;
 	int64_t ro = 4;
@@ -3079,7 +3258,7 @@ static void process_ret()
 		RO(ro >> 2LL) |
 		RD(lk) |
 		RS1(regSP) |
-		I_RTS
+		opcode
 	);
 }
 
@@ -3486,8 +3665,10 @@ static void process_ldi()
   p = inptr;
 	if (*p=='.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = true;
+	}
 	sz &= 3;
   Rt = getRegisterX();
   expect(',');
@@ -3986,31 +4167,33 @@ static int64_t process_op2()
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-static void process_popq(int oc)
+static void process_pushq(int oc)
 {
-	int Rd;
+	int Rs2;
 	int Rs1;
 
 	if (*inptr == '.') {
 		inptr++;
 		recflag = true;
 	}
-	Rd = getRegisterX();
-	need(',');
 	Rs1 = getRegisterX();
+	need(',');
+	Rs2 = getRegisterX();
 	emit_insn(
 		RCF(recflag) |
 		FUNC5(oc) |
+		RS2(Rs2) |
 		RS1(Rs1) |
-		RD(Rd) |
+		RD(0) |
 		I_OSR2
 	);
+	prevToken();
 }
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-static void process_pushq(int oc)
+static void process_setto(int oc, int func7)
 {
 	int Rs2;
 	int Rs1;
@@ -4019,12 +4202,13 @@ static void process_pushq(int oc)
 	need(',');
 	Rs2 = getRegisterX();
 	emit_insn(
-		FUNC5(oc) |
+		FUNC5(func7) |
 		RS2(Rs2) |
 		RS1(Rs1) |
 		RD(0) |
-		I_OSR2
+		oc
 	);
+	prevToken();
 }
 
 // ----------------------------------------------------------------------------
@@ -4051,8 +4235,10 @@ static void process_shifti(int64_t op4)
 	}
 	if (q[0]=='.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = true;
+	}
 	Rt = getRegisterX();
 	need(',');
 	Ra = getRegisterX();
@@ -4164,8 +4350,10 @@ static void process_shift(int64_t op4)
 	}
 	if (q[0]=='.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = true;
+	}
 	Rt = getRegisterX();
 	need(',');
 	Ra = getRegisterX();
@@ -4181,7 +4369,7 @@ static void process_shift(int64_t op4)
 		if (Rb >= 112 && Rb <= 115) {
 			b23 = 1;
 		}
-		emit_insn((op4 << 24) | (b23 << 23) | RD(Rt)| RS2(Rb) | RS1(Ra) | I_SHIFT);
+		emit_insn(RCF(recflag)|(op4 << 24) | (b23 << 23) | RD(Rt)| RS2(Rb) | RS1(Ra) | I_SHIFT);
 	 }
 }
 
@@ -4666,30 +4854,32 @@ static void ProcessEOL(int opt)
 
 static void process_default()
 {
+	while (token == ' ' || token == '\t' || token == '\r')
+		NextToken();
 	switch (token) {
 	case tk_eol: ProcessEOL(1); break;
 		//        case tk_add:  process_add(); break;
 		//		case tk_abs:  process_rop(0x04); break;
 	case tk_abs: process_rop(0x01); break;
-	case tk_addi: process_riop(0x04,0x04,0); break;
+	case tk_addi: process_riop(0x04, 0x04, 0); break;
 	case tk_align: process_align(); break;
-	case tk_andi:  process_riop(I_ANDI,I_AND2,0); break;
+	case tk_andi:  process_riop(I_ANDI, I_AND2, 0); break;
 	case tk_asl: process_shift(I_ASL); break;
 	case tk_asr: process_shift(I_ASR); break;
-	//case tk_bbc: process_bbc(0x26, 1); break;
-	//case tk_bbs: process_bbc(0x26, 0); break;
+		//case tk_bbc: process_bbc(0x26, 1); break;
+		//case tk_bbs: process_bbc(0x26, 0); break;
 	case tk_begin_expand: expandedBlock = 1; break;
-	//case tk_beqi: process_beqi(0x32, 0); break;
+		//case tk_beqi: process_beqi(0x32, 0); break;
 	case tk_beqz: process_beqz(0x46); break;
-	case tk_bfchg: process_bitfield(I_FLIP,7); break;
-	case tk_bfclr: process_bitfield(I_DEP,3); break;
-	case tk_bfext: process_bitfield(I_EXT,0); break;
-	case tk_bfextu: process_bitfield(I_EXT,1); break;
-	case tk_bfins: process_bitfield(I_DEP,0); break;
-	case tk_bfinsi: process_bitfield(I_DEPI,0); break;
+	case tk_bfchg: process_bitfield(I_FLIP, 7); break;
+	case tk_bfclr: process_bitfield(I_DEP, 3); break;
+	case tk_bfext: process_bitfield(I_EXT, 0); break;
+	case tk_bfextu: process_bitfield(I_EXT, 1); break;
+	case tk_bfins: process_bitfield(I_DEP, 0); break;
+	case tk_bfinsi: process_bitfield(I_DEPI, 0); break;
 	case tk_bnez: process_beqz(0x47); break;
 		//case tk_bnei: process_beqi(0x12, 1); break;
-	case tk_bra: process_bra(0xD4,0x0C); break;
+	case tk_bra: process_bra(0xD4, 0x0C); break;
 	case tk_brk: process_brk(); break;
 		//case tk_bsr: process_bra(0x56); break;
 	case tk_bss:
@@ -4703,6 +4893,7 @@ static void process_default()
 		}
 		segment = bssseg;
 		break;
+	case tk_bytndx: process_rrop();
 	case tk_cache: process_cache(0x1E); break;
 	case tk_cli: emit_insn(0xC0000002); break;
 	case tk_chk:  process_chk(0x34); break;
@@ -4732,16 +4923,19 @@ static void process_default()
 	case tk_db:  process_db(); break;
 		//case tk_dbnz: process_dbnz(0x26,3); break;
 	case tk_dc:  process_dc(); break;
+	case tk_dcb: process_db(); break;
+	case tk_dct: process_dct(); break;
+	case tk_dcw: process_dcw(); break;
 	case tk_dep: process_bitfield(0x1D, 0x00);
 	case tk_dh:  process_dh(); break;
 	case tk_dh_htbl:  process_dh_htbl(); break;
 		//case tk_divsu:	process_rrop(0x3D, -1); break;
 	case tk_divwait: process_rop(0x13); break;
 	case tk_dw:  process_dw(); break;
-//	case tk_end: goto j1;
+		//	case tk_end: goto j1;
 	case tk_end_expand: expandedBlock = 0; break;
 	case tk_endpublic: break;
-	case tk_eori: process_riop(I_EORI,I_EOR2,0); break;
+	case tk_eori: process_riop(I_EORI, I_EOR2, 0); break;
 	case tk_ext: process_bitfield(0x1C, 0x00); break;
 	case tk_extu: process_bitfield(0x1C, 0x01); break;
 	case tk_extern: process_extern(); break;
@@ -4757,18 +4951,19 @@ static void process_default()
 		break;
 	case tk_ftoi:	process_ftoi(0x12); break;
 	case tk_fadd:	process_fprrop(0x04); break;
-	case tk_fbeq:	process_fbcc(0); break;
-	case tk_fbge:	process_fbcc(3); break;
-	case tk_fblt:	process_fbcc(2); break;
-	case tk_fbne:	process_fbcc(1); break;
+	case tk_fcmp:	process_fsetop(I_FCMP); break;
 	case tk_fdiv:	process_fprrop(0x09); break;
 	case tk_fill: process_fill(); break;
 	case tk_fmov:	process_fprop(0x10); break;
 	case tk_fmul:	process_fprrop(0x08); break;
 	case tk_fneg:	process_fprop(0x14); break;
 	case tk_fsub:	process_fprrop(0x05); break;
-	case tk_fslt:	process_fprrop(0x38); break;
+	case tk_fseq:	process_fsetop(I_FSEQ); break;
+	case tk_fsle:	process_fsetop(I_FSLE); break;
+	case tk_fslt:	process_fsetop(I_FSLT); break;
 	case tk_gcsub: process_riop(I_GCSUBI, I_GCSUB, 0x00); break;
+	case tk_getto: process_rop(I_GETTO); break;
+	case tk_getzl: process_getzl(I_GETZL); break;
 	case tk_hint:	process_hint(); break;
 		//case tk_ibne: process_ibne(0x26,2); break;
 	case tk_if:		pif1 = inptr - 2; doif(); break;
@@ -4778,8 +4973,9 @@ static void process_default()
 	case tk_iret:	process_iret(0xC8000002); break;
 	case tk_isptr:  process_ptrop(0x06,1); break;
 	case tk_jal: process_jal(0x18); break;
-	case tk_jmp: process_call(0x31,0); break;
-	case tk_jsr: process_call(0x30,1); break;
+	case tk_jlr: process_call(I_JLR, 1); break;
+	case tk_jmp: process_call(I_JMP,0); break;
+	case tk_jsr: process_call(I_JSR,1); break;
 	case tk_ld:	process_ld(); break;
 		//case tk_lui: process_lui(0x27); break;
 	case tk_lsr: process_shift(I_LSR); break;
@@ -4789,6 +4985,7 @@ static void process_default()
 	case tk_memsb: emit_insn(0x04440002); break;
 	case tk_message: process_message(); break;
 	case tk_mov: process_mov(I_MOV, 0x00); break;
+	case tk_mvseg: process_rrop(); break;
 		//case tk_mulh: process_rrop(0x26, 0x3A); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 	case tk_neg: process_com(5); break;
@@ -4797,12 +4994,14 @@ static void process_default()
 		//        case tk_not: process_rop(0x07); break;
 	case tk_ori: process_riop(0x09,0x09,0); break;
 	case tk_org: process_org(); break;
-	case tk_peekq: process_pushq(10); break;
+	case tk_peekq: process_popq(I_PEEKQ); break;
 	case tk_plus: compress_flag = 0;  expand_flag = 1; break;
-	case tk_popq: process_popq(9); break;
+	case tk_popq: process_popq(I_POPQ); break;
 	case tk_ptrdif: process_rrop(); break;
-	case tk_public: process_public(); break;
-	case tk_pushq: process_pushq(8); break;
+	case tk_public:
+		process_public();
+		break;
+	case tk_pushq: process_pushq(I_PUSHQ); break;
 	case tk_rodata:
 		if (first_rodata) {
 			while (sections[segment].address & 4095)
@@ -4815,17 +5014,19 @@ static void process_default()
 		segment = rodataseg;
 		break;
 	//case tk_redor: process_rop(0x06); break;
-	case tk_ret: process_ret(); break;
+	case tk_ret: process_ret(I_RTS); break;
 	case tk_rex: process_rex(); break;
 	case tk_rol: process_shift(I_ROL); break;
 	case tk_roli: process_shifti(I_ROLI); break;
 	case tk_ror: process_shift(I_ROR); break;
 	case tk_rori: process_shifti(I_RORI); break;
 	case tk_rti: process_iret(0xC8000002); break;
-	case tk_rts: process_ret(); break;
+	case tk_rtl: process_ret(I_RTL); break;
+	case tk_rts: process_ret(I_RTS); break;
 	case tk_sei: process_sei(); break;
 	case tk_seq:	process_setop(I_SEQ, I_SEQ, 0x00); break;
 	
+	case tk_setto: process_setto(I_OSR2, I_SETTO); break;
 	case tk_setwb: emit_insn(0x04580002); break;
 		//case tk_seq:	process_riop(0x1B,2); break;
 	case tk_sge:	process_setop(I_SGE, I_SGEI, 0x00); break;
@@ -4893,6 +5094,10 @@ static void process_default()
 	case tk_zxh: process_rop(0x08); break;
 	case tk_id:  process_label(); break;
 	case '-': compress_flag = 1; expand_flag = 0; break;
+	default:	
+//		printf("%.60s\r\n", stptr);
+//		printf("%*s", inptr - stptr, "^");
+		break;
 	}
 }
 
@@ -4937,6 +5142,9 @@ void rtf64_processMaster()
 		jumptbl[tk_and] = &process_rrop;
 		parm1[tk_and] = I_AND2;
 		parm2[tk_and] = I_ANDI;
+		jumptbl[tk_bit] = &process_rrop;
+		parm1[tk_bit] = I_BIT;
+		parm2[tk_bit] = I_BITI;
 		jumptbl[tk_or] = &process_rrop;
 		parm1[tk_or] = I_OR2;
 		parm2[tk_or] = I_ORI;
@@ -4990,6 +5198,22 @@ void rtf64_processMaster()
 		jumptbl[tk_xnor] = &process_rrop;
 		parm1[tk_xnor] = I_XNOR;
 		parm2[tk_xnor] = -1LL;
+		jumptbl[tk_fbeq] = &process_fbcc;
+		parm1[tk_fbeq] = I_BEQ;
+		parm2[tk_fbeq] = 0x04;
+		parm3[tk_fbeq] = 0;
+		jumptbl[tk_fbeq] = &process_fbcc;
+		parm1[tk_fbne] = I_BNE;
+		parm2[tk_fbne] = 0x00;
+		parm3[tk_fbne] = 0;
+		jumptbl[tk_fbge] = &process_fbcc;
+		parm1[tk_fbge] = I_BGE;
+		parm2[tk_fbge] = 0x00;
+		parm3[tk_fbge] = 0;
+		jumptbl[tk_fblt] = &process_fbcc;
+		parm1[tk_fblt] = I_BLT;
+		parm2[tk_fblt] = 0x00;
+		parm3[tk_fblt] = 0;
 		jumptbl[tk_beq] = &process_bcc;
 		parm1[tk_beq] = I_BEQ;
 		parm2[tk_beq] = 0x04;
@@ -5074,6 +5298,10 @@ void rtf64_processMaster()
 		parm1[tk_sto] = I_STO;
 		parm2[tk_sto] = I_STO;
 		parm3[tk_sto] = 0x03;
+		jumptbl[tk_sto] = &process_store;
+		parm1[tk_fsto] = I_FSTO;
+		parm2[tk_fsto] = I_FSTO;
+		parm3[tk_fsto] = 0x00;
 		jumptbl[tk_sth] = &process_store;
 		parm1[tk_sth] = 0x24;
 		parm2[tk_sth] = 0x24;
@@ -5123,36 +5351,14 @@ void rtf64_processMaster()
 		parm1[tk_ldh] = 0x04;
 		parm2[tk_ldh] = 0x04;
 		parm3[tk_ldh] = 0x04;
-/*
-		jumptbl[tk_lvb] = &process_load;
-		parm1[tk_lvb] = -1;
-		parm2[tk_lvb] = 0x00;
-		parm3[tk_lvb] = 0x00;
-		jumptbl[tk_lvbu] = &process_load;
-		parm1[tk_lvbu] = -1;
-		parm2[tk_lvbu] = 0x01;
-		parm3[tk_lvbu] = 0x00;
-		jumptbl[tk_lvc] = &process_load;
-		parm1[tk_lvc] = 0x3B;
-		parm2[tk_lvc] = 0x02;
-		parm3[tk_lvc] = 0x01;
-		jumptbl[tk_lvcu] = &process_load;
-		parm1[tk_lvcu] = 0x11;
-		parm2[tk_lvcu] = 0x03;
-		parm3[tk_lvcu] = -1;
-		jumptbl[tk_lvh] = &process_load;
-		parm1[tk_lvh] = 0x3B;
-		parm2[tk_lvh] = 0x04;
-		parm3[tk_lvh] = 0x02;
-		jumptbl[tk_lvhu] = &process_load;
-		parm1[tk_lvhu] = 0x11;
-		parm2[tk_lvhu] = 0x05;
-		parm3[tk_lvhu] = -2;
-		jumptbl[tk_lvw] = &process_load;
-		parm1[tk_lvw] = 0x3B;
-		parm2[tk_lvw] = 0x06;
-		parm3[tk_lvw] = 0x04;
-*/
+		jumptbl[tk_fldo] = &process_load;
+		parm1[tk_fldo] = I_FLDO;
+		parm2[tk_fldo] = I_FLDO;
+		parm3[tk_fldo] = 0x03;
+		jumptbl[tk_bytndx] = &process_rrop;
+		parm1[tk_bytndx] = I_BYTNDX;
+		parm2[tk_bytndx] = I_BYTNDX;
+		parm3[tk_bytndx] = 0x00;
 		jumptbl[tk_sf] = &process_store;
 		parm1[tk_sf] = 0x2B;
 		parm2[tk_sf] = 0x2D;
@@ -5161,6 +5367,18 @@ void rtf64_processMaster()
 		parm1[tk_lf] = 0x1B;
 		parm2[tk_lf] = 0x1D;
 		parm3[tk_lf] = 0x01;
+		jumptbl[tk_mvseg] = &process_rrop;
+		parm1[tk_mvseg] = I_MVSEG;
+		parm2[tk_mvseg] = I_MVSEG;
+		parm3[tk_mvseg] = 0;
+		jumptbl[tk_mvmap] = &process_rrop;
+		parm1[tk_mvmap] = I_MVMAP;
+		parm2[tk_mvmap] = I_MVMAP;
+		parm3[tk_mvmap] = 0;
+		jumptbl[tk_rem] = &process_rrop;
+		parm1[tk_rem] = I_REM;
+		parm2[tk_rem] = I_REMI;
+		parm3[tk_rem] = 0;
 	}
 	tbndx = 0;
 
@@ -5183,12 +5401,14 @@ void rtf64_processMaster()
   ca = code_address;
   segment = codeseg;
   memset(current_label,0,sizeof(current_label));
+	current_symbol = nullptr;
 	ZeroMemory(&insnStats, sizeof(insnStats));
+	SymbolInitForPass();
 	num_lbranch = 0;
 	num_insns = 0;
 	num_cinsns = 0;
 	num_bytes = 0;
-  rtf64_NextToken();
+  NextToken();
   while (token != tk_eof && token != tk_end) {
 		recflag = FALSE;
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
@@ -5196,7 +5416,7 @@ void rtf64_processMaster()
     if (expandedBlock)
       expand_flag = 1;
 		(*jumptbl[token])();
-    rtf64_NextToken();
+    NextToken();
   }
 j1:
   ;

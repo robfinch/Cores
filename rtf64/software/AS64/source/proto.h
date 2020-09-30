@@ -8,6 +8,8 @@ void doifndef();
 bool IsNBit128(Int128&, Int128&);
 void process_dcp();
 void process_dcd();
+void process_dct();
+void process_dcw();
 // tokenizer
 void getnum();
 int my_isspace(char ch);
@@ -26,6 +28,6 @@ int64_t getsch();
 int getIdentifier();
 void getString();
 int isPseudoOp();
-
+void SymbolInitForPass();
 void rtf64_processMaster();
 int rtf64_NextToken();

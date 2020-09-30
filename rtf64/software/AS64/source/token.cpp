@@ -370,6 +370,8 @@ int NextToken()
 	unsigned int64_t n;
 	SYM *sym;
 
+	if (gCpu == RTF64)
+		return (rtf64_NextToken());
 	token2 = tk_nop;
 	// Under construction: tokens are stored in a buffer
 	if (false && pass > 3 && gCpu=='F') {
@@ -5052,12 +5054,12 @@ int getFPRegister()
 {
     int reg;
 
-    while(isspace(*inptr)) inptr++;
+  while(isspace(*inptr)) inptr++;
 	if (*inptr=='$')
 		inptr++;
     switch(*inptr) {
     case 'f': case 'F':
-         if (inptr[1]=='p' || inptr[1]=='P') {
+      if (inptr[1]=='p' || inptr[1]=='P') {
          if (isdigit(inptr[2])) {
              reg = inptr[2]-'0';
              if (isdigit(inptr[3])) {
@@ -5088,7 +5090,26 @@ int getFPRegister()
          }
          else return -1;
          }
-         else return -1;
+			else if (isdigit(inptr[1])) {
+				reg = inptr[1] - '0';
+				if (isdigit(inptr[2])) {
+					reg = 10 * reg + (inptr[2] - '0');
+					if (isIdentChar(inptr[3]))
+						return -1;
+					else {
+						inptr += 3;
+						NextToken();
+						return (reg);
+					}
+				}
+				else if (isIdentChar(inptr[2]))
+					return (-1);
+				inptr += 2;
+				NextToken();
+				return (reg);
+			}
+			else
+				return -1;
     default:
         return -1;
     }

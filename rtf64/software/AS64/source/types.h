@@ -83,6 +83,7 @@ typedef struct _tagInsnStats {
 	int stores;
 	int pushes;
 	int indexed;
+	int compares;
 	int branches;
 	int beqi;
 	int bnei;
@@ -94,6 +95,8 @@ typedef struct _tagInsnStats {
 	int ands;
 	int ors;
 	int xors;
+	int bits;
+	int tsts;
 	int shls;
 	int shifts;
 	int luis;
@@ -102,6 +105,7 @@ typedef struct _tagInsnStats {
 	int sets;
 	int floatops;
 	int ptrdif;
+	int csrs;
 	int total;
 } InsnStats;
 

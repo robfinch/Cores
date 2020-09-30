@@ -1,0 +1,153 @@
+_XA	=	0x200 ;/* extra alphabetic */
+_XS	=	0x100 ;/* extra space */
+_BB	=	0x80 ;/* BEL, BS, etc. */
+_CN	=	0x40 ;/* CR, FF, HT, NL, VT */
+_DI	=	0x20 ;/* '0'-'9' */
+_LO	=	0x10 ;/* 'a'-'z' */
+_PU	=	0x08 ;/* punctuation */
+_SP	=	0x04 ;/* space */
+_UP	=	0x02 ;/* 'A'-'Z' */
+_XD	=	0x01 ;/* '0'-'9', 'A'-'F', 'a'-'f' */
+
+XDI = _DI|_XD
+XUP = _UP|_XD
+XLO = _LO|_XD
+
+  rodata
+  dcw   0
+__ctyptbl:
+  dcw   0, _BB, _BB, _BB, _BB, _BB, _BB, _BB,
+  dcw _BB, _CN, _CN, _CN, _CN, _CN, _BB, _BB,
+  dcw _BB, _BB, _BB, _BB, _BB, _BB, _BB, _BB,
+  dcw _BB, _BB, _BB, _BB, _BB, _BB, _BB, _BB,
+  dcw _SP, _PU, _PU, _PU, _PU, _PU, _PU, _PU,
+  dcw _PU, _PU, _PU, _PU, _PU, _PU, _PU, _PU,
+  dcw XDI, XDI, XDI, XDI, XDI, XDI, XDI, XDI,
+  dcw XDI, XDI, _PU, _PU, _PU, _PU, _PU, _PU,
+  dcw _PU, XUP, XUP, XUP, XUP, XUP, XUP, _UP,
+  dcw _UP, _UP, _UP, _UP, _UP, _UP, _UP, _UP,
+  dcw _UP, _UP, _UP, _UP, _UP, _UP, _UP, _UP,
+  dcw _UP, _UP, _UP, _PU, _PU, _PU, _PU, _PU,
+  dcw _PU, XLO, XLO, XLO, XLO, XLO, XLO, _LO,
+  dcw _LO, _LO, _LO, _LO, _LO, _LO, _LO, _LO,
+  dcw _LO, _LO, _LO, _LO, _LO, _LO, _LO, _LO,
+  dcw _LO, _LO, _LO, _PU, _PU, _PU, _PU, _BB,
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+  dcw 0,0,0,0,0,0,0,0
+
+  code 18 bits
+
+  align 16
+public _islower:
+  asl     $a0,$a0,#1
+  ldwu    $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_LO
+  rtl
+endpublic
+
+public _isupper:
+  asl     $a0,$a0,#1
+  ldwu    $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_UP
+  rtl
+endpublic
+
+public _isalpha:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_UP|_LO
+  rtl
+endpublic
+
+public _isdigit:
+  asl     $a0,$a0,#1
+  ldwu    $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_DI
+  rtl
+endpublic
+
+public _isxdigit:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#XUP|XLO|XDI
+  rtl
+endpublic
+
+public _isalnum:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_UP|_LO|_DI
+  rtl
+endpublic
+
+public _isspace:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_CN|_SP
+  rtl
+endpublic
+
+public _iscntrl:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_CN|_BB
+  rtl
+endpublic
+
+public _isgraph:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_DI|_LO|_PU|_UP|_XA
+  rtl
+endpublic
+
+public _isprint:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_DI|_LO|_PU|_SP|_UP|_XA
+  rtl
+endpublic
+
+public _ispunct:
+  asl     $a0,$a0,#1
+  ldw     $a0,__ctyptbl[$a0]
+  and.    $a0,$a0,#_PU
+  rtl
+endpublic
+
+  align 16
+public _toupper:
+	cmp		$a0,#'a'
+	blt   .ret	        ; is it < 'a'?
+	cmp		$a0,#'z'
+	bgt   .ret          ; >= 'a' and <= 'z'?
+	sub		$a0,$a0,#$20  ; if not, make it upper case
+.ret:
+	rtl
+endpublic
+
+  align 16
+public _tolower:
+	cmp		$a0,#'A'
+	blt   .ret	        ; is it < 'A'?
+	cmp		$a0,#'Z'
+	bgt   .ret          ; >= 'A' and <= 'Z'?
+	add		$a0,$a0,#$20  ; if not, make it lower case
+.ret:
+	rtl
+endpublic
+
