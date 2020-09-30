@@ -99,7 +99,6 @@ float num_bytes;
 int num_insns;
 int num_cinsns;
 int num_lbranch;
-HTBLE hTable[100000];
 int htblmax;
 int processOpt;
 int gCanCompress = 1;
@@ -206,6 +205,7 @@ void DumpInsnStats()
 	fprintf(ofp, "Stores:   %6d (%3.6f%%)\n", insnStats.stores, ((double)insnStats.stores/(double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  Indexed:%6d (%3.6f%%)\n", insnStats.indexed, ((double)insnStats.indexed / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Pushes:   %6d (%3.6f%%)\n", insnStats.pushes, ((double)insnStats.pushes / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Compares: %6d (%3.6f%%)\n", insnStats.compares, ((double)insnStats.compares / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Branches: %6d (%3.6f%%)\n", insnStats.branches, ((double)insnStats.branches / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  BEQI:		%6d (%3.6f%%)\n", insnStats.beqi, ((double)insnStats.beqi / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  BNEI:		%6d (%3.6f%%)\n", insnStats.bnei, ((double)insnStats.bnei / (double)insnStats.total) * 100.0f);
@@ -217,6 +217,8 @@ void DumpInsnStats()
 	fprintf(ofp, "Ands:	    %6d (%3.6f%%)\n", insnStats.ands, ((double)insnStats.ands / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Ors:	    %6d (%3.6f%%)\n", insnStats.ors, ((double)insnStats.ors / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Xors:	    %6d (%3.6f%%)\n", insnStats.xors, ((double)insnStats.xors / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Bits:	    %6d (%3.6f%%)\n", insnStats.bits, ((double)insnStats.bits / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Tsts:	    %6d (%3.6f%%)\n", insnStats.tsts, ((double)insnStats.tsts / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Lshifts:  %6d (%3.6f%%)\n", insnStats.shls, ((double)insnStats.shls / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "shifts:	  %6d (%3.6f%%)\n", insnStats.shifts, ((double)insnStats.shifts / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Luis:	    %6d (%3.6f%%)\n", insnStats.luis, ((double)insnStats.luis / (double)insnStats.total) * 100.0f);
@@ -224,6 +226,7 @@ void DumpInsnStats()
 	fprintf(ofp, "CMoves:	  %6d (%3.6f%%)\n", insnStats.cmoves, ((double)insnStats.cmoves / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Sets:	    %6d (%3.6f%%)\n", insnStats.sets, ((double)insnStats.sets / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Ptrdif:   %6d (%3.6f%%)\n", insnStats.ptrdif, ((double)insnStats.ptrdif / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Csr:		  %6d (%3.6f%%)\n", insnStats.csrs, ((double)insnStats.csrs / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Floatops: %6d (%3.6f%%)\n", insnStats.floatops, ((double)insnStats.floatops / (double)insnStats.total) * 100.0f);
 	tot = insnStats.loads
 		+ insnStats.stores
@@ -557,10 +560,12 @@ void process_public()
   SYM *sym;
   int64_t ca;
 	int div = 1;
+  char* p1;
 
 	if (gCpu==7 || gCpu==GAMBIT_V5)
 		div = 2;
 
+  p1 = pinptr;
   NextToken();
   if (token==tk_code) {
     segment = codeseg;
@@ -633,26 +638,64 @@ void process_public()
     sym->segment = segment;
     sym->scope = 'P';
   }
-	else if (pass > 4) {
+  // Strip out unreferenced publics
+  else if (pass == 5) {
+    if (sym) {
+      if (!sym->referenced) {
+        char* p2, * p3;
+        p3 = p1;
+        do {
+          NextToken();
+        } while (token != tk_endpublic);
+        p2 = inptr;
+        for (; *p2; p1++, p2++)
+          *p1 = *p2;
+        *p1 = 0;
+        inptr = p3;
+        return;
+      }
+      if (sym->value.low != ca) {
+        phasing_errors++;
+        sym->phaserr = '*';
+        //if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+        if (gCpu == 'G')
+          sym->value.low = ca & -4LL;
+        else
+          sym->value.low = ca;
+        sym->value.high = 0;
+      }
+      else
+        sym->phaserr = ' ';
+    }
+  }
+	else if (pass > 5) {
 		if (!sym) {
 			printf("Symbol (%s) not defined.\r\n", lastid);
 			goto xit1;
 		}
-		if (sym->value.low != ca) {
+    if (sym) {
+      if (!sym->referenced) {
+        do {
+          NextToken();
+        } while (token != tk_endpublic);
+      }
+    }
+    if (sym->value.low != ca) {
 			phasing_errors++;
 			sym->phaserr = '*';
 			//if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
-		}
+      if (gCpu == 'G')
+        sym->value.low = ca & -4LL;
+      else
+        sym->value.low = ca;
+      sym->value.high = 0;
+    }
 		else
 			sym->phaserr = ' ';
-		if (gCpu == 'G')
-			sym->value.low = ca & -4LL;
-		else
-			sym->value.low = ca;
-		sym->value.high = 0;
 	}
 xit1:
   strcpy_s(current_label, sizeof(current_label), lastid);
+  current_symbol = sym;
 xit2:
   ScanToEOL();
   inptr++;
@@ -984,6 +1027,56 @@ void process_dc()
     ScanToEOL();
 }
 
+void process_dcw()
+{
+  int64_t val;
+
+  SkipSpaces();
+  while (token != tk_eol) {
+    SkipSpaces();
+    if (*inptr == '"') {
+      inptr++;
+      while (*inptr != '"') {
+        if (*inptr == '\\') {
+          inptr++;
+          switch (*inptr) {
+          case '\\': emitWyde('\\'); inptr++; break;
+          case 'r': emitWyde(0x0D); inptr++; break;
+          case 'n': emitWyde(0x0A); inptr++; break;
+          case 'b': emitWyde('\b'); inptr++; break;
+          case '"': emitWyde('"'); inptr++; break;
+          default: inptr++; break;
+          }
+        }
+        else {
+          emitWyde(*inptr);
+          inptr++;
+        }
+      }
+      inptr++;
+    }
+    else if (*inptr == '\'') {
+      inptr++;
+      emitWyde(*inptr);
+      inptr++;
+      if (*inptr != '\'') {
+        printf("Missing ' in character constant.\r\n");
+      }
+    }
+    else {
+      NextToken();
+      val = expr();
+      emitWyde(val);
+      prevToken();
+    }
+    SkipSpaces();
+    if (*inptr != ',')
+      break;
+    inptr++;
+  }
+  ScanToEOL();
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1115,6 +1208,60 @@ void process_dw()
         inptr++;
     }
     ScanToEOL();
+}
+
+void process_dct()
+{
+  int64_t val;
+
+  SkipSpaces();
+  while (token != tk_eol) {
+    SkipSpaces();
+    if (*inptr == '"') {
+      inptr++;
+      while (*inptr != '"') {
+        if (*inptr == '\\') {
+          inptr++;
+          switch (*inptr) {
+          case '\\': emitTetra('\\'); inptr++; break;
+          case 'r': emitTetra(0x0D); inptr++; break;
+          case 'n': emitTetra(0x0A); inptr++; break;
+          case 'b': emitTetra('\b'); inptr++; break;
+          case '"': emitTetra('"'); inptr++; break;
+          default: inptr++; break;
+          }
+        }
+        else {
+          emitTetra(*inptr);
+          inptr++;
+        }
+      }
+      inptr++;
+    }
+    else if (*inptr == '\'') {
+      inptr++;
+      emitTetra(*inptr);
+      inptr++;
+      if (*inptr != '\'') {
+        printf("Missing ' in character constant.\r\n");
+      }
+    }
+    else {
+      NextToken();
+      val = expr();
+      // A pointer to an object might be emitted as a data word.
+      if (bGen && lastsym)
+        if (lastsym->segment < 5)
+          sections[segment + 7].AddRel(sections[segment].index, ((int64_t)(lastsym->ord + 1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
+      emitTetra(val);
+      prevToken();
+    }
+    SkipSpaces();
+    if (*inptr != ',')
+      break;
+    inptr++;
+  }
+  ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -1421,8 +1568,9 @@ void process_label()
   else
     strcpy_s(nm, sizeof(nm), lastid);
 	sym = find_symbol(nm);
-	if (sym == nullptr && lastid[0]!='.')
-		strcpy_s(current_label, sizeof(current_label), lastid);
+  if (sym == nullptr && lastid[0] != '.') {
+    strcpy_s(current_label, sizeof(current_label), lastid);
+  }
 	if (lastid[0]!='.' && sym)
 		if (!sym->isMacro)
 			strcpy_s(current_label, sizeof(current_label), lastid);
@@ -1530,6 +1678,8 @@ void process_label()
   if (strcmp("begin_init_data", nm)==0)
     isInitializationData = 1;
 //    printf("</process_ label>\r\n");
+  if (lastid[0] != '.')
+    current_symbol = sym;
 }
 
 // ----------------------------------------------------------------------------
@@ -2514,13 +2664,18 @@ int main(int argc, char *argv[])
     if (verbose) printf("Pass 4 - get all symbols, set initial values.\r\n");
     first_org = 1;
     processMaster();
+    if (verbose) printf("Pass 5 - strip unused code.\r\n");
     pass = 5;
+    first_org = 1;
     phasing_errors = 0;
-    if (verbose) printf("Pass 5 - assemble code.\r\n");
+    processMaster();
+    if (verbose) printf("Pass 6 - assemble code.\r\n");
+    pass = 6;
+    phasing_errors = 0;
     first_org = 1;
     processMaster();
-    if (verbose) printf("Pass 6: phase errors: %d\r\n", phasing_errors);
-    pass = 6;
+    if (verbose) printf("Pass 7: phase errors: %d\r\n", phasing_errors);
+    pass = 7;
 	pe3 = pe2 = pe1 = 0;
     while (phasing_errors && pass < 40) {
         phasing_errors = 0;
@@ -2529,8 +2684,8 @@ int main(int argc, char *argv[])
 		num_cinsns = 0;
 	    first_org = 1;
         processMaster();
-        if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
         pass++;
+        if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
 		pe3 = pe2;
 		pe2 = pe1;
 		pe1 = phasing_errors;
@@ -2560,7 +2715,9 @@ int main(int argc, char *argv[])
     }
     processOpt = 2;
 	bGenListing = true;
-    processMaster();
+	num_bytes = 0;
+	num_insns = 0;
+	processMaster();
 	bGenListing = false;
     DumpSymbols();
     DumphTable();

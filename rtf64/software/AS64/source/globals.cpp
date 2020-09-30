@@ -1,5 +1,6 @@
 #include "stdafx.h"
 
+HTBLE hTable[10000];
 int64_t tokenBuffer[5000000];
 char litpool[10000000];
 char *pinptr;
