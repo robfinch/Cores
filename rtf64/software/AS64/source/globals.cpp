@@ -1,5 +1,3 @@
-#include "stdafx.h"
-
 HTBLE hTable[10000];
 int64_t tokenBuffer[5000000];
 char litpool[10000000];
@@ -14,4 +12,3 @@ int16_t token2;
 int32_t reg;
 int tbndx;
 int lpndx = 0;
-

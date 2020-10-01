@@ -109,6 +109,8 @@
 `define PFI     5'h11
 `define WFI     5'h12
 `define MVMAP   5'h1C
+`define MVSEG   5'h1D
+`define TLBRW   5'h1E
 `define LDB   8'h80
 `define LDBU  8'h81
 `define LDW   8'h82
@@ -290,13 +292,16 @@
 `define DATH    63:32
 `endif
 
+`define RTF64_TLB     1'b1
+//`define RTF64_PAGEMAP 1'b1
+
 `include "../fpu/fpConfig.sv"
 
 module rtf64(hartid_i, rst_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
 parameter FPWID = 64;
-parameter RSTPC = 32'hFFFC0100;
+parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter pL1CacheLines = 128;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
 input [7:0] hartid_i;
@@ -312,7 +317,7 @@ output reg stb_o;
 input ack_i;
 output reg we_o;
 output reg [15:0] sel_o;
-output reg [31:0] adr_o;
+output reg [AWID-1:0] adr_o;
 `ifdef CPU_B128
 input [127:0] dat_i;
 output reg [127:0] dat_o;
@@ -374,10 +379,14 @@ parameter MEMORY_KEYCHK3 = 6'd36;
 parameter FLOAT = 6'd37;
 parameter INSTRUCTION_ALIGN = 6'd38;
 parameter IFETCH5 = 6'd39;
+parameter MEMORY1a = 6'd40;
+parameter MEMORY6a = 6'd41;
+parameter MEMORY11a = 6'd42;
+parameter IFETCH2a = 6'd43;
 
 `include "../fpu/fpSize.sv"
 
-reg [31:0] pc, ipc, ret_pc;
+reg [AWID-1:0] pc, ipc, ret_pc;
 reg illegal_insn;
 reg [31:0] ir;
 reg [255:0] iri, ici;
@@ -465,7 +474,7 @@ always @(posedge clk_g)
 reg [AWID-1:0] ra [0:63]; // ra0 = 0-31, ra1 = 32 to 63
 reg [AWID-1:0] ca [0:63];
 reg [31:0] cregfile [0:31];
-reg [31:0] sregfile [0:15];
+reg [AWID-1:0] sregfile [0:15];
 wire [64:0] difi = ia - imm;
 wire [64:0] difr = ia - ib;
 wire [63:0] andi = ia & imm;
@@ -505,8 +514,8 @@ wire [7:0] cds = cds32 >> {Rs1[1:0],3'b0};
 
 // CSRs
 reg [7:0] cause [0:7];
-reg [31:0] tvec [0:7];
-reg [31:0] badaddr [0:7];
+reg [AWID-1:0] tvec [0:7];
+reg [AWID-1:0] badaddr [0:7];
 reg [31:0] status [0:7];
 wire mprv = status[5][17];
 wire uie = status[5][0];
@@ -518,8 +527,8 @@ wire die = status[5][5];
 reg [31:0] gcie;
 reg [63:0] scratch [0:7];
 reg [39:0] instret;
-reg [31:0] epc [0:31];
-reg [31:0] next_epc;
+reg [AWID-1:0] epc [0:31];
+reg [AWID-1:0] next_epc;
 reg [31:0] pmStack;
 reg [31:0] rsStack;
 reg [4:0] rprv;
@@ -559,7 +568,7 @@ wire ie = pmStack[0];
 reg [31:0] miex;
 reg [19:0] key [0:8];
 // Debug
-reg [31:0] dbad [0:3];
+reg [AWID-1:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
@@ -592,12 +601,13 @@ wire [AWID-1:0] cao = ca[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStac
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg keyViolation;
-reg [31:0] ladr;
+reg [AWID-1:0] ladr;
 reg wrpagemap;
 wire [13:0] pagemapoa, pagemapo;
 reg [16:0] pagemapa;
 wire [16:0] pagemap_ndx = {ASID,ladr[25:14]};
 
+`ifdef RTF64_PAGEMAP
 // 131072 x14 bit entries
 PagemapRam upageram (
   .clka(clk_g),   // input wire clka
@@ -613,6 +623,7 @@ PagemapRam upageram (
   .dinb(14'd0),    // input wire [13 : 0] dinb
   .doutb(pagemapo)  // output wire [13 : 0] doutb
 );
+`endif
 
 reg memaccess;
 wire [19:0] keyo, keyoa;
@@ -633,6 +644,30 @@ KeyMemory ukm1 (
 
 wire MUserMode;
 wire keymem_cs = MUserMode && adr_o[31:28]==4'h0;
+
+reg xlaten;
+reg tlben, tlbwr;
+wire tlbmiss;
+wire [63:0] tlbdato;
+
+`ifdef RTF64_TLB
+rtf64_TLB utlb (
+  .rst_i(rst_i),
+  .clk_i(clk_g),
+  .asid_i(ASID),
+  .umode_i(vpa_o ? UserMode : MUserMode),
+  .xlaten_i(xlaten),
+  .we_i(we_o),
+  .ladr_i(ladr),
+  .padr_o(adr_o),
+  .tlben_i(tlben),
+  .wrtlb_i(tlbwr),
+  .tlbadr_i(ia[11:0]),
+  .tlbdat_i(ib),
+  .tlbdat_o(tlbdato),
+  .tlbmiss_o(tlbmiss)
+);
+`endif
 
 wire [31:0] card21o, card22o, card1o;
 wire [63:0] cardmem0o;
@@ -839,16 +874,17 @@ TraceFifo utf1 (
 );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Instruction cache
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [3:0] icnt;
 (* ram_style="distributed" *)
 reg [255:0] icache [0:pL1CacheLines-1];
 (* ram_style="distributed" *)
-reg [31:0] ictag [0:pL1CacheLines-1];
+reg [AWID-1:0] ictag [0:pL1CacheLines-1];
 (* ram_style="distributed" *)
 reg [pL1CacheLines-1:0] icvalid;
 reg ic_invline;
-wire ihit = ictag[adr_o[pL1msb:5]][31:5]==adr_o[31:5] && icvalid[adr_o[pL1msb:5]];
+wire ihit = ictag[adr_o[pL1msb:5]][AWID-1:5]==adr_o[AWID-1:5] && icvalid[adr_o[pL1msb:5]];
 initial begin
   icvalid = {pL1CacheLines{1'd0}};
   for (n = 0; n < pL1CacheLines; n = n + 1)
@@ -913,8 +949,8 @@ default:	fnSelect = 8'h00;
 endcase
 endfunction
 
-reg [31:0] ea;
-wire [3:0] segsel = ea[31:28];
+reg [AWID-1:0] ea;
+wire [3:0] segsel = ea[AWID-1:AWID-4];
 
 `ifdef CPU_B128
 reg [31:0] sel;
@@ -1221,6 +1257,9 @@ if (rst_i) begin
 	set_wfi <= 1'b0;
 	next_epc <= 32'hFFFFFFFF;
 	instret <= 40'd0;
+	tlben <= 1'b0;
+	tlbwr <= 1'b0;
+	xlaten <= 1'b0;
 end
 else begin
 if (trace_match[0]) dbsr[0] <= TRUE;
@@ -1244,14 +1283,16 @@ peekq <= 1'b0;
 statq <= 1'b0;
 rd_trace <= 1'b0;
 
+`ifdef RTF64_PAGEMAP
 if (!UserMode)
 	adr_o <= ladr;
 else begin
-	if (ladr[31:24]==8'hFF)
-		adr_o <= ladr;
+	if (ladr[39:24]==16'hFFFF)
+		adr_o <= [31:0];
 	else
 		adr_o <= {pagemapo & 14'h3FFF,ladr[13:0]};
 end
+`endif
 
 // Check the memory keys
 keyViolation <= TRUE;
@@ -1304,18 +1345,11 @@ IFETCH1:
 	  Rs3x <= Rs3x1;
 		illegal_insn <= 1'b1;
 		ipc <= pc;
-`ifdef CPU_B128
-    pc_reload <= pc[31:4]!=ipc[31:4]; 
-`endif
-`ifdef CPU_B64
-    pc_reload <= pc[31:3]!=ipc[31:3]; 
-`endif
-`ifdef CPU_B32
-    pc_reload <= TRUE;
-`endif
 		wrirf <= 1'b0;
 		wrfrf <= 1'b0;
     tPC();
+    xlaten <= TRUE;
+ 		vpa_o <= HIGH;
 		if (nmif) begin
 			nmif <= 1'b0;
 			tException(32'h800000FE,pc);
@@ -1341,32 +1375,47 @@ IFETCH1:
 IFETCH2:
   begin
     icnt <= 4'd0;
+`ifdef RTF64_TLB
+    goto (IFETCH2a);
+`else
     goto (IFETCH3);
+`endif
     wrcrf <= 1'b0;
+  end
+IFETCH2a:
+  begin
+    goto(IFETCH3);
   end
 IFETCH3:
   begin
+ 		xlaten <= FALSE;
 		if (ihit) begin
 		  iri <= icache[adr_o[pL1msb:5]];
 		  goto (INSTRUCTION_ALIGN);
 	  end
 	  else begin
   		goto (IFETCH4);
-      cyc_o <= HIGH;
-  		stb_o <= HIGH;
-  		vpa_o <= HIGH;
+  		if (tlbmiss) begin
+			  tException(32'h80000004,ipc);
+			  badaddr[3'd5] <= ipc;
+			  vpa_o <= FALSE;
+			end
+			else begin
+        cyc_o <= HIGH;
+    		stb_o <= HIGH;
 `ifdef CPU_B128
-      sel_o <= 16'hFFFF;
-      adr_o[4:0] <= {icnt[0],4'h0};
+        sel_o <= 16'hFFFF;
+        adr_o[4:0] <= {icnt[0],4'h0};
 `endif
 `ifdef CPU_B64
-      sel_o <= 8'hFF;
-      adr_o[4:0] <= {icnt[1:0],3'h0};
+        sel_o <= 8'hFF;
+        adr_o[4:0] <= {icnt[1:0],3'h0};
 `endif
 `ifdef CPU_B32
-  		sel_o <= 4'hF;
-      adr_o[4:0] <= {icnt[2:0],2'h0};
+    		sel_o <= 4'hF;
+        adr_o[4:0] <= {icnt[2:0],2'h0};
 `endif
+      end
 	  end
   end
 IFETCH4:
@@ -1476,6 +1525,7 @@ DECODE:
 	      begin
 	        illegal_insn <= 1'b0;
 	      end
+	    `TLBRW: begin illegal_insn <= 1'b0; end
 	    `PUSHQ: begin d_pushq <= TRUE; illegal_insn <= FALSE; end
 	    `POPQ:  begin d_popq <= TRUE; illegal_insn <= FALSE; end
 	    `PEEKQ: begin d_peekq <= TRUE; illegal_insn <= FALSE; end 
@@ -1681,7 +1731,7 @@ DECODE:
     // Flow Control
     `JMP:
       begin
-        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
+        pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
         goto (IFETCH1);
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
@@ -1694,7 +1744,7 @@ DECODE:
         // than at WRITEBACK.
         rares <= ipc;
         wrra <= 1'b1;
-        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
+        pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
         if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
@@ -1708,7 +1758,7 @@ DECODE:
         Rd <= 5'd31;
         Rs1 <= 5'd31;
         wrirf <= 1'b1;
-        pc <= {pc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
+        pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + (ir[10] ? cao : {AWID{1'd0}});
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
         if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
@@ -2543,6 +2593,7 @@ EXECUTE:
           endcase
         end
       `MVMAP: begin mathCnt <= 8'd2; goto (PAGEMAPA); end
+      `TLBRW: begin tlben <= 1'b1; tlbwr <= ia[63]; mathCnt <= 8'd2; goto (PAGEMAPA); end
       `PEEKQ:
         case(ia[3:0])
         4'd15:  res <= trace_dout;
@@ -2733,16 +2784,26 @@ MUL2:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 PAGEMAPA:
   begin
+    tlbwr <= 1'b0;
     mathCnt <= mathCnt - 2'd1;
     if (mathCnt==8'd0) begin
-      res <= {50'd0,pagemapoa}; 
+      case(funct5)
+      `MVMAP: res <= {50'd0,pagemapoa}; 
+      `TLBRW: begin tlben <= 1'b0; res <= tlbdato; end
+      default:  ;
+      endcase
       goto (WRITEBACK);
     end
   end
 MEMORY1:
   begin
+`ifdef RTF64_TLB
+    goto (MEMORY1a);
+`else
     goto (MEMORY2);
+`endif
     tEA();
+    xlaten <= TRUE;
 `ifdef CPU_B128
     sel <= fnSelect(ir) << ea[3:0];
     dat <= ib << {ea[3:0],3'b0};
@@ -2756,6 +2817,8 @@ MEMORY1:
     dat <= ib << {ea[1:0],3'b0};
 `endif
   end
+MEMORY1a:
+  goto (MEMORY2);
 // This cycle for pageram access
 MEMORY2:
   begin
@@ -2769,27 +2832,32 @@ MEMORY_KEYCHK1:
   end
 MEMORY3:
   begin
+    xlaten <= FALSE;
     goto (MEMORY4);
-    if (~d_cache) begin
-    cyc_o <= HIGH;
-    stb_o <= HIGH;
+		if (tlbmiss) begin
+		  tException(32'h80000004,ipc);
+  	  badaddr[3'd5] <= ea;
+  	end
+    else if (~d_cache) begin
+      cyc_o <= HIGH;
+      stb_o <= HIGH;
 `ifdef CPU_B128
-    sel_o <= sel[15:0];
-    dat_o <= dat[127:0];
+      sel_o <= sel[15:0];
+      dat_o <= dat[127:0];
 `endif
 `ifdef CPU_B64
-    sel_o <= sel[7:0];
-    dat_o <= dat[63:0];
+      sel_o <= sel[7:0];
+      dat_o <= dat[63:0];
 `endif
 `ifdef CPU_B32
-    sel_o <= sel[3:0];
-    dat_o <= dat[31:0];
+      sel_o <= sel[3:0];
+      dat_o <= dat[31:0];
 `endif
-    case(opcode)
-    `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
-      we_o <= HIGH;
-    default:  ;
-    endcase
+      case(opcode)
+      `STB,`STW,`STT,`STO,`STOC,`STPTR,`STX,`FSTO:
+        we_o <= HIGH;
+      default:  ;
+      endcase
     end
   end
 MEMORY4:
@@ -2835,9 +2903,16 @@ MEMORY5:
   end
 MEMORY6:
   begin
+`ifdef RTF64_TLB
+    goto (MEMORY6a);
+`else
     goto (MEMORY7);
+`endif
+    xlaten <= TRUE;
     tEA();
   end
+MEMORY6a:
+  goto (MEMORY7);
 MEMORY7:
   goto (MEMORY_KEYCHK2);
 MEMORY_KEYCHK2:
@@ -2847,10 +2922,21 @@ MEMORY_KEYCHK2:
   end
 MEMORY8:
   begin
+    xlaten <= FALSE;
     goto (MEMORY9);
-    stb_o <= HIGH;
-    sel_o <= sel[`SELH];
-    dat_o <= dat[`DATH];
+		if (tlbmiss) begin
+		  tException(32'h80000004,ipc);
+  	  badaddr[3'd5] <= ea;
+		  cyc_o <= LOW;
+		  stb_o <= LOW;
+		  we_o <= 1'b0;
+		  sel_o <= 1'd0;
+	  end
+		else begin
+      stb_o <= HIGH;
+      sel_o <= sel[`SELH];
+      dat_o <= dat[`DATH];
+    end
   end
 MEMORY9:
   if (acki) begin
@@ -2896,9 +2982,16 @@ MEMORY10:
   end
 MEMORY11:
   begin
+`ifdef RTF64_TLB
+    goto (MEMORY11a);
+`else
     goto (MEMORY12);
+`endif
+    xlaten <= TRUE;
     tEA();
   end
+MEMORY11a:
+  goto (MEMORY12);
 MEMORY12:
   goto (MEMORY_KEYCHK3);
 MEMORY_KEYCHK3:
@@ -2908,10 +3001,21 @@ MEMORY_KEYCHK3:
   end
 MEMORY13:
   begin
+    xlaten <= FALSE;
     goto (MEMORY14);
-    stb_o <= HIGH;
-    sel_o <= sel[11:8];
-    dat_o <= dat[95:64];
+		if (tlbmiss) begin
+		  tException(32'h80000004,ipc);
+  	  badaddr[3'd5] <= ea;
+		  cyc_o <= LOW;
+		  stb_o <= LOW;
+		  we_o <= 1'b0;
+		  sel_o <= 1'd0;
+	  end
+		else begin
+      stb_o <= HIGH;
+      sel_o <= sel[11:8];
+      dat_o <= dat[95:64];
+    end
   end
 MEMORY14:
   if (acki) begin
