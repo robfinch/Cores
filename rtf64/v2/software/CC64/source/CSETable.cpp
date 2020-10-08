@@ -297,9 +297,9 @@ void CSETable::InitializeTempRegs()
 					GenerateDiadic(op_mov, 0, ap2, ap);
 				}
 				else {
-					size = GetNaturalSize(exptr);
+					size = exptr->GetNaturalSize();
 					ap->isUnsigned = exptr->isUnsigned;
-					cg.GenLoad(ap2, ap, size, size);
+					cg.GenerateLoad(ap2, ap, size, size);
 				}
 				ReleaseTempReg(ap);
 			}

@@ -186,6 +186,7 @@ Instruction *Instruction::Get(int op)
 {
 	// This test really not needed in a properly working compiler.
 	// It could be assumed that the ops passed are only valid ones.
+	op &= 0x7fff;
 	if (op >= op_last || op < 0)
 		return (nullptr);	// Should throw an exception here.
 	return (&opl[opmap[op]]);

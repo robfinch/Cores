@@ -125,6 +125,7 @@ enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodatas
 
 enum e_op {
 	op_none,
+	op_aslx,
 	op_move, op_add, op_addu, op_addi, op_asfmul,
 	op_bf, op_bt, op_gcsub,
 	op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,

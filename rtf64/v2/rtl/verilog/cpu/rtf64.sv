@@ -159,11 +159,16 @@
 `define ROL   4'h2
 `define ROR   4'h3
 `define ASR   4'h5
+`define ASLX  4'h5
+`define LSRX  4'h6
 `define ASLI  4'h8
 `define LSRI  4'h9
 `define ROLI  4'hA
 `define RORI  4'hB
 `define ASRI  4'hC
+`define ASLXI 4'hD
+`define LSRXI 4'hE
+
 // 1r operations
 `define CNTLZR1 5'h00
 `define CNTLOR1 5'h01
@@ -820,6 +825,20 @@ default:  takb = 1'b0;
 endcase
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Operation mask for byte, wyde, tetra format operations.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+reg [63:0] op_mask;
+always @*
+case(ir[25:23]) // Fmt
+3'd0: op_mask = {64{1'b1}};
+3'd1: op_mask = {32{1'b1}};
+3'd2: op_mask = {16{1'b1}};
+3'd3: op_mask = {8{1'b1}};
+default:  op_mask = {64{1'b1}};
+endcase
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Trace
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg wr_trace, rd_trace;
@@ -1008,6 +1027,19 @@ default:	fnSelect = 8'h00;
 endcase
 endfunction
 
+function [31:0] fnTrim32;
+input [63:0] i;
+fnTrim32 = i[31:0];
+endfunction
+function [15:0] fnTrim16;
+input [63:0] i;
+fnTrim16 = i[15:0];
+endfunction
+function [7:0] fnTrim8;
+input [63:0] i;
+fnTrim8 = i[7:0];
+endfunction
+
 reg [AWID-1:0] ea;
 reg [7:0] ealow;
 wire [3:0] segsel = ea[AWID-1:AWID-4];
@@ -1042,10 +1074,10 @@ cntpop64 ucpop1 (ia, cntpopo);
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Shift / Bitfield
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-wire [127:0] shlr = ia << ib[5:0];
-wire [127:0] shrr = {ia,64'd0} >> ib[5:0];
-wire [127:0] shli = ia << imm[5:0];
-wire [127:0] shri = {ia,64'd0} >> imm[5:0];
+wire [128: 0] shlr = {ia,ir[27:24]==`ALSX ? cds[0] : 1'b0} << ib[5:0];
+wire [128:-1] shrr = {ir[27:24]==`LSRX ? cds[0] : 1'b0,ia,65'd0} >> ib[5:0];
+wire [128: 0] shli = {ia,ir[27:24]==`ALSIX  ? cds[0] : 1'b0} << imm[5:0];
+wire [128:-1] shri = {ir[27:24]==`LSRXI ? cds[0] : 1'b0,ia,65'd0} >> imm[5:0];
 
 wire [5:0] mb = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[23:18] : ib[5:0];
 wire [5:0] mw = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[29:24] : ic[5:0];
@@ -1797,11 +1829,15 @@ DECODE:
         `ROL:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
         `ROR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
         `ASR:  begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `ASLX: begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
+        `LSRX: begin wrirf <= 1'b1; wrcrf <= ir[31]; d_shiftr <= 1'b1; illegal_insn <= 1'b0; end
         `ASLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `LSRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `ROLI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `RORI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         `ASRI: begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `ASLXI:begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
+        `LSRXI:begin wrirf <= 1'b1; wrcrf <= ir[31]; imm <= ir[23:18]; illegal_insn <= 1'b0; end
         default:  ;
         endcase
       end
@@ -2065,7 +2101,7 @@ REGFETCH1:
     else if (opcode==`R2B || (d_shiftr & ir[23]))
       ib <= cd2[0];
     else if (d_jsr)
-      ib <= ipc;
+      ib <= pc; // pc is addressing next instruction
     else
       ib <= 64'd0;
     goto (REGFETCH2);
@@ -2360,62 +2396,243 @@ EXECUTE:
         `TST1:
           begin
             d_tst <= TRUE;
-            case(mop)
-            `CMP_CPY:
-              begin
-                crres[0] <= 1'b0;
-                crres[1] <= ia==64'd0;
-                crres[2] <= 1'b0;
-                crres[3] <= 1'b0;
-                crres[4] <= ^ia;
-                crres[5] <= ia[0];
-                crres[6] <= 1'b0;
-                crres[7] <= ia[63];
-              end
-            `CMP_AND:
-              begin
-                crres[0] <= 1'b0;
-                crres[1] <= cd && ia==64'd0;
-                crres[2] <= 1'b0;
-                crres[3] <= 1'b0;
-                crres[4] <= cd & ^ia;
-                crres[5] <= cd & ia[0];
-                crres[6] <= 1'b0;
-                crres[7] <= cd & ia[63];
-              end
-            `CMP_OR:
-              begin
-                crres[0] <= 1'b0;
-                crres[1] <= cd || ia==64'd0;
-                crres[2] <= 1'b0;
-                crres[3] <= 1'b0;
-                crres[4] <= cd | ^ia;
-                crres[5] <= cd | ia[0];
-                crres[6] <= 1'b0;
-                crres[7] <= cd | ia[63];
-              end
-            `CMP_ANDCM:
-              begin
-                crres[0] <= 1'b0;
-                crres[1] <= cd && !(ia==64'd0);
-                crres[2] <= 1'b0;
-                crres[3] <= 1'b0;
-                crres[4] <= cd & ~^ia;
-                crres[5] <= cd & ~ia[0];
-                crres[6] <= 1'b0;
-                crres[7] <= cd & ~ia[63];
-              end
-            `CMP_ORCM:
-              begin
-                crres[0] <= 1'b0;
-                crres[1] <= cd || !(ia==64'd0);
-                crres[2] <= 1'b0;
-                crres[3] <= 1'b0;
-                crres[4] <= cd | ~^ia;
-                crres[5] <= cd | ~ia[0];
-                crres[6] <= 1'b0;
-                crres[7] <= cd | ~ia[63];
-              end
+            case(ir[25:23])
+            3'd0: // Octa
+              case(mop)
+              `CMP_CPY:
+                begin
+                  crres[0] <= ia!=64'd0;
+                  crres[1] <= ia==64'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= ^ia;
+                  crres[5] <= ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= ia[63];
+                end
+              `CMP_AND:
+                begin
+                  crres[0] <= cd && ia!=64'd0;
+                  crres[1] <= cd && ia==64'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ^ia;
+                  crres[5] <= cd & ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ia[63];
+                end
+              `CMP_OR:
+                begin
+                  crres[0] <= cd || ia!=64'd0;
+                  crres[1] <= cd || ia==64'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ^ia;
+                  crres[5] <= cd | ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ia[63];
+                end
+              `CMP_ANDCM:
+                begin
+                  crres[0] <= cd && !(ia!=64'd0);
+                  crres[1] <= cd && !(ia==64'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ~^ia;
+                  crres[5] <= cd & ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ~ia[63];
+                end
+              `CMP_ORCM:
+                begin
+                  crres[0] <= cd || !(ia!=64'd0);
+                  crres[1] <= cd || !(ia==64'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ~^ia;
+                  crres[5] <= cd | ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ~ia[63];
+                end
+              default:  ;
+              endcase
+            3'd1: // Tetra
+              case(mop)
+              `CMP_CPY:
+                begin
+                  crres[0] <= ia[31:0]!=32'd0;
+                  crres[1] <= ia[31:0]==32'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= ^ia[31:0];
+                  crres[5] <= ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= ia[31];
+                end
+              `CMP_AND:
+                begin
+                  crres[0] <= cd && ia[31:0]!=32'd0;
+                  crres[1] <= cd && ia[31:0]==32'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ^ia[31:0];
+                  crres[5] <= cd & ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ia[31];
+                end
+              `CMP_OR:
+                begin
+                  crres[0] <= cd || ia[31:0]!=32'd0;
+                  crres[1] <= cd || ia[31:0]==32'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ^ia[31:0];
+                  crres[5] <= cd | ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ia[31];
+                end
+              `CMP_ANDCM:
+                begin
+                  crres[0] <= cd && !(ia[31:0]!=32'd0);
+                  crres[1] <= cd && !(ia[31:0]==32'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ~^ia[31:0];
+                  crres[5] <= cd & ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ~ia[31];
+                end
+              `CMP_ORCM:
+                begin
+                  crres[0] <= cd || !(ia[31:0]!=32'd0);
+                  crres[1] <= cd || !(ia[31:0]==32'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ~^ia[31:0];
+                  crres[5] <= cd | ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ~ia[31];
+                end
+              default:  ;
+              endcase
+            3'd2: // Wyde
+              case(mop)
+              `CMP_CPY:
+                begin
+                  crres[0] <= ia[15:0]!=16'd0;
+                  crres[1] <= ia[15:0]==16'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= ^ia[15:0];
+                  crres[5] <= ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= ia[15];
+                end
+              `CMP_AND:
+                begin
+                  crres[0] <= cd && ia[15:0]!=16'd0;
+                  crres[1] <= cd && ia[15:0]==16'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ^ia[15:0];
+                  crres[5] <= cd & ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ia[15];
+                end
+              `CMP_OR:
+                begin
+                  crres[0] <= cd || ia[15:0]!=16'd0;
+                  crres[1] <= cd || ia[15:0]==16'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ^ia[15:0];
+                  crres[5] <= cd | ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ia[15];
+                end
+              `CMP_ANDCM:
+                begin
+                  crres[0] <= cd && !(ia[15:0]!=16'd0);
+                  crres[1] <= cd && !(ia[15:0]==16'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ~^ia[15:0];
+                  crres[5] <= cd & ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ~ia[15];
+                end
+              `CMP_ORCM:
+                begin
+                  crres[0] <= cd || !(ia[15:0]!=16'd0);
+                  crres[1] <= cd || !(ia[15:0]==16'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ~^ia[15:0];
+                  crres[5] <= cd | ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ~ia[15];
+                end
+              default:  ;
+              endcase
+            3'd3: // Byte
+              case(mop)
+              `CMP_CPY:
+                begin
+                  crres[0] <= ia[7:0]!=8'd0;
+                  crres[1] <= ia[7:0]==8'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= ^ia[7:0];
+                  crres[5] <= ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= ia[7];
+                end
+              `CMP_AND:
+                begin
+                  crres[0] <= cd && ia[7:0]!=8'd0;
+                  crres[1] <= cd && ia[7:0]==8'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ^ia[7:0];
+                  crres[5] <= cd & ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ia[7];
+                end
+              `CMP_OR:
+                begin
+                  crres[0] <= cd || ia[7:0]!=8'd0;
+                  crres[1] <= cd || ia[7:0]==8'd0;
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ^ia[7:0];
+                  crres[5] <= cd | ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ia[7];
+                end
+              `CMP_ANDCM:
+                begin
+                  crres[0] <= cd && !(ia[7:0]!=8'd0);
+                  crres[1] <= cd && !(ia[7:0]==8'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd & ~^ia[7:0];
+                  crres[5] <= cd & ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd & ~ia[7];
+                end
+              `CMP_ORCM:
+                begin
+                  crres[0] <= cd || !(ia[7:0]!=8'd0);
+                  crres[1] <= cd || !(ia[7:0]==8'd0);
+                  crres[2] <= 1'b0;
+                  crres[3] <= 1'b0;
+                  crres[4] <= cd | ~^ia[7:0];
+                  crres[5] <= cd | ~ia[0];
+                  crres[6] <= 1'b0;
+                  crres[7] <= cd | ~ia[7];
+                end
+              default:  ;
+              endcase
             default:  ;
             endcase
           end
@@ -2550,17 +2767,64 @@ EXECUTE:
     `SHIFT:
       begin
         Rd <= ir[12:8];
+        Cs <= 2'd0;
         case(ir[27:24])
-        `ASL:  res <= shlr[63:0];
-        `LSR:  res <= shrr[127:64];
-        `ROL:  res <= shlr[63:0]|shlr[127:64];
+        `ASL:  
+          case(ir[30:28])
+          3'd0:  res <= shlr[64:1];
+          3'd1:  res <= {id[63:32],shlr[32:1]};
+          3'd2:  res <= {id[63:16],shlr[16:1]};
+          3'd3:  res <= {id[63:8],shlr[8:1]};
+          default: res <= shlr[64:1];
+          endcase
+        `LSR:
+          case(ir[30:28])
+          3'd0: res <= {shrr[63],ia >> ib[5:0]};
+          3'd1: res <= {id[63:32],fnTrim32(ia[31:0] >> ib[5:0])};
+          3'd2: res <= {id[63:16],fnTrim16(ia[15:0] >> ib[5:0])};
+          3'd3: res <= {id[63:8],fnTrim8(ia[7:0] >> ib[5:0])};
+          default:  {shrr[63],ia >> ib[5:0]};
+          endcase
+        `ROL:  res <= shlr[64:1]|shlr[128:65];
         `ROR:  res <= shrr[127:64]|shrr[63:0];
-        `ASR:  res <= ia[63] ? {{64{1'b1}},ia} >> ib[5:0] : shlr[63:0];
-        `ASLI: res <= shli[63:0];
-        `LSRI: res <= shri[127:64];
-        `ROLI: res <= shli[63:0]|shli[127:64];
+        `ASR:  
+          case(ir[30:28])
+          3'd0: res <= ia[63] ? {{64{1'b1}},ia} >> ib[5:0] : ia >> ib[5:0];
+          3'd1: res <= {id[63:32],fnTrim32(ia[31] ? ({{96{1'b1}},ia[31:0]} >> ib[5:0]) : ia[31:0] >> ib[5:0])};
+          3'd2: res <= {id[63:16],fnTrim16(ia[31] ? ({{112{1'b1}},ia[15:0]} >> ib[5:0]) : ia[15:0] >> ib[5:0])};
+          3'd3: res <= {id[63:8],fnTrim8(ia[31] ? ({{120{1'b1}},ia[7:0]} >> ib[5:0]) : ia[7:0] >> ib[5:0])};
+          default:  res <= ia[63] ? {{64{1'b1}},ia} >> ib[5:0] : shrr[63:0];
+          endcase
+        `LSRX: res <= {shrr[63],shrr[127:64]};
+        `ASLX: res <= shlr[63:0];
+        `ASLI:
+          case(ir[30:28])
+          3'd0:  res <= shli[64:1];
+          3'd1:  res <= {id[63:32],shli[32:1]};
+          3'd2:  res <= {id[63:16],shli[16:1]};
+          3'd3:  res <= {id[63:8],shli[8:1]};
+          default: res <= shli[64:1];
+          endcase
+        `LSRI:
+          case(ir[30:28])
+          3'd0: res <= {shrr[63],ia >> imm[5:0]};
+          3'd1: res <= {id[63:32],fnTrim32(ia[31:0] >> imm[5:0])};
+          3'd2: res <= {id[63:16],fnTrim16(ia[15:0] >> imm[5:0])};
+          3'd3: res <= {id[63:8],fnTrim8(ia[7:0] >> imm[5:0])};
+          default:  {shrr[63],ia >> imm[5:0]};
+          endcase
+        `ROLI: res <= shli[64:1]|shli[128:65];
         `RORI: res <= shri[127:64]|shri[63:0];
-        `ASRI: res <= ia[63] ? {{64{1'b1}},ia} >> imm[5:0] : shli[63:0];
+        `ASRI: res <= ia[63] ? {{64{1'b1}},ia} >> imm[5:0] : shri[63:0];
+          case(ir[30:28])
+          3'd0: res <= ia[63] ? {{64{1'b1}},ia} >> imm[5:0] : ia >> imm[5:0];
+          3'd1: res <= {id[63:32],fnTrim32(ia[31] ? ({{96{1'b1}},ia[31:0]} >> imm[5:0]) : ia[31:0] >> imm[5:0])};
+          3'd2: res <= {id[63:16],fnTrim16(ia[31] ? ({{112{1'b1}},ia[15:0]} >> imm[5:0]) : ia[15:0] >> imm[5:0])};
+          3'd3: res <= {id[63:8],fnTrim8(ia[31] ? ({{120{1'b1}},ia[7:0]} >> imm[5:0]) : ia[7:0] >> imm[5:0])};
+          default:  res <= ia[63] ? {{64{1'b1}},ia} >> imm[5:0] : ia >> imm[5:0];
+          endcase
+        `ASLXI: res <= shli[64:1];
+        `LSRXI: res <= {shri[63],shri[127:64]};
         default:  ;
         endcase
       end

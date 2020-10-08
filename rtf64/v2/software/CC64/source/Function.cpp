@@ -1359,7 +1359,7 @@ Operand *Function::MakeDirect(ENODE *node) { return (compiler.of.MakeDirect(node
 Operand *Function::MakeStringAsNameConst(char *s, e_sg seg) { return (compiler.of.MakeStringAsNameConst(s, seg)); }
 Operand *Function::MakeIndexed(int64_t o, int i) { return (cg.MakeIndexed(o, i)); }
 Operand *Function::MakeIndexed(ENODE *node, int rg) { return (cg.MakeIndexed(node, rg)); }
-void Function::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size) { cg.GenLoad(ap3, ap1, ssize, size); }
+void Function::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size) { cg.GenerateLoad(ap3, ap1, ssize, size); }
 
 
 // When going to insert a class method, check the base classes to see if it's

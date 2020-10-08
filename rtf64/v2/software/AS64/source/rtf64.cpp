@@ -36,7 +36,7 @@
 #define I_ADDI	0x04
 #define I_SUBFI 0x05
 #define I_MULI	0x06
-#define I_CMPI	0x07
+#define I_CMP		0x07
 #define I_ANDI	0x08
 #define I_ORI		0x09
 #define I_EORI	0x0A
@@ -157,7 +157,6 @@
 #define I_FSTO	0xAB
 #define I_STX		0xAF
 #define I_STO24	0xB0
-#define I_PUSHC64	0xB1
 #define I_NOP		0xEA
 
 #define I_FLT2	0xF2
@@ -195,7 +194,6 @@
 #define I_ADD2	0x04
 #define I_SUB2	0x05
 #define I_MUL		0x06
-#define I_CMP		0x07
 #define I_NAND	0x08
 #define I_NOR		0x09
 #define I_ENOR	0x0A
@@ -270,6 +268,8 @@
 #define I_FSEQ	0x11
 #define I_FSLT	0x12
 #define I_FSLE	0x13
+
+#define CI_TABLE_SIZE		1536
 
 static void (*jumptbl[tk_last_token])();
 static int64_t parm1[tk_last_token];
@@ -1720,8 +1720,6 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 			length = 2;
 			insnStats.pushes++;
 			break;
-		case I_PUSHC64:
-			length = 9;
 		case I_PUSHC:
 			insnStats.pushes++;
 			break;
@@ -1823,9 +1821,7 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 		case I_WYDNDX:
 			length = 5;
 			break;
-		case I_CMPI:
-			if ((oc >> 10) & 7)
-				insnStats.mops++;
+		case I_CMP:
 			insnStats.compares++;
 			break;
 		case I_FLT2:
@@ -1864,9 +1860,9 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 	}
 	if (pass > 3) {
 		if (can_compress && !expand_flag && gCanCompress && length > 2 && length <= 4) {
-			for (ndx = 0; ndx < min(256, htblmax); ndx++) {
+			for (ndx = 0; ndx < min(CI_TABLE_SIZE, htblmax); ndx++) {
 				if (oc == hTable[ndx].opcode) {
-					emitCode(0x70);
+					emitCode(0x70|(ndx >> 8));
 					emitCode(ndx);
 					num_bytes += 2;
 					num_insns += 1;
@@ -2272,8 +2268,8 @@ xit:
 static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 {
 	int Ra;
-	int Cr, Rtp;
-	char *p;
+	int Rt, Rtp;
+	char* p;
 	int64_t val;
 	int sz = 3;
 	bool li = false;
@@ -2281,38 +2277,39 @@ static void process_cmpi(int64_t opcode6, int64_t func6, int64_t bit23)
 
 	p = inptr;
 	if (*inptr == '.')
-		mop = getMergeOp();
-	if (*inptr == '.')
 		getSz(&sz);
+	if (*inptr == '.') {
+		inptr++;
+		recflag = true;
+	}
 	p = inptr;
-	Cr = getRegisterX();
-	if (Cr < 112 || Cr > 115) {
-		Cr = 0;
-		inptr = p;
-	}
-	else {
-		Cr &= 3;
-		need(',');
-	}
-	Ra = getRegisterX();
+	Rt = getRegisterX();
 	need(',');
+	p = inptr;
+	Ra = getRegisterX();
+	if (Ra < 0) {
+		inptr = p;
+		Ra = Rt;
+		Rt = 0;
+	}
+	else
+		need(',');
 	NextToken();
 	val = expr();
 	if (!IsNBit(val, 13)) {
 		if (!IsNBit(val, 38)) {
 			LoadConstant(val, 2);
-			emit_insn(RCF(recflag)|
-				FUNC5(func6) | RS2(2) | RS1(Ra) | RD((mop << 3) | Cr) | I_R2A);
+			emit_insn(RCF(recflag)|FUNC5(func6) | RS2(2) | RS1(Ra) | RD(Rt) | I_R2A);
 			return;
 		}
 		LoadConstant(val, 2);
-		emit_insn(RCF(recflag) | FUNC5(func6) | RS2(2) | RS1(Ra) | RD((mop << 3) | Cr) | I_R2A);
+		emit_insn(RCF(recflag) | FUNC5(func6) | RS2(2) | RS1(Ra) | RD(Rt) | I_R2A);
 		return;
 	}
 	emit_insn(
 		RCF(0) |
 		IMM(val) |
-		RD((mop<<3)|Cr) |
+		RD(Rt) |
 		RS1(Ra) |
 		opcode6);
 xit:
@@ -2583,35 +2580,29 @@ static void process_cmp()
 	p = inptr;
 	// fxdiv, transform
 	// - check for writeback indicator
-	if (inptr[0] == '.')
-		mop = getMergeOp();
 	if (*inptr == '.')
 		getSz(&sz);
-	if (*inptr == '.')
+	if (*inptr == '.') {
+		inptr++;
 		recflag = TRUE;
+	}
 	p = inptr;
-	Rt = Cr = getRegisterX();
-	if (Cr >= 0 && Cr <= 31) {
-		opcode = I_R2B;
-		need(',');
-	}
-	else if (Cr < 112 || Cr > 119) {
-		Cr = 0;
-		inptr = p;
-	}
-	else {
-		need(',');
-	}
+	Rt = getRegisterX();
+	need(',');
+	p == inptr;
 	Ra = getRegisterX();
-	if (Ra == -1) {
-		opcode = I_R2A;
+	if (Ra < 0) {
+		inptr = p;
+		if (token == '#') {
+			process_cmpi(iop, funct6, bit23);
+			return;
+		}
+		error("CMP: a source register is required");
+		return;
 	}
 	if (token == ',') {
 		NextToken();
 		if (token == '#') {
-			if ((iop < 0 && iop != -0x84) || opcode == I_R2B)
-				error("Immediate mode not supported");
-			//printf("Insn:%d\n", token);
 			inptr = p;
 			process_cmpi(iop, funct6, bit23);
 			return;
@@ -2632,13 +2623,7 @@ static void process_cmp()
 	//}
 	Ra = Ra & 0x1f;
 	Rb = Rb & 0x1f;
-	if (opcode == I_R2B && Rt < 32) {
-		if (funct6 == I_CMP)
-			funct6 = I_CMPR2B;
-		emit_insn(RCF(recflag) | FUNC6(funct6) | FMT(sz) | RS2(Rb) | RD(Rt) | RS1(Ra) | opcode);
-	}
-	else
-		emit_insn(RCF(recflag) | FUNC6(funct6) | FMT(sz) | RS2(Rb) | RD((mop << 3) | Cr) | RS1(Ra) | opcode);
+	emit_insn(RCF(recflag) | FUNC6(funct6) | FMT(sz) | RS2(Rb) | RD(Rt) | RS1(Ra) | I_R2A);
 xit:
 	prevToken();
 	ScanToEOL();
@@ -3889,9 +3874,10 @@ static void process_push()
 			goto xit;
 		}
 		else {
+			LoadConstant(val, 2);
 			emit_insn(
-				(val << 8LL) |
-				I_PUSHC64, true
+				RD(2) |
+				I_PUSH, true
 			);
 			goto xit;
 		}
@@ -5746,7 +5732,7 @@ static void process_default()
 	case tk_tlbwi:   process_tlb(4); break;
 	case tk_tlbwr:   process_tlb(3); break;
 	case tk_tlbwrreg:   process_tlb(8); break;
-	case tk_tst:	process_rop(0x0B);
+	case tk_tst:	process_rop(I_TST);
 		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
 	/*
 	case tk_vadd: process_vrrop(0x04); break;
@@ -5818,12 +5804,8 @@ void rtf64_processMaster()
 		parm3[tk_add] = I_R2A;
 		jumptbl[tk_cmp] = &process_cmp;
 		parm1[tk_cmp] = I_CMP;
-		parm2[tk_cmp] = I_CMPI;
+		parm2[tk_cmp] = I_CMP;
 		parm3[tk_cmp] = I_R2A;
-		jumptbl[tk_cmpu] = &process_cmp;
-		parm1[tk_cmpu] = I_CMPUR2B;
-		parm2[tk_cmpu] = I_CMPI;
-		parm3[tk_cmpu] = I_R2A;
 		jumptbl[tk_and] = &process_rrop;
 		parm1[tk_and] = I_AND2;
 		parm2[tk_and] = I_ANDI;

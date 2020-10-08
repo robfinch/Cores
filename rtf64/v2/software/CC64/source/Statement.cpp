@@ -1159,7 +1159,7 @@ Operand *Statement::MakeDoubleIndexed(int i, int j, int scale) { return (cg.Make
 Operand *Statement::MakeDirect(ENODE *node) { return (cg.MakeDirect(node)); };
 Operand *Statement::MakeIndexed(ENODE *node, int rg) { return (cg.MakeIndexed(node, rg)); };
 
-void Statement::GenStore(Operand *ap1, Operand *ap3, int size) { cg.GenStore(ap1, ap3, size); }
+void Statement::GenStore(Operand *ap1, Operand *ap3, int size) { cg.GenerateStore(ap1, ap3, size); }
 
 void Statement::GenMixedSource()
 {
@@ -1870,7 +1870,7 @@ void Statement::GenerateTry()
 		if (ap2->mode == am_reg)
 			GenerateDiadic(op_mov, 0, ap2, makereg(1));
 		else
-			GenStore(makereg(1), ap2, GetNaturalSize(node));
+			GenStore(makereg(1), ap2, node->GetNaturalSize());
 		ReleaseTempRegister(ap2);
 		//            GenStore(makereg(1),MakeIndexed(sym->value.i,regFP),sym->tp->size);
 		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(24));
@@ -2045,7 +2045,7 @@ void Statement::Generate()
 		case st_expr:
 			initstack();
 			ap = cg.GenerateExpression(stmt->exp, am_all | am_novalue,
-				GetNaturalSize(stmt->exp));
+				stmt->exp->GetNaturalSize());
 			ReleaseTempRegister(ap);
 			tmpFreeAll();
 			break;

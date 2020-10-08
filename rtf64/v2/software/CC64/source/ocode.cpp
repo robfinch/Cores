@@ -1194,10 +1194,12 @@ void OCODE::OptLea()
 	}
 }
 
+// Converts two separate register pushes into one operation.
 void OCODE::OptPush()
 {
 	OCODE *ip;
 
+	return;
 	ip = back;
 	if (ip && !ip->remove) {
 		if (ip->opcode == op_push) {

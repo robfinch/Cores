@@ -241,6 +241,7 @@ Operand *OperandFactory::makecreg(int r)
 	ap = allocOperand();
 	ap->mode = am_creg;
 	ap->preg = r;
+	ap->isBool = true;
 	return (ap);
 }
 

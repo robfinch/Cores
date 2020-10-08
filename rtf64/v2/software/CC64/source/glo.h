@@ -420,7 +420,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[267];
+extern Instruction opl[268];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 

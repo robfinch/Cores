@@ -586,15 +586,20 @@ public:
 	Operand *GenIndex();
 	Operand *GenHook(int flags, int size);
 	Operand *GenSafeHook(int flags, int size);
-	Operand *GenShift(int flags, int size, int op);
+	Operand *GenerateShift(int flags, int size, int op);
 	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
 	Operand *GenUnary(int flags, int size, int op);
 	Operand *GenBinary(int flags, int size, int op);
-	Operand *GenAssignShift(int flags, int size, int op);
-	Operand *GenAssignAdd(int flags, int size, int op);
-	Operand *GenAssignLogic(int flags, int size, int op);
+	Operand *GenerateAssignShift(int flags, int size, int op);
+	Operand *GenerateAssignAdd(int flags, int size, int op);
+	Operand *GenerateAssignLogic(int flags, int size, int op);
 	Operand *GenLand(int flags, int op, bool safe);
+	Operand* GenerateBitfieldDereference(int flags, int size, int opt);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int offset, int width);
+	Operand* GenerateBitfieldAssign(int flags, int size);
+	Operand* GenerateBitfieldAssignAdd(int flags, int size, int op);
+	Operand* GenerateBitfieldAssignLogic(int flags, int size, int op);
 
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);
@@ -809,14 +814,20 @@ public:
 	Operand *MakeDirect(ENODE *node);
 	Operand *MakeIndexed(ENODE *node, int rg);
 
+	virtual Operand* MakeBoolean(Operand* oper);
 	void GenerateHint(int num);
 	void GenerateComment(char *cm);
 	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int typ);
-	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
-	void GenStore(Operand *ap1, Operand *ap3, int size);
+	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenerateStore(Operand *ap1, Operand *ap3, int size);
+	virtual Operand* GenerateSafeLand(ENODE *, int flags, int op);
+	virtual void GenerateBranchTrue(Operand* ap, int label);
+	virtual void GenerateBranchFalse(Operand* ap, int label);
 	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit) { return (false); };
+	virtual void GenerateLea(Operand* ap1, Operand* ap2);
+	virtual void SignExtendBitfield(Operand* ap3, uint64_t mask);
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
-	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
+	virtual void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
 	Operand *GenerateDereference(ENODE *node, int flags, int size, int su);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
@@ -846,14 +857,38 @@ public:
 class RTF64CodeGenerator : public CodeGenerator
 {
 public:
+	Operand* MakeBoolean(Operand* oper);
+	void GenerateLea(Operand* ap1, Operand* ap2);
+	void GenerateBranchTrue(Operand* ap, int label);
+	void GenerateBranchFalse(Operand* ap, int label);
 	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit);
+	Operand* GenerateEq(ENODE* node);
+	Operand* GenerateNe(ENODE* node);
+	Operand* GenerateLt(ENODE* node);
+	Operand* GenerateLe(ENODE* node);
+	Operand* GenerateGt(ENODE* node);
+	Operand* GenerateGe(ENODE* node);
+	Operand* GenerateLtu(ENODE* node);
+	Operand* GenerateLeu(ENODE* node);
+	Operand* GenerateGtu(ENODE* node);
+	Operand* GenerateGeu(ENODE* node);
+	Operand* GenerateFeq(ENODE* node);
+	Operand* GenerateFne(ENODE* node);
+	Operand* GenerateFlt(ENODE* node);
+	Operand* GenerateFle(ENODE* node);
+	Operand* GenerateFgt(ENODE* node);
+	Operand* GenerateFge(ENODE* node);
 	Operand *GenExpr(ENODE *node);
 	bool IsPascal(ENODE *ep);
 	void LinkAutonew(ENODE *node);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);
 	void PopArguments(Function *func, int howMany, bool isPascal = true);
+	Operand* GenerateSafeLand(ENODE *, int flags, int op);
 	Operand *GenerateFunctionCall(ENODE *node, int flags);
+	void SignExtendBitfield(Operand* ap3, uint64_t mask);
+	void GenerateBitfieldInsert(Operand* dst, Operand* src, int offset, int width);
+	Operand* GenerateBitfieldExtract(Operand* src, Operand* offset, Operand* width);
 };
 
 // Control Flow Graph

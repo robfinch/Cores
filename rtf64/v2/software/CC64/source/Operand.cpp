@@ -121,7 +121,7 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		return (ap);
 	if (ap->mode != am_reg && ap->mode != am_fpreg) {
 		ap1 = GetTempRegister();
-		cg.GenLoad(ap1, ap, isize, isize);
+		cg.GenerateLoad(ap1, ap, isize, isize);
 		ReleaseTempRegister(ap);
 		switch (isize)
 		{
@@ -241,7 +241,7 @@ void Operand::MakeLegal(int flags, int size)
 				if (this->tp->GetBtp())
 					ap2->isUnsigned = this->tp->GetBtp()->isUnsigned;
 			}
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			cg.GenLoadConst(this, ap2);
@@ -253,8 +253,11 @@ void Operand::MakeLegal(int flags, int size)
 		case am_fpreg:
 			GenerateDiadic(op_ftoi, fpsize(), ap2, this);
 			break;
+		case am_creg:
+			GenerateTriadic(op_aslx, 0, ap2, makereg(regZero), cg.MakeImmediate((int64_t)1));
+			break;
 		default:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_reg;
@@ -280,7 +283,7 @@ void Operand::MakeLegal(int flags, int size)
 		switch (mode) {
 		case am_ind:
 		case am_indx:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			ap1 = GetTempRegister();
@@ -292,7 +295,7 @@ void Operand::MakeLegal(int flags, int size)
 			GenerateDiadic(op_itof, ap2->fpsize(), ap2, this);
 			break;
 		default:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_fpreg;
@@ -313,16 +316,17 @@ void Operand::MakeLegal(int flags, int size)
 		switch (mode) {
 		case am_ind:
 		case am_indx:
+		case am_indx2:
 			ap2 = GetTempRegister();
-			cg.GenLoad(ap2, this, size, size);
-			GenerateTriadic(op_sne, 0, makecreg(0), ap2, makereg(regZero));
+			cg.GenerateLoad(ap2, this, size, size);
+			cg.MakeBoolean(ap2);
 			ReleaseTempReg(ap2);
 			return;
 		case am_imm:
 			GenerateTriadic(op_sne, 0, makecreg(0), makereg(regZero), this);
 			return;
 		case am_reg:
-			GenerateTriadic(op_sne, 0, makecreg(0), this, makereg(regZero));
+			cg.MakeBoolean(this);
 			return;
 		}
 	}
@@ -349,7 +353,7 @@ void Operand::MakeLegal(int flags, int size)
 	switch (mode) {
 	case am_ind:
 	case am_indx:
-		cg.GenLoad(ap2, this, size, size);
+		cg.GenerateLoad(ap2, this, size, size);
 		break;
 	case am_imm:
 		cg.GenLoadConst(this, ap2);
@@ -359,7 +363,7 @@ void Operand::MakeLegal(int flags, int size)
 		GenerateDiadic(op_mov, 0, ap2, this);
 		break;
 	default:
-		cg.GenLoad(ap2, this, size, size);
+		cg.GenerateLoad(ap2, this, size, size);
 	}
 	mode = am_reg;
 	preg = ap2->preg;

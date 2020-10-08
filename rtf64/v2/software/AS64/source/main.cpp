@@ -179,21 +179,30 @@ void DumphTable()
    // Sort the table (already sorted)
 //   qsort(pt, htblmax, sizeof(HTBLE), hcmp);
 
-   if (gCpu=='F' || gCpu==RTF64) {
+   if (gCpu == RTF64) {
+     fprintf(ofp, "%d compressable instructions\n", htblmax);
+     fprintf(ofp, "The top 1536 are:\n", htblmax);
+     fprintf(ofp, "Comp  Opcode  Count\n");
+     for (nn = 0; nn < htblmax && nn < 1536; nn++) {
+       fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+     }
+     return;
+   }
+   if (gCpu=='F') {
     fprintf(ofp, "%d compressable instructions\n", htblmax);
     fprintf(ofp, "The top 256 are:\n", htblmax);
     fprintf(ofp, "Comp  Opcode  Count\n"); 
     for (nn = 0; nn < htblmax && nn < 256; nn++) {
-        fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+      fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
     }
-	return;
-   }
-    fprintf(ofp, "%d compressable instructions\n", htblmax);
-    fprintf(ofp, "The top 1024 are:\n", htblmax);
-    fprintf(ofp, "Comp  Opcode  Count\n"); 
-    for (nn = 0; nn < htblmax && nn < 1024; nn++) {
-        fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
-    }
+    return;
+  }
+  fprintf(ofp, "%d compressable instructions\n", htblmax);
+  fprintf(ofp, "The top 1024 are:\n", htblmax);
+  fprintf(ofp, "Comp  Opcode  Count\n"); 
+  for (nn = 0; nn < htblmax && nn < 1024; nn++) {
+      fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+  }
 }
 
 // ---------------------------------------------------------------------------
