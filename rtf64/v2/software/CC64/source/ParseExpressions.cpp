@@ -732,7 +732,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			getch();
 		if( lastch == '(') {
 			sp = allocSYM();
-			sp->fi = allocFunction(sp->id);
+			sp->fi = compiler.ff.MakeFunction(sp->id);
 			sp->fi->sym = sp;
 			sp->fi->IsPascal = defaultcc == 1;
 			sp->tp = &stdfunc;
@@ -1880,7 +1880,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 			*/
 			if (sp==nullptr) {
 				sp = allocSYM();
-				sp->fi = allocFunction(sp->id);
+				sp->fi = MakeFunction(sp->id);
 				sp->fi->sym = sp;
 				sp->storage_class = sc_external;
 				sp->SetName(name);
@@ -1894,7 +1894,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 				sp->tp = TYP::Make(bt_func,0);
 				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
 				if (!sp->fi) {
-					sp->fi = allocFunction(sp->id);
+					sp->fi = MakeFunction(sp->id);
 					sp->fi->sym = sp;
 				}
 				sp->fi->AddProto(&typearray);
@@ -2097,6 +2097,8 @@ j1:
  *                      sizeof unary
  *                      typenum(typecast)
 												__mulf(a,b)
+												__bytendx(a,b)
+												__wydendx(a,b)
  //                     new 
  *
  */
@@ -2107,6 +2109,7 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
   int flag2;
 	int typ;
 	bool autonew = false;
+	Declaration decl;
 
 	Enter("<ParseUnary>");
     ep1 = NULL;
@@ -2293,7 +2296,19 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 		ep1->esize = 8;
 		tp = &stdint;
 		break;
-/*
+	case kw_wydendx:
+		NextToken();
+		needpunc(openpa, 46);
+		tp1 = ParseNonCommaExpression(&ep1);
+		needpunc(comma, 47);
+		tp2 = ParseNonCommaExpression(&ep2);
+		needpunc(closepa, 48);
+		ep1 = makenode(en_wydendx, ep1, ep2);
+		ep1->isUnsigned = TRUE;
+		ep1->esize = 8;
+		tp = &stdint;
+		break;
+		/*
 	case kw_abs:
 		NextToken();
 		if (lastst==openpa) {
@@ -2362,8 +2377,8 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 			if (flag2 && IsBeginningOfTypecast(lastst)) {
 				tp = head;
 				tp1 = tail;
-				Declaration::ParseSpecifier(0);
-				Declaration::ParsePrefix(FALSE);
+				decl.ParseSpecifier(0);
+				decl.ParsePrefix(FALSE);
 				if( head != NULL )
 					ep1 = makeinode(en_icon,head->size);
 				else {
@@ -2408,8 +2423,8 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 
 				tp = head;
 				tp1 = tail;
-  				Declaration::ParseSpecifier(0);
-  				Declaration::ParsePrefix(FALSE);
+  				decl.ParseSpecifier(0);
+  				decl.ParsePrefix(FALSE);
   				if( head != NULL )
   					ep1 = makeinode(en_icon,head->size);
   				else {
@@ -2469,8 +2484,8 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 		needpunc(openpa,3);
 		tp = head;
 		tp1 = tail;
-		Declaration::ParseSpecifier(0);
-		Declaration::ParsePrefix(FALSE);
+		decl.ParseSpecifier(0);
+		decl.ParsePrefix(FALSE);
 		if( head != NULL )
 			ep1 = makeinode(en_icon,head->GetHash());
 		else {
@@ -2509,6 +2524,7 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 {
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
+	Declaration decl;
 
   Enter("ParseCast ");
   *node = (ENODE *)NULL;
@@ -2543,10 +2559,10 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 	case openpa:
 		NextToken();
 		if (IsBeginningOfTypecast(lastst)) {
-			Declaration::ParseSpecifier(0); // do cast declaration
-			Declaration::ParsePrefix(FALSE);
-			tp = head;
-			tp1 = tail;
+			decl.ParseSpecifier(0); // do cast declaration
+			decl.ParsePrefix(FALSE);
+			tp = decl.head;
+			tp1 = decl.tail;
 			needpunc(closepa, 5);
 			if ((tp2 = ParseCastExpression(&ep1)) == NULL) {
 				error(ERR_IDEXPECT);
@@ -3699,5 +3715,6 @@ TYP *Expression::ParseExpression(ENODE **node)
 
 TYP *expression(ENODE **node)
 {
-	return (Expression::ParseExpression(node));
+	Expression k;
+	return (k.ParseExpression(node));
 }

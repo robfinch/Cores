@@ -342,7 +342,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__new");
-	sp->fi = allocFunction(sp->id);
+	sp->fi = ff.MakeFunction(sp->id);
 	sp->fi->sym = sp;
 	sp->fi->IsPascal = true;
 	tanew.Add(bt_long, 0);
@@ -354,7 +354,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__autonew");
-	sp->fi = allocFunction(sp->id);
+	sp->fi = ff.MakeFunction(sp->id);
 	sp->fi->sym = sp;
 	sp->fi->IsPascal = true;
 	tanew.Add(bt_long, 0);
@@ -366,7 +366,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__delete");
-	sp->fi = allocFunction(sp->id);
+	sp->fi = ff.MakeFunction(sp->id);
 	sp->fi->sym = sp;
 	sp->fi->IsPascal = true;
 	tadelete.Add(bt_pointer, 0);

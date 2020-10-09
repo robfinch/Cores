@@ -145,18 +145,25 @@
 
 #define I_LDO24	0x90
 
-#define I_STB		0xA0
-#define I_STW		0xA1
-#define I_STT		0xA2
-#define I_STO		0xA3
-#define I_STOC	0xA4
-#define I_STPTR	0xA5
+#define I_STBS	0xA0
+#define I_STWS	0xA1
+#define I_STTS	0xA2
+#define I_STOS	0xA3
+#define I_STOCS	0xA4
+#define I_STPTRS	0xA5
+
 #define I_STOT	0xA8
 #define I_PUSHC	0xA9
 #define I_PUSH	0xAA
 #define I_FSTO	0xAB
 #define I_STX		0xAF
-#define I_STO24	0xB0
+#define I_STB		0xB8
+#define I_STW		0xB9
+#define I_STT		0xBA
+#define I_STO		0xBB
+#define I_STOC	0xBC
+#define I_STPTR	0xBD
+
 #define I_NOP		0xEA
 
 #define I_FLT2	0xF2
@@ -236,6 +243,8 @@
 #define I_ROLI	0xA
 #define I_ROR		0x3
 #define I_RORI	0xB
+#define I_ASLX	0x5
+#define I_ASLXI	0xD
 
 // 2r Set operations
 #define I_SEQ		0x0
@@ -341,6 +350,9 @@ static int regCnst;
 #define COND(x)		(((x) & 0x1fLL) << 13LL)
 #define P2(x)			(((x) & 3LL) << 11LL)
 #define BRDISP(x)	(((x) & 0x3fffffLL) << 18LL)
+#define BO(x)		(((x) & 0x3fLL) << 18LL)
+#define BW(x)		(((x) & 0x3fLL) << 24LL)
+
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -348,6 +360,7 @@ static int regCnst;
 static void error(char *msg)
 {
 	printf("%s. (%d)\n", msg, /*mname.c_str(), */lineno);
+	fprintf(ofp, "%s. (%d)\n", msg, /*mname.c_str(), */lineno);
 }
 
 // ----------------------------------------------------------------------------
@@ -1647,6 +1660,8 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 			switch ((oc >> 24) & 0xfLL) {
 			case I_ASL:
 			case I_ASLI:
+			case I_ASLX:
+			case I_ASLXI:
 				insnStats.shls++;
 				insnStats.shifts++;
 				break;
@@ -1703,8 +1718,6 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 //		case I_LMI:
 //			insnStats.luis++;
 //			break;
-		case I_STO24:
-			length = 3;
 		case I_STB:
 		case I_STW:
 		case I_STT:
@@ -1782,6 +1795,8 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 			insnStats.beqi++;
 			insnStats.branches++;
 			break;
+		case I_BBC:
+			insnStats.bbc++;
 		case I_BEQZ:
 		case I_BNEZ:
 			insnStats.beqz++;
@@ -1862,7 +1877,7 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 		if (can_compress && !expand_flag && gCanCompress && length > 2 && length <= 4) {
 			for (ndx = 0; ndx < min(CI_TABLE_SIZE, htblmax); ndx++) {
 				if (oc == hTable[ndx].opcode) {
-					emitCode(0x70|(ndx >> 8));
+					emitCode(0x60|(ndx >> 8));
 					emitCode(ndx);
 					num_bytes += 2;
 					num_insns += 1;
@@ -2519,6 +2534,7 @@ static void process_rrop()
 		}
 		else {
 			error("R2 operation needs two source operands");
+			fprintf(ofp, "R2 operation needs two source operands\r");
 			Rb = 0;
 		}
 	}
@@ -3153,7 +3169,7 @@ static void process_rop(int oc)
 	p = inptr;
 	if (oc == I_TST && inptr[0] == '.')
 		mop = getMergeOp();
-	if (*p == '.')
+	if (*inptr == '.')
 		getSz(&sz);
 	if (*inptr == '.') {
 		inptr++;
@@ -3285,8 +3301,10 @@ static void process_bcc()
 	if (Cr < 0) { // no register
 		Cr = 0;
 	}
-	else if (Cr < 112 || Cr > 115)
+	else if (Cr < 112 || Cr > 115) {
 		error("Need condition register for branch");
+		fprintf(ofp, "Need condition register for branch");
+	}
 	else {
 		need(',');
 	}
@@ -3309,6 +3327,59 @@ static void process_bcc()
 	);
 	prevToken();
 	return;
+}
+
+// ---------------------------------------------------------------------------
+//
+// ---------------------------------------------------------------------------
+
+static void process_bbc(int opcode6, int opcode3)
+{
+	int Ra, Rc, pred;
+	int64_t bitno;
+	int64_t val;
+	int64_t disp;
+	char* p1;
+	int sz = 3;
+	char* p;
+	bool isn48 = false;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	bitno = expr();
+	need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc == -1) {
+		inptr = p;
+		NextToken();
+		val = expr();
+		disp = (val - code_address);
+		if (!IsNBit(disp, 12LL)) {
+			isn48 = !gpu;
+			if (!IsNBit(disp, 27LL) || gpu) {
+				if (pass > 4)
+					error("BBC/BBS Branch target too far away");
+			}
+		}
+		emit_insn(
+			(disp << 21LL) |
+			(opcode3 << 20LL) |
+			((bitno >> 5LL) << 18LL) |
+			RS1(Ra) |
+			RD(bitno) |
+			opcode6, false
+		);
+		return;
+	}
+	error("ibne: target must be a label");
 }
 
 // ---------------------------------------------------------------------------
@@ -4083,13 +4154,13 @@ static void process_store()
   mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
 		emit_insn(
-//			((int64_t)seg << 45LL) |
+			(((disp >> 5LL) & 1LL) << 29LL) |
 			(Sc << 28LL) |
 			RS3(Rc) |
 			RS2(Rs) |
 			RS1(Ra) |
-			RD(opcode6)|
-			I_STX, true);// seg == -1 ? 4 : 6);
+			RD(disp)|
+			opcode6, true);// seg == -1 ? 4 : 6);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -4104,31 +4175,42 @@ static void process_store()
 		else
 			val -= data_base_address;
 	}
-	if (!IsNBit(val, 13)) {
+	if (!IsNBit(val, 12)) {
 		LoadConstant(val, 2);
 		emit_insn(
-			//			((int64_t)seg << 45LL) |
 			RS3(2) |
 			RS2(Rs) |
 			RS1(Ra) |
-			RD(opcode6) |
-			I_STX, true);// seg == -1 ? 4 : 6);
+			opcode6, true);// seg == -1 ? 4 : 6);
 		return;
 	}
-	if (opcode6 == I_STO && IsNBit(val, 9)) {
-		emit_insn(
-			STDISP(val) |
-			RS2(Rs) |
-			RS1(Ra) |
-			I_STO24, true);
+	switch (opcode6) {
+	case I_STB:
+	case I_STW:
+	case I_STT:
+	case I_STO:
+	case I_STOC:
+	case I_STPTR:
+	case I_STOT:
+		if ((Ra == regSP || Ra == regFP) && (val & 7LL) == 0LL) {
+			emit_insn(
+				RS2(Rs) |
+				RS1((Ra & 1) | ((val >> 8LL) << 1LL)) |
+				RD(val >> 3LL) |
+				opcode6-0x18, true
+			);
+			ScanToEOL();
+			return;
+		}
 	}
-	else
-		emit_insn(
-			STDISP(val) |
-			RS2(Rs) |
-			RS1(Ra) |
-			opcode6, true);
-    ScanToEOL();
+	emit_insn(
+		(1 << 30LL) |	// set mode bit
+		(((val >> 5LL) & 0x7fLL) << 23LL) |
+		RS2(Rs) |
+		RS1(Ra) |
+		RD(val) |
+		opcode6, true);
+  ScanToEOL();
 }
 /*
 static void process_storepair(int64_t opcode6)
@@ -4372,8 +4454,8 @@ static void process_load()
 	case I_LDTU:
 	case I_LDO:
 	case I_LDOR:
-		if ((Ra == 30 || Ra == 31) && Rc <= 0) {
-			if (IsNBit(val, 13) && (val & 7)==0) {
+		if ((Ra == regFP || Ra == regSP) && Rc <= 0) {
+			if (IsNBit(val, 12) && (val & 7)==0) {
 				emit_insn(
 					(recflag << 23) |
 					(((val >> 3LL) & 0x1ffLL) << 14LL) |
@@ -4905,6 +4987,7 @@ static void process_shifti(int64_t op4)
 	emit_insn(
 		RCF(recflag) |
 		(sz << 28) |
+		(1 << 27) |
 		(op4 << 24) |
 		((val & 0x3f) << 18) |
 		RD(Rt) |
@@ -5280,6 +5363,29 @@ static void process_com(int oc)
 	prevToken();
 }
 
+static void process_sxx(int oc)
+{
+	int Ra, Rt;
+
+	if (*inptr == '.') {
+		inptr++;
+		recflag = true;
+	}
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	emit_insn(
+		(((oc >> 7) & 1) << 30) |
+		BW(oc) |
+		BO(0) |
+		RD(Rt) |
+		RS1(Ra) |
+		I_EXT
+	);
+	prevToken();
+	ScanToEOL();
+}
+
 static void process_sync(int oc)
 {
 //    emit_insn(oc,!expand_flag);
@@ -5522,9 +5628,10 @@ static void process_default()
 	case tk_align: process_align(); break;
 	case tk_andi:  process_riop(I_ANDI, I_AND2, 0); break;
 	case tk_asl: process_shift(I_ASL); break;
+	case tk_aslx: process_shift(I_ASLX); break;
 	case tk_asr: process_shift(I_ASR); break;
-		//case tk_bbc: process_bbc(0x26, 1); break;
-		//case tk_bbs: process_bbc(0x26, 0); break;
+	case tk_bbc: process_bbc(I_BBC, 0); break;
+	case tk_bbs: process_bbc(I_BBC, 1); break;
 	case tk_begin_expand: expandedBlock = 1; break;
 	case tk_beqi: process_beqi(I_BEQI, 0); break;
 	case tk_beqz: process_beqz(0x46); break;
@@ -5588,6 +5695,7 @@ static void process_default()
 	case tk_dcb: process_db(); break;
 	case tk_dct: process_dct(); break;
 	case tk_dcw: process_dcw(); break;
+	case tk_dco: process_dco(); break;
 	case tk_dep: process_bitfield(I_DEP, 0x00);
 	case tk_dh:  process_dh(); break;
 	case tk_dh_htbl:  process_dh_htbl(); break;
@@ -5623,6 +5731,7 @@ static void process_default()
 	case tk_fseq:	process_fsetop(I_FSEQ); break;
 	case tk_fsle:	process_fsetop(I_FSLE); break;
 	case tk_fslt:	process_fsetop(I_FSLT); break;
+//	case tk_fsne:	process_fsetop(I_FSNE); break;
 	case tk_gcsub: process_riop(I_GCSUBI, I_GCSUB, 0x00); break;
 	case tk_getto: process_rop(I_GETTO); break;
 	case tk_getzl: process_getzl(I_GETZL); break;
@@ -5720,9 +5829,9 @@ static void process_default()
 	case tk_sv:  process_sv(0x37); break;
 	case tk_swap: process_rop(0x03); break;
 		//case tk_swp:  process_storepair(0x27); break;
-	case tk_sxb: process_rop(0x1A); break;
-	case tk_sxc: process_rop(0x19); break;
-	case tk_sxh: process_rop(0x18); break;
+	case tk_sxb: process_sxx(0x07); break;
+	case tk_sxw: process_sxx(0x0F); break;
+	case tk_sxt: process_sxx(0x1F); break;
 	case tk_sync: emit_insn(0x04480002); break;
 	case tk_tlbdis:  process_tlb(6); break;
 	case tk_tlben:   process_tlb(5); break;
@@ -5752,10 +5861,11 @@ static void process_default()
 	*/
 	case tk_wai: emit_insn(FUNC5(I_WAI)|I_OSR2,true); break;
 	case tk_wfi: emit_insn(FUNC5(I_WAI) | I_OSR2,true); break;
+	case tk_wydndx: process_rrop();
 	case tk_xori: process_riop(0x0A,0x0A,0x00); break;
-	case tk_zxb: process_rop(0x0A); break;
-	case tk_zxc: process_rop(0x09); break;
-	case tk_zxh: process_rop(0x08); break;
+	case tk_zxb: process_sxx(0x87); break;
+	case tk_zxw: process_sxx(0x8F); break;
+	case tk_zxt: process_sxx(0x9F); break;
 	case tk_id:  process_label(); break;
 	case '-': compress_flag = 1; expand_flag = 0; break;
 	default:	
@@ -6033,14 +6143,18 @@ void rtf64_processMaster()
 		parm1[tk_fldo] = I_FLDO;
 		parm2[tk_fldo] = I_FLDO;
 		parm3[tk_fldo] = 0x03;
+		jumptbl[tk_fsto] = &process_store;
+		parm1[tk_fsto] = I_FSTO;
+		parm2[tk_fsto] = I_FSTO;
+		parm3[tk_fsto] = 0x03;
 		jumptbl[tk_bytndx] = &process_rrop;
 		parm1[tk_bytndx] = I_BYTNDX;
 		parm2[tk_bytndx] = I_BYTNDX;
 		parm3[tk_bytndx] = I_R2A;
-		jumptbl[tk_bytndx] = &process_rrop;
+		jumptbl[tk_wydndx] = &process_rrop;
 		parm1[tk_wydndx] = I_WYDNDX;
 		parm2[tk_wydndx] = I_WYDNDX;
-		parm3[tk_bytndx] = I_R2A;
+		parm3[tk_wydndx] = I_R2A;
 		jumptbl[tk_sf] = &process_store;
 		parm1[tk_sf] = 0x2B;
 		parm2[tk_sf] = 0x2D;

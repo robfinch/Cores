@@ -1013,7 +1013,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
 	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), MakeImmediate(node2->esize));
 //	GenerateDiadic(op_ldi, 0, makereg(regFirstArg + 2), MakeImmediate(node1->esize));
-	GenerateMonadic(op_call, 0, MakeStringAsNameConst("__aacpy",codeseg));
+	GenerateMonadic(op_jsr, 0, MakeStringAsNameConst("__aacpy",codeseg));
 	ReleaseTempReg(base2);
 	return (base);
 	//base = GenerateDereference(node1,am_mem,sizeOfWord,0);
@@ -1655,6 +1655,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
   case en_or:     ap1 = node->GenBinary(flags,size,op_or); goto retpt;
 	case en_xor:	ap1 = node->GenBinary(flags,size,op_xor); goto retpt;
 	case en_bytendx:	ap1 = node->GenBinary(flags, size, op_bytendx); goto retpt;
+	case en_wydendx:	ap1 = node->GenBinary(flags, size, op_wydendx); goto retpt;
 	case en_mulf:    ap1 = node->GenMultiply(flags, size, op_mulf); goto retpt;
 	case en_mul:    ap1 = node->GenMultiply(flags,size,op_mul); goto retpt;
   case en_mulu:   ap1 = node->GenMultiply(flags,size,op_mulu); goto retpt;
@@ -1738,13 +1739,13 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_sxc:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 2);
-		GenerateDiadic(op_sxc, 0, ap1, ap2);
+		GenerateDiadic(op_sxw, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		goto retpt;
 	case en_sxh:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 4);
-		GenerateDiadic(op_sxh, 0, ap1, ap2);
+		GenerateDiadic(op_sxt, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		goto retpt;
 	case en_cubw:
@@ -1757,23 +1758,23 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_cucu:
 	case en_ccu:
 		ap1 = GenerateExpression(node->p[0],am_reg,2);
-		GenerateDiadic(op_zxc,0,ap1,ap1);
+		GenerateDiadic(op_zxw,0,ap1,ap1);
 		goto retpt;
 	case en_ccwp:
 		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
-		GenerateDiadic(op_sxc, 0, ap1, ap1);
+		GenerateDiadic(op_sxw, 0, ap1, ap1);
 		goto retpt;
 	case en_cucwp:
 		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
-		GenerateDiadic(op_zxc, 0, ap1, ap1);
+		GenerateDiadic(op_zxw, 0, ap1, ap1);
 		goto retpt;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
 		ap1 = GenerateExpression(node->p[0],am_reg,4);
-		GenerateDiadic(op_zxh,0,ap1,ap1);
+		GenerateDiadic(op_zxt,0,ap1,ap1);
 		goto retpt;
 	case en_cbw:
 		ap1 = GenerateExpression(node->p[0],am_reg,1);
@@ -1782,11 +1783,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		goto retpt;
 	case en_ccw:
 		ap1 = GenerateExpression(node->p[0],am_reg,2);
-		GenerateDiadic(op_sxc,0,ap1,ap1);
+		GenerateDiadic(op_sxw,0,ap1,ap1);
 		goto retpt;
 	case en_chw:
 		ap1 = GenerateExpression(node->p[0],am_reg,4);
-		GenerateDiadic(op_sxh,0,ap1,ap1);
+		GenerateDiadic(op_sxt,0,ap1,ap1);
 		goto retpt;
 	case en_list:
 		ap1 = GetTempRegister();
@@ -1868,11 +1869,13 @@ void CodeGenerator::GenerateTrueJump(ENODE *node, int label, unsigned int predic
 		ap1 = GenerateExpression(node,am_reg|am_fpreg,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap1,0);
 		ReleaseTempRegister(ap1);
-		if (ap1->mode == am_fpreg)
-			GenerateTriadic(op_fbne, 0, ap1, makefpreg(0), MakeDataLabel(label));
+		if (ap1->mode == am_fpreg) {
+			GenerateTriadic(op_fsne, 0, makecreg(1), ap1, makefpreg(0));
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
+		}
 		else {
 			if (ap1->preg >= regFirstArg && ap1->preg < regFirstArg + 4)
-				GenerateDiadic(op_bnez, 0, ap1, MakeDataLabel(label));
+				GenerateDiadic(op_bnez, 0, ap1, MakeCodeLabel(label));
 			else {
 				ap2 = MakeBoolean(ap1);
 				ReleaseTempReg(ap1);
@@ -1944,11 +1947,13 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 		ap = GenerateExpression(node,am_reg|am_fpreg,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap,0);
 		ReleaseTempRegister(ap);
-		if (ap->mode==am_fpreg)
-			GenerateTriadic(op_fbeq, 0, ap, makefpreg(0), MakeDataLabel(label));
+		if (ap->mode == am_fpreg) {
+			GenerateTriadic(op_fseq, 0, makecreg(1), ap, makefpreg(0));
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
+		}
 		else {
 			if (ap->preg >= regFirstArg && ap->preg < regFirstArg + 4)
-				GenerateDiadic(op_beqz, 0, ap, MakeDataLabel(label));
+				GenerateDiadic(op_beqz, 0, ap, MakeCodeLabel(label));
 			else {
 				ap1 = MakeBoolean(ap);
 				ReleaseTempReg(ap);

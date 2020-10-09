@@ -1308,6 +1308,60 @@ void process_dct()
   ScanToEOL();
 }
 
+void process_dco()
+{
+  int64_t val;
+
+  SkipSpaces();
+  while (token != tk_eol) {
+    SkipSpaces();
+    if (*inptr == '"') {
+      inptr++;
+      while (*inptr != '"') {
+        if (*inptr == '\\') {
+          inptr++;
+          switch (*inptr) {
+          case '\\': emitOcta('\\'); inptr++; break;
+          case 'r': emitOcta(0x0D); inptr++; break;
+          case 'n': emitOcta(0x0A); inptr++; break;
+          case 'b': emitOcta('\b'); inptr++; break;
+          case '"': emitOcta('"'); inptr++; break;
+          default: inptr++; break;
+          }
+        }
+        else {
+          emitOcta(*inptr);
+          inptr++;
+        }
+      }
+      inptr++;
+    }
+    else if (*inptr == '\'') {
+      inptr++;
+      emitOcta(*inptr);
+      inptr++;
+      if (*inptr != '\'') {
+        printf("Missing ' in character constant.\r\n");
+      }
+    }
+    else {
+      NextToken();
+      val = expr();
+      // A pointer to an object might be emitted as a data word.
+      if (bGen && lastsym)
+        if (lastsym->segment < 5)
+          sections[segment + 7].AddRel(sections[segment].index, ((int64_t)(lastsym->ord + 1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
+      emitOcta(val);
+      prevToken();
+    }
+    SkipSpaces();
+    if (*inptr != ',')
+      break;
+    inptr++;
+  }
+  ScanToEOL();
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 

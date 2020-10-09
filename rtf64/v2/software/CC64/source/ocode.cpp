@@ -427,7 +427,7 @@ void OCODE::OptLoadByte()
 void OCODE::OptLoadHalf()
 {
 	if (fwd) {
-		if (fwd->opcode == op_sext32 || fwd->opcode == op_sxh ||
+		if (fwd->opcode == op_sext32 || fwd->opcode == op_sxt ||
 			(fwd->opcode == op_bfext && fwd->oper3->offset->i == 0 && fwd->oper4->offset->i == 31)) {
 			if (fwd->oper1->preg == oper1->preg) {
 				fwd->MarkRemove();
@@ -1088,13 +1088,13 @@ void OCODE::OptLdi()
 
 	if (fwd) {
 		if (oper2->offset->constflag) {
-			if (fwd->opcode == op_sxh) {
+			if (fwd->opcode == op_sxt) {
 				if (oper2->offset->i >= -2147483648L && oper2->offset->i <= 2147483647L) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_sxc) {
+			if (fwd->opcode == op_sxw) {
 				if (oper2->offset->i >= -32768 && oper2->offset->i <= 32767) {
 					fwd->MarkRemove();
 					optimized++;
@@ -1106,13 +1106,13 @@ void OCODE::OptLdi()
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_zxh) {
+			if (fwd->opcode == op_zxt) {
 				if (oper2->offset->i >= 0 && oper2->offset->i <= 4294967295L) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_zxc) {
+			if (fwd->opcode == op_zxw) {
 				if (oper2->offset->i >= 0 && oper2->offset->i <= 65535) {
 					fwd->MarkRemove();
 					optimized++;

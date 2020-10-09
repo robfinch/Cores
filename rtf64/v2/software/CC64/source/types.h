@@ -372,8 +372,9 @@ public:
     } value;
 	Float128 f128;
 	TYP *tp;
-    Statement *stmt;
+  Statement *stmt;
 
+	static Function* MakeFunction(int symnum);
 	static SYM *Copy(SYM *src);
 	SYM *Find(std::string name);
 	int FindNextExactMatch(int startpos, TypeArray *);
@@ -622,33 +623,38 @@ public:
 
 class Expression : public CompilerType
 {
-private:
-	static ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
-	static TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
-	static TYP *ParseUnaryExpression(ENODE **node, int got_pa);
-	static TYP *ParsePostfixExpression(ENODE **node, int got_pa);
-	static TYP *ParseCastExpression(ENODE **node);
-	static TYP *ParseMultOps(ENODE **node);
-	static TYP *ParseAddOps(ENODE **node);
-	static TYP *ParseShiftOps(ENODE **node);
-	static TYP *ParseRelationalOps(ENODE **node);
-	static TYP *ParseEqualOps(ENODE **node);
-	static TYP *ParseBitwiseAndOps(ENODE **node);
-	static TYP *ParseBitwiseXorOps(ENODE **node);
-	static TYP *ParseBitwiseOrOps(ENODE **node);
-	static TYP *ParseAndOps(ENODE **node);
-	static TYP *ParseSafeAndOps(ENODE **node);
-	static TYP *ParseOrOps(ENODE **node);
-	static TYP *ParseSafeOrOps(ENODE **node);
-	static TYP *ParseConditionalOps(ENODE **node);
-	static TYP *ParseNonAssignExpression(ENODE **node);
-	static TYP *ParseCommaOp(ENODE **node);
 public:
+	TYP* head;
+	TYP* tail;
+private:
+	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
+	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
+	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
+	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
+	TYP *ParseCastExpression(ENODE **node);
+	TYP *ParseMultOps(ENODE **node);
+	TYP *ParseAddOps(ENODE **node);
+	TYP *ParseShiftOps(ENODE **node);
+	TYP *ParseRelationalOps(ENODE **node);
+	TYP *ParseEqualOps(ENODE **node);
+	TYP *ParseBitwiseAndOps(ENODE **node);
+	TYP *ParseBitwiseXorOps(ENODE **node);
+	TYP *ParseBitwiseOrOps(ENODE **node);
+	TYP *ParseAndOps(ENODE **node);
+	TYP *ParseSafeAndOps(ENODE **node);
+	TYP *ParseOrOps(ENODE **node);
+	TYP *ParseSafeOrOps(ENODE **node);
+	TYP *ParseConditionalOps(ENODE **node);
+	TYP *ParseNonAssignExpression(ENODE **node);
+	TYP *ParseCommaOp(ENODE **node);
+public:
+	Expression();
 	// The following is called from declaration processing, so is made public
-	static TYP *ParseAssignOps(ENODE **node);
-	static TYP *ParseNonCommaExpression(ENODE **node);
+	TYP *ParseAssignOps(ENODE **node);
+	TYP *ParseNonCommaExpression(ENODE **node);
 	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
-	static TYP *ParseExpression(ENODE **node);
+	TYP *ParseExpression(ENODE **node);
+	Function* MakeFunction(int symnum);
 };
 
 class Operand : public CompilerType
@@ -798,6 +804,12 @@ public:
 	Operand *MakeNegIndexed(ENODE *node, int regno);
 	Operand *MakeDoubleIndexed(int regi, int regj, int scale);
 	Operand *MakeDirect(ENODE *node);
+};
+
+class FunctionFactory
+{
+public:
+	Function* MakeFunction(int symnum);
 };
 
 class CodeGenerator
@@ -1391,75 +1403,90 @@ public:
 
 class Declaration
 {
-	static void SetType(SYM *sp);
+	void SetType(SYM* sp);
 public:
+	TYP* head;
+	TYP* tail;
+	int bit_offset;
+	int bit_width;
+	int bit_next;
+	int bit_max;
+public:
+	Declaration();
 	Declaration *next;
-	static void AssignParameterName();
-	static int declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype);
-	static void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
-	static void ParseEnum(TABLE *table);
-	static void ParseVoid();
-	static void ParseConst();
-	static void ParseTypedef();
-	static void ParseNaked();
-	static void ParseShort();
-	static void ParseLong();
-	static void ParseInt();
-	static void ParseInt64();
-	static void ParseInt32();
-	static void ParseChar();
-	static void ParseInt8();
-	static void ParseByte();
-	static void ParseFloat();
-	static void ParseDouble();
-	static void ParseTriple();
-	static void ParseFloat128();
-	static void ParseVector();
-	static void ParseVectorMask();
-	static SYM *ParseId();
-	static void ParseDoubleColon(SYM *sp);
-	static void ParseBitfieldSpec(bool isUnion);
-	static int ParseSpecifier(TABLE *table);
-	static SYM *ParsePrefixId();
-	static SYM *ParsePrefixOpenpa(bool isUnion);
-	static SYM *ParsePrefix(bool isUnion);
-	static void ParseSuffixOpenbr();
-	static void ParseSuffixOpenpa(Function *);
-	static SYM *ParseSuffix(SYM *sp);
+	void AssignParameterName();
+	int declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype);
+	void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
+	void ParseEnum(TABLE *table);
+	void ParseVoid();
+	void ParseConst();
+	void ParseTypedef();
+	void ParseNaked();
+	void ParseShort();
+	void ParseLong();
+	void ParseInt();
+	void ParseInt64();
+	void ParseInt32();
+	void ParseChar();
+	void ParseInt8();
+	void ParseByte();
+	void ParseFloat();
+	void ParseDouble();
+	void ParseTriple();
+	void ParseFloat128();
+	void ParseVector();
+	void ParseVectorMask();
+	SYM *ParseId();
+	void ParseDoubleColon(SYM *sp);
+	void ParseBitfieldSpec(bool isUnion);
+	int ParseSpecifier(TABLE *table);
+	SYM *ParsePrefixId();
+	SYM *ParsePrefixOpenpa(bool isUnion);
+	SYM *ParsePrefix(bool isUnion);
+	void ParseSuffixOpenbr();
+	void ParseSuffixOpenpa(Function *);
+	SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
-	static void ParseAssign(SYM *sp);
-	static void DoDeclarationEnd(SYM *sp, SYM *sp1);
-	static void DoInsert(SYM *sp, TABLE *table);
-	static void AllocFunc(SYM *sp, SYM *sp1);
-	static SYM *FindSymbol(SYM *sp, TABLE *table);
+	void ParseAssign(SYM *sp);
+	void DoDeclarationEnd(SYM *sp, SYM *sp1);
+	void DoInsert(SYM *sp, TABLE *table);
+	SYM *FindSymbol(SYM *sp, TABLE *table);
 
-	static int GenStorage(int nbytes, int al, int ilc);
+	int GenerateStorage(int nbytes, int al, int ilc);
+	static Function* MakeFunction(int symnum);
+	static void MakeFunction(SYM* sp, SYM* sp1);
 };
 
 class StructDeclaration : public Declaration
 {
 public:
-	static void ParseMembers(SYM * sym, TYP *tp, int ztype);
-	static int Parse(int ztype);
+	void GetType(TYP** hd, TYP** tl) {
+		*hd = head; *tl = tail;
+	};
+	void ParseMembers(SYM * sym, TYP *tp, int ztype);
+	int Parse(int ztype);
 };
 
 class ClassDeclaration : public Declaration
 {
 public:
-	static void ParseMembers(SYM * sym, int ztype);
-	static int Parse(int ztype);
+	void GetType(TYP** hd, TYP** tl) {
+		*hd = head; *tl = tail;
+	};
+	void ParseMembers(SYM * sym, int ztype);
+	int Parse(int ztype);
 };
 
 class AutoDeclaration : public Declaration
 {
 public:
-	static void Parse(SYM *parent, TABLE *ssyms);
+	void Parse(SYM *parent, TABLE *ssyms);
 };
 
 class ParameterDeclaration : public Declaration
 {
 public:
-	static int Parse(int);
+	int Parse(int);
 };
 
 class GlobalDeclaration : public Declaration
@@ -1479,6 +1506,7 @@ public:
 	Function functionTable[3000];
 	TYP typeTable[32768];
 	OperandFactory of;
+	FunctionFactory ff;
 	short int pass;
 public:
 	GlobalDeclaration *decls;

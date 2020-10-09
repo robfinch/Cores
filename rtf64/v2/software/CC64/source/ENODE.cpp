@@ -575,7 +575,7 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
-	case en_bytendx:
+	case en_bytendx:	case en_wydendx:
 	case en_sub:
 	case en_mulf:   case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
@@ -816,7 +816,7 @@ void ENODE::scanexpr(int duse)
 		p[0]->scanexpr(duse);
 		p[1]->scanexpr(duse);
 		break;
-	case en_mulf:		case en_bytendx:
+	case en_mulf:		case en_bytendx:	case en_wydendx:
 	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
 	case en_mod:    case en_umod:   case en_and:
@@ -1781,8 +1781,8 @@ Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
 			}
 			switch (ssize) {
 			case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
-			case 2:	GenerateDiadic(op_sxc, 0, ap1, ap1); break;
-			case 4:	GenerateDiadic(op_sxh, 0, ap1, ap1); break;
+			case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
+			case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
 			}
 			ap1->MakeLegal( flags, size);
 			return (ap1);

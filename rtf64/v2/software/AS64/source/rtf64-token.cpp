@@ -431,7 +431,7 @@ int rtf64_NextToken()
 					tbndx++;
 					return (token = '_');
 					*/
-        // abs add addi addu addui and andcm andi align asr asri
+        // abs add addi addu addui and andcm andi align aslx asr asri
         case 'a':
         case 'A':
             if ((inptr[1]=='n' || inptr[1]=='N') && (inptr[2]=='d' || inptr[2]=='D') && isspaceOrDot(inptr[3])) {
@@ -508,7 +508,13 @@ int rtf64_NextToken()
 								tbndx++;
 								return token = tk_asli;
             }
-            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
+						if ((inptr[1] == 's' || inptr[1] == 'S') && (inptr[2] == 'l' || inptr[2] == 'L') && (inptr[3] == 'x' || inptr[3] == 'X') && isspaceOrDot(inptr[4])) {
+							inptr += 4;
+							tokenBuffer[tbndx] = tk_aslx;
+							tbndx++;
+							return token = tk_aslx;
+						}
+						if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
 								tokenBuffer[tbndx] = tk_asl;
 								tbndx++;
@@ -924,6 +930,22 @@ int rtf64_NextToken()
 							tokenBuffer[tbndx] = tk_bcs;
 							tbndx++;
 							return token = tk_bcs;
+						}
+						if ((inptr[1] == 'b' || inptr[1] == 'B') &&
+							(inptr[2] == 'c' || inptr[2] == 'C') &&
+							isspaceOrDot(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_bbc;
+							tbndx++;
+							return token = tk_bbc;
+						}
+						if ((inptr[1] == 'b' || inptr[1] == 'B') &&
+							(inptr[2] == 's' || inptr[2] == 'S') &&
+							isspaceOrDot(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_bbs;
+							tbndx++;
+							return token = tk_bbs;
 						}
 						if ((inptr[1] == 'y' || inptr[1] == 'Y') &&
 							(inptr[2] == 't' || inptr[2] == 'T') &&
@@ -1783,6 +1805,15 @@ int rtf64_NextToken()
 					tokenBuffer[tbndx] = tk_fldo;
 					tbndx++;
 					return token = tk_fldo;
+				}
+				if ((inptr[1] == 's' || inptr[1] == 'S') &&
+					(inptr[2] == 't' || inptr[2] == 'T') &&
+					(inptr[3] == 'o' || inptr[3] == 'O') &&
+					(isspaceOrDot(inptr[4]))) {
+					inptr += 4;
+					tokenBuffer[tbndx] = tk_fsto;
+					tbndx++;
+					return token = tk_fsto;
 				}
 				break;
 
@@ -3569,6 +3600,17 @@ int rtf64_NextToken()
 				tokenBuffer[tbndx] = tk_wfi;
 				tbndx++;
 				return token = tk_wfi;
+			}
+			if ((inptr[1] == 'y' || inptr[1] == 'Y') &&
+				(inptr[2] == 'd' || inptr[2] == 'D') &&
+				(inptr[3] == 'n' || inptr[3] == 'N') &&
+				(inptr[4] == 'd' || inptr[4] == 'D') &&
+				(inptr[5] == 'x' || inptr[5] == 'X') &&
+				isspaceOrDot(inptr[6])) {
+				inptr += 6;
+				tokenBuffer[tbndx] = tk_wydndx;
+				tbndx++;
+				return (token = tk_wydndx);
 			}
 			break;
 

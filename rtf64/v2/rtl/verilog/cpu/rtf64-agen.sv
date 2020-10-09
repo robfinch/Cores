@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -55,37 +55,40 @@ always @*
 casez(inst[`OPCODE])
 `LOAD:	// Loads
 	casez(inst[`OPCODE])
-	`LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDO,`LDOR,`LDOT,`LEA:
+	// Short form loads
+	`LDBS,`LDBUS,`LDWS,`LDWUS,`LDTS,`LDTUS,`LDOS,`LDORS://,`LDOT,`LEA:
 	  ma <= a + {{AMSB{inst[22]}},inst[22:14],3'd0};
-	`LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDOX,`LDORX,`LDOTX:
-	  ma <= a + cx + {{AMSB{inst[39]}},inst[39:32],inst[30:29],inst[22:18]};
+	`LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDO,`LDOR,`LDOT:
+	  if (instr[30])
+	    ma <= a + {{AMSB{inst[29]}},inst[29:18]};
+	  else
+	    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[22:18]};
 	`POP:   ma <= a;
 	`AMO:		ma <= a;
 	default:	
-	  ma <= a + cx + {{AMSB{inst[39]}},inst[39:32],inst[30:29],inst[22:18]};
+    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[22:18]};
 	endcase
 `STORE:	// stores
 	casez(inst[`OPCODE])
+	// Short form stores
+	`STBS,`STWS,`STTS,`STOS,`STOCS:
+	  ma <= a + {{AMSB{inst[22]}},inst[22:18],inst[13:8],3'd0};
 	`STB,`STW,`STT,`STO,`STOC,`STOT:
-	  ma <= a + {{AMSB{inst[14]}},inst[17:14],inst[13:8],3'd0};
-	`STBX,`STWX,`STTX,`STOX,`STOCX,`STOTX:
-	  ma <= a + cx + {{AMSB{inst[39]}},inst[39:32],inst[30:29],inst[12:8]};
+	  if (instr[30])
+	    ma <= a + {{AMSB{inst[29]}},inst[29:23],inst[12:8]};
+	  else
+	    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[12:8]};
 	`PUSHC:
 		ma <= a - 8'd8;
 	`PUSH:
-		case(inst[35:34])
-		2'd0:	ma <= a - 8'd0;
-		2'd1:	ma <= a - 8'd8;
-		2'd2:	ma <= a - 8'd16;
-		2'd3:	ma <= a - 8'd24;
-		endcase
+		ma <= a - 8'd8;
 	default:	
-		case(inst[`AM])
-		1'd0:	ma <= a + {{AMSB{inst[36]}},inst[36:23],inst[12:8]};
-		1'd1:	ma <= a + cx + {inst[36:33],inst[12:8]};
-		endcase
+	  if (instr[30])
+	    ma <= a + {{AMSB{inst[29]}},inst[29:23],inst[12:8]};
+	  else
+	    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[12:8]};
 	endcase
-default:	ma <= a + {{AMSB{inst[36]}},inst[36:18]};
+default:  ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[22:18]};
 endcase
 
 

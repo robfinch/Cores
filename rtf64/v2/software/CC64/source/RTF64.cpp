@@ -92,6 +92,10 @@ Operand* RTF64CodeGenerator::GenerateSafeLand(ENODE *node, int flags, int op)
 	else
 		ap5 = ap2;
 
+	if (ap4->mode == am_reg)
+		ap4->MakeLegal(am_creg, sizeOfWord);
+	if (ap5->mode == am_reg)
+		ap5->MakeLegal(am_creg, sizeOfWord);
 	ip = currentFn->pl.tail;
 	ip->insn2 = Instruction::Get(op);
 
@@ -489,19 +493,16 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_land_safe:
-		ap3 = GetTempRegister();
 		ap1 = cg.GenerateExpression(node->p[0], am_creg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_creg, size);
 		ip = currentFn->pl.tail;
 		ip->insn2 = Instruction::Get(op_and);
-		ap2->isBool = true;
-		return(ap3);
+		return(ap2);
 	case en_lor_safe:
 		ap1 = cg.GenerateExpression(node->p[0], am_creg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_creg, size);
 		ip = currentFn->pl.tail;
 		ip->insn2 = Instruction::Get(op_or);
-		ap2->isBool = true;
 		return(ap2);
 	default:	// en_land, en_lor
 		//ap1 = GetTempRegister();

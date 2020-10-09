@@ -44,7 +44,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[268] =
+Instruction opl[271] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -99,7 +99,7 @@ Instruction opl[268] =
 { "bsr", op_bsr },
 { "bt", op_bt,3,0,false,am_reg,am_direct,0,0 },
 { "bun", op_bun,2,0 },
-{ "bytndx", op_bytendx,1,1,false,am_reg,am_reg|am_imm,0,0 },
+{ "bytndx", op_bytendx,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "cache",op_cache,1,0 },
 { "call", op_call,4,1,false,0,0,0,0 },
 { "chk", op_chk,1,0 },
@@ -146,8 +146,10 @@ Instruction opl[268] =
 { "fmul.s", op_fsmul,10,1,false },
 { "fneg", op_fneg,2,1,false,am_fpreg,am_fpreg,0,0 },
 { "fs2d", op_fs2d,2,1,false,am_fpreg,am_fpreg,0,0 },
-{ "fsle", op_fsle, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
-{ "fslt", op_fslt, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
+{ "fseq", op_fseq, 1, 1, false, am_creg, am_fpreg, am_fpreg, 0 },
+{ "fsle", op_fsle, 1, 1, false, am_creg, am_fpreg, am_fpreg, 0 },
+{ "fslt", op_fslt, 1, 1, false, am_creg, am_fpreg, am_fpreg, 0 },
+{ "fsne", op_fsne, 1, 1, false, am_creg, am_fpreg, am_fpreg, 0 },
 { "fsto", op_fsto, 4, 0, true, am_fpreg, am_mem, 0, 0 },
 { "fsub", op_fdsub,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
 { "fsub", op_fsub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
@@ -309,6 +311,7 @@ Instruction opl[268] =
 { "vsne", op_vsne,10,1,false, am_vreg,am_vreg,am_vreg,0 },
 { "vsub", op_vsub,10,1,false, am_vreg,am_vreg,am_vreg,0 },
 { "vsubs", op_vsubs,10 },
+{ "wydndx", op_wydendx,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "xnor",op_xnor,1,1,false,am_reg,am_reg,am_reg,0 },
 { "xor",op_xor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "zxb",op_zxb,1,1,false,am_reg,am_reg,0,0 },
@@ -995,12 +998,12 @@ void align(int n)
 
 void cseg()
 {
-	if( curseg != codeseg) {
+	if( curseg != codeseg || true) {
 		nl();
 		ofs.printf("\tcode\n");
 		ofs.printf("\talign\t16\n");
 		curseg = codeseg;
-    }
+  }
 }
 
 void dseg()

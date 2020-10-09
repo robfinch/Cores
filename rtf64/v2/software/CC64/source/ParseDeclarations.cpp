@@ -25,8 +25,7 @@
 //
 #include "stdafx.h"
 
-TYP *head = (TYP *)NULL;
-TYP *tail = (TYP *)NULL;
+//TYP *tail = (TYP *)NULL;
 std::string *declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
@@ -66,12 +65,6 @@ bool isPrivate = true;
 SYM *currentClass;
 int mangledNames = FALSE;
 int defaultcc = 1;
-
-/* variable for bit fields */
-static int		bit_max;	// largest bitnumber
-int bit_offset;	/* the actual offset */
-int      bit_width;	/* the actual width */
-int bit_next;	/* offset for next variable */
 
 bool IsDeclBegin(int st)
 {
@@ -599,6 +592,9 @@ SYM *Declaration::ParseId()
 int Declaration::ParseSpecifier(TABLE *table)
 {
 	SYM *sp;
+	ClassDeclaration cd;
+	StructDeclaration sd;
+	bool rv;
 
 	dfs.printf("<ParseSpecifier>\n");
 	isUnsigned = FALSE;
@@ -739,18 +735,47 @@ int Declaration::ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_class:
-				ClassDeclaration::Parse(bt_class);
+				cd.bit_max = bit_max;
+				cd.bit_next = bit_next;
+				cd.bit_offset = bit_offset;
+				cd.bit_width = bit_width;
+				cd.Parse(bt_class);
+				cd.GetType(&head, &tail);
+				bit_max = cd.bit_max;
+				bit_next = cd.bit_next;
+				bit_offset = cd.bit_offset;
+				bit_width = cd.bit_width;
 				goto lxit;
 
 			case kw_struct:
 				NextToken();
-				if (StructDeclaration::Parse(bt_struct))
+				sd.bit_max = bit_max;
+				sd.bit_next = bit_next;
+				sd.bit_offset = bit_offset;
+				sd.bit_width = bit_width;
+				rv = sd.Parse(bt_struct);
+				sd.GetType(&head, &tail);
+				bit_max = sd.bit_max;
+				bit_next = sd.bit_next;
+				bit_offset = sd.bit_offset;
+				bit_width = sd.bit_width;
+				if (rv)
 					return 1;
 				goto lxit;
 
 			case kw_union:
 				NextToken();
-				if (StructDeclaration::Parse(bt_union))
+				sd.bit_max = bit_max;
+				sd.bit_next = bit_next;
+				sd.bit_offset = bit_offset;
+				sd.bit_width = bit_width;
+				rv = sd.Parse(bt_union);
+				sd.GetType(&head, &tail);
+				bit_max = sd.bit_max;
+				bit_next = sd.bit_next;
+				bit_offset = sd.bit_offset;
+				bit_width = sd.bit_width;
+				if (rv)
 					return 1;
 				goto lxit;
 
@@ -831,7 +856,7 @@ SYM *Declaration::ParsePrefixId()
 	sp = allocSYM();
 	dfs.printf("C"); 
 	if (funcdecl==1) {
-		sp->fi = allocFunction(sp->id);
+		sp->fi = MakeFunction(sp->id);
 		sp->fi->sym = sp;
 		if (nparms > 19)
 			error(ERR_TOOMANY_PARAMS);
@@ -1082,7 +1107,7 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 	NextToken();
 	sp->IsPascal = isPascal;
 	sp->IsInline = isInline;
-  
+
 	// An asterik before the function name indicates a function pointer but only
 	// if it's bracketed properly, otherwise it could be the return value that's
 	// a pointer.
@@ -1173,6 +1198,7 @@ j2:
   		tempHead = head;
   		tempTail = tail;
   		isd = isStructDecl;
+			head = tail = nullptr;
   		//ParseParameterDeclarations(10);	// parse and discard
   		funcdecl = 10;
   //				SetType(sp);
@@ -1278,11 +1304,11 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 			// the symbol here if it isn't yet defined.
 			if (sp == nullptr) {
 				sp = allocSYM();
-				sp->fi = allocFunction(sp->id);
+				sp->fi = MakeFunction(sp->id);
 				sp->fi->sym = sp;
 			}
 			else if (sp->fi == nullptr) {
-				sp->fi = allocFunction(sp->id);
+				sp->fi = MakeFunction(sp->id);
 				sp->fi->sym = sp;
 			}
 			ParseSuffixOpenpa(sp->fi);
@@ -1315,44 +1341,18 @@ void Declaration::AssignParameterName()
 }
 
 
-int Declaration::GenStorage(int nbytes, int al, int ilc)
-{
-	static long old_nbytes;
-	int bcnt;
-
-	if (bit_width > 0 && bit_offset > 0) {
-		// share the storage word with the previously defined field
-		nbytes = old_nbytes - ilc;
-	}
-	old_nbytes = ilc + nbytes;
-	dfs.printf("E");
-	if ((ilc + nbytes) % head->roundAlignment()) {
-		if (al == sc_thread)
-			tseg();
-		else
-			dseg();
-	}
-	bcnt = 0;
-	while ((ilc + nbytes) % head->roundAlignment()) {
-		++nbytes;
-		bcnt++;
-	}
-	if (al != sc_member && al != sc_external && al != sc_auto) {
-		if (bcnt > 0)
-			genstorage(bcnt);
-	}
-	return (nbytes);
-}
-
 void Declaration::ParseAssign(SYM *sp)
 {
 	TYP *tp1, *tp2;
 	enum e_node op;
 	ENODE *ep1, *ep2;
+	Expression exp;
+	exp.head = head;
+	exp.tail = tail;
 
 	tp1 = nameref(&ep1, TRUE);
 	op = en_assign;
-	tp2 = Expression::ParseAssignOps(&ep2);
+	tp2 = exp.ParseAssignOps(&ep2);
 	if (tp2 == nullptr || !IsLValue(ep1))
 		error(ERR_LVALUE);
 	else {
@@ -1445,28 +1445,6 @@ void Declaration::DoInsert(SYM *sp, TABLE *table)
 		}
 	}
 	dfs.printf("</DoInsert>\n");
-}
-
-void Declaration::AllocFunc(SYM *sp, SYM *sp1)
-{
-	dfs.printf("<AllocFunc>");
-	sp1->SetType(sp->tp);
-	sp1->storage_class = sp->storage_class;
-	sp1->value.i = sp->value.i;
-	if (!sp1->fi) {
-		sp1->fi = allocFunction(sp1->id);
-		//sp1->fi = newFunction(sp1->id);
-		sp1->fi->sym = sp1;
-	}
-	sp1->fi->IsPascal = sp->fi->IsPascal;
-	sp1->fi->IsPrototype = sp->fi->IsPrototype;
-	sp1->fi->IsVirtual = sp->fi->IsVirtual;
-	sp1->parent = sp->parent;
-	sp->fi->params.CopyTo(&sp1->fi->params);
-	sp->fi->proto.CopyTo(&sp1->fi->proto);
-	sp1->lsyms = sp->lsyms;
-	sp = sp1;
-	dfs.printf("</AllocFunc>\n");
 }
 
 SYM *Declaration::FindSymbol(SYM *sp, TABLE *table)
@@ -1588,7 +1566,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			SetType(sp);
 			if (funcdecl > 0) {
 				//sp->fi = newFunction(sp->id);
-				sp->fi = allocFunction(sp->id);
+				sp->fi = MakeFunction(sp->id);
 				sp->fi->sym = sp;
 				sp->fi->IsPascal = isPascal;
 				sp->fi->IsInline = isInline;
@@ -1611,8 +1589,12 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			dfs.printf("D");
 			if (classname) delete classname;
 			classname = new std::string("");
-			if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
-				sp->fi->IsVirtual = isVirtual;
+			if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
+//				if (sp->fi == nullptr)
+//					sp->fi = MakeFunction(sp->id);
+				if (sp->fi)
+					sp->fi->IsVirtual = isVirtual;
+			}
 			sp->storage_class = al;
 			sp->isConst = isConst;
 			if (isConst)
@@ -1625,7 +1607,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 				isTypedef = FALSE;
 			}
 			if (sp->storage_class != sc_typedef)
-				nbytes = GenStorage(nbytes, al, ilc);
+				nbytes = GenerateStorage(nbytes, al, ilc);
 /*
       dfs.printf("F");
 		  if (sp->parent) {
@@ -1671,7 +1653,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
   				}
   			}
   			if (sp->tp->type == bt_ifunc && flag) {
-					AllocFunc(sp, sp1);
+					MakeFunction(sp, sp1);
   				sp = sp1;
         }
   			else {
@@ -1693,7 +1675,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 						insState = 0;
 					}
 					else {
-						fn = allocFunction(sp->id);
+						fn = MakeFunctiontion(sp->id);
 						memcpy(fn, sp->fi, sizeof(Function));
 						if (!sp->fi->alloced)
 							delete sp->fi;
@@ -1799,6 +1781,7 @@ void GlobalDeclaration::Parse()
 	isPascal = defaultcc==1;
 	isInline = false;
 	isLeaf = false;
+	head = tail = nullptr;
 	for(;;) {
 		lc_auto = 0;
 		bool notVal = false;

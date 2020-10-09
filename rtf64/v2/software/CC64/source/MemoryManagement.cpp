@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -187,55 +187,6 @@ SYM *allocSYM() {
     throw new C64PException(ERR_TOOMANY_SYMBOLS,1);
   }
 	return sym;
-};
-
-Function *allocFunction(int symnum)
-{
-	int count;
-
-	for (count = 0; count < 3000; count++) {
-		Function *sym = &compiler.functionTable[compiler.funcnum];
-		if (!sym->valid) {
-			ZeroMemory(sym, sizeof(Function));
-			sym->alloced = true;
-			sym->valid = TRUE;
-			sym->NumParms = -1;
-			sym->numa = -1;
-			sym->params.SetOwner(symnum);
-			sym->proto.SetOwner(symnum);
-			sym->UsesTemps = true;
-			sym->UsesStackParms = true;
-			compiler.funcnum++;
-			if (compiler.funcnum > 2999)
-				compiler.funcnum = 0;
-			return (sym);
-		}
-		compiler.funcnum++;
-		if (compiler.funcnum > 2999)
-			compiler.funcnum = 0;
-	}
-	dfs.printf("Too many functions.\n");
-	throw new C64PException(ERR_TOOMANY_SYMBOLS, 1);
-};
-
-Function *newFunction(int symnum)
-{
-	int count;
-
-	Function *sym = new Function;
-	if (sym) {
-		ZeroMemory(sym, sizeof(Function));
-		sym->valid = TRUE;
-		sym->NumParms = -1;
-		sym->numa = -1;
-		sym->params.SetOwner(symnum);
-		sym->proto.SetOwner(symnum);
-		sym->UsesTemps = true;
-		sym->UsesStackParms = true;
-		return (sym);
-	}
-	dfs.printf("Too many functions.\n");
-	throw new C64PException(ERR_TOOMANY_SYMBOLS, 1);
 };
 
 void FreeFunction(Function *fn)

@@ -57,7 +57,7 @@ enum e_node {
         en_uge, en_ule, en_ult,
 		en_ref, en_fieldref, en_ursh,
 		en_bchk, en_chk, en_bytendx,
-		en_abs, en_max, en_min, en_addrof, en_ptrdif,
+		en_abs, en_max, en_min, en_addrof, en_ptrdif, en_wydendx,
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
@@ -89,7 +89,7 @@ enum e_sym {
 	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd, lor_safe, land_safe,
 	ellipsis,
 	// functions
-	kw_abs, kw_max, kw_min,
+	kw_abs, kw_max, kw_min, kw_wydendx,
 
 	kw_vector, kw_vector_mask,
 	kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
@@ -215,6 +215,7 @@ enum e_op {
 	op_ptrdif, op_isnullptr,
 	// Built in functions
 	op_abs, op_mulf, op_bytendx, op_zxw, op_zxt,
+	op_wydendx,
 	op_phi,
     op_empty,
 		op_last,

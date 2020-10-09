@@ -14,8 +14,6 @@ void GenerateHint(int num);
 void SaveRegisterVars(CSet *rmask);
 void SaveFPRegisterVars(CSet *fprmask);
 void funcbottom(Statement *stmt);
-Function *allocFunction(int id);
-Function *newFunction(int id);
 SYM *makeint2(std::string na);
 int64_t round10(int64_t n);
 int pwrof2(int64_t);

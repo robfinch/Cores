@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,7 +25,6 @@
 //
 #include "stdafx.h"
 
-extern TYP *head, *tail;
 extern TYP stdbyte;
 extern int catchdecl;
 Statement *ParseCatchStatement();
@@ -327,6 +326,7 @@ Statement *Statement::ParseCatch()
 	TYP *tp, *tp1, *tp2;
 	ENODE *node;
 	static char buf[200];
+	AutoDeclaration ad;
 
 	snp = NewStatement(st_catch, TRUE);
 	currentStmt = snp;
@@ -340,15 +340,10 @@ Statement *Statement::ParseCatch()
 		return snp;
 	}
 	needpunc(openpa, 33);
-	tp = head;
-	tp1 = tail;
 	catchdecl = TRUE;
-	AutoDeclaration::Parse(NULL, &snp->ssyms);
+	ad.Parse(NULL, &snp->ssyms);
 	cseg();
 	catchdecl = FALSE;
-	tp2 = head;
-	head = tp;
-	tail = tp1;
 	needpunc(closepa, 34);
 
 	if ((sp = snp->ssyms.Find(*declid, false)) == NULL)
@@ -666,10 +661,11 @@ Statement *Statement::ParseTry()
 Statement *Statement::ParseExpression()
 {
 	Statement *snp;
+	Expression exp;
 
 	dfs.printf("<ParseExpression>\n");
 	snp = NewStatement(st_expr, FALSE);
-	if (Expression::ParseExpression(&(snp->exp)) == NULL) {
+	if (exp.ParseExpression(&(snp->exp)) == NULL) {
 		error(ERR_EXPREXPECT);
 		NextToken();
 	}
@@ -686,6 +682,7 @@ Statement *Statement::ParseCompound()
 	Statement *snp;
 	Statement *head, *tail;
 	Statement *p;
+	AutoDeclaration ad;
 
 	snp = NewStatement(st_compound, FALSE);
 	currentStmt = snp;
@@ -697,7 +694,7 @@ Statement *Statement::ParseCompound()
 				printf("clockbug\r\n");
 		NextToken();
 	}
-	AutoDeclaration::Parse(NULL, &snp->ssyms);
+	ad.Parse(NULL, &snp->ssyms);
 	cseg();
 	// Add the first statement at the head of the list.
 	p = currentStmt;
@@ -1736,6 +1733,7 @@ void Statement::GenerateSwitch()
 	minv = 0x7FFFFFFFL;
 	maxv = 0;
 	struct scase casetab[512];
+	OCODE* ip;
 
 	st = s1;
 	mm = 0;
@@ -1795,22 +1793,22 @@ void Statement::GenerateSwitch()
 		initstack();
 		ap = cg.GenerateExpression(exp, am_reg, exp->GetNaturalSize());
 		if (!nkd) {
-			ap1 = GetTempRegister();
-			ap2 = GetTempRegister();
 			//GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(minv));
 			//GenerateTriadic(op_blt, 0, ap, ap1, MakeCodeLabel(defcase ? deflbl : breaklab));
 			//GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(maxv + 1));
 			//GenerateTriadic(op_bge, 0, ap, ap2, MakeCodeLabel(defcase ? deflbl : breaklab));
-			GenerateTriadic(op_sge, 0, ap1, ap, MakeImmediate(minv));
-			GenerateTriadic(op_sle, 0, ap2, ap, MakeImmediate(maxv));
+			GenerateTriadic(op_sge, 0, makecreg(0), ap, MakeImmediate(minv));
+			GenerateTriadic(op_sle, 0, makecreg(0), ap, MakeImmediate(maxv));
+			ip = currentFn->pl.tail;
+			ip->insn2 = Instruction::Get(op_and);
+			GenerateDiadic(op_bf, 0, makecreg(0), MakeCodeLabel(defcase ? deflbl : breaklab));
 			if (minv != 0)
 				GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 			GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 			GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-			GenerateTriadic(op_band, 0, ap1, ap2, ap);
-			GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
-			ReleaseTempRegister(ap2);
-			ReleaseTempRegister(ap1);
+			GenerateDiadic(op_mov, 0, makereg(114), ap);
+			GenerateMonadic(op_jmp, 0, MakeIndirect(114));
+			//GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
 			ReleaseTempRegister(ap);
 			s1->GenerateCase();
 			GenerateLabel(breaklab);
@@ -1821,7 +1819,8 @@ void Statement::GenerateSwitch()
 			GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 		GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 		GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-		GenerateDiadic(op_jal, 0, makereg(0), MakeIndexed((int64_t)0, ap->preg));
+		GenerateDiadic(op_mov, 0, makereg(114), ap);
+		GenerateMonadic(op_jmp, 0, MakeIndirect(114));
 		s1->GenerateCase();
 		GenerateLabel(breaklab);
 		ReleaseTempRegister(ap);

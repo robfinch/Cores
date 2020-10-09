@@ -138,11 +138,11 @@ bool Instruction::IsExt()
 	if (this == nullptr)
 		return (false);
 	if (opcode == op_sxb
-		|| opcode == op_sxc
-		|| opcode == op_sxh
+		|| opcode == op_sxw
+		|| opcode == op_sxt
 		|| opcode == op_zxb
-		|| opcode == op_zxc
-		|| opcode == op_zxh
+		|| opcode == op_zxw
+		|| opcode == op_zxt
 		)
 		return (true);
 	return (false);

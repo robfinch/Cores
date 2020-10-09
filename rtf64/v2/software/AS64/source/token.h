@@ -53,6 +53,7 @@ enum {
      tk_andi,
      tk_asl,
      tk_asli,
+     tk_aslx,
      tk_asr,
      tk_asri,
 		 tk_band,

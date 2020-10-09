@@ -316,6 +316,8 @@ int IdentifyKeyword()
 			return (lastst = kw_mulf);
 		if (p[2] == 'b' && p[3] == 'y' && p[4] == 't' && p[5] == 'e' && p[6] == 'n' && p[7] == 'd' && p[8] == 'x' && p[9] == '\0')
 			return lastst = kw_bytendx;
+		if (p[2] == 'w' && p[3] == 'y' && p[4] == 'd' && p[5] == 'e' && p[6] == 'n' && p[7] == 'd' && p[8] == 'x' && p[9] == '\0')
+			return lastst = kw_wydendx;
 		if (p[2]=='c' && p[3]=='h' && p[4]=='e' && p[5]=='c' && p[6]=='k' && p[7]=='\0')
 			return lastst = kw_check;
 		if (p[2]=='e' && p[3]=='x' && p[4]=='c' && p[5]=='e' && p[6]=='p' && p[7]=='t' && p[8]=='i' && p[9]=='o' && p[10]=='n' && p[11]=='\0')

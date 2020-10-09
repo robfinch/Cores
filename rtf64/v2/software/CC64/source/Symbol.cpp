@@ -29,6 +29,10 @@ char *prefix;
 extern int nparms;
 extern bool isRegister;
 
+Function* SYM::MakeFunction(int symnum) {
+	return (compiler.ff.MakeFunction(symnum));
+};
+
 SYM *SYM::GetPtr(int n)
 { 
   if (n==0)
@@ -264,7 +268,7 @@ SYM *SYM::Copy(SYM *src)
 //		dst->shortname = src->shortname;
 		dst->SetNext(0);
 		if (src->fi) {
-			dst->fi = allocFunction(src->id);
+			dst->fi = MakeFunction(src->id);
 			memcpy(dst->fi, src->fi, sizeof(Function));
 			dst->fi->sym = dst;
 			dst->fi->params.SetOwner(src->id);

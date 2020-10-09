@@ -1111,6 +1111,7 @@ void Function::BuildParameterList(int *num, int *numa)
 	bool noParmOffset = false;
 	Stringx oldnames[MAX_PARMS];
 	int old_nparms;
+	ParameterDeclaration pd;
 
 	dfs.printf("<BuildParameterList\n>");
 	if (opt_vreg)
@@ -1128,7 +1129,7 @@ void Function::BuildParameterList(int *num, int *numa)
 	// declarations are processed.
 	//if (strcmp(sym->name->c_str(), "__Skip") == 0)
 	//	printf("hello");
-	np = ParameterDeclaration::Parse(1);
+	np = pd.ParameterDeclaration::Parse(1);
 	*num += np;
 	*numa = 0;
 	dfs.printf("B");
