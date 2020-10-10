@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-Function* FunctionFactory::MakeFunction(int symnum)
+Function* FunctionFactory::MakeFunction(int symnum, SYM* sp, bool isPascal)
 {
 	int count;
 
@@ -8,6 +8,8 @@ Function* FunctionFactory::MakeFunction(int symnum)
 		Function* sym = &compiler.functionTable[compiler.funcnum];
 		if (!sym->valid) {
 			ZeroMemory(sym, sizeof(Function));
+			sym->sym = sp;
+			sym->IsPascal = isPascal;
 			sym->alloced = true;
 			sym->valid = TRUE;
 			sym->NumParms = -1;

@@ -1,3 +1,27 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2019-2020  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
+`include "../inc/rtf64-defines.sv"
 
 // Given the byte opcode, the instruction length is determined.
 module rtf64_InsLength(i, o);
@@ -6,9 +30,8 @@ output reg [3:0] o;
 
 always @*
 casez(i)
-8'h00:  o = 4'd3;
-8'h0F:  o = 4'd5;
-8'h17:  o = 4'd6;
+`CSR:   o = 4'd5;
+`PERM:  o = 4'd6;
 8'h1B:  o = 4'd5;
 8'h30:  o = 4'd3;
 8'h31:  o = 4'd3;
@@ -51,7 +74,9 @@ casez(i)
 8'h57:  o = 4'd3;
 8'h5E:  o = 4'd3;
 8'h5F:  o = 4'd2;
-8'h6?:  o = 4'd2;
+`CI:    o = 4'd2;
+`BRK:   o = 4'd2;
+`NOP:   o = 4'd1;
 8'h80:  o = 4'd3;
 8'h81:  o = 4'd3;
 8'h82:  o = 4'd3;
@@ -80,7 +105,6 @@ casez(i)
 8'hB0:  o = 4'd3;
 8'hB7:  o = 4'd6;
 8'hE1:  o = 4'd3;
-8'hEA:  o = 4'd1;
 8'hF1:  o = 4'd3;
 default:  o = 4'd4;
 endcase

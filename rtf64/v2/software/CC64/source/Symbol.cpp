@@ -29,8 +29,9 @@ char *prefix;
 extern int nparms;
 extern bool isRegister;
 
-Function* SYM::MakeFunction(int symnum) {
-	return (compiler.ff.MakeFunction(symnum));
+Function* SYM::MakeFunction(int symnum, bool isPascal) {
+	Function* fn = compiler.ff.MakeFunction(symnum, this, isPascal);
+	return (fn);
 };
 
 SYM *SYM::GetPtr(int n)
@@ -268,7 +269,7 @@ SYM *SYM::Copy(SYM *src)
 //		dst->shortname = src->shortname;
 		dst->SetNext(0);
 		if (src->fi) {
-			dst->fi = MakeFunction(src->id);
+			dst->fi = dst->MakeFunction(src->id, false);
 			memcpy(dst->fi, src->fi, sizeof(Function));
 			dst->fi->sym = dst;
 			dst->fi->params.SetOwner(src->id);

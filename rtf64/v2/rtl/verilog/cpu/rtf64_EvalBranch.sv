@@ -23,33 +23,34 @@
 //
 `include "../inc/rtf64-defines.sv"
 
-module rtf64_EvalBranch(inst, cd, id, takb);
+module rtf64_EvalBranch(inst, brdat, takb);
 parameter WID=64;
 input [23:0] inst;  // low 24 bits of instruction
-input [7:0] cd;     // compare result
-input [WID-1:0] id; // operand zero
+input [WID-1:0] brdat;
 output reg takb;
 
 always @*
 case(inst[7:0])
-`BEQ: takb =  cd[1];
-`BNE: takb = ~cd[1];
-`BMI: takb =  cd[7];
-`BPL: takb = ~cd[7];
-`BVS: takb =  cd[6];
-`BVC: takb = ~cd[6];
-`BCS,`BT: takb =  cd[0];
-`BCC: takb = ~cd[0];
-`BLE: takb = cd[1] | cd[7];
-`BGT: takb = ~(cd[1] | cd[7]);
-`BLEU:  takb = cd[1] | cd[0];
-`BGTU:  takb = ~(cd[1] | cd[0]);
-`BOD:   takb = cd[5];
-`BPS:   takb = cd[4];
-`BEQZ:  takb = id=={WID{1'd0}};
-`BNEZ:  takb = id!={WID{1'd0}};
-`BBC:   takb = ~id[inst[18:13]];
-`BBS:   takb =  id[inst[18:13]];
+`BEQ: takb =  brdat[1];
+`BNE: takb = ~brdat[1];
+`BMI: takb =  brdat[7];
+`BPL: takb = ~brdat[7];
+`BVS: takb =  brdat[6];
+`BVC: takb = ~brdat[6];
+`BCS,`BT: takb =  brdat[0];
+`BCC: takb = ~brdat[0];
+`BLE: takb = brdat[1] | brdat[7];
+`BGT: takb = ~(brdat[1] | brdat[7]);
+`BLEU:  takb = brdat[1] | brdat[0];
+`BGTU:  takb = ~(brdat[1] | brdat[0]);
+`BOD:   takb = brdat[5];
+`BPS:   takb = brdat[4];
+`BEQZ:  takb = brdat=={WID{1'd0}};
+`BNEZ:  takb = brdat!={WID{1'd0}};
+`BBC:   takb = ~brdat[inst[18:13]];
+`BBS:   takb =  brdat[inst[18:13]];
+`BEQI:  takb = brdat=={{56{inst[20]}},inst[20:13]};
+`BRA:   takb = 1'b1;
 default:  takb = 1'b0;
 endcase
 

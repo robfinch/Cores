@@ -374,7 +374,7 @@ public:
 	TYP *tp;
   Statement *stmt;
 
-	static Function* MakeFunction(int symnum);
+	Function* MakeFunction(int symnum, bool isPascal);
 	static SYM *Copy(SYM *src);
 	SYM *Find(std::string name);
 	int FindNextExactMatch(int startpos, TypeArray *);
@@ -621,6 +621,12 @@ public:
 	void Dump();
 };
 
+class ExpressionFactory : public CompilerType
+{
+public:
+	ENODE* Makefnode(int nt, double v1);
+};
+
 class Expression : public CompilerType
 {
 public:
@@ -628,6 +634,8 @@ public:
 	TYP* tail;
 private:
 	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
+	ENODE* ParseStringConst(ENODE** node, int sizeof_flag);
+	ENODE* ParseRealConst(ENODE** node);
 	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
 	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
 	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
@@ -654,7 +662,7 @@ public:
 	TYP *ParseNonCommaExpression(ENODE **node);
 	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
 	TYP *ParseExpression(ENODE **node);
-	Function* MakeFunction(int symnum);
+	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
 };
 
 class Operand : public CompilerType
@@ -809,7 +817,7 @@ public:
 class FunctionFactory
 {
 public:
-	Function* MakeFunction(int symnum);
+	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
 };
 
 class CodeGenerator
@@ -1434,6 +1442,8 @@ public:
 	void ParseDouble();
 	void ParseTriple();
 	void ParseFloat128();
+	void ParseClass();
+	int ParseStruct(e_bt typ);
 	void ParseVector();
 	void ParseVectorMask();
 	SYM *ParseId();
@@ -1447,13 +1457,14 @@ public:
 	void ParseSuffixOpenpa(Function *);
 	SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
+	int ParseFunction(TABLE* table, SYM* sp, e_sc al);
 	void ParseAssign(SYM *sp);
 	void DoDeclarationEnd(SYM *sp, SYM *sp1);
 	void DoInsert(SYM *sp, TABLE *table);
 	SYM *FindSymbol(SYM *sp, TABLE *table);
 
 	int GenerateStorage(int nbytes, int al, int ilc);
-	static Function* MakeFunction(int symnum);
+	static Function* MakeFunction(int symnum, SYM* sym, bool isPascal, bool isInline);
 	static void MakeFunction(SYM* sp, SYM* sp1);
 };
 
@@ -1507,6 +1518,7 @@ public:
 	TYP typeTable[32768];
 	OperandFactory of;
 	FunctionFactory ff;
+	ExpressionFactory ef;
 	short int pass;
 public:
 	GlobalDeclaration *decls;

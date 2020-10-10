@@ -585,6 +585,42 @@ SYM *Declaration::ParseId()
 	return (sp);
 }
 
+void Declaration::ParseClass()
+{
+	ClassDeclaration cd;
+
+	NextToken();
+	cd.bit_max = bit_max;
+	cd.bit_next = bit_next;
+	cd.bit_offset = bit_offset;
+	cd.bit_width = bit_width;
+	cd.Parse(bt_class);
+	cd.GetType(&head, &tail);
+	bit_max = cd.bit_max;
+	bit_next = cd.bit_next;
+	bit_offset = cd.bit_offset;
+	bit_width = cd.bit_width;
+}
+
+int Declaration::ParseStruct(e_bt typ)
+{
+	StructDeclaration sd;
+	int rv;
+
+	NextToken();
+	sd.bit_max = bit_max;
+	sd.bit_next = bit_next;
+	sd.bit_offset = bit_offset;
+	sd.bit_width = bit_width;
+	rv = sd.Parse(typ);
+	sd.GetType(&head, &tail);
+	bit_max = sd.bit_max;
+	bit_next = sd.bit_next;
+	bit_offset = sd.bit_offset;
+	bit_width = sd.bit_width;
+	return (rv);
+}
+
 // Parse a specifier. This is the first part of a declaration.
 // Returns:
 // 0 usually, 1 if only a specifier is present
@@ -735,48 +771,17 @@ int Declaration::ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_class:
-				cd.bit_max = bit_max;
-				cd.bit_next = bit_next;
-				cd.bit_offset = bit_offset;
-				cd.bit_width = bit_width;
-				cd.Parse(bt_class);
-				cd.GetType(&head, &tail);
-				bit_max = cd.bit_max;
-				bit_next = cd.bit_next;
-				bit_offset = cd.bit_offset;
-				bit_width = cd.bit_width;
+				ParseClass();
 				goto lxit;
 
 			case kw_struct:
-				NextToken();
-				sd.bit_max = bit_max;
-				sd.bit_next = bit_next;
-				sd.bit_offset = bit_offset;
-				sd.bit_width = bit_width;
-				rv = sd.Parse(bt_struct);
-				sd.GetType(&head, &tail);
-				bit_max = sd.bit_max;
-				bit_next = sd.bit_next;
-				bit_offset = sd.bit_offset;
-				bit_width = sd.bit_width;
-				if (rv)
-					return 1;
+				if (ParseStruct(bt_struct))
+					return (1);
 				goto lxit;
 
 			case kw_union:
-				NextToken();
-				sd.bit_max = bit_max;
-				sd.bit_next = bit_next;
-				sd.bit_offset = bit_offset;
-				sd.bit_width = bit_width;
-				rv = sd.Parse(bt_union);
-				sd.GetType(&head, &tail);
-				bit_max = sd.bit_max;
-				bit_next = sd.bit_next;
-				bit_offset = sd.bit_offset;
-				bit_width = sd.bit_width;
-				if (rv)
-					return 1;
+				if (ParseStruct(bt_union))
+					return (1);
 				goto lxit;
 
       case kw_exception:
@@ -856,8 +861,7 @@ SYM *Declaration::ParsePrefixId()
 	sp = allocSYM();
 	dfs.printf("C"); 
 	if (funcdecl==1) {
-		sp->fi = MakeFunction(sp->id);
-		sp->fi->sym = sp;
+		sp->fi = MakeFunction(sp->id, sp, defaultcc==1, false);
 		if (nparms > 19)
 			error(ERR_TOOMANY_PARAMS);
 		else {
@@ -1304,12 +1308,10 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 			// the symbol here if it isn't yet defined.
 			if (sp == nullptr) {
 				sp = allocSYM();
-				sp->fi = MakeFunction(sp->id);
-				sp->fi->sym = sp;
+				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
 			}
 			else if (sp->fi == nullptr) {
-				sp->fi = MakeFunction(sp->id);
-				sp->fi->sym = sp;
+				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
 			}
 			ParseSuffixOpenpa(sp->fi);
 			goto lxit;
@@ -1497,6 +1499,97 @@ SYM *Declaration::FindSymbol(SYM *sp, TABLE *table)
 	return (sp1);
 }
 
+int Declaration::ParseFunction(TABLE* table, SYM* sp, e_sc al)
+{
+	SYM* sp1;
+	bool flag;
+	bool fn_doneinit = false;
+
+	sp1 = FindSymbol(sp, table);
+	dfs.printf("k");
+	flag = false;
+	if (sp1) {
+		if (sp1->tp) {
+			dfs.printf("l");
+			flag = sp1->tp->type == bt_func;
+		}
+	}
+	if (sp->tp->type == bt_ifunc && flag) {
+		MakeFunction(sp, sp1);
+		sp = sp1;
+	}
+	else {
+		// Here the symbol wasn't found in the table.
+		if (sp1 == nullptr)
+			DoInsert(sp, table);
+	}
+	dfs.printf("J");
+	if (needParseFunction) {
+		needParseFunction = FALSE;
+		currentFn = sp->fi;
+		fn_doneinit = sp->fi->Parse();
+		/*
+		fn = sp->fi->FindExactMatch(TABLE::matchno);
+		if (fn) {
+			if (!sp->fi->alloced)
+				delete sp->fi;
+			sp->fi = fn;
+			insState = 0;
+		}
+		else {
+			fn = MakeFunctiontion(sp->id);
+			memcpy(fn, sp->fi, sizeof(Function));
+			if (!sp->fi->alloced)
+				delete sp->fi;
+			sp->fi = fn;
+			switch (insState) {
+			case 1:	sp->fi->InsertMethod(); break;
+			case 2: table->insert(sp); break;
+			}
+			insState = 3;
+		}
+		*/
+		if (sp->tp->type != bt_pointer)
+			return (1);
+	}
+	/*
+	if (insState == 1 || insState == 2) {
+		if (sp->tp->type == bt_ifunc || sp->tp->type == bt_func) {
+			fn = sp->fi->FindExactMatch(TABLE::matchno);
+			if (fn) {
+				if (!sp->fi->alloced)
+					delete sp->fi;
+				sp->fi = fn;
+			}
+			else {
+				fn = allocFunction(sp->id);
+				memcpy(fn, sp->fi, sizeof(Function));
+				if (!sp->fi->alloced)
+					delete sp->fi;
+				sp->fi = fn;
+				switch (insState) {
+				case 1:	sp->fi->InsertMethod(); break;
+				case 2: table->insert(sp); break;
+				}
+				insState = 3;
+			}
+		}
+		else if (insState==2)
+			table->insert(sp);
+	}
+		*/
+		//         if(sp->tp->type == bt_ifunc) { /* function body follows */
+		//             ParseFunction(sp);
+		//             return nbytes;
+		//         }
+	dfs.printf("K");
+	if ((al == sc_global || al == sc_static || al == sc_thread) && !fn_doneinit &&
+		sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class != sc_typedef)
+		doinit(sp);
+	return (0);
+}
+
+
 /*
  *      process declarations of the form:
  *
@@ -1559,19 +1652,14 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			AssignParameterName();
 
 		dfs.printf("C");
-		if( declid->length() > 0 || classname->length()!=0) {      // otherwise just struct tag...
+		if (declid->length() > 0 || classname->length() != 0) {      // otherwise just struct tag...
 			if (sp == nullptr) {
 				sp = allocSYM();
+				if (funcdecl > 0)
+					sp->fi = MakeFunction(sp->id, sp, isPascal, isInline);
 			}
 			SetType(sp);
-			if (funcdecl > 0) {
-				//sp->fi = newFunction(sp->id);
-				sp->fi = MakeFunction(sp->id);
-				sp->fi->sym = sp;
-				sp->fi->IsPascal = isPascal;
-				sp->fi->IsInline = isInline;
-			}
-			else
+			if (funcdecl <= 0)
 				sp->IsInline = isInline;
 			sp->IsRegister = isRegister;
 			isRegister = false;
@@ -1579,19 +1667,15 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			sp->IsParameter = parsingParameterList > 0;
 			if (sp->parent < 0)// was nullptr
 				sp->parent = parent->GetIndex();
-			if (al==sc_member)
+			if (al == sc_member)
 				sp->IsPrivate = isPrivate;
 			else
 				sp->IsPrivate = false;
-			//if (declid==nullptr)
-			//	declid = new std::string("");
 			sp->SetName(classname->length() > 0 ? *classname : *declid);
 			dfs.printf("D");
 			if (classname) delete classname;
 			classname = new std::string("");
 			if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
-//				if (sp->fi == nullptr)
-//					sp->fi = MakeFunction(sp->id);
 				if (sp->fi)
 					sp->fi->IsVirtual = isVirtual;
 			}
@@ -1599,7 +1683,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			sp->isConst = isConst;
 			if (isConst)
 				sp->tp->isConst = TRUE;
-			if (al != sc_member && parsingParameterList == 0) {
+			if (al != sc_member && !parsingParameterList) {
 				//							sp->isTypedef = isTypedef;
 				if (isTypedef) {
 					sp->storage_class = sc_typedef;
@@ -1608,23 +1692,6 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			}
 			if (sp->storage_class != sc_typedef)
 				nbytes = GenerateStorage(nbytes, al, ilc);
-/*
-      dfs.printf("F");
-		  if (sp->parent) {
-        dfs.printf("f:%d",sp->parent);
-        if (sp->GetParentPtr()->tp==nullptr) {
-          dfs.printf("f:%d",sp->parent);
-          dfs.printf("null type pointer.\n");
-          parentBytes = 0;
-        }
-        else {
-			    parentBytes = sp->GetParentPtr()->tp->size;
-			    dfs.printf("ParentBytes=%d\n",parentBytes);
-		    }
-		  }
-		  else
-			  parentBytes = 0;
-*/
 			dfs.printf("G");
 			if ((sp->tp->type == bt_func) && sp->storage_class == sc_global)
 				sp->storage_class = sc_external;
@@ -1643,90 +1710,10 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			//if (strcmp(name.c_str(), "__Skip") == 0)
 			//	printf("hl");
 			if (sp->name->length() > 0) {
-				sp1 = FindSymbol(sp, table);
-  dfs.printf("k");
-  			flag = false;
-	  		if (sp1) {
-  				if (sp1->tp) {
-  dfs.printf("l");
-  					flag = sp1->tp->type == bt_func;
-  				}
-  			}
-  			if (sp->tp->type == bt_ifunc && flag) {
-					MakeFunction(sp, sp1);
-  				sp = sp1;
-        }
-  			else {
-  				// Here the symbol wasn't found in the table.
-  				if (sp1 == nullptr)
-						DoInsert(sp, table);
-  			}
-  dfs.printf("J");
-  			if (needParseFunction) {
-  				needParseFunction = FALSE;
-					currentFn = sp->fi;
-  				fn_doneinit = sp->fi->Parse();
-					/*
-					fn = sp->fi->FindExactMatch(TABLE::matchno);
-					if (fn) {
-						if (!sp->fi->alloced)
-							delete sp->fi;
-						sp->fi = fn;
-						insState = 0;
-					}
-					else {
-						fn = MakeFunctiontion(sp->id);
-						memcpy(fn, sp->fi, sizeof(Function));
-						if (!sp->fi->alloced)
-							delete sp->fi;
-						sp->fi = fn;
-						switch (insState) {
-						case 1:	sp->fi->InsertMethod(); break;
-						case 2: table->insert(sp); break;
-						}
-						insState = 3;
-					}
-					*/
-  				if (sp->tp->type != bt_pointer)
-  					return (nbytes);
-  			}
-				/*
-				if (insState == 1 || insState == 2) {
-					if (sp->tp->type == bt_ifunc || sp->tp->type == bt_func) {
-						fn = sp->fi->FindExactMatch(TABLE::matchno);
-						if (fn) {
-							if (!sp->fi->alloced)
-								delete sp->fi;
-							sp->fi = fn;
-						}
-						else {
-							fn = allocFunction(sp->id);
-							memcpy(fn, sp->fi, sizeof(Function));
-							if (!sp->fi->alloced)
-								delete sp->fi;
-							sp->fi = fn;
-							switch (insState) {
-							case 1:	sp->fi->InsertMethod(); break;
-							case 2: table->insert(sp); break;
-							}
-							insState = 3;
-						}
-					}
-					else if (insState==2)
-						table->insert(sp);
-				}
-						*/
-     //         if(sp->tp->type == bt_ifunc) { /* function body follows */
-     //             ParseFunction(sp);
-     //             return nbytes;
-     //         }
-  dfs.printf("K");
-            if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
-              sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
-              doinit(sp);
-          }
-      }
-
+				if (ParseFunction(table, sp, al))
+					return (nbytes);
+			}
+		}
 		if (funcdecl>0) {
 			if (lastst == closepa) {
 				goto xit1;

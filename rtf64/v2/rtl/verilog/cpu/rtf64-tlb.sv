@@ -53,7 +53,6 @@ wire wrtlb3 = tlbadr_i[11:10]==2'd2 && wrtlb_i;
 wire wrtlb4 = tlbadr_i[11:10]==2'd3 && wrtlb_i;
 wire [63:0] tlbdato1,tlbdato2,tlbdato3,tlbdato4;
 wire [63:0] tadr0, tadr1, tadr2, tadr3;
-reg hit0, hit1, hit2, hit3;
 wire clk_g = clk_i;
 always @*
 case(tlbadr_i[11:10])

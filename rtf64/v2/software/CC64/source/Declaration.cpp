@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+extern int defaultcc;
+
 Declaration::Declaration()
 {
 	head = (TYP*)nullptr;
@@ -10,8 +12,10 @@ Declaration::Declaration()
 	bit_next = 0;
 }
 
-Function* Declaration::MakeFunction(int symnum) {
-	return (compiler.ff.MakeFunction(symnum));
+Function* Declaration::MakeFunction(int symnum, SYM* sym, bool isPascal, bool isInline) {
+	Function* fn = compiler.ff.MakeFunction(symnum, sym, isPascal);
+	fn->IsInline = isInline;
+	return (fn);
 };
 
 void Declaration::MakeFunction(SYM* sp, SYM* sp1)
@@ -21,7 +25,7 @@ void Declaration::MakeFunction(SYM* sp, SYM* sp1)
 	sp1->storage_class = sp->storage_class;
 	sp1->value.i = sp->value.i;
 	if (!sp1->fi) {
-		sp1->fi = MakeFunction(sp1->id);
+		sp1->fi = MakeFunction(sp1->id, sp1, defaultcc==1, false);
 		//sp1->fi = newFunction(sp1->id);
 		sp1->fi->sym = sp1;
 	}

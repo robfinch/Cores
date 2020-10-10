@@ -181,9 +181,9 @@ void DumphTable()
 
    if (gCpu == RTF64) {
      fprintf(ofp, "%d compressable instructions\n", htblmax);
-     fprintf(ofp, "The top 1536 are:\n", htblmax);
+     fprintf(ofp, "The top 256 are:\n", htblmax);
      fprintf(ofp, "Comp  Opcode  Count\n");
-     for (nn = 0; nn < htblmax && nn < 1536; nn++) {
+     for (nn = 0; nn < htblmax && nn < 256; nn++) {
        fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
      }
      return;
@@ -862,7 +862,7 @@ void process_align()
 		if (gCpu == RTF64) {
 			if (segment == codeseg) {
 				while (sections[segment].address % v)
-					emitByte(0xEA);	// NOP instruction
+					emitByte(0x79);	// NOP instruction
 			}
 			else {
 				while (sections[segment].address % v)

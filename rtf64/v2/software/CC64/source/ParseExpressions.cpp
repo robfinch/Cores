@@ -223,24 +223,6 @@ ENODE *makeinode(int nt, int64_t v1)
     return ep;
 }
 
-ENODE *makefnode(int nt, double v1)
-{
-	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
-	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
-	ep->esize = -1;
-	ep->f = v1;
-  ep->f1 = v1;
-//    ep->f2 = v2;
-	ep->p[0] = 0;
-	ep->p[1] = 0;
-	ep->p[2] = 0;
-  return ep;
-}
-
 ENODE *makefqnode(int nt, Float128 *f128)
 {
 	ENODE *ep;
@@ -732,9 +714,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			getch();
 		if( lastch == '(') {
 			sp = allocSYM();
-			sp->fi = compiler.ff.MakeFunction(sp->id);
-			sp->fi->sym = sp;
-			sp->fi->IsPascal = defaultcc == 1;
+			sp->fi = compiler.ff.MakeFunction(sp->id, sp, defaultcc==1);
 			sp->tp = &stdfunc;
 			sp->SetName(*(new std::string(lastid)));
 			sp->storage_class = sc_external;
@@ -822,7 +802,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			if (sp->tp->type==bt_quad)
 				*node = makefqnode(en_fqcon,&sp->f128);
 			else if (sp->tp->type==bt_float || sp->tp->type==bt_double || sp->tp->type==bt_triple)
-				*node = makefnode(en_fcon,sp->value.f);
+				*node = compiler.ef.Makefnode(en_fcon,sp->value.f);
 			else {
 				*node = makeinode(en_icon,sp->value.i);
 				if (sp->tp->isUnsigned)
@@ -1190,6 +1170,7 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
 			//	goto j2;
 			//}
 		}
+		pnode->SetType(tptr);
 				//pnode->p[3] = (ENODE *)tptr->size;
 //				if (pnode->nodetype==en_nacon)
 //					pnode->p[0] = makenode(en_list,tptr->BuildEnodeTree(),nullptr);
@@ -1252,81 +1233,28 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
   case iconst:
     tptr = &stdint;
 		pnode = Sub1(tptr, ival);
+		pnode->SetType(tptr);
     NextToken();
     break;
 
 	case kw_floatmax:
     tptr = &stdquad;
     tptr->isConst = TRUE;
-    pnode = makefnode(en_fcon,rval);
+    pnode = compiler.ef.Makefnode(en_fcon,rval);
     pnode->constflag = TRUE;
     pnode->SetType(tptr);
 		pnode->i = quadlit(Float128::FloatMax());
     NextToken();
 		break;
 
-    case rconst:
-j2:
-      pnode = makefnode(en_fcon,rval);
-      pnode->constflag = TRUE;
-			pnode->i = quadlit(&rval128);
-			pnode->f128 = rval128;
-			pnode->segment = rodataseg;
-			switch(float_precision) {
-			case 'Q': case 'q':
-				tptr = &stdquad;
-				//getch();
-				break;
-			case 'D': case 'd':
-				tptr = &stddouble;
-				//getch();
-				break;
-			case 'T': case 't':
-				tptr = &stdtriple;
-				//getch();
-				break;
-			case 'S': case 's':
-				tptr = &stdflt;
-				//getch();
-				break;
-			default:
-				tptr = &stddouble;
-				break;
-			}
-      pnode->SetType(tptr);
-      tptr->isConst = TRUE;
-      NextToken();
-      break;
+  case rconst:
+		pnode = ParseRealConst(node);
+    break;
 
 	case sconst:
-	{
-		char *str;
+		pnode = ParseStringConst(node, sizeof_flag);
+		break;
 
-		str = GetStrConst();
-		if (sizeof_flag) {
-			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(str) + 1;
-			tptr->btp = TYP::Make(bt_char, 2)->GetIndex();// stdchar.GetIndex();
-			tptr->GetBtp()->isConst = TRUE;
-			tptr->val_flag = 1;
-			tptr->isConst = TRUE;
-			tptr->isUnsigned = TRUE;
-		}
-		else {
-			tptr = &stdstring;
-		}
-		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
-		if (sizeof_flag == 0)
-			pnode->i = stringlit(str);
-		free(str);
-		pnode->etype = bt_pointer;
-		pnode->esize = 2;
-		pnode->constflag = TRUE;
-		pnode->segment = rodataseg;
-		pnode->SetType(tptr);
-		tptr->isConst = TRUE;
-	}
-  break;
 	case asconst:
 	{
 		char *str;
@@ -1334,7 +1262,7 @@ j2:
 		str = GetStrConst();
 		if (sizeof_flag) {
 			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(str) + 1;
+			tptr->size = strlen(str) + (int64_t)1;
 			switch (str[0]) {
 			case 'B':
 				tptr->btp = TYP::Make(bt_byte, 1)->GetIndex();
@@ -1442,6 +1370,7 @@ j2:
 		tptr->isUnsigned = TRUE;
 		dfs.puts((char *)tptr->GetBtp()->sname->c_str());
 		pnode = makeinode(en_regvar,regCLP);
+		pnode->SetType(tptr);
 		dfs.puts("</ExprThis>");
         break;
 
@@ -1478,8 +1407,8 @@ j2:
         return (TYP *)NULL;
     }
 	*node = pnode;
-    if (*node)
-       (*node)->SetType(tptr);
+//    if (*node)
+//       (*node)->SetType(tptr);
     if (tptr)
     Leave("ParsePrimary", tptr->type);
     else
@@ -1880,8 +1809,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 			*/
 			if (sp==nullptr) {
 				sp = allocSYM();
-				sp->fi = MakeFunction(sp->id);
-				sp->fi->sym = sp;
+				sp->fi = MakeFunction(sp->id, sp, defaultcc==1);
 				sp->storage_class = sc_external;
 				sp->SetName(name);
 				sp->tp = TYP::Make(bt_func,0);
@@ -1894,8 +1822,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 				sp->tp = TYP::Make(bt_func,0);
 				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
 				if (!sp->fi) {
-					sp->fi = MakeFunction(sp->id);
-					sp->fi->sym = sp;
+					sp->fi = MakeFunction(sp->id, sp, defaultcc==1);
 				}
 				sp->fi->AddProto(&typearray);
 				sp->mangledName = sp->fi->BuildSignature();

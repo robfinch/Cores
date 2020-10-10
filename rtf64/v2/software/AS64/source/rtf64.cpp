@@ -278,7 +278,7 @@
 #define I_FSLT	0x12
 #define I_FSLE	0x13
 
-#define CI_TABLE_SIZE		1536
+#define CI_TABLE_SIZE		256
 
 static void (*jumptbl[tk_last_token])();
 static int64_t parm1[tk_last_token];
@@ -1974,15 +1974,14 @@ static void LoadConstant(int64_t val, int rg)
 	emit_insn(
 		RCF(recflag) |
 		((val & 0x1fffLL) << 18LL) |
-		RS1(2) |
+		RS1(0) |
 		RD(rg) |
 		I_ORI, true
 	);
 	emit_insn(
-		((val >> 27LL) << 32LL) |
+		((val >> 32LL) << 32LL) |
 		RCF(recflag) |
-		(((val >> 14LL) & 0x1fffLL) << 18LL) |
-		RS1(2) |
+		(((val >> 14LL) & 0x3ffffLL) << 13LL) |
 		RD(rg) |
 		I_ADDUI |
 		((val >> 13LL) & 1), true
@@ -3749,7 +3748,7 @@ static void process_call(int opcode, int opt)
 			);
 		return;
 	}
-	disp = (val - code_address) >> 2;
+	disp = (val - code_address);
 	if (rel && opcode==I_JSR && IsNBit(disp, 16)) {
 		emit_insn((disp << 8LL) | I_JSR18, false);
 		return;
@@ -4153,16 +4152,36 @@ static void process_store()
 	expect(',');
   mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
+		if (!IsNBit(disp, 6)) {
+			LoadConstant(disp, 2);
+			emit_insn(
+				RS2(Ra) |
+				RS1(2) |
+				RD(2) |
+				I_ADDR2
+			);
+			emit_insn(
+				(Sc << 28) |
+				RD(Rs) |
+				RS1(2) |
+				RS2(0) |
+				RS3(Rc) |
+				opcode6, true);
+			ScanToEOL();
+			return;
+		}
 		emit_insn(
 			(((disp >> 5LL) & 1LL) << 29LL) |
-			(Sc << 28LL) |
-			RS3(Rc) |
-			RS2(Rs) |
+			(Sc << 28) |
+			RD(Rs) |
 			RS1(Ra) |
-			RD(disp)|
-			opcode6, true);// seg == -1 ? 4 : 6);
+			RS2(disp) |
+			RS3(Rc) |
+			opcode6, true);
+		ScanToEOL();
 		return;
 	}
+
   if (Ra < 0) Ra = 0;
   val = disp;
 	if (Ra == 55)
@@ -4179,8 +4198,9 @@ static void process_store()
 		LoadConstant(val, 2);
 		emit_insn(
 			RS3(2) |
-			RS2(Rs) |
+			RS2(0) |
 			RS1(Ra) |
+			RD(Rs) |
 			opcode6, true);// seg == -1 ? 4 : 6);
 		return;
 	}
@@ -4192,25 +4212,36 @@ static void process_store()
 	case I_STOC:
 	case I_STPTR:
 	case I_STOT:
-		if ((Ra == regSP || Ra == regFP) && (val & 7LL) == 0LL) {
-			emit_insn(
-				RS2(Rs) |
-				RS1((Ra & 1) | ((val >> 8LL) << 1LL)) |
-				RD(val >> 3LL) |
-				opcode6-0x18, true
-			);
-			ScanToEOL();
-			return;
+		if ((Ra == regFP || Ra == regSP) && Rc <= 0) {
+			if (IsNBit(val, 12) && (val & 7) == 0) {
+				emit_insn(
+					(((val >> 3LL) & 0x1ffLL) << 14LL) |
+					((Ra & 1) << 13) |
+					RD(Rs) |
+					(opcode6 - 0x18)
+				);
+				ScanToEOL();
+				return;
+			}
 		}
 	}
+	if (!IsNBit(val, 12)) {
+		LoadConstant(val, 2);
+		emit_insn(
+			RS3(2) |
+			RD(Rs) |
+			RS1(Ra) |
+			opcode6, true);// seg != -1 ? 6 : 4);
+		ScanToEOL();
+		return;
+	}
 	emit_insn(
-		(1 << 30LL) |	// set mode bit
-		(((val >> 5LL) & 0x7fLL) << 23LL) |
-		RS2(Rs) |
+		(1 << 30) |	// set address mode bit (non-indexed)
+		((val & 0xFFFLL) << 18LL) |
+		RD(Rs) |
 		RS1(Ra) |
-		RD(val) |
 		opcode6, true);
-  ScanToEOL();
+	ScanToEOL();
 }
 /*
 static void process_storepair(int64_t opcode6)
@@ -4420,25 +4451,25 @@ static void process_load()
 				I_ADDR2
 			);
 			emit_insn(
-				RS3(Rc) |
+				RCF(recflag) |
 				(((val >> 5LL) & 1LL) << 29LL) |
 				(Sc << 28) |
 				RD(Rt) |
 				RS1(2) |
 				RS2(val) |
-				RS2(Rc) |
+				RS3(Rc) |
 				opcode6, true);
 			ScanToEOL();
 			return;
 		}
 		emit_insn(
-			RS3(Rc) |
+			RCF(recflag) |
 			(((val >> 5LL) & 1LL) << 29LL) |
 			(Sc << 28) |
 			RD(Rt) |
 			RS1(Ra) |
 			RS2(val) |
-			RS2(Rc) |
+			RS3(Rc) |
 			opcode6, true);
 		ScanToEOL();
 		return;

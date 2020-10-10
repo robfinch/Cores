@@ -342,9 +342,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__new");
-	sp->fi = ff.MakeFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
+	sp->fi = sp->MakeFunction(sp->id, true);
 	tanew.Add(bt_long, 0);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
@@ -354,9 +352,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__autonew");
-	sp->fi = ff.MakeFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
+	sp->fi = sp->MakeFunction(sp->id, true);
 	tanew.Add(bt_long, 0);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
@@ -366,9 +362,7 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__delete");
-	sp->fi = ff.MakeFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
+	sp->fi = sp->MakeFunction(sp->id, true);
 	tadelete.Add(bt_pointer, 0);
 	sp->fi->AddProto(&tadelete);
 	sp->tp = &stdvoid;
