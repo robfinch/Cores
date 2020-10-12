@@ -31,11 +31,11 @@ class CSet //: public CObject
    unsigned __int8 size;          // number of int's of bitmap.
    unsigned __int8 compl;         // Negative true set if compl is true
 
-   void enlarge(int);            // increase size of set
    int cmp(CSet&) const;
    int SetTest(CSet &);
    void allocBitStorage();
 public:
+	void enlarge(int);            // increase size of set
 	void Create() {
 		map = dmap;
 		size = SET_DEFAULT_SIZE;
@@ -140,6 +140,10 @@ public:
 	int isMember(int bit) { return ((bit >= nbits)||bit < 0 ? 0 : (map[bit >> SET_NBIT] & (1 << (bit & SET_BMASK)))) != 0; }; // is n a member of s ?
 	int test(int x) { return (isMember(x)) ? !compl : compl; };
 	int isSubset(CSet &);
+	void insert(int64_t val, int base, int len);
+	void extract(int64_t* val, int base, int len);
+	bool shr(int amt);
+	bool shl(int amt);
 
 //	void Serialize(CArchive& ar);
 };

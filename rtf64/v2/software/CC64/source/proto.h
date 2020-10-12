@@ -49,12 +49,14 @@ extern char *GetStrConst();
 extern void push_typ(TYP *tp);
 extern TYP *pop_typ();
 
-extern TYP *nameref2(std::string name, ENODE **node, int nt, bool alloc, TypeArray*, TABLE* tbl);
 extern void opt_const_unchecked(ENODE **node);
 extern Operand *MakeString(char *s);
 extern Operand *MakeDoubleIndexed(int i, int j, int scale);
 extern Operand *makecreg(int);
 
+// Utility
 extern int64_t round8(int64_t);
+extern int countLeadingBits(int64_t val);
+extern int countLeadingZeros(int64_t val);
 
 #endif

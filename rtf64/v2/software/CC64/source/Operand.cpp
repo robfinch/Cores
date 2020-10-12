@@ -183,6 +183,15 @@ void Operand::MakeLegal(int flags, int size)
 			else if (flags & am_imm0) {
 				if (i == 0)
 					return;
+				if (flags & am_imm) {
+					if (flags & am_reg) {
+						if (offset->i == 0) {
+							mode = am_reg;
+							preg = 0;
+						}
+					}
+					return;
+				}
 			}
 			// If there is a choice between r0 and #0 choose r0.
 			else if (flags & am_imm) {

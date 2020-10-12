@@ -51,6 +51,7 @@ TYP *pop_typ()
 		typ_sp--;
 		return (typ_vector[typ_sp]);
 	}
+	return (nullptr);
 }
 
 bool TYP::IsScalar()

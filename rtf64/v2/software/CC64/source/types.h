@@ -420,9 +420,10 @@ public:
 	unsigned int isIO : 1;
 	unsigned int isConst : 1;	// const in declaration
 	unsigned int isResv : 1;
+	unsigned int isBits : 1;
 	__int16 precision;			// precision of the numeric in bits
-	int8_t		bit_width;
-	int8_t		bit_offset;
+	ENODE* bit_width;
+	ENODE* bit_offset;
 	int8_t		ven;			// vector element number
 	int64_t   size;
 	int64_t struct_offset;
@@ -444,6 +445,7 @@ public:
 	static TYP *Copy(TYP *src);
 	bool IsScalar();
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
+	bool IsPositType() const { return (type == bt_posit); };
 	bool IsVectorType() const { return (type==bt_vector); };
 	bool IsUnion() const { return (type==bt_union); };
 	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
@@ -509,7 +511,7 @@ public:
 	int64_t esize;
 	TYP *tp;
 	SYM *sym;
-	__int8 constflag;
+	bool constflag;
 	unsigned int segment : 4;
 	unsigned int predreg : 4;
 	unsigned int isVolatile : 1;
@@ -520,8 +522,8 @@ public:
 	unsigned int isAutonew : 1;
 	unsigned int isNeg : 1;
 	ENODE *vmask;
-	__int8 bit_width;
-	__int8 bit_offset;
+	ENODE* bit_width;
+	ENODE* bit_offset;
 	__int8 scale;
 	short int rg;
 	// The following could be in a value union
@@ -534,7 +536,7 @@ public:
 	std::string *udnm;			// undecorated name
 	void *ctor;
 	void *dtor;
-	ENODE *p[4];
+	ENODE *p[5];
 	ENODE *pfl;			// postfix list
 
 	ENODE *Clone();
@@ -558,6 +560,7 @@ public:
 	bool HasCall();
 
 	// Parsing
+	void AddToList(ENODE* ele);
 	bool AssignTypeToList(TYP *);
 
 	// Optimization
@@ -590,7 +593,7 @@ public:
 	Operand *GenerateShift(int flags, int size, int op);
 	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
-	Operand *GenUnary(int flags, int size, int op);
+	Operand *GenerateUnary(int flags, int size, int op);
 	Operand *GenBinary(int flags, int size, int op);
 	Operand *GenerateAssignShift(int flags, int size, int op);
 	Operand *GenerateAssignAdd(int flags, int size, int op);
@@ -598,6 +601,8 @@ public:
 	Operand *GenLand(int flags, int op, bool safe);
 	Operand* GenerateBitfieldDereference(int flags, int size, int opt);
 	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int offset, int width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	Operand* GenerateBitfieldAssign(int flags, int size);
 	Operand* GenerateBitfieldAssignAdd(int flags, int size, int op);
 	Operand* GenerateBitfieldAssignLogic(int flags, int size, int op);
@@ -624,18 +629,64 @@ public:
 class ExpressionFactory : public CompilerType
 {
 public:
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3, ENODE* v4);
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3);
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
 	ENODE* Makefnode(int nt, double v1);
 };
 
 class Expression : public CompilerType
 {
+private:
+	int cnt;				// number of []
+	ENODE* pep1;
+	int numdimen;
+	int64_t sa[10];	// size array - 10 dimensions max
+	int64_t totsz;
 public:
+	bool isMember;
 	TYP* head;
 	TYP* tail;
+	int sizeof_flag;
+	bool got_pa;
 private:
+	void SetRefType(ENODE** node);
+	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
 	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
-	ENODE* ParseStringConst(ENODE** node, int sizeof_flag);
+	ENODE* ParseCharConst(ENODE** node);
+	ENODE* ParseStringConst(ENODE** node);
+	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
+	ENODE* ParseInlineStringConst(ENODE** node);
 	ENODE* ParseRealConst(ENODE** node);
+	ENODE* ParseFloatMax();
+	ENODE* ParseThis(ENODE** node);
+	ENODE* ParseAggregate(ENODE** node);
+	ENODE* ParseNameRef();
+	ENODE* ParseTypenum();
+	ENODE* ParseNew(bool autonew);
+	ENODE* ParseDelete();
+	ENODE* ParseAddressOf();
+	ENODE* ParseMulf();
+	ENODE* ParseBytndx();
+	ENODE* ParseWydndx();
+	// Unary Expression Parsing
+	ENODE* ParseMinus();
+	ENODE* ParseNot();
+	ENODE* ParseCom();
+	ENODE* ParseStar();
+	ENODE* ParseSizeof();
+
+	ENODE* ParseDotOperator(TYP* tp1, ENODE* ep1);
+	ENODE* ParsePointsTo(TYP* tp1, ENODE* ep1);
+	ENODE* ParseOpenpa(TYP* tp1, ENODE* ep1);
+	ENODE* ParseOpenbr(TYP*tp1, ENODE* ep1);
+	ENODE* AdjustForBitArray(int pop, TYP* tp1, ENODE* ep1);
+
+	void ApplyVMask(ENODE* node, ENODE* mask);
+
+	TYP* deref(ENODE** node, TYP* tp);
+	TYP* CondDeref(ENODE** node, TYP* tp);
+
 	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
 	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
 	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
@@ -655,8 +706,25 @@ private:
 	TYP *ParseConditionalOps(ENODE **node);
 	TYP *ParseNonAssignExpression(ENODE **node);
 	TYP *ParseCommaOp(ENODE **node);
+	ENODE* MakeStaticNameNode(SYM* sym);
+	ENODE* MakeThreadNameNode(SYM* sp);
+	ENODE* MakeGlobalNameNode(SYM* sp);
+	ENODE* MakeExternNameNode(SYM* sp);
+	ENODE* MakeConstNameNode(SYM* sp);
+	ENODE* MakeMemberNameNode(SYM* sp);
+	ENODE* MakeAutoNameNode(SYM* sp);
+	ENODE* MakeUnknownFunctionNameNode(SYM* sp, TYP** tp, TypeArray* typearray);
+	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
+	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
+	void DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp);
+	void DerefFloat(ENODE** node, TYP* tp, SYM* sp);
+	void DerefDouble(ENODE** node, TYP* tp, SYM* sp);
+	void DerefBitfield(ENODE** node, TYP* tp, SYM* sp);
+	ENODE* FindLastMulu(ENODE*, ENODE*);
 public:
 	Expression();
+	TYP* nameref(ENODE** node, int nt);
+	TYP* nameref2(std::string name, ENODE** node, int nt, bool alloc, TypeArray* typearray, TABLE* tbl);
 	// The following is called from declaration processing, so is made public
 	TYP *ParseAssignOps(ENODE **node);
 	TYP *ParseNonCommaExpression(ENODE **node);
@@ -679,6 +747,7 @@ public:
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
+	unsigned int preserveNextReg : 1;
 	unsigned int type : 16;
 	TYP* tp;
 	char FloatSize;
@@ -695,6 +764,8 @@ public:
 	short int deep2;
 	ENODE *offset;
 	ENODE *offset2;
+	ENODE* bit_offset;
+	ENODE* bit_width;
 	int8_t scale;
 	Operand *next;			// For extended sizes (long)
 public:
@@ -848,18 +919,21 @@ public:
 	virtual void SignExtendBitfield(Operand* ap3, uint64_t mask);
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 	virtual void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
+	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
+	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
+	virtual Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
-	Operand *GenerateDereference(ENODE *node, int flags, int size, int su);
+	Operand *GenerateDereference(ENODE *node, int flags, int size, int su, int opt);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
 	Operand *GenerateAssignModiv(ENODE *node, int flags, int size, int op);
 	void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base);
 	void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base);
 	Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
-	Operand *GenAutocon(ENODE *node, int flags, int size, int type);
-	Operand* GenFloatcon(ENODE* node, int flags, int size);
-	Operand* GenLabelcon(ENODE* node, int flags, int size);
-	Operand *GenerateAssign(ENODE *node, int flags, int size);
-	Operand *GenerateExpression(ENODE *node, int flags, int size);
+	Operand *GenAutocon(ENODE *node, int flags, int64_t size, int type);
+	Operand* GenFloatcon(ENODE* node, int flags, int64_t size);
+	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
+	Operand *GenerateAssign(ENODE *node, int flags, int64_t size);
+	Operand *GenerateExpression(ENODE *node, int flags, int64_t size);
 	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
@@ -872,6 +946,7 @@ public:
 	virtual void PopArguments(Function *func, int howMany) {};
 	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
 	void GenerateFunction(Function *fn) { fn->Gen(); };
+	Operand* GenerateTrinary(ENODE* node, int flags, int size, int op);
 };
 
 class RTF64CodeGenerator : public CodeGenerator
@@ -908,7 +983,10 @@ public:
 	Operand *GenerateFunctionCall(ENODE *node, int flags);
 	void SignExtendBitfield(Operand* ap3, uint64_t mask);
 	void GenerateBitfieldInsert(Operand* dst, Operand* src, int offset, int width);
+	void GenerateBitfieldInsert(Operand* dst, Operand* src, Operand* offset, Operand* width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	Operand* GenerateBitfieldExtract(Operand* src, Operand* offset, Operand* width);
+	Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
 };
 
 // Control Flow Graph
@@ -1432,6 +1510,7 @@ public:
 	void ParseNaked();
 	void ParseShort();
 	void ParseLong();
+	void ParseBit();
 	void ParseInt();
 	void ParseInt64();
 	void ParseInt32();

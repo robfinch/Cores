@@ -79,3 +79,39 @@ std::string TraceName(SYM *sp)
 	return namebuf;
 }
 
+// Count the number of leading bits that are the same as the topmost bit.
+
+int countLeadingBits(int64_t val)
+{
+	int64_t b;
+	int64_t mask;
+	int count;
+
+	mask = 0x8000000000000000LL;
+	b = val & mask;
+	for (count = 0; ((val & mask) == b) && count < 64; count++)
+		val = val << 1LL;
+	return (count);
+}
+
+int countLeadingZeros(int64_t val)
+{
+	int64_t b;
+	int64_t mask;
+	int count;
+
+	mask = 0x8000000000000000LL;
+	for (count = 0; ((val & mask) == 0LL) && count < 64; count++)
+		val = val << 1LL;
+	return (count);
+}
+
+double log2(double n)
+{
+	return (log(n) / log(2));
+}
+
+double clog2(double n)
+{
+	return (ceil(log2(n)));
+}

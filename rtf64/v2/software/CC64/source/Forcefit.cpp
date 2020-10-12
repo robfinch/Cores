@@ -47,6 +47,9 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		switch (dsttp->type) {
 		case bt_void:
 			return (srctp);
+		case bt_bit:
+			*dstnode = *srcnode; return (dsttp);
+			break;
 		case bt_byte:
 		case bt_ubyte:
 			switch (srctp->type) {

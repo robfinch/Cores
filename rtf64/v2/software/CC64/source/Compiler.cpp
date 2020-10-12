@@ -161,6 +161,11 @@ void Compiler::AddStandardTypes()
 	TYP *p, *pchar, *pint, *pbyte;
 	TYP *pichar;
 
+	p = TYP::Make(bt_bit, sizeOfWord);
+	stdbit = *p;
+	pint = p;
+	p->precision = sizeOfWord * 8;
+
 	p = TYP::Make(bt_long,sizeOfWord);
 	stdint = *p;
 	pint = p;
@@ -225,7 +230,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pchar->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdstring = *p;
@@ -236,7 +241,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pichar->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdistring = *p;
@@ -247,7 +252,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pbyte->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdastring = *p;
@@ -256,7 +261,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_double;
 	p->typeno = bt_double;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stddbl = *p;
 	stddouble = *p;
@@ -265,7 +270,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_triple;
 	p->typeno = bt_triple;
 	p->size = 12;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 96;
 	stdtriple = *p;
   
@@ -273,7 +278,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_quad;
 	p->typeno = bt_quad;
 	p->size = 16;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 128;
 	stdquad = *p;
   
@@ -281,7 +286,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_float;
 	p->typeno = bt_float;
 	p->size = 4;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 32;
 	stdflt = *p;
   
@@ -295,7 +300,7 @@ void Compiler::AddStandardTypes()
 	p->size = 2;
 	p->isUnsigned = true;
 	p->precision = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	stdexception = *p;
 
 	p = allocTYP();
@@ -303,7 +308,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_long;
 	p->val_flag = 1;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdconst = *p;
 
@@ -312,7 +317,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_vector;
 	p->val_flag = 1;
 	p->size = 512;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdvector = *p;
 
@@ -321,7 +326,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_vector_mask;
 	p->val_flag = 1;
 	p->size = 32;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 32;
 	stdvectormask = p;
 
@@ -330,7 +335,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_void;
 	p->val_flag = 1;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdvoid = *p;
 }

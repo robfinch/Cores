@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -355,7 +355,6 @@ Var *Var::Find(int num)
 Var *Var::Find2(int num)
 {
 	Var *vp;
-	Tree *t;
 
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		//t = ::forest.trees[num];
@@ -496,12 +495,9 @@ void Var::Transplant(Var *v)
 bool Var::Coalesce2()
 {
 	int reg1, reg2;
-	Var *v1, *v2, *v3;
+	Var *v1, *v2;
 	Var *p, *q;
-	Tree *t, *u;
-	bool foundSameTree;
 	bool improved;
-	int nn, mm;
 
 	improved = false;
 	for (p = currentFn->varlist; p; p = p->next) {

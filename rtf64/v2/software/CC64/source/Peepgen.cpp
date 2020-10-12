@@ -384,7 +384,7 @@ void RemoveCode()
 					for (p = basicBlocks[nn]->lcode; p && !eol; p = p->back) {
 						if (p->opcode == op_label)
 							continue;
-						if (p->opcode == op_ret)
+						if (p->opcode == op_ret || p->opcode == op_rts)
 							continue;
 						p->GetTargetReg(&rg1, &rg2);
 						if (rg1 == v->num && rg2 == 0) {

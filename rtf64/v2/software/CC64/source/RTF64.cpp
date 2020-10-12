@@ -73,8 +73,8 @@ void RTF64CodeGenerator::GenerateLea(Operand* ap1, Operand* ap2)
 
 Operand* RTF64CodeGenerator::GenerateSafeLand(ENODE *node, int flags, int op)
 {
-	Operand* ap1, * ap2, * ap3, * ap4, * ap5;
-	int lab0, lab1;
+	Operand* ap1, * ap2, * ap4, * ap5;
+	int lab0;
 	OCODE* ip;
 
 	lab0 = nextlabel++;
@@ -130,10 +130,72 @@ void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int 
 }
 
 
+void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width)
+{
+	int nn;
+	uint64_t mask;
+
+	if (cpu.SupportsBitfield) {
+		ap1->MakeLegal(am_reg, sizeOfWord);
+		ap2->MakeLegal(am_reg, sizeOfWord);
+		Generate4adic(op_dep, 0, ap1, ap2, offset, width);
+		return;
+	}
+	/*
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateTriadic(op_and, 0, ap2, ap2, MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+	GenerateTriadic(op_ror, 0, ap1, ap1, offset);
+	GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(mask));		// clear bits in target field
+	GenerateTriadic(op_or, 0, ap1, ap1, ap2);
+	GenerateTriadic(op_rol, 0, ap1, ap1, offset);
+	*/
+}
+
+
+void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width)
+{
+	int nn;
+	uint64_t mask;
+	Operand* ap3, * ap4;
+	OCODE* ip;
+
+	if (cpu.SupportsBitfield) {
+		ap1->MakeLegal(am_reg, sizeOfWord);
+		ap2->MakeLegal(am_reg, sizeOfWord);
+		ip = currentFn->pl.tail;
+		// Try and get immediate operands for both offset and width
+		ap3 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord);
+		ap4 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord);
+		if (ap3->mode != ap4->mode) {
+			ReleaseTempReg(ap4);
+			ReleaseTempReg(ap3);
+			currentFn->pl.tail = ip;
+			ap3 = GenerateExpression(offset, am_reg, sizeOfWord);
+			ap4 = GenerateExpression(width, am_reg, sizeOfWord);
+		}
+		Generate4adic(op_dep, 0, ap1, ap2, ap3, ap4);
+		ReleaseTempReg(ap4);
+		ReleaseTempReg(ap3);
+		return;
+	}
+	/*
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateTriadic(op_and, 0, ap2, ap2, MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+	GenerateTriadic(op_ror, 0, ap1, ap1, offset);
+	GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(mask));		// clear bits in target field
+	GenerateTriadic(op_or, 0, ap1, ap1, ap2);
+	GenerateTriadic(op_rol, 0, ap1, ap1, offset);
+	*/
+}
+
+
 Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, Operand* offset, Operand* width)
 {
 	Operand* ap1;
-	int bit_offset = offset->offset->i;
 
 	ap1 = GetTempRegister();
 	if (cpu.SupportsBitfield) {
@@ -144,6 +206,7 @@ Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, Operand* offse
 	}
 	else {
 		uint64_t mask;
+		int bit_offset = offset->offset->i;
 
 		mask = 0;
 		while (--width)	mask = mask + mask + 1;
@@ -152,6 +215,46 @@ Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, Operand* offse
 		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate((int64_t)mask));
 		if (isSigned)
 			SignExtendBitfield(ap1, mask);
+	}
+	return (ap1);
+}
+
+Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, ENODE* offset, ENODE* width)
+{
+	Operand* ap1;
+	Operand* ap2;
+	Operand* ap3;
+	OCODE* ip;
+
+	ap1 = GetTempRegister();
+	ip = currentFn->pl.tail;
+	ap2 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord);
+	ap3 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord);
+	if (ap2->mode != ap3->mode) {
+		currentFn->pl.tail = ip;
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		ap2 = GenerateExpression(offset, am_reg, sizeOfWord);
+		ap3 = GenerateExpression(width, am_reg, sizeOfWord);
+	}
+	if (cpu.SupportsBitfield) {
+		if (isSigned)
+			Generate4adic(op_ext, 0, ap1, ap, ap2, ap3);
+		else
+			Generate4adic(op_extu, 0, ap1, ap, ap2, ap3);
+	}
+	else {
+		/*
+		uint64_t mask;
+
+		mask = 0;
+		while (--width)	mask = mask + mask + 1;
+		if (bit_offset > 0)
+			GenerateTriadic(op_lsr, 0, ap1, ap, ap2);
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate((int64_t)mask));
+		if (isSigned)
+			SignExtendBitfield(ap1, mask);
+		*/
 	}
 	return (ap1);
 }
@@ -414,7 +517,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 {
 	Operand *ap1,*ap2,*ap3,*ap4;
 	int lab0, lab1;
-	int size;
+	int64_t size = sizeOfWord;
 	int op;
 	OCODE* ip;
 
@@ -587,7 +690,7 @@ void RTF64CodeGenerator::GenerateBranchFalse(Operand* ap, int label)
 bool RTF64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit)
 {
 	int size, sz;
-	Operand *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2;
 	OCODE *ip;
 
 	if ((op == op_nand || op == op_nor || op == op_and || op == op_or) && (node->p[0]->HasCall() || node->p[1]->HasCall()))
@@ -1196,7 +1299,7 @@ void RTF64CodeGenerator::LinkAutonew(ENODE *node)
 
 Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 { 
-	Operand *ap, *ap1;
+	Operand *ap;
 	Function *sym;
 	Function *o_fn;
 	SYM *s;

@@ -48,11 +48,13 @@ int IdentifyKeyword()
 			return lastst = kw_inout;
 	}
 
-	// break,byte
+	// bit,break,byte
 	if (p[0]=='b' && p[1]=='r' && p[2]=='e' && p[3]=='a' && p[4]=='k' && p[5]=='\0')
 		return lastst = kw_break;
 	if (p[0]=='b' && p[1]=='y' && p[2]=='t' && p[3]=='e' && p[4]=='\0')
 		return lastst = kw_byte;
+	if (p[0] == 'b' && p[1] == 'i' && p[2] == 't' && p[3] == '\0')
+		return lastst = kw_bit;
 
 	// while,wchar_t
 	if (p[0]=='w') {
@@ -234,7 +236,7 @@ int IdentifyKeyword()
 			return lastst = modop;
 	}
 
-	if (p[0]=='p') {	// private,public,pascal,prolog
+	if (p[0]=='p') {	// private,public,pascal,prolog,posit
 		if (p[1]=='r' && p[2]=='i' && p[3]=='v' && p[4]=='a' && p[5]=='t' && p[6]=='e' && p[7]=='\0')
 			return lastst = kw_private;
 		if (p[1]=='u' && p[2]=='b' && p[3]=='l' && p[4]=='i' && p[5]=='c' && p[6]=='\0')
@@ -243,7 +245,10 @@ int IdentifyKeyword()
 			return lastst = kw_pascal;
 		if (p[1]=='r' && p[2]=='o' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_prolog;
+		if (p[1] == 'o' && p[2] == 's' && p[3] == 'i' && p[4] == 't' && p[5] == '\0')
+			return lastst = kw_posit;
 	}
+
 	if (p[0]=='n') {	// nocall,null,nullptr,naked,new,namespace,not
 		if (p[1]=='e' && p[2]=='w' && p[3]=='\0') {
 			return lastst = kw_new;

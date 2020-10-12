@@ -35,7 +35,7 @@ void OCODE::Remove()
 bool OCODE::HasTargetReg() const
 {
 	if (insn) {
-		if (insn->opcode == op_call || insn->opcode == op_jal)
+		if (insn->opcode == op_call || insn->opcode == op_jal || insn->opcode==op_jsr)
 			return (oper1->type != bt_void);
 		return (insn->HasTarget());
 	}
@@ -59,7 +59,7 @@ bool OCODE::HasSourceReg(int regno) const
 	if (insn == nullptr)
 		return (false);
 	// Push has an implied target, so oper1 is actually a source.
-	if (oper1 && !insn->HasTarget() || opcode==op_push) {
+	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep) {
 		if (oper1->preg==regno)
 			return (true);
 		if (oper1->sreg==regno)
@@ -114,6 +114,8 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 		case op_pea:
 		case op_push:
 		case op_ret:
+		case op_rts:
+		case op_jsr:
 		case op_call:
 			*rg1 = regSP;
 			*rg2 = 0;
@@ -531,8 +533,6 @@ void OCODE::OptStore()
 
 void OCODE::OptBeq()
 {
-	OCODE* p;
-
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
 		if (back->back && back->back->opcode == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
@@ -548,8 +548,6 @@ void OCODE::OptBeq()
 
 void OCODE::OptBne()
 {
-	OCODE* p;
-	
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
 		if (back->back && back->back->opcode == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
@@ -1089,7 +1087,7 @@ void OCODE::OptLdi()
 	if (fwd) {
 		if (oper2->offset->constflag) {
 			if (fwd->opcode == op_sxt) {
-				if (oper2->offset->i >= -2147483648L && oper2->offset->i <= 2147483647L) {
+				if (oper2->offset->i >= -(int64_t)2147483648L && oper2->offset->i <= 2147483647L) {
 					fwd->MarkRemove();
 					optimized++;
 				}

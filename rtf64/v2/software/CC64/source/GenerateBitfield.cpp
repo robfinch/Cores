@@ -26,28 +26,64 @@
 #include "stdafx.h"
 #define SUPPORT_BITFIELD	false
 
+Operand* FindBitOffset()
+{
+	OCODE* ip;
+
+	ip = currentFn->pl.tail;
+	for (; ip; ip = ip->back) {
+		if (ip->opcode == op_and) {
+			if (ip->oper3->mode == am_imm) {
+				if (ip->oper3->offset->i == 63) {
+					return (ip->oper1);
+				}
+			}
+		}
+	}
+	return (nullptr);
+}
+
 Operand* ENODE::GenerateBitfieldDereference(int flags, int size, int opt)
 {
 	Operand* ap, * ap3, * ap4;
-	int width = bit_width + 1;
 	int isSigned;
+	Operand* tmpo = nullptr;
 
 	isSigned = !isUnsigned;
+	ap = cg.GenerateDereference(this, flags, esize, isSigned,1);
+	ap->MakeLegal(flags, esize);
+	if (this->tp->type == bt_bit) {
+		ap->offset->bit_offset = nullptr;
+		ap->offset->bit_width = nullptr;
+		tmpo = FindBitOffset();
+	}
+	else {
+		//if (ap->offset == nullptr) {
+		//	ap->offset = makenode(en_fieldref, nullptr, nullptr);
+		//}
+		if (ap->offset == nullptr) {
+			if (p[0]->nodetype == en_ext || p[0]->nodetype == en_extu) {
+				ap->offset = makenode(p[0]->nodetype, nullptr, nullptr);
+			}
+		}
+		ap->offset->bit_offset = bit_offset;
+		ap->offset->bit_width = bit_width;
+	}
+	if (opt==1)
+		return (ap);
+	ReleaseTempReg(tmpo);
 	ap3 = GetTempRegister();
 	ap3->tempflag = TRUE;
-	ap = cg.GenerateDereference(this, flags, esize, isSigned);
-	ap->MakeLegal(flags, esize);
-	ap->offset->bit_offset = bit_offset;
-	ap->offset->bit_width = bit_width;
-	if (opt)
-		return (ap);
 	if (ap->mode == am_reg)
 		GenerateDiadic(op_mov, 0, ap3, ap);
 	else if (ap->mode == am_imm)
 		GenerateDiadic(op_ldi, 0, ap3, ap);
 	else	// memory
 		GenLoad(ap3, ap, esize, esize);
-	ap4 = cg.GenerateBitfieldExtract(ap3, MakeImmediate((int64_t)bit_offset), MakeImmediate((int64_t)(bit_width - 1)));
+	if (tmpo)
+		ap4 = cg.GenerateBitfieldExtract(ap3, tmpo, makereg(regZero));
+	else
+		ap4 = cg.GenerateBitfieldExtract(ap3, bit_offset, bit_width);
 	ReleaseTempReg(ap3);
 	ap4->MakeLegal(flags, esize);
 	ap4->next = ap;
@@ -56,6 +92,11 @@ Operand* ENODE::GenerateBitfieldDereference(int flags, int size, int opt)
 }
 
 void ENODE::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int offset, int width)
+{
+	cg.GenerateBitfieldInsert(ap1, ap2, offset, width);
+}
+
+void ENODE::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width)
 {
 	cg.GenerateBitfieldInsert(ap1, ap2, offset, width);
 }
@@ -69,12 +110,21 @@ Operand *ENODE::GenerateBitfieldAssign(int flags, int size)
 	ap1 = cg.GenerateExpression(p[0],am_reg|am_mem|am_bf_assign,size);
 	ap2 = cg.GenerateExpression(p[1],am_reg,size);
 	if (ap1->mode == am_reg) {
-		GenerateBitfieldInsert(ap1, ap2, p[0]->bit_offset, p[0]->bit_width);
+		GenerateBitfieldInsert(ap1, ap2, ap1->bit_offset, ap1->bit_width);
 	}
 	else {
 		ap3 = GetTempRegister();
 		GenLoad(ap3,ap1,size,size);
-		GenerateBitfieldInsert(ap3, ap2, p[0]->bit_offset, p[0]->bit_width);
+		GenerateBitfieldInsert(ap3, ap2, ap1->bit_offset, ap1->bit_width);
+		/*
+		if (p[0]->bit_offset == nullptr) {
+			if (p[0]->p[0]->nodetype == en_bitoffset) {
+				GenerateBitfieldInsert(ap3, ap2, p[0]->p[0]->bit_offset, p[0]->p[0]->bit_width);
+			}
+		}
+		else
+			GenerateBitfieldInsert(ap3, ap2, p[0]->bit_offset, p[0]->bit_width);
+			*/
 		GenStore(ap3,ap1,size);
 		ReleaseTempRegister(ap3);
 	}
@@ -102,13 +152,24 @@ Operand* ENODE::GenerateBitfieldAssignAdd(int flags, int size, int op)
 	ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
 	if (ap1->mode == am_reg) {
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
-		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		if (ap1->offset->bit_offset == nullptr)
+			GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
+		else
+			GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 	}
 	else {
 		GenLoad(ap3, ap1, size, size);
-		Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width - 1));
+		cg.GenerateBitfieldExtract(ap1, ap1->next, MakeImmediate(1));
+//		if (ap1->offset->bit_offset == nullptr)
+//			Generate4adic(op_ext, 0, ap3, ap1, ap1->next, MakeImmediate(1));
+//		else
+//			Generate4adic(op_ext, 0, ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+//		Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width - 1));
 		GenerateTriadic(op, 0, ap4, ap4, ap2);
-		GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
+		if (ap1->offset->bit_offset == nullptr)
+			GenerateBitfieldInsert(ap3, ap4, ap1->next, MakeImmediate(1));
+		else
+			GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenStore(ap3, ap1, ssize);
 	}
 	ReleaseTempReg(ap2);

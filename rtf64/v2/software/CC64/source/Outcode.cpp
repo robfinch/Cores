@@ -44,7 +44,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[271] =
+Instruction opl[272] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -116,10 +116,11 @@ Instruction opl[271] =
 { "dw", op_dw },
 { "eor",op_eor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "eq",op_eq },
-{ "ext",op_ext,1,1,false,am_reg,am_reg,am_reg | am_imm,am_reg | am_imm },
-{ "extu", op_extu,1,1,false,am_reg,am_reg,am_reg | am_imm,am_reg|am_imm },
+{ "ext", op_ext,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg | am_imm | am_imm0 },
+{ "extr", op_extr,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg|am_imm | am_imm0 },
+{ "extu", op_extu,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg | am_imm | am_imm0 },
 { "fadd", op_fadd, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
-{ "fadd", op_fdadd,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
+{ "fadd.d", op_fdadd,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
 { "fadd.s", op_fsadd,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
 { "fbeq", op_fbeq,3,0,false,am_fpreg,am_fpreg,0,0 },
 { "fbge", op_fbge,3,0,false,am_fpreg,am_fpreg,0,0 },

@@ -207,12 +207,23 @@ Operand* CodeGenerator::GenerateBitfieldDereference(ENODE* node, int flags, int 
 	return (node->GenerateBitfieldDereference(flags, size, opt));
 }
 
+ENODE* FindAnd(ENODE *node)
+{
+	if (node->nodetype == en_and) {
+		if (node->p[1]->nodetype == en_icon) {
+			if (node->p[1]->i == 63) {
+				return (node->p[1]);
+			}
+		}
+	}
+}
+
 //
 //  Return the addressing mode of a dereferenced node.
 //
-Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int su)
+Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int su, int opt)
 {    
-	Operand *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3, * ap4;
   int siz1;
 	int typ;
 
@@ -224,7 +235,55 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	//	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
 	//		return GenerateExpression(node, am_reg | am_mem, size);
 	//	}
+	/*
+	if (node->nodetype==en_fieldref && (node->p[0]->nodetype == en_ext || node->p[0]->nodetype == en_extu)) {
+		//ap1 = GenerateExpression(node->p[0], am_reg | am_mem, sizeOfWord);
+		ap1 = GetTempRegister();
+		ap1->offset = node->p[0];
+		ap1->tp = node->tp;
+		ap1->segment = dataseg;
+		ap1->MakeLegal(flags, size);
+		return (ap1);
+	}
+	*/
+	if (node->p[0]->nodetype == en_bitoffset) {
+		OCODE* ip;
+		ap4 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0]->p[0], am_reg, sizeOfWord);
+		if (opt) {
+			ip = currentFn->pl.tail;
+			ap2 = GenerateExpression(node->p[0]->p[1], am_reg | am_imm | am_imm0, sizeOfWord);
+			ap3 = GenerateExpression(node->p[0]->p[2], am_reg | am_imm | am_imm0, sizeOfWord);
+			if (ap2->mode != ap3->mode) {
+				ReleaseTempReg(ap3);
+				ReleaseTempReg(ap2);
+				currentFn->pl.tail = ip;
+				ap2 = GenerateExpression(node->p[0]->p[1], am_reg, sizeOfWord);
+				ap3 = GenerateExpression(node->p[0]->p[2], am_reg, sizeOfWord);
+			}
+			Generate4adic(node->tp->isUnsigned ? op_extu : op_ext, 0, ap4, ap1, ap2, ap3);
+			ReleaseTempReg(ap3);
+			ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+		}
+		else
+			ap4 = ap1;
+		ap4->bit_offset = node->p[0]->p[1];
+		ap4->bit_width = node->p[0]->p[2];
+		ap4->isPtr = node->IsRefType();
 
+		// For parameters we want Rn, for others [Rn]
+		// This seems like an error earlier in the compiler
+		// See setting val_flag in ParseExpressions
+//		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_reg;
+		//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
+//		ap1->preg = node->p[0]->rg;
+		ap4->tp = node->tp;
+		ap4->isUnsigned = node->tp->isUnsigned;
+		ap4->MakeLegal(flags, size);
+		Leave("Genderef", 3);
+		return (ap4);
+	}
     if( node->p[0]->nodetype == en_add )
     {
 //    ap2 = GetTempRegister();
@@ -487,7 +546,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	else if (node->p[0]->nodetype == en_vex) {
 		Operand *ap2;
 		if (node->p[0]->p[0]->nodetype==en_vector_ref) {
-			ap1 = GenerateDereference(node->p[0]->p[0],am_reg,8,0);
+			ap1 = GenerateDereference(node->p[0]->p[0],am_reg,8,0,0);
 			ap2 = GenerateExpression(node->p[0]->p[1],am_reg,8);
 			if (ap1->offset && ap2->offset) {
 				GenerateTriadic(op_add,0,ap1,makereg(0),MakeImmediate(ap2->offset->i));
@@ -661,7 +720,10 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
-		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		if (ap1->offset->bit_offset < 0)
+			GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
+		else
+			GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenerateStore(ap3, ap1->next, ssize);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1->next);
@@ -726,7 +788,10 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
-		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		if (ap1->offset->bit_offset < 0)
+			GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
+		else
+			GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenerateStore(ap3, ap1->next, siz1);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1->next);
@@ -1041,7 +1106,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 // destination is larger than the size passed then everything below this node
 // will be evaluated with the assignment size.
 // ----------------------------------------------------------------------------
-Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 {
 	Operand *ap1, *ap2 ,*ap3, *ap4, *ap5;
 	TYP *tp;
@@ -1054,7 +1119,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 
     if (node->p[0]->IsBitfield()) {
       Leave("GenAssign",0);
-		return (node->GenerateBitfieldAssign(flags, size));
+		return (node->GenerateBitfieldAssign(flags|am_bf_assign, size));
     }
 
 	ssize = node->p[0]->GetReferenceSize();
@@ -1257,7 +1322,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 
 // autocon and autofcon nodes
 
-Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int size, int type)
+Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int64_t size, int type)
 {
 	Operand *ap1, *ap2;
 
@@ -1276,7 +1341,7 @@ Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int size, int type)
 	return (ap1);             /* return reg */
 }
 
-Operand* CodeGenerator::GenFloatcon(ENODE* node, int flags, int size)
+Operand* CodeGenerator::GenFloatcon(ENODE* node, int flags, int64_t size)
 {
 	Operand* ap1, * ap2;
 
@@ -1292,13 +1357,14 @@ Operand* CodeGenerator::GenFloatcon(ENODE* node, int flags, int size)
 	if (node)
 		DataLabels[node->i] = true;
 	ap1->type = stddouble.GetIndex();
-	ap1->tp = node->tp;
+	if (node)
+		ap1->tp = node->tp;
 	// Don't allow the constant to be loaded into an integer register.
 	ap1->MakeLegal(flags & ~am_reg, size);
 	return (ap1);
 }
 
-Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int size)
+Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
 {
 	Operand* ap1, * ap2;
 
@@ -1330,7 +1396,7 @@ Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int size)
 // General expression evaluation. returns the addressing mode
 // of the result.
 //
-Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 {   
 	Operand *ap1, *ap2, *ap3;
   int natsize, siz1;
@@ -1338,6 +1404,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	static char buf[4][20];
 	static int ndx;
 	static int numDiags = 0;
+	OCODE* ip;
 
   Enter("<GenerateExpression>"); 
   if( node == (ENODE *)NULL )
@@ -1378,7 +1445,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
     ap1->offset = node;
     ap1->MakeLegal(flags,size);
 		ap1->tp = node->tp;
-    Leave("GenExpression",3); 
+		Leave("GenExpression",3);
 		goto retpt;
 
 	case en_labcon:
@@ -1457,12 +1524,12 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ReleaseTempReg(ap2);
 		goto retpt;
   case en_ref:
-		ap1 = GenerateDereference(node, flags, node->tp->size, !node->isUnsigned);
+		ap1 = GenerateDereference(node, flags, node->tp->size, !node->isUnsigned, (flags & am_bf_assign) ? 0 : 1);
 		ap1->isPtr = TRUE;
 		goto retpt;
 	case en_fieldref:
-		ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned)
-			: GenerateBitfieldDereference(node,flags,node->tp->size,!node->isUnsigned);
+		ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned,0)
+			: GenerateBitfieldDereference(node, flags, node->tp->size, 0);//!node->isUnsigned);
 		goto retpt;
 	case en_regvar:
 	case en_tempref:
@@ -1515,15 +1582,15 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1->MakeLegal(flags,size);
 		goto retpt;
 
-	case en_abs:	return node->GenUnary(flags,size,op_abs);
+	case en_abs:	return node->GenerateUnary(flags,size,op_abs);
     case en_uminus: 
-			ap1 = node->GenUnary(flags, size, op_neg);
+			ap1 = node->GenerateUnary(flags, size, op_neg);
 			goto retpt;
     case en_compl:
-			ap1 = node->GenUnary(flags,size,op_com);
+			ap1 = node->GenerateUnary(flags,size,op_com);
 			goto retpt;
 	case en_not:	
-		ap1 = (node->GenUnary(flags, 8, op_not));
+		ap1 = (node->GenerateUnary(flags, 8, op_not));
 		goto retpt;
 	case en_add:    ap1 = node->GenBinary(flags, size, op_add); goto retpt;
 	case en_sub:  ap1 = node->GenBinary(flags, size, op_sub); goto retpt;
@@ -1612,6 +1679,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_fmul:	  ap1 = node->GenBinary(flags, size, op_fmul); goto retpt;
 	case en_fdiv:	  ap1 = node->GenBinary(flags, size, op_fdiv); goto retpt;
 
+	case en_padd:	  ap1 = node->GenBinary(flags, size, op_padd); goto retpt;
+	case en_psub:	  ap1 = node->GenBinary(flags, size, op_psub); goto retpt;
+	case en_pmul:	  ap1 = node->GenBinary(flags, size, op_pmul); goto retpt;
+	case en_pdiv:	  ap1 = node->GenBinary(flags, size, op_pdiv); goto retpt;
+
 	case en_fdadd:    return node->GenBinary(flags,size,op_fdadd);
   case en_fdsub:    return node->GenBinary(flags,size,op_fdsub);
   case en_fsadd:    return node->GenBinary(flags,size,op_fsadd);
@@ -1650,12 +1722,14 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1 = (node->GenLand(flags, op_or, true));
 		goto retpt;
 
-	case en_isnullptr:	ap1 = node->GenUnary(flags, size, op_isnullptr); goto retpt;
+	case en_isnullptr:	ap1 = node->GenerateUnary(flags, size, op_isnullptr); goto retpt;
 	case en_and:    ap1 = node->GenBinary(flags, size, op_and); goto retpt;
   case en_or:     ap1 = node->GenBinary(flags,size,op_or); goto retpt;
 	case en_xor:	ap1 = node->GenBinary(flags,size,op_xor); goto retpt;
 	case en_bytendx:	ap1 = node->GenBinary(flags, size, op_bytendx); goto retpt;
 	case en_wydendx:	ap1 = node->GenBinary(flags, size, op_wydendx); goto retpt;
+	case en_ext:			ap1 = GenerateTrinary(node, flags, size, op_ext); goto retpt;
+	case en_extu:			ap1 = GenerateTrinary(node, flags, size, op_extu); goto retpt;
 	case en_mulf:    ap1 = node->GenMultiply(flags, size, op_mulf); goto retpt;
 	case en_mul:    ap1 = node->GenMultiply(flags,size,op_mul); goto retpt;
   case en_mulu:   ap1 = node->GenMultiply(flags,size,op_mulu); goto retpt;
@@ -1671,7 +1745,40 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
   case en_shru:   ap1 = node->GenerateShift(flags,size,op_lsr); goto retpt;
 	case en_rol:   ap1 = node->GenerateShift(flags,size,op_rol); goto retpt;
 	case en_ror:   ap1 = node->GenerateShift(flags,size,op_ror); goto retpt;
-	/*	
+	case en_bitoffset:
+		ap1 = GetTempRegister();
+		ip = currentFn->pl.tail;
+		ap2 = GenerateExpression(node->p[1], am_reg | am_imm | am_imm0, sizeOfWord);
+		ap3 = GenerateExpression(node->p[2], am_reg | am_imm | am_imm0, sizeOfWord);
+		if (ap2->mode != ap3->mode) {
+			ReleaseTempReg(ap3);
+			ReleaseTempReg(ap2);
+			currentFn->pl.tail = ip;
+			ap2 = GenerateExpression(node->p[1], am_reg, sizeOfWord);
+			ap3 = GenerateExpression(node->p[2], am_reg, sizeOfWord);
+		}
+		GenerateTriadic(op_ext, 0, ap1, ap2, ap3);
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		/*
+		ip = currentFn->pl.tail;
+		ap1 = GenerateExpression(node->p[1], am_reg|am_imm|am_imm0, size);
+		ap2 = GenerateExpression(node->p[2], am_reg|am_imm|am_imm0, size);
+		if (ap1->mode != ap2->mode) {
+			ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+			currentFn->pl.tail = ip;
+			ap1 = GenerateExpression(node->p[1], am_reg, size);
+			ap2 = GenerateExpression(node->p[2], am_reg, size);
+		}
+		//GenerateTriadic(op_and, 0, ap3, ap1, MakeImmediate(63));
+		//GenerateTriadic(op_lsr, 0, ap1, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->next = ap3;
+		ap1->preserveNextReg = true;
+		*/
+		goto retpt;
+		/*
 	case en_asfadd: return GenerateAssignAdd(node,flags,size,op_fadd);
 	case en_asfsub: return GenerateAssignAdd(node,flags,size,op_fsub);
 	case en_asfmul: return GenerateAssignAdd(node,flags,size,op_fmul);
@@ -2035,3 +2142,148 @@ int CodeGenerator::GenerateInlineArgumentList(Function *sym, ENODE *plist)
 		delete ta;
 	return (sum);
 }
+
+// Generate code for a binary expression
+
+Operand* CodeGenerator::GenerateTrinary(ENODE* node, int flags, int size, int op)
+{
+	Operand* ap1 = nullptr, * ap2 = nullptr, * ap3, * ap4, * ap5;
+	bool dup = false;
+
+	if (node->IsFloatType())
+	{
+		ap3 = GetTempFPRegister();
+		if (node->IsEqual(node->p[0], node->p[1]))
+			dup = !opt_nocgo;
+		ap1 = cg.GenerateExpression(node->p[0], am_fpreg, size);
+		if (!dup)
+			ap2 = cg.GenerateExpression(node->p[1], am_fpreg, size);
+		// Generate a convert operation ?
+		if (!dup) {
+			if (ap1->fpsize() != ap2->fpsize()) {
+				if (ap2->fpsize() == 's')
+					GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+			}
+		}
+		if (dup)
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		ap3->type = ap1->type;
+	}
+	else if (op == op_vex) {
+		ap3 = GetTempRegister();
+		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+		ap2 = cg.GenerateExpression(node->p[1], am_reg, size);
+		GenerateTriadic(op, 0, ap3, ap1, ap2);
+	}
+	else if (node->IsVectorType()) {
+		ap3 = GetTempVectorRegister();
+		if (ENODE::IsEqual(node->p[0], node->p[1]) && !opt_nocgo) {
+			ap1 = cg.GenerateExpression(node->p[0], am_vreg, size);
+			ap2 = cg.GenerateExpression(node->vmask, am_vmreg, size);
+			Generate4adic(op, 0, ap3, ap1, ap1, ap2);
+		}
+		else {
+			ap1 = cg.GenerateExpression(node->p[0], am_vreg, size);
+			ap2 = cg.GenerateExpression(node->p[1], am_vreg, size);
+			ap4 = cg.GenerateExpression(node->vmask, am_vmreg, size);
+			Generate4adic(op, 0, ap3, ap1, ap2, ap4);
+			ReleaseTempReg(ap4);
+		}
+		// Generate a convert operation ?
+		//if (fpsize(ap1) != fpsize(ap2)) {
+		//	if (fpsize(ap2)=='s')
+		//		GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+		//}
+	}
+	else {
+		ap3 = GetTempRegister();
+		if (flags & am_bf_assign)
+			return (ap3);
+		{
+			OCODE* ip;
+
+			ap1 = cg.GenerateExpression(node->p[0], Instruction::Get(op)->amclass2, size);
+			// modu/ptrdif does not have an immediate mode
+			ip = currentFn->pl.tail;
+			ap2 = cg.GenerateExpression(node->p[1], Instruction::Get(op)->amclass3, size);
+			if (Instruction::Get(op)->amclass4) {	// op_ptrdif
+				ap4 = cg.GenerateExpression(node->p[2], Instruction::Get(op)->amclass4, size);
+				Generate4adic(op, 0, ap3, ap1, ap2, ap4);
+				if (ap2->mode != ap4->mode) {
+					currentFn->pl.tail = ip;
+					ap2 = cg.GenerateExpression(node->p[1], am_reg, size);
+					ap4 = cg.GenerateExpression(node->p[2], am_reg, size);
+					Generate4adic(op, 0, ap3, ap1, ap2, ap4);
+				}
+			}
+			else {
+				if (ap2->mode == am_imm) {
+					switch (op) {
+					case op_and:
+						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
+						/*
+						if (ap2->offset->i & 0xFFFF0000LL)
+						GenerateDiadic(op_andq1,0,ap3,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF00000000LL)
+						GenerateDiadic(op_andq2,0,ap3,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF000000000000LL)
+						GenerateDiadic(op_andq3,0,ap3,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
+						*/
+						break;
+					case op_or:
+						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
+						/*
+						if (ap2->offset->i & 0xFFFF0000LL)
+						GenerateDiadic(op_orq1,0,ap3,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF00000000LL)
+						GenerateDiadic(op_orq2,0,ap3,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF000000000000LL)
+						GenerateDiadic(op_orq3,0,ap3,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
+						*/
+						break;
+						// If there is a pointer plus a constant we really wanted an address calc.
+					case op_add:
+					case op_sub:
+						if (ap1->isPtr && ap2->isPtr)
+							GenerateTriadic(op, 0, ap3, ap1, ap2);
+						else if (ap2->isPtr)
+							GenerateDiadic(op_lea, 0, ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
+						else
+							GenerateTriadic(op, 0, ap3, ap1, ap2);
+						break;
+						// Most ops handle a max 16 bit immediate operand. If the operand is over 16 bits
+						// it has to be loaded into a register.
+					default:
+						//if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
+							//ap4 = GetTempRegister();
+							//GenerateTriadic(op_or, 0, ap4, makereg(regZero), MakeImmediate(ap2->offset->i));
+							/*
+							if (ap2->offset->i & 0xFFFF0000LL)
+							GenerateDiadic(op_orq1,0,ap4,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
+							if (ap2->offset->i & 0xFFFF00000000LL)
+							GenerateDiadic(op_orq2,0,ap4,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
+							if (ap2->offset->i & 0xFFFF000000000000LL)
+							GenerateDiadic(op_orq3,0,ap4,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
+							*/
+							//GenerateTriadic(op, 0, ap3, ap1, ap4);
+							//ReleaseTempReg(ap4);
+						//}
+						//else
+						GenerateTriadic(op, 0, ap3, ap1, ap2);
+					}
+				}
+				else
+					GenerateTriadic(op, 0, ap3, ap1, ap2);
+			}
+		}
+	}
+	if (ap2)
+		ReleaseTempReg(ap2);
+	if (ap1)
+		ReleaseTempReg(ap1);
+	ap3->MakeLegal(flags, size);
+	return (ap3);
+}
+

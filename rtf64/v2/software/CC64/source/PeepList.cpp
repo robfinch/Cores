@@ -54,7 +54,7 @@ bool PeepList::HasCall(OCODE *ip)
 	int cnt;
 
 	for (cnt = 0; ip; ip = ip->fwd) {
-		if (ip->opcode == op_call || ip->opcode == op_jal) {
+		if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode==op_jsr) {
 			return (true);
 		}
 		if (ip == tail)

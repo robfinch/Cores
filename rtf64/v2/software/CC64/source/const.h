@@ -3,8 +3,8 @@
 
 enum e_bt {
 	bt_none,
-	bt_byte, bt_ubyte,
-	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
+	bt_byte, bt_ubyte, bt_bit,
+	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_posit, bt_pointer,
 	bt_ichar, bt_iuchar,
 	bt_uchar, bt_ushort, bt_ulong,
   bt_unsigned, bt_vector, bt_vector_mask,
@@ -41,9 +41,10 @@ enum e_node {
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
+		en_padd, en_psub, en_pmul, en_pdiv, en_ptoi, en_itop, en_peq, en_pne, en_plt, en_ple, en_pcon, en_pgt, en_pge,
 		en_d2t, en_d2q, en_t2q,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
-        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror,
+        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror, en_ext, en_extu,
 		en_cond, en_safe_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
 				en_asfmul,
@@ -56,7 +57,7 @@ enum e_node {
         en_xor, en_mulu, en_udiv, en_umod, en_ugt,
         en_uge, en_ule, en_ult,
 		en_ref, en_fieldref, en_ursh,
-		en_bchk, en_chk, en_bytendx,
+		en_bchk, en_chk, en_bytendx, en_bitoffset,
 		en_abs, en_max, en_min, en_addrof, en_ptrdif, en_wydendx,
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
@@ -89,11 +90,11 @@ enum e_sym {
 	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd, lor_safe, land_safe,
 	ellipsis,
 	// functions
-	kw_abs, kw_max, kw_min, kw_wydendx,
+	kw_abs, kw_max, kw_min, kw_wydendx, kw_bit,
 
 	kw_vector, kw_vector_mask,
 	kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
-	kw_float128,
+	kw_float128, kw_posit, 
 	kw_icache, kw_dcache, kw_thread,
 	kw_void, kw_char, kw_float, kw_double, kw_triple,
 	kw_struct, kw_union, kw_class,
@@ -140,7 +141,7 @@ enum e_op {
 	op_jlr, op_jmp, op_jsr, op_mului, op_mod, op_modu,
 	op_bmi, op_subu, op_lddr, op_stdc, op_loop, op_iret,
 	op_sext32, op_sext16, op_sext8, op_sxb, op_sxc, op_sxh, op_sxw, op_sxt, op_sxp, op_sxo,
-	op_zxb, op_zxc, op_zxh,
+	op_zxb, op_zxc, op_zxh, op_extr,
 	op_dw, op_cache,
 	op_subui, op_addui, op_sei,
 	op_std, op_sth, op_sto, op_stp, op_stt, op_stw, op_stb, op_outb, op_inb, op_inbu,
@@ -184,6 +185,8 @@ enum e_op {
 	op_fmov,
 	op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
 	op_fldo, op_fsto,
+	op_padd, op_psub, op_pmul, op_pdiv, op_ptoi, op_itop,
+	op_pldo, op_psto, op_peq, op_plt, op_ple,
 	// Vector
 	op_lv, op_sv,
 	op_vadd, op_vsub, op_vmul, op_vdiv,
@@ -250,6 +253,7 @@ enum e_am {
 	am_imm0 = 1 << 22,
 	am_novalue = 1 << 23,
 	am_creg = 1 << 24,
+	am_preg = 1 << 25,
 	am_all = 0x1FF,
 };
 

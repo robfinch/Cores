@@ -327,6 +327,7 @@ Statement *Statement::ParseCatch()
 	ENODE *node;
 	static char buf[200];
 	AutoDeclaration ad;
+	Expression exp;
 
 	snp = NewStatement(st_catch, TRUE);
 	currentStmt = snp;
@@ -353,7 +354,7 @@ Statement *Statement::ParseCatch()
 	// restore it.
 	strncpy_s(buf, sizeof(buf), lastid, 199);
 	strncpy_s(lastid, sizeof(lastid), declid->c_str(), sizeof(lastid) - 1);
-	nameref(&node, FALSE);
+	exp.nameref(&node, FALSE);
 	strcpy_s(lastid, sizeof(lastid), buf);
 	snp->s1 = Statement::Parse();
 	// Empty statements return NULL

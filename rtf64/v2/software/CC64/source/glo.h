@@ -105,6 +105,7 @@ extern int sizeOfFPS;
 extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
+extern int sizeOfPosit;
 extern int maxVL;
 extern MachineReg regs[1024];
 extern int nregs;
@@ -182,6 +183,7 @@ extern Statement *currentStmt;
 extern bool dogen;
 
 extern TYP stdvoid;
+extern TYP stdbit;
 extern TYP stdint;
 extern TYP stduint;
 extern TYP stdlong;
@@ -420,7 +422,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[271];
+extern Instruction opl[272];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 

@@ -171,6 +171,9 @@ int ENODE::GetNaturalSize()
 	case en_not:    case en_compl:
 	case en_uminus: case en_assign:
 		return p[0]->GetNaturalSize();
+	case en_padd:	case en_psub:
+	case en_pmul: case en_pdiv:
+	case en_peq:	case en_plt:	case en_ple:
 	case en_fadd:	case en_fsub:
 	case en_fmul:	case en_fdiv:
 	case en_fsadd:	case en_fssub:
@@ -180,13 +183,14 @@ int ENODE::GetNaturalSize()
 	case en_vadds:	case en_vsubs:
 	case en_vmuls:	case en_vdivs:
 	case en_add:    case en_sub:	case en_ptrdif:
+	case en_ext:		case en_extu:
 	case en_mul:    case en_mulu:
 	case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_and:    case en_or:     case en_xor:
 	case en_asl:
 	case en_shl:    case en_shlu:
-	case en_shr:	case en_shru:
+	case en_shr:	case en_shru:	case en_bitoffset:
 	case en_asr:	case en_asrshu:
 	case en_feq:    case en_fne:
 	case en_flt:    case en_fle:
@@ -242,6 +246,12 @@ int ENODE::GetNaturalSize()
 
 bool ENODE::IsBitfield()
 {
+	if (nodetype == en_ref) {
+		if (p[0]->nodetype == en_bitoffset)
+			return (true);
+	}
+	if (this->tp->type == bt_bit)
+		return (true);
 	return (nodetype == en_fieldref);
 }
 
@@ -360,6 +370,26 @@ ENODE *ENODE::Clone()
 // Parsing
 // ============================================================================
 // ============================================================================
+
+// AddToList used to build aggregate types.
+
+void ENODE::AddToList(ENODE* ele)
+{
+	ENODE* p, * pp;
+
+	p = this;
+	pp = nullptr;
+	while (p) {
+		pp = p;
+		p = p->p[2];
+	}
+	if (pp) {
+		pp->p[2] = ele;
+	}
+	else
+		this->p[2] = ele;
+}
+
 
 // Assign a type to a whole list.
 
@@ -577,10 +607,11 @@ void ENODE::repexpr()
 		break;
 	case en_bytendx:	case en_wydendx:
 	case en_sub:
+	case en_ext: case en_extu:
 	case en_mulf:   case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_shl:	case en_asl:
-	case en_shlu:	case en_shru:	case en_asr:
+	case en_shlu:	case en_shru:	case en_asr: case en_bitoffset:
 	case en_shr:
 	case en_and:
 	case en_or:     case en_xor:
@@ -599,7 +630,9 @@ void ENODE::repexpr()
 	case en_fdadd:  case en_fdsub:
 	case en_fadd: case en_fsub:
 	case en_fmul: case en_fdiv:
-
+	case en_padd:	case en_psub:
+	case en_pmul:	case en_pdiv:
+	case en_peq:  case en_plt: case en_ple:
 	case en_veq:    case en_vne:
 	case en_vlt:    case en_vle:
 	case en_vgt:    case en_vge:
@@ -816,7 +849,8 @@ void ENODE::scanexpr(int duse)
 		p[0]->scanexpr(duse);
 		p[1]->scanexpr(duse);
 		break;
-	case en_mulf:		case en_bytendx:	case en_wydendx:
+	case en_ext: case en_extu:
+	case en_mulf:		case en_bytendx:	case en_wydendx: case en_bitoffset:
 	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
 	case en_mod:    case en_umod:   case en_and:
@@ -828,6 +862,7 @@ void ENODE::scanexpr(int duse)
 	case en_lt:     case en_le:
 	case en_ugt:    case en_uge:
 	case en_ult:    case en_ule:
+
 	case en_feq:    case en_fne:
 	case en_flt:    case en_fle:
 	case en_fgt:    case en_fge:
@@ -835,6 +870,10 @@ void ENODE::scanexpr(int duse)
 	case en_fdadd:  case en_fdsub:
 	case en_fadd: case en_fsub:
 	case en_fmul: case en_fdiv:
+
+	case en_peq:	case en_plt:	case en_ple:
+	case en_padd:	case en_psub:
+	case en_pmul:	case en_pdiv:
 
 	case en_veq:    case en_vne:
 	case en_vlt:    case en_vle:
@@ -1484,7 +1523,7 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 //
 // Generate code to evaluate a unary minus or complement.
 //
-Operand *ENODE::GenUnary(int flags, int size, int op)
+Operand *ENODE::GenerateUnary(int flags, int size, int op)
 {
 	Operand *ap, *ap2;
 	OCODE* ip;
@@ -1677,25 +1716,29 @@ Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 		size = ssize;
 	if (p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap4 = GetTempRegister();
 		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
 		//		GenerateDiadic(op_mov, 0, ap3, ap1);
 		//ap1 = cg.GenerateExpression(p[0], am_reg | am_mem, size);
 		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
 		if (ap1->mode == am_reg) {
 			GenerateTriadic(op, 0, ap1, ap1, ap2);
-			cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+			if (ap1->offset->bit_offset < 0)
+				GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
+			else
+				GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+			//cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		}
 		else {
 			GenLoad(ap3, ap1, size, size);
-			Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
+			//Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
+			ap4 = cg.GenerateBitfieldExtract(ap3, ap1->offset->bit_offset, ap1->offset->bit_width);
 			GenerateTriadic(op, 0, ap4, ap4, ap2);
 			cg.GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
 			GenStore(ap3, ap1, ssize);
 		}
+		ReleaseTempReg(ap4);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
-		ReleaseTempReg(ap4);
 		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
@@ -2347,4 +2390,9 @@ void ENODE::CountSegments()
 		if (p[2])	p[2]->CountSegments();
 		if (p[3])	p[3]->CountSegments();
 	}
+}
+
+void ENODE::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width)
+{
+	cg.GenerateBitfieldInsert(ap1, ap2, offset, width);
 }

@@ -35,7 +35,9 @@ bool IsBasicBlockSeparater(OCODE *ip)
 	switch(ip->opcode) {
 	case op_rte:	return (true);
 	case op_ret:	return true;
+	case op_rts:	return true;
 	case op_jal:	return true;
+	case op_jsr:  return true;
 	case op_jmp:	return true;
 	case op_bra:	return true;
 	case op_beq:	return true;
@@ -207,7 +209,7 @@ CSet *BasicBlock::livo;
 
 void BasicBlock::ComputeLiveVars()
 {
-	OCODE *ip, *ip2;
+	OCODE *ip;
 	int tr, nn;
 	static CSet OldLiveIn, OldLiveOut;
 	int rg1, rg2;
@@ -622,7 +624,6 @@ void BasicBlock::BuildLivesetFromLiveout()
 {
 	int m;
 	int v;
-	Var *vr;
 	int K = nregs;
 
 	live->clear();

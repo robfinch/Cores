@@ -1,7 +1,7 @@
 #pragma once
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||

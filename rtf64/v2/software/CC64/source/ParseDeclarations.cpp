@@ -106,8 +106,8 @@ void Declaration::SetType(SYM *sp)
 				sp->tp = TYP::Make(bt_bitfield,head->size);
 				sp->tp->isUnsigned = head->isUnsigned;
 				//  		*(sp->tp) = *head;
-				sp->tp->bit_width = bit_width;
-				sp->tp->bit_offset = bit_offset;
+				sp->tp->bit_width = makeinode(en_icon, bit_width);
+				sp->tp->bit_offset = makeinode(en_icon, bit_offset);
 			}
 		}
 	}
@@ -306,6 +306,23 @@ void Declaration::ParseInt()
 		NextToken();
 	}
 //printf("Leave ParseInt\r\n");
+}
+
+void Declaration::ParseBit()
+{
+	//printf("Enter ParseInt\r\n");
+	head = TYP::Make(bt_bit, sizeOfWord);
+	tail = head;
+	if (head == nullptr)
+		return;
+	head->isUnsigned = isUnsigned;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	head->isBits = true;
+	NextToken();
+	head->size = 8;
+	bit_max = 64;
 }
 
 void Declaration::ParseFloat()
@@ -699,6 +716,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			// byte and char default to unsigned unless overridden using
 			// the 'signed' keyword
 			//
+			case kw_bit:	ParseBit(); goto lxit;
 			case kw_byte:   ParseByte(); goto lxit;
 			case kw_char:	ParseChar(); goto lxit;
 			case kw_int8:	ParseInt8(); goto lxit;
@@ -1292,6 +1310,8 @@ j2:
 
 SYM *Declaration::ParseSuffix(SYM *sp)
 {
+	TYP* tp;
+
 	dfs.printf("<ParseDeclSuffix>\n");
 
 	while(true) {
@@ -1352,7 +1372,7 @@ void Declaration::ParseAssign(SYM *sp)
 	exp.head = head;
 	exp.tail = tail;
 
-	tp1 = nameref(&ep1, TRUE);
+	tp1 = exp.nameref(&ep1, TRUE);
 	op = en_assign;
 	tp2 = exp.ParseAssignOps(&ep2);
 	if (tp2 == nullptr || !IsLValue(ep1))
@@ -1376,6 +1396,7 @@ void Declaration::DoDeclarationEnd(SYM *sp, SYM *sp1)
 	int nn;
 	TYP *tp1;
 	ENODE *ep1, *ep2;
+	Expression exp;
 
 	if (sp == nullptr)
 		return;
@@ -1388,7 +1409,7 @@ void Declaration::DoDeclarationEnd(SYM *sp, SYM *sp1)
 			if (sp1) {
 				ep1 = nullptr;
 				// Build an expression that references the ctor.
-				tp1 = nameref2(*sp->tp->sname, &ep1, TRUE, false, nullptr, nullptr);
+				tp1 = exp.nameref2(*sp->tp->sname, &ep1, TRUE, false, nullptr, nullptr);
 				// Create a function call node for the ctor.
 				if (tp1 != nullptr) {
 					// Make an expresison that references the var name as the
@@ -1638,6 +1659,12 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 		dfs.printf("b");
 		bit_width = -1;
 		sp = ParsePrefix(ztype==bt_union);
+		if (dhead->type == bt_bit) {
+			if (head->isArray) {
+				head->size += 7;
+				head->size /= 8;
+			}
+		}
 		if (declid==nullptr)
 			declid = new std::string("");
 		if (al == sc_static) {
@@ -1815,7 +1842,7 @@ void GlobalDeclaration::Parse()
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union: case kw_class:
-        case kw_enum: case kw_void:
+				case kw_enum: case kw_void: case kw_bit:
         case kw_float: case kw_double: case kw_float128:
 		case kw_vector: case kw_vector_mask:
                 lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
@@ -1963,6 +1990,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
                 NextToken();
         case kw_exception:
 		case kw_volatile: case kw_const:
+		case kw_bit:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union: case kw_class:
@@ -2048,7 +2076,7 @@ dfs.printf("B");
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
     case kw_long: case kw_struct: case kw_union: case kw_class:
-    case kw_enum: case kw_void:
+		case kw_enum: case kw_void: case kw_bit:
 		case kw_float: case kw_double: case kw_float128:
 		case kw_vector: case kw_vector_mask:
 dfs.printf("C");

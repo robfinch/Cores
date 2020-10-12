@@ -651,3 +651,76 @@ void CSet::Serialize(CArchive& ar)
 	}
 }
 */
+
+void CSet::insert(int64_t val, int base, int len)
+{
+	while (len > 0) {
+		if (val & 1LL)
+			add(base);
+		else
+			remove(base);
+		base++;
+		len--;
+		val = val >> 1LL;
+	}
+}
+
+void CSet::extract(int64_t* val, int base, int len)
+{
+	int64_t v;
+
+	v = 0;
+	while (len > 0) {
+		len--;
+		v = v << 1LL;
+		if (isMember(base + len))
+			v = v | 1;
+	}
+	if (val)
+		*val = v;
+}
+
+// Shift the entire set to the right.
+
+bool CSet::shr(int amt)
+{
+	unsigned int* p;
+	int i;
+	unsigned int v, c, nc;
+
+	for (; amt > 0; amt--) {
+		p = map;
+		nc = c = 0;
+		for (i = size - 1; i >= 0; i--) {
+			v = map[i];
+			nc = (v & 1LL) << 63LL;
+			v = (v >> 1LL) | c;
+			map[i] = v;
+			c = nc;
+		}
+	}
+	return (c >> 63LL);
+}
+
+// Shift entire set to the left.
+
+bool CSet::shl(int amt)
+{
+	unsigned int* p;
+	int i;
+	unsigned int v, c, nc;
+
+	for (; amt > 0; amt--) {
+		p = map;
+		nc = c = 0;
+		for (i = 0; i < size; i++) {
+			v = map[i];
+			nc = (v >> 63LL) & 1LL;
+			v = (v << 1LL) | c;
+			map[i] = v;
+			c = nc;
+		}
+	}
+	return (c);
+}
+

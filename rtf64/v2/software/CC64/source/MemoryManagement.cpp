@@ -200,7 +200,7 @@ TYP *allocTYP()
 	TYP *tp = (TYP *)&compiler.typeTable[compiler.typenum];
 	ZeroMemory(tp,sizeof(TYP));
 	tp->sname = new std::string("");
-  tp->bit_width = -1;
+  tp->bit_width = nullptr;
 //	printf("Leave allocTYP():%p\r\n",tp);
   compiler.typenum++;
 	if (compiler.typenum > 32760) {

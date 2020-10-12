@@ -32,6 +32,7 @@
 #include <fstream>
 #include <iomanip>
 #include <string>
+#include <math.h>
 
 #define snprintf	sprintf_s
 
@@ -39,6 +40,7 @@
 #include "Int80.h"
 #include "Float128.h"
 #include "Int128.h"
+#include "Posit64.h"
 #include "Rand.h"
 #include "txtStream.h"
 #include "const.h"

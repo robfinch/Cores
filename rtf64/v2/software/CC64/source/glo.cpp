@@ -80,6 +80,7 @@ int sizeOfFPD = 8;
 int sizeOfFPT = 12;
 int sizeOfFPQ = 16;
 int sizeOfPtr = 8;
+int sizeOfPosit = 8;
 
 std::ifstream *ifs;
 txtoStream ofs;
