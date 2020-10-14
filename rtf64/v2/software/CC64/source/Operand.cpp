@@ -281,6 +281,8 @@ void Operand::MakeLegal(int flags, int size)
 		deep = ap2->deep;
 		pdeep = ap2->pdeep;
 		tempflag = 1;
+		memref = ap2->memref;
+		memop = ap2->memop;
 		return;
 	}
 	if (flags & am_fpreg)
@@ -584,8 +586,14 @@ void Operand::store(txtoStream& ofs)
 		break;
 
 	case am_indx2:
-		if (scale == 1 || scale == 0)
-			ofs.printf("[%s+%s]", RegMoniker(sreg), RegMoniker(preg));
+		if (scale == 1 || scale == 0) {
+			if (sreg==regZero)
+				ofs.printf("[%s]", RegMoniker(preg));
+			else if (preg==regZero)
+				ofs.printf("[%s]", RegMoniker(sreg));
+			else
+				ofs.printf("[%s+%s]", RegMoniker(sreg), RegMoniker(preg));
+		}
 		else
 			ofs.printf("[%s+%s*%d]", RegMoniker(sreg), RegMoniker(preg), scale);
 		break;

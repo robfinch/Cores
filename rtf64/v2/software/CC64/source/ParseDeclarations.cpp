@@ -106,7 +106,10 @@ void Declaration::SetType(SYM *sp)
 				sp->tp = TYP::Make(bt_bitfield,head->size);
 				sp->tp->isUnsigned = head->isUnsigned;
 				//  		*(sp->tp) = *head;
-				sp->tp->bit_width = makeinode(en_icon, bit_width);
+				// The width eventually ends up in an extract or deposit instruction so,
+				// minus one is subtracted here. (The instruction wants one less than
+				// the actual width.
+				sp->tp->bit_width = makeinode(en_icon, (int64_t)bit_width-1);
 				sp->tp->bit_offset = makeinode(en_icon, bit_offset);
 			}
 		}

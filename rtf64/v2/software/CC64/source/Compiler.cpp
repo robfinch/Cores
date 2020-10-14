@@ -340,6 +340,8 @@ void Compiler::AddStandardTypes()
 	stdvoid = *p;
 }
 
+// Actually compiler support routines
+
 void Compiler::AddBuiltinFunctions()
 {
 	SYM *sp;
@@ -348,7 +350,7 @@ void Compiler::AddBuiltinFunctions()
 	sp = allocSYM();
 	sp->SetName("__new");
 	sp->fi = sp->MakeFunction(sp->id, true);
-	tanew.Add(bt_long, 0);
+	tanew.Add(bt_long, regFirstArg);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
 	sp->fi->AddProto(&tanew);
@@ -358,7 +360,7 @@ void Compiler::AddBuiltinFunctions()
 	sp = allocSYM();
 	sp->SetName("__autonew");
 	sp->fi = sp->MakeFunction(sp->id, true);
-	tanew.Add(bt_long, 0);
+	//tanew.Add(bt_long, 0);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
 	sp->fi->AddProto(&tanew);
@@ -368,7 +370,7 @@ void Compiler::AddBuiltinFunctions()
 	sp = allocSYM();
 	sp->SetName("__delete");
 	sp->fi = sp->MakeFunction(sp->id, true);
-	tadelete.Add(bt_pointer, 0);
+	tadelete.Add(bt_pointer, regFirstArg);
 	sp->fi->AddProto(&tadelete);
 	sp->tp = &stdvoid;
 	gsyms->insert(sp);

@@ -646,6 +646,7 @@ void PeepList::OptInstructions()
 			case op_mov:	ip->OptMove();	break;
 			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
+			case op_gcsub:	ip->OptSubtract(); break;
 			case op_ldb:		ip->OptLoadByte(); break;
 			case op_ldw:		ip->OptLoadChar(); break;
 			case op_ldp:		ip->OptLoadHalf(); break;
@@ -837,7 +838,7 @@ void PeepList::RemoveReturnBlock()
 		if (ip->oper2 && ip->oper2->mode == am_indx && ip->oper2->preg == regFP) {
 			ip->oper2->preg = regSP;
 		}
-		if (ip->opcode == op_ret)
+		if (ip->opcode == op_ret || ip->opcode == op_rts)
 			if (ip->oper1)
 				ip->oper1->offset->i = 0;
 	}

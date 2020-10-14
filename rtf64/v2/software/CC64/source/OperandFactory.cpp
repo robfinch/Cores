@@ -146,6 +146,20 @@ Operand *OperandFactory::MakeIndexed(ENODE *node, int regno)
 	return (ap);
 }
 
+Operand* OperandFactory::MakeMemoryIndirect(int disp, int regno)
+{
+	Operand* ap;
+	ENODE* ep;
+	ep = allocEnode();
+	ep->nodetype = en_icon;
+	ep->i = disp;
+	ap = allocOperand();
+	ap->mode = am_mem_indirect;
+	ap->offset = ep;
+	ap->preg = regno;
+	return (ap);
+}
+
 Operand *OperandFactory::MakeNegIndexed(ENODE *node, int regno)
 {
 	Operand *ap;

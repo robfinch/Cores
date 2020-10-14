@@ -44,7 +44,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[272] =
+Instruction opl[273] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -244,6 +244,7 @@ Instruction opl[272] =
 { "rti", op_rti,2,0 },
 { "rtl", op_rtl,1,0,am_imm,0,0,0 },
 { "rts", op_rts,1,0,am_imm,0,0,0 },
+{ "rtx", op_rtx,1,0,0,0,0,0 },
 { "sand",op_sand,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "sei", op_sei,1,0,false,am_reg,0,0,0 },
 { "seq", op_seq,1,1,false,am_reg,am_reg,am_reg|am_i26,0 },

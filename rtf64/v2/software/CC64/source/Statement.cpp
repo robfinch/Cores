@@ -35,7 +35,7 @@ int loopexit;
 Statement *currentStmt;
 char *llptr;
 extern char *lptr;
-extern char inpline[132];
+extern int isidch(char);
 
 int     breaklab;
 int     contlab;
@@ -65,29 +65,14 @@ static SYM *makeint(char *name)
 	return (sp);
 }
 
-
-Statement *NewStatement(int typ, int gt) {
-	Statement *s = (Statement *)xalloc(sizeof(Statement));
-	ZeroMemory(s, sizeof(Statement));
-	s->stype = typ;
-	s->predreg = -1;
-	s->outer = currentStmt;
-	s->s1 = (Statement *)NULL;
-	s->s2 = (Statement *)NULL;
-	s->ssyms.Clear();
-	s->lptr = my_strdup(inpline);
-	s->prediction = 0;
-	s->depth = stmtdepth;
-	//memset(s->ssyms,0,sizeof(s->ssyms));
-	if (gt) NextToken();
-	return s;
+Statement* Statement::MakeStatement(int typ, int gt) {
+	return (compiler.sf.MakeStatement(typ, gt));
 };
 
-
-Statement *ParseCheckStatement()
+Statement *Statement::ParseCheckStatement()
 {
 	Statement *snp;
-	snp = NewStatement(st_check, TRUE);
+	snp = MakeStatement(st_check, TRUE);
 	if (expression(&(snp->exp)) == 0)
 		error(ERR_EXPREXPECT);
 	needpunc(semicolon, 31);
@@ -99,7 +84,7 @@ Statement *Statement::ParseWhile()
 	Statement *snp;
 
 	currentFn->UsesPredicate = TRUE;
-	snp = NewStatement(st_while, TRUE);
+	snp = MakeStatement(st_while, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
@@ -129,7 +114,7 @@ Statement *Statement::ParseUntil()
 	Statement *snp;
 
 	currentFn->UsesPredicate = TRUE;
-	snp = NewStatement(st_until, TRUE);
+	snp = MakeStatement(st_until, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
@@ -157,7 +142,7 @@ Statement *Statement::ParseDo()
 	Statement *snp;
 
 	currentFn->UsesPredicate = TRUE;
-	snp = NewStatement(st_do, TRUE);
+	snp = MakeStatement(st_do, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
@@ -193,7 +178,7 @@ Statement *Statement::ParseFor()
 	Statement *snp;
 
 	currentFn->UsesPredicate = TRUE;
-	snp = NewStatement(st_for, TRUE);
+	snp = MakeStatement(st_for, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
@@ -227,7 +212,7 @@ Statement *Statement::ParseFor()
 Statement *Statement::ParseForever()
 {
 	Statement *snp;
-	snp = NewStatement(st_forever, TRUE);
+	snp = MakeStatement(st_forever, TRUE);
 	snp->stype = st_forever;
 	foreverlevel = looplevel;
 	snp->s1 = Statement::Parse();
@@ -250,7 +235,7 @@ Statement *Statement::ParseFirstcall()
 	int st;
 
 	dfs.puts("<ParseFirstcall>");
-	snp = NewStatement(st_firstcall, TRUE);
+	snp = MakeStatement(st_firstcall, TRUE);
 	sp = allocSYM();
 	//	sp->SetName(*(new std::string(snp->fcname)));
 	sp->storage_class = sc_static;
@@ -280,7 +265,7 @@ Statement *Statement::ParseIf()
 	if (lastst == kw_firstcall)
 		return (ParseFirstcall());
 	currentFn->UsesPredicate = TRUE;
-	snp = NewStatement(st_if, FALSE);
+	snp = MakeStatement(st_if, FALSE);
 	snp->predreg = iflevel;
 	iflevel++;
 	if (lastst != openpa)
@@ -329,7 +314,7 @@ Statement *Statement::ParseCatch()
 	AutoDeclaration ad;
 	Expression exp;
 
-	snp = NewStatement(st_catch, TRUE);
+	snp = MakeStatement(st_catch, TRUE);
 	currentStmt = snp;
 	if (lastst != openpa) {
 		snp->label = (int64_t *)NULL;
@@ -341,6 +326,27 @@ Statement *Statement::ParseCatch()
 		return snp;
 	}
 	needpunc(openpa, 33);
+	if (lastst == closepa) {
+		NextToken();
+		snp->label = (int64_t*)NULL;
+		snp->s2 = (Statement*)99999;
+		snp->s1 = Statement::Parse();
+		// Empty statements return NULL
+		if (snp->s1)
+			snp->s1->outer = snp;
+		return snp;
+	}
+	if (lastst == ellipsis) {
+		NextToken();
+		needpunc(closepa, 33);
+		snp->label = (int64_t*)NULL;
+		snp->s2 = (Statement*)99999;
+		snp->s1 = Statement::Parse();
+		// Empty statements return NULL
+		if (snp->s1)
+			snp->s1->outer = snp;
+		return snp;
+	}
 	catchdecl = TRUE;
 	ad.Parse(NULL, &snp->ssyms);
 	cseg();
@@ -350,6 +356,8 @@ Statement *Statement::ParseCatch()
 	if ((sp = snp->ssyms.Find(*declid, false)) == NULL)
 		sp = makeint((char *)declid->c_str());
 	node = makenode(sp->storage_class == sc_static ? en_labcon : en_autocon, NULL, NULL);
+	node->bit_offset = sp->tp->bit_offset;
+	node->bit_width = sp->tp->bit_width;
 	// nameref looks up the symbol using lastid, so we need to back it up and
 	// restore it.
 	strncpy_s(buf, sizeof(buf), lastid, 199);
@@ -378,7 +386,7 @@ Statement *Statement::ParseCase()
 	int nn;
 	int64_t *bf;
 
-	snp = NewStatement(st_case, FALSE);
+	snp = MakeStatement(st_case, FALSE);
 	if (lastst == kw_fallthru)	// ignore "fallthru"
 		NextToken();
 	if (lastst == kw_case) {
@@ -473,7 +481,7 @@ Statement *Statement::ParseSwitch()
 	Statement *snp;
 	Statement *head, *tail;
 
-	snp = NewStatement(st_switch, TRUE);
+	snp = MakeStatement(st_switch, TRUE);
 	snp->nkd = false;
 	iflevel++;
 	looplevel++;
@@ -520,7 +528,7 @@ Statement *Statement::ParseReturn()
 	Statement *snp;
 
 	loopexit = TRUE;
-	snp = NewStatement(st_return, TRUE);
+	snp = MakeStatement(st_return, TRUE);
 	expression(&(snp->exp));
 	if (lastst != end)
 		needpunc(semicolon, 37);
@@ -534,7 +542,7 @@ Statement *Statement::ParseThrow()
 
 	currentFn->DoesThrow = TRUE;
 	loopexit = TRUE;
-	snp = NewStatement(st_throw, TRUE);
+	snp = MakeStatement(st_throw, TRUE);
 	tp = expression(&(snp->exp));
 	snp->num = tp->GetHash();
 	if (lastst != end)
@@ -546,7 +554,7 @@ Statement *Statement::ParseBreak()
 {
 	Statement *snp;
 
-	snp = NewStatement(st_break, TRUE);
+	snp = MakeStatement(st_break, TRUE);
 	if (lastst != end)
 		needpunc(semicolon, 39);
 	if (looplevel == foreverlevel)
@@ -558,7 +566,7 @@ Statement *Statement::ParseContinue()
 {
 	Statement *snp;
 
-	snp = NewStatement(st_continue, TRUE);
+	snp = MakeStatement(st_continue, TRUE);
 	if (lastst != end)
 		needpunc(semicolon, 40);
 	return (snp);
@@ -568,7 +576,7 @@ Statement *Statement::ParseStop()
 {
 	Statement *snp;
 
-	snp = NewStatement(st_stop, TRUE);
+	snp = MakeStatement(st_stop, TRUE);
 	snp->num = (int)GetIntegerExpression(NULL);
 	if (lastst != end)
 		needpunc(semicolon, 43);
@@ -577,12 +585,16 @@ Statement *Statement::ParseStop()
 
 Statement *Statement::ParseAsm()
 {
-	static char buf[3501];
+	static char buf[4000];
+	static char buf2[50];
 	int nn;
 	bool first = true;
+	SYM* sp, * thead, * firsts;
+	int sn, lo, tn;
+	char* p;
 
 	Statement *snp;
-	snp = NewStatement(st_asm, FALSE);
+	snp = MakeStatement(st_asm, FALSE);
 	while (my_isspace(lastch))
 		getch();
 	NextToken();
@@ -632,7 +644,7 @@ Statement *Statement::ParseTry()
 
 	hd = (Statement *)NULL;
 	tl = (Statement *)NULL;
-	snp = NewStatement(st_try, TRUE);
+	snp = MakeStatement(st_try, TRUE);
 	snp->s1 = Statement::Parse();
 	// Empty statements return NULL
 	if (snp->s1)
@@ -665,7 +677,7 @@ Statement *Statement::ParseExpression()
 	Expression exp;
 
 	dfs.printf("<ParseExpression>\n");
-	snp = NewStatement(st_expr, FALSE);
+	snp = MakeStatement(st_expr, FALSE);
 	if (exp.ParseExpression(&(snp->exp)) == NULL) {
 		error(ERR_EXPREXPECT);
 		NextToken();
@@ -685,7 +697,7 @@ Statement *Statement::ParseCompound()
 	Statement *p;
 	AutoDeclaration ad;
 
-	snp = NewStatement(st_compound, FALSE);
+	snp = MakeStatement(st_compound, FALSE);
 	currentStmt = snp;
 	head = 0;
 	if (lastst == colon) {
@@ -751,7 +763,7 @@ Statement *Statement::ParseLabel()
 	Statement *snp;
 	SYM *sp;
 
-	snp = NewStatement(st_label, FALSE);
+	snp = MakeStatement(st_label, FALSE);
 	if ((sp = currentFn->sym->lsyms.Find(lastid, false)) == NULL) {
 		sp = allocSYM();
 		sp->SetName(*(new std::string(lastid)));
@@ -787,7 +799,7 @@ Statement *Statement::ParseGoto()
 		error(ERR_IDEXPECT);
 		return ((Statement *)NULL);
 	}
-	snp = NewStatement(st_goto, FALSE);
+	snp = MakeStatement(st_goto, FALSE);
 	if ((sp = currentFn->sym->lsyms.Find(lastid, false)) == NULL) {
 		sp = allocSYM();
 		sp->SetName(*(new std::string(lastid)));
@@ -816,7 +828,7 @@ Statement *Statement::Parse()
 	dfs.puts("<Parse>");
 	switch (lastst) {
 	case semicolon:
-		snp = NewStatement(st_empty, 1);
+		snp = MakeStatement(st_empty, 1);
 		break;
 	case begin:
 		NextToken();
@@ -1840,6 +1852,7 @@ void Statement::GenerateTry()
 	Operand *a, *ap2;
 	ENODE *node;
 	Statement *stmt;
+	char buf[200];
 
 	lab1 = nextlabel++;
 	oldthrow = throwlab;
@@ -1847,8 +1860,22 @@ void Statement::GenerateTry()
 
 	a = MakeCodeLabel(throwlab);
 	a->mode = am_imm;
-	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
+	// Push catch handler address on catch handler address stack
+//	GenerateDiadic(op_ldi, 0, makereg(regAsm), MakeCodeLabel(throwlab));
+//	GenerateTriadic(op_gcsub, 0, makereg(regXHSP), makereg(regXHSP), MakeImmediate(sizeOfWord));
+//	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeIndexed((int64_t)0, regXHSP));
+	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord*(int64_t)2));
+	GenerateDiadic(op_ldo, 0, makereg(regAsm), MakeStringAsNameConst("__xhandler_head", dataseg));
+	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeIndexed(sizeOfWord, regSP));
+	sprintf_s(buf, sizeof(buf), "#%s_%lld", GetNamespace(), (int64_t)throwlab);
+	GenerateDiadic(op_ldi, 0, makereg(regAsm), MakeStringAsNameConst(buf,codeseg));
+	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeIndexed((int64_t)0, regSP));
+	GenerateDiadic(op_sto, 0, makereg(regSP), MakeStringAsNameConst("__xhandler_head", dataseg));
 	s1->Generate();
+	// Restore previous handler
+	GenerateDiadic(op_ldo, 0, makereg(regAsm), MakeIndexed(sizeOfWord, regSP));
+	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeStringAsNameConst("__xhandler_head", dataseg));
+	GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * (int64_t)2));
 	GenerateMonadic(op_bra, 0, MakeCodeLabel(lab1));	// branch around catch statements
 	GenerateLabel(throwlab);
 	// Generate catch statements
@@ -1861,27 +1888,33 @@ void Statement::GenerateTry()
 			;
 		else {
 			curlab = nextlabel++;
-			GenerateTriadic(op_sne, 0, makecreg(0), makereg(2), MakeImmediate(stmt->num));
+			GenerateTriadic(op_sne, 0, makecreg(0), makereg(regFirstArg+1), MakeImmediate(stmt->num));
 			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(curlab));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
-		ap2 = cg.GenerateExpression(node, am_reg | am_mem, node->GetNaturalSize());
-		if (ap2->mode == am_reg)
-			GenerateDiadic(op_mov, 0, ap2, makereg(1));
-		else
-			GenStore(makereg(1), ap2, node->GetNaturalSize());
-		ReleaseTempRegister(ap2);
-		//            GenStore(makereg(1),MakeIndexed(sym->value.i,regFP),sym->tp->size);
-		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(24));
+		if (node) {
+			ap2 = cg.GenerateExpression(node, am_reg | am_mem, node->GetNaturalSize());
+			if (ap2->mode == am_reg)
+				GenerateDiadic(op_mov, 0, ap2, makereg(regFirstArg));
+			else
+				GenStore(makereg(regFirstArg), ap2, node->GetNaturalSize());
+			ReleaseTempRegister(ap2);
+		}
 		stmt->s1->Generate();
 		GenerateLabel(curlab);
 	}
+	// Restore previous handler
+	// Here the none of the catch handlers could process the throw. Move to the next
+	// level of handlers.
+	GenerateDiadic(op_ldo, 0, makereg(regAsm), MakeIndexed(sizeOfWord, regSP));
+	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeStringAsNameConst("__xhandler_head", dataseg));
+	GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * (int64_t)2));
+	GenerateMonadic(op_brk, 0, MakeImmediate(239));
 	GenerateLabel(lab1);
 	throwlab = oldthrow;
 	a = MakeCodeLabel(throwlab);
 	a->mode = am_imm;
-	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
 }
 
 void Statement::GenerateThrow()
@@ -1893,24 +1926,23 @@ void Statement::GenerateThrow()
 		initstack();
 		ap = cg.GenerateExpression(exp, am_all, 8);
 		if (ap->mode == am_imm)
-			GenerateDiadic(op_ldi, 0, makereg(1), ap);
+			GenerateDiadic(op_ldi, 0, makereg(regFirstArg), ap);
 		else if (ap->mode != am_reg)
-			GenerateDiadic(op_ldh, 0, makereg(1), ap);
+			GenerateDiadic(op_ldo, 0, makereg(regFirstArg), ap);
 		else if (ap->preg != 1)
-			GenerateDiadic(op_mov, 0, makereg(1), ap);
+			GenerateDiadic(op_mov, 0, makereg(regFirstArg), ap);
 		ReleaseTempRegister(ap);
 		// If a system exception is desired create an appropriate BRK instruction.
 		if (num == bt_exception) {
-			GenerateDiadic(op_brk, 0, makereg(1), MakeImmediate(1));
+			GenerateDiadic(op_brk, 0, makereg(regFirstArg), MakeImmediate(1));
 			return;
 		}
-		GenerateDiadic(op_ldi, 0, makereg(2), MakeImmediate(num));
-		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(16));
+		GenerateDiadic(op_ldi, 0, makereg(regFirstArg+1), MakeImmediate(num));
 	}
-	// If there is no catch handler, get lr for return.
-	if (throwlab == retlab)
-		GenerateDiadic(op_ldh, 0, makereg(regLR), MakeIndexed(16,regFP));
-	GenerateMonadic(op_bra, 0, MakeCodeLabel(throwlab));
+	// Jump to handler address.
+	GenerateMonadic(op_brk, 0, MakeImmediate(239));
+//	GenerateDiadic(op_ldo, 0, makereg(114), MakeStringAsNameConst("__xhandler_head", dataseg));
+//	GenerateMonadic(op_jmp, 0, MakeIndexed((int64_t)0, 114));
 }
 
 void Statement::GenerateCheck()
@@ -2043,11 +2075,13 @@ void Statement::Generate()
 			stmt->GenerateCheck();
 			break;
 		case st_expr:
-			initstack();
-			ap = cg.GenerateExpression(stmt->exp, am_all | am_novalue,
-				stmt->exp->GetNaturalSize());
-			ReleaseTempRegister(ap);
-			tmpFreeAll();
+			if (stmt->exp) {
+				initstack();
+				ap = cg.GenerateExpression(stmt->exp, am_all | am_novalue,
+					stmt->exp->GetNaturalSize());
+				ReleaseTempRegister(ap);
+				tmpFreeAll();
+			}
 			break;
 		case st_return:
 			currentFn->GenReturn(stmt);
@@ -2112,6 +2146,43 @@ void Statement::GenerateStop()
 
 void Statement::GenerateAsm()
 {
+	char buf2[50];
+	SYM* thead, * firsts;
+	int64_t tn, lo, bn, ll;
+	char* p;
+	char* buf = (char*)label;
+
+	ll = strlen(buf);
+	thead = firsts = SYM::GetPtr(currentFn->params.head);
+	while (thead) {
+		if (p = strstr(buf, &thead->name->c_str()[1])) {
+			bn = p - buf;
+			if (!isidch(p[tn = thead->name->length()])) {
+				tn--;
+				if (thead->IsParameter) {
+					if (thead->IsRegister)
+						sprintf_s(buf2, sizeof(buf2), "x%lld", thead->reg);
+					else
+						sprintf_s(buf2, sizeof(buf2), "%lld[$fp]", thead->value.i + currentFn->SizeofReturnBlock() * sizeOfWord);
+					lo = strlen(buf2);
+					if (lo >= tn) {
+						memmove(&p[lo], &p[tn], ll - bn);
+						memcpy(p, buf2, lo);
+					}
+					else {
+						memmove(&p[tn], &p[lo], ll - bn);
+						memcpy(p, buf2, lo);
+					}
+				}
+			}
+		}
+		thead = thead->GetNextPtr();
+		if (thead == firsts) {
+			dfs.printf("Circular list.\n");
+			throw new C64PException(ERR_CIRCULAR_LIST, 1);
+		}
+	}
+
 	GenerateMonadic(op_asm, 0, MakeStringAsNameConst((char *)label,codeseg));
 }
 

@@ -453,18 +453,18 @@ std::string *SYM::BuildSignature(int opt)
 		dfs.printf("D");
 		if (name > (std::string *)0x15)
 			str->append(*name);
-		if (opt) {
-			dfs.printf("E");
-			str->append(*fi->GetParameterTypes()->BuildSignature());
-		}
-		else {
-			dfs.printf("F");
-			str->append(*fi->GetProtoTypes()->BuildSignature());
-		}
 	}
 	else {
 		str = new std::string("");
 		str->append(*name);
+	}
+	if (opt) {
+		dfs.printf("E");
+		str->append(*fi->GetParameterTypes()->BuildSignature());
+	}
+	else {
+		dfs.printf("F");
+		str->append(*fi->GetProtoTypes()->BuildSignature());
 	}
 	dfs.printf(":%s</BuildSignature>", (char *)str->c_str());
 	return str;

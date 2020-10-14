@@ -214,7 +214,7 @@ enum e_op {
 	op_stdp,
 	op_string,
 	op_rem,
-	op_rtl,
+	op_rtl, op_rtx,
 	op_ptrdif, op_isnullptr,
 	// Built in functions
 	op_abs, op_mulf, op_bytendx, op_zxw, op_zxt,
@@ -254,6 +254,7 @@ enum e_am {
 	am_novalue = 1 << 23,
 	am_creg = 1 << 24,
 	am_preg = 1 << 25,
+	am_mem_indirect = 1 << 26,
 	am_all = 0x1FF,
 };
 

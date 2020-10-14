@@ -46,7 +46,6 @@ std::ifstream *inclfile[10];
 //int             incldepth = 0;
 int             inclline[10];
 char            *lptr;
-extern char     inpline[132];
 int endifCount = 0;
 extern void searchenv(char *filename, int, char *envname, char *pathname, int);
 int dodefine();

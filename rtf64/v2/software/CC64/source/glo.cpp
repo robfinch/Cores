@@ -36,6 +36,7 @@ int regSP = 31;
 int regFP = 30;
 int regLR = 112;
 int regXLR = 28;
+int regXHSP = 27;
 int regGP = 29;
 int regGP1 = 28;
 int regTP = 28;
@@ -73,7 +74,7 @@ int address_bits = 32;
 int maxVL = 64;
 int nregs = 64;
 
-int sizeOfWord = 8;
+int64_t sizeOfWord = 8;
 int sizeOfFP = 8;
 int sizeOfFPS = 4;
 int sizeOfFPD = 8;

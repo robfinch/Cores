@@ -166,6 +166,8 @@ void CodeGenerator::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size
 			}
 		}
     }
+	ap3->memref = true;
+	ap3->memop = ap1->Clone();
 }
 
 void CodeGenerator::GenerateStore(Operand *ap1, Operand *ap3, int size)
@@ -1140,8 +1142,10 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 */
 	tp = node->p[0]->tp;
 	if (tp) {
-		if (node->p[0]->tp->IsAggregateType() || node->p[1]->nodetype==en_list || node->p[1]->nodetype==en_aggregate)
-			return GenerateAggregateAssign(node->p[0],node->p[1]);
+		if (tp->size > sizeOfWord) {
+			if (node->p[0]->tp->IsAggregateType() || node->p[1]->nodetype == en_list || node->p[1]->nodetype == en_aggregate)
+				return GenerateAggregateAssign(node->p[0], node->p[1]);
+		}
 	}
 	//if (size > 8) {
 	//	ap1 = GenerateExpression(node->p[0],am_mem,ssize);
@@ -1333,6 +1337,8 @@ Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int64_t size, int typ
 	ap2->mode = am_indx;
 	ap2->preg = regFP;          // frame pointer
 	ap2->offset = node;     /* use as constant node */
+	ap2->bit_offset = node->bit_offset;
+	ap2->bit_width = node->bit_width;
 	ap2->type = type;
 	ap1->type = stdint.GetIndex();
 	ap2->tp = node->tp;
@@ -1528,8 +1534,8 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ap1->isPtr = TRUE;
 		goto retpt;
 	case en_fieldref:
-		ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned,0)
-			: GenerateBitfieldDereference(node, flags, node->tp->size, 0);//!node->isUnsigned);
+		ap1 = /*(flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned,0)
+			:*/ GenerateBitfieldDereference(node, flags, node->tp->size, (flags & am_bf_assign) != 0);//!node->isUnsigned);
 		goto retpt;
 	case en_regvar:
 	case en_tempref:

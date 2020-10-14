@@ -276,32 +276,34 @@ void CSETable::InitializeTempRegs()
 			exptr = csp->exp;
 			if (1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
 			{
-				initstack();
-				ap = cg.GenerateExpression(exptr, am_reg | am_imm | am_mem | am_fpreg, exptr->tp->size);
-				ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
-				if (csp->isfp)
-					ap2->type = ap->type;
-				ap2->isPtr = ap->isPtr;
-				if (ap->mode == am_imm) {
-					if (ap2->mode == am_fpreg) {
-						ap3 = GetTempRegister();
-						GenerateDiadic(op_ldi, 0, ap3, ap);
-						GenerateDiadic(op_mov, 0, ap2, ap3);
-						ReleaseTempReg(ap3);
+				if (exptr->tp) {
+					initstack();
+					ap = cg.GenerateExpression(exptr, am_reg | am_imm | am_mem | am_fpreg, exptr->tp->size);
+					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
+					if (csp->isfp)
+						ap2->type = ap->type;
+					ap2->isPtr = ap->isPtr;
+					if (ap->mode == am_imm) {
+						if (ap2->mode == am_fpreg) {
+							ap3 = GetTempRegister();
+							GenerateDiadic(op_ldi, 0, ap3, ap);
+							GenerateDiadic(op_mov, 0, ap2, ap3);
+							ReleaseTempReg(ap3);
+						}
+						else {
+							cg.GenLoadConst(ap, ap2);
+						}
+					}
+					else if (ap->mode == am_reg) {
+						GenerateDiadic(op_mov, 0, ap2, ap);
 					}
 					else {
-						cg.GenLoadConst(ap, ap2);
+						size = exptr->GetNaturalSize();
+						ap->isUnsigned = exptr->isUnsigned;
+						cg.GenerateLoad(ap2, ap, size, size);
 					}
+					ReleaseTempReg(ap);
 				}
-				else if (ap->mode == am_reg) {
-					GenerateDiadic(op_mov, 0, ap2, ap);
-				}
-				else {
-					size = exptr->GetNaturalSize();
-					ap->isUnsigned = exptr->isUnsigned;
-					cg.GenerateLoad(ap2, ap, size, size);
-				}
-				ReleaseTempReg(ap);
 			}
 		}
 	}

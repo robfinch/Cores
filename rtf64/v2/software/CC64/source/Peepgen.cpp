@@ -29,7 +29,6 @@ extern char irfile[256];
 void PrintPeepList();
 static void Remove();
 static void PeepoptSub(OCODE *ip);
-void opt_peep();
 void put_ocode(OCODE *p);
 void CreateControlFlowGraph();
 extern void ComputeLiveVars();

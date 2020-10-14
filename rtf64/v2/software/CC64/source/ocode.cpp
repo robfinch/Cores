@@ -203,7 +203,7 @@ void OCODE::OptRedor()
 
 bool OCODE::IsSubiSP()
 {
-	if (opcode == op_sub) {
+	if (opcode == op_sub || opcode == op_gcsub) {
 		if (oper3->mode == am_imm) {
 			if (oper1->preg == regSP && oper2->preg == regSP) {
 				return (true);

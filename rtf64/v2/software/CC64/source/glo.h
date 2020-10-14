@@ -59,6 +59,7 @@ extern int regSP;
 extern int regFP;
 extern int regLR;
 extern int regXLR;
+extern int regXHSP;
 extern int regPC;
 extern int regCLP;
 extern int regPP;
@@ -98,7 +99,7 @@ extern txtoStream ofs;
 extern txtoStream lfs;
 extern txtoStream dfs;
 extern int mangledNames;
-extern int sizeOfWord;
+extern int64_t sizeOfWord;
 extern int sizeOfPtr;
 extern int sizeOfFP;
 extern int sizeOfFPS;
@@ -422,10 +423,11 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[272];
+extern Instruction opl[273];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
-
+extern char inpline[520];
 extern bool ExpressionHasReference;
+extern Object *_GarbageList;
 
 #endif

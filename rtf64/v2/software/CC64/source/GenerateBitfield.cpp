@@ -62,12 +62,14 @@ Operand* ENODE::GenerateBitfieldDereference(int flags, int size, int opt)
 		//	ap->offset = makenode(en_fieldref, nullptr, nullptr);
 		//}
 		if (ap->offset == nullptr) {
-			if (p[0]->nodetype == en_ext || p[0]->nodetype == en_extu) {
-				ap->offset = makenode(p[0]->nodetype, nullptr, nullptr);
+			if (p[0]->nodetype == en_ext || p[0]->nodetype == en_extu || p[0]->nodetype==en_fieldref) {
+				//ap->offset = makenode(p[0]->nodetype, nullptr, nullptr);
 			}
 		}
-		ap->offset->bit_offset = bit_offset;
-		ap->offset->bit_width = bit_width;
+		//ap->offset->bit_offset = bit_offset;
+		//ap->offset->bit_width = bit_width;
+		ap->bit_offset = bit_offset;
+		ap->bit_width = bit_width;
 	}
 	if (opt==1)
 		return (ap);
@@ -88,6 +90,8 @@ Operand* ENODE::GenerateBitfieldDereference(int flags, int size, int opt)
 	ap4->MakeLegal(flags, esize);
 	ap4->next = ap;
 	ap4->offset = this;
+	ap4->bit_offset = bit_offset->Clone();
+	ap4->bit_width = bit_width->Clone();
 	return (ap4);
 }
 
@@ -111,6 +115,8 @@ Operand *ENODE::GenerateBitfieldAssign(int flags, int size)
 	ap2 = cg.GenerateExpression(p[1],am_reg,size);
 	if (ap1->mode == am_reg) {
 		GenerateBitfieldInsert(ap1, ap2, ap1->bit_offset, ap1->bit_width);
+		if (ap1->memref)
+			GenStore(ap1, ap1->memop, size);
 	}
 	else {
 		ap3 = GetTempRegister();

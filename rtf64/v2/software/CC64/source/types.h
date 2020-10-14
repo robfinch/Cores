@@ -41,6 +41,28 @@ class OCODE;
 class PeepList;
 class Var;
 
+// 64 bytes
+class Object
+{
+public:
+	Object();
+	int64_t magic;
+	int size;
+	//	__gc_skip skip1 {
+	__int32 typenum;
+	__int32 id;
+	__int8 state;			// WHITE, GREY, or BLACK
+	__int8 scavangeCount;
+	__int8 owningMap;
+	__int8 pad1;
+	__int32 pad2;
+	unsigned int usedInMap;
+	//	};
+	struct _tagObject* forwardingAddress;
+	void (*finalizer)();
+	int pad3;
+};
+
 class CompilerType
 {
 public:
@@ -121,6 +143,10 @@ public:
 	static bool IsCalleeSave(int regno);
 	bool IsArgReg();
 	static void MarkColorable();
+};
+
+class Factory : public CompilerType
+{
 };
 
 // Class for representing tables. Small footprint.
@@ -318,6 +344,7 @@ public:
 	Operand *MakeIndexed(ENODE *node, int rg);
 
 	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	int64_t SizeofReturnBlock();
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
 	void GenReturn(Statement *stmt);
@@ -547,7 +574,7 @@ public:
 	bool IsVectorType() { return (etype == bt_vector); };
 	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autocon || nodetype == en_autovcon || nodetype == en_classcon); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
-	bool IsRefType() {	return (nodetype == en_ref);	};
+	bool IsRefType() {	return (nodetype == en_ref || etype==bt_struct || etype==bt_union || etype==bt_class);	};
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
@@ -626,7 +653,7 @@ public:
 	void Dump();
 };
 
-class ExpressionFactory : public CompilerType
+class ExpressionFactory : public Factory
 {
 public:
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3, ENODE* v4);
@@ -713,7 +740,7 @@ private:
 	ENODE* MakeConstNameNode(SYM* sp);
 	ENODE* MakeMemberNameNode(SYM* sp);
 	ENODE* MakeAutoNameNode(SYM* sp);
-	ENODE* MakeUnknownFunctionNameNode(SYM* sp, TYP** tp, TypeArray* typearray);
+	ENODE* MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args);
 	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
 	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
 	void DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp);
@@ -747,6 +774,7 @@ public:
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
+	unsigned int memref : 1;
 	unsigned int preserveNextReg : 1;
 	unsigned int type : 16;
 	TYP* tp;
@@ -768,6 +796,7 @@ public:
 	ENODE* bit_width;
 	int8_t scale;
 	Operand *next;			// For extended sizes (long)
+	Operand* memop;
 public:
 	Operand *Clone();
 	static bool IsSameType(Operand *ap1, Operand *ap2);
@@ -861,7 +890,7 @@ public:
 	void storeHex(txtoStream& ofs);
 };
 
-class OperandFactory
+class OperandFactory : public Factory
 {
 public:
 	Operand *MakeDataLabel(int labno);
@@ -876,6 +905,7 @@ public:
 	Operand *makefpreg(int r);
 	Operand *MakeMask(int mask);
 	Operand *MakeImmediate(int64_t i);
+	Operand* MakeMemoryIndirect(int disp, int regno);
 	Operand *MakeIndirect(short int regno);
 	Operand *MakeIndexedCodeLabel(int lab, int i);
 	Operand *MakeIndexed(int64_t offset, int regno);
@@ -885,7 +915,7 @@ public:
 	Operand *MakeDirect(ENODE *node);
 };
 
-class FunctionFactory
+class FunctionFactory : public Factory
 {
 public:
 	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
@@ -1404,30 +1434,33 @@ public:
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
 	
+	Statement* MakeStatement(int typ, int gt);
+
 	// Parsing
-	static Statement *ParseStop();
-	static Statement *ParseCompound();
-	static Statement *ParseDo();
-	static Statement *ParseFor();
-	static Statement *ParseForever();
-	static Statement *ParseFirstcall();
-	static Statement *ParseIf();
-	static Statement *ParseCatch();
-	static Statement *ParseCase();
+	Statement* ParseCheckStatement();
+	Statement *ParseStop();
+	Statement *ParseCompound();
+	Statement *ParseDo();
+	Statement *ParseFor();
+	Statement *ParseForever();
+	Statement *ParseFirstcall();
+	Statement *ParseIf();
+	Statement *ParseCatch();
+	Statement *ParseCase();
 	int CheckForDuplicateCases();
-	static Statement *ParseThrow();
-	static Statement *ParseContinue();
-	static Statement *ParseAsm();
-	static Statement *ParseTry();
-	static Statement *ParseExpression();
-	static Statement *ParseLabel();
-	static Statement *ParseWhile();
-	static Statement *ParseUntil();
-	static Statement *ParseGoto();
-	static Statement *ParseReturn();
-	static Statement *ParseBreak();
-	static Statement *ParseSwitch();
-	static Statement *Parse();
+	Statement *ParseThrow();
+	Statement *ParseContinue();
+	Statement *ParseAsm();
+	Statement *ParseTry();
+	Statement *ParseExpression();
+	Statement *ParseLabel();
+	Statement *ParseWhile();
+	Statement *ParseUntil();
+	Statement *ParseGoto();
+	Statement *ParseReturn();
+	Statement *ParseBreak();
+	Statement *ParseSwitch();
+	Statement *Parse();
 
 	// Optimization
 	void scan();
@@ -1480,6 +1513,13 @@ public:
 	void Dump();
 	void DumpCompound();
 };
+
+class StatementFactory : public Factory
+{
+public:
+	Statement* MakeStatement(int typ, int gt);
+};
+
 
 class Stringx
 {
@@ -1598,6 +1638,7 @@ public:
 	OperandFactory of;
 	FunctionFactory ff;
 	ExpressionFactory ef;
+	StatementFactory sf;
 	short int pass;
 public:
 	GlobalDeclaration *decls;

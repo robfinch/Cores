@@ -76,7 +76,7 @@ Statement *Function::ParseBody()
 	currentStmt = (Statement *)NULL;
 	dfs.printf("C");
 	stmtdepth = 0;
-	sym->stmt = Statement::ParseCompound();
+	sym->stmt = sym->stmt->ParseCompound();
 	dfs.printf("D");
 	//	stmt->stype = st_funcbody;
 	while (lc_auto % sizeOfWord)	// round frame size to word
@@ -483,22 +483,17 @@ void Function::RestoreTemporaries(int sp, int fsp)
 
 void Function::UnlinkStack()
 {
+	/* auto news are garbage collected
 	if (hasAutonew) {
 		GenerateMonadic(op_call, 0, MakeStringAsNameConst("__autodel",codeseg));
 		GenerateMonadic(op_bex, 0, MakeDataLabel(throwlab));
 	}
+	*/
 	GenerateMonadic(op_hint, 0, MakeImmediate(begin_stack_unlink));
 	GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
 	GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
-	if (exceptions) {
-		if (DoesThrow)
-			GenerateDiadic(op_ldo, 0, makereg(regXLR), MakeIndexed(2 * sizeOfWord, regSP));
-	}
 	if (!IsLeaf) {
-		if (exceptions && DoesThrow)
-			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeDoubleIndexed(regXoffs, regSP, 1));
-		else
-			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(3*sizeOfWord, regSP));
+		GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
 	}
 	//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),MakeImmediate(3*sizeOfWord));
 	GenerateMonadic(op_hint, 0, MakeImmediate(end_stack_unlink));
@@ -528,6 +523,10 @@ bool Function::GenDefaultCatch()
 	return (false);
 }
 
+int64_t Function::SizeofReturnBlock()
+{
+	return ((int64_t)(IsLeaf ? 1 : 2));
+}
 
 // For a leaf routine don't bother to store the link register.
 void Function::SetupReturnBlock()
@@ -536,24 +535,13 @@ void Function::SetupReturnBlock()
 	int n;
 
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
-	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(4 * sizeOfWord));
+	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate((IsLeaf ? 1 : 2) *sizeOfWord));
 	GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
-	GenerateDiadic(op_sto, 0, makereg(regZero), MakeIndexed(sizeOfWord, regSP));
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
 	n = 0;
-	if (exceptions) {
-		if (DoesThrow) {
-			n = 1;
-			GenerateDiadic(op_sto, 0, makereg(regXLR), MakeIndexed(2 * sizeOfWord, regSP));
-		}
-	}
 	if (!IsLeaf) {
 		n |= 2;
-		GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(3 * sizeOfWord, regSP));
-	}
-	if (exceptions) {
-		if (DoesThrow)
-			GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(3 * sizeOfWord));
+		GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord, regSP));
 	}
 	/*
 	switch (n) {
@@ -584,6 +572,7 @@ void Function::GenReturn(Statement *stmt)
 	int toAdd;
 	SYM *p;
 	bool isFloat;
+	int64_t sz;
 
 	// Generate the return expression and force the result into r1.
 	if (stmt != NULL && stmt->exp != NULL)
@@ -599,33 +588,49 @@ void Function::GenReturn(Statement *stmt)
 			GenerateDiadic(op_ldi, 0, makereg(regFirstArg), ap);
 		else if (ap->mode == am_reg) {
 			if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union || sym->tp->GetBtp()->type == bt_class)) {
-				p = params.Find("_pHiddenStructPtr", false);
-				if (p) {
-					if (p->IsRegister)
-						GenerateDiadic(op_mov, 0, makereg(regFirstArg), makereg(p->reg));
-					else
-						GenerateDiadic(op_ldo, 0, makereg(regFirstArg), MakeIndexed(p->value.i, regFP));
-					ap2 = GetTempRegister();
-					GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(sym->tp->GetBtp()->size));
-					if (cpu.SupportsPush) {
-						GenerateMonadic(op_push, 0, ap2);
-						GenerateMonadic(op_push, 0, ap);
-						GenerateMonadic(op_push, 0, makereg(1));
+				if ((sz = sym->tp->GetBtp()->size) > sizeOfWord) {
+					p = params.Find("_pHiddenStructPtr", false);
+					if (p) {
+						if (p->IsRegister)
+							GenerateDiadic(op_mov, 0, makereg(regFirstArg), makereg(p->reg));
+						else
+							GenerateDiadic(op_ldo, 0, makereg(regFirstArg), MakeIndexed(p->value.i, regFP));
+						ap2 = GetTempRegister();
+						GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(sym->tp->GetBtp()->size));
+						if (cpu.SupportsPush) {
+							GenerateMonadic(op_push, 0, ap2);
+							GenerateMonadic(op_push, 0, ap);
+							GenerateMonadic(op_push, 0, makereg(1));
+						}
+						else {
+							GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
+							GenerateDiadic(op_sto, 0, makereg(1), MakeIndirect(regSP));
+							GenerateDiadic(op_sto, 0, ap, MakeIndexed(sizeOfWord, regSP));
+							GenerateDiadic(op_sto, 0, ap2, MakeIndexed(sizeOfWord * 2, regSP));
+						}
+						ReleaseTempReg(ap2);
+						GenerateMonadic(op_jsr, 0, MakeStringAsNameConst("__aacpy", codeseg));
+						GenerateMonadic(op_bex, 0, MakeDataLabel(throwlab));
+						if (!IsPascal)
+							GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
 					}
 					else {
-						GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
-						GenerateDiadic(op_sto, 0, makereg(1), MakeIndirect(regSP));
-						GenerateDiadic(op_sto, 0, ap, MakeIndexed(sizeOfWord, regSP));
-						GenerateDiadic(op_sto, 0, ap2, MakeIndexed(sizeOfWord * 2, regSP));
+						error(ERR_MISSING_HIDDEN_STRUCTPTR);
 					}
-					ReleaseTempReg(ap2);
-					GenerateMonadic(op_jsr, 0, MakeStringAsNameConst("__aacpy",codeseg));
-					GenerateMonadic(op_bex, 0, MakeDataLabel(throwlab));
-					if (!IsPascal)
-						GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
 				}
 				else {
-					error(ERR_MISSING_HIDDEN_STRUCTPTR);
+					if (ap->isPtr) {
+						if (sz > 4)
+							GenLoad(makereg(regFirstArg), MakeIndirect(ap->preg), 8, 8);
+						else if (sz > 2)
+							GenLoad(makereg(regFirstArg), MakeIndirect(ap->preg), 4, 4);
+						else if (sz > 1)
+							GenLoad(makereg(regFirstArg), MakeIndirect(ap->preg), 2, 2);
+						else
+							GenLoad(makereg(regFirstArg), MakeIndirect(ap->preg), 1, 1);
+					}
+					else
+						GenerateDiadic(op_mov, 0, makereg(regFirstArg), ap);
 				}
 			}
 			else {
@@ -668,6 +673,9 @@ void Function::GenReturn(Statement *stmt)
 	GenerateLabel(retlab);
 	rcode = pl.tail;
 
+	// Unreferenced objects are garbage collected by the system. There's no need
+	// to manage a list of them.
+
 	//if (currentFn->UsesNew) {
 	//	if (cpu.SupportsPush)
 	//		GenerateMonadic(op_push, 0, makereg(regFirstArg));
@@ -704,7 +712,7 @@ void Function::GenReturn(Statement *stmt)
 		return;
 	}
 	UnlinkStack();
-	toAdd = 4 * sizeOfWord;
+	toAdd = SizeofReturnBlock() * sizeOfWord;
 
 	if (epilog) {
 		epilog->Generate();
@@ -1191,32 +1199,34 @@ void Function::BuildParameterList(int *num, int *numa)
 	if (sym->tp) {
 		if (sym->tp->GetBtp()) {
 			if (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union || sym->tp->GetBtp()->type == bt_class) {
-				sp1 = makeStructPtr("_pHiddenStructPtr");
-				sp1->parent = sym->parent;
-				sp1->value.i = poffset;
-				poffset += sizeOfWord;
-				sp1->storage_class = sc_register;
-				sp1->IsAuto = false;
-				sp1->next = 0;
-				sp1->IsRegister = true;
-				if (preg > regLastArg)
-					sp1->IsRegister = false;
-				if (sp1->IsRegister && sp1->tp->size < 11) {
-					sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
-					preg++;
-					if ((preg & 0x8000) == 0) {
-						noParmOffset = true;
-						sp1->value.i = -1;
+				if (sym->tp->GetBtp()->size > sizeOfWord) {
+					sp1 = makeStructPtr("_pHiddenStructPtr");
+					sp1->parent = sym->parent;
+					sp1->value.i = poffset;
+					poffset += sizeOfWord;
+					sp1->storage_class = sc_register;
+					sp1->IsAuto = false;
+					sp1->next = 0;
+					sp1->IsRegister = true;
+					if (preg > regLastArg)
+						sp1->IsRegister = false;
+					if (sp1->IsRegister && sp1->tp->size < 11) {
+						sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
+						preg++;
+						if ((preg & 0x8000) == 0) {
+							noParmOffset = true;
+							sp1->value.i = -1;
+						}
 					}
+					else
+						sp1->IsRegister = false;
+					// record parameter list
+					params.insert(sp1);
+					//		nparms++;
+					if (!sp1->IsRegister)
+						*numa += 1;
+					*num = *num + 1;
 				}
-				else
-					sp1->IsRegister = false;
-				// record parameter list
-				params.insert(sp1);
-				//		nparms++;
-				if (!sp1->IsRegister)
-					*numa += 1;
-				*num = *num + 1;
 			}
 		}
 	}

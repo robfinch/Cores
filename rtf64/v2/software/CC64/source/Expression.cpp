@@ -303,8 +303,10 @@ ENODE* Expression::ParseNameRef()
 	// Convert a reference to a constant to a constant. Need this for
 	// GetIntegerExpression().
 	if (pnode->IsRefType()) {
-		if (pnode->p[0]->nodetype == en_icon) {
-			pnode = SetIntConstSize(tptr, pnode->p[0]->i);
+		if (pnode->p[0]) {
+			if (pnode->p[0]->nodetype == en_icon) {
+				pnode = SetIntConstSize(tptr, pnode->p[0]->i);
+			}
 		}
 		//else if (pnode->p[0]->nodetype == en_fcon) {
 		//	rval = pnode->p[0]->f;
@@ -566,10 +568,10 @@ ENODE* Expression::ParseNew(bool autonew)
 		decl.ParseSpecifier(0);
 		decl.ParsePrefix(FALSE);
 		if (head != NULL)
-			ep1 = makeinode(en_icon, head->size);
+			ep1 = makeinode(en_icon, head->size + 64);
 		else {
 			error(ERR_IDEXPECT);
-			ep1 = makeinode(en_icon, 1);
+			ep1 = makeinode(en_icon, 65);
 		}
 		ep4 = nullptr;
 		ep2 = makeinode(en_icon, head->GetHash());
@@ -582,7 +584,6 @@ ENODE* Expression::ParseNew(bool autonew)
 		//ep5 = makenode(en_void, ep4, ep5);
 		ep2 = makesnode(en_cnacon, name, name, 0);
 		ep1 = makefcnode(en_fcall, ep2, ep5, nullptr);
-		ep1->isAutonew = autonew;
 		head = tp;
 		tail = tp1;
 	}
@@ -592,14 +593,17 @@ ENODE* Expression::ParseNew(bool autonew)
 		sizeof_flag--;
 		if (tp == 0) {
 			error(ERR_SYNTAX);
-			ep1 = makeinode(en_icon, 1);
+			ep1 = makeinode(en_icon, 65);
 		}
 		else
-			ep1 = makeinode(en_icon, (long)tp->size);
+			ep1 = makeinode(en_icon, (int64_t)tp->size+64);
 		ep3 = makenode(en_void, ep1, nullptr);
 		ep2 = makesnode(en_cnacon, name, name, 0);
 		ep1 = makefcnode(en_fcall, ep2, ep3, nullptr);
 	}
+	ep1->isAutonew = autonew;
+	if (autonew)
+		currentFn->hasAutonew = true;
 	if (ep1) ep1->SetType(tp);
 	return (ep1);
 }
@@ -608,17 +612,18 @@ ENODE* Expression::ParseDelete()
 {
 	ENODE* ep1, *ep2;
 	TYP* tp;
+	bool needbr = false;
 
 	currentFn->IsLeaf = FALSE;
 	NextToken();
 	{
 		std::string* name = new std::string("__delete");
 
-		if (lastst == openbr) {
+		if (lastst == openbr)
 			NextToken();
-			needpunc(closebr, 50);
-		}
 		tp = ParseCastExpression(&ep1);
+		if (needbr)
+			needpunc(closebr, 50);
 		tp = deref(&ep1, tp);
 		ep2 = makesnode(en_cnacon, name, name, 0);
 		ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
@@ -877,8 +882,12 @@ ENODE* Expression::ParseDotOperator(TYP* tp1, ENODE *ep1)
 		dfs.printf("tp1->type:%d", tp1->type);
 		qnode = makeinode(en_icon, sp->value.i);
 		qnode->constflag = TRUE;
+		qnode->bit_offset = makeinode(en_icon, sp->tp->bit_offset->i);
+		qnode->bit_width = makeinode(en_icon, sp->tp->bit_width->i);
 		iu = ep1->isUnsigned;
 		ep1 = makenode(en_add, ep1, qnode);
+		ep1->bit_offset = qnode->bit_offset;
+		ep1->bit_width = qnode->bit_width;
 		ep1->isPascal = ep1->p[0]->isPascal;
 		ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = iu;
@@ -956,7 +965,7 @@ ENODE* Expression::ParseOpenpa(TYP* tp1, ENODE* ep1)
 	}
 	dfs.printf("tp2->type=%d", tp2->type);
 	name = lastid;
-	NextToken();
+	//NextToken();
 	tp3 = tp1->GetBtp();
 	ep4 = nullptr;
 	if (tp3) {
@@ -1095,13 +1104,20 @@ ENODE* Expression::ParseOpenbr(TYP* tp1, ENODE* ep1)
 			qnode = compiler.ef.Makenode(en_sub, pnode->Clone(), qnode);
 			qnode = compiler.ef.Makenode(en_sub, qnode, makeinode(en_icon, 1));
 			//ep1 = compiler.ef.Makenode(pnode->isUnsigned ? en_extu : en_ext, rnode, pnode, qnode);
-			ep1 = compiler.ef.Makenode(en_bitoffset, rnode, snode, qnode);
+			rnode->nodetype = en_fieldref;
+			rnode->bit_offset = snode;
+			rnode->bit_width = qnode;
+			ep1 = rnode;//compiler.ef.Makenode(en_bitoffset, rnode, snode, qnode);
 			//ep1 = compiler.ef.Makenode(en_void, rnode, nullptr);
 		}
 		else {
 			qnode = makeinode(en_icon, 0);
 			//ep1 = compiler.ef.Makenode(pnode->isUnsigned ? en_extu : en_ext, rnode, pnode->Clone(), qnode->Clone());
-			ep1 = compiler.ef.Makenode(en_bitoffset, rnode, pnode, qnode);
+			rnode->nodetype = en_fieldref;
+			rnode->bit_offset = pnode;
+			rnode->bit_width = qnode;
+			ep1 = rnode;//compiler.ef.Makenode(en_bitoffset, rnode, pnode, qnode);
+			snode = pnode;
 			//ep1 = compiler.ef.Makenode(en_void, rnode, nullptr);
 		}
 		//rnode->bit_offset = pnode;
@@ -1110,6 +1126,9 @@ ENODE* Expression::ParseOpenbr(TYP* tp1, ENODE* ep1)
 		//ep1->bit_width = qnode->Clone();
 		needpunc(closebr, 9);
 		tp1 = CondDeref(&ep1, tp2);
+		tp1->type = bt_bitfield;
+		tp1->bit_offset = snode->Clone();
+		tp1->bit_width = qnode->Clone();
 		ep1->tp = tp1;
 		return (ep1);
 		error(ERR_NOPOINTER);
@@ -1341,6 +1360,8 @@ ENODE* Expression::MakeAutoNameNode(SYM* sp)
 		node = makeinode(en_autofcon, sp->value.i);
 	else {
 		node = makeinode(en_autocon, sp->value.i);
+		node->bit_offset = sp->tp->bit_offset;
+		node->bit_width = sp->tp->bit_width;
 		if (sp->tp->isUnsigned)
 			node->isUnsigned = TRUE;
 	}
@@ -1363,21 +1384,24 @@ ENODE* Expression::MakeAutoNameNode(SYM* sp)
 	return (node);
 }
 
-ENODE* Expression::MakeUnknownFunctionNameNode(SYM* sp, TYP** tp, TypeArray* typearray)
+ENODE* Expression::MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args)
 {
-	ENODE* node;
+	ENODE* node, * namenode;
+	SYM* sp;
 
 	sp = allocSYM();
 	sp->fi = compiler.ff.MakeFunction(sp->id, sp, defaultcc == 1);
 	sp->tp = &stdfunc;
-	sp->SetName(*(new std::string(lastid)));
+	sp->tp->btp = bt_long;
+	sp->SetName(*(new std::string(nm)));
 	sp->storage_class = sc_external;
 	sp->IsUndefined = TRUE;
 	dfs.printf("Insert at nameref\r\n");
 	typearray->Print();
-	//    gsyms[0].insert(sp);
+	    gsyms[0].insert(sp);
 	*tp = &stdfunc;
-	node = makesnode(en_cnacon, sp->name, sp->BuildSignature(1), sp->value.i);
+	namenode = makesnode(en_cnacon, sp->name, sp->BuildSignature(1), sp->value.i);
+	node = makefcnode(en_fcall, namenode, args, sp);
 	node->constflag = TRUE;
 	node->sym = sp;
 	if (sp->tp->isUnsigned)

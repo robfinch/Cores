@@ -31,7 +31,6 @@ extern SYM *currentClass;
 extern int defaultcc;
 static unsigned char sizeof_flag = 0;
 extern void backup();
-extern char *inpline;
 extern int parsingParameterList;
 extern SYM *gsearch2(std::string , __int16, TypeArray *,bool);
 extern SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray);
@@ -745,8 +744,16 @@ TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeA
 	if( sp == NULL ) {
 		while( my_isspace(lastch) )
 			getch();
-		if( lastch == '(')
-			*node = MakeUnknownFunctionNameNode(sp, &tp, typearray);
+		if (lastch == '(') {
+			ENODE* args;
+			std::string nm(lastid);
+			NextToken();
+			NextToken();
+			args = ParseArgumentList(nullptr, typearray);
+			*node = MakeUnknownFunctionNameNode(nm, &tp, typearray, args);
+			sp = (*node)->sym;
+			nt = false;
+		}
 		else {
 			dfs.printf("Undefined symbol2 in nameref\r\n");
 			tp = (TYP *)NULL;
@@ -755,6 +762,7 @@ TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeA
 		}
 	}
 	else {
+j1:
 		dfs.printf("sp is not null\n");
 		typearray->Print();
 		if( (tp = sp->tp) == NULL ) {
@@ -893,7 +901,8 @@ ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 		}
 		NextToken();
 	}
-	NextToken();
+	if (lastst==closepa)
+		NextToken();
 	dfs.printf("</ArgumentList>\n");
 	return ep1;
 }
@@ -1384,6 +1393,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 			cnt = 0;
 			wasBr = false;
 			ep1 = AdjustForBitArray(pop, tp1, ep1);
+			NextToken();
 			ep1 = ParseOpenpa(tp1, ep1);
 			break;
 
