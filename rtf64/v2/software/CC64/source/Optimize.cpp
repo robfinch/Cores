@@ -674,6 +674,11 @@ static void opt0(ENODE **node)
                                     }
                             }
                     break;
+	case en_fieldref:
+		opt0(&(ep->p[0]));
+		opt0(&(ep->bit_offset));
+		opt0(&(ep->bit_width));
+		break;
 	case en_bitoffset:
 	case en_ext:
 	case en_extu:

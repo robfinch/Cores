@@ -1356,8 +1356,10 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			save_mask = mask;
 		}
 		else {
-			if (sym && sym->IsLeaf)
-				GenerateMonadic(op_jlr, 0, MakeDirect(node->p[0]));
+			if (sym && sym->IsLeaf) {
+				GenerateMonadic(op_jal, 0, MakeDirect(node->p[0]));
+				currentFn->doesJAL = true;
+			}
 			else
 				GenerateMonadic(op_jsr,0,MakeDirect(node->p[0]));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
@@ -1419,8 +1421,10 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		}
 		else {
 			GenerateDiadic(op_mov, 0, makereg(114), ap);
-			if (sym && sym->IsLeaf)
-				GenerateMonadic(op_jlr,0,MakeIndirect(114));
+			if (sym && sym->IsLeaf) {
+				GenerateMonadic(op_jal, 0, MakeIndirect(114));
+				currentFn->doesJAL = true;
+			}
 			else
 				GenerateMonadic(op_jsr, 0, MakeIndirect(114));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));

@@ -274,6 +274,11 @@ void CSETable::InitializeTempRegs()
 		if (csp->reg != -1)
 		{               // see if preload needed
 			exptr = csp->exp;
+			// A negative reference relative to the frame pointer indicates local variable.
+			// Since local vars haven't been initialized yet, there's no point to preloading
+			// the register.
+			if (exptr->nodetype == en_ref && exptr->p[0]->nodetype == en_autocon && exptr->p[0]->i < 0)
+				continue;
 			if (1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
 			{
 				if (exptr->tp) {

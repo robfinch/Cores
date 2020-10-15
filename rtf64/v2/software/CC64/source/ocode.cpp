@@ -59,11 +59,16 @@ bool OCODE::HasSourceReg(int regno) const
 	if (insn == nullptr)
 		return (false);
 	// Push has an implied target, so oper1 is actually a source.
+	// For deposit, the target is also a source
 	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep) {
-		if (oper1->preg==regno)
-			return (true);
-		if (oper1->sreg==regno)
-			return (true);
+		if (oper1) {
+			if (oper1->preg == regno)
+				return (true);
+			if (oper1->sreg == regno)
+				return (true);
+		}
+		else
+			return (false);
 	}
 	if (oper2 && oper2->preg==regno)
 		return (true);
@@ -77,8 +82,13 @@ bool OCODE::HasSourceReg(int regno) const
 		return (true);
 	if (oper4 && oper4->sreg==regno)
 		return (true);
+	// For pop the source operand is implied.
+	if (opcode == op_pop)
+		return (regno == regSP);
+	if (opcode == op_unlk)
+		return (regno == regFP);
 	// The call instruction implicitly has register arguments as source registers.
-	if (opcode==op_call) {
+	if (opcode==op_call || opcode==op_jsr) {
 		if (IsArgumentReg(regno))
 			return(true);
 	}
@@ -96,9 +106,12 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 	if (insn->HasTarget()) {
 		// Handle implicit targets
 		switch(insn->opcode) {
-		case op_pop:
-		case op_unlk:
 		case op_link:
+		case op_unlk:
+			*rg1 = regSP;
+			*rg2 = regFP;
+			return(0);
+		case op_pop:
 			*rg1 = regSP;
 			*rg2 = oper1->preg;
 			return(0);
@@ -446,6 +459,7 @@ void OCODE::OptLoadHalf()
 void OCODE::OptLoadWord()
 {
 	OCODE *ip;
+	int rg1, rg2;
 
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->opcode == op_label)
@@ -457,7 +471,8 @@ void OCODE::OptLoadWord()
 		if (ip->HasSourceReg(oper1->preg))
 			break;
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
+			ip->GetTargetReg(&rg1, &rg2);
+			if (rg1 == oper1->preg || rg2==oper1->preg) {
 				MarkRemove();
 				optimized++;
 				break;
@@ -508,7 +523,7 @@ void OCODE::OptStore()
 {
 	OCODE *ip;
 
-	if (opcode == op_stp)
+	if (opcode == op_stt)
 		OptStoreHalf();
 	for (ip = fwd; ip; ip = ip->fwd)
 		if (ip->opcode != op_remark && ip->opcode != op_hint)
@@ -519,9 +534,9 @@ void OCODE::OptStore()
 		return;
 	if (!OCODE::IsEqualOperand(oper2, ip->oper2))
 		return;
-	if (opcode == op_stp && ip->opcode != op_ldp)
+	if (opcode == op_stt && ip->opcode != op_ldt)
 		return;
-	if (opcode == op_sth && ip->opcode != op_ldh)
+	if (opcode == op_sto && ip->opcode != op_ldo)
 		return;
 	if (ip->isVolatile)
 		return;
@@ -824,11 +839,13 @@ void OCODE::OptIndexScale()
 		// abort optimization.
 		else if (frwd->oper1) {
 			if (frwd->HasTargetReg()) {
-				if (frwd->oper1->preg == back->oper1->preg) {
+				int rg1, rg2;
+				frwd->GetTargetReg(&rg1, &rg2);
+				if (rg1 == back->oper1->preg || rg2 == back->oper1->preg) {
 					frwd = nullptr;
 					break;
 				}
-				if (frwd->oper1->preg == back->oper2->preg) {
+				if (rg1 == back->oper2->preg || rg2 == back->oper2->preg) {
 					frwd = nullptr;
 					break;
 				}
@@ -964,15 +981,15 @@ void OCODE::OptHint()
 		// It optimized it to:
 		// ldi  $t1,#0
 		// It didn't set the back->oper1 properly.
-		return;
 		if (fwd == nullptr || back == nullptr)
 			break;
-		if (fwd->opcode != op_mov) {
-			MarkRemove();
+		if (back->opcode != op_mov || fwd->opcode != op_mov) {
 			break;
 		}
 		if (IsEqualOperand(fwd->oper2, back->oper1)) {
 			if (back->HasTargetReg()) {
+				int rg1, rg2;
+				back->GetTargetReg(&rg1, &rg2);
 				if (!(fwd->oper1->mode == am_fpreg && back->opcode == op_ldi)) {
 					// Search forward to see if the target register is used anywhere.
 					for (frwd = fwd->fwd; frwd; frwd = frwd->fwd) {
@@ -994,10 +1011,6 @@ void OCODE::OptHint()
 					optimized++;
 				}
 			}
-		}
-		else {
-			MarkRemove();
-			optimized++;
 		}
 		break;
 
@@ -1126,8 +1139,10 @@ void OCODE::OptLdi()
 	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
+			int rg1, rg2;
+			ip->GetTargetReg(&rg1, &rg2);
+			if (ip->opcode == op_ldi) {
+				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();
 						optimized++;
@@ -1176,8 +1191,10 @@ void OCODE::OptLea()
 	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
+			int rg1, rg2;
+			ip->GetTargetReg(&rg1, &rg2);
+			if (ip->opcode == op_ldi) {
+				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();
 						optimized++;

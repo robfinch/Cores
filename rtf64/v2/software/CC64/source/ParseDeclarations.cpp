@@ -584,8 +584,9 @@ SYM *Declaration::ParseId()
 
   dfs.printf("<ParseId>%s",lastid);
 	sp = tagtable.Find(lastid,false);//gsyms[0].Find(lastid);
-	if (sp==nullptr)
-		sp = gsyms[0].Find(lastid,false);
+	if (sp == nullptr) {
+		sp = gsyms[0].Find(lastid, false);
+	}
 	if (sp) {
 		dfs.printf("Actually found type.\r\n");
 		if (sp->storage_class==sc_typedef || sp->storage_class==sc_type) {

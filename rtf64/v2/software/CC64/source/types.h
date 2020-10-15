@@ -244,6 +244,7 @@ public:
 	unsigned int IsPascal : 1;
 	unsigned int IsLeaf : 1;
 	unsigned int DoesThrow : 1;
+	unsigned int doesJAL : 1;
 	unsigned int UsesNew : 1;
 	unsigned int UsesPredicate : 1;
 	unsigned int IsVirtual : 1;
@@ -259,6 +260,7 @@ public:
 	unsigned int retGenerated : 1;
 	unsigned int alloced : 1;
 	unsigned int hasAutonew : 1;
+	unsigned int alstk : 1;		// stack space was allocated with link
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
@@ -548,6 +550,7 @@ public:
 	unsigned int isPascal : 1;
 	unsigned int isAutonew : 1;
 	unsigned int isNeg : 1;
+	unsigned int argref : 1;		// argument reference
 	ENODE *vmask;
 	ENODE* bit_width;
 	ENODE* bit_offset;
@@ -621,7 +624,7 @@ public:
 	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
 	Operand *GenerateUnary(int flags, int size, int op);
-	Operand *GenBinary(int flags, int size, int op);
+	Operand *GenerateBinary(int flags, int size, int op);
 	Operand *GenerateAssignShift(int flags, int size, int op);
 	Operand *GenerateAssignAdd(int flags, int size, int op);
 	Operand *GenerateAssignLogic(int flags, int size, int op);
@@ -775,6 +778,7 @@ public:
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
 	unsigned int memref : 1;
+	unsigned int argref : 1;	// refers to a function argument
 	unsigned int preserveNextReg : 1;
 	unsigned int type : 16;
 	TYP* tp;

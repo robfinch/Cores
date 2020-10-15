@@ -46,7 +46,6 @@ bool Coalesce();
 void ComputeSpillCosts();
 extern void CalcDominatorTree();
 Var *FindVar(int num);
-void ExpandReturnBlocks();
 bool RemoveEnabled = true;
 unsigned int ArgRegCount;
 int count;
@@ -270,13 +269,12 @@ void Function::PeepOpt()
 		hasBPReferences = (pl.CountBPReferences() != 0);
 		hasGPReferences = (pl.CountGPReferences() != 0);
 
-		if (!hasBPReferences)
-			pl.RemoveLinkUnlink();
-		if (IsLeaf && !hasSPReferences && !hasBPReferences)
-			pl.RemoveStackCode();
-		if ((IsLeaf && !hasSPReferences)
-			|| (!hasSPReferences && !hasBPReferences))
-			pl.RemoveReturnBlock();
+//		if (!hasBPReferences)
+//			pl.RemoveLinkUnlink();
+//		if (IsLeaf && !hasSPReferences && !hasBPReferences)
+//			pl.RemoveStackCode();
+//		if (!hasSPReferences && !hasBPReferences)
+//			pl.RemoveReturnBlock();
 		if (!hasGPReferences)
 			pl.RemoveGPLoad();
 		pl.Remove();

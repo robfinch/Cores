@@ -1598,9 +1598,9 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 	case en_not:	
 		ap1 = (node->GenerateUnary(flags, 8, op_not));
 		goto retpt;
-	case en_add:    ap1 = node->GenBinary(flags, size, op_add); goto retpt;
-	case en_sub:  ap1 = node->GenBinary(flags, size, op_sub); goto retpt;
-	case en_ptrdif:  ap1 = node->GenBinary(flags, size, op_ptrdif); goto retpt;
+	case en_add:    ap1 = node->GenerateBinary(flags, size, op_add); goto retpt;
+	case en_sub:  ap1 = node->GenerateBinary(flags, size, op_sub); goto retpt;
+	case en_ptrdif:  ap1 = node->GenerateBinary(flags, size, op_ptrdif); goto retpt;
 	case en_i2d:
     ap1 = GetTempFPRegister();	
     ap2=GenerateExpression(node->p[0],am_reg,8);
@@ -1671,35 +1671,35 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ReleaseTempReg(ap2);
 		goto retpt;
 
-	case en_vadd:	  return node->GenBinary(flags,size,op_vadd);
-	case en_vsub:	  return node->GenBinary(flags,size,op_vsub);
-	case en_vmul:	  return node->GenBinary(flags,size,op_vmul);
-	case en_vadds:	  return node->GenBinary(flags,size,op_vadds);
-	case en_vsubs:	  return node->GenBinary(flags,size,op_vsubs);
-	case en_vmuls:	  return node->GenBinary(flags,size,op_vmuls);
-	case en_vex:      return node->GenBinary(flags,size,op_vex);
-	case en_veins:    return node->GenBinary(flags,size,op_veins);
+	case en_vadd:	  return node->GenerateBinary(flags,size,op_vadd);
+	case en_vsub:	  return node->GenerateBinary(flags,size,op_vsub);
+	case en_vmul:	  return node->GenerateBinary(flags,size,op_vmul);
+	case en_vadds:	  return node->GenerateBinary(flags,size,op_vadds);
+	case en_vsubs:	  return node->GenerateBinary(flags,size,op_vsubs);
+	case en_vmuls:	  return node->GenerateBinary(flags,size,op_vmuls);
+	case en_vex:      return node->GenerateBinary(flags,size,op_vex);
+	case en_veins:    return node->GenerateBinary(flags,size,op_veins);
 
-	case en_fadd:	  ap1 = node->GenBinary(flags, size, op_fadd); goto retpt;
-	case en_fsub:	  ap1 = node->GenBinary(flags, size, op_fsub); goto retpt;
-	case en_fmul:	  ap1 = node->GenBinary(flags, size, op_fmul); goto retpt;
-	case en_fdiv:	  ap1 = node->GenBinary(flags, size, op_fdiv); goto retpt;
+	case en_fadd:	  ap1 = node->GenerateBinary(flags, size, op_fadd); goto retpt;
+	case en_fsub:	  ap1 = node->GenerateBinary(flags, size, op_fsub); goto retpt;
+	case en_fmul:	  ap1 = node->GenerateBinary(flags, size, op_fmul); goto retpt;
+	case en_fdiv:	  ap1 = node->GenerateBinary(flags, size, op_fdiv); goto retpt;
 
-	case en_padd:	  ap1 = node->GenBinary(flags, size, op_padd); goto retpt;
-	case en_psub:	  ap1 = node->GenBinary(flags, size, op_psub); goto retpt;
-	case en_pmul:	  ap1 = node->GenBinary(flags, size, op_pmul); goto retpt;
-	case en_pdiv:	  ap1 = node->GenBinary(flags, size, op_pdiv); goto retpt;
+	case en_padd:	  ap1 = node->GenerateBinary(flags, size, op_padd); goto retpt;
+	case en_psub:	  ap1 = node->GenerateBinary(flags, size, op_psub); goto retpt;
+	case en_pmul:	  ap1 = node->GenerateBinary(flags, size, op_pmul); goto retpt;
+	case en_pdiv:	  ap1 = node->GenerateBinary(flags, size, op_pdiv); goto retpt;
 
-	case en_fdadd:    return node->GenBinary(flags,size,op_fdadd);
-  case en_fdsub:    return node->GenBinary(flags,size,op_fdsub);
-  case en_fsadd:    return node->GenBinary(flags,size,op_fsadd);
-  case en_fssub:    return node->GenBinary(flags,size,op_fssub);
+	case en_fdadd:    return node->GenerateBinary(flags,size,op_fdadd);
+  case en_fdsub:    return node->GenerateBinary(flags,size,op_fdsub);
+  case en_fsadd:    return node->GenerateBinary(flags,size,op_fsadd);
+  case en_fssub:    return node->GenerateBinary(flags,size,op_fssub);
   case en_fdmul:    return node->GenMultiply(flags,size,op_fmul);
   case en_fsmul:    return node->GenMultiply(flags,size,op_fmul);
   case en_fddiv:    return node->GenMultiply(flags,size,op_fddiv);
   case en_fsdiv:    return node->GenMultiply(flags,size,op_fsdiv);
-	case en_ftadd:    return node->GenBinary(flags,size,op_ftadd);
-  case en_ftsub:    return node->GenBinary(flags,size,op_ftsub);
+	case en_ftadd:    return node->GenerateBinary(flags,size,op_ftadd);
+  case en_ftsub:    return node->GenerateBinary(flags,size,op_ftsub);
   case en_ftmul:    return node->GenMultiply(flags,size,op_ftmul);
   case en_ftdiv:    return node->GenMultiply(flags,size,op_ftdiv);
 
@@ -1729,11 +1729,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		goto retpt;
 
 	case en_isnullptr:	ap1 = node->GenerateUnary(flags, size, op_isnullptr); goto retpt;
-	case en_and:    ap1 = node->GenBinary(flags, size, op_and); goto retpt;
-  case en_or:     ap1 = node->GenBinary(flags,size,op_or); goto retpt;
-	case en_xor:	ap1 = node->GenBinary(flags,size,op_xor); goto retpt;
-	case en_bytendx:	ap1 = node->GenBinary(flags, size, op_bytendx); goto retpt;
-	case en_wydendx:	ap1 = node->GenBinary(flags, size, op_wydendx); goto retpt;
+	case en_and:    ap1 = node->GenerateBinary(flags, size, op_and); goto retpt;
+  case en_or:     ap1 = node->GenerateBinary(flags,size,op_or); goto retpt;
+	case en_xor:	ap1 = node->GenerateBinary(flags,size,op_xor); goto retpt;
+	case en_bytendx:	ap1 = node->GenerateBinary(flags, size, op_bytendx); goto retpt;
+	case en_wydendx:	ap1 = node->GenerateBinary(flags, size, op_wydendx); goto retpt;
 	case en_ext:			ap1 = GenerateTrinary(node, flags, size, op_ext); goto retpt;
 	case en_extu:			ap1 = GenerateTrinary(node, flags, size, op_extu); goto retpt;
 	case en_mulf:    ap1 = node->GenMultiply(flags, size, op_mulf); goto retpt;

@@ -68,10 +68,10 @@ int main(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
-	cpu.SupportsPop = false;
-	cpu.SupportsPush = false;
-	cpu.SupportsLink = false;
-	cpu.SupportsUnlink = false;
+	cpu.SupportsPop = true;
+	cpu.SupportsPush = true;
+	cpu.SupportsLink = true;
+	cpu.SupportsUnlink = true;
 	cpu.SupportsBitfield = true;
 
 //	printf("c64 starting...\r\n");

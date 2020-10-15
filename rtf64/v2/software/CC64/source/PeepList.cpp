@@ -67,8 +67,8 @@ bool PeepList::FindTarget(OCODE *ip, int reg)
 {
 	for (; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->opcode == op_call || ip->opcode == op_jal) {
-				if (reg == 1 || reg == 2)
+			if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode==op_jsr) {
+				if (reg == regFirstArg || reg == regFirstArg+1)
 					return (true);
 			}
 			if (ip->oper1->preg == reg)
@@ -292,14 +292,17 @@ int PeepList::CountSPReferences()
 		}
 		if (!inFuncBody)
 			continue;
-		if (ip->opcode == op_call || ip->opcode == op_jal) {
+		if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode == op_jsr) {
 			refSP++;
 			continue;
 		}
 		if (ip->opcode != op_label && ip->opcode != op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->insn) {
-				if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
+				if (ip->insn->opcode == op_push || ip->insn->opcode == op_pop) {
+					refSP++;
+				}
+				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
 					if (ip->oper1) {
 						if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
 							refSP++;
@@ -874,7 +877,7 @@ void PeepList::RemoveStackCode()
 					ip->MarkRemove();
 			}
 		}
-		if (ip->opcode == op_ret)
+		if (ip->opcode == op_ret || ip->opcode == op_rts)
 			if (ip->oper1)
 				ip->oper1->offset->i = 0;
 	}
@@ -886,7 +889,8 @@ void PeepList::RemoveStackAlloc()
 
 	for (ip = head; ip; ip = ip->fwd) {
 		if (ip->insn) {
-			if ((ip->opcode == op_add || ip->opcode == op_sub) && ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
+			if ((ip->opcode == op_add || ip->opcode == op_sub || ip->opcode == op_gcsub) &&
+				ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
 				ip->MarkRemove();
 			}
 		}

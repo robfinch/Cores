@@ -68,7 +68,8 @@ Statement *Function::ParseBody()
 		GenerateMonadic(op_fnname, 0, MakeStringAsNameConst(p, codeseg));
 	currentFn = this;
 	IsLeaf = TRUE;
-	DoesThrow = FALSE;
+	DoesThrow = false;
+	doesJAL = false;
 	UsesPredicate = FALSE;
 	UsesNew = FALSE;
 	regmask = 0;
@@ -490,10 +491,19 @@ void Function::UnlinkStack()
 	}
 	*/
 	GenerateMonadic(op_hint, 0, MakeImmediate(begin_stack_unlink));
-	GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
-	GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
-	if (!IsLeaf) {
-		GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
+	if (!IsLeaf && doesJAL) {
+		if (alstk)
+			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord + stkspace, regSP));
+	}
+	if (cpu.SupportsUnlink)
+		GenerateZeradic(op_unlk);
+	else {
+		GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
+		GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
+	}
+	if (!IsLeaf && doesJAL) {
+		if (!alstk)
+			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
 	}
 	//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),MakeImmediate(3*sizeOfWord));
 	GenerateMonadic(op_hint, 0, MakeImmediate(end_stack_unlink));
@@ -525,7 +535,7 @@ bool Function::GenDefaultCatch()
 
 int64_t Function::SizeofReturnBlock()
 {
-	return ((int64_t)(IsLeaf ? 1 : 2));
+	return ((int64_t)(IsLeaf ? 1 : doesJAL ? 2 : 1));
 }
 
 // For a leaf routine don't bother to store the link register.
@@ -533,15 +543,31 @@ void Function::SetupReturnBlock()
 {
 	Operand *ap;
 	int n;
-
+	
+	alstk = false;
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
-	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate((IsLeaf ? 1 : 2) *sizeOfWord));
-	GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
+	if (cpu.SupportsLink) {
+		if (stkspace < 65536 * 8) {
+			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord + stkspace));
+			//spAdjust = pl.tail;
+			alstk = true;
+		}
+		else
+			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+	}
+	else {
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+		GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
+	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
 	n = 0;
-	if (!IsLeaf) {
+	if (!IsLeaf && doesJAL) {
 		n |= 2;
-		GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord, regSP));
+		if (alstk) {
+			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord + stkspace, regSP));
+		}
+		else
+			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord, regSP));
 	}
 	/*
 	switch (n) {
@@ -554,11 +580,12 @@ void Function::SetupReturnBlock()
 	retlab = nextlabel++;
 	ap = MakeDataLabel(retlab);
 	ap->mode = am_imm;
-	if (exceptions && DoesThrow)
-		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
-	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
-	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(stkspace));
-	spAdjust = pl.tail;
+	if (!cpu.SupportsLink)
+		GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
+	if (!alstk) {
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(stkspace));
+		//spAdjust = pl.tail;
+	}
 	GenerateMonadic(op_hint, 0, MakeImmediate(end_return_block));
 }
 
@@ -712,7 +739,10 @@ void Function::GenReturn(Statement *stmt)
 		return;
 	}
 	UnlinkStack();
-	toAdd = SizeofReturnBlock() * sizeOfWord;
+	if (!alstk)
+		toAdd = SizeofReturnBlock() * sizeOfWord;
+	else
+		toAdd = sizeOfWord;
 
 	if (epilog) {
 		epilog->Generate();
@@ -765,8 +795,14 @@ void Function::GenReturn(Statement *stmt)
 		return;
 	}
 
-	if (!IsInline)
-		GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_rts, 0, MakeImmediate(toAdd));
+	if (!IsInline) {
+		if (toAdd > 65536)
+			;
+		else if (toAdd == sizeOfWord)
+			GenerateZeradic(currentFn->IsLeaf ? op_rtl : op_rts);
+		else
+			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_rts, 0, MakeImmediate(toAdd));
+	}
 	else
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
 }

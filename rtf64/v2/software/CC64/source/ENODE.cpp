@@ -558,8 +558,10 @@ void ENODE::repexpr()
 		p[1]->repexpr();
 		break;
 	*/
-	case en_ref:
 	case en_fieldref:
+		bit_offset->repexpr();
+		bit_width->repexpr();
+	case en_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_regvar;
@@ -819,8 +821,10 @@ void ENODE::scanexpr(int duse)
 	case en_chw:
 		p[0]->scanexpr(duse);
 		break;
-	case en_ref:
 	case en_fieldref:
+		bit_offset->scanexpr(duse);
+		bit_width->scanexpr(duse);
+	case en_ref:
 		OptInsertRef(duse);
 		break;
 	case en_uminus:
@@ -1563,7 +1567,7 @@ Operand *ENODE::GenerateUnary(int flags, int size, int op)
 
 // Generate code for a binary expression
 
-Operand *ENODE::GenBinary(int flags, int size, int op)
+Operand *ENODE::GenerateBinary(int flags, int size, int op)
 {
 	Operand *ap1 = nullptr, *ap2 = nullptr, *ap3, *ap4;
 	bool dup = false;
