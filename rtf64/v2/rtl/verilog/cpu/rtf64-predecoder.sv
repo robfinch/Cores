@@ -107,6 +107,7 @@ casez(i)
 `BNEZ:    o = 8'h13;
 `BBC:     o = 8'h14;
 `BBS:     o = 8'h14;
+`RTX:     o = 8'h11;
 `JSR18:   o = 8'h13;
 `BT:      o = 8'h12;
 `CI:      o = 8'h22;
@@ -123,6 +124,7 @@ casez(i)
 `LDORS:   o = 8'h43;
 `LDOT:    o = 8'h43;
 `LEAS:    o = 8'h43;
+`UNLINK:  o = 8'h41;
 `POP:     o = 8'h42;
 `PLDOS:   o = 8'h43;
 `FLDOS:   o = 8'h43;
@@ -147,6 +149,7 @@ casez(i)
 `STOTS:   o = 8'h43;
 `PUSHC:   o = 8'h44;
 `PUSH:    o = 8'h42;
+`LINK:    o = 8'h43;
 `FSTOS:   o = 8'h43;
 `PSTOS:   o = 8'h43;
 `STM:     o = 8'h46;

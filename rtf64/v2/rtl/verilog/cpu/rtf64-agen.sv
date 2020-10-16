@@ -90,6 +90,7 @@ casez(inst[`OPCODE])
 	  else
 	    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[22:18]};
 	`POP:   ma <= a;
+	`UNLINK:  ma <= a;
 //	`AMO:		ma <= a;
 	default:	;
 	endcase
@@ -107,6 +108,8 @@ casez(inst[`OPCODE])
 		ma <= a - 8'd8;
 	`PUSH:
 		ma <= a - 8'd8;
+  `LINK:
+    ma <= a - 8'd8;
 	default:	;
 	endcase
 `OSR2:

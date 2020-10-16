@@ -22,8 +22,11 @@
 //                                                                          
 // ============================================================================
 
+`include "../inc/rtf64-config.sv"
+
 module rtf64_TLB(rst_i, clk_i, asid_i, umode_i,xlaten_i,we_i,ladr_i,iacc_i,iadr_i,padr_o,acr_o,tlben_i,wrtlb_i,tlbadr_i,tlbdat_i,tlbdat_o,tlbmiss_o);
 parameter AWID=32;
+parameter RSTIP = 64'hFFFFFFFFFFFC0100;
 input rst_i;
 input clk_i;
 input [7:0] asid_i;
@@ -44,6 +47,7 @@ output reg tlbmiss_o;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
+wire [AWID-1:0] rstip = RSTIP;
 reg [63:0] tadri0, tadri1, tadri2, tadri3;
 reg wr0,wr1,wr2,wr3, wed;
 reg hit0,hit1,hit2,hit3;
@@ -163,10 +167,16 @@ TLBRam u4 (
 );
 
 always @(posedge clk_g)
+if (rst_i)
+  padr_o[13:0] <= rstip[13:0];
+else
   padr_o[13:0] <= iacc_i ? iadr_i[13:0] : ladr_i[13:0];
 
 always @(posedge clk_g)
-begin
+if (rst_i) begin
+  padr_o[AWID-1:14] <= rstip[AWID-1:14];
+end
+else begin
   if (pe_xlat) begin
     hit0 <= 1'b0;
     hit1 <= 1'b0;

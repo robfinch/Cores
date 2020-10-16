@@ -166,13 +166,16 @@ wire st_execute = state==EXECUTE;
 // stage. This means that if something goes wrong with the load the stack
 // pointer will already have been updated.
 wire wr_pop = state==EXECUTE && opcode==`POP;
+wire wr_link = (state==EXECUTE && (opcode==`LINK || opcode==`UNLINK)) ||
+               (state==MEMORY1 && opcode==`LINK);
+wire wr_rf = (st_writeback | wr_pop | wr_link) & wrirf;
 
 // It takes 6 block rams to get triple output ports with 32 sets of 32 regs.
 
 regfile64 uirfRs1 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf & (st_writeback|wr_pop)),      // input wire [0 : 0] wea
+  .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(irfoRd),  // output wire [63 : 0] douta
@@ -187,7 +190,7 @@ regfile64 uirfRs1 (
 regfile64 uirfRs2 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf & (st_writeback|wr_pop)),      // input wire [0 : 0] wea
+  .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
@@ -202,7 +205,7 @@ regfile64 uirfRs2 (
 regfile64 uirfRs3 (
   .clka(clk_g),    // input wire clka
   .ena(1'b1),      // input wire ena
-  .wea(wrirf & (st_writeback|wr_pop)),      // input wire [0 : 0] wea
+  .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
@@ -684,12 +687,12 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg wr_ci_tbl;
 reg rd_ci;
-reg [31:0] ci_tbl [0:255];
+reg [31:0] ci_tbl [0:511];
 always @(posedge clk_g)
   if (wr_ci_tbl)
-      ci_tbl[ia[7:0]] <= ib[31:0];
-wire [31:0] ci_tblo2 = ci_tbl[ia[7:0]];
-wire [31:0] ci_tblo = ci_tbl[{ir[15:8]}];
+      ci_tbl[ia[8:0]] <= ib[31:0];
+wire [31:0] ci_tblo2 = ci_tbl[ia[8:0]];
+wire [31:0] ci_tblo = ci_tbl[{ir[0],ir[15:8]}];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1650,7 +1653,7 @@ DECODE:
         if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
           tException(`FLT_BT, ipc);
       end
-    `JLR:
+    `JAL:
       begin
         // Assume instruction will not crap out and write ra0,ra1 here rather
         // than at WRITEBACK.
@@ -1699,6 +1702,16 @@ DECODE:
         Rs1 <= 5'd31;
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
+        d_wha <= TRUE;
+        illegal_insn <= 1'b0;
+      end
+    `RTX:
+      begin
+        d_rts <= TRUE;
+        Rd <= 5'd27;
+        Rs1 <= 5'd27;
+        wrirf <= 1'b1;
+        imm <= 64'd8;
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
       end
@@ -1766,6 +1779,32 @@ DECODE:
         d_ld <= TRUE; 
         illegal_insn <= 1'b0;
       end
+    `FLDO:
+      begin
+        Rd <= ir[12:8];
+        Rdx <= 5'h01;
+        wrirf <= 1'b1;
+        if (ir[30])
+          imm <= {{52{ir[29]}},ir[29:18]};
+        else
+          imm <= {{58{ir[29]}},ir[29],ir[22:18]};
+        wrcrf <= ir[31];
+        illegal_insn <= 1'b0;
+        d_ld <= TRUE;
+      end
+    `PLDO:
+      begin
+        Rd <= ir[12:8];
+        Rdx <= 5'h02;
+        wrirf <= 1'b1;
+        if (ir[30])
+          imm <= {{52{ir[29]}},ir[29:18]};
+        else
+          imm <= {{58{ir[29]}},ir[29],ir[22:18]};
+        wrcrf <= ir[31];
+        illegal_insn <= 1'b0;
+        d_ld <= TRUE;
+      end
     `LEA:  
       begin
         Rd <= ir[12:8];
@@ -1822,9 +1861,32 @@ DECODE:
         d_stot <= TRUE;
         Cs <= ir[19:18];
       end
+    `FSTO:  
+      begin
+        Rd <= ir[12:8];
+        Rdx <= 5'h01;
+        if (ir[30])
+          imm <= {{52{ir[29]}},ir[29:23],ir[12:8]};
+        else
+          imm <= {{58{ir[29]}},ir[29],ir[12:8]};
+        illegal_insn <= 1'b0;
+        d_st <= TRUE;
+      end
+    `PSTO:
+      begin
+        Rd <= ir[12:8];
+        Rdx <= 5'h02;
+        if (ir[30])
+          imm <= {{52{ir[29]}},ir[29:23],ir[12:8]};
+        else
+          imm <= {{58{ir[29]}},ir[29],ir[12:8]};
+        illegal_insn <= 1'b0;
+        d_st <= TRUE;
+      end
     `PUSH:
       begin
         Rd <= ir[12:8];
+        Cs <= ir[9:8];
         wrirf <= TRUE;
         d_st = TRUE;
         illegal_insn <= FALSE;
@@ -1838,6 +1900,37 @@ DECODE:
       end
     `POP:
       begin
+        casez(ir[14:8])
+        7'b110000?: begin rad <= ir[8]; wrra <= 1'b1; end
+        7'b110001?: begin rad <= ir[8]; wrca <= 1'b1; end
+        7'b11100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+        7'b1111101: begin wrcrf32 <= 1'b1; end
+        default:  wrirf <= TRUE;
+        endcase
+        illegal_insn <= FALSE;
+      end
+    // step1:
+    //  select frame pointer to store
+    //  copy stack pointer to frame pointer
+    // step2:
+    //  write frame pointer to memory
+    //  subtract allocation from stack pointer
+    `LINK:
+      begin
+        Rs1 <= 5'd31;   // stack pointer
+        Rs2 <= 5'd30;   // frame pointer
+        Rd <= 5'd30;
+        imm <= {ir[23:8],3'd0};
+        wrirf <= TRUE;
+        illegal_insn <= FALSE;
+      end
+    // step1:
+    //  copy frame pointer to stack pointer
+    // step2:
+    //  load frame pointer from stack
+    `UNLINK:
+      begin
+        Rs1 <= 5'd30;
         wrirf <= TRUE;
         illegal_insn <= FALSE;
       end
@@ -1923,7 +2016,7 @@ REGFETCH1:
 REGFETCH2:
   begin
     case(opcode)
-    `JLR:
+    `JAL:
       pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + (ir[9] ? cao : {AWID{1'd0}});
     `JSR:
       case(ir[9:8])
@@ -1950,6 +2043,17 @@ REGFETCH3:
     else
       id <= Rd==5'd0 ? 64'd0 : irfoRd;
 		case(opcode)
+    `PUSH
+       begin
+        casez(ir[14:8])
+        7'b110000?: id <= rao;
+        7'b110001?: id <= cao;
+        7'b1100111: id <= epc[crs];
+        7'b11100??: id <= cd2;
+        7'b1111101: id <= cds322;
+        default:  id <= irfoRd;
+        endcase
+      end
 		`FSTO:  id <= Rs2==5'd0 ? 64'd0 : frfob;
 		`FLT2:
 			case(fltfunct5)
@@ -2598,7 +2702,7 @@ EXECUTE:
         res <= ia + imm;
         pc <= ret_pc + {ir[12:9],2'b00};
       end
-    `RTS: 
+    `RTS,`RTX: 
       begin
         res <= ia + imm;
         goto (MEMORY1);
@@ -2708,7 +2812,7 @@ EXECUTE:
     // Address generation is done by a module above.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     `LDBS,`LDBUS,`LDWS,`LDWUS,`LDTS,`LDTUS,`LDOS,`LDORS,
-    `STBS,`STWS,`STTS,`STOS,`STOCS,`STPTRS,`LEAS:    
+    `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`LEAS:    
       goto (MEMORY1);
     `LDB,`LDBU,`STB:
       goto (MEMORY1);
@@ -2716,7 +2820,7 @@ EXECUTE:
       goto (MEMORY1);
     `LDT,`LDTU,`STT:
       goto (MEMORY1);
-    `LDO,`LDOR,`LDOT,`FLDO,`PLDO,`STO,`STOC,`STPTR,`FSTO,`PSTO,`LEA:
+    `LDO,`LDOR,`LDOT,`FLDO,`PLDO,`STO,`STOC,`STOT,`STPTR,`FSTO,`PSTO,`LEA:
       goto (MEMORY1);
     `PUSH,`PUSHC:
       begin
@@ -2725,8 +2829,20 @@ EXECUTE:
       end
     `POP:
       begin
-        Rd = 5'd31;
+        Rd <= 5'd31;
         res <= ia + 4'd8;
+        goto (MEMORY1);
+      end
+    `LINK:
+      begin
+        Rd <= 5'd30;
+        res <= ia;
+        goto (MEMORY1);
+      end
+    `UNLINK:
+      begin
+        Rd <= 5'd31;
+        res <= ia;
         goto (MEMORY1);
       end
 
@@ -2872,6 +2988,10 @@ PAGEMAPA:
   end
 MEMORY1:
   begin
+    if (opcode==`LINK) begin
+      Rd <= 5'd31;
+      res <= ia + imm;
+    end
 `ifdef RTF64_TLB
     goto (MEMORY1a);
 `else
@@ -2939,8 +3059,8 @@ MEMORY3:
       dat_o <= dat[31:0];
 `endif
       case(opcode)
-      `STB,`STW,`STT,`STO,`STOC,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
+      `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         we_o <= HIGH;
       default:  ;
       endcase
@@ -2969,8 +3089,8 @@ MEMORY5:
       goto (MEMORY6);
     else begin
       case(opcode)
-      `STB,`STW,`STT,`STO,`STOC,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
+      `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         goto (IFETCH1);
       `JSR,`JSR18:
         goto (WRITEBACK);
@@ -3052,8 +3172,8 @@ MEMORY10:
 `endif
     begin
       case(opcode)
-      `STB,`STW,`STT,`STO,`STOC,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
+      `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         goto (IFETCH1);
       `JSR,`JSR18:
         goto (WRITEBACK);
@@ -3114,8 +3234,8 @@ MEMORY14:
 MEMORY15:
   if (~acki) begin
     case(opcode)
-    `STB,`STW,`STT,`STO,`STOC,`STPTR,`FSTO,`PSTO,
-    `STBS,`STWS,`STTS,`STOS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
+    `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
+    `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
       goto (IFETCH1);
     `JSR,`JSR18:
       goto (WRITEBACK);
@@ -3137,7 +3257,10 @@ DATA_ALIGN:
     `LDOT:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
     `LDOR,`LDORS: res <= datis[63:0];
     `FLDO,`PLDO:  res <= datis[63:0];
-    `RTS:   pc <= datis[63:0] + {ir[12:9],2'b00};
+    `RTS:    pc <= datis[63:0] + {ir[12:9],2'b00};
+    `RTX:    pc <= datis[63:0];
+    `UNLINK:  begin res <= datis[63:0]; Rd <= 5'd30; end
+    `POP:   begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; res <= datis[63:0]; end
     default:  ;
     endcase
   end
@@ -3618,9 +3741,16 @@ WRITEBACK:
       endcase
     `POP:
       begin
-        wrirf <= ir[14:13]==2'b00;
-        wrfrf <= ir[14:13]==2'b01;
-        wrprf <= ir[14:13]==2'b10;
+        casez(ir[14:8])
+        7'b00?????: wrirf <= TRUE;
+        7'b01?????: wrirf <= TRUE;
+        7'b10?????: wrirf <= TRUE;
+        7'b110000?: wrra <= TRUE;
+        7'b110001?: wrca <= TRUE;
+        7'b11100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+        7'b1111101: wrcrf32 <= TRUE;
+        default:  ;
+        endcase
         Rd <= ir[12:8];  // This got reset to SP above.
       end
     endcase
