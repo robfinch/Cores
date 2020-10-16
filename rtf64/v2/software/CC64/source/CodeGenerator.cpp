@@ -220,6 +220,370 @@ ENODE* FindAnd(ENODE *node)
 	}
 }
 
+Operand* CodeGenerator::GenerateFieldrefDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = GenerateExpression(node, am_reg | am_mem, sizeOfWord);
+	ap1->bit_offset = node->bit_offset;
+	ap1->bit_width = node->bit_width;
+	ap1->isPtr = isRefType;
+	ap1->tp = tp;
+	ap1->segment = dataseg;
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
+{
+	Operand* ap1;
+
+	ap1 = node->GenIndex();
+	ap1->isUnsigned = !su;//node->isUnsigned;
+// *** may have to fix for stackseg
+	ap1->segment = dataseg;
+	ap1->tp = tp;
+	ap1->bit_offset = node->bit_offset;
+	ap1->bit_width = node->bit_width;
+	//		ap2->mode = ap1->mode;
+	//		ap2->segment = dataseg;
+	//		ap2->offset = ap1->offset;
+	//		ReleaseTempRegister(ap1);
+	if (!node->isUnsigned)
+		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+	else
+		ap1->MakeLegal(flags, siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regFP;
+	ap1->segment = stackseg;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->argref = node->sym->IsParameter;
+	ap1->isUnsigned = !su;
+	ap1->tp = tp;
+	if (!node->isUnsigned)
+		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+	else
+		ap1->MakeLegal(flags, siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regCLP;
+	ap1->segment = dataseg;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->isUnsigned = !su;
+	ap1->tp = tp;
+	if (!node->isUnsigned)
+		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+	else
+		ap1->MakeLegal(flags, siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAutofconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regFP;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->tp = tp;
+	if (node->tp)
+		switch (node->tp->precision) {
+		case 32: ap1->FloatSize = 's'; break;
+		case 40: ap1->FloatSize = 's'; break;
+		case 64: ap1->FloatSize = 'd'; break;
+		case 80: ap1->FloatSize = 'd'; break;
+		default: ap1->FloatSize = 'd'; break;
+		}
+	else
+		ap1->FloatSize = 'd';
+	ap1->segment = stackseg;
+	switch (node->tp->type) {
+	case bt_float:	ap1->type = stdflt.GetIndex(); break;
+	case bt_double:	ap1->type = stddouble.GetIndex(); break;
+	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	}
+	//	    ap1->MakeLegal(flags,siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	if (use_gp)
+	{
+		ap1->mode = am_indx;
+		switch (node->segment) {
+		case dataseg:	ap1->preg = regGP; break;
+		case rodataseg: ap1->preg = regGP1; break;
+		case tlsseg:	ap1->preg = regTP; break;
+		default:	ap1->preg = regPP; break;
+		}
+		ap1->segment = node->segment;
+	}
+	else
+	{
+		ap1->mode = am_direct;
+		ap1->preg = 0;
+		ap1->segment = dataseg;
+	}
+	ap1->offset = node;//makeinode(en_icon,node->p[0]->i);
+	ap1->tp = tp;
+	ap1->isUnsigned = !su;
+	if (!node->isUnsigned)
+		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+	else
+		ap1->MakeLegal(flags, siz1);
+	ap1->isVolatile = node->isVolatile;
+	switch (node->tp->type) {
+	case bt_float:	ap1->type = stdflt.GetIndex(); break;
+	case bt_double:	ap1->type = stddouble.GetIndex(); break;
+	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	}
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAutovconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regFP;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->tp = tp;
+	if (node->tp)
+		switch (node->tp->precision) {
+		case 32: ap1->FloatSize = 's'; break;
+		case 64: ap1->FloatSize = 'd'; break;
+		default: ap1->FloatSize = 'd'; break;
+		}
+	else
+		ap1->FloatSize = 'd';
+	ap1->segment = stackseg;
+	ap1->type = stdvector.GetIndex();
+	//	    ap1->MakeLegal(flags,siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAutovmconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regFP;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->tp = tp;
+	if (node->tp)
+		switch (node->tp->precision) {
+		case 32: ap1->FloatSize = 's'; break;
+		case 64: ap1->FloatSize = 'd'; break;
+		default: ap1->FloatSize = 'd'; break;
+		}
+	else
+		ap1->FloatSize = 'd';
+	ap1->segment = stackseg;
+	ap1->type = stdvectormask->GetIndex();
+	//	    ap1->MakeLegal(flags,siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+
+	// For parameters we want Rn, for others [Rn]
+	// This seems like an error earlier in the compiler
+	// See setting val_flag in ParseExpressions
+	ap1->mode = (node->rg >= regFirstArg && node->rg <= regLastArg) ? am_reg : am_ind;
+	//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
+	ap1->preg = node->rg;
+	ap1->tp = tp;
+	ap1->isUnsigned = node->tp->isUnsigned;
+	ap1->MakeLegal(flags, size);
+	Leave("Genderef", 3);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	/*error(ERR_DEREF)*/;
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = node->rg < regFirstArg ? am_ind : am_fpreg;
+	ap1->preg = node->rg;
+	ap1->tp = tp;
+	switch (node->tp->type) {
+	case bt_float:	ap1->type = stdflt.GetIndex(); break;
+	case bt_double:	ap1->type = stddouble.GetIndex(); break;
+	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	}
+	ap1->MakeLegal(flags, size);
+	Leave("</Genderef>", 3);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateLabconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	if (use_gp)
+	{
+		ap1->mode = am_indx;
+		switch (node->segment) {
+		case dataseg:	ap1->preg = regGP; break;
+		case rodataseg: ap1->preg = regGP1; break;
+		case tlsseg:	ap1->preg = regTP; break;
+		default:	ap1->preg = regPP; break;
+		}
+		ap1->segment = node->segment;
+	}
+	else
+	{
+		ap1->mode = am_direct;
+		ap1->preg = 0;
+		ap1->segment = node->segment;
+	}
+	ap1->offset = node;//makeinode(en_icon,node->p[0]->i);
+	ap1->tp = tp;
+	ap1->isUnsigned = !su;
+	if (!node->isUnsigned)
+		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+	else
+		ap1->MakeLegal(flags, siz1);
+	ap1->isVolatile = node->isVolatile;
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateBitoffsetDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int opt)
+{
+	Operand* ap1, * ap2, * ap3, * ap4;
+
+	OCODE* ip;
+	ap4 = GetTempRegister();
+	ap1 = GenerateExpression(node->p[0], am_reg, sizeOfWord);
+	if (opt) {
+		ip = currentFn->pl.tail;
+		ap2 = GenerateExpression(node->p[1], am_reg | am_imm | am_imm0, sizeOfWord);
+		ap3 = GenerateExpression(node->p[2], am_reg | am_imm | am_imm0, sizeOfWord);
+		if (ap2->mode != ap3->mode) {
+			ReleaseTempReg(ap3);
+			ReleaseTempReg(ap2);
+			currentFn->pl.tail = ip;
+			ap2 = GenerateExpression(node->p[1], am_reg, sizeOfWord);
+			ap3 = GenerateExpression(node->p[2], am_reg, sizeOfWord);
+		}
+		Generate4adic(tp->isUnsigned ? op_extu : op_ext, 0, ap4, ap1, ap2, ap3);
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+	}
+	else
+		ap4 = ap1;
+	ap4->bit_offset = node->p[1];
+	ap4->bit_width = node->p[2];
+	//ap4->isPtr = node->IsRefType();
+
+	// For parameters we want Rn, for others [Rn]
+	// This seems like an error earlier in the compiler
+	// See setting val_flag in ParseExpressions
+	//		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_reg;
+			//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
+	//		ap1->preg = node->p[0]->rg;
+	ap4->tp = tp;
+	ap4->isUnsigned = node->tp->isUnsigned;
+	ap4->MakeLegal(flags, size);
+	Leave("Genderef", 3);
+	return (ap4);
+}
+
+Operand* CodeGenerator::GenerateDereference2(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, int opt)
+{
+	Operand* ap1, * ap2, * ap3, * ap4;
+
+	switch (node->nodetype) {
+	case en_fieldref: return (GenerateFieldrefDereference(node, tp, isRefType, flags, size));
+	case en_add: return (GenerateAddDereference(node, tp, isRefType, flags, size, siz1, su));
+	case en_autocon: return (GenerateAutoconDereference(node, tp, isRefType, flags, size, siz1, su));
+	case en_classcon: return (GenerateClassconDereference(node, tp, isRefType, flags, size, siz1, su));
+	case en_autofcon: return (GenerateAutofconDereference(node, tp, isRefType, flags, size));
+	case en_nacon: return (GenerateNaconDereference(node, tp, isRefType, flags, size, siz1, su));
+	case en_autovcon: return (GenerateAutovconDereference(node, tp, isRefType, flags, size));
+	case en_autovmcon: return (GenerateAutovmconDereference(node, tp, isRefType, flags, size));
+	case en_labcon: return (GenerateLabconDereference(node, tp, isRefType, flags, size, siz1, su));
+	case en_regvar: return (GenerateRegvarDereference(node, tp, isRefType, flags, size));
+	case en_fpregvar: return (GenerateFPRegvarDereference(node, tp, isRefType, flags, size));
+	case en_bitoffset: return (GenerateBitoffsetDereference(node, tp, isRefType, flags, size, opt));
+	default:	return (nullptr);
+	}
+/*
+	if (node->nodetype == en_vex) {
+		Operand* ap2;
+		if (node->nodetype == en_vector_ref) {
+			ap1 = GenerateDereference(node->p[0], am_reg, 8, 0, 0);
+			ap2 = GenerateExpression(node->p[1], am_reg, 8);
+			if (ap1->offset && ap2->offset) {
+				GenerateTriadic(op_add, 0, ap1, makereg(0), MakeImmediate(ap2->offset->i));
+			}
+			ReleaseTempReg(ap2);
+			//ap1->mode = node->p[0]->i < 18 ? am_ind : am_reg;
+			//ap1->preg = node->p[0]->i;
+			ap1->type = stdvector.GetIndex();
+			ap1->MakeLegal(flags, size);
+			return (ap1);
+		}
+	}
+*/
+	return (nullptr);
+}
+
 //
 //  Return the addressing mode of a dereferenced node.
 //
@@ -237,329 +601,13 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	//	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
 	//		return GenerateExpression(node, am_reg | am_mem, size);
 	//	}
-	/*
-	if (node->nodetype==en_fieldref && (node->p[0]->nodetype == en_ext || node->p[0]->nodetype == en_extu)) {
-		//ap1 = GenerateExpression(node->p[0], am_reg | am_mem, sizeOfWord);
-		ap1 = GetTempRegister();
-		ap1->offset = node->p[0];
-		ap1->tp = node->tp;
-		ap1->segment = dataseg;
-		ap1->MakeLegal(flags, size);
-		return (ap1);
-	}
-	*/
-	if (node->p[0]->nodetype == en_bitoffset) {
-		OCODE* ip;
-		ap4 = GetTempRegister();
-		ap1 = GenerateExpression(node->p[0]->p[0], am_reg, sizeOfWord);
-		if (opt) {
-			ip = currentFn->pl.tail;
-			ap2 = GenerateExpression(node->p[0]->p[1], am_reg | am_imm | am_imm0, sizeOfWord);
-			ap3 = GenerateExpression(node->p[0]->p[2], am_reg | am_imm | am_imm0, sizeOfWord);
-			if (ap2->mode != ap3->mode) {
-				ReleaseTempReg(ap3);
-				ReleaseTempReg(ap2);
-				currentFn->pl.tail = ip;
-				ap2 = GenerateExpression(node->p[0]->p[1], am_reg, sizeOfWord);
-				ap3 = GenerateExpression(node->p[0]->p[2], am_reg, sizeOfWord);
-			}
-			Generate4adic(node->tp->isUnsigned ? op_extu : op_ext, 0, ap4, ap1, ap2, ap3);
-			ReleaseTempReg(ap3);
-			ReleaseTempReg(ap2);
-			ReleaseTempReg(ap1);
+	ap1 = GenerateDereference2(node->p[0], node->tp, node->IsRefType(), flags, size, siz1, su, opt);
+	if (ap1) {
+		if (node->nodetype == en_fieldref) {
+			ap1->bit_offset = node->bit_offset;
+			ap1->bit_width = node->bit_width;
 		}
-		else
-			ap4 = ap1;
-		ap4->bit_offset = node->p[0]->p[1];
-		ap4->bit_width = node->p[0]->p[2];
-		ap4->isPtr = node->IsRefType();
-
-		// For parameters we want Rn, for others [Rn]
-		// This seems like an error earlier in the compiler
-		// See setting val_flag in ParseExpressions
-//		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_reg;
-		//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
-//		ap1->preg = node->p[0]->rg;
-		ap4->tp = node->tp;
-		ap4->isUnsigned = node->tp->isUnsigned;
-		ap4->MakeLegal(flags, size);
-		Leave("Genderef", 3);
-		return (ap4);
-	}
-    if( node->p[0]->nodetype == en_add )
-    {
-//    ap2 = GetTempRegister();
-      ap1 = node->p[0]->GenIndex();
-//        GenerateTriadic(op_add,0,ap2,makereg(ap1->preg),makereg(regGP));
-			ap1->isUnsigned = !su;//node->isUnsigned;
-		// *** may have to fix for stackseg
-			ap1->segment = dataseg;
-//		ap2->mode = ap1->mode;
-//		ap2->segment = dataseg;
-//		ap2->offset = ap1->offset;
-//		ReleaseTempRegister(ap1);
-			if (!node->isUnsigned)
-				ap1 = ap1->GenSignExtend(siz1,size,flags);
-			else
-				ap1->MakeLegal(flags,siz1);
-      ap1->MakeLegal(flags,size);
-			return (ap1);
-		}
-
-  if(node->p[0]->nodetype == en_autocon)
-  {
-    ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->tp = node->tp;
-		ap1->mode = am_indx;
-		ap1->preg = regFP;
-		ap1->segment = stackseg;
-		ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->isUnsigned = !su;
-		ap1->tp = node->tp;
-		if (!node->isUnsigned)
-			ap1 = ap1->GenSignExtend(siz1,size,flags);
-		else
-			ap1->MakeLegal(flags,siz1);
-		ap1->MakeLegal(flags,size);
-		return (ap1);
-  }
-
-    if( node->p[0]->nodetype == en_classcon )
-    {
-        ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_indx;
-        ap1->preg = regCLP;
-		ap1->segment = dataseg;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->isUnsigned = !su;
-		ap1->tp = node->tp;
-		if (!node->isUnsigned)
-	    ap1 = ap1->GenSignExtend(siz1,size,flags);
-		else
-		  ap1->MakeLegal(flags,siz1);
-    ap1->MakeLegal(flags,size);
-		goto xit;
-    }
-    else if( node->p[0]->nodetype == en_autofcon )
-    {
-    ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_indx;
-    ap1->preg = regFP;
-    ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->tp = node->tp;
-		if (node->p[0]->tp)
-			switch(node->p[0]->tp->precision) {
-			case 40: ap1->FloatSize = 's'; break;
-			case 80: ap1->FloatSize = 'd'; break;
-			default: ap1->FloatSize = 'd'; break;
-			}
-		else
-			ap1->FloatSize = 'd';
-		ap1->segment = stackseg;
-		switch (node->p[0]->tp->type) {
-		case bt_float:	ap1->type = stdflt.GetIndex(); break;
-		case bt_double:	ap1->type = stddouble.GetIndex(); break;
-		case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-		case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-		}
-//	    ap1->MakeLegal(flags,siz1);
-        ap1->MakeLegal(flags,size);
-		goto xit;
-    }
-    else if( node->p[0]->nodetype == en_autovcon )
-    {
-      ap1 = allocOperand();
-			ap1->isPtr = node->IsRefType();
-			ap1->mode = am_indx;
-      ap1->preg = regFP;
-      ap1->offset = makeinode(en_icon,node->p[0]->i);
-			ap1->offset->sym = node->p[0]->sym;
-			ap1->tp = node->tp;
-			if (node->p[0]->tp)
-				switch(node->p[0]->tp->precision) {
-					case 32: ap1->FloatSize = 's'; break;
-					case 64: ap1->FloatSize = 'd'; break;
-					default: ap1->FloatSize = 'd'; break;
-					}
-				else
-					ap1->FloatSize = 'd';
-			ap1->segment = stackseg;
-			ap1->type = stdvector.GetIndex();
-			//	    ap1->MakeLegal(flags,siz1);
-      ap1->MakeLegal(flags,size);
-			goto xit;
-    }
-    else if( node->p[0]->nodetype == en_autovmcon )
-    {
-        ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_indx;
-        ap1->preg = regFP;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->tp = node->tp;
-		if (node->p[0]->tp)
-			switch(node->p[0]->tp->precision) {
-			case 32: ap1->FloatSize = 's'; break;
-			case 64: ap1->FloatSize = 'd'; break;
-			default: ap1->FloatSize = 'd'; break;
-			}
-		else
-			ap1->FloatSize = 'd';
-		ap1->segment = stackseg;
-		ap1->type = stdvectormask->GetIndex();
-		//	    ap1->MakeLegal(flags,siz1);
-        ap1->MakeLegal(flags,size);
-		goto xit;
-    }
-	else if ((node->p[0]->nodetype == en_labcon) && use_gp)
-	{
-		ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_indx;
-		switch (node->p[0]->segment) {
-		case dataseg:	ap1->preg = regGP; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case tlsseg:	ap1->preg = regTP; break;
-		default:	ap1->preg = regPP; break;
-		}
-		ap1->segment = node->p[0]->segment;
-		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
-		ap1->tp = node->tp;
-		ap1->isUnsigned = !su;
-		if (!node->isUnsigned)
-			ap1 = ap1->GenSignExtend(siz1, size, flags);
-		else
-			ap1->MakeLegal( flags, siz1);
-		ap1->isVolatile = node->isVolatile;
-		ap1->MakeLegal( flags, size);
-		goto xit;
-	}
-	else if(( node->p[0]->nodetype==en_nacon ) && use_gp)
-  {
-    ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_indx;
-		switch (node->p[0]->segment) {
-		case dataseg:	ap1->preg = regGP; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case tlsseg:	ap1->preg = regTP; break;
-		default:	ap1->preg = regPP; break;
-		}
-		ap1->segment = node->p[0]->segment;
-    ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
-		ap1->tp = node->tp;
-		ap1->isUnsigned = !su;
-		if (!node->isUnsigned)
-	      ap1 = ap1->GenSignExtend(siz1,size,flags);
-		else
-		  ap1->MakeLegal(flags,siz1);
-      ap1->isVolatile = node->isVolatile;
-		switch (node->p[0]->tp->type) {
-		case bt_float:	ap1->type = stdflt.GetIndex(); break;
-		case bt_double:	ap1->type = stddouble.GetIndex(); break;
-		case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-		case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-		}
-		ap1->MakeLegal(flags,size);
-		goto xit;
-  }
-	else if ((node->p[0]->nodetype == en_labcon) && !use_gp)
-	{
-		ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_direct;
-		ap1->preg = 0;
-		ap1->segment = node->p[0]->segment;
-		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
-		ap1->tp = node->tp;
-		ap1->isUnsigned = !su;
-		if (!node->isUnsigned)
-			ap1 = ap1->GenSignExtend(siz1, size, flags);
-		else
-			ap1->MakeLegal( flags, siz1);
-		ap1->isVolatile = node->isVolatile;
-		ap1->MakeLegal( flags, size);
-		goto xit;
-	}
-	else if ((node->p[0]->nodetype == en_nacon) && !use_gp)
-	{
-		ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = am_direct;
-		ap1->preg = 0;
-		ap1->segment = dataseg;
-		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
-		ap1->tp = node->tp;
-		ap1->isUnsigned = !su;
-		if (!node->isUnsigned)
-			ap1 = ap1->GenSignExtend(siz1, size, flags);
-		else
-			ap1->MakeLegal( flags, siz1);
-		ap1->isVolatile = node->isVolatile;
-		switch (node->p[0]->tp->type) {
-		case bt_float:	ap1->type = stdflt.GetIndex(); break;
-		case bt_double:	ap1->type = stddouble.GetIndex(); break;
-		case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-		case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-		}
-		ap1->MakeLegal( flags, size);
-		goto xit;
-	}
-	else if (node->p[0]->nodetype == en_regvar) {
-    ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-
-		// For parameters we want Rn, for others [Rn]
-		// This seems like an error earlier in the compiler
-		// See setting val_flag in ParseExpressions
-		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_reg;
-//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
-		ap1->preg = node->p[0]->rg;
-		ap1->tp = node->tp;
-		ap1->isUnsigned = node->tp->isUnsigned;
-		ap1->MakeLegal(flags,size);
-	    Leave("Genderef",3);
-        return ap1;
-	}
-	else if (node->p[0]->nodetype == en_fpregvar) {
-		/*error(ERR_DEREF)*/;
-		ap1 = allocOperand();
-		ap1->isPtr = node->IsRefType();
-		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_fpreg;
-		ap1->preg = node->p[0]->rg;
-		ap1->tp = node->tp;
-		switch (node->p[0]->tp->type) {
-		case bt_float:	ap1->type = stdflt.GetIndex(); break;
-		case bt_double:	ap1->type = stddouble.GetIndex(); break;
-		case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-		case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-		}
-        ap1->MakeLegal(flags,size);
-	    Leave("</Genderef>",3);
-        return (ap1);
-	}
-	else if (node->p[0]->nodetype == en_vex) {
-		Operand *ap2;
-		if (node->p[0]->p[0]->nodetype==en_vector_ref) {
-			ap1 = GenerateDereference(node->p[0]->p[0],am_reg,8,0,0);
-			ap2 = GenerateExpression(node->p[0]->p[1],am_reg,8);
-			if (ap1->offset && ap2->offset) {
-				GenerateTriadic(op_add,0,ap1,makereg(0),MakeImmediate(ap2->offset->i));
-			}
-			ReleaseTempReg(ap2);
-			//ap1->mode = node->p[0]->i < 18 ? am_ind : am_reg;
-			//ap1->preg = node->p[0]->i;
-			ap1->type = stdvector.GetIndex();
-			ap1->MakeLegal(flags,size);
-			return (ap1);
-		}
+		return(ap1);
 	}
 	ap1 = GenerateExpression(node->p[0], am_reg | am_imm, 8); // generate address
 	ap1->isPtr = node->IsRefType();
@@ -578,26 +626,28 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 			}
 			else
 			{
-j1:
-				//        ap1->mode = am_ind;
-				if (use_gp) {
-					ap1->mode = am_indx;
-					ap1->preg = node->segment==rodataseg ? regGP1 : regGP;
+			j1:
+				if (!ap1->argref) {
+					//        ap1->mode = am_ind;
+					if (use_gp) {
+						ap1->mode = am_indx;
+						ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
+					}
+					else
+						ap1->mode = am_ind;
+					if (node->p[0]->constflag == TRUE)
+						ap1->offset = node->p[0];
+					else
+						ap1->offset = nullptr;	// ****
+					ap1->isUnsigned = !su | ap1->isPtr;
+					if (!node->isUnsigned)
+						ap1 = ap1->GenerateSignExtend(siz1, size, flags);
+					else
+						ap1->MakeLegal(flags, siz1);
+					ap1->isVolatile = node->isVolatile;
 				}
-				else
-					ap1->mode = am_ind;
-				if (node->p[0]->constflag == TRUE)
-					ap1->offset = node->p[0];
-				else
-					ap1->offset = nullptr;	// ****
-				ap1->isUnsigned = !su | ap1->isPtr;
-				if (!node->isUnsigned)
-					ap1 = ap1->GenSignExtend(siz1, size, flags);
-				else
-					ap1->MakeLegal(flags, siz1);
-				ap1->isVolatile = node->isVolatile;
+				ap1->MakeLegal(flags, size);
 			}
-      ap1->MakeLegal(flags,size);
 			goto xit;
     }
 	// Note sure about this, but immediate were being incorrectly
@@ -633,7 +683,7 @@ j1:
 	if (ap1->isPtr) {
 //		ap3 = GetTempRegister();
 		ap2 = GetTempRegister();
-		GenerateDiadic(op_ldh, 0, ap2, ap1);
+		GenerateDiadic(op_ldo, 0, ap2, ap1);
 //		GenLoad(ap3, MakeIndirect(ap2->preg), size, size);
 //		ReleaseTempRegister(ap2);
 		ap2->MakeLegal(flags, 8);
@@ -642,7 +692,7 @@ j1:
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
   ap1->isUnsigned = !su | ap1->isPtr;
 	if (!node->isUnsigned)
-	    ap1 = ap1->GenSignExtend(siz1,size,flags);
+	    ap1 = ap1->GenerateSignExtend(siz1,size,flags);
 	else
 		ap1->MakeLegal(flags,siz1);
   ap1->isVolatile = node->isVolatile;
@@ -767,7 +817,7 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
 		GenMemop(op, ap1, ap2, ssize, typ);
 	}
     ReleaseTempReg(ap2);
-    ap1 = ap1->GenSignExtend(ssize,size,flags);
+    ap1 = ap1->GenerateSignExtend(ssize,size,flags);
     ap1->MakeLegal(flags,size);
     return (ap1);
 }
@@ -1534,8 +1584,8 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ap1->isPtr = TRUE;
 		goto retpt;
 	case en_fieldref:
-		ap1 = /*(flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned,0)
-			:*/ GenerateBitfieldDereference(node, flags, node->tp->size, (flags & am_bf_assign) != 0);//!node->isUnsigned);
+		ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,node->tp->size,!node->isUnsigned, (flags & am_bf_assign) != 0)
+			: GenerateBitfieldDereference(node, flags, node->tp->size, (flags & am_bf_assign) != 0);//!node->isUnsigned);
 		goto retpt;
 	case en_regvar:
 	case en_tempref:

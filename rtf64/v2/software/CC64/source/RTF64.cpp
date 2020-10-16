@@ -256,6 +256,8 @@ Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, ENODE* offset,
 			SignExtendBitfield(ap1, mask);
 		*/
 	}
+	ReleaseTempReg(ap3);
+	ReleaseTempReg(ap2);
 	return (ap1);
 }
 
@@ -949,7 +951,7 @@ static void SaveRegisterSet(SYM *sym)
 {
 	int nn, mm;
 
-	if (!cpu.SupportsPush) {
+	if (!cpu.SupportsPush || true) {
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
 		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 		mm = 0;
@@ -967,7 +969,7 @@ static void RestoreRegisterSet(SYM * sym)
 {
 	int nn, mm;
 
-	if (!cpu.SupportsPop) {
+	if (!cpu.SupportsPop || true) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
 			GenerateDiadic(op_ldo,0,makereg(nn),cg.MakeIndexed(mm,regSP));
@@ -976,7 +978,7 @@ static void RestoreRegisterSet(SYM * sym)
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 	}
-	else
+	else // ToDo: check pop is in reverse order to push
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
 			GenerateMonadic(op_pop,0,makereg(nn));
 }
@@ -1361,7 +1363,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 				currentFn->doesJAL = true;
 			}
 			else
-				GenerateMonadic(op_jsr,0,MakeDirect(node->p[0]));
+				GenerateMonadic(op_call,0,MakeDirect(node->p[0]));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
 			LinkAutonew(node);
 		}
@@ -1426,7 +1428,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 				currentFn->doesJAL = true;
 			}
 			else
-				GenerateMonadic(op_jsr, 0, MakeIndirect(114));
+				GenerateMonadic(op_call, 0, MakeIndirect(114));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
 			LinkAutonew(node);
 		}

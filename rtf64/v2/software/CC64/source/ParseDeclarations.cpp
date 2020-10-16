@@ -1686,8 +1686,8 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 		if (declid->length() > 0 || classname->length() != 0) {      // otherwise just struct tag...
 			if (sp == nullptr) {
 				sp = allocSYM();
-				if (funcdecl > 0)
-					sp->fi = MakeFunction(sp->id, sp, isPascal, isInline);
+				//if (funcdecl > 0)
+				//	sp->fi = MakeFunction(sp->id, sp, isPascal, isInline);
 			}
 			SetType(sp);
 			if (funcdecl <= 0)

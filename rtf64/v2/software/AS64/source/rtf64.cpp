@@ -87,9 +87,10 @@
 #define I_ORUI	0x3C
 #define I_AUIIP	0x3E
 
-#define I_JLR		0x40
+#define I_JAL		0x40
 #define I_JMP		0x41
 #define I_JSR		0x42
+#define I_CALL	0x42
 #define I_RTS		0x43
 #define I_RTL		0x44
 #define I_RTE		0x45
@@ -127,6 +128,7 @@
 #define I_LDTS	0x84
 #define I_LDTUS 0x85
 #define I_LDOS	0x86
+#define I_UNLINK	0x8F
 
 #define I_LEA		0x91
 #define I_FLDO	0x92
@@ -151,11 +153,12 @@
 #define I_STOS	0xA3
 #define I_STOCS	0xA4
 #define I_STPTRS	0xA5
-
+#define I_STOTS	0xA6
 #define I_STOT	0xA8
 #define I_PUSHC	0xA9
 #define I_PUSH	0xAA
 #define I_FSTO	0xAB
+#define I_LINK	0xAD
 #define I_STX		0xAF
 #define I_STB		0xB8
 #define I_STW		0xB9
@@ -278,7 +281,7 @@
 #define I_FSLT	0x12
 #define I_FSLE	0x13
 
-#define CI_TABLE_SIZE		256
+#define CI_TABLE_SIZE		512
 
 static void (*jumptbl[tk_last_token])();
 static int64_t parm1[tk_last_token];
@@ -1718,15 +1721,23 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 //		case I_LMI:
 //			insnStats.luis++;
 //			break;
+		case I_STBS:
+		case I_STWS:
+		case I_STTS:
+		case I_STOS:
+		case I_STOCS:
+		case I_STOTS:
+			length = 3;
+			insnStats.stores++;
+			break;
 		case I_STB:
 		case I_STW:
 		case I_STT:
 		case I_STO:
+		case I_STOC:
 		case I_STOT:
-			insnStats.stores++;
-			break;
-		case I_STX:
-			insnStats.indexed++;
+			if ((oc & 0x4000000LL) == 0)
+				insnStats.indexed++;
 			insnStats.stores++;
 			break;
 		case I_PUSH:
@@ -1735,6 +1746,14 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 			break;
 		case I_PUSHC:
 			insnStats.pushes++;
+			break;
+		case I_LINK:
+			length = 3;
+			insnStats.stores++;
+			break;
+		case I_UNLINK:
+			length = 1;
+			insnStats.loads++;
 			break;
 		case I_LDBS:
 		case I_LDBUS:
@@ -1762,9 +1781,9 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 			insnStats.calls++;
 			length = 3;
 			break;
-		case I_JSR:
+		case I_CALL:
 			length = 5;
-		case I_JLR:
+		case I_JAL:
 			insnStats.calls++;
 			break;
 		case I_RTS:
@@ -3683,7 +3702,7 @@ static void process_call(int opcode, int opt)
 		inptr++;
 		rel = false;
 	}
-	if (opcode == I_JLR) {
+	if (opcode == I_JAL) {
 		lk = getRegisterX();
 		if (lk < 0) {
 			lk = opt ? 1 : 0;
@@ -3965,6 +3984,20 @@ xit:
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
+static void process_link(int64_t oc)
+{
+	int64_t amt;
+
+	NextToken();
+	amt = expr();
+	emit_insn(
+		(amt << 8LL)|
+		oc,true);
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
 static void GetIndexScale(int *sc)
 {
 	int64_t val;
@@ -4213,7 +4246,7 @@ static void process_store()
 	case I_STPTR:
 	case I_STOT:
 		if ((Ra == regFP || Ra == regSP) && Rc <= 0) {
-			if (IsNBit(val, 12) && (val & 7) == 0) {
+			if (IsNBit(val, 12LL) && (val & 7LL) == 0) {
 				emit_insn(
 					(((val >> 3LL) & 0x1ffLL) << 14LL) |
 					((Ra & 1) << 13) |
@@ -5691,6 +5724,7 @@ static void process_default()
 		break;
 	case tk_bytndx: process_rrop();
 	case tk_cache: process_cache(0x1E); break;
+	case tk_call: process_call(I_JSR, 1); break;
 	case tk_cli: emit_insn(0xC0000002); break;
 	case tk_chk:  process_chk(0x34); break;
 	case tk_cmovenz: process_cmove(6); break;
@@ -5774,11 +5808,12 @@ static void process_default()
 	case tk_itof: process_itof(0x15); break;
 	case tk_iret:	process_iret(0xC8000002); break;
 	case tk_isptr:  process_ptrop(0x06,1); break;
-	case tk_jal: process_jal(0x18); break;
-	case tk_jlr: process_call(I_JLR, 1); break;
+	//case tk_jal: process_jal(0x18); break;
+	case tk_jal: process_call(I_JAL, 1); break;
 	case tk_jmp: process_call(I_JMP,0); break;
 	case tk_jsr: process_call(I_JSR,1); break;
 	case tk_ld:	process_ld(); break;
+	case tk_link: process_link(I_LINK); break;
 		//case tk_lui: process_lui(0x27); break;
 	case tk_lsr: process_shift(I_LSR); break;
 	case tk_lv:  process_lv(0x36); break;
@@ -5873,7 +5908,7 @@ static void process_default()
 	case tk_tlbwr:   process_tlb(3); break;
 	case tk_tlbwrreg:   process_tlb(8); break;
 	case tk_tst:	process_rop(I_TST);
-		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
+	case tk_unlink: emit_insn(I_UNLINK, false); break;
 	/*
 	case tk_vadd: process_vrrop(0x04); break;
 	case tk_vadds: process_vsrrop(0x14); break;

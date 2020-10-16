@@ -250,8 +250,9 @@ bool ENODE::IsBitfield()
 		if (p[0]->nodetype == en_bitoffset)
 			return (true);
 	}
-	if (this->tp->type == bt_bit)
-		return (true);
+	if (this->tp)
+		if (this->tp->type == bt_bit)
+			return (true);
 	return (nodetype == en_fieldref);
 }
 
@@ -717,10 +718,13 @@ CSE *ENODE::OptInsertRef(int duse)
 
 	csp = nullptr;
 	// Search the chain of refs.
-	for (ep = p[0]; ep->IsRefType(); ep = ep->p[0])
-		;
+	for (ep = p[0]; ep && ep->IsRefType(); ep = ep->p[0])
+		if (ep == nullptr)
+			return (nullptr);
+	if (this == nullptr)
+		return (nullptr);
 	ep = p[0];
-	if (ep->IsAutocon()) {
+	if (ep && ep->IsAutocon()) {
 		csp = currentFn->csetbl->InsertNode(this, duse, &first);
 		// take care: the non-derereferenced use of the autocon node may
 		// already be in the list. In this case, set voidf to 1
@@ -1006,7 +1010,7 @@ void ENODE::GenerateHint(int num)
 	GenerateMonadic(op_hint, 0, MakeImmediate(num));
 }
 
-void ENODE::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
+void ENODE::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 {
 	cg.GenerateLoad(ap3, ap1, ssize, size);
 }
@@ -1210,7 +1214,7 @@ j1:
 						ap1->isPtr = true;
 					break;
 				default:
-					GenLoad(ap1, ap2, size, size);
+					GenerateLoad(ap1, ap2, size, size);
 					break;
 				}
 				break;
@@ -1227,7 +1231,7 @@ j1:
 						ap1->isPtr = true;
 					break;
 				default:
-					GenLoad(ap1, ap2, size, size);
+					GenerateLoad(ap1, ap2, size, size);
 					break;
 				}
 				break;
@@ -1264,7 +1268,7 @@ j1:
 					ap1->isPtr = true;
 				break;
 			default:
-				GenLoad(ap1, ap2, size, size);
+				GenerateLoad(ap1, ap2, size, size);
 				break;
 			}
 			break;
@@ -1281,7 +1285,7 @@ j1:
 					ap1->isPtr = true;
 				break;
 			default:
-				GenLoad(ap1, ap2, size, size);
+				GenerateLoad(ap1, ap2, size, size);
 				break;
 			}
 			break;
@@ -1422,7 +1426,7 @@ Operand *ENODE::GenerateAssignShift(int flags, int size, int op)
 		return (ap3);
 	}
 	ap1 = GetTempRegister();
-	GenLoad(ap1, ap3, size, size);
+	GenerateLoad(ap1, ap3, size, size);
 	GenerateTriadic(op, size, ap1, ap1, ap2);
 	GenStore(ap1, ap3, size);
 	ReleaseTempRegister(ap1);
@@ -1726,21 +1730,21 @@ Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
 		if (ap1->mode == am_reg) {
 			GenerateTriadic(op, 0, ap1, ap1, ap2);
-			if (ap1->offset->bit_offset < 0)
+			if (ap1->bit_offset < 0)
 				GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
 			else
-				GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+				GenerateBitfieldInsert(ap3, ap1, ap1->bit_offset, ap1->bit_width);
 			//cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		}
 		else {
-			GenLoad(ap3, ap1, size, size);
+			GenerateLoad(ap3, ap1, size, size);
 			//Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
-			ap4 = cg.GenerateBitfieldExtract(ap3, ap1->offset->bit_offset, ap1->offset->bit_width);
+			ap4 = cg.GenerateBitfieldExtract(ap3, ap1->bit_offset, ap1->bit_width);
 			GenerateTriadic(op, 0, ap4, ap4, ap2);
-			cg.GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
+			cg.GenerateBitfieldInsert(ap3, ap4, ap1->bit_offset, ap1->bit_width);
 			GenStore(ap3, ap1, ssize);
+			ReleaseTempReg(ap4);
 		}
-		ReleaseTempReg(ap4);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		ap3->MakeLegal( flags, size);
@@ -1834,7 +1838,7 @@ Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
 			ap1->MakeLegal( flags, size);
 			return (ap1);
 		}
-		ap1 = ap1->GenSignExtend(ssize, size, flags);
+		ap1 = ap1->GenerateSignExtend(ssize, size, flags);
 	}
 	ap1->MakeLegal( flags, size);
 	return (ap1);

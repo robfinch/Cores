@@ -265,7 +265,6 @@ enum {
      tk_jci,
      tk_jhi,
      tk_jgr,
-			tk_jlr,
      tk_jmp,
      tk_jsf,
      tk_jsp,

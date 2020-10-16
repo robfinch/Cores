@@ -49,7 +49,7 @@ bool Instruction::IsFlowControl()
 		opcode == op_rts ||
 		opcode == op_call ||
 		opcode == op_jsr ||
-		opcode == op_jlr ||
+		opcode == op_jal ||
 		opcode == op_bra ||
 		opcode == op_beq ||
 		opcode == op_bne ||

@@ -1980,7 +1980,7 @@ int rtf64_NextToken()
       }
 			 break;
 
-      // jal jgr jlr jmp jsf jsr jsp jci jhi
+      // jal jmp jsf jsr
       case 'j': case 'J':
 				if ((inptr[1]=='s' || inptr[1]=='S') &&
 					(inptr[2]=='r' || inptr[2]=='R') &&
@@ -1990,13 +1990,13 @@ int rtf64_NextToken()
 					tbndx++;
 					return token = tk_jsr;
 				}
-				if ((inptr[1] == 'l' || inptr[1] == 'L') &&
-					(inptr[2] == 'r' || inptr[2] == 'R') &&
+				if ((inptr[1] == 'a' || inptr[1] == 'A') &&
+					(inptr[2] == 'l' || inptr[2] == 'L') &&
 					isspaceOrDot(inptr[3])) {
 					inptr += 3;
-					tokenBuffer[tbndx] = tk_jlr;
+					tokenBuffer[tbndx] = tk_jal;
 					tbndx++;
-					return token = tk_jlr;
+					return token = tk_jal;
 				}
 				if ((inptr[1]=='s' || inptr[1]=='S') &&
 					(inptr[2]=='f' || inptr[2]=='F') &&
@@ -2218,7 +2218,16 @@ int rtf64_NextToken()
 								tbndx++;
 								return token = tk_lfd;
             }
-					if ((inptr[1]=='l' || inptr[1]=='L') &&
+						if ((inptr[1] == 'i' || inptr[1] == 'I') &&
+							(inptr[2] == 'n' || inptr[2] == 'N') &&
+							(inptr[3] == 'k' || inptr[3] == 'K') &&
+							isspaceOrDot(inptr[4])) {
+							inptr += 4;
+							tokenBuffer[tbndx] = tk_link;
+							tbndx++;
+							return token = tk_link;
+						}
+						if ((inptr[1]=='l' || inptr[1]=='L') &&
 						(inptr[2]=='a' || inptr[2]=='A') &&
 						isspaceOrDot(inptr[3])) {
 						inptr += 3;
@@ -3437,6 +3446,17 @@ int rtf64_NextToken()
 		
 		// unlink
 		case 'u': case 'U':
+			if ((inptr[1] == 'n' || inptr[1] == 'N') &&
+				(inptr[2] == 'l' || inptr[2] == 'L') &&
+				(inptr[3] == 'i' || inptr[3] == 'I') &&
+				(inptr[4] == 'n' || inptr[4] == 'N') &&
+				(inptr[5] == 'k' || inptr[5] == 'K') &&
+				isspaceOrDot(inptr[6])) {
+				inptr += 6;
+				tokenBuffer[tbndx] = tk_unlink;
+				tbndx++;
+				return token = tk_unlink;
+			}
 			break;
 
 		// vadd vdiv vmul vsub

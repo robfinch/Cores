@@ -81,7 +81,7 @@ Operand* ENODE::GenerateBitfieldDereference(int flags, int size, int opt)
 	else if (ap->mode == am_imm)
 		GenerateDiadic(op_ldi, 0, ap3, ap);
 	else	// memory
-		GenLoad(ap3, ap, esize, esize);
+		GenerateLoad(ap3, ap, esize, esize);
 	if (tmpo)
 		ap4 = cg.GenerateBitfieldExtract(ap3, tmpo, makereg(regZero));
 	else
@@ -112,16 +112,21 @@ Operand *ENODE::GenerateBitfieldAssign(int flags, int size)
 	// we don't want a bitfield dereference operation here.
 	// We want all the bits.
 	ap1 = cg.GenerateExpression(p[0],am_reg|am_mem|am_bf_assign,size);
-	ap2 = cg.GenerateExpression(p[1],am_reg,size);
 	if (ap1->mode == am_reg) {
+		ap2 = cg.GenerateExpression(p[1], am_reg, size);
 		GenerateBitfieldInsert(ap1, ap2, ap1->bit_offset, ap1->bit_width);
-		if (ap1->memref)
+		if (ap1->memref) {
 			GenStore(ap1, ap1->memop, size);
+			ReleaseTempReg(ap1->memop);
+		}
+		ReleaseTempRegister(ap2);
 	}
 	else {
 		ap3 = GetTempRegister();
-		GenLoad(ap3,ap1,size,size);
+		GenerateLoad(ap3,ap1,size,size);
+		ap2 = cg.GenerateExpression(p[1], am_reg, size);
 		GenerateBitfieldInsert(ap3, ap2, ap1->bit_offset, ap1->bit_width);
+		ReleaseTempRegister(ap2);
 		/*
 		if (p[0]->bit_offset == nullptr) {
 			if (p[0]->p[0]->nodetype == en_bitoffset) {
@@ -134,7 +139,6 @@ Operand *ENODE::GenerateBitfieldAssign(int flags, int size)
 		GenStore(ap3,ap1,size);
 		ReleaseTempRegister(ap3);
 	}
-	ReleaseTempRegister(ap2);
 	ap1->MakeLegal( flags, size);
 	return (ap1);
 }
@@ -164,7 +168,7 @@ Operand* ENODE::GenerateBitfieldAssignAdd(int flags, int size, int op)
 			GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 	}
 	else {
-		GenLoad(ap3, ap1, size, size);
+		GenerateLoad(ap3, ap1, size, size);
 		cg.GenerateBitfieldExtract(ap1, ap1->next, MakeImmediate(1));
 //		if (ap1->offset->bit_offset == nullptr)
 //			Generate4adic(op_ext, 0, ap3, ap1, ap1->next, MakeImmediate(1));

@@ -464,7 +464,7 @@ void OCODE::OptLoadWord()
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->opcode == op_label)
 			break;
-		if (ip->opcode == op_jsr || ip->opcode == op_jlr)
+		if (ip->opcode == op_jsr || ip->opcode == op_jal)
 			break;
 		if (ip->opcode == op_hint || ip->opcode == op_remark)
 			continue;

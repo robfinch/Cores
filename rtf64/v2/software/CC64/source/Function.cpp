@@ -799,9 +799,9 @@ void Function::GenReturn(Statement *stmt)
 		if (toAdd > 65536)
 			;
 		else if (toAdd == sizeOfWord)
-			GenerateZeradic(currentFn->IsLeaf ? op_rtl : op_rts);
+			GenerateZeradic(currentFn->IsLeaf ? op_rtl : op_ret);
 		else
-			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_rts, 0, MakeImmediate(toAdd));
+			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
 	}
 	else
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));

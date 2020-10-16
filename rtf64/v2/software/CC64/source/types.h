@@ -614,7 +614,7 @@ public:
 
 	void GenerateHint(int num);
 	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int typ);
-	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
 	void GenStore(Operand *ap1, Operand *ap3, int size);
 	static void GenRedor(Operand *ap1, Operand *ap2);
 	Operand *GenIndex();
@@ -808,7 +808,7 @@ public:
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
-	Operand *GenSignExtend(int isize, int osize, int flags);
+	Operand *GenerateSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
 	int OptRegConst(int regclass, bool tally=false);
 
@@ -956,8 +956,21 @@ public:
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	virtual Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	Operand* GenerateAddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutofconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateNaconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutovconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateAutovmconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateLabconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
+	Operand* GenerateBitoffsetDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int opt);
+	Operand* GenerateFieldrefDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand *GenerateDereference(ENODE *node, int flags, int size, int su, int opt);
+	Operand* GenerateDereference2(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, int opt);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
 	Operand *GenerateAssignModiv(ENODE *node, int flags, int size, int op);
 	void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base);

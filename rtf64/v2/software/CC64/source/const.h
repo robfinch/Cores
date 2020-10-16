@@ -138,7 +138,7 @@ enum e_op {
 	op_asr, op_asri, op_stpl, op_stpr, op_stpru, op_ror, op_rol,
 	op_stpli, op_stpri, op_stprui, op_stplu, op_stplui, op_rori, op_roli,
 	op_bfclr, op_bfext, op_bfextu, op_bfins, op_bfset, op_dep,
-	op_jlr, op_jmp, op_jsr, op_mului, op_mod, op_modu,
+	op_jmp, op_jsr, op_mului, op_mod, op_modu,
 	op_bmi, op_subu, op_lddr, op_stdc, op_loop, op_iret,
 	op_sext32, op_sext16, op_sext8, op_sxb, op_sxc, op_sxh, op_sxw, op_sxt, op_sxp, op_sxo,
 	op_zxb, op_zxc, op_zxh, op_extr,

@@ -181,9 +181,9 @@ void DumphTable()
 
    if (gCpu == RTF64) {
      fprintf(ofp, "%d compressable instructions\n", htblmax);
-     fprintf(ofp, "The top 256 are:\n", htblmax);
+     fprintf(ofp, "The top 512 are:\n", htblmax);
      fprintf(ofp, "Comp  Opcode  Count\n");
-     for (nn = 0; nn < htblmax && nn < 256; nn++) {
+     for (nn = 0; nn < htblmax && nn < 512; nn++) {
        fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
      }
      return;

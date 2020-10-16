@@ -172,7 +172,7 @@ Instruction opl[273] =
 { "iret", op_iret,2,0,false,0,0,0,0 },
 { "isnull", op_isnullptr,1,1,false,am_reg,am_reg,0,0 },
 { "itof", op_itof, 2, 1, false, am_fpreg, am_reg, 0, 0 },
-{ "jlr", op_jlr,1,1,false },
+{ "jal", op_jal,1,1,false },
 { "jmp",op_jmp,1,0,false,am_mem,0,0,0 },
 { "jsr", op_jsr,1,1,false },
 { "ldb", op_ldb,4,1,true,am_reg,am_mem,0,0 },

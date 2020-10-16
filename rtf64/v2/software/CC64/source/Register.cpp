@@ -292,9 +292,24 @@ Operand *GetTempRegister()
 	Operand *ap;
     Function *sym = currentFn;
 	int number;
+	int nr, nn;
 
 	number = reg_in_use[next_reg];
 	if (number >= 0) {// && number < rap[wrapno]) {
+		/*
+		nr = next_reg;
+		for (nn = regFirstTemp; nn <= regLastTemp; nn++) {
+			if (reg_in_use[nn] < 0) {
+				reg_in_use[nn] = reg_alloc_ptr;
+				ap = allocOperand();
+				ap->mode = am_reg;
+				ap->preg = next_reg;
+				ap->pdeep = ap->deep;
+				ap->deep = reg_alloc_ptr;
+				return (ap);
+			}
+		}
+		*/
 		SpillRegister(makereg(next_reg),number);
 	}
 	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)

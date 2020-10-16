@@ -308,16 +308,20 @@ void PromoteConstFlag(ENODE *ep)
 
 void Expression::SetRefType(ENODE** node)
 {
+	int64_t sz = (*node)->esize;
+
 	if ((*node)->bit_offset != nullptr) {
 		ENODE* pnode, * qnode;
 		pnode = (*node)->bit_offset;
 		qnode = (*node)->bit_width;
+		sz = (*node)->esize;
 		*node = makenode(en_fieldref, *node, (ENODE*)NULL);
 		(*node)->bit_offset = pnode;
 		(*node)->bit_width = qnode;
 	}
 	else
 		*node = makenode(en_ref, *node, (ENODE*)NULL);
+	(*node)->esize = sz;
 }
 
 void Expression::DerefBit(ENODE** node, TYP* tp, SYM* sp)
@@ -379,9 +383,9 @@ void Expression::DerefBitfield(ENODE** node, TYP* tp, SYM* sp)
 		(*node)->isUnsigned = true;
 	(*node)->bit_width = tp->bit_width;
 	(*node)->bit_offset = tp->bit_offset;
-	/*
-	* maybe it should be 'unsigned'
-	*/
+	
+	// maybe it should be 'unsigned'
+	
 	(*node)->etype = tp->type;//(enum e_bt)stdint.type;
 	(*node)->esize = tp->size;
 	tp = &stdint;
@@ -746,11 +750,11 @@ TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeA
 			getch();
 		if (lastch == '(') {
 			ENODE* args;
-			std::string nm(lastid);
+			std::string nm(lastid);//???
 			NextToken();
 			NextToken();
 			args = ParseArgumentList(nullptr, typearray);
-			*node = MakeUnknownFunctionNameNode(nm, &tp, typearray, args);
+			*node = MakeUnknownFunctionNameNode(name, &tp, typearray, args);
 			sp = (*node)->sym;
 			nt = false;
 		}

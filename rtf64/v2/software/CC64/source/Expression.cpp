@@ -493,8 +493,8 @@ ENODE* Expression::ParseSizeof()
 		tp1 = tail;
 		decl.ParseSpecifier(0);
 		decl.ParsePrefix(FALSE);
-		if (head != NULL)
-			ep1 = makeinode(en_icon, head->size);
+		if (decl.head != NULL)
+			ep1 = makeinode(en_icon, decl.head->size);
 		else {
 			error(ERR_IDEXPECT);
 			ep1 = makeinode(en_icon, 1);
@@ -882,8 +882,10 @@ ENODE* Expression::ParseDotOperator(TYP* tp1, ENODE *ep1)
 		dfs.printf("tp1->type:%d", tp1->type);
 		qnode = makeinode(en_icon, sp->value.i);
 		qnode->constflag = TRUE;
-		qnode->bit_offset = makeinode(en_icon, sp->tp->bit_offset->i);
-		qnode->bit_width = makeinode(en_icon, sp->tp->bit_width->i);
+		if (sp->tp->bit_offset) {
+			qnode->bit_offset = makeinode(en_icon, sp->tp->bit_offset->i);
+			qnode->bit_width = makeinode(en_icon, sp->tp->bit_width->i);
+		}
 		iu = ep1->isUnsigned;
 		ep1 = makenode(en_add, ep1, qnode);
 		ep1->bit_offset = qnode->bit_offset;
@@ -1102,11 +1104,12 @@ ENODE* Expression::ParseOpenbr(TYP* tp1, ENODE* ep1)
 			tp3 = expression(&qnode);
 			snode = qnode;
 			qnode = compiler.ef.Makenode(en_sub, pnode->Clone(), qnode);
-			qnode = compiler.ef.Makenode(en_sub, qnode, makeinode(en_icon, 1));
+			//qnode = compiler.ef.Makenode(en_sub, qnode, makeinode(en_icon, 1));
 			//ep1 = compiler.ef.Makenode(pnode->isUnsigned ? en_extu : en_ext, rnode, pnode, qnode);
 			rnode->nodetype = en_fieldref;
 			rnode->bit_offset = snode;
 			rnode->bit_width = qnode;
+			rnode->esize = tp3->size;
 			ep1 = rnode;//compiler.ef.Makenode(en_bitoffset, rnode, snode, qnode);
 			//ep1 = compiler.ef.Makenode(en_void, rnode, nullptr);
 		}
@@ -1116,6 +1119,7 @@ ENODE* Expression::ParseOpenbr(TYP* tp1, ENODE* ep1)
 			rnode->nodetype = en_fieldref;
 			rnode->bit_offset = pnode;
 			rnode->bit_width = qnode;
+			rnode->esize = tp3->size;
 			ep1 = rnode;//compiler.ef.Makenode(en_bitoffset, rnode, pnode, qnode);
 			snode = pnode;
 			//ep1 = compiler.ef.Makenode(en_void, rnode, nullptr);
@@ -1125,7 +1129,7 @@ ENODE* Expression::ParseOpenbr(TYP* tp1, ENODE* ep1)
 		//ep1->bit_offset = pnode->Clone();
 		//ep1->bit_width = qnode->Clone();
 		needpunc(closebr, 9);
-		tp1 = CondDeref(&ep1, tp2);
+		//tp1 = CondDeref(&ep1, tp2);
 		tp1->type = bt_bitfield;
 		tp1->bit_offset = snode->Clone();
 		tp1->bit_width = qnode->Clone();
