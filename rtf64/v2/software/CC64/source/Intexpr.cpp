@@ -65,7 +65,7 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 	return (node->i);
 }
 
-Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
+Float128 *GetFloatExpression(ENODE **pnode)
 { 
 	TYP *tp;
 	ENODE *node;
@@ -100,6 +100,42 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 	if (pnode)
 		*pnode = node;
 	return (&node->f128);
+}
+
+Posit64 GetPositExpression(ENODE** pnode)
+{
+	TYP* tp;
+	ENODE* node;
+	Posit64 flt;
+	Expression exp;
+
+	tp = exp.ParseNonCommaExpression(&node);
+	if (node == NULL) {
+		error(ERR_SYNTAX);
+		return 0;
+	}
+	opt_const_unchecked(&node);
+	if (node == NULL) {
+		fatal("Compiler Error: GetFloatExpression: node is NULL");
+		return 0;
+	}
+	if (node->nodetype != en_pcon) {
+		if (node->nodetype == en_uminus) {
+			if (node->p[0]->nodetype != en_pcon) {
+				printf("\r\nnode:%d \r\n", node->nodetype);
+				error(ERR_INT_CONST);
+				return (0);
+			}
+			flt = node->p[0]->posit;
+			flt.val = -flt.val;
+			if (pnode)
+				*pnode = node;
+			return (flt);
+		}
+	}
+	if (pnode)
+		*pnode = node;
+	return (node->posit);
 }
 
 int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */

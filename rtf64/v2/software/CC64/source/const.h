@@ -80,7 +80,7 @@ enum e_stmt {
 
 enum e_sym {
 	tk_nop,
-	id, cconst, iconst, lconst, sconst, isconst, asconst, rconst, plus, minus,
+	id, cconst, iconst, lconst, sconst, isconst, asconst, rconst, pconst, plus, minus,
 	star, divide, lshift, rshift, lrot, rrot,
 	modop, eq, neq, lt, leq, gt,
 	geq, assign, asplus, asminus, astimes, asdivide, asmodop,
@@ -401,6 +401,7 @@ enum e_hint {
 #define AL_POINTER      8
 #define AL_FLOAT        8
 #define AL_DOUBLE       8
+#define AL_POSIT				8
 #define AL_QUAD			16
 #define AL_STRUCT       2
 #define AL_TRIPLE       12

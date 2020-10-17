@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -240,6 +240,12 @@ int64_t initfloat()
 	return (8LL);
 }
 
+int64_t initPosit()
+{
+	GeneratePosit(GetPositExpression((ENODE**)NULL));
+	return (8LL);
+}
+
 int64_t inittriple()
 {
 	GenerateQuad(GetFloatExpression((ENODE **)NULL));
@@ -327,9 +333,13 @@ int64_t InitializePointer(TYP *tp2)
 			free(str);
     }
 		else if (lastst == rconst) {
-        GenerateLabelReference(quadlit(&rval128),0);
-        NextToken();
-	}
+			GenerateLabelReference(quadlit(&rval128), 0);
+			NextToken();
+		}
+		else if (lastst == pconst) {
+			GeneratePosit(pval64);
+			NextToken();
+		}
 	//else if (lastst == id) {
 	//	sp = gsearch(lastid);
 	//	if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {

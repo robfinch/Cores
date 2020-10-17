@@ -42,17 +42,29 @@ void dooper(ENODE *node)
     ep->i = (ep->p[0]->i >= 0) ? ep->p[0]->i : -ep->p[0]->i;
 		break;
   case en_add:
-    ep->nodetype = en_icon;
-    ep->i = ep->p[0]->i + ep->p[1]->i;
+		if (ep->p[0]->nodetype == en_icon) {
+			ep->nodetype = en_icon;
+			ep->i = ep->p[0]->i + ep->p[1]->i;
+		}
+		if (ep->p[0]->nodetype == en_pcon) {
+			ep->nodetype = en_pcon;
+			ep->posit.Add(ep->p[0]->posit, ep->p[1]->posit);
+		}
     break;
 	case en_ptrdif:
 		ep->nodetype = en_icon;
 		ep->i = (ep->p[0]->i - ep->p[1]->i) >> ep->p[4]->i;
 		break;
 	case en_sub:
-    ep->nodetype = en_icon;
-    ep->i = ep->p[0]->i - ep->p[1]->i;
-    break;
+		if (ep->p[0]->nodetype == en_icon) {
+			ep->nodetype = en_icon;
+			ep->i = ep->p[0]->i - ep->p[1]->i;
+		}
+		if (ep->p[0]->nodetype == en_pcon) {
+			ep->nodetype = en_pcon;
+			ep->posit.Sub(ep->p[0]->posit, ep->p[1]->posit);
+		}
+		break;
 	case en_mul:
 	case en_mulu:
 		ep->nodetype = en_icon;
@@ -434,6 +446,12 @@ static void opt0(ENODE **node)
 										*node = ep->p[1];
 								return;
               }
+								if (ep->p[0]->nodetype == en_pcon) {
+									if (ep->p[1]->nodetype == en_pcon) {
+										dooper(*node);
+										return;
+									}
+								}
 						// Place the constant node second in the add to allow
 						// use of immediate mode instructions.
 						if (ep->nodetype==en_add)

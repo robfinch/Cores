@@ -26,12 +26,18 @@ public:
 
 class Posit64
 {
-	static int8_t posWidth;
-	static int8_t expWidth;
+	static int64_t posWidth;
+	static int64_t expWidth;
+	static int Posit64::DividerLUT[65536];
+public:
 	int64_t val;
 public:
 	Posit64() { val = 0; };
 	Posit64(int64_t i);
+	void Zero() { val = 0; };
+	void One() { val = 0x4000000000000000LL; };
+	void Ten() { val = 0x4d00000000000000LL; };
+	void OneTenth() {	val = 0x3266666666666666LL; };
 	Posit64 Addsub(int8_t op, Posit64 a, Posit64 b);
 	Posit64 Add(Posit64 a, Posit64 b);
 	Posit64 Sub(Posit64 a, Posit64 b);
@@ -40,5 +46,6 @@ public:
 	Posit64 IntToPosit(int64_t i);
 	int64_t PositToInt(Posit64 p);
 	void Decompose(Posit64 a, RawPosit* b);
+	char *ToString();
 };
 

@@ -64,6 +64,9 @@ extern int lstackptr;
 
 int main(int argc, char **argv)
 {
+	Posit64 pst;
+
+	pst = pst.IntToPosit(1);
 	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;

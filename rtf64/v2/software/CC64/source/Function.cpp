@@ -636,7 +636,7 @@ void Function::GenReturn(Statement *stmt)
 							GenerateDiadic(op_sto, 0, ap2, MakeIndexed(sizeOfWord * 2, regSP));
 						}
 						ReleaseTempReg(ap2);
-						GenerateMonadic(op_jsr, 0, MakeStringAsNameConst("__aacpy", codeseg));
+						GenerateMonadic(op_call, 0, MakeStringAsNameConst("__aacpy", codeseg));
 						GenerateMonadic(op_bex, 0, MakeDataLabel(throwlab));
 						if (!IsPascal)
 							GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));

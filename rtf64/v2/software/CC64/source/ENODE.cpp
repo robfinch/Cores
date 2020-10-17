@@ -2018,6 +2018,13 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		sprintf_s(buf, sizeof(buf), "0x%llx", f);
 		ofs.write(buf);
 		break;
+	case en_pcon:
+		if (!opt)
+			goto j1;
+		// The following spits out a warning, but is okay.
+		sprintf_s(buf, sizeof(buf), "0x%llx", posit.val);
+		ofs.write(buf);
+		break;
 	case en_autovcon:
 	case en_autocon:
 	case en_icon:
@@ -2315,10 +2322,10 @@ int ENODE::PutStructConst(txtoStream& ofs)
 			else
 				k = ep1->esize;
 			switch (ep1->esize) {
-			case 1:	ofs.printf("db\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 2:	ofs.printf("dc\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 4:	ofs.printf("dh\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 8:	ofs.printf("dw\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 1:	ofs.printf("dcb\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 2:	ofs.printf("dcw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 4:	ofs.printf("dct\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 8:	ofs.printf("dco\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
 			default:
 				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
 				ofs.printf("db\t");

@@ -1020,9 +1020,10 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 			{
 			case 1:	GenerateDiadic(op_stb,0,ap2,MakeIndexed(offset,base->preg)); break;
 			case 2:	GenerateDiadic(op_stw,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 4:	GenerateDiadic(op_stp,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 512:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
-			default:	GenerateDiadic(op_sth,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_stt,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 8:	GenerateDiadic(op_sto, 0, ap2, MakeIndexed(offset, base->preg)); break;
+			case 64:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sto,0,ap2,MakeIndexed(offset,base->preg)); break;
 			}
 			if (ap2)
 				ReleaseTempReg(ap2);
@@ -1103,9 +1104,10 @@ void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Ope
 			{
 			case 1:	GenerateDiadic(op_stb,0,ap2,MakeIndexed(offset,base->preg)); break;
 			case 2:	GenerateDiadic(op_stw,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 4:	GenerateDiadic(op_stp,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 512:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
-			default:	GenerateDiadic(op_sth,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_stt,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 8:	GenerateDiadic(op_sto, 0, ap2, MakeIndexed(offset, base->preg)); break;
+			case 64:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sto,0,ap2,MakeIndexed(offset,base->preg)); break;
 			}
 			offset += tp->GetElementSize();
 			ReleaseTempReg(ap2);
@@ -1130,7 +1132,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
 	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), MakeImmediate(node2->esize));
 //	GenerateDiadic(op_ldi, 0, makereg(regFirstArg + 2), MakeImmediate(node1->esize));
-	GenerateMonadic(op_jsr, 0, MakeStringAsNameConst("__aacpy",codeseg));
+	GenerateMonadic(op_call, 0, MakeStringAsNameConst("__aacpy",codeseg));
 	ReleaseTempReg(base2);
 	return (base);
 	//base = GenerateDereference(node1,am_mem,sizeOfWord,0);
@@ -1420,6 +1422,29 @@ Operand* CodeGenerator::GenFloatcon(ENODE* node, int flags, int64_t size)
 	return (ap1);
 }
 
+Operand* CodeGenerator::GenPositcon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	if (use_gp) {
+		ap1->mode = am_indx;
+		ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
+	}
+	else
+		ap1->mode = am_direct;
+	ap1->offset = node;
+	if (node)
+		DataLabels[node->i] = true;
+	ap1->type = stdposit.GetIndex();
+	if (node)
+		ap1->tp = node->tp;
+	// Don't allow the constant to be loaded into an integer register.
+	ap1->MakeLegal(flags & ~am_reg, size);
+	return (ap1);
+}
+
 Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
 {
 	Operand* ap1, * ap2;
@@ -1495,6 +1520,10 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ap1 = GenFloatcon(node, flags, size);
 		goto retpt;
 
+	case en_pcon:
+		ap1 = GenPositcon(node, flags, size);
+		goto retpt;
+
 	case en_icon:
     ap1 = allocOperand();
     ap1->mode = am_imm;
@@ -1558,6 +1587,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 			goto retpt;
 		case bt_triple:	return GenAutocon(node, flags, size, stdtriple.GetIndex());
 		case bt_quad:	return GenAutocon(node, flags, size, stdquad.GetIndex());
+		case bt_posit: return GenAutocon(node, flags, size, stdposit.GetIndex());
 		case bt_pointer:
 			ap1 = GenAutocon(node, flags, size, stdint.GetIndex());
 			goto retpt;
@@ -1611,6 +1641,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 			case bt_double:	ap1->type = stddouble.GetIndex(); break;
 			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
 			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			case bt_posit: ap1->type = stdposit.GetIndex(); break;
 			default: ap1->type = stdint.GetIndex(); break;
 			}
 		else
@@ -1631,6 +1662,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 			case bt_double:	ap1->type = stddouble.GetIndex(); break;
 			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
 			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			case bt_posit: ap1->type = stdposit.GetIndex(); break;
 			default: ap1->type = stdint.GetIndex(); break;
 			}
 		else

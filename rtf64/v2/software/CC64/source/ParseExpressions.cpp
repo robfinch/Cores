@@ -68,6 +68,7 @@ TYP				stdtriple;
 TYP				stdflt;
 TYP				stddouble;
 TYP				stdquad;
+TYP				stdposit;
 TYP             stdfunc;
 TYP             stdexception;
 extern TYP      *head;          /* shared with ParseSpecifier */
@@ -1095,6 +1096,10 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
   case rconst:
 		pnode = ParseRealConst(node);
     break;
+
+	case pconst:
+		pnode = ParsePositConst(node);
+		break;
 
 	case sconst:
 		pnode = ParseStringConst(node);

@@ -123,6 +123,23 @@ ENODE* Expression::ParseRealConst(ENODE** node)
 	return (pnode);
 }
 
+ENODE* Expression::ParsePositConst(ENODE** node)
+{
+	ENODE* pnode;
+	TYP* tptr;
+
+	pnode = compiler.ef.MakePositNode(en_pcon, pval64);
+	pnode->constflag = TRUE;
+	pnode->posit = pval64;
+	pnode->esize = 8;
+	pnode->segment = rodataseg;
+	tptr = &stdposit;
+	pnode->SetType(tptr);
+	tptr->isConst = TRUE;
+	NextToken();
+	return (pnode);
+}
+
 ENODE* Expression::ParseStringConst(ENODE** node)
 {
 	char* str;

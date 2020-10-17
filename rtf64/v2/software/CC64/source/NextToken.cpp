@@ -342,26 +342,38 @@ void getbase(int64_t b)
 void getfrac()
 {
 	Float128 frmul128,tmp,ch128,fract128;
+  Posit64 pmul64, pch64, pfract64, p10;
+
 	double frmul;
 	double fract = 0.0;
 	Float128::Assign(&frmul128,Float128::One());
-    frmul = 1.0;
-    while(isdigit(lastch)) {
+  pmul64.One();
+  pfract64.Zero();
+  p10.Ten();
+  frmul = 1.0;
+  while(isdigit(lastch)) {
 		Float128::IntToFloat(&ch128,lastch-'0');
 		Float128::Mul(&tmp,&fract128,Float128::Ten());
 		Float128::Add(&fract128,&ch128,&tmp);
 
         fract = fract * 10.0 + (lastch - '0');
+        pch64 = pch64.IntToPosit(lastch - '0');
+        pfract64 = pfract64.Multiply(pfract64, p10);
+        pfract64 = pfract64.Add(pch64, pfract64);
         getch();
         frmul *= 10.0;
 		Float128::Mul(&frmul128,&frmul128,Float128::Ten());
-    }
+
+    pmul64 = pmul64.Multiply(pmul64, p10);
+  }
 	fract = fract / frmul;
 	rval += fract;
 	Float128::Div(&fract128,&fract128,&frmul128);
 	Float128::Add(&rval128,&rval128,&fract128);
+  pfract64 = pfract64.Divide(pfract64, pmul64);
+  pval64 = pval64.Add(pval64, pfract64);
 }
- 
+
 /*
  *      getexp - get exponent part of floating number.
  *
@@ -373,23 +385,30 @@ void getexp()
 {       
 		double  expo, exmul;
 		Float128 exp128, exmul128;
+    Posit64 pexp64, pexmul64;
 		
+    pexp64.One();
 		Float128::Assign(&exp128,Float128::One());
         expo = 1.0;
-        if(lastst != rconst)
-                rval = (double)ival;
+        if (lastst != rconst) {
+          pval64 = pval64.IntToPosit(ival);
+          rval = (double)ival;
+        }
         if(lastch == '-') {
 			Float128::Assign(&exmul128,Float128::OneTenth());
+      pexmul64.OneTenth();
                 exmul = 0.1;
                 getch();
                 }
 		else if (lastch=='+') {
 			getch();
 			Float128::Assign(&exmul128,Float128::Ten());
+      pexmul64.Ten();
                 exmul = 10.0;
 		}
         else {
 			Float128::Assign(&exmul128,Float128::Ten());
+      pexmul64.Ten();
                 exmul = 10.0;
 		}
         getbase(10);
@@ -397,10 +416,13 @@ void getexp()
                 error(ERR_FPCON);
         else
                 while(ival--) {
+                  pexp64 = pexp64.Multiply(pexp64, pexmul64);
 					Float128::Mul(&exp128,&exp128,&exmul128);
                         expo *= exmul;
 				}
+        pval64 = pval64.Multiply(pval64, pexp64);
 		Float128::Mul(&rval128,&rval128,&exp128);
+
         rval *= expo;
 }
  
@@ -412,10 +434,12 @@ void getexp()
  */
 void getnum()
 {       register int    i;
+  bool isPosit = false;
         i = 0;
         
         ival = 0;
         rval = 0.0;
+        pval64.Zero();
 		Float128::Assign(&rval128,Float128::Zero());
         numstrptr = &numstr[0];
          *numstrptr = lastch;
@@ -437,15 +461,21 @@ j1:
                         getch();
                         rval = (double)ival;    /* float the integer part */
 						Float128::IntToFloat(&rval128, (__int64)ival);
+            pval64 = pval64.Posit64::IntToPosit(ival);
                         getfrac();      /* add the fractional part */
                         lastst = rconst;
                         }
+                if (lastch == 'p' || lastch == 'P') {
+                  getch();
+                  isPosit = true;
+                  lastst = pconst;
+                }
                 if(lastch == 'e' || lastch == 'E') {
                         getch();
                         getexp();       /* get the exponent */
 						// This must be reset because getting the exponent
 						// calls getbase() which will set lastst=iconst
-						lastst = rconst;
+						lastst = isPosit ? pconst : rconst;
                         }
 				
 				if (lastst==rconst && (lastch=='Q' || lastch=='q' ||

@@ -381,6 +381,25 @@ void Declaration::ParseDouble()
 	bit_max = head->precision;
 }
 
+void Declaration::ParsePosit()
+{
+	head = (TYP*)TYP::Make(bt_posit, 8);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	if (lastst == kw_vector) {
+		int btp = head->GetIndex();
+		head = TYP::Make(bt_vector, 512);
+		head->numele = maxVL;
+		head->btp = btp;
+		tail = head;
+		NextToken();
+	}
+	bit_max = head->precision;
+}
+
 void Declaration::ParseTriple()
 {
 	head = (TYP *)TYP::Make(bt_triple, 12);
@@ -770,6 +789,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case kw_float:	ParseFloat(); goto lxit;
 			case kw_double:	ParseDouble(); goto lxit;
 			case kw_float128:	ParseFloat128(); goto lxit;
+			case kw_posit:	ParsePosit(); goto lxit;
 
 			case kw_triple:
 				head = TYP::Copy(&stdtriple);
@@ -1847,7 +1867,7 @@ void GlobalDeclaration::Parse()
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union: case kw_class:
 				case kw_enum: case kw_void: case kw_bit:
-        case kw_float: case kw_double: case kw_float128:
+				case kw_float: case kw_double: case kw_float128: case kw_posit:
 		case kw_vector: case kw_vector_mask:
                 lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
 				isInline = false;
@@ -1999,7 +2019,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union: case kw_class:
         case kw_enum: case kw_void:
-        case kw_float: case kw_double: case kw_float128:
+				case kw_float: case kw_double: case kw_float128: case kw_posit:
 		case kw_vector: case kw_vector_mask:
             lc_auto += declare(parent,ssyms,sc_auto,lc_auto,bt_struct);
             break;
@@ -2081,7 +2101,7 @@ dfs.printf("B");
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
     case kw_long: case kw_struct: case kw_union: case kw_class:
 		case kw_enum: case kw_void: case kw_bit:
-		case kw_float: case kw_double: case kw_float128:
+		case kw_float: case kw_double: case kw_float128: case kw_posit:
 		case kw_vector: case kw_vector_mask:
 dfs.printf("C");
 			declare(NULL,&currentFn->params,sc_auto,0,bt_struct);

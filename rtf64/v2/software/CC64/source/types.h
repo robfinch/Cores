@@ -561,6 +561,7 @@ public:
 	double f;
 	double f1, f2;
 	Float128 f128;
+	Posit64 posit;
 	std::string *sp;
 	std::string *msp;
 	std::string *udnm;			// undecorated name
@@ -663,6 +664,7 @@ public:
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3);
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
 	ENODE* Makefnode(int nt, double v1);
+	ENODE* MakePositNode(int nt, Posit64 v1);
 };
 
 class Expression : public CompilerType
@@ -688,6 +690,7 @@ private:
 	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
 	ENODE* ParseInlineStringConst(ENODE** node);
 	ENODE* ParseRealConst(ENODE** node);
+	ENODE* ParsePositConst(ENODE** node);
 	ENODE* ParseFloatMax();
 	ENODE* ParseThis(ENODE** node);
 	ENODE* ParseAggregate(ENODE** node);
@@ -978,6 +981,7 @@ public:
 	Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
 	Operand *GenAutocon(ENODE *node, int flags, int64_t size, int type);
 	Operand* GenFloatcon(ENODE* node, int flags, int64_t size);
+	Operand* GenPositcon(ENODE* node, int flags, int64_t size);
 	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
 	Operand *GenerateAssign(ENODE *node, int flags, int64_t size);
 	Operand *GenerateExpression(ENODE *node, int flags, int64_t size);
@@ -1578,6 +1582,7 @@ public:
 	void ParseDouble();
 	void ParseTriple();
 	void ParseFloat128();
+	void ParsePosit();
 	void ParseClass();
 	int ParseStruct(e_bt typ);
 	void ParseVector();

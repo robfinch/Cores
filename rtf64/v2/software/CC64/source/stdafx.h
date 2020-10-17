@@ -40,6 +40,7 @@
 #include "Int80.h"
 #include "Float128.h"
 #include "Int128.h"
+#include "Int256.h"
 #include "Posit64.h"
 #include "Rand.h"
 #include "txtStream.h"

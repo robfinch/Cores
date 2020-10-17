@@ -59,4 +59,6 @@ extern int64_t round8(int64_t);
 extern int countLeadingBits(int64_t val);
 extern int countLeadingZeros(int64_t val);
 
+extern Posit64 GetPositExpression(ENODE** pnode);
+extern void GeneratePosit(Posit64 val);
 #endif

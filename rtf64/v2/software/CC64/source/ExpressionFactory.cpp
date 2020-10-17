@@ -18,6 +18,23 @@ ENODE* ExpressionFactory::Makefnode(int nt, double v1)
 	return (ep);
 }
 
+ENODE* ExpressionFactory::MakePositNode(int nt, Posit64 v1)
+{
+	ENODE* ep;
+	ep = allocEnode();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = TRUE;
+	ep->isUnsigned = FALSE;
+	ep->etype = bt_void;
+	ep->esize = -1;
+	ep->posit = v1;
+	//    ep->f2 = v2;
+	ep->p[0] = 0;
+	ep->p[1] = 0;
+	ep->p[2] = 0;
+	return (ep);
+}
+
 ENODE* ExpressionFactory::Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3, ENODE* v4)
 {
 	ENODE* ep;

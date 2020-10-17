@@ -56,8 +56,11 @@ public:
 	// Shift left one bit.
 	static bool Shl(Int128 *o, Int128 *a);
 	static bool Shr(Int128 *o, Int128 *a);
+	static bool Lsr(Int128* o, Int128* a);
 	static bool Shl(Int128 *o, Int128 *a, int);
 	static int64_t Shr(Int128 *o, Int128 *a, int);
+	static int64_t Lsr(Int128* o, Int128* a, int);
+	static int64_t StickyCalc(Int128* a, int);
 	static void Mul(Int128 *p, Int128 *a, Int128 *b);
 	static void Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b);
 	static bool IsEqual(Int128 *a, Int128 *b);
@@ -80,4 +83,6 @@ public:
 		return (p);
 	}
 	bool IsNBit(int bitno);
+	void insert(int64_t i, int64_t offset, int64_t width);
+	int64_t extract(Int128* i, int64_t offset, int64_t width);
 };

@@ -48,7 +48,7 @@ bool Int128::Shl(Int128 *o, Int128 *a, int b) {
 	for (; b > 0; b--) {
 		Shl(&k, &k);
 	}
-	Assign(0, &k);
+	Assign(o, &k);
 	return (true);
 }
 
@@ -56,7 +56,7 @@ bool Int128::Shl(Int128 *o, Int128 *a, int b) {
 bool Int128::Shr(Int128 *o, Int128 *a) {
 	bool c = (a->high & 1LL) != 0LL;
 	Int128 r;
-	r.low = a->low >> 1LL;
+	r.low = (uint64_t)a->low >> 1LL;
 	r.high = a->high >> 1LL;
 	if (c)
 		r.low |= 0x8000000000000000LL;
@@ -66,12 +66,38 @@ bool Int128::Shr(Int128 *o, Int128 *a) {
 	return (c);
 }
 
+bool Int128::Lsr(Int128* o, Int128* a) {
+	bool c = (a->high & 1LL) != 0LL;
+	Int128 r;
+	r.low = (uint64_t)a->low >> 1LL;
+	r.high = (uint64_t)a->high >> 1LL;
+	if (c)
+		r.low |= 0x8000000000000000LL;
+	c = (a->low & 1LL) != 0LL;
+	o->low = r.low;
+	o->high = r.high;
+	o->high &= 0x7fffffffffffffffLL;
+	return (c);
+}
+
 int64_t Int128::Shr(Int128 *o, Int128 *a, int b) {
 	Int128 k;
 
 	Assign(&k, a);
 	for (; b > 0; b--) {
 		Shr(&k, &k);
+	}
+	if (o)
+		Assign(o, &k);
+	return (k.low);
+}
+
+int64_t Int128::Lsr(Int128* o, Int128* a, int b) {
+	Int128 k;
+
+	Assign(&k, a);
+	for (; b > 0; b--) {
+		Lsr(&k, &k);
 	}
 	if (o)
 		Assign(o, &k);
@@ -203,3 +229,53 @@ bool Int128::IsNBit(int bitno)
 	}
 	return true;
 }
+
+int64_t Int128::StickyCalc(Int128* a, int amt)
+{
+	int64_t st;
+	Int128 b;
+
+	Assign(&b, a);
+	st = 0;
+	for (; amt > 0; amt--) {
+		st = st | (b.low & 1LL);
+		Shr(&b, &b, 1);
+	}
+	return (st);
+}
+
+void Int128::insert(int64_t i, int64_t offset, int64_t width)
+{
+	Int128 aa, bb;
+	Int128 mask;
+	int nn;
+
+	Assign(&aa, this);
+	Assign(&mask, One());
+	for (nn = 0; nn < width; nn++) {
+		Shl(&mask, &mask, 1LL);
+		mask.low |= 1LL;
+	}
+	Shl(&mask, &mask, offset);
+	// clear out bitfield
+	aa.low &= ~mask.low;
+	aa.high &= ~mask.high;
+	bb.low = i;
+	Shl(&bb, &bb, offset);
+	bb.low &= mask.low;
+	bb.high &= mask.high;
+	aa.low |= bb.low;
+	aa.high |= bb.high;
+	low = aa.low;
+	high = aa.high;
+}
+
+int64_t Int128::extract(Int128* p, int64_t offset, int64_t width)
+{
+	Int128 k;
+
+	Shr(&k, p, offset);
+	k.low &= ((1LL << width) - 1LL);
+	return k.low;
+}
+

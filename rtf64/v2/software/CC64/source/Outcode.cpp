@@ -602,6 +602,15 @@ void GenerateQuad(Float128 *val)
 	genst_cumulative += 16;
 }
 
+void GeneratePosit(Posit64 val)
+{
+	ofs.printf("\r\n\talign 8\r\n");
+	ofs.printf("\tdco\t%s", val.ToString());
+	gentype = longgen;
+	outcol = 65;
+	genst_cumulative += 8;
+}
+
 void GenerateReference(SYM *sp,int64_t offset)
 {
 	char sign;
@@ -953,19 +962,19 @@ void dumplits()
 					GenerateByte(*cp++);
 				GenerateByte(0);
 				break;
-			case 'C':
+			case 'W':
 				cp++;
 				while (*cp)
 					GenerateChar(*cp++);
 				GenerateChar(0);
 				break;
-			case 'H':
+			case 'T':
 				cp++;
 				while (*cp)
 					GenerateHalf(*cp++);
 				GenerateHalf(0);
 				break;
-			case 'W':
+			case 'O':
 				cp++;
 				while (*cp)
 					GenerateWord(*cp++);

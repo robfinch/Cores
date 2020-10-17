@@ -546,6 +546,9 @@ j1:
 			return (dsttp);
 		}
 		return srctp;
+	
+	case bt_posit:
+		return srctp;
 
 	case bt_class:
 	case bt_struct:
