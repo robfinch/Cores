@@ -60,6 +60,23 @@ public:
 		a->midHigh = b->midHigh;
 		a->high = b->high;
 	};
+	static Int256 MakeMask(int64_t width) {
+		Int256 a;
+		Int256 one;
+
+		a = *Int256::One();
+		one = *Int256::One();
+		a.Shl(&a, &a, width);
+		a.Sub(&a, &a, &one);
+		return (a);
+	};
+	static Int256 MakeMask(int64_t offset, int64_t width) {
+		Int256 a;
+
+		a = MakeMask(width);
+		a.Shl(&a, &a, offset);
+		return (a);
+	};
 	//fnASCarry = op? (~a&b)|(s&~a)|(s&b) : (a&b)|(a&~s)|(b&~s);
 	// Compute carry bit from 64 bit addition.
 	static bool AddCarry(__int64 s, __int64 a, __int64 b) {
@@ -73,6 +90,12 @@ public:
 	static bool Add(Int256 *sum, Int256 *a, Int256 *b);
 	// Subtract two 256 bit numbers.
 	static bool Sub(Int256 *sum, Int256 *a, Int256 *b);
+	static void BitAnd(Int256* dst, Int256* a, Int256* b) {
+		dst->low = a->low & b->low;
+		dst->midLow = a->midLow & b->midLow;
+		dst->midHigh = a->midHigh & b->midHigh;
+		dst->high = a->high & b->high;
+	};
 	// Shift left one bit.
 	static bool Shl(Int256 *o, Int256 *a);
 	static bool Shr(Int256 *o, Int256 *a);
@@ -94,7 +117,7 @@ public:
 		this->low = s.low;
 		return s;
 	}
-	static Int256 Convert(long v) {
+	static Int256 Convert(int64_t v) {
 		Int256 p;
 
 		p.low = v;
@@ -110,8 +133,17 @@ public:
 		}
 		return (p);
 	}
+	static Int256 Convert(uint64_t v) {
+		Int256 p;
+
+		p.low = v;
+		p.midLow = 0LL;
+		p.midHigh = 0LL;
+		p.high = 0LL;
+		return (p);
+	}
 	bool IsNBit(int bitno);
 	void insert(int64_t i, int64_t offset, int64_t width);
-	void insert(Int128 i, int64_t offset, int64_t width);
-	int64_t extract(Int256* p, int64_t offset, int64_t width);
+	void insert(Int256 i, int64_t offset, int64_t width);
+	int64_t extract(int64_t offset, int64_t width);
 };

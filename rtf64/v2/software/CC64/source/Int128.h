@@ -36,6 +36,23 @@ public:
 		zr.high = 0LL;
 		return (&zr);
 	};
+	static Int128 MakeMask(int64_t width) {
+		Int128 a;
+		Int128 one;
+
+		a = *Int128::One();
+		one = *Int128::One();
+		a.Shl(&a, &a, width);
+		a.Sub(&a, &a, &one);
+		return (a);
+	};
+	static Int128 MakeMask(int64_t offset, int64_t width) {
+		Int128 a;
+
+		a = MakeMask(width);
+		a.Shl(&a, &a, offset);
+		return (a);
+	};
 	static void Assign(Int128 *a, Int128 *b) {
 		a->low = b->low;
 		a->high = b->high;
@@ -53,6 +70,10 @@ public:
 	static bool Add(Int128 *sum, Int128 *a, Int128 *b);
 	// Subtract two 128 bit numbers.
 	static bool Sub(Int128 *sum, Int128 *a, Int128 *b);
+	static void BitAnd(Int128* dst, Int128* a, Int128* b) {
+		dst->low = a->low & b->low;
+		dst->high = a->high & b->high;
+	};
 	// Shift left one bit.
 	static bool Shl(Int128 *o, Int128 *a);
 	static bool Shr(Int128 *o, Int128 *a);
@@ -60,7 +81,7 @@ public:
 	static bool Shl(Int128 *o, Int128 *a, int);
 	static int64_t Shr(Int128 *o, Int128 *a, int);
 	static int64_t Lsr(Int128* o, Int128* a, int);
-	static int64_t StickyCalc(Int128* a, int);
+	int64_t StickyCalc(int);
 	static void Mul(Int128 *p, Int128 *a, Int128 *b);
 	static void Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b);
 	static bool IsEqual(Int128 *a, Int128 *b);
@@ -72,7 +93,7 @@ public:
 		this->low = s.low;
 		return s;
 	}
-	static Int128 Convert(long v) {
+	static Int128 Convert(int64_t v) {
 		Int128 p;
 
 		p.low = v;
@@ -82,7 +103,14 @@ public:
 			p.high = 0;
 		return (p);
 	}
+	static Int128 Convert(uint64_t v) {
+		Int128 p;
+
+		p.low = v;
+		p.high = 0;
+		return (p);
+	}
 	bool IsNBit(int bitno);
 	void insert(int64_t i, int64_t offset, int64_t width);
-	int64_t extract(Int128* i, int64_t offset, int64_t width);
+	int64_t extract(int64_t offset, int64_t width);
 };

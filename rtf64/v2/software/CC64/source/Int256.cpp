@@ -145,14 +145,8 @@ void Int256::Mul(Int256 *p, Int256 *a, Int256 *b)
 	int nn;
 	bool sign;
 
-	p0.low = 0LL;
-	p0.midLow = 0LL;
-	p0.midHigh = 0LL;
-	p0.high = 0LL;
-	p1.low = 0LL;
-	p1.midLow = 0LL;
-	p1.midHigh = 0LL;
-	p1.high = 0LL;
+	p0 = *Zero();
+	p1 = *Zero();
 	Assign(&oa,a);
 	Assign(&ob,b);
 	// Compute output sign
@@ -164,17 +158,13 @@ void Int256::Mul(Int256 *p, Int256 *a, Int256 *b)
 	if (ob.high < 0)
 		Sub(&ob,Zero(),&ob);
 	for (nn = 0; nn < 256; nn++) {
-		if (Shl(&p0,&p0)) {
-			Shl(&p1,&p1);
+		Shl(&p1, &p1);
+		if (Shl(&p0, &p0))
 			p1.low |= 1LL;
-		}
-		else
-			Shl(&p1,&p1);
-		if (oa.high & 0x8000000000000000LL) {
-			if (Add(&p0,&p0,&ob))
+		if (Shl(&oa, &oa)) {
+			if (Add(&p0, &p0, &ob))
 				p1.low|=1LL;
 		}
-		Shl(&oa,&oa);
 	}
 	Assign (p,&p0);
 	if (sign) {
@@ -210,7 +200,7 @@ void Int256::Div(Int256 *q, Int256 *r, Int256 *a, Int256 *b)
 		Shl(&rm,&rm);
 		if (Shl(&qu,&qu))
 			rm.low |= 1LL;
-		if (IsLessThan(&oa,&rm)) {
+		if (IsLE(&oa,&rm)) {
 			Sub(&rm,&rm,&oa);
 			qu.low |= 1LL;
 		}
@@ -315,11 +305,33 @@ int64_t Int256::StickyCalc(Int256* a, int amt)
 
 	Assign(&b, a);
 	st = 0;
-	for (; amt > 0; amt--) {
-		st = st | (b.low & 1LL);
-		Shr(&b, &b, 1);
+	if (amt >= 192) {
+		st = (b.low | b.midLow | b.midHigh) != 0;
+		b.low = b.high;
+		b.midLow = 0LL;
+		b.midHigh = 0LL;
+		b.high = 0LL;
+		amt -= 192;
 	}
-	return (st);
+	else if (amt >= 128) {
+		st = (b.low | b.midLow) != 0;
+		b.low = b.midHigh;
+		b.midLow = b.high;
+		b.midHigh = 0LL;
+		b.high = 0LL;
+		amt -= 128;
+	}
+	else if (amt >= 64) {
+		st = b.low != 0;
+		b.low = b.midLow;
+		b.midLow = b.midHigh;
+		b.midHigh = b.high;
+		b.high = 0LL;
+		amt -= 64;
+	}
+	for (; amt > 0; amt--)
+		st = st | Shr(&b, &b);
+	return (st & 1LL);
 }
 
 void Int256::insert(int64_t i, int64_t offset, int64_t width)
@@ -329,7 +341,7 @@ void Int256::insert(int64_t i, int64_t offset, int64_t width)
 	int nn;
 
 	Assign(&aa, this);
-	Assign(&mask, One());
+	Assign(&mask, Zero());
 	for (nn = 0; nn < width; nn++) {
 		Shl(&mask, &mask, 1LL);
 		mask.low |= 1LL;
@@ -356,33 +368,27 @@ void Int256::insert(int64_t i, int64_t offset, int64_t width)
 	high = aa.high;
 }
 
-void Int256::insert(Int128 i, int64_t offset, int64_t width)
+void Int256::insert(Int256 i, int64_t offset, int64_t width)
 {
 	Int256 aa, bb;
 	Int256 mask;
 	int nn;
 
-	Assign(&aa, this);
+	Assign(&aa, &i);
 	Assign(&mask, One());
 	for (nn = 0; nn < width; nn++) {
 		Shl(&mask, &mask, 1LL);
 		mask.low |= 1LL;
 	}
+	aa.BitAnd(&aa, &aa, &mask);
+	aa.Shl(&aa, &aa, offset);
 	Shl(&mask, &mask, offset);
 	// clear out bitfield
-	aa.low &= ~mask.low;
-	aa.midLow &= ~mask.midLow;
-	aa.midHigh &= ~mask.midHigh;
-	aa.high &= ~mask.high;
-	bb.low = i.low;
-	bb.midLow = i.high;
-	bb.midHigh = 0LL;
-	bb.high = 0LL;
-	Shl(&bb, &bb, offset);
-	bb.low &= mask.low;
-	bb.midLow &= mask.midLow;
-	bb.midHigh &= mask.midHigh;
-	bb.high &= mask.high;
+	Assign(&bb, this);
+	bb.low &= ~mask.low;
+	bb.midLow &= ~mask.midLow;
+	bb.midHigh &= ~mask.midHigh;
+	bb.high &= ~mask.high;
 	aa.low |= bb.low;
 	aa.midLow |= bb.midLow;
 	aa.midHigh |= bb.midHigh;
@@ -393,11 +399,11 @@ void Int256::insert(Int128 i, int64_t offset, int64_t width)
 	high = aa.high;
 }
 
-int64_t Int256::extract(Int256* p, int64_t offset, int64_t width)
+int64_t Int256::extract(int64_t offset, int64_t width)
 {
 	Int256 k;
 
-	Shr(&k, p, offset);
+	Lsr(&k, this, offset);
 	k.low &= ((1LL << width) - 1LL);
 	return k.low;
 }

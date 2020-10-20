@@ -62,11 +62,85 @@ extern int      total_errors;
 int uctran_off;
 extern int lstackptr;
 
+int64_t rand64()
+{
+	int64_t r;
+
+	r = 0x0000000000000000LL;
+	r |= (int64_t)rand() << 48LL;
+	r |= (int64_t)rand() << 32LL;
+	r |= (int64_t)rand() << 16LL;
+	r |= (int64_t)rand();
+	return (r);
+}
+
+
 int main(int argc, char **argv)
 {
 	Posit64 pst;
+	Posit64 a, b, c, d, e;
+	int cnt;
+	txtoStream ofs;
+	Int128 aa, bb, cc, qq, rr;
 
-	pst = pst.IntToPosit(1);
+	aa.low = 0;
+	aa.high = 100;
+	bb.low = 20;
+	bb.high = 0;
+	cc.Div(&qq, &rr, &aa, &bb);
+	/*
+	pst = pst.IntToPosit(100);
+	a = a.IntToPosit(50);
+	b = b.IntToPosit(50);
+	c = a.Add(a, b);
+	a = a.IntToPosit(100);
+	b = b.IntToPosit(10);
+	c = c.Divide(a, b);
+	ofs.open("d:/cores2020/rtf64/v2/software/examples/positTest.txt", std::ios::out | std::ios::trunc);
+	for (cnt = 0; cnt < 30000; cnt++) {
+		switch (cnt) {
+		case 0:
+			a = a.IntToPosit(10);
+			b = b.IntToPosit(10);
+			break;
+		case 1:
+			a = a.IntToPosit(10);
+			b = b.IntToPosit(1);
+			break;
+		case 2:
+			a = a.IntToPosit(1);
+			b = b.IntToPosit(10);
+			break;
+		case 3:
+			a = a.IntToPosit(100);
+			b = b.IntToPosit(10);
+			break;
+		case 4:
+			a = a.IntToPosit(2);
+			b = b.IntToPosit(2);
+			break;
+		case 5:
+			a = a.IntToPosit(-10);
+			b = b.IntToPosit(-10);
+			break;
+		default:
+			a.val = rand64();
+			b.val = rand64();
+		}
+		ofs.printf("%08I64X ", a.val);
+		ofs.printf("%08I64X ", b.val);
+		c = c.Add(a, b);
+		ofs.printf("%08I64X ", c.val);
+		d = d.Multiply(a, b);
+		ofs.printf("%08I64X ", d.val);
+		e = e.Divide(a, b);
+		ofs.printf("%08I64X ", e.val);
+		ofs.printf("\n");
+	}
+	ofs.flush();
+	ofs.close();
+	exit(0);
+	*/
 	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;

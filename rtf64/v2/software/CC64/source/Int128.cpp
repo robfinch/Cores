@@ -126,17 +126,13 @@ void Int128::Mul(Int128 *p, Int128 *a, Int128 *b)
 	if (ob.high < 0)
 		Sub(&ob,Zero(),&ob);
 	for (nn = 0; nn < 128; nn++) {
-		if (Shl(&p0,&p0)) {
-			Shl(&p1,&p1);
-			p1.low |= 1LL;
-		}
-		else
-			Shl(&p1,&p1);
-		if (oa.high & 0x8000000000000000LL) {
+		Shl(&p1, &p1);
+		if (Shl(&p0, &p0))
+			p1.low |= 1;
+		if (Shl(&oa, &oa)) {
 			if (Add(&p0,&p0,&ob))
 				p1.low|=1LL;
 		}
-		Shl(&oa,&oa);
 	}
 	Assign (p,&p0);
 	if (sign) {
@@ -168,7 +164,7 @@ void Int128::Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b)
 		Shl(&rm,&rm);
 		if (Shl(&qu,&qu))
 			rm.low |= 1LL;
-		if (IsLessThan(&oa,&rm)) {
+		if (IsLE(&oa,&rm)) {
 			Sub(&rm,&rm,&oa);
 			qu.low |= 1LL;
 		}
@@ -230,18 +226,23 @@ bool Int128::IsNBit(int bitno)
 	return true;
 }
 
-int64_t Int128::StickyCalc(Int128* a, int amt)
+int64_t Int128::StickyCalc(int amt)
 {
 	int64_t st;
 	Int128 b;
 
-	Assign(&b, a);
-	st = 0;
-	for (; amt > 0; amt--) {
-		st = st | (b.low & 1LL);
-		Shr(&b, &b, 1);
+	Assign(&b, this);
+	if (amt >= 64) {
+		st = b.low != 0;
+		b.low = b.high;
+		b.high = 0;
+		amt -= 64;
 	}
-	return (st);
+	else
+		st = 0;
+	for (; amt > 0; amt--)
+		st = st | Shr(&b, &b);
+	return (st & 1LL);
 }
 
 void Int128::insert(int64_t i, int64_t offset, int64_t width)
@@ -251,7 +252,7 @@ void Int128::insert(int64_t i, int64_t offset, int64_t width)
 	int nn;
 
 	Assign(&aa, this);
-	Assign(&mask, One());
+	Assign(&mask, Zero());
 	for (nn = 0; nn < width; nn++) {
 		Shl(&mask, &mask, 1LL);
 		mask.low |= 1LL;
@@ -270,12 +271,12 @@ void Int128::insert(int64_t i, int64_t offset, int64_t width)
 	high = aa.high;
 }
 
-int64_t Int128::extract(Int128* p, int64_t offset, int64_t width)
+int64_t Int128::extract(int64_t offset, int64_t width)
 {
 	Int128 k;
 
-	Shr(&k, p, offset);
+	Lsr(&k, this, offset);
 	k.low &= ((1LL << width) - 1LL);
-	return k.low;
+	return (k.low);
 }
 

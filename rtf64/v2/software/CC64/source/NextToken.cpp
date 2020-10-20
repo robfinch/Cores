@@ -343,13 +343,16 @@ void getfrac()
 {
 	Float128 frmul128,tmp,ch128,fract128;
   Posit64 pmul64, pch64, pfract64, p10;
+  Posit64 pmu, pot;
 
 	double frmul;
 	double fract = 0.0;
 	Float128::Assign(&frmul128,Float128::One());
   pmul64.One();
+  pmu.One();
   pfract64.Zero();
   p10.Ten();
+  pot.OneTenth();
   frmul = 1.0;
   while(isdigit(lastch)) {
 		Float128::IntToFloat(&ch128,lastch-'0');
@@ -365,12 +368,14 @@ void getfrac()
 		Float128::Mul(&frmul128,&frmul128,Float128::Ten());
 
     pmul64 = pmul64.Multiply(pmul64, p10);
+    pmu = pmu.Multiply(pmu, pot);
   }
 	fract = fract / frmul;
 	rval += fract;
 	Float128::Div(&fract128,&fract128,&frmul128);
 	Float128::Add(&rval128,&rval128,&fract128);
   pfract64 = pfract64.Divide(pfract64, pmul64);
+  //pfract64 = pfract64.Multiply(pfract64, pmu);
   pval64 = pval64.Add(pval64, pfract64);
 }
 

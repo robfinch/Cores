@@ -26,10 +26,10 @@ public:
 
 class Posit64
 {
-	static int64_t posWidth;
-	static int64_t expWidth;
 	static int Posit64::DividerLUT[65536];
 public:
+	static int64_t posWidth;
+	static int64_t expWidth;
 	int64_t val;
 public:
 	Posit64() { val = 0; };
@@ -49,3 +49,10 @@ public:
 	char *ToString();
 };
 
+class Posit64Multiplier : public Posit64
+{
+public:
+	Posit64 Multiply(Posit64 a, Posit64 b);
+	Int256 BuildResult(Int128 prod1, int64_t exp, int64_t rs);
+	Posit64 Round(Int256 tmp1, int rgml, uint64_t so, bool zero, bool inf);
+};
