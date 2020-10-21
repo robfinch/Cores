@@ -69,6 +69,8 @@ TYP				stdflt;
 TYP				stddouble;
 TYP				stdquad;
 TYP				stdposit;
+TYP				stdposit32;
+TYP				stdposit16;
 TYP             stdfunc;
 TYP             stdexception;
 extern TYP      *head;          /* shared with ParseSpecifier */

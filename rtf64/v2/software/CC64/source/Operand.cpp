@@ -218,6 +218,10 @@ void Operand::MakeLegal(int flags, int size)
 			if (flags & am_fpreg)
 				return;
 			break;
+		case am_preg:
+			if (flags & am_preg)
+				return;
+			break;
 		case am_creg:
 			if (flags & am_creg)
 				return;
@@ -289,6 +293,7 @@ void Operand::MakeLegal(int flags, int size)
 			return;
 		ReleaseTempReg(this);      /* maybe we can use it... */
 		ap2 = GetTempFPRegister();
+		ap2->tp = this->tp;	// Load needs this
 		switch (mode) {
 		case am_ind:
 		case am_indx:
@@ -314,6 +319,44 @@ void Operand::MakeLegal(int flags, int size)
 		case 't': type = stdtriple.GetIndex(); break;
 		case 'q':	type = stdquad.GetIndex(); break;
 		default:	type = stddouble.GetIndex(); break;
+		}
+		preg = ap2->preg;
+		deep = ap2->deep;
+		pdeep = ap2->pdeep;
+		tempflag = 1;
+		return;
+	}
+	if (flags & am_preg)
+	{
+		if (mode == am_preg)
+			return;
+		ReleaseTempReg(this);      /* maybe we can use it... */
+		ap2 = GetTempFPRegister();
+		ap2->tp = this->tp;	// Load needs this
+		switch (mode) {
+		case am_ind:
+		case am_indx:
+			cg.GenerateLoad(ap2, this, size, size);
+			break;
+		case am_imm:
+			ap1 = GetTempRegister();
+			GenerateDiadic(op_ldi, 0, ap1, this);
+			GenerateDiadic(op_mov, 0, ap2, ap1);
+			ReleaseTempReg(ap1);
+			break;
+		case am_reg:
+			GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
+			break;
+		default:
+			cg.GenerateLoad(ap2, this, size, size);
+			break;
+		}
+		mode = am_fpreg;
+		switch (ap2->fpsize()) {
+		case 'd':	type = stdposit.GetIndex(); break;
+		case 's': type = stdposit32.GetIndex(); break;
+		case 'h': type = stdposit16.GetIndex(); break;
+		default:	type = stdposit.GetIndex(); break;
 		}
 		preg = ap2->preg;
 		deep = ap2->deep;
@@ -541,6 +584,9 @@ void Operand::store(txtoStream& ofs)
 		break;
 	case am_fpreg:
 		ofs.printf("$f%d", (int)preg);
+		break;
+	case am_preg:
+		ofs.printf("$p%d", (int)preg);
 		break;
 	case am_creg:
 		ofs.printf("$cr%d", (int)preg);

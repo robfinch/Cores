@@ -254,6 +254,16 @@ Operand *OperandFactory::makefpreg(int r)
 	return (ap);
 }
 
+Operand* OperandFactory::makepreg(int r)
+{
+	Operand* ap;
+	ap = allocOperand();
+	ap->mode = am_preg;
+	ap->preg = r;
+	ap->type = stdposit.GetIndex();
+	return (ap);
+}
+
 Operand *OperandFactory::makecreg(int r)
 {
 	Operand *ap;
@@ -325,6 +335,11 @@ Operand *makevmreg(int r)
 Operand *makefpreg(int r)
 {
 	return(compiler.of.makefpreg(r));
+}
+
+Operand* makepreg(int r)
+{
+	return(compiler.of.makepreg(r));
 }
 
 Operand *makecreg(int r)

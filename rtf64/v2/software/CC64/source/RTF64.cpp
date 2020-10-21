@@ -1311,6 +1311,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
     int i;
 	int sp = 0;
 	int fsp = 0;
+	int psp = 0;
 	int ps;
 	TypeArray *ta = nullptr;
 	CSet *mask, *fmask;
@@ -1330,7 +1331,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
         }
 */
 //		ReleaseTempRegister(ap);
-		sym->SaveTemporaries(&sp, &fsp);
+		sym->SaveTemporaries(&sp, &fsp, &psp);
 		if (currentFn->HasRegisterParameters())
 			sym->SaveRegisterArguments();
 		// If the symbol is unknown, assume a throw is present
@@ -1376,7 +1377,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			if (sym)
 				sym->RestoreRegisterArguments();
 		if (sym)
-			sym->RestoreTemporaries(sp, fsp);
+			sym->RestoreTemporaries(sp, fsp, psp);
 	}
     else
     {
@@ -1394,7 +1395,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 				sym = ap->offset->sym->fi;
 		}
 		if (sym)
-			sym->SaveTemporaries(&sp, &fsp);
+			sym->SaveTemporaries(&sp, &fsp, &psp);
 		if (currentFn->HasRegisterParameters())
 			if (sym)
 				sym->SaveRegisterArguments();
@@ -1441,7 +1442,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			if (sym)
 				sym->RestoreRegisterArguments();
 		if (sym)
-			sym->RestoreTemporaries(sp, fsp);
+			sym->RestoreTemporaries(sp, fsp, psp);
 		ReleaseTempRegister(ap);
 	}
 	/*

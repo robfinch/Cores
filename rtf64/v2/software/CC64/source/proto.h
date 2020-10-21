@@ -54,6 +54,23 @@ extern Operand *MakeString(char *s);
 extern Operand *MakeDoubleIndexed(int i, int j, int scale);
 extern Operand *makecreg(int);
 
+// Register.c
+extern Operand* GetTempReg(int);
+extern Operand* GetTempRegister();
+extern Operand* GetTempTgtRegister();
+extern Operand* GetTempBrRegister();
+extern Operand* GetTempFPRegister();
+extern Operand* GetTempPositRegister();
+extern Operand* GetTempVectorRegister();
+extern Operand* GetTempVectorMaskRegister();
+extern void ReleaseTempRegister(Operand* ap);
+extern void ReleaseTempReg(Operand* ap);
+extern int TempInvalidate(int*, int*);
+extern void TempRevalidate(int sp, int fsp, int psp);
+extern int GetTempMemSpace();
+extern bool IsArgumentReg(int);
+extern Operand* GenerateFunctionCall(ENODE* node, int flags);
+
 // Utility
 extern int64_t round8(int64_t);
 extern int countLeadingBits(int64_t val);

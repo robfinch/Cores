@@ -124,6 +124,7 @@ int             global_flag = 1;
 TABLE           defsyms;
 CSet *save_mask = nullptr;          /* register save mask */
 CSet *fpsave_mask = nullptr;
+CSet* psave_mask = nullptr;
 TYP             tp_int, tp_econst;
 bool dogen = true;
 int isKernel = FALSE;

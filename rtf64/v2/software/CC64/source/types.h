@@ -92,6 +92,7 @@ struct nlit {
 	struct nlit* next;
 	struct nlit* tail;
 	int    label;
+	int precision;
 	Float128 f128;
 	double f;
 	Posit64 p;
@@ -290,6 +291,7 @@ public:
 	DerivedMethod *derivitives;
 	CSet *mask, *rmask;
 	CSet *fpmask, *fprmask;
+	CSet* pmask, * prmask;
 	CSet *vmask, *vrmask;
 	BasicBlock *RootBlock;
 	BasicBlock *LastBlock;
@@ -329,14 +331,16 @@ public:
 
 	void SaveGPRegisterVars();
 	void SaveFPRegisterVars();
+	void SavePositRegisterVars();
 	void SaveRegisterVars();
 	void SaveRegisterArguments();
 	int RestoreGPRegisterVars();
 	int RestoreFPRegisterVars();
+	int RestorePositRegisterVars();
 	void RestoreRegisterVars();
 	void RestoreRegisterArguments();
-	void SaveTemporaries(int *sp, int *fsp);
-	void RestoreTemporaries(int sp, int fsp);
+	void SaveTemporaries(int *sp, int *fsp, int* psp);
+	void RestoreTemporaries(int sp, int fsp, int psp);
 
 	void UnlinkStack();
 
@@ -929,6 +933,7 @@ public:
 	Operand *makevreg(int r);
 	Operand *makevmreg(int r);
 	Operand *makefpreg(int r);
+	Operand* makepreg(int r);
 	Operand *MakeMask(int mask);
 	Operand *MakeImmediate(int64_t i);
 	Operand* MakeMemoryIndirect(int disp, int regno);
@@ -1009,8 +1014,8 @@ public:
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
 	void GenLoadConst(Operand *ap1, Operand *ap2);
-	void SaveTemporaries(Function *sym, int *sp, int *fsp);
-	void RestoreTemporaries(Function *sym, int sp, int fsp);
+	void SaveTemporaries(Function *sym, int *sp, int *fsp, int* psp);
+	void RestoreTemporaries(Function *sym, int sp, int fsp, int psp);
 	int GenerateInlineArgumentList(Function *func, ENODE *plist);
 	virtual int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat) { return(0); };
 	virtual int PushArguments(Function *func, ENODE *plist) { return (0); };

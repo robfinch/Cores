@@ -3,16 +3,16 @@
 extern int countLeadingBits(int64_t val);
 extern double clog2(double n);
 
-int64_t Posit64::posWidth = 64;
-int64_t Posit64::expWidth = 3;
+int64_t Posit16::posWidth = 16;
+int64_t Posit16::expWidth = 1;
 
-Posit64::Posit64(int64_t i)
+Posit16::Posit16(int i)
 {
   val = 0;
   IntToPosit(i);
 }
 
-Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
+Posit16 Posit16::Addsub(int8_t op, Posit16 a, Posit16 b)
 {
   int64_t rs = (int64_t)clog2((double)(posWidth - 1LL));
   int64_t es = expWidth;
@@ -39,13 +39,13 @@ Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
   int64_t expo;
   int64_t exp_mask = (((uint64_t)1 << (uint64_t)expWidth) - 1LL);
   int64_t rs_mask = (((uint64_t)1 << (uint64_t)rs) - 1LL);
-  RawPosit ad((int8_t)3, (int8_t)64), bd((int8_t)3, (int8_t)64);
+  RawPosit ad((int8_t)2, (int8_t)32), bd((int8_t)2, (int8_t)32);
   int64_t S, T, L, G, R, St, St1;
   Int256 s1, s2;
   int nn;
   uint64_t ulp, rnd_ulp, tmp1_rnd_ulp, tmp1_rnd;
   uint64_t abs_tmp, o;
-  Posit64 out;
+  Posit16 out;
   uint64_t sx;
 
   Decompose(a, &ad);
@@ -98,9 +98,9 @@ Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
   diff = ((argm1 << expWidth) | exp1) - ((argm2 << expWidth) | exp2);
   exp_diff = (diff > ((1LL << (rs + 1LL))) -1LL) ? -1LL & rs_mask : diff & rs_mask;
   sig1s.low = 0;
-  sig1s.high = sig1;
+  sig1s.high = sig1 << 32;
   sig2s.low = 0;
-  sig2s.high = sig2;
+  sig2s.high = sig2 << 32;
   Int128::Lsr(&sig2s, &sig2s, exp_diff);
   if (rop)
     sigov = Int128::Sub(&sig_sd, &sig1s, &sig2s);
@@ -143,60 +143,61 @@ Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
   s1 = *s1.Zero();
   switch (es) {
   case 0:
-    S = sig_ls.StickyCalc(posWidth - 3);
+    S = sig_ls.StickyCalc(posWidth*2 - 3);
     s1.low = srxx;
     s1.midLow = srxx;
     s1.midHigh = srxx;
     s1.high = srxx;
     s1.insert(S, 0, 1);
-    s1.insert(sig_ls.extract(posWidth - 2, 64), 1, 64);
-    s1.insert(sig_ls.extract(posWidth + 62, 1), 65, 1);
-    s1.insert(srxtmp1, 66, 1);
+    s1.insert(sig_ls.extract(posWidth*3 - 2, 32), 1, 32);
+    s1.insert(sig_ls.extract(posWidth*3 + 30, 1), 33, 1);
+    s1.insert(srxtmp1, 34, 1);
     break;
   case 1:
-    S = sig_ls.StickyCalc(posWidth - 2);
+    S = sig_ls.StickyCalc(posWidth*2 - 2);
     s1.low = srxx;
     s1.midLow = srxx;
     s1.midHigh = srxx;
     s1.high = srxx;
     s1.insert(S, 0, 1);
-    s1.insert(sig_ls.extract(posWidth - 1, 64), 1, 64);
-    s1.insert(expo, 65, 1);
-    s1.insert(srxtmp1, 66, 1);
+    s1.insert(sig_ls.extract(posWidth*3 - 1, 32), 1, 32);
+    s1.insert(expo, 33, 1);
+    s1.insert(srxtmp1, 34, 1);
     break;
   case 2:
-    S = sig_ls.StickyCalc(posWidth - 1);
+    S = sig_ls.StickyCalc(posWidth*3 - 1);
     s1.low = srxx;
     s1.midLow = srxx;
     s1.midHigh = srxx;
     s1.high = srxx;
     s1.insert(S, 0, 1);
-    s1.insert(sig_ls.extract(posWidth, 63), 1, 63);
-    s1.insert(expo, 64, 2);
-    s1.insert(srxtmp1, 66, 1);
+    s1.insert(sig_ls.extract(posWidth*3, 31), 1, 31);
+    s1.insert(expo, 32, 2);
+    s1.insert(srxtmp1, 34, 1);
     break;
   case 3:
-    S = sig_ls.StickyCalc(posWidth);
+    S = sig_ls.StickyCalc(posWidth*3);
     s1.low = srxx;
     s1.midLow = srxx;
     s1.midHigh = srxx;
     s1.high = srxx;
     s1.insert(S, 0, 1);
-    sx = sig_ls.extract(posWidth + 1, 62);
-    s1.insert(sx, 1, 62);
-    s1.insert(expo, 63, 3);
-    s1.insert(srxtmp1, 66, 1);
+    sx = sig_ls.extract(posWidth*3 + 1, 30);
+    s1.insert(sx, 1, 30);
+    s1.insert(expo, 31, 3);
+    s1.insert(srxtmp1, 34, 1);
     break;
   default:
-    S = sig_ls.StickyCalc(posWidth - 1LL + expWidth - 2LL);
+    // Error: not supported
+    S = sig_ls.StickyCalc(posWidth*3 - 1LL + expWidth - 2LL);
     s1.low = srxx;
     s1.midLow = srxx;
     s1.midHigh = srxx;
     s1.high = srxx;
-    s1.insert(S, 0, 2);
-    s1.insert(sig_ls.extract(posWidth+expWidth-3LL, posWidth * 2LL -(posWidth + expWidth - 3LL) ), 3LL, posWidth * 2LL - (posWidth + expWidth - 3LL));
-    s1.insert(expo, posWidth * 2LL - 2LL - (posWidth + expWidth - 2LL) + 4LL, expWidth);
-    s1.insert(srxtmp1, posWidth * 2LL - 2LL - (posWidth + expWidth - 2LL) + expWidth + 4LL, 1LL);
+    s1.insert(S, 0, 1);
+    s1.insert(sig_ls.extract(posWidth*3+expWidth-3LL, posWidth * 4LL -(posWidth*3 + expWidth - 3LL) ), 1LL, posWidth * 4LL - (posWidth*3 + expWidth - 3LL));
+    s1.insert(expo, posWidth * 4LL - 2LL - (posWidth*3 + expWidth - 2LL) + 2LL, expWidth);
+    s1.insert(srxtmp1, posWidth * 4LL - 2LL - (posWidth*3 + expWidth - 2LL) + expWidth + 2LL, 1LL);
     break;
   }
   s1.Shl(&s2, & s1, posWidth + 1LL);
@@ -249,25 +250,25 @@ Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
 }
 
 
-Posit64 Posit64::Add(Posit64 a, Posit64 b)
+Posit16 Posit16::Add(Posit16 a, Posit16 b)
 {
   return (Addsub(0, a, b));
 }
 
-Posit64 Posit64::Sub(Posit64 a, Posit64 b)
+Posit16 Posit16::Sub(Posit16 a, Posit16 b)
 {
   return (Addsub(1, a, b));
 }
 
-Posit64 Posit64::Multiply(Posit64 a, Posit64 b)
+Posit16 Posit16::Multiply(Posit16 a, Posit16 b)
 {
-  Posit64Multiplier pm;
+  Posit16Multiplier pm;
   return (pm.Multiply(a, b));
 };
 
-Posit64 Posit64Multiplier::Round(Int256 tmp1, int rgml, uint64_t so, bool zero, bool inf)
+Posit16 Posit16Multiplier::Round(Int256 tmp1, int rgml, uint64_t so, bool zero, bool inf)
 {
-  Posit64 out;
+  Posit16 out;
 
   int64_t M = posWidth - expWidth;
   int64_t L = tmp1.extract(posWidth + 4, 1);
@@ -283,7 +284,7 @@ Posit64 Posit64Multiplier::Round(Int256 tmp1, int rgml, uint64_t so, bool zero, 
   return (out);
 }
 
-Int256 Posit64Multiplier::BuildResult(Int128 prod1, int64_t exp, int64_t rs)
+Int256 Posit16Multiplier::BuildResult(Int128 prod1, int64_t exp, int64_t rs)
 {
   Int256 tmp;
   int64_t M = posWidth - expWidth;
@@ -302,7 +303,7 @@ Int256 Posit64Multiplier::BuildResult(Int128 prod1, int64_t exp, int64_t rs)
   return (tmp);
 }
 
-Posit64 Posit64Multiplier::Multiply(Posit64 a, Posit64 b)
+Posit16 Posit16Multiplier::Multiply(Posit16 a, Posit16 b)
 {
   RawPosit rawA(3, 64);
   RawPosit rawB(3, 64);
@@ -312,7 +313,7 @@ Posit64 Posit64Multiplier::Multiply(Posit64 a, Posit64 b)
   int64_t M = posWidth - expWidth;
   int64_t mo;
   int64_t rs = clog2(posWidth - 1);
-  Posit64 o;
+  Posit16 o;
   int64_t decexp;
   int64_t sigw, one;
   int cnt;
@@ -375,11 +376,11 @@ Posit64 Posit64Multiplier::Multiply(Posit64 a, Posit64 b)
   return (o);
 }
 
-Posit64 Posit64::Divide(Posit64 a, Posit64 b)
+Posit16 Posit16::Divide(Posit16 a, Posit16 b)
 {
-  RawPosit aa(Posit64::expWidth, Posit64::posWidth);
-  RawPosit bb(Posit64::expWidth, Posit64::posWidth);
-  Posit64 out;
+  RawPosit aa(Posit16::expWidth, Posit16::posWidth);
+  RawPosit bb(Posit16::expWidth, Posit16::posWidth);
+  Posit16 out;
   int64_t so;
   int64_t inf;
   int64_t zer;
@@ -425,8 +426,8 @@ Posit64 Posit64::Divide(Posit64 a, Posit64 b)
   else
     NR_Iter = 0;
 
-  Posit64::Decompose(a, &aa);
-  Posit64::Decompose(b, &bb);
+  Posit16::Decompose(a, &aa);
+  Posit16::Decompose(b, &bb);
   inf = aa.isInf | bb.isZero;
   zer = aa.isZero | bb.isInf;
   so = aa.sign ^ bb.sign;
@@ -569,7 +570,7 @@ Posit64 Posit64::Divide(Posit64 a, Posit64 b)
 }
 
 
-Posit64 Posit64::IntToPosit(int64_t i)
+Posit16 Posit16::IntToPosit(int64_t i)
 {
   int8_t sgn;
   int64_t ii;
@@ -583,7 +584,7 @@ Posit64 Posit64::IntToPosit(int64_t i)
   int64_t S;
   int64_t nn;
   int64_t rnd_ulp;
-  Posit64 pst;
+  Posit16 pst;
 
   if (i == 0) {
     pst.val = 0;
@@ -591,10 +592,10 @@ Posit64 Posit64::IntToPosit(int64_t i)
   }
   ii = i < 0 ? -i : i;
   lzcnt = countLeadingZeros((ii<<1LL)|1LL);
-  sgn = (i >> 63LL) & 1LL;
+  sgn = (i >> posWidth-1LL) & 1LL;
   rgm = (posWidth - (lzcnt + 2LL)) >> expWidth;
   sig = ii << lzcnt;  // left align number
-  sig &= 0x3fffffffffffffffLL;  // chop off leading one
+  sig &= 0x3fffffff;  // chop off leading one
   if (expWidth > 0) {
     exp = (posWidth - (lzcnt + 2LL)) & ((1LL << expWidth) - 1LL);
     ones = -1LL;
@@ -642,7 +643,7 @@ Posit64 Posit64::IntToPosit(int64_t i)
   tmp3.low = rnd_ulp;
   tmp3.high = 0LL;
   Int128::Add(&tmp2_rnd, &tmp2, &tmp3);
-  tmp2_rnd.low &= 0x7fffffffffffffffLL;
+  tmp2_rnd.low &= 0x7fffffff;
   if (i == 0)
     pst.val = 0;
   else if (i < 0)
@@ -652,12 +653,12 @@ Posit64 Posit64::IntToPosit(int64_t i)
   return (pst);
 }
 
-int64_t Posit64::PositToInt(Posit64 p)
+int64_t Posit16::PositToInt(Posit16 p)
 {
   return (0);
 }
 
-void Posit64::Decompose(Posit64 a, RawPosit* b)
+void Posit16::Decompose(Posit16 a, RawPosit* b)
 {
   uint64_t n;
   int8_t rgmlen;
@@ -665,14 +666,14 @@ void Posit64::Decompose(Posit64 a, RawPosit* b)
   int8_t sign;
   int64_t regexp;
 
-  sign = (a.val >> 63LL) & 1LL;
+  sign = (a.val >> posWidth-1LL) & 1LL;
   n = a.val < 0 ? -a.val : a.val;
   rgmlen = countLeadingBits(n << 1LL) + 1;
   regexp = (n >> (posWidth - rgmlen - expWidth - 1LL));
   exp = (n >> (posWidth - rgmlen - expWidth - 1LL)) & ((1 << expWidth) - 1);
-  b->Size(3, 64);
-  b->isNaR = a.val == 0x8000000000000000LL;
-  b->isInf = a.val == 0x8000000000000000LL;
+  b->Size(expWidth, posWidth);
+  b->isNaR = a.val == 0x80000000;
+  b->isInf = a.val == 0x80000000;
   b->isZero = a.val == 0LL;
   b->sign = sign;
   b->exp = exp;
@@ -691,23 +692,23 @@ void Posit64::Decompose(Posit64 a, RawPosit* b)
     b->sig.high = 0LL;
   }
   else
-    Int128::Assign(&b->sig, &Int128::Convert(0x4000000000000000LL));
+    Int128::Assign(&b->sig, &Int128::Convert(0x40000000LL));
   if (b->isZero)
     b->sig = *Int128::Zero();
 }
 
-char* Posit64::ToString()
+char* Posit16::ToString()
 {
   static char buf[20];
-  sprintf_s(buf, sizeof(buf), "%08LX", val);
+  sprintf_s(buf, sizeof(buf), "%02X", val);
   return (buf);
 }
 
-Posit32 Posit64::ConvertTo32()
+Posit64 Posit16::ConvertTo64()
 {
-  RawPosit aa(3, 64);
-  RawPosit bb(2, 32);
-  Posit32 b;
+  RawPosit aa(1, 16);
+  RawPosit bb(3, 64);
+  Posit64 b;
   int64_t x;
   Int128 ai128;
 
@@ -715,11 +716,11 @@ Posit32 Posit64::ConvertTo32()
   bb.isInf = aa.isInf;
   bb.isZero = aa.isZero;
   if (bb.isInf) {
-    b.val = 0x80000000;
+    b.val = 0x8000000000000000LL;
     return (b);
   }
   if (bb.isZero) {
-    b.val = 0;
+    b.val = 0LL;
     return (b);
   }
   int64_t rgma = (aa.regsign) ? aa.regime : -aa.regime;
@@ -729,57 +730,15 @@ Posit32 Posit64::ConvertTo32()
   bb.regime = aa.regsign ? rgmb : -rgmb;
   bb.regsign = aa.regsign;
   bb.regexp = (bb.regime << bb.expWidth) | bb.exp;
-  ai128 = Int128::Convert(this->val < 0 ? -this->val : this->val);
-  int64_t L = ai128.extract(this->posWidth - b.posWidth - 1LL, 1LL);
-  int64_t G = ai128.extract(this->posWidth - b.posWidth - 2LL, 1LL);
-  int64_t R = ai128.extract(this->posWidth - b.posWidth - 3LL, 1LL);
-  int64_t St = ai128.StickyCalc(this->posWidth - b.posWidth - 4);
-  int64_t ulp = ((G & (R | St)) | (L & G & ~(R | St)));
-  int64_t tmp1_rnd_ulp = ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth) + ulp;
-  int64_t c = ai128.AddCarry(tmp1_rnd_ulp, ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth), ulp);
-  int64_t tmp1_rnd = (rgmb < b.posWidth - b.expWidth - 2LL) ? tmp1_rnd_ulp : ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth);
-  int64_t abs_tmp = aa.sign ? -tmp1_rnd : tmp1_rnd;
-  b.val = (aa.sign << (b.posWidth - 1LL)) | ((uint32_t)abs_tmp >> 1LL);
+  int64_t r = bb.regsign ? 0LL : -1LL;
+  ai128.insert((int64_t)aa.sig.low, 0, aa.sigWidth);
+  ai128.insert(bb.exp, aa.sigWidth, bb.expWidth);
+  ai128.insert(bb.regsign, aa.sigWidth + 1LL, 1);
+  ai128.insert(r, aa.sigWidth + bb.expWidth + 1LL, 64LL);
+  ai128.Shl(&ai128, &ai128, 64LL - aa.sigWidth);
+  ai128.Lsr(&ai128, &ai128, rgmb + bb.expWidth);
+  int64_t tmp1 = ai128.extract(rgmb + bb.expWidth, b.posWidth);
+  int64_t abs_tmp = aa.sign ? -tmp1 : tmp1;
+  b.val = (aa.sign << (b.posWidth - 1LL)) | ((uint64_t)abs_tmp >> 1LL);
   return (b);
 }
-
-Posit16 Posit64::ConvertTo16()
-{
-  RawPosit aa(3, 64);
-  RawPosit bb(1, 16);
-  Posit16 b;
-  int64_t x;
-  Int128 ai128;
-
-  Decompose(*this, &aa);
-  bb.isInf = aa.isInf;
-  bb.isZero = aa.isZero;
-  if (bb.isInf) {
-    b.val = 0x8000;
-    return (b);
-  }
-  if (bb.isZero) {
-    b.val = 0;
-    return (b);
-  }
-  int64_t rgma = (aa.regsign) ? aa.regime : -aa.regime;
-  x = (rgma << aa.expWidth) + aa.exp;
-  int64_t rgmb = (x >> bb.expWidth);
-  bb.exp = x - (rgmb << bb.expWidth);
-  bb.regime = aa.regsign ? rgmb : -rgmb;
-  bb.regsign = aa.regsign;
-  bb.regexp = (bb.regime << bb.expWidth) | bb.exp;
-  ai128 = Int128::Convert(this->val < 0 ? -this->val : this->val);
-  int64_t L = ai128.extract(this->posWidth - b.posWidth - 1LL, 1LL);
-  int64_t G = ai128.extract(this->posWidth - b.posWidth - 2LL, 1LL);
-  int64_t R = ai128.extract(this->posWidth - b.posWidth - 3LL, 1LL);
-  int64_t St = ai128.StickyCalc(this->posWidth - b.posWidth - 4);
-  int64_t ulp = ((G & (R | St)) | (L & G & ~(R | St)));
-  int64_t tmp1_rnd_ulp = ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth) + ulp;
-  int64_t c = ai128.AddCarry(tmp1_rnd_ulp, ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth), ulp);
-  int64_t tmp1_rnd = (rgmb < b.posWidth - b.expWidth - 2LL) ? tmp1_rnd_ulp : ai128.extract(this->posWidth - b.posWidth - 1LL, b.posWidth);
-  int64_t abs_tmp = aa.sign ? -tmp1_rnd : tmp1_rnd;
-  b.val = (aa.sign << (b.posWidth - 1LL)) | ((uint16_t)abs_tmp >> 1LL);
-  return (b);
-}
-

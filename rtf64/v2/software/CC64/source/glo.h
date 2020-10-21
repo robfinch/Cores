@@ -154,6 +154,7 @@ extern int              global_flag;
 extern TABLE            defsyms;
 extern CSet *save_mask;      /* register save mask */
 extern CSet *fpsave_mask;
+extern CSet* psave_mask;
 extern int				bsave_mask;
 extern int uctran_off;
 extern int isKernel;
@@ -206,6 +207,8 @@ extern TYP stdtriple;
 extern TYP stdflt;
 extern TYP stddouble;
 extern TYP stdposit;
+extern TYP stdposit32;
+extern TYP stdposit16;
 extern TYP stdfunc;
 extern TYP stdexception;
 extern TYP stdconst;
@@ -388,21 +391,6 @@ extern char nmspace[20][100];
 extern void MakeLegalOperand(Operand *ap,int flags, int size);
 // List.c
 extern void ListTable(TABLE *t, int i);
-// Register.c
-extern Operand *GetTempReg(int);
-extern Operand *GetTempRegister();
-extern Operand *GetTempTgtRegister();
-extern Operand *GetTempBrRegister();
-extern Operand *GetTempFPRegister();
-extern Operand *GetTempVectorRegister();
-extern Operand *GetTempVectorMaskRegister();
-extern void ReleaseTempRegister(Operand *ap);
-extern void ReleaseTempReg(Operand *ap);
-extern int TempInvalidate(int *);
-extern void TempRevalidate(int sp, int fsp);
-extern int GetTempMemSpace();
-extern bool IsArgumentReg(int);
-extern Operand *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
@@ -425,7 +413,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[277];
+extern Instruction opl[280];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 extern char inpline[520];

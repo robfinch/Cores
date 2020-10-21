@@ -2030,6 +2030,8 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 {
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
+	Posit16 pos16;
+	Posit32 pos32;
 
 	// Used only by lea for subtract
 	if (isNeg)
@@ -2051,8 +2053,13 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 	case en_pcon:
 		if (!opt)
 			goto j1;
-		// The following spits out a warning, but is okay.
-		sprintf_s(buf, sizeof(buf), "0x%I64x", posit.val);
+		switch (tp->precision) {
+		case 16:	pos16 = posit.ConvertTo16();  sprintf_s(buf, sizeof(buf), "0x%04x", pos16.val); break;
+		case 32:	pos32 = posit.ConvertTo32();  sprintf_s(buf, sizeof(buf), "0x%08x", pos32.val); break;
+		default:
+			// The following spits out a warning, but is okay.
+			sprintf_s(buf, sizeof(buf), "0x%I64x", posit.val);
+		}
 		ofs.write(buf);
 		break;
 	case en_autovcon:
@@ -2361,9 +2368,9 @@ int ENODE::PutStructConst(txtoStream& ofs)
 			else
 				k = ep1->esize;
 			switch (ep1->esize) {
-			case 1:	ofs.printf("\tdcb\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 2:	ofs.printf("\tdcw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 4:	ofs.printf("\tdct\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 1:	ofs.printf("\tdcb\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 2:	ofs.printf("\tdcw\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 4:	ofs.printf("\tdct\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
 			case 8:	ofs.printf("\tdco\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
 			default:
 				ofs.printf("\tfill.b %ld,0x00\n", ep1->esize - 1);

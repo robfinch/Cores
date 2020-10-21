@@ -128,8 +128,18 @@ void CodeGenerator::GenerateComment(char *cm)
 
 void CodeGenerator::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 {
-	if (ap3->mode == am_fpreg) {
-		GenerateDiadic(op_fldo, 0, ap3, ap1);
+	if (ap3->tp->IsPositType()) {
+		switch (ap3->tp->precision) {
+		case 16:
+			GenerateDiadic(op_pldw, 0, ap3, ap1);
+			break;
+		case 32:
+			GenerateDiadic(op_pldt, 0, ap3, ap1);
+			break;
+		default:
+			GenerateDiadic(op_pldo, 0, ap3, ap1);
+			break;
+		}
 	}
 	else if (ap3->type==stdvector.GetIndex()) {
         GenerateDiadic(op_lv,0,ap3,ap1);
@@ -145,6 +155,9 @@ void CodeGenerator::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size
 	}
 	else if (ap3->type == stdtriple.GetIndex()) {
 		GenerateDiadic(op_ldf, 't', ap3, ap1);
+	}
+	else if (ap3->mode == am_fpreg) {
+		GenerateDiadic(op_fldo, 0, ap3, ap1);
 	}
 	else if (ap3->isUnsigned) {
 		{
@@ -344,9 +357,10 @@ Operand* CodeGenerator::GenerateAutopconDereference(ENODE* node, TYP* tp, bool i
 	ap1->preg = regFP;
 	ap1->offset = makeinode(en_icon, node->i);
 	ap1->offset->sym = node->sym;
-	ap1->tp = tp;
+	ap1->tp = node->tp;
 	if (node->tp)
 		switch (node->tp->precision) {
+		case 16: ap1->FloatSize = 'h'; break;
 		case 32: ap1->FloatSize = 's'; break;
 		default: ap1->FloatSize = ' '; break;
 		}
@@ -468,7 +482,7 @@ Operand* CodeGenerator::GenerateRegvarDereference(ENODE* node, TYP* tp, bool isR
 	ap1->mode = (node->rg >= regFirstArg && node->rg <= regLastArg) ? am_reg : am_ind;
 	//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
 	ap1->preg = node->rg;
-	ap1->tp = tp;
+	ap1->tp = node->tp;
 	ap1->isUnsigned = node->tp->isUnsigned;
 	ap1->MakeLegal(flags, size);
 	Leave("Genderef", 3);
@@ -1338,11 +1352,19 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
           }
 		}
 		else {
-			if (ap1->type==stddouble.GetIndex() || ap1->type==stdflt.GetIndex()
-				|| ap1->type==stdtriple.GetIndex() || ap1->type==stdquad.GetIndex())
+			if (ap1->type == stddouble.GetIndex() || ap1->type == stdflt.GetIndex()
+				|| ap1->type == stdtriple.GetIndex() || ap1->type == stdquad.GetIndex()) {
 				ap3 = GetTempFPRegister();
-			else
+				ap3->tp = ap1->tp;
+			}
+			else if (ap1->type == stdposit.GetIndex()) {
+				ap3 = GetTempPositRegister();
+				ap3->tp = ap1->tp;
+			}
+			else {
 				ap3 = GetTempRegister();
+				ap3->tp = ap1->tp;
+			}
 			// Generate a memory to memory move (struct assignments)
 			if (ssize > 10) {
 				if (ap1->type==stdvector.GetIndex() && ap2->type==stdvector.GetIndex()) {
@@ -1438,8 +1460,9 @@ Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int64_t size, int typ
 	ap2->bit_offset = node->bit_offset;
 	ap2->bit_width = node->bit_width;
 	ap2->type = type;
-	ap1->type = stdint.GetIndex();
 	ap2->tp = node->tp;
+	ap1->type = stdint.GetIndex();
+	ap1->tp = node->tp;
 	GenerateDiadic(op_lea,0,ap1,ap2);
 	ap1->MakeLegal(flags,size);
 	return (ap1);             /* return reg */
@@ -2239,31 +2262,31 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 	}
 }
 
-void CodeGenerator::SaveTemporaries(Function *sym, int *sp, int *fsp)
+void CodeGenerator::SaveTemporaries(Function *sym, int *sp, int *fsp, int* psp)
 {
 	if (sym) {
 		if (sym->UsesTemps) {
-			*sp = TempInvalidate(fsp);
+			*sp = TempInvalidate(fsp, psp);
 			//*fsp = TempFPInvalidate();
 		}
 	}
 	else {
-		*sp = TempInvalidate(fsp);
+		*sp = TempInvalidate(fsp, psp);
 		//*fsp = TempFPInvalidate();
 	}
 }
 
-void CodeGenerator::RestoreTemporaries(Function *sym, int sp, int fsp)
+void CodeGenerator::RestoreTemporaries(Function *sym, int sp, int fsp, int psp)
 {
 	if (sym) {
 		if (sym->UsesTemps) {
 			//TempFPRevalidate(fsp);
-			TempRevalidate(sp, fsp);
+			TempRevalidate(sp, fsp, psp);
 		}
 	}
 	else {
 		//TempFPRevalidate(fsp);
-		TempRevalidate(sp, fsp);
+		TempRevalidate(sp, fsp, psp);
 	}
 }
 

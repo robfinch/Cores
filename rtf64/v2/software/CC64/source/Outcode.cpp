@@ -45,7 +45,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[277] =
+Instruction opl[280] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -231,6 +231,9 @@ Instruction opl[277] =
 { "pea", op_pea },
 { "pea",op_pea },
 { "phi", op_phi },
+{ "pldo", op_pldo,4,1,true,am_reg,am_mem,0,0 },
+{ "pldt", op_pldt,4,1,true,am_reg,am_mem,0,0 },
+{ "pldw", op_pldw,4,1,true,am_reg,am_mem,0,0 },
 { "pmul", op_pmul, 8, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
 { "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
@@ -877,6 +880,10 @@ int NumericLiteral(ENODE* node)
 	lp->nmspace = my_strdup(GetNamespace());
 	lp->next = numeric_tab;
 	lp->typ = node->etype;
+	if (node->tp)
+		lp->precision = node->tp->precision;
+	else
+		lp->precision = 64;
 	numeric_tab = lp;
 	return (lp->label);
 }
@@ -985,9 +992,23 @@ void dumplits()
 				outcol += 35;
 				break;
 			case bt_posit:
-				ofs.printf("\t\dco\t");
-				ofs.printf("0x%08I64X\n", numeric_tab->p.val);
-				outcol += 35;
+				switch (numeric_tab->precision) {
+				case 16:
+					ofs.printf("\t\dcw\t");
+					ofs.printf("0x%04X\n", (int)(numeric_tab->p.val & 0xffffLL));
+					outcol += 35;
+					break;
+				case 32:
+					ofs.printf("\t\dct\t");
+					ofs.printf("0x%08X\n", (int)(numeric_tab->p.val & 0xffffffffLL));
+					outcol += 35;
+					break;
+				default:
+					ofs.printf("\t\dco\t");
+					ofs.printf("0x%016I64X\n", numeric_tab->p.val);
+					outcol += 35;
+					break;
+				}
 				break;
 			case bt_void:
 				break;

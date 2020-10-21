@@ -139,9 +139,26 @@ ENODE* Expression::ParsePositConst(ENODE** node)
 	pnode->posit = pval64;
 	if (parsingAggregate==0 && sizeof_flag == 0)
 		pnode->i = NumericLiteral(pnode);
-	pnode->esize = 8;
 	pnode->segment = rodataseg;
 	tptr = &stdposit;
+	switch (float_precision) {
+	case 'D': case 'd':
+		tptr = &stdposit;
+		pnode->esize = 8;
+		break;
+	case 'S': case 's':
+		tptr = &stdposit32;
+		pnode->esize = 4;
+		break;
+	case 'H': case 'h':
+		tptr = &stdposit16;
+		pnode->esize = 2;
+		break;
+	default:
+		tptr = &stdposit;
+		pnode->esize = 8;
+		break;
+	}
 	pnode->SetType(tptr);
 	tptr->isConst = TRUE;
 	NextToken();

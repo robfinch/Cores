@@ -188,7 +188,8 @@ enum e_op {
 	op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
 	op_fldo, op_fsto,
 	op_padd, op_psub, op_pmul, op_pdiv, op_ptoi, op_itop,
-	op_pldo, op_psto, op_peq, op_plt, op_ple,
+	op_pldw, op_pldt, op_pldo, op_pstw, op_pstt, op_psto,
+	op_peq, op_plt, op_ple,
 	// Vector
 	op_lv, op_sv,
 	op_vadd, op_vsub, op_vmul, op_vdiv,

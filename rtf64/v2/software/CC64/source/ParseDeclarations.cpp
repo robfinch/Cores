@@ -399,6 +399,7 @@ void Declaration::ParsePosit()
 		NextToken();
 		if (lastst == iconst) {
 			head->precision = ival;
+			head->size = head->precision / 8;
 			NextToken();
 			if ((head->precision & 7) != 0
 				|| head->precision < 16

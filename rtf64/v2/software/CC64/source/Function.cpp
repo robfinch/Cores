@@ -314,9 +314,25 @@ void Function::SaveFPRegisterVars()
 	if (fprmask->NumMember()) {
 		cnt = 0;
 		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
-		rmask->resetPtr();
-		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+		fprmask->resetPtr();
+		for (nn = fprmask->lastMember(); nn >= 0; nn = fprmask->prevMember()) {
 			GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
+		}
+	}
+}
+
+void Function::SavePositRegisterVars()
+{
+	int cnt;
+	int nn;
+
+	if (prmask->NumMember()) {
+		cnt = 0;
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(prmask->NumMember() * 8));
+		prmask->resetPtr();
+		for (nn = prmask->lastMember(); nn >= 0; nn = prmask->prevMember()) {
+			GenerateDiadic(op_psto, ' ', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 	}
@@ -448,37 +464,54 @@ int Function::RestoreFPRegisterVars()
 	return (cnt2);
 }
 
+int Function::RestorePositRegisterVars()
+{
+	int cnt2 = 0, cnt;
+	int nn;
+
+	if (psave_mask->NumMember()) {
+		cnt2 = cnt = (fpsave_mask->NumMember() - 1) * sizeOfWord;
+		psave_mask->resetPtr();
+		for (nn = psave_mask->nextMember(); nn >= 1; nn = psave_mask->nextMember()) {
+			GenerateDiadic(op_pldo, ' ', compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			cnt -= sizeOfWord;
+		}
+		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
+	}
+	return (cnt2);
+}
+
 void Function::RestoreRegisterVars()
 {
 	RestoreFPRegisterVars();
 	RestoreGPRegisterVars();
 }
 
-void Function::SaveTemporaries(int *sp, int *fsp)
+void Function::SaveTemporaries(int *sp, int *fsp, int* psp)
 {
 	if (this) {
 		if (UsesTemps) {
-			*sp = TempInvalidate(fsp);
+			*sp = TempInvalidate(fsp, psp);
 			//*fsp = TempFPInvalidate();
 		}
 	}
 	else {
-		*sp = TempInvalidate(fsp);
+		*sp = TempInvalidate(fsp, psp);
 		//*fsp = TempFPInvalidate();
 	}
 }
 
-void Function::RestoreTemporaries(int sp, int fsp)
+void Function::RestoreTemporaries(int sp, int fsp, int psp)
 {
 	if (this) {
 		if (UsesTemps) {
 			//TempFPRevalidate(fsp);
-			TempRevalidate(sp, fsp);
+			TempRevalidate(sp, fsp, psp);
 		}
 	}
 	else {
 		//TempFPRevalidate(fsp);
-		TempRevalidate(sp, fsp);
+		TempRevalidate(sp, fsp, psp);
 	}
 }
 

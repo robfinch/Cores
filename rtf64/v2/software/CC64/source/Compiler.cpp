@@ -294,6 +294,22 @@ void Compiler::AddStandardTypes()
 	p->precision = 64;
 	stdposit = *p;
 
+	p = allocTYP();
+	p->type = bt_posit;
+	p->typeno = bt_posit;
+	p->size = 4;
+	p->bit_width = nullptr;
+	p->precision = 32;
+	stdposit32 = *p;
+
+	p = allocTYP();
+	p->type = bt_posit;
+	p->typeno = bt_posit;
+	p->size = 2;
+	p->bit_width = nullptr;
+	p->precision = 16;
+	stdposit16 = *p;
+
 	p = TYP::Make(bt_func,0);
 	p->btp = pint->GetIndex();
 	stdfunc = *p;

@@ -474,6 +474,10 @@ j1:
                   getch();
                   isPosit = true;
                   lastst = pconst;
+                  if (lastch == 's' || lastch == 'h' || lastch=='S' || lastch=='H') {
+                    float_precision = tolower(lastch);
+                    getch();
+                  }
                 }
                 if(lastch == 'e' || lastch == 'E') {
                         getch();
@@ -488,7 +492,7 @@ j1:
 						float_precision = tolower(lastch);
 						getch();
 				}
-				else
+				else if (!isPosit)
 					float_precision = 'd';
 				
 				// Ignore 'U' unsigned suffix
