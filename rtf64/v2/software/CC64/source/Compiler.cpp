@@ -35,10 +35,6 @@ extern char *errtext(int errnum);
 extern std::string *classname;
 extern void doInitCleanup();
 
-Compiler::Compiler()
-{
-}
-
 int Compiler::GetReturnBlockSize()
 {
 	return (4 * sizeOfWord);

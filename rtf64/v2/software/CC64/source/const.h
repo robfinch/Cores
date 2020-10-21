@@ -8,7 +8,7 @@ enum e_bt {
 	bt_ichar, bt_iuchar,
 	bt_uchar, bt_ushort, bt_ulong,
   bt_unsigned, bt_vector, bt_vector_mask,
-  bt_struct, bt_union, bt_class, bt_enum, bt_void,
+  bt_array, bt_struct, bt_union, bt_class, bt_enum, bt_void,
   bt_func, bt_ifunc, bt_label,
 	bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
 	bt_exception, bt_ellipsis,
@@ -30,7 +30,9 @@ enum e_node {
 		en_cwl, en_cld, en_cfd,
 		en_sxb, en_sxc, en_sxh,
 		en_zxb, en_zxc, en_zxh,
-        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_scon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+		en_i2p, en_p2i,
+        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_scon, en_labcon, en_nacon,
+				en_autocon, en_autofcon, en_autopcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		

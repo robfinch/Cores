@@ -65,9 +65,9 @@ static void Leave(char *p, int n)
 }
 
 
-Operand *CodeGenerator::MakeDataLabel(int lab)
+Operand *CodeGenerator::MakeDataLabel(int lab, int ndxreg)
 {
-	return (compiler.of.MakeDataLabel(lab));
+	return (compiler.of.MakeDataLabel(lab, ndxreg));
 }
 
 Operand *CodeGenerator::MakeCodeLabel(int lab)
@@ -327,6 +327,34 @@ Operand* CodeGenerator::GenerateAutofconDereference(ENODE* node, TYP* tp, bool i
 	case bt_double:	ap1->type = stddouble.GetIndex(); break;
 	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
 	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	case bt_posit:	ap1->type = stdposit.GetIndex(); break;
+	}
+	//	    ap1->MakeLegal(flags,siz1);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAutopconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = am_indx;
+	ap1->preg = regFP;
+	ap1->offset = makeinode(en_icon, node->i);
+	ap1->offset->sym = node->sym;
+	ap1->tp = tp;
+	if (node->tp)
+		switch (node->tp->precision) {
+		case 32: ap1->FloatSize = 's'; break;
+		default: ap1->FloatSize = ' '; break;
+		}
+	else
+		ap1->FloatSize = ' ';
+	ap1->segment = stackseg;
+	switch (node->tp->type) {
+	case bt_posit: ap1->type = stdposit.GetIndex(); break;
 	}
 	//	    ap1->MakeLegal(flags,siz1);
 	ap1->MakeLegal(flags, size);
@@ -369,6 +397,7 @@ Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRe
 	case bt_double:	ap1->type = stddouble.GetIndex(); break;
 	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
 	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	case bt_posit:	ap1->type = stdposit.GetIndex(); break;
 	}
 	ap1->MakeLegal(flags, size);
 	return (ap1);
@@ -461,6 +490,7 @@ Operand* CodeGenerator::GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool i
 	case bt_double:	ap1->type = stddouble.GetIndex(); break;
 	case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
 	case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+	case bt_posit:	ap1->type = stdposit.GetIndex(); break;
 	}
 	ap1->MakeLegal(flags, size);
 	Leave("</Genderef>", 3);
@@ -554,6 +584,7 @@ Operand* CodeGenerator::GenerateDereference2(ENODE* node, TYP* tp, bool isRefTyp
 	case en_autocon: return (GenerateAutoconDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_classcon: return (GenerateClassconDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_autofcon: return (GenerateAutofconDereference(node, tp, isRefType, flags, size));
+	case en_autopcon: return (GenerateAutopconDereference(node, tp, isRefType, flags, size));
 	case en_nacon: return (GenerateNaconDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_autovcon: return (GenerateAutovconDereference(node, tp, isRefType, flags, size));
 	case en_autovmcon: return (GenerateAutovmconDereference(node, tp, isRefType, flags, size));
@@ -708,7 +739,7 @@ void CodeGenerator::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int 
 	Operand *ap3;
 	int tp;
 
-	if (typ == bt_double || typ == bt_float) {
+	if (typ == bt_double || typ == bt_float || typ == bt_posit) {
 		ap3 = GetTempFPRegister();
 		GenerateLoad(ap3, ap1, ssize, ssize);
 		GenerateTriadic(op, 0, ap3, ap3, ap2);
@@ -716,7 +747,7 @@ void CodeGenerator::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int 
 		ReleaseTempReg(ap3);
 		return;
 	}
-	if (ap1->type==stddouble.GetIndex()) {
+	if (ap1->type==stddouble.GetIndex() || ap1->type==stdposit.GetIndex()) {
      	ap3 = GetTempFPRegister();
 		GenerateLoad(ap3,ap1,ssize,ssize);
 		GenerateTriadic(op,ap1->FloatSize,ap3,ap3,ap2);
@@ -830,6 +861,7 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
 	Operand *ap1, *ap2, *ap3;
     int             siz1;
     int isFP;
+		bool isPosit;
 		MachineReg *mr;
 		bool cnst = false;
  
@@ -852,6 +884,7 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
 		return (ap3);
 	}
 	isFP = node->etype==bt_double || node->etype==bt_float || node->etype==bt_triple || node->etype==bt_quad;
+	isPosit = node->etype == bt_posit;
     if (isFP) {
         if (op==op_div || op==op_divu)
            op = op_fdiv;
@@ -864,7 +897,19 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
 //        else if (op==op_mod || op==op_modu)
 //           op = op_fdmod;
     }
-    else {
+		else if (isPosit) {
+			if (op == op_div || op == op_divu)
+				op = op_pdiv;
+			ap1 = GenerateExpression(node->p[0], am_fpreg, siz1);
+			ap2 = GenerateExpression(node->p[1], am_fpreg, size);
+			GenerateTriadic(op, siz1 == 4 ? 's' : siz1 == 8 ? ' ' : siz1 == 16 ? 'q' : 'd', ap1, ap1, ap2);
+			ReleaseTempReg(ap2);
+			ap1->MakeLegal(flags, size);
+			return (ap1);
+			//        else if (op==op_mod || op==op_modu)
+			//           op = op_fdmod;
+		}
+		else {
         ap1 = GetTempRegister();
         ap2 = GenerateExpression(node->p[0],am_all & ~am_imm,siz1);
     }
@@ -1134,6 +1179,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 //	GenerateDiadic(op_ldi, 0, makereg(regFirstArg + 2), MakeImmediate(node1->esize));
 	GenerateMonadic(op_call, 0, MakeStringAsNameConst("__aacpy",codeseg));
 	ReleaseTempReg(base2);
+	currentFn->IsLeaf = false;
 	return (base);
 	//base = GenerateDereference(node1,am_mem,sizeOfWord,0);
 	tp = node1->tp;
@@ -1486,6 +1532,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 	static int ndx;
 	static int numDiags = 0;
 	OCODE* ip;
+	int ndxreg;
 
   Enter("<GenerateExpression>"); 
   if( node == (ENODE *)NULL )
@@ -1544,8 +1591,6 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
       ap2->mode = am_indx;
       ap2->preg = node->segment==rodataseg ? regGP1 : regGP;      // global pointer
       ap2->offset = node;     // use as constant node
-			if (node->segment == 0)
-				printf("hi");
 			if (node)
 				DataLabels[node->i] = true;
       GenerateDiadic(op_lea,0,ap1,ap2);
@@ -1593,7 +1638,26 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 			goto retpt;
 		}
 		break;
-    case en_autovcon:	return GenAutocon(node, flags, size, stdvector.GetIndex());
+
+	case en_autopcon:
+		switch (node->tp->type)
+		{
+		case bt_float:
+			ap1 = GenAutocon(node, flags, size, stdflt.GetIndex());
+			goto retpt;
+		case bt_double:
+			ap1 = GenAutocon(node, flags, size, stddouble.GetIndex());
+			goto retpt;
+		case bt_triple:	return GenAutocon(node, flags, size, stdtriple.GetIndex());
+		case bt_quad:	return GenAutocon(node, flags, size, stdquad.GetIndex());
+		case bt_posit: return GenAutocon(node, flags, size, stdposit.GetIndex());
+		case bt_pointer:
+			ap1 = GenAutocon(node, flags, size, stdint.GetIndex());
+			goto retpt;
+		}
+		break;
+
+	case en_autovcon:	return GenAutocon(node, flags, size, stdvector.GetIndex());
     case en_autovmcon:	return GenAutocon(node, flags, size, stdvectormask->GetIndex());
   case en_classcon:
     ap1 = GetTempRegister();
@@ -1683,6 +1747,12 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 	case en_add:    ap1 = node->GenerateBinary(flags, size, op_add); goto retpt;
 	case en_sub:  ap1 = node->GenerateBinary(flags, size, op_sub); goto retpt;
 	case en_ptrdif:  ap1 = node->GenerateBinary(flags, size, op_ptrdif); goto retpt;
+	case en_i2p:
+		ap1 = GetTempFPRegister();
+		ap2 = GenerateExpression(node->p[0], am_reg, 8);
+		GenerateDiadic(op_itop, 0, ap1, ap2);
+		ReleaseTempReg(ap2);
+		goto retpt;
 	case en_i2d:
     ap1 = GetTempFPRegister();	
     ap2=GenerateExpression(node->p[0],am_reg,8);
@@ -1986,7 +2056,17 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		goto retpt;
 	case en_list:
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_lea, 0, ap1, MakeDataLabel(node->i));
+		if (use_gp) {
+			switch (node->segment) {
+			case dataseg:	ndxreg = regGP; break;
+			case rodataseg: ndxreg = regGP1; break;
+			case tlsseg:	ndxreg = regTP; break;
+			default:	ndxreg = regPP; break;
+			}
+			GenerateDiadic(op_lea, 0, ap1, MakeDataLabel(node->i, ndxreg));
+		}
+		else
+			GenerateDiadic(op_lea, 0, ap1, MakeDataLabel(node->i, regZero));
 		ap1->isPtr = true;
 		goto retpt;
 	case en_object_list:

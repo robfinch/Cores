@@ -107,6 +107,9 @@ void put_ty(TYP *tp)
                 case bt_double:
                         lfs.printf("Double");
                         break;
+                case bt_posit:
+                  lfs.printf("Posit");
+                  break;
                 case bt_pointer:
                         if( tp->val_flag == 0)
                                 lfs.printf("Pointer to ");

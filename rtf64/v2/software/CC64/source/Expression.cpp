@@ -7,6 +7,7 @@ extern ENODE* makefcnode(int nt, ENODE* v1, ENODE* v2, SYM* sp);
 extern ENODE* makefqnode(int nt, Float128* f128);
 extern TYP* CondDeref(ENODE** node, TYP* tp);
 extern int IsBeginningOfTypecast(int st);
+extern int NumericLiteral(ENODE*);
 
 Expression::Expression()
 {
@@ -23,6 +24,7 @@ Expression::Expression()
 	isMember = false;
 	for (nn = 0; nn < 10; nn++)
 		sa[nn] = 0;
+	parsingAggregate = 0;
 }
 
 Function* Expression::MakeFunction(int symnum, SYM* sym, bool isPascal) {
@@ -85,7 +87,9 @@ ENODE* Expression::ParseFloatMax()
 	pnode = compiler.ef.Makefnode(en_fcon, rval);
 	pnode->constflag = TRUE;
 	pnode->SetType(tptr);
-	pnode->i = quadlit(Float128::FloatMax());
+//	pnode->i = NumericLiteral(Float128::FloatMax());
+	if (parsingAggregate == 0 && sizeof_flag == 0)
+		pnode->i = NumericLiteral(pnode);
 	NextToken();
 	return (pnode);
 }
@@ -97,8 +101,10 @@ ENODE* Expression::ParseRealConst(ENODE** node)
 
 	pnode = compiler.ef.Makefnode(en_fcon, rval);
 	pnode->constflag = TRUE;
-	pnode->i = quadlit(&rval128);
+	//pnode->i = quadlit(&rval128);
 	pnode->f128 = rval128;
+	if (parsingAggregate == 0 && sizeof_flag == 0)
+		pnode->i = NumericLiteral(pnode);
 	pnode->segment = rodataseg;
 	switch (float_precision) {
 	case 'Q': case 'q':
@@ -131,6 +137,8 @@ ENODE* Expression::ParsePositConst(ENODE** node)
 	pnode = compiler.ef.MakePositNode(en_pcon, pval64);
 	pnode->constflag = TRUE;
 	pnode->posit = pval64;
+	if (parsingAggregate==0 && sizeof_flag == 0)
+		pnode->i = NumericLiteral(pnode);
 	pnode->esize = 8;
 	pnode->segment = rodataseg;
 	tptr = &stdposit;
@@ -287,12 +295,21 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 	TYP* tptr;
 	int64_t sz = 0;
 	ENODE* list;
+	bool cnst = true;
+	bool consistentType = true;
+	TYP* tptr2;
 
+	parsingAggregate++;
 	NextToken();
 	head = tail = nullptr;
 	list = makenode(en_list, nullptr, nullptr);
+	tptr2 = nullptr;
 	while (lastst != end) {
 		tptr = ParseNonCommaExpression(&pnode);
+		if (!tptr->isConst)
+			cnst = false;
+		if (tptr2 != nullptr && tptr->type != tptr2->type)
+			consistentType = false;
 		pnode->SetType(tptr);
 		//sz = sz + tptr->size;
 		sz = sz + pnode->esize;
@@ -301,13 +318,17 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 		if (lastst != comma)
 			break;
 		NextToken();
+		tptr2 = tptr;
 	}
 	needpunc(end, 9);
 	pnode = makenode(en_aggregate, list, nullptr);
-	pnode->SetType(tptr = TYP::Make(bt_struct, sz));
+	pnode->SetType(tptr = TYP::Make(consistentType ? bt_array : bt_struct, sz));
 	pnode->esize = sz;
 	pnode->i = litlist(pnode);
+	pnode->segment = cnst ? rodataseg : dataseg;
 	list->i = pnode->i;
+	list->segment = pnode->segment;
+	parsingAggregate--;
 	return (pnode);
 }
 
@@ -402,7 +423,8 @@ ENODE* Expression::ParseMinus()
 		ep1->f = -ep1->f;
 		ep1->f128.sign = !ep1->f128.sign;
 		// A new literal label is required.
-		ep1->i = quadlit(&ep1->f128);
+		//ep1->i = quadlit(&ep1->f128);
+		ep1->i = NumericLiteral(ep1);
 	}
 	else
 	{
@@ -1331,6 +1353,8 @@ ENODE* Expression::MakeConstNameNode(SYM* sp)
 		node = makefqnode(en_fqcon, &sp->f128);
 	else if (sp->tp->type == bt_float || sp->tp->type == bt_double || sp->tp->type == bt_triple)
 		node = compiler.ef.Makefnode(en_fcon, sp->value.f);
+	else if (sp->tp->type == bt_posit)
+		node = compiler.ef.Makepnode(en_pcon, sp->p);
 	else {
 		node = makeinode(en_icon, sp->value.i);
 		if (sp->tp->isUnsigned)
@@ -1379,6 +1403,8 @@ ENODE* Expression::MakeAutoNameNode(SYM* sp)
 		node = makeinode(en_autovmcon, sp->value.i);
 	else if (sp->tp->IsFloatType())
 		node = makeinode(en_autofcon, sp->value.i);
+	else if (sp->tp->IsPositType())
+		node = makeinode(en_autopcon, sp->value.i);
 	else {
 		node = makeinode(en_autocon, sp->value.i);
 		node->bit_offset = sp->tp->bit_offset;

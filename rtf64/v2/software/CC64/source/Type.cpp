@@ -201,6 +201,7 @@ int64_t TYP::GetElementSize()
 		return 8;
 	case bt_float:
 	case bt_double:
+	case bt_posit:
 		return 8;
 	case bt_struct:
 	case bt_class:
@@ -247,7 +248,10 @@ void TYP::put_ty()
     case bt_double:
             lfs.printf("Double");
             break;
-    case bt_pointer:
+		case bt_posit:
+			lfs.printf("Posit");
+			break;
+		case bt_pointer:
             if( val_flag == 0)
                     lfs.printf("Pointer to ");
             else

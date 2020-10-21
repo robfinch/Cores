@@ -214,6 +214,12 @@ void Declaration::ParseLong()
 		bit_max = head->precision;
 		NextToken();
 	}
+	else if (lastst == kw_posit) {
+		head = (TYP*)TYP::Copy(&stdposit);
+		tail = head;
+		bit_max = head->precision;
+		NextToken();
+	}
 	else {
 		if (isUnsigned) {
 			head =(TYP *)TYP::Make(bt_ulong,sizeOfWord);
@@ -389,6 +395,21 @@ void Declaration::ParsePosit()
 	head->isIO = isIO;
 	head->isConst = isConst;
 	NextToken();
+	if (lastst == colon) {
+		NextToken();
+		if (lastst == iconst) {
+			head->precision = ival;
+			NextToken();
+			if ((head->precision & 7) != 0
+				|| head->precision < 16
+				|| head->precision > 128) {
+				error(ERR_PRECISION);
+				head->precision = sizeOfWord * 8;
+			}
+		}
+		else
+			error(ERR_INT_CONST);
+	}
 	if (lastst == kw_vector) {
 		int btp = head->GetIndex();
 		head = TYP::Make(bt_vector, 512);

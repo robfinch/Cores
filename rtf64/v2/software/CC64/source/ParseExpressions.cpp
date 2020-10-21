@@ -231,7 +231,7 @@ ENODE *makefqnode(int nt, Float128 *f128)
   ep->nodetype = (enum e_node)nt;
   ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
+	ep->etype = bt_quad;
 	ep->esize = -1;
   Float128::Assign(&ep->f128,f128);
 //    ep->f2 = v2;
@@ -400,6 +400,16 @@ void Expression::DerefDouble(ENODE** node, TYP* tp, SYM* sp)
 	(*node)->esize = tp->size;
 	(*node)->etype = (enum e_bt)tp->type;
 	tp = &stddouble;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefPosit(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stdposit;
 	(*node)->sym = sp;
 	(*node)->tp = tp;
 }
@@ -573,6 +583,10 @@ TYP* Expression::deref(ENODE **node, TYP *tp)
 
     case bt_float:
 			DerefFloat(node, tp, sp);
+			break;
+
+		case bt_posit:
+			DerefPosit(node, tp, sp);
 			break;
 
 		case bt_bitfield:

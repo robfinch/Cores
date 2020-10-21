@@ -88,6 +88,18 @@ struct slit {
 	char			*nmspace;
 };
 
+struct nlit {
+	struct nlit* next;
+	struct nlit* tail;
+	int    label;
+	Float128 f128;
+	double f;
+	Posit64 p;
+	int typ;
+	int8_t pass;
+	char* nmspace;
+};
+
 struct scase {
 	int label;
 	int64_t val;
@@ -116,7 +128,6 @@ struct typ;
 class Statement;
 
 class TYP;
-class SYM;
 class TypeArray;
 
 class DerivedMethod
@@ -334,7 +345,7 @@ public:
 	void FlushPeep() { pl.flush(); };
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
 	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
@@ -399,6 +410,7 @@ public:
         uint16_t wa[8];
         char *s;
     } value;
+	Posit64 p;
 	Float128 f128;
 	TYP *tp;
   Statement *stmt;
@@ -478,7 +490,8 @@ public:
 	bool IsVectorType() const { return (type==bt_vector); };
 	bool IsUnion() const { return (type==bt_union); };
 	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
-	bool IsAggregateType() const { return (IsStructType() | isArray); };
+	bool IsArrayType() const { return (type == bt_array); };
+	bool IsAggregateType() const { return (IsStructType() | isArray | IsArrayType()); };
 	static bool IsSameType(TYP *a, TYP *b, bool exact);
 	void put_ty();
 
@@ -538,8 +551,8 @@ public:
 	enum e_node new_nodetype;			// nodetype replaced by optimization
 	int etype;
 	int64_t esize;
-	TYP *tp;
-	SYM *sym;
+	TYP* tp;
+	SYM* sym;
 	bool constflag;
 	unsigned int segment : 4;
 	unsigned int predreg : 4;
@@ -551,7 +564,7 @@ public:
 	unsigned int isAutonew : 1;
 	unsigned int isNeg : 1;
 	unsigned int argref : 1;		// argument reference
-	ENODE *vmask;
+	ENODE* vmask;
 	ENODE* bit_width;
 	ENODE* bit_offset;
 	__int8 scale;
@@ -562,21 +575,24 @@ public:
 	double f1, f2;
 	Float128 f128;
 	Posit64 posit;
-	std::string *sp;
-	std::string *msp;
-	std::string *udnm;			// undecorated name
-	void *ctor;
-	void *dtor;
-	ENODE *p[5];
-	ENODE *pfl;			// postfix list
+	std::string* sp;
+	std::string* msp;
+	std::string* udnm;			// undecorated name
+	void* ctor;
+	void* dtor;
+	ENODE* p[5];
+	ENODE* pfl;			// postfix list
 
-	ENODE *Clone();
+	ENODE* Clone();
 
-	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
-	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype==en_addrof); };
-	bool IsFloatType() { return (nodetype==en_addrof || nodetype==en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	void SetType(TYP* t) { tp = t; if (t) etype = t->type; };
+	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype == en_addrof); };
+	bool IsFloatType() { return (nodetype == en_addrof || nodetype == en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsPositType() {
+		return (nodetype == en_addrof || nodetype == en_autopcon) ? false : (etype == bt_posit);
+	};
 	bool IsVectorType() { return (etype == bt_vector); };
-	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autocon || nodetype == en_autovcon || nodetype == en_classcon); };
+	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autofcon || nodetype == en_autopcon || nodetype == en_autovcon || nodetype == en_classcon); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
 	bool IsRefType() {	return (nodetype == en_ref || etype==bt_struct || etype==bt_union || etype==bt_class);	};
 	bool IsBitfield();
@@ -602,7 +618,7 @@ public:
 	void update();
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
 	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
@@ -664,6 +680,7 @@ public:
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3);
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
 	ENODE* Makefnode(int nt, double v1);
+	ENODE* Makepnode(int nt, Posit64 v1);
 	ENODE* MakePositNode(int nt, Posit64 v1);
 };
 
@@ -681,6 +698,7 @@ public:
 	TYP* tail;
 	int sizeof_flag;
 	bool got_pa;
+	int parsingAggregate;
 private:
 	void SetRefType(ENODE** node);
 	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
@@ -752,6 +770,7 @@ private:
 	void DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp);
 	void DerefFloat(ENODE** node, TYP* tp, SYM* sp);
 	void DerefDouble(ENODE** node, TYP* tp, SYM* sp);
+	void DerefPosit(ENODE** node, TYP* tp, SYM* sp);
 	void DerefBitfield(ENODE** node, TYP* tp, SYM* sp);
 	ENODE* FindLastMulu(ENODE*, ENODE*);
 public:
@@ -900,7 +919,7 @@ public:
 class OperandFactory : public Factory
 {
 public:
-	Operand *MakeDataLabel(int labno);
+	Operand *MakeDataLabel(int labno, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
 	Operand *MakeStrlab(std::string s, e_sg seg);
 	Operand *MakeString(char *s);
@@ -931,7 +950,7 @@ public:
 class CodeGenerator
 {
 public:
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
 	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
@@ -963,6 +982,7 @@ public:
 	Operand* GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateAutofconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateAutopconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand* GenerateNaconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateAutovconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand* GenerateAutovmconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
@@ -1492,7 +1512,7 @@ public:
 	void update_compound();
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
 	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
@@ -1663,8 +1683,8 @@ public:
 	StatementFactory sf;
 	short int pass;
 public:
+	Compiler() { typenum = 0; };
 	GlobalDeclaration *decls;
-	Compiler();
 	void compile();
 	int PreprocessFile(char *nm);
 	void CloseFiles();

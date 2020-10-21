@@ -1158,7 +1158,7 @@ void Statement::update_compound()
 //=============================================================================
 //=============================================================================
 
-Operand *Statement::MakeDataLabel(int lab) { return (cg.MakeDataLabel(lab)); };
+Operand *Statement::MakeDataLabel(int lab, int ndxreg) { return (cg.MakeDataLabel(lab,ndxreg)); };
 Operand *Statement::MakeCodeLabel(int lab) { return (cg.MakeCodeLabel(lab)); };
 Operand *Statement::MakeStringAsNameConst(char *s, e_sg seg) { return (cg.MakeStringAsNameConst(s, seg)); };
 Operand *Statement::MakeString(char *s) { return (cg.MakeString(s)); };
@@ -1428,7 +1428,7 @@ void Statement::GenerateIf()
 	if (!opt_nocgo && ep->nodetype == en_and && ep->p[1]->nodetype == en_icon && pwrof2(ep->p[1]->i) >= 0) {
 		size = node->GetNaturalSize();
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		GenerateTriadic(op_bbc, 0, ap1, MakeImmediate(pwrof2(ep->p[1]->i)), MakeDataLabel(lab1));
+		GenerateTriadic(op_bbc, 0, ap1, MakeImmediate(pwrof2(ep->p[1]->i)), MakeDataLabel(lab1, regZero));
 		ReleaseTempRegister(ap1);
 	}
 	else if (!opt_nocgo && ep->nodetype == en_lor_safe) {

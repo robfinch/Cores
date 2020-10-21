@@ -617,7 +617,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(1));
-		GenerateMonadic(op_bra,0,MakeDataLabel(lab1));
+		GenerateMonadic(op_bra,0,MakeDataLabel(lab1,regZero));
 		GenerateLabel(lab0);
 		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(0));
 		GenerateLabel(lab1);
@@ -681,12 +681,12 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 
 void RTF64CodeGenerator::GenerateBranchTrue(Operand* ap, int label)
 {
-	GenerateDiadic(op_bt, 0, ap, MakeDataLabel(label));
+	GenerateDiadic(op_bt, 0, ap, MakeDataLabel(label,regZero));
 }
 
 void RTF64CodeGenerator::GenerateBranchFalse(Operand* ap, int label)
 {
-	GenerateDiadic(op_bf, 0, ap, MakeDataLabel(label));
+	GenerateDiadic(op_bf, 0, ap, MakeDataLabel(label,regZero));
 }
 
 bool RTF64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit)
@@ -1074,6 +1074,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	case bt_triple:	sz = sizeOfFPT; break;
 	case bt_double:	sz = sizeOfFPD; break;
 	case bt_float:	sz = sizeOfFPD; break;
+	case bt_posit:	sz = sizeOfFPD; break;
 	default:	sz = sizeOfWord; break;
 	}
 	if (ep->tp) {
@@ -1090,6 +1091,8 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 		ap = cg.GenerateExpression(ep,am_reg,sz);
 	else if (ep->etype==bt_float)
 		ap = cg.GenerateExpression(ep,am_reg,sz);
+	else if (ep->etype == bt_posit)
+		ap = cg.GenerateExpression(ep, am_reg, sz);
 	else
 		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	switch(ap->mode) {
@@ -1364,7 +1367,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			}
 			else
 				GenerateMonadic(op_call,0,MakeDirect(node->p[0]));
-			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
@@ -1429,7 +1432,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			}
 			else
 				GenerateMonadic(op_call, 0, MakeIndirect(114));
-			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);

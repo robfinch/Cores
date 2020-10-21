@@ -40,11 +40,12 @@ int	       gentype = nogen;
 int	       curseg = noseg;
 int        outcol = 0;
 static ENODE *agr;
+struct nlit *numeric_tab = nullptr;
 
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[273] =
+Instruction opl[277] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -225,11 +226,15 @@ Instruction opl[273] =
 { "nr", op_nr },
 { "or",op_or,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "orcm",op_orcm,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "padd", op_padd, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
+{ "pdiv", op_pdiv, 10, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "pea", op_pea },
 { "pea",op_pea },
 { "phi", op_phi },
+{ "pmul", op_pmul, 8, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
 { "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
+{ "psub", op_psub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "ptrdif",op_ptrdif,1,1,false,am_reg,am_reg,am_reg,am_imm },
 { "push",op_push,4,1,true,am_reg|am_imm,am_reg,0,0 },
 { "pushf",op_pushf,4,0,true,am_fpreg,0,0,0 },
@@ -832,6 +837,51 @@ int quadlit(Float128 *f128)
 }
 
 
+int NumericLiteral(ENODE* node)
+{
+	struct nlit* lp;
+	lp = numeric_tab;
+	// First search for the same literal constant and it's label if found.
+	while (lp) {
+		if (lp->typ == node->etype) {
+			switch (node->etype) {
+			case bt_float:
+				if (lp->f == node->f)
+					return (lp->label);
+				break;
+			case bt_double:
+				if (lp->f == node->f)
+					return (lp->label);
+				break;
+			case bt_quad:
+				if (Float128::IsEqual(&node->f128, Float128::Zero())) {
+					if (Float128::IsEqualNZ(&lp->f128, &node->f128))
+						return (lp->label);
+				}
+				else if (Float128::IsEqual(&lp->f128, &node->f128))
+					return (lp->label);
+				break;
+			case bt_posit:
+				if (Posit64::IsEqual(lp->p, node->posit))
+					return (lp->label);
+				break;
+			}
+		}
+		lp = lp->next;
+	}
+	lp = (struct nlit*)allocx(sizeof(struct nlit));
+	lp->label = nextlabel++;
+	Float128::Assign(&lp->f128, &node->f128);
+	lp->p.val = node->posit.val;
+	lp->f = node->f;
+	lp->nmspace = my_strdup(GetNamespace());
+	lp->next = numeric_tab;
+	lp->typ = node->etype;
+	numeric_tab = lp;
+	return (lp->label);
+}
+
+
 char *strip_crlf(char *p)
 {
      static char buf[2000];
@@ -888,6 +938,11 @@ void dumplits()
 	char *cp;
 	int64_t nn;
 	slit *lit;
+	union _tagFlt {
+		double f;
+		int64_t i;
+	} Flt;
+	union _tagFlt uf;
 
 	dfs.printf("<Dumplits>\n");
 	roseg();
@@ -906,6 +961,42 @@ void dumplits()
 		}
 		casetab = casetab->next;
 	}
+	if (numeric_tab) {
+		nl();
+		align(8);
+		nl();
+	}
+	while (numeric_tab != nullptr) {
+		nl();
+		if (DataLabels[numeric_tab->label])
+			put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D');
+			switch (numeric_tab->typ) {
+			case bt_float:
+			case bt_double:
+				ofs.printf("\tdct\t");
+				numeric_tab->f128.Pack(64);
+				ofs.printf("%s", numeric_tab->f128.ToString(64));
+				outcol += 35;
+				break;
+			case bt_quad:
+				ofs.printf("\tdct\t");
+				numeric_tab->f128.Pack(64);
+				ofs.printf("%s", numeric_tab->f128.ToString(64));
+				outcol += 35;
+				break;
+			case bt_posit:
+				ofs.printf("\t\dco\t");
+				ofs.printf("0x%08I64X\n", numeric_tab->p.val);
+				outcol += 35;
+				break;
+			case bt_void:
+				break;
+			default:
+				;// printf("hi");
+			}
+		numeric_tab = numeric_tab->next;
+	}
+
 	if (quadtab) {
 		nl();
 		align(8);

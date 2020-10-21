@@ -47,6 +47,7 @@ char ENODE::fsize()
 	case bt_double:	return ('d');
 	case bt_triple:	return ('t');
 	case bt_quad:	return ('q');
+	case bt_posit: return (' ');
 	default:	return ('d');
 	}
 }
@@ -155,6 +156,7 @@ int ENODE::GetNaturalSize()
 			return (tp->size);
 		else
 			return (sizeOfWord);
+	case en_autopcon:
 	case en_autofcon:
 		return (sizeOfWord);
 	case en_ref:
@@ -223,6 +225,7 @@ int ENODE::GetNaturalSize()
 	case en_q2i:
 	case en_t2i:
 		return (sizeOfWord);
+	case en_i2p:
 	case en_i2d:
 		return (sizeOfWord);
 	case en_i2t:
@@ -306,6 +309,7 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 	case en_classcon:	// Check type ?
 	case en_autocon:
 	case en_autovcon:
+	case en_autopcon:
 	case en_autofcon:
 	{
 		return (node1->i == node2->i);
@@ -486,6 +490,7 @@ void ENODE::repexpr()
 		}
 		break;
 	// Autofcon resolve to *pointers* which are stored in integer registers.
+	case en_autopcon:
 	case en_autofcon:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
 			csp->isfp = FALSE; //**** a kludge
@@ -591,6 +596,7 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
+	case en_i2p:
 	case en_i2d:
 		p[0]->repexpr();
 		p[1]->repexpr();
@@ -803,6 +809,7 @@ void ENODE::scanexpr(int duse)
 	case en_nacon:
 		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
+	case en_autopcon:
 	case en_autofcon:
 	case en_tempfpref:
 		csp = OptInsertAutocon(duse);
@@ -840,6 +847,7 @@ void ENODE::scanexpr(int duse)
 	case en_chk:
 		p[0]->scanexpr(duse);
 		break;
+	case en_i2p:
 	case en_i2d:
 		p[0]->scanexpr(duse);
 		break;
@@ -955,9 +963,9 @@ void ENODE::update()
 // ============================================================================
 // ============================================================================
 
-Operand *ENODE::MakeDataLabel(int lab)
+Operand *ENODE::MakeDataLabel(int lab, int ndxreg)
 {
-	return (compiler.of.MakeDataLabel(lab));
+	return (compiler.of.MakeDataLabel(lab, ndxreg));
 }
 
 Operand *ENODE::MakeCodeLabel(int lab)
@@ -1597,6 +1605,27 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
 		ap3->type = ap1->type;
 	}
+	if (IsPositType())
+	{
+		ap3 = GetTempFPRegister();
+		if (IsEqual(p[0], p[1]))
+			dup = !opt_nocgo;
+		ap1 = cg.GenerateExpression(p[0], am_fpreg, size);
+		if (!dup)
+			ap2 = cg.GenerateExpression(p[1], am_fpreg, size);
+		// Generate a convert operation ?
+		if (!dup) {
+			if (ap1->fpsize() != ap2->fpsize()) {
+				if (ap2->fpsize() == 's')
+					GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+			}
+		}
+		if (dup)
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		ap3->type = ap1->type;
+	}
 	else if (op == op_vex) {
 		ap3 = GetTempRegister();
 		ap1 = cg.GenerateExpression(p[0], am_reg, size);
@@ -2007,6 +2036,7 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		ofs.write("-");
 	switch (nodetype)
 	{
+	case en_autopcon:
 	case en_autofcon:
 		sprintf_s(buf, sizeof(buf), "%lld", i);
 		ofs.write(buf);
@@ -2022,7 +2052,7 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		if (!opt)
 			goto j1;
 		// The following spits out a warning, but is okay.
-		sprintf_s(buf, sizeof(buf), "0x%llx", posit.val);
+		sprintf_s(buf, sizeof(buf), "0x%I64x", posit.val);
 		ofs.write(buf);
 		break;
 	case en_autovcon:
@@ -2126,6 +2156,7 @@ ENODE *ENODE::GetConstantHex(std::ifstream& ifs)
 	buf[2] = '\0';
 	ep->nodetype = (e_node)strtol(buf, nullptr, 16);
 	switch (ep->nodetype) {
+	case en_autopcon:
 	case en_autofcon:
 		ifs.read(buf, 8);
 		buf[8] = '\0';
@@ -2154,10 +2185,12 @@ void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int r
 	ofs.printf("N%02X", nodetype);
 	switch (nodetype)
 	{
+	case en_autopcon:
 	case en_autofcon:
-		sprintf_s(buf, sizeof(buf), "%08LLX", i);
+		sprintf_s(buf, sizeof(buf), "%08I64X", i);
 		ofs.write(buf);
 		break;
+	case en_pcon:
 	case en_fcon:
 		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
 		ofs.write(buf);
@@ -2300,6 +2333,7 @@ int ENODE::PutStructConst(txtoStream& ofs)
 	ENODE *ep1;
 	ENODE *ep = this;
 	bool isStruct;
+	bool isArray;
 
 	if (ep == nullptr)
 		return (0);
@@ -2307,6 +2341,9 @@ int ENODE::PutStructConst(txtoStream& ofs)
 		return (0);
 
 	isStruct = ep->tp->IsStructType();
+	isArray = ep->tp->type == bt_array;
+	if (isArray)
+		ofs.printf("\talign %ld\n", (int)ep->p[0]->p[2]->tp->walignment());
 	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
 		if (ep1->nodetype == en_aggregate) {
 			k = ep1->PutStructConst(ofs);
@@ -2319,22 +2356,24 @@ int ENODE::PutStructConst(txtoStream& ofs)
 				}
 				k = ep1->tp->struct_offset + ep1->esize;
 			}
+			else if (isArray)
+				k = ep1->tp->struct_offset + ep1->esize;
 			else
 				k = ep1->esize;
 			switch (ep1->esize) {
-			case 1:	ofs.printf("dcb\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 2:	ofs.printf("dcw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 4:	ofs.printf("dct\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 8:	ofs.printf("dco\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 1:	ofs.printf("\tdcb\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 2:	ofs.printf("\tdcw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 4:	ofs.printf("\tdct\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 8:	ofs.printf("\tdco\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
 			default:
-				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
-				ofs.printf("db\t");
+				ofs.printf("\tfill.b %ld,0x00\n", ep1->esize - 1);
+				ofs.printf("\tdcb\t");
 				ep1->PutConstant(ofs, 0, 0, true);
 				ofs.printf("\n");
 				break;
 			}
 		}
-		if (isStruct)
+		if (isStruct|isArray)
 			n = k;
 		else
 			n = n + k;

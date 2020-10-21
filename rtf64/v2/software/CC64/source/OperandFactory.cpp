@@ -28,7 +28,7 @@
 //
 //      construct a reference node for an internal label number.
 //
-Operand *OperandFactory::MakeDataLabel(int lab)
+Operand *OperandFactory::MakeDataLabel(int lab, int ndxreg)
 {
 	ENODE *lnode;
 	Operand *ap;
@@ -38,7 +38,12 @@ Operand *OperandFactory::MakeDataLabel(int lab)
 	lnode->i = lab;
 	DataLabels[lab] = true;
 	ap = allocOperand();
-	ap->mode = am_direct;
+	if (ndxreg != regZero) {
+		ap->mode = am_indx;
+		ap->preg = ndxreg;
+	}
+	else
+		ap->mode = am_direct;
 	ap->offset = lnode;
 	ap->isUnsigned = TRUE;
 	return (ap);

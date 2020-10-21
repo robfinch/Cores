@@ -82,13 +82,13 @@ int main(int argc, char **argv)
 	int cnt;
 	txtoStream ofs;
 	Int128 aa, bb, cc, qq, rr;
-
+	/*
 	aa.low = 0;
 	aa.high = 100;
 	bb.low = 20;
 	bb.high = 0;
 	cc.Div(&qq, &rr, &aa, &bb);
-	/*
+	
 	pst = pst.IntToPosit(100);
 	a = a.IntToPosit(50);
 	b = b.IntToPosit(50);

@@ -7,10 +7,27 @@ ENODE* ExpressionFactory::Makefnode(int nt, double v1)
 	ep->nodetype = (enum e_node)nt;
 	ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
+	ep->etype = bt_quad;
 	ep->esize = -1;
 	ep->f = v1;
 	ep->f1 = v1;
+	//    ep->f2 = v2;
+	ep->p[0] = 0;
+	ep->p[1] = 0;
+	ep->p[2] = 0;
+	return (ep);
+}
+
+ENODE* ExpressionFactory::Makepnode(int nt, Posit64 v1)
+{
+	ENODE* ep;
+	ep = allocEnode();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = TRUE;
+	ep->isUnsigned = FALSE;
+	ep->etype = bt_posit;
+	ep->esize = -1;
+	ep->posit = v1;
 	//    ep->f2 = v2;
 	ep->p[0] = 0;
 	ep->p[1] = 0;
@@ -25,7 +42,7 @@ ENODE* ExpressionFactory::MakePositNode(int nt, Posit64 v1)
 	ep->nodetype = (enum e_node)nt;
 	ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
+	ep->etype = bt_posit;
 	ep->esize = -1;
 	ep->posit = v1;
 	//    ep->f2 = v2;

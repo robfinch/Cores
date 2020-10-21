@@ -92,8 +92,8 @@ Posit64 Posit64::Addsub(int8_t op, Posit64 a, Posit64 b)
   sig2 = sig2 << 3LL;
   
   // ???
-  argm1 = argm1 < 0 ? argm1 + 1 : argm1;
-  argm2 = argm2 < 0 ? argm2 + 1 : argm2;
+  argm1 = argm1 < 0 ? argm1 + 2 : argm1;
+  argm2 = argm2 < 0 ? argm2 + 2 : argm2;
 
   diff = ((argm1 << expWidth) | exp1) - ((argm2 << expWidth) | exp2);
   exp_diff = (diff > ((1LL << (rs + 1LL))) -1LL) ? -1LL & rs_mask : diff & rs_mask;

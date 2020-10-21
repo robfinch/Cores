@@ -26,7 +26,7 @@
 #include "stdafx.h"
 
 static void fold_const(ENODE **node);
-
+extern int NumericLiteral(ENODE*);
 /*
  *      dooper will execute a constant operation in a node and
  *      modify the node to be the result of the operation.
@@ -85,65 +85,77 @@ void dooper(ENODE *node)
 		ep->f = (double)ep->p[0]->i;
 		ep->tp = &stddouble;// ep->p[0]->tp;
 		Float128::IntToFloat(&ep->f128, ep->p[0]->i);
-		ep->i = quadlit(&ep->f128);
+		//ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		ep->SetType(ep->tp);
+		break;
+	case en_i2p:
+		ep->nodetype = en_pcon;
+		ep->f = (double)ep->p[0]->i;
+		ep->tp = &stdposit;// ep->p[0]->tp;
+		ep->posit.IntToPosit(ep->p[0]->i);
+		ep->SetType(ep->tp);
 		break;
 	case en_fadd:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f + ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		//ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		ep->SetType(ep->tp);
 		break;
 	case en_fsub:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f - ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		//ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
 		break;
 	case en_fmul:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f * ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+//		ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
 		break;
 	case en_fdiv:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f / ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+//		ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
 		break;
 
 	case en_padd:
 		ep->nodetype = en_pcon;
 		ep->f = ep->p[0]->f + ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
-//		Posit::Add(&ep->p64, &ep->p[0]->p64, &ep->p[1]->p64);
-		Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->posit.Add(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_psub:
 		ep->nodetype = en_pcon;
 		ep->f = ep->p[0]->f - ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
-		Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->posit.Sub(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_pmul:
 		ep->nodetype = en_pcon;
 		ep->f = ep->p[0]->f * ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
-		Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->posit.Multiply(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_pdiv:
 		ep->nodetype = en_pcon;
 		ep->f = ep->p[0]->f / ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
-		Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->posit.Divide(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 
 	case en_asl:
@@ -476,6 +488,7 @@ static void opt0(ENODE **node)
 								}
 							}
 							break;
+						case en_i2p:
 						case en_i2d:
 				opt0(&(ep->p[0]));
 				if (ep->p[0]->nodetype == en_icon) {

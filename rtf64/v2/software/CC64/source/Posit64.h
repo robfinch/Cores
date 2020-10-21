@@ -47,6 +47,9 @@ public:
 	int64_t PositToInt(Posit64 p);
 	void Decompose(Posit64 a, RawPosit* b);
 	char *ToString();
+	static bool IsEqual(Posit64 a, Posit64 b) {
+		return (a.val == b.val);
+	};
 };
 
 class Posit64Multiplier : public Posit64
