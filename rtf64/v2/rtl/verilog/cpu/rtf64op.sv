@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rtf64.sv
+//	rtf64op.sv
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -40,11 +40,13 @@
 `endif
 
 `include "../fpu/fpConfig.sv"
+`include "../pau/positConfig.sv"
 
 module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
 parameter FPWID = 64;
+parameter PSTWID = 64;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter pL1CacheLines = 128;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
@@ -141,8 +143,10 @@ parameter IFETCH_INCR = 6'd54;
 parameter MEMORY0 = 6'd55;
 
 `include "../fpu/fpSize.sv"
+`include "../pau/positSize.sv"
 
-reg [AWID-1:0] pc, ipc, ret_pc;
+reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
+reg [AWID-1:0] pc, ipc, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
 reg [AWID-1:0] dpc, rpc, expc, mpc, wpc;
 reg [3:0] dilen, rilen;
 reg illegal_insn, rillegal_insn, eillegal_insn, millegal_insn, willegal_insn;
@@ -966,6 +970,61 @@ fpRound #(.FPWID(FPWID)) u9 (.clk(clk_g), .ce(1'b1), .rm(rmq), .i(fnorm_o), .o(f
 fpDecompReg #(FPWID) u10 (.clk(clk_g), .ce(1'b1), .i(fres), .sgn(), .exp(), .fract(), .xz(fdn), .vz(), .inf(finf), .nan() );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Posit Arithmetic Logic
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+wire [63:0] pas1_o, pas_o;
+wire [63:0] pmul1_o, pmul_o;
+wire [63:0] pdiv1_o, pdiv_o;
+wire pmulz_o, pmuli_o;
+wire pmulz1_o, pmuli1_o;
+wire pdivz_o, pdivi_o;
+wire pdivz1_o, pdivi1_o;
+
+positAddsub #(.PSTWID(PSTWID), .es(es)) up4
+(
+  .op(fltfunct5==`PSUB),
+  .a(ia),
+  .b(ib),
+  .o(pas1_o)
+);
+delay6 #(PSTWID) upd1 (.clk(clk_g), .ce(1'b1), .i(pas1_o), .o(pas_o));
+
+positMul #(.PSTWID(PSTWID), .es(es)) up5
+(
+  .a(ia),
+  .b(ib),
+  .o(pmul1_o),
+  .zero(pmulz1_o),
+  .inf(pmuli1_o)
+);
+delay6 #(PSTWID) upd2 (.clk(clk_g), .ce(1'b1), .i(pmul1_o), .o(pmul_o));
+delay6 #(1) upd6 (.clk(clk_g), .ce(1'b1), .i(pmulz1_o), .o(pmulz_o));
+delay6 #(1) upd7 (.clk(clk_g), .ce(1'b1), .i(pmuli1_o), .o(pmuli_o));
+
+positDivide #(.PSTWID(PSTWID), .es(es)) up6
+(
+  .clk(clk_g),
+  .ce(1'b1),
+  .a(ia),
+  .b(ib),
+  .o(pdiv1_o),
+  .start(),
+  .done(),
+  .zero(pdivz1_o),
+  .inf(pdivi1_o)
+);
+delay6 #(PSTWID) upd3 (.clk(clk_g), .ce(1'b1), .i(pdiv1_o), .o(pdiv_o));
+delay6 #(1) upd4 (.clk(clk_g), .ce(1'b1), .i(pdivz1_o), .o(pdivz_o));
+delay6 #(1) upd5 (.clk(clk_g), .ce(1'b1), .i(pdivi1_o), .o(pdivi_o));
+
+wire pcmpnan = ia==64'h8000000000000000 || ib==64'h8000000000000000;
+wire pinf_o = ia==64'h8000000000000000 || ib==64'h8000000000000000;
+wire pseq_o = ia==ib;
+wire pslt_o = $signed(ia) < $signed(ib);
+wire psle_o = $signed(ia) <= $signed(ib);
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Address Generator
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 wire inc_ma = (mstate==MEMORY5 && !acki) ||
@@ -1432,6 +1491,7 @@ DECODE:
     wrirf <= 1'b0;
     wrcrf32 <= 1'b0;
     wrra <= 1'b0;
+    dmod_pc <= FALSE;
     d_cmp <= 1'b0;
     d_set <= 1'b0;
     d_tst <= 1'b0;
@@ -1465,15 +1525,23 @@ DECODE:
     d_jsr <= FALSE;
     d_rts <= FALSE;
     rd_ci <= FALSE;
+    /* Decode is faster than the slowest stage meaning it'll always transition
+       to the DECODE_WAIT state. Save some hardware by not checking for
+       pipeline advance here.
+       
     if (advance_pipe) begin
       rir <= ir;
       rpc <= dpc;
       rilen <= dilen;
       rillegal_insn <= illegal_insn;
+      if (dmod_pc)
+        pc <= dnext_pc;
       decode_done <= FALSE;
       dgoto (DECODE);
     end
-    else begin
+    else
+    */
+    begin
       decode_done <= TRUE;
       dgoto(DECODE_WAIT);
     end
@@ -1770,11 +1838,12 @@ DECODE:
     // Flow Control
     `JMP:
       begin
+        dmod_pc <= TRUE;
         case(ir[9:8])
-        2'b00:  pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
-        2'b01:  pc <= ipc + {{34{ir[39]}},ir[39:10]};
-        2'b10:  pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + cao;
-        2'b11:  pc <= ipc + {{34{ir[39]}},ir[39:10]};
+        2'b00:  dnext_pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
+        2'b01:  dnext_pc <= ipc + {{34{ir[39]}},ir[39:10]};
+        2'b10:  dnext_pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + cao;
+        2'b11:  dnext_pc <= ipc + {{34{ir[39]}},ir[39:10]};
         endcase
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
@@ -1846,13 +1915,14 @@ DECODE:
     `RTE:
       // Must be at a higher operating mode in order to return to a lower one.
       if (rsStack[4:0] > rsStack[9:5] && rsStack[4:0] > 5'd25) begin
+        dmod_pc <= TRUE;
 			  rsStack <= {5'd31,rsStack[29:5]};
 			  rprv <= 5'h0;
 			  Rdx1 <= rsStack[9:5];
 			  Rs1x1 <= rsStack[9:5];
 			  Rs2x1 <= rsStack[9:5];
 			  Rs3x1 <= rsStack[9:5];
-				pc <= epc[rsStack[4:0]];
+				dnext_pc <= epc[rsStack[4:0]];
 				d_wha <= TRUE;
 				illegal_insn <= 1'b0;
       end
@@ -2138,6 +2208,10 @@ DECODE_WAIT:
     rpc <= dpc;
     rilen <= dilen;
     rillegal_insn <= illegal_insn;
+    if (dmod_pc) begin
+      ir <= `NOP_INSN;
+      pc <= dnext_pc;
+    end
     decode_done <= FALSE;
     dgoto (DECODE);
   end
@@ -2150,6 +2224,7 @@ case(rstate)
 // Need a state to read Rd from block ram.
 REGFETCH1:
   begin
+    rmod_pc <= FALSE;
     if (d_stot) begin
       if (Rs2==eRd)
         ib <= res;
@@ -2183,16 +2258,25 @@ REGFETCH2:
   begin
     case(ropcode)
     `JAL:
-      pc <= {rpc[AWID-1:24],rir[31:10],2'b00} + (rir[9] ? cao : {AWID{1'd0}});
+      begin
+        rmod_pc <= TRUE;
+        rnext_pc <= {rpc[AWID-1:24],rir[31:10],2'b00} + (rir[9] ? cao : {AWID{1'd0}});
+      end
     `JSR:
-      case(rir[9:8])
-      2'b00:  pc <= {rpc[AWID-1:24],ir[31:10],2'b00};
-      2'b01:  pc <= rpc + {{34{ir[39]}},ir[39:10]};
-      2'b10:  pc <= {rpc[AWID-1:24],ir[31:10],2'b00} + cao;
-      2'b11:  pc <= rpc + {{34{ir[39]}},ir[39:10]};
-      endcase
+      begin
+        rmod_pc <= TRUE;
+        case(rir[9:8])
+        2'b00:  rnext_pc <= {rpc[AWID-1:24],ir[31:10],2'b00};
+        2'b01:  rnext_pc <= rpc + {{34{ir[39]}},ir[39:10]};
+        2'b10:  rnext_pc <= {rpc[AWID-1:24],ir[31:10],2'b00} + cao;
+        2'b11:  rnext_pc <= rpc + {{34{ir[39]}},ir[39:10]};
+        endcase
+      end
     `JSR18:
-      pc <= rpc + {{48{ir[23]}},ir[23:8]};
+      begin
+        rmod_pc <= TRUE;
+        rnext_pc <= rpc + {{48{ir[23]}},ir[23:8]};
+      end
     default:  ;
     endcase
     rgoto (REGFETCH3);
@@ -2216,6 +2300,11 @@ REGFETCH3:
       e_fltcmp <= d_fltcmp;
       e_ld <= d_ld;
       e_st <= d_st;
+      if (rmod_pc) begin
+        ir <= `NOP_INSN;
+        rir <= `NOP_INSN;
+        pc <= rnext_pc;
+      end
       regfetch_done <= FALSE;
       rgoto (REGFETCH1);
     end
@@ -2329,6 +2418,11 @@ REGFETCH_WAIT:
     e_st <= d_st;
 		if (d_jsr)
       id <= dpc + dilen; // pc is addressing next instruction
+    if (rmod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      pc <= rnext_pc;
+    end
     regfetch_done <= FALSE;
     rgoto (REGFETCH1);
   end
@@ -2342,6 +2436,7 @@ EXECUTE:
   begin
     adv_ex();
     res <= 64'd0;
+    emode_pc <= FALSE;
     casez(eopcode)
 		`BRK:
 		  case(eir[15:8])
@@ -2948,8 +3043,9 @@ EXECUTE:
       end
     `RTL: 
       begin
+        emod_pc <= TRUE;
         res <= ia + imm;
-        pc <= ret_pc + {ir[12:9],2'b00};
+        enext_pc <= ret_pc + {eir[12:9],2'b00};
       end
     `RTS,`RTX: 
       begin
@@ -2987,48 +3083,53 @@ EXECUTE:
           case(ir[10:8])
           3'd0:
             if (uie) begin
+              emod_pc <= TRUE;
               badaddr[eir[10:8]] <= badaddr[omode];
               cause[eir[10:8]] <= cause[omode];
               pmStack[3:0] <= 4'b0;
               rsStack[4:0] <= 5'd26;
               next_epc <= epc[crs];
-              pc <= tvec[eir[10:8]];
+              enext_pc <= tvec[eir[10:8]];
             end
           3'd1:
             if (sie) begin
+              emod_pc <= TRUE;
               badaddr[eir[10:8]] <= badaddr[omode];
               cause[eir[10:8]] <= cause[omode];
               pmStack[3:0] <= 4'd2;
               rsStack[4:0] <= 5'd27;
               next_epc <= epc[crs];
-              pc <= tvec[eir[10:8]];
+              enext_pc <= tvec[eir[10:8]];
             end
           3'd2:
             if (hie) begin
+              emod_pc <= TRUE;
               badaddr[eir[10:8]] <= badaddr[omode];
               cause[eir[10:8]] <= cause[omode];
               pmStack[3:0] <= 4'd4;
               rsStack[4:0] <= 5'd28;
               next_epc <= epc[crs];
-              pc <= tvec[eir[10:8]];
+              enext_pc <= tvec[eir[10:8]];
             end
           3'd3:
             if (mie) begin
+              emod_pc <= TRUE;
               badaddr[eir[10:8]] <= badaddr[omode];
               cause[eir[10:8]] <= cause[omode];
               pmStack[3:0] <= 4'd6;
               rsStack[4:0] <= 5'd29;
               next_epc <= epc[crs];
-              pc <= tvec[eir[10:8]];
+              enext_pc <= tvec[eir[10:8]];
             end
           3'd4:
             if (iie) begin
+              emod_pc <= TRUE;
               badaddr[eir[10:8]] <= badaddr[omode];
               cause[eir[10:8]] <= cause[omode];
               pmStack[3:0] <= 4'd8;
               rsStack[4:0] <= 5'd30;
               next_epc <= epc[crs];
-              pc <= tvec[eir[10:8]];
+              enext_pc <= tvec[eir[10:8]];
             end
           default:  ;
           endcase
@@ -3137,6 +3238,19 @@ EXECUTE:
 			`FSEQ:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSEQ
   	  `FMIN:  begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FMIN / FMAX
   	  `FMAX:  begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FMIN / FMAX
+			default:	;
+			endcase
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+		`PST2:	// Float
+			case(efltfunct5)
+//			`PST1:
+//			  case(eRs2)
+//			  endcase
+			`PADD:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PADD
+			`PSUB:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PSUB
+			`PMUL:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PMUL
+			`PDIV:	begin execute_done <= FALSE; mathCnt <= 8'd9; egoto(FLOAT); end	// PDIV
 			default:	;
 			endcase
     endcase
@@ -3565,6 +3679,208 @@ FLOAT:
   				endcase // FLT1
   			default:  ;
   		  endcase   // FLT2
+			`PST2:
+				case(efltfunct5)
+				`PADD,`PSUB:
+					begin
+						res <= pas_o;	// FADD
+						//if (fdn) fuf <= 1'b1;
+						//if (finf) fof <= 1'b1;
+						//if (norm_nx) fnx <= 1'b1;
+					end
+			  `PMUL:
+			    begin
+			      res <= pmul_o;
+			    end
+			  `PDIV:
+			    begin
+			      res <= pdiv_o;
+			    end
+				`PSEQ:
+					begin
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= pseq_o & ~pcmpnan;	// PSEQ
+    						crres[1] <= pseq_o & ~pcmpnan;	// PSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= pinf_o;
+    			      crres[7] <= 1'b0;
+			        end
+			      `CMP_AND:
+			        begin
+    						crres[0] <= cd[0] & pseq_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cd[1] & pseq_o & ~pcmpnan;	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_OR:
+			        begin
+    						crres[0] <= cd[0] | (pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | (pseq_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ANDCM:
+			        begin
+    						crres[0] <= cd[0] & ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] & ~(pseq_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ORCM:
+			        begin
+    						crres[0] <= cd[0] | ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | ~(pseq_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      default:  crres <= cd;
+			      endcase
+			    end
+				`PSLT:
+					begin
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= pslt_o & ~pcmpnan;	// PSEQ
+    						crres[1] <= pslt_o & ~pcmpnan;	// PSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= pinf_o;
+    			      crres[7] <= 1'b0;
+			        end
+			      `CMP_AND:
+			        begin
+    						crres[0] <= cd[0] & pslt_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cd[1] & pslt_o & ~pcmpnan;	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_OR:
+			        begin
+    						crres[0] <= cd[0] | (pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | (pslt_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ANDCM:
+			        begin
+    						crres[0] <= cd[0] & ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] & ~(pslt_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ORCM:
+			        begin
+    						crres[0] <= cd[0] | ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | ~(pslt_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      default:  crres <= cd;
+			      endcase
+			    end
+				`PSLE:
+					begin
+					  case(mop)
+					  `CMP_CPY:
+					    begin
+    						crres[0] <= psle_o & ~pcmpnan;	// PSEQ
+    						crres[1] <= psle_o & ~pcmpnan;	// PSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= pinf_o;
+    			      crres[7] <= 1'b0;
+			        end
+			      `CMP_AND:
+			        begin
+    						crres[0] <= cd[0] & psle_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cd[1] & psle_o & ~pcmpnan;	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= 1'b0;
+    			      crres[5] <= 1'b0;
+    			      crres[6] <= cd[6] & pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_OR:
+			        begin
+    						crres[0] <= cd[0] | (psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | (psle_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ANDCM:
+			        begin
+    						crres[0] <= cd[0] & ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] & ~(psle_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] & ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      `CMP_ORCM:
+			        begin
+    						crres[0] <= cd[0] | ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cd[1] | ~(psle_o & ~pcmpnan);	// FSEQ
+    			      crres[2] <= 1'b0;
+    			      crres[3] <= 1'b0;
+    			      crres[4] <= cd[4];
+    			      crres[5] <= cd[5];
+    			      crres[6] <= cd[6] | ~pinf_o;
+    			      crres[7] <= cd[7];
+			        end
+			      default:  crres <= cd;
+			      endcase
+			    end
+  			default:  ;
+  		  endcase   // FLT2
 			default:	;
 			endcase     // opcode
 			adv_ex();
@@ -3934,14 +4250,17 @@ WRITEBACK:
   begin
     $display("ia: %h  ib:%h  ic:%h  id:%h  imm:%h", ia, ib, ic, id, imm);
     $display("res: %h", res);
+    wmod_pc <= FALSE;
     wres <= mres;
     wres2 <= mres2;
     writeback_done <= TRUE;
+    /*
     if (advance_pipe) begin
       writeback_done <= FALSE;
       wgoto (WRITEBACK);
     end
     else
+    */
       wgoto (WRITEBACK_WAIT);
     // Compares and sets already update crres
     if (~w_cmp & ~w_set & ~w_tst & ~w_fltcmp & ~willegal_insn & wwrcrf) begin
@@ -4067,6 +4386,8 @@ WRITEBACK2:
     Rd <= Rd2;
     res <= res2;
     if (advance_pipe) begin
+      if (wmod_pc)
+        pc <= wnext_pc;
       writeback_done <= FALSE;
       wgoto (WRITEBACK);
     end
@@ -4077,6 +4398,8 @@ WRITEBACK2:
   end
 WRITEBACK_WAIT:
   if (advance_pipe) begin
+    if (wmod_pc)
+      pc <= wnext_pc;
     writeback_done <= FALSE;
     wgoto (WRITEBACK);
   end
@@ -4242,6 +4565,12 @@ begin
 		m_fltcmp <= e_fltcmp;
     m_ld <= m_ld;
     m_st <= m_st;
+    if (emod_pc) begin
+      pc <= enext_pc;
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      eir <= `NOP_INSN;
+    end
 		execute_done <= FALSE;
     egoto (EXECUTE);
   end
@@ -4258,6 +4587,7 @@ begin
   if (advance_pipe) begin
     if (takb) begin
       ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
       eir <= `NOP_INSN;
       mir <= `NOP_INSN;
     end
@@ -4275,6 +4605,13 @@ begin
 		w_set <= m_set;
 		w_tst <= m_tst;
 		w_fltcmp <= m_fltcmp;
+		if (mmod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      eir <= `NOP_INSN;
+      mir <= `NOP_INSN;
+		  pc <= mnext_pc;
+		end
     memory_done <= FALSE;
     mgoto(MEMORY0);
   end
@@ -4313,7 +4650,7 @@ task dException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
- 	pc <= tvec[3'd5] + {omode,6'h00};
+  dmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4329,6 +4666,7 @@ begin
   $display("** Exception: %d    **", cse);
   $display("**********************");
   if (advance_pipe) begin
+   	pc <= tvec[3'd5] + {omode,6'h00};
     ir <= `NOP_INSN;
     rir <= ir;
     rpc <= dpc;
@@ -4338,6 +4676,7 @@ begin
     dgoto (DECODE);
   end
   else begin
+    dnext_pc <= tvec[3'd5] + {omode,6'h00};
     decode_done <= TRUE;
 	  dgoto (DECODE_WAIT);
   end
@@ -4349,7 +4688,7 @@ task eException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
- 	pc <= tvec[3'd5] + {omode,6'h00};
+  emod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4366,6 +4705,7 @@ begin
   $display("**********************");
   if (advance_pipe) begin
     ir <= `NOP_INSN;
+    rir <= `NOP_INSN;
     eir <= `NOP_INSN;
     mpc <= expc;
     mir <= eir;
@@ -4374,10 +4714,12 @@ begin
     mRd <= Rd;
     mRd2 <= Rd2;
     millegal_insn <= eillegal_insn;
+   	pc <= tvec[3'd5] + {omode,6'h00};
     execute_done <= FALSE;
     egoto (EXECUTE);
   end
   else begin
+ 	  enext_pc <= tvec[3'd5] + {omode,6'h00};
     execute_done <= TRUE;
 	  egoto (EXECUTE_WAIT);
   end
@@ -4389,7 +4731,7 @@ task mException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
- 	pc <= tvec[3'd5] + {omode,6'h00};
+  mmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4406,12 +4748,15 @@ begin
   $display("**********************");
   if (advance_pipe) begin
     ir <= `NOP_INSN;
+    rir <= `NOP_INSN;
     eir <= `NOP_INSN;
     mir <= `NOP_INSN;
+   	pc <= tvec[3'd5] + {omode,6'h00};
     memory_done <= FALSE;
     dgoto (DECODE);
   end
   else begin
+ 	  mnext_pc <= tvec[3'd5] + {omode,6'h00};
     memory_done <= TRUE;
 	  dgoto (MEMORY_WAIT);
   end
@@ -4423,7 +4768,7 @@ task wException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
- 	pc <= tvec[3'd5] + {omode,6'h00};
+  wmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4440,13 +4785,16 @@ begin
   $display("**********************");
   if (advance_pipe) begin
     ir <= `NOP_INSN;
+    rir <= `NOP_INSN;
     eir <= `NOP_INSN;
     mir <= `NOP_INSN;
     wir <= `NOP_INSN;
+   	pc <= tvec[3'd5] + {omode,6'h00};
     writeback_done <= FALSE;
     dgoto (WRITEBACK);
   end
   else begin
+    wnext_pc <= tvec[3'd5] + {omode,6'h00};
     writeback_done <= TRUE;
 	  dgoto (WRITEBACK_WAIT);
   end
