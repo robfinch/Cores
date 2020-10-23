@@ -46,7 +46,6 @@ module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, c
 parameter WID = 64;
 parameter AWID = 32;
 parameter FPWID = 64;
-parameter PSTWID = 64;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter pL1CacheLines = 128;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
@@ -197,6 +196,24 @@ wire st_execute = estate==EXECUTE;
 reg ifetch_done, decode_done, regfetch_done, execute_done, memory_done, writeback_done;
 wire advance_pipe = ifetch_done & decode_done & regfetch_done & execute_done & memory_done & writeback_done;
 
+reg [39:0] iStateNameReg;
+function [39:0] iStateName;
+input [5:0] istate;
+begin
+  case(istate)
+  IFETCH1:  iStateName = "IF1  ";
+  IFETCH2:  iStateName = "IF2  ";
+  IFETCH3:  iStateName = "IF3  ";
+  IFETCH4:  iStateName = "IF4  ";
+  IFETCH_INCR:  iStateName = "INCR ";
+  IFETCH_WAIT:  iStateName = "WAIT ";
+  IFETCH2a:  iStateName = "IF2a ";
+  IFETCH3a:  iStateName = "IF3a ";
+  default:  iStateName = "???? ";
+  endcase
+end
+endfunction
+
 // POP needs to update the register file twice, once for the stack pointer and
 // again for the loaded value. So, it the first update takes place in the EX
 // stage. This means that if something goes wrong with the load the stack
@@ -210,7 +227,7 @@ regfile64 uirfRs1 (
   .ena(1'b1),      // input wire ena
   .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
-  .dina(res[63:0]),    // input wire [63 : 0] dina
+  .dina(wres[63:0]),    // input wire [63 : 0] dina
   .douta(irfoRd),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(1'b1),      // input wire enb
@@ -225,7 +242,7 @@ regfile64 uirfRs2 (
   .ena(1'b1),      // input wire ena
   .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
-  .dina(res[63:0]),    // input wire [63 : 0] dina
+  .dina(wres[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(1'b1),      // input wire enb
@@ -240,7 +257,7 @@ regfile64 uirfRs3 (
   .ena(1'b1),      // input wire ena
   .wea(wr_rf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
-  .dina(res[63:0]),    // input wire [63 : 0] dina
+  .dina(wres[63:0]),    // input wire [63 : 0] dina
   .douta(),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
   .enb(1'b1),      // input wire enb
@@ -412,7 +429,7 @@ wire [AWID-1:0] cao = ca[{d_stot ? Rs2[0] : d_mov ? Rs1[0] : ir[8],rprv ? rsStac
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // MMU
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+reg maccess;
 reg keyViolation;
 reg [AWID-1:0] ladr;
 reg wrpagemap;
@@ -1093,18 +1110,32 @@ BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
 wire [3:0] ea_acr = sregfile[segsel][3:0];
 wire [3:0] pc_acr = sregfile[pc[AWID-1:AWID-4]][3:0];
+wire iaccess_pending = istate==IFETCH3 && !((ihit && icnt==4'h0) || (ihit1 && ipc[4:0] < 5'h9 && icnt==4'h0));
 
 always @(posedge clk_g)
-if (rst_i) begin
+begin
+  tReset();
+  tOne();
 
-	istate <= IFETCH_WAIT;
-	dstate <= DECODE_WAIT;
+  // The six stage pipeline
+  tIFetch();
+  tDecode();
+  tRegfetch();
+  tExecute();
+  tMemory();
+  tWriteback();
+  
+  // Invalidate portions of pipeline due to branch or exceptions.
+  tInvalidate();
+end
+
+task tReset;
+begin
+  if (rst_i) begin
 	rstate <= REGFETCH_WAIT;
 	estate <= EXECUTE_WAIT;
 	mstate <= MEMORY_WAIT;
 	wstate <= WRITEBACK_WAIT;
-	ifetch_done <= TRUE;
-	decode_done <= TRUE;
 	regfetch_done <= TRUE;
 	execute_done <= TRUE;
 	memory_done <= TRUE;
@@ -1112,9 +1143,6 @@ if (rst_i) begin
 
 	icvalid <= 64'd0;
 	ic_invline <= 1'b0;
-	ir <= 64'h000000EA;
-	pc <= RSTPC;
-	ipc <= 32'h0;
 	pc_reload <= TRUE;
 	for (n = 0; n < 8; n = n + 1) begin
 	  tvec[n] <= 32'hFFFC0000;
@@ -1175,9 +1203,14 @@ if (rst_i) begin
 	wr_ci_tbl <= FALSE;
 	instfetch <= 40'd0;
 	icaccess <= FALSE;
+	maccess <= FALSE;
 	rd_ci <= FALSE;
+  end
 end
-else begin
+endtask
+
+task tOne;
+begin
 if (trace_match[0]) dbsr[0] <= TRUE;
 if (trace_match[1]) dbsr[1] <= TRUE;
 if (trace_match[2]) dbsr[2] <= TRUE;
@@ -1229,10 +1262,24 @@ if (inc_ma)
 `ifdef CPU_B32
   ea <= {ea[31:2]+2'd1,2'b00};
 `endif
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Instruction fetch stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tIFetch();
+begin
+if (rst_i) begin
+	istate <= IFETCH1;
+	ifetch_done <= FALSE;
+	pc <= RSTPC;
+	ipc <= {AWID{1'b0}};
+end
+else begin
+`ifdef SIM
+  iStateNameReg = iStateName(istate);
+`endif
 case (istate)
 // It takes two clocks to read the pagemap ram, this is after the linear
 // address is set, which also takes a clock cycle.
@@ -1339,7 +1386,7 @@ IFETCH3:
 `endif			
 			begin
 			  // First time in, set to miss address, after that increment
-			  icaccess <= TRUE;
+			  icaccess <= !maccess;
 `ifdef CPU_B128
         if (!icaccess)
           iadr <= {adr_o[AWID-1:5],5'h0};
@@ -1362,7 +1409,7 @@ IFETCH3:
 	  end
   end
 IFETCH3a:
-  begin
+  if (!maccess) begin
     cyc_o <= HIGH;
 		stb_o <= HIGH;
 `ifdef CPU_B128
@@ -1376,6 +1423,8 @@ IFETCH3a:
 `endif
     igoto (IFETCH4);
   end
+  else
+    icaccess <= !maccess;
 IFETCH4:
   begin
     if (ack_i) begin
@@ -1454,7 +1503,18 @@ IFETCH_INCR:
     if (advance_pipe) begin
       dpc <= ipc;
       dilen <= ilen;
-      pc <= pc + ilen;
+      if (wmod_pc)
+        pc <= wnext_pc;
+      else if (mmod_pc)
+        pc <= mnext_pc;
+      else if (emod_pc)
+        pc <= enext_pc;
+      else if (rmod_pc)
+        pc <= rnext_pc;
+      else if (dmod_pc)
+        pc <= dnext_pc;
+      else
+        pc <= pc + ilen;
       ifetch_done <= FALSE;
       igoto (IFETCH1);
     end
@@ -1467,15 +1527,37 @@ IFETCH_WAIT:
   if (advance_pipe) begin
     dpc <= ipc;
     dilen <= ilen;
-    pc <= pc + ilen;
+    if (wmod_pc)
+      pc <= wnext_pc;
+    else if (mmod_pc)
+      pc <= mnext_pc;
+    else if (emod_pc)
+      pc <= enext_pc;
+    else if (rmod_pc)
+      pc <= rnext_pc;
+    else if (dmod_pc)
+      pc <= dnext_pc;
+    else
+      pc <= pc + ilen;
     ifetch_done <= FALSE;
     igoto (IFETCH1);
   end
 endcase
+end
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Instruction decode stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tDecode;
+begin
+if (rst_i) begin
+  dpc <= RSTPC;
+	dstate <= DECODE_WAIT;
+	decode_done <= TRUE;
+end
+else
 case (dstate)
 EXPAND_CI:
   begin
@@ -1485,8 +1567,10 @@ EXPAND_CI:
   end
 DECODE:
   begin
+`ifdef SIM
     $display("IP: %h", ipc);
     $display("Fetch: %h", ir);
+`endif    
     decode_done <= TRUE;
     wrirf <= 1'b0;
     wrcrf32 <= 1'b0;
@@ -1546,6 +1630,7 @@ DECODE:
       dgoto(DECODE_WAIT);
     end
     Rd <= 5'd0;
+    Rd2 <= 5'd0;
     Rs1 <= ir[17:13];
     Rs2 <= ir[22:18];
     Rs3 <= ir[27:23];
@@ -2208,18 +2293,23 @@ DECODE_WAIT:
     rpc <= dpc;
     rilen <= dilen;
     rillegal_insn <= illegal_insn;
-    if (dmod_pc) begin
-      ir <= `NOP_INSN;
-      pc <= dnext_pc;
-    end
+    dmod_pc <= FALSE;
     decode_done <= FALSE;
     dgoto (DECODE);
   end
 endcase
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Register fetch stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tRegfetch;
+begin
+if (rst_i) begin
+  rpc <= RSTPC;
+end
+else
 case(rstate)
 // Need a state to read Rd from block ram.
 REGFETCH1:
@@ -2289,6 +2379,8 @@ REGFETCH3:
       expc <= rpc;
       eRs1 <= Rs1;
       eRs2 <= Rs2;
+      eRd <= Rd;
+      eRd2 <= Rd2;
       ewrirf <= wrirf;
       ewrcrf <= wrcrf;
       ewrcrf32 <= wrcrf32;
@@ -2300,11 +2392,6 @@ REGFETCH3:
       e_fltcmp <= d_fltcmp;
       e_ld <= d_ld;
       e_st <= d_st;
-      if (rmod_pc) begin
-        ir <= `NOP_INSN;
-        rir <= `NOP_INSN;
-        pc <= rnext_pc;
-      end
       regfetch_done <= FALSE;
       rgoto (REGFETCH1);
     end
@@ -2312,8 +2399,9 @@ REGFETCH3:
       regfetch_done <= TRUE;
       rgoto (REGFETCH_WAIT);
     end
+`ifdef SIM    
     $display("RF: irfoRs1:%h Rs1=%d",irfoRs1, Rs1);
-
+`endif
     if (Rs1==5'd0)
       ia <= 64'd0;
     else if (Rs1==eRd)
@@ -2404,6 +2492,8 @@ REGFETCH_WAIT:
     expc <= rpc;
     eRs1 <= Rs1;
     eRs2 <= Rs2;
+    eRd <= Rd;
+    eRd2 <= Rd2;
     eillegal_insn <= illegal_insn;
     ewrirf <= wrirf;
     ewrcrf <= wrcrf;
@@ -2418,25 +2508,31 @@ REGFETCH_WAIT:
     e_st <= d_st;
 		if (d_jsr)
       id <= dpc + dilen; // pc is addressing next instruction
-    if (rmod_pc) begin
-      ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      pc <= rnext_pc;
-    end
+    rmod_pc <= FALSE;
     regfetch_done <= FALSE;
     rgoto (REGFETCH1);
   end
 endcase
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tExecute;
+begin
+if (rst_i) begin
+  expc <= RSTPC;
+  res <= 64'd0;
+  res2 <= 64'd0;
+end
+else
 case(estate)
 EXECUTE:
   begin
     adv_ex();
     res <= 64'd0;
-    emode_pc <= FALSE;
+    emod_pc <= FALSE;
     casez(eopcode)
 		`BRK:
 		  case(eir[15:8])
@@ -3893,24 +3989,37 @@ EXECUTE_WAIT:
     mRs1 <= eRs1;
     mRd <= eRd;
     mRd2 <= eRd2;
+    mpc <= expc;
+    ea <= eea;
+    emod_pc <= FALSE;
     millegal_insn <= eillegal_insn;
     execute_done <= FALSE;
     egoto(EXECUTE);
   end
 endcase
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Memory stage
 // Load or store the memory value.
 // Wait for operation to complete.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tMemory;
+begin
+if (rst_i) begin
+  mpc <= RSTPC;
+  mres <= 64'd0;
+  mres2 <= 64'd0;
+end
+else
 case(mstate)
 MEMORY0:
   begin
+    mmod_pc <= FALSE;
     mres <= res;
     mres2 <= res2;
     willegal_insn <= millegal_insn;
-    ea <= eea;
     mgoto (MEMORY1);
   end
 MEMORY1:
@@ -3925,7 +4034,8 @@ MEMORY1:
     `BLEU,`BGTU,`BOD,`BPS,`BEQZ,`BNEZ,`BRA:
       begin
         if (takb) begin
-          pc <= mpc + {{50{ir[23]}},mir[23:10]};
+          mmod_pc <= TRUE;
+          mnext_pc <= mpc + {{50{mir[23]}},mir[23:10]};
           if (mir[23:10]==14'd0)
             mException(`FLT_BT, mpc);
         end
@@ -3934,7 +4044,8 @@ MEMORY1:
     `BEQI,`BBC,`BBS:
       begin
         if (takb) begin
-          pc <= mpc + {{52{mir[31]}},mir[31:21]};
+          mmod_pc <= TRUE;
+          mnext_pc <= mpc + {{52{mir[31]}},mir[31:21]};
           if (mir[31:21]==12'd0)
             mException(`FLT_BT, mpc);
         end
@@ -3943,36 +4054,47 @@ MEMORY1:
     `BT:
       begin
         if (takb) begin
-          pc <= mpc + {{58{mir[15]}},mir[15:10]};
+          mmod_pc <= TRUE;
+          mnext_pc <= mpc + {{58{mir[15]}},mir[15:10]};
           if (mir[15:10]==6'd0)
             mException(`FLT_BT, mpc);
         end
         adv_mem(takb);
       end
     endcase
-    if (opcode==`LINK) begin
+    if (mopcode==`LINK) begin
       res2 <= ia + imm;
     end
-    if (opcode==`LEA || opcode==`LEAS) begin
+    if (mopcode==`LEA || mopcode==`LEAS) begin
       res <= ea;
       adv_mem(1'b0);
     end
     else begin
-      tEA();
-      xlaten <= TRUE;
+      // Must have a memory op to continue.
+      if (mopcode[7:4]==4'h8 || mopcode[7:4]==4'h9 || mopcode[7:4]==4'hA || mopcode[7:4]==4'hB) begin
+        if (iaccess_pending)
+          mstate <= mstate;
+        else begin
+          maccess <= TRUE;
+          tEA();
+          xlaten <= TRUE;
 `ifdef CPU_B128
-      sel <= selx << ea[3:0];
-      dat <= id << {ea[3:0],3'b0};
+          sel <= selx << ea[3:0];
+          dat <= id << {ea[3:0],3'b0};
 `endif
 `ifdef CPU_B64
-      sel <= selx << ea[2:0];
-      dat <= id << {ea[2:0],3'b0};
+          sel <= selx << ea[2:0];
+          dat <= id << {ea[2:0],3'b0};
 `endif
 `ifdef CPU_B32
-      sel <= selx << ea[1:0];
-      dat <= id << {ea[1:0],3'b0};
+          sel <= selx << ea[1:0];
+          dat <= id << {ea[1:0],3'b0};
 `endif
-      ealow <= ea[7:0];
+          ealow <= ea[7:0];
+        end
+      end
+      else
+        adv_mem(1'b0);
     end
   end
 MEMORY1a:
@@ -4014,7 +4136,7 @@ MEMORY3:
       sel_o <= sel[3:0];
       dat_o <= dat[31:0];
 `endif
-      case(opcode)
+      case(mopcode)
       `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
       `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         we_o <= HIGH;
@@ -4028,7 +4150,7 @@ MEMORY4:
       icvalid[adr_o[pL1msb:5]] <= 1'b0;
       adv_mem(1'b0);
     end
-    else if (acki) begin
+    else if (acki & ~icaccess) begin
       mgoto (MEMORY5);
       stb_o <= LOW;
       dati <= dat_i;
@@ -4044,7 +4166,7 @@ MEMORY5:
     if (|sel[`SELH])
       mgoto (MEMORY6);
     else begin
-      case(opcode)
+      case(mopcode)
       `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
       `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         adv_mem(1'b0);
@@ -4096,7 +4218,7 @@ MEMORY8:
     end
   end
 MEMORY9:
-  if (acki) begin
+  if (acki & ~icaccess) begin
     mgoto (MEMORY10);
     stb_o <= LOW;
     dati[`DATH] <= dat_i;
@@ -4127,7 +4249,7 @@ MEMORY10:
     else
 `endif
     begin
-      case(opcode)
+      case(mopcode)
       `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
       `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         adv_mem(1'b0);
@@ -4179,7 +4301,7 @@ MEMORY13:
     end
   end
 MEMORY14:
-  if (acki) begin
+  if (acki & ~icaccess) begin
     mgoto (MEMORY15);
     cyc_o <= LOW;
     stb_o <= LOW;
@@ -4189,7 +4311,7 @@ MEMORY14:
   end
 MEMORY15:
   if (~acki) begin
-    case(opcode)
+    case(mopcode)
     `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
     `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
       adv_mem(1'b0);
@@ -4202,7 +4324,7 @@ MEMORY15:
 DATA_ALIGN:
   begin
     adv_mem(1'b0);
-    case(opcode)
+    case(mopcode)
     `LDB,`LDBS:   mres <= {{56{datis[7]}},datis[7:0]};
     `LDBU,`LDBUS: mres <= {{56{1'b0}},datis[7:0]};
     `LDW,`LDWS:   mres <= {{48{datis[15]}},datis[15:0]};
@@ -4222,6 +4344,7 @@ DATA_ALIGN:
   end
 MEMORY_WAIT:
   if (advance_pipe) begin
+    maccess <= FALSE;
     if (takb) begin
       ir <= `NOP_INSN;
       eir <= `NOP_INSN;
@@ -4232,24 +4355,37 @@ MEMORY_WAIT:
     wRs1 <= mRs1;
     wRd <= mRd;
     wRd2 <= mRd2;
+    wpc <= mpc;
     wwrirf <= mwrirf;
     wwrcrf <= mwrcrf;
     wwrcrf32 <= mwrcrf32;
     wwrra <= mwrra;
     wwrca <= mwrca;
+    mmod_pc <= FALSE;
     memory_done <= FALSE;
     mgoto(MEMORY1);
   end
 endcase
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Writeback stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+task tWriteback;
+begin
+if (rst_i) begin
+  wres <= 64'd0;
+  wres2 <= 64'd0;
+end
+else
 case(wstate)
 WRITEBACK:
   begin
+`ifdef SIM
     $display("ia: %h  ib:%h  ic:%h  id:%h  imm:%h", ia, ib, ic, id, imm);
     $display("res: %h", res);
+`endif    
     wmod_pc <= FALSE;
     wres <= mres;
     wres2 <= mres2;
@@ -4299,56 +4435,7 @@ WRITEBACK:
         end
       default:  ;
       endcase
-    `CSR:
-      begin
-        if (wRs1 != 5'd0)
-        case(wir[39:37])
-        3'd0: ; // read only
-        3'd1,3'd5:
-          casez(wir[28:18])
-          11'b001_0001_0000:  TaskId <= wia;
-          11'b001_0001_1111:  ASID <= wia;
-          11'b001_0010_0000:  begin key[0] <= wia[19:0]; key[1] <= wia[39:20]; key[2] <= wia[59:40]; end
-          11'b001_0010_0001:  begin key[3] <= wia[19:0]; key[4] <= wia[39:20]; key[5] <= wia[59:40]; end
-          11'b001_0010_0010:  begin key[6] <= wia[19:0]; key[7] <= wia[39:20]; key[8] <= wia[59:40]; end
-          11'b???_0000_0110:  cause[wir[28:26]] <= wia;
-          11'b???_0000_0111:  badaddr[wir[28:26]] <= wia;
-          11'b???_0000_1001:  scratch[wir[28:26]] <= wia;
-          11'b???_0011_0???:  tvec[wir[28:26]] <= wia;
-          11'b???_0100_0000:  pmStack <= wia;
-          11'b???_0100_0011:  rsStack <= wia;
-				  11'b???_0100_1000:	epc[rprv[4] ? rsStack[9:5] : rsStack[4:0]] <= wia;
-				  11'b???_0001_1100:
-				    begin
-  			      rprv <= wia[4:0];
-  			      Rdx1  <= wia[0] ? rsStack[9:5] : rsStack[4:0];
-  			      Rs1x1 <= wia[1] ? rsStack[9:5] : rsStack[4:0];
-  			      Rs2x1 <= wia[2] ? rsStack[9:5] : rsStack[4:0];
-  			      Rs3x1 <= wia[3] ? rsStack[9:5] : rsStack[4:0];
-  			    end
-          11'b101_0001_10??:  dbad[wir[19:18]] <= wia;
-          11'b101_0001_1100:  dbcr <= wia;
-          11'b101_0001_1101:  dbsr <= wia;
-          default:  ;
-          endcase
-        3'd2,3'd6:
-          casez(wir[28:18])
-          11'b???_0100_0000:  pmStack <= pmStack | wia;
-          11'b???_0100_0011:  rsStack <= rsStack | wia;
-          11'b101_0001_1100:  dbcr <= dbcr | wia;
-          11'b101_0001_1101:  dbsr <= dbsr | wia;
-          default:  ;
-          endcase
-        3'd3,3'd7:
-          casez(wir[28:18])
-          11'b???_0100_0000:  pmStack <= pmStack & ~wia;
-          11'b???_0100_0011:  rsStack <= rsStack & ~wia;
-          11'b101_0001_1100:  dbcr <= dbcr & ~wia;
-          11'b101_0001_1101:  dbsr <= dbsr & ~wia;
-          default:  ;
-          endcase
-        endcase
-      end
+    `CSR: wr_csr();
     `RTE:
       begin
 				pmStack <= {4'b1010,pmStack[31:4]};
@@ -4386,8 +4473,6 @@ WRITEBACK2:
     Rd <= Rd2;
     res <= res2;
     if (advance_pipe) begin
-      if (wmod_pc)
-        pc <= wnext_pc;
       writeback_done <= FALSE;
       wgoto (WRITEBACK);
     end
@@ -4398,13 +4483,64 @@ WRITEBACK2:
   end
 WRITEBACK_WAIT:
   if (advance_pipe) begin
-    if (wmod_pc)
-      pc <= wnext_pc;
     writeback_done <= FALSE;
     wgoto (WRITEBACK);
   end
 endcase
 end
+endtask
+
+task wr_csr;
+begin
+  if (wRs1 != 5'd0)
+  case(wir[39:37])
+  3'd0: ; // read only
+  3'd1,3'd5:
+    casez(wir[28:18])
+    11'b001_0001_0000:  TaskId <= wia;
+    11'b001_0001_1111:  ASID <= wia;
+    11'b001_0010_0000:  begin key[0] <= wia[19:0]; key[1] <= wia[39:20]; key[2] <= wia[59:40]; end
+    11'b001_0010_0001:  begin key[3] <= wia[19:0]; key[4] <= wia[39:20]; key[5] <= wia[59:40]; end
+    11'b001_0010_0010:  begin key[6] <= wia[19:0]; key[7] <= wia[39:20]; key[8] <= wia[59:40]; end
+    11'b???_0000_0110:  cause[wir[28:26]] <= wia;
+    11'b???_0000_0111:  badaddr[wir[28:26]] <= wia;
+    11'b???_0000_1001:  scratch[wir[28:26]] <= wia;
+    11'b???_0011_0???:  tvec[wir[28:26]] <= wia;
+    11'b???_0100_0000:  pmStack <= wia;
+    11'b???_0100_0011:  rsStack <= wia;
+	  11'b???_0100_1000:	epc[rprv[4] ? rsStack[9:5] : rsStack[4:0]] <= wia;
+	  11'b???_0001_1100:
+	    begin
+	      rprv <= wia[4:0];
+	      Rdx1  <= wia[0] ? rsStack[9:5] : rsStack[4:0];
+	      Rs1x1 <= wia[1] ? rsStack[9:5] : rsStack[4:0];
+	      Rs2x1 <= wia[2] ? rsStack[9:5] : rsStack[4:0];
+	      Rs3x1 <= wia[3] ? rsStack[9:5] : rsStack[4:0];
+	    end
+    11'b101_0001_10??:  dbad[wir[19:18]] <= wia;
+    11'b101_0001_1100:  dbcr <= wia;
+    11'b101_0001_1101:  dbsr <= wia;
+    default:  ;
+    endcase
+  3'd2,3'd6:
+    casez(wir[28:18])
+    11'b???_0100_0000:  pmStack <= pmStack | wia;
+    11'b???_0100_0011:  rsStack <= rsStack | wia;
+    11'b101_0001_1100:  dbcr <= dbcr | wia;
+    11'b101_0001_1101:  dbsr <= dbsr | wia;
+    default:  ;
+    endcase
+  3'd3,3'd7:
+    casez(wir[28:18])
+    11'b???_0100_0000:  pmStack <= pmStack & ~wia;
+    11'b???_0100_0011:  rsStack <= rsStack & ~wia;
+    11'b101_0001_1100:  dbcr <= dbcr & ~wia;
+    11'b101_0001_1101:  dbsr <= dbsr & ~wia;
+    default:  ;
+    endcase
+  endcase
+end
+endtask
 
 task tEA;
 begin
@@ -4544,6 +4680,44 @@ begin
 end
 endtask
 
+task tInvalidate;
+begin
+  if (rst_i) begin
+    ir <= `NOP_INSN;
+    rir <= `NOP_INSN;
+    eir <= `NOP_INSN;
+    mir <= `NOP_INSN;
+    wir <= `NOP_INSN;
+  end
+  else if (advance_pipe) begin
+    if (wmod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      eir <= `NOP_INSN;
+      mir <= `NOP_INSN;
+      wir <= `NOP_INSN;
+    end
+  	else if (mmod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      eir <= `NOP_INSN;
+      mir <= `NOP_INSN;
+  	end
+    else if (emod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+      eir <= `NOP_INSN;
+    end
+    else if (rmod_pc) begin
+      ir <= `NOP_INSN;
+      rir <= `NOP_INSN;
+    end
+    else if (dmod_pc)
+      ir <= `NOP_INSN;
+  end
+end
+endtask
+
 task adv_ex;
 begin
   if (advance_pipe) begin
@@ -4553,6 +4727,7 @@ begin
     mRs1 <= eRs1;
     mRd <= Rd;
     mRd2 <= Rd2;
+    mpc <= expc;
     millegal_insn <= eillegal_insn;
     mwrirf <= ewrirf;
     mwrcrf <= ewrcrf;
@@ -4565,12 +4740,7 @@ begin
 		m_fltcmp <= e_fltcmp;
     m_ld <= m_ld;
     m_st <= m_st;
-    if (emod_pc) begin
-      pc <= enext_pc;
-      ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
-    end
+    ea <= eea;
 		execute_done <= FALSE;
     egoto (EXECUTE);
   end
@@ -4585,17 +4755,12 @@ task adv_mem;
 input takb;
 begin
   if (advance_pipe) begin
-    if (takb) begin
-      ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
-      mir <= `NOP_INSN;
-    end
     wia <= mia;
     wir <= mir;
     wRs1 <= mRs1;
     wRd <= mRd;
     wRd2 <= mRd2;
+    wpc <= mpc;
     wwrirf <= mwrirf;
     wwrcrf <= mwrcrf;
     wwrcrf32 <= mwrcrf32;
@@ -4605,13 +4770,6 @@ begin
 		w_set <= m_set;
 		w_tst <= m_tst;
 		w_fltcmp <= m_fltcmp;
-		if (mmod_pc) begin
-      ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
-      mir <= `NOP_INSN;
-		  pc <= mnext_pc;
-		end
     memory_done <= FALSE;
     mgoto(MEMORY0);
   end
@@ -4638,9 +4796,11 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+`ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
+`endif  
   igoto (IFETCH1);
 end
 endtask
@@ -4650,7 +4810,6 @@ task dException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
-  dmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4662,24 +4821,15 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+`ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
-  if (advance_pipe) begin
-   	pc <= tvec[3'd5] + {omode,6'h00};
-    ir <= `NOP_INSN;
-    rir <= ir;
-    rpc <= dpc;
-    rilen <= dilen;
-    rillegal_insn <= illegal_insn;
-    decode_done <= FALSE;
-    dgoto (DECODE);
-  end
-  else begin
-    dnext_pc <= tvec[3'd5] + {omode,6'h00};
-    decode_done <= TRUE;
-	  dgoto (DECODE_WAIT);
-  end
+`endif
+  dmod_pc <= TRUE;
+  dnext_pc <= tvec[3'd5] + {omode,6'h00};
+  decode_done <= TRUE;
+  dgoto (DECODE_WAIT);
 end
 endtask
 
@@ -4688,7 +4838,6 @@ task eException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
-  emod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4700,29 +4849,15 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+`ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
-  if (advance_pipe) begin
-    ir <= `NOP_INSN;
-    rir <= `NOP_INSN;
-    eir <= `NOP_INSN;
-    mpc <= expc;
-    mir <= eir;
-    mia <= ia;
-    mRs1 <= eRs1;
-    mRd <= Rd;
-    mRd2 <= Rd2;
-    millegal_insn <= eillegal_insn;
-   	pc <= tvec[3'd5] + {omode,6'h00};
-    execute_done <= FALSE;
-    egoto (EXECUTE);
-  end
-  else begin
- 	  enext_pc <= tvec[3'd5] + {omode,6'h00};
-    execute_done <= TRUE;
-	  egoto (EXECUTE_WAIT);
-  end
+`endif  
+  emod_pc <= TRUE;
+  enext_pc <= tvec[3'd5] + {omode,6'h00};
+  execute_done <= TRUE;
+  egoto (EXECUTE_WAIT);
 end
 endtask
 
@@ -4731,7 +4866,6 @@ task mException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
-  mmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4743,23 +4877,15 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+`ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
-  if (advance_pipe) begin
-    ir <= `NOP_INSN;
-    rir <= `NOP_INSN;
-    eir <= `NOP_INSN;
-    mir <= `NOP_INSN;
-   	pc <= tvec[3'd5] + {omode,6'h00};
-    memory_done <= FALSE;
-    dgoto (DECODE);
-  end
-  else begin
- 	  mnext_pc <= tvec[3'd5] + {omode,6'h00};
-    memory_done <= TRUE;
-	  dgoto (MEMORY_WAIT);
-  end
+`endif  
+  mmod_pc <= TRUE;
+  mnext_pc <= tvec[3'd5] + {omode,6'h00};
+  memory_done <= TRUE;
+  dgoto (MEMORY_WAIT);
 end
 endtask
 
@@ -4768,7 +4894,6 @@ task wException;
 input [31:0] cse;
 input [AWID-1:0] tpc;
 begin
-  wmod_pc <= TRUE;
 	epc[5'd31] <= tpc;
 	pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
@@ -4780,24 +4905,15 @@ begin
   Rs2x1 <= 5'd31;
   Rs3x1 <= 5'd31;
   rsStack <= {rsStack[24:0],5'd31};
+`ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
-  if (advance_pipe) begin
-    ir <= `NOP_INSN;
-    rir <= `NOP_INSN;
-    eir <= `NOP_INSN;
-    mir <= `NOP_INSN;
-    wir <= `NOP_INSN;
-   	pc <= tvec[3'd5] + {omode,6'h00};
-    writeback_done <= FALSE;
-    dgoto (WRITEBACK);
-  end
-  else begin
-    wnext_pc <= tvec[3'd5] + {omode,6'h00};
-    writeback_done <= TRUE;
-	  dgoto (WRITEBACK_WAIT);
-  end
+`endif  
+  wmod_pc <= TRUE;
+  wnext_pc <= tvec[3'd5] + {omode,6'h00};
+  writeback_done <= TRUE;
+  dgoto (WRITEBACK_WAIT);
 end
 endtask
 
