@@ -2043,7 +2043,7 @@ REGFETCH3:
     else
       id <= Rd==5'd0 ? 64'd0 : irfoRd;
 		case(opcode)
-    `PUSH
+    `PUSH:
        begin
         casez(ir[14:8])
         7'b110000?: id <= rao;

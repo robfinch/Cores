@@ -746,6 +746,11 @@ end
 reg wr_ci_tbl;
 reg rd_ci;
 reg [31:0] ci_tbl [0:511];
+initial begin
+  for (n = 0; n < 512; n = n + 1)
+    ci_tbl[n] <= `NOP_INSN;
+    
+end
 always @(posedge clk_g)
   if (wr_ci_tbl)
       ci_tbl[ia[8:0]] <= ib[31:0];
@@ -770,7 +775,7 @@ assign MUserMode = memmode==3'b000;
 wire [7:0] selx;
 modSelect usel1
 (
-  .opcode(ir[7:0]),
+  .opcode(mir[7:0]),
   .sel(selx)
 );
 
@@ -3248,7 +3253,8 @@ EXECUTE:
         default: ;
         endcase
       `MVCI:  res <= ci_tblo2;
-    endcase
+      default:  ;
+      endcase
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Memory Ops
@@ -3992,6 +3998,8 @@ EXECUTE_WAIT:
     mpc <= expc;
     ea <= eea;
     emod_pc <= FALSE;
+    mres <= res;
+    mres2 <= res2;
     millegal_insn <= eillegal_insn;
     execute_done <= FALSE;
     egoto(EXECUTE);
@@ -4017,8 +4025,6 @@ case(mstate)
 MEMORY0:
   begin
     mmod_pc <= FALSE;
-    mres <= res;
-    mres2 <= res2;
     willegal_insn <= millegal_insn;
     mgoto (MEMORY1);
   end
@@ -4079,15 +4085,15 @@ MEMORY1:
           tEA();
           xlaten <= TRUE;
 `ifdef CPU_B128
-          sel <= selx << ea[3:0];
+          sel <= {8'h00,selx} << ea[3:0];
           dat <= id << {ea[3:0],3'b0};
 `endif
 `ifdef CPU_B64
-          sel <= selx << ea[2:0];
+          sel <= {8'h00,selx} << ea[2:0];
           dat <= id << {ea[2:0],3'b0};
 `endif
 `ifdef CPU_B32
-          sel <= selx << ea[1:0];
+          sel <= {12'h00,selx} << ea[1:0];
           dat <= id << {ea[1:0],3'b0};
 `endif
           ealow <= ea[7:0];
@@ -4362,6 +4368,8 @@ MEMORY_WAIT:
     wwrra <= mwrra;
     wwrca <= mwrca;
     mmod_pc <= FALSE;
+		wres <= mres;
+		wres2 <= mres2;
     memory_done <= FALSE;
     mgoto(MEMORY1);
   end
@@ -4387,8 +4395,6 @@ WRITEBACK:
     $display("res: %h", res);
 `endif    
     wmod_pc <= FALSE;
-    wres <= mres;
-    wres2 <= mres2;
     writeback_done <= TRUE;
     /*
     if (advance_pipe) begin
@@ -4741,6 +4747,8 @@ begin
     m_ld <= m_ld;
     m_st <= m_st;
     ea <= eea;
+    mres <= res;
+    mres2 <= res2;
 		execute_done <= FALSE;
     egoto (EXECUTE);
   end
@@ -4770,6 +4778,8 @@ begin
 		w_set <= m_set;
 		w_tst <= m_tst;
 		w_fltcmp <= m_fltcmp;
+		wres <= mres;
+		wres2 <= mres2;
     memory_done <= FALSE;
     mgoto(MEMORY0);
   end

@@ -69,7 +69,7 @@ else begin
     ma <= {ma[31:3]+2'd1,3'b00};
 `endif
 `ifdef CPU_B32
-    aa <= {ma[31:2]+2'd1,2'b00};
+    ma <= {ma[31:2]+2'd1,2'b00};
 `endif
 else if (en)
 casez(inst[`OPCODE])

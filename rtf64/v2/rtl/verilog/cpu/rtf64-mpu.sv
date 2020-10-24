@@ -231,7 +231,7 @@ endcase
 always @(posedge clk_i)
 	ack <= ack_i|pic_ack|pit_ack;
 
-rtf64 ucpu1
+rtf64op ucpu1
 (
     .hartid_i(hartid_i),
     .rst_i(rst_i),
