@@ -71,7 +71,7 @@ use UNISIM.VComponents.all;
 
 entity xbusClocking is
    Generic (
-      kClkRange : natural := 1);  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
+      kClkRange : natural := 3);  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
    Port (
       TMDS_Clk_p : in std_logic;
       TMDS_Clk_n : in std_logic;

@@ -69,23 +69,25 @@ use work.xbusConstants.ALL;
 --use UNISIM.VComponents.all;
 
 entity xbusChannelBond is
+   Generic (
+      kParallelWidth : natural := 14); -- number of parallel bits
    Port (
       PixelClk : in std_logic;
-      pDataInRaw : in std_logic_vector(13 downto 0);
+      pDataInRaw : in std_logic_vector(kParallelWidth-1 downto 0);
       pMeVld : in std_logic;
       pOtherChVld : in std_logic_vector(1 downto 0);
       pOtherChRdy : in std_logic_vector(1 downto 0);
       
-      pDataInBnd : out std_logic_vector(13 downto 0);
+      pDataInBnd : out std_logic_vector(kParallelWidth-1 downto 0);
       pMeRdy : out std_logic
       );
 end xbusChannelBond;
 
 architecture Behavioral of xbusChannelBond is
 constant kFIFO_Depth : natural := 32;
-type FIFO_t is array (0 to kFIFO_Depth-1) of std_logic_vector(13 downto 0);
+type FIFO_t is array (0 to kFIFO_Depth-1) of std_logic_vector(kParallelWidth-1 downto 0);
 signal pFIFO : FIFO_t;
-signal pDataFIFO : std_logic_vector(13 downto 0);
+signal pDataFIFO : std_logic_vector(kParallelWidth-1 downto 0);
 signal pRdA, pWrA : natural range 0 to kFIFO_Depth-1;
 signal pRdEn : std_logic;
 signal pAllVld, pAllVld_q, pMeRdy_int: std_logic;

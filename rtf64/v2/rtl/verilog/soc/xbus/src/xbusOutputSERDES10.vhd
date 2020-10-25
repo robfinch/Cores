@@ -68,7 +68,7 @@ use UNISIM.VComponents.all;
 
 entity xbusOutputSERDES is
    Generic (
-      kParallelWidth : natural := 14); -- number of parallel bits
+      kParallelWidth : natural := 10); -- number of parallel bits
    Port (
       PixelClk : in STD_LOGIC;   --TMDS clock x1 (CLKDIV)
       SerialClk : in STD_LOGIC;  --TMDS clock x5 (CLK)
@@ -167,10 +167,10 @@ SerializerSlave: OSERDESE2
       D2                => '0',
       D3                => pDataOut(8),
       D4                => pDataOut(9),
-      D5                => pDataOut(10),
-      D6                => pDataOut(11),
-      D7                => pDataOut(12),
-      D8                => pDataOut(13),
+      D5                => '0',
+      D6                => '0',
+      D7                => '0',
+      D8                => '0',
       OCE               => '1',             -- 1-bit input: Output data clock enable
       RST               => aRst,             -- 1-bit input: Reset
       -- SHIFTIN1 / SHIFTIN2: 1-bit (each) input: Data input expansion (1-bit each)

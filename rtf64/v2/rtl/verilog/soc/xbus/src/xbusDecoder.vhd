@@ -70,7 +70,8 @@ use work.xbusConstants.ALL;
 
 entity xbusDecoder is
    Generic (
-      kCtlTknCount : natural := 128; --how many subsequent control tokens make a valid blank detection
+      kParallelWidth : natural := 14;
+      kCtlTknCount : natural := 9; -- was 128 --how many subsequent control tokens make a valid blank detection
       kTimeoutMs : natural := 50; --what is the maximum time interval for a blank to be detected
       kRefClkFrqMHz : natural := 300; --what is the RefClk frequency
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
@@ -86,7 +87,7 @@ entity xbusDecoder is
       sDataIn_n : in std_logic;  --TMDS data channel negative
       
       --Decoded parallel data
-      pDataIn : out std_logic_vector(11 downto 0);
+      pDataIn : out std_logic_vector(kParallelWidth-3 downto 0);
       pC0 : out std_logic;
       pC1 : out std_logic;
       pVde : out std_logic;
@@ -105,16 +106,16 @@ end xbusDecoder;
 
 architecture Behavioral of xbusDecoder is
 constant kBitslipDelay : natural := 3; --three-period delay after bitslip 
-signal pAlignRst, pLockLostRst_n : std_logic; 
+signal pAlignRst : std_logic; 
 signal pBitslipCnt : natural range 0 to kBitslipDelay - 1 := kBitslipDelay - 1; 
-signal pDataIn8b : std_logic_vector(11 downto 0);
-signal pDataInBnd : std_logic_vector(13 downto 0);
-signal pDataInRaw : std_logic_vector(13 downto 0);
+signal pDataIn8b : std_logic_vector(kParallelWidth-3 downto 0);
+signal pDataInBnd : std_logic_vector(kParallelWidth-1 downto 0);
+signal pDataInRaw : std_logic_vector(kParallelWidth-1 downto 0);
 signal pMeRdy_int, pAligned, pAlignErr_int, pAlignErr_q, pBitslip : std_logic;
 signal pIDLY_LD, pIDLY_CE, pIDLY_INC : std_logic;
 signal pIDLY_CNT : std_logic_vector(kIDLY_TapWidth-1 downto 0);
 -- Timeout Counter End
-constant kTimeoutEnd : natural := kTimeoutMs * 1000 * kRefClkFrqMHz;
+constant kTimeoutEnd : natural := 20; --kTimeoutMs * 1000 * kRefClkFrqMHz;
 signal rTimeoutCnt : natural range 0 to kTimeoutEnd-1;
 signal pTimeoutRst, pTimeoutOvf, rTimeoutRst, rTimeoutOvf : std_logic;
 begin
@@ -123,7 +124,7 @@ begin
 xbusInputSERDES_X: entity work.xbusInputSERDES
    generic map (
       kIDLY_TapWidth => kIDLY_TapWidth,
-      kParallelWidth => 14 -- TMDS uses 1:10 serialization
+      kParallelWidth => kParallelWidth -- TMDS uses 1:10 serialization
       )
    port map (
       PixelClk => PixelClk,
@@ -188,7 +189,8 @@ SyncBaseRst: entity work.SyncBase
 -- Phase alignment controller to lock onto data stream
 xbusPhaseAlignX: entity work.xbusPhaseAlign 
    generic map (
-      kUseFastAlgorithm => false,   
+      kParallelWidth => kParallelWidth,
+      kUseFastAlgorithm => true,   
       kCtlTknCount => kCtlTknCount,
       kIDLY_TapValuePs => kIDLY_TapValuePs,
       kIDLY_TapWidth => kIDLY_TapWidth
@@ -246,6 +248,9 @@ end process BitslipDelay;
    
 -- Channel de-skew (bonding)
 xbusChannelBondX: entity work.xbusChannelBond
+   generic map (
+      kParallelWidth => kParallelWidth
+   )
    port map (
       PixelClk => PixelClk,
       pDataInRaw => pDataInRaw,
@@ -257,9 +262,9 @@ xbusChannelBondX: entity work.xbusChannelBond
 
 pMeRdy <= pMeRdy_int;
 
--- Below performs the 14B-12B decoding function
-pDataIn8b <=   pDataInBnd(11 downto 0) when pDataInBnd(13) = '0' else
-               not pDataInBnd(11 downto 0);
+-- Below performs the 10B-8B or 14B-12B decoding function
+pDataIn8b <=   pDataInBnd(kParallelWidth-3 downto 0) when pDataInBnd(kParallelWidth-1) = '0' else
+               not pDataInBnd(kParallelWidth-3 downto 0);
                
 xbusDecode: process (PixelClk)
 begin
@@ -289,8 +294,8 @@ begin
             when others =>
                pVde <= '1'; 
                pDataIn(0) <= pDataIn8b(0);
-               for iBit in 1 to 11 loop
-                  if (pDataInBnd(12) = '1') then
+               for iBit in 1 to kParallelWidth-3 loop
+                  if (pDataInBnd(kParallelWidth-2) = '1') then
                      pDataIn(iBit) <= pDataIn8b(iBit) xor pDataIn8b(iBit-1);
                   else
                      pDataIn(iBit) <= pDataIn8b(iBit) xnor pDataIn8b(iBit-1);

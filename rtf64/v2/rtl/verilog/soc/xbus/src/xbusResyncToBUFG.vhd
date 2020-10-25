@@ -69,15 +69,18 @@ library UNISIM;
 use UNISIM.VComponents.all;
 
 entity xbusResyncToBUFG is
+   Generic (
+      kParallelWidth : natural := 14
+   );
    Port (
       -- Video in
-      piData : in std_logic_vector(35 downto 0);
+      piData : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       piVDE : in std_logic;
       piHSync : in std_logic;
       piVSync : in std_logic;
       PixelClkIn : in std_logic;
       -- Video out
-      poData : out std_logic_vector(35 downto 0);
+      poData : out std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       poVDE : out std_logic;
       poHSync : out std_logic;
       poVSync : out std_logic;

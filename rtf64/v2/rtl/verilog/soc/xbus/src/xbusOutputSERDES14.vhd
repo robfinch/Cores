@@ -86,7 +86,7 @@ end xbusOutputSERDES;
 architecture Behavioral of xbusOutputSERDES is
 
 signal sDataOut, ocascade1, ocascade2 : std_logic;
-signal pDataOut_q : std_logic_vector(kParallelWidth-1 downto 0);
+signal pDataOut_q : std_logic_vector(13 downto 0);
 begin
 
 -- Differential output buffer for TMDS I/O standard 

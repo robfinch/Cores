@@ -95,7 +95,7 @@ end xbusInputSERDES;
 architecture Behavioral of xbusInputSERDES is
 
 signal sDataIn, sDataInDly, icascade1, icascade2, SerialClkInv : std_logic;
-signal pDataIn_q : std_logic_vector(kParallelWidth-1 downto 0); --ISERDESE2 can do 1:14 at most
+signal pDataIn_q : std_logic_vector(13 downto 0); --ISERDESE2 can do 1:14 at most
 begin
 
 -- Differential input buffer for TMDS I/O standard 
@@ -149,14 +149,14 @@ DeserializerMaster: ISERDESE2
       IOBDELAY          => "IFD",         -- Use input at DDLY to output the data on Q1-Q6
       SERDES_MODE       => "MASTER")
    port map (
-      Q1                => pDataIn_q(0),
-      Q2                => pDataIn_q(1),
-      Q3                => pDataIn_q(2),
-      Q4                => pDataIn_q(3),
-      Q5                => pDataIn_q(4),
-      Q6                => pDataIn_q(5),
-      Q7                => pDataIn_q(6),
-      Q8                => pDataIn_q(7),
+      Q1                => pDataIn(0),
+      Q2                => pDataIn(1),
+      Q3                => pDataIn(2),
+      Q4                => pDataIn(3),
+      Q5                => pDataIn(4),
+      Q6                => pDataIn(5),
+      Q7                => pDataIn(6),
+      Q8                => pDataIn(7),
       SHIFTOUT1         => icascade1, -- Cascade connection to Slave ISERDES
       SHIFTOUT2         => icascade2, -- Cascade connection to Slave ISERDES
       BITSLIP           => pBitslip, -- 1-bit Invoke Bitslip. This can be used with any 
@@ -193,12 +193,12 @@ DeserializerSlave: ISERDESE2
    port map (
       Q1                => open, --not used in cascaded mode
       Q2                => open, --not used in cascaded mode
-      Q3                => pDataIn_q(8),
-      Q4                => pDataIn_q(9),
-      Q5                => pDataIn_q(10),
-      Q6                => pDataIn_q(11),
-      Q7                => pDataIn_q(12),
-      Q8                => pDataIn_q(13),
+      Q3                => pDataIn(8),
+      Q4                => pDataIn(9),
+      Q5                => pDataIn(10),
+      Q6                => pDataIn(11),
+      Q7                => pDataIn(12),
+      Q8                => pDataIn(13),
       SHIFTOUT1         => open,
       SHIFTOUT2         => open,
       SHIFTIN1          => icascade1, -- Cascade connections from Master ISERDES
@@ -220,20 +220,5 @@ DeserializerSlave: ISERDESE2
       OCLK             => '0',
       OCLKB            => '0',
       O                => open); -- unregistered output of ISERDESE1
-
--------------------------------------------------------------------------------
--- Input and output SERDES are opposite. To get the same ressult back that
--- was sent, either the input or output bits must be rearranged.
---
--- Concatenate the serdes outputs together. Keep the timesliced
--- bits together, and placing the earliest bits on the right
--- ie, if data comes in 0, 1, 2, 3, 4, 5, 6, 7, ...
--- the output will be 3210, 7654, ...
-------------------------------------------------------------------------------- 
-SliceISERDES_q: for slice_count in 0 to kParallelWidth-1 generate begin
-    --DVI sends least significant bit first 
-   -- This places the first data in time on the right
-   pDataIn(slice_count) <= pDataIn_q(kParallelWidth-slice_count-1);
-end generate SliceISERDES_q;
 
 end Behavioral;

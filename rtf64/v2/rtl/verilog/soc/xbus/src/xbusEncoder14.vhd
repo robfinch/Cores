@@ -69,18 +69,16 @@ use IEEE.NUMERIC_STD.ALL;
 --use UNISIM.VComponents.all;
 
 entity xbusEncoder is
-   Generic (
-      kParallelWidth : natural := 14); -- number of parallel bits
    Port (
       PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
       SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
       aRst : in std_logic;       --asynchronous reset; must be reset when PixelClk/SerialClk is not within spec
       
       --Encoded parallel data
-      pDataOutRaw : out std_logic_vector(kParallelWidth-1 downto 0);
+      pDataOutRaw : out std_logic_vector(13 downto 0);
       
       --Unencoded parallel data
-      pDataOut : in std_logic_vector(kParallelWidth-3 downto 0);
+      pDataOut : in std_logic_vector(11 downto 0);
       pC0 : in std_logic;
       pC1 : in std_logic;
       pVde : in std_logic
@@ -88,9 +86,9 @@ entity xbusEncoder is
 end xbusEncoder;
 
 architecture Behavioral of xbusEncoder is
-signal pDataOut_1 : std_logic_vector(kParallelWidth-3 downto 0);
-signal q_m_1, q_m_xor_1, q_m_xnor_1, q_m_2: std_logic_vector(kParallelWidth-2 downto 0);
-signal control_token_2, q_out_2: std_logic_vector(kParallelWidth-1 downto 0);
+signal pDataOut_1 : std_logic_vector(11 downto 0);
+signal q_m_1, q_m_xor_1, q_m_xnor_1, q_m_2: std_logic_vector(12 downto 0);
+signal control_token_2, q_out_2: std_logic_vector(13 downto 0);
 signal n1d_1, n1q_m_2, n0q_m_2, n1q_m_1 : unsigned(3 downto 0); --range 0-12
 signal dc_bias_2, cnt_t_3, cnt_t_2 : signed(4 downto 0) := "00000"; --range -12 - +12 + sign
 signal pC0_1, pC1_1, pVde_1, pC0_2, pC1_2, pVde_2 : std_logic;
@@ -117,7 +115,7 @@ begin
 	if Rising_Edge(PixelClk) then
 		pVde_1 <= pVde;
 
-		n1d_1 <= sum_bits(pDataOut(kParallelWidth-3 downto 0));
+		n1d_1 <= sum_bits(pDataOut(11 downto 0));
 		pDataOut_1 <= pDataOut; --insert data into the pipeline;
 		pC0_1 <= pC0; --insert control into the pipeline;
 		pC1_1 <= pC1;
@@ -128,21 +126,21 @@ end process Stage1;
 -- Choose one of the two encoding options based on n1d_1
 ----------------------------------------------------------------------------------
 q_m_xor_1(0) <= pDataOut_1(0);
-encode1: for i in 1 to kParallelWidth-3 generate
+encode1: for i in 1 to 11 generate
 	q_m_xor_1(i) <= q_m_xor_1(i-1) xor pDataOut_1(i);
 end generate encode1;
-q_m_xor_1(kParallelWidth-2) <= '1';
+q_m_xor_1(12) <= '1';
 
 q_m_xnor_1(0) <= pDataOut_1(0);
-encode2: for i in 1 to kParallelWidth-3 generate
+encode2: for i in 1 to 11 generate
 	q_m_xnor_1(i) <= q_m_xnor_1(i-1) xnor pDataOut_1(i);
 end generate encode2;
-q_m_xnor_1(kParallelWidth-2) <= '0';
+q_m_xnor_1(12) <= '0';
 
-q_m_1 <= q_m_xnor_1 when n1d_1 > (kParallelWidth-2)/2 or (n1d_1 = (kParallelWidth-2)/2 and pDataOut_1(0) = '0') else
+q_m_1 <= q_m_xnor_1 when n1d_1 > 7 or (n1d_1 = 7 and pDataOut_1(0) = '0') else
          q_m_xor_1;
 
-n1q_m_1 <= sum_bits(q_m_1(kParallelWidth-3 downto 0));
+n1q_m_1 <= sum_bits(q_m_1(11 downto 0));
 		
 ----------------------------------------------------------------------------------
 -- Pipeline stage 2, balance DC
@@ -151,7 +149,7 @@ Stage2: process(PixelClk)
 begin
 	if Rising_Edge(PixelClk) then
 		n1q_m_2 <= n1q_m_1;
-		n0q_m_2 <= kParallelWidth-2 - n1q_m_1;
+		n0q_m_2 <= 12 - n1q_m_1;
 		q_m_2 <= q_m_1;
 		pC0_2 <= pC0_1;
 		pC1_2 <= pC1_1;
@@ -159,10 +157,10 @@ begin
 	end if;
 end process Stage2;
 
-cond_balanced_2 <=   '1' when cnt_t_3 = 0 or n1q_m_2 = (kParallelWidth-2)/2 else -- DC balanced output
+cond_balanced_2 <=   '1' when cnt_t_3 = 0 or n1q_m_2 = 7 else -- DC balanced output
 						   '0';
-cond_not_balanced_2 <=  '1' when (cnt_t_3 > 0 and n1q_m_2 > (kParallelWidth-2)/2) or -- too many 1's
-									 (cnt_t_3 < 0 and n1q_m_2 < (kParallelWidth-2)/2) else -- too many 0's
+cond_not_balanced_2 <=  '1' when (cnt_t_3 > 0 and n1q_m_2 > 7) or -- too many 1's
+									 (cnt_t_3 < 0 and n1q_m_2 < 7) else -- too many 0's
                         '0';
 
 control_token_2 <= 	kCtlTkn0 when pC1_2 = '0' and pC0_2 = '0' else
@@ -171,18 +169,18 @@ control_token_2 <= 	kCtlTkn0 when pC1_2 = '0' and pC0_2 = '0' else
                      kCtlTkn3;
 							
 q_out_2 <=  control_token_2												when pVde_2 = '0' else	--control period
-			   not q_m_2(kParallelWidth-2) & q_m_2(kParallelWidth-2) & not q_m_2(kParallelWidth-3 downto 0)    when cond_balanced_2 = '1' and q_m_2(kParallelWidth-2) = '0' else
-			   not q_m_2(kParallelWidth-2) & q_m_2(kParallelWidth-2) & q_m_2(kParallelWidth-3 downto 0)        when cond_balanced_2 = '1' and q_m_2(kParallelWidth-2) = '1' else
-			   '1' & q_m_2(kParallelWidth-2) & not q_m_2(kParallelWidth-3 downto 0)             when cond_not_balanced_2 = '1' else
-			   '0' & q_m_2(kParallelWidth-2) & q_m_2(kParallelWidth-3 downto 0);	--DC balanced
+			   not q_m_2(12) & q_m_2(12) & not q_m_2(11 downto 0)    when cond_balanced_2 = '1' and q_m_2(12) = '0' else
+			   not q_m_2(12) & q_m_2(12) & q_m_2(11 downto 0)        when cond_balanced_2 = '1' and q_m_2(12) = '1' else
+			   '1' & q_m_2(12) & not q_m_2(11 downto 0)             when cond_not_balanced_2 = '1' else
+			   '0' & q_m_2(12) & q_m_2(11 downto 0);	--DC balanced
 
 dc_bias_2 <= to_signed(to_integer(n0q_m_2),5) - to_signed(to_integer(n1q_m_2),5);
 
 cnt_t_2 <=  to_signed(0, cnt_t_2'length)                                   when pVde_2 = '0' else	--control period
-			   cnt_t_3 + dc_bias_2                                            when cond_balanced_2 = '1' and q_m_2(kParallelWidth-2) = '0' else
-			   cnt_t_3 - dc_bias_2                                            when cond_balanced_2 = '1' and q_m_2(kParallelWidth-2) = '1' else
-			   cnt_t_3 + signed('0' & q_m_2(kParallelWidth-2 downto kParallelWidth-2) & '0') + dc_bias_2	   when cond_not_balanced_2 = '1' else
-			   cnt_t_3 - signed('0' & not q_m_2(kParallelWidth-2 downto kParallelWidth-2) & '0') - dc_bias_2;
+			   cnt_t_3 + dc_bias_2                                            when cond_balanced_2 = '1' and q_m_2(12) = '0' else
+			   cnt_t_3 - dc_bias_2                                            when cond_balanced_2 = '1' and q_m_2(12) = '1' else
+			   cnt_t_3 + signed('0' & q_m_2(12 downto 12) & '0') + dc_bias_2	   when cond_not_balanced_2 = '1' else
+			   cnt_t_3 - signed('0' & not q_m_2(12 downto 12) & '0') - dc_bias_2;
 
 ----------------------------------------------------------------------------------
 -- Pipeline stage 3, registered output

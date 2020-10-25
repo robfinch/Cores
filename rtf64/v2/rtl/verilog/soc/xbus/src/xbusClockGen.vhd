@@ -43,7 +43,7 @@ use UNISIM.VComponents.all;
 
 entity xbusClockGen is
    Generic (
-      kClkRange : natural := 1;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
+      kClkRange : natural := 3;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
       kClkPrimitive : string := "MMCM"); -- "MMCM" or "PLL" to instantiate, if kGenerateSerialClk true
    Port (
       PixelClkIn : in STD_LOGIC;

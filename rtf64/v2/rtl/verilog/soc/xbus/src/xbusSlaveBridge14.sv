@@ -35,13 +35,12 @@
 //
 // ============================================================================
 
-module xbusSlaveBridge(rst_i, clk_i, rclk_i, locked_i,
+module xbusSlaveBridge(rst_i, clk_i, rclk_i,
   cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_o, dat_i,
-  xb_dat_i, xb_dat_o, xb_sync_o);
+  xb_dat_i, xb_dat_o, xb_hsync_o, xb_vsync_o, xb_de_o);
 input rst_i;
 input clk_i;
 input rclk_i;
-input locked_i;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
@@ -52,7 +51,9 @@ output reg [127:0] dat_o;
 input [127:0] dat_i;
 input [35:0] xb_dat_i;
 output reg [35:0] xb_dat_o;
-output reg xb_sync_o;
+output reg xb_hsync_o;
+output reg xb_vsync_o;
+output reg xb_de_o;
 
 reg [3:0] state;
 reg [3:0] ostate;
@@ -63,10 +64,69 @@ parameter XD64_95 = 4'd5;
 parameter XD96_127 = 4'd6;
 parameter WAIT_ACK = 4'd7;
 parameter WAIT_NACK = 4'd8;
-parameter WAIT_LOCK = 4'd9;
+
+// Sync Generator defaults: 800x600 60Hz
+// Note these timings are not for VGA. The horizontal sync has been shortened.
+parameter phSyncOn  = 40;		//   40 front porch
+parameter phSyncOff = 50;		//  128 sync
+parameter phBlankOff = 252;	//256	//   88 back porch
+//parameter phBorderOff = 336;	//   80 border
+parameter phBorderOff = 256;	//   80 border
+//parameter phBorderOn = 976;		//  640 display
+parameter phBorderOn = 1056;		//  640 display
+parameter phBlankOn = 1052;		//   80 border
+parameter phTotal = 1056;		// 1056 total clocks
+parameter pvSyncOn  = 1;		//    1 front porch
+parameter pvSyncOff = 5;		//    4 vertical sync
+parameter pvBlankOff = 28;		//   23 back porch
+parameter pvBorderOff = 28;		//   44 border	0
+//parameter pvBorderOff = 72;		//   44 border	0
+parameter pvBorderOn = 628;		//  512 display
+//parameter pvBorderOn = 584;		//  512 display
+parameter pvBlankOn = 628;  	//   44 border	0
+parameter pvTotal = 628;		//  628 total scan lines
 
 reg ackw, ackr = 1'b0;
 assign ack_o = ackw|ackr;
+
+// "Fake" some display signals.
+wire blank, hsync, vsync;
+always @(posedge clk_i)
+  xb_de_o <= ~hsync;
+always @(posedge clk_i)
+  xb_hsync_o <= hsync;
+always @(posedge clk_i)
+  xb_vsync_o <= vsync & hsync;
+
+VGASyncGen usg1
+(
+  .rst(rst_i),
+  .clk(clk_i),
+  .eol(),
+  .eof(),
+  .hSync(hsync),
+  .vSync(vsync),
+  .hCtr(),
+  .vCtr(),
+  .blank(blank),
+  .vblank(),
+  .vbl_int(),
+  .border(),
+  .hTotal_i(phTotal),
+  .vTotal_i(pvTotal),
+  .hSyncOn_i(phSyncOn),
+  .hSyncOff_i(phSyncOff),
+  .vSyncOn_i(pvSyncOn),
+  .vSyncOff_i(pvSyncOff),
+  .hBlankOn_i(phBlankOn),
+  .hBlankOff_i(phBlankOff),
+  .vBlankOn_i(pvBlankOn),
+  .vBlankOff_i(pvBlankOff),
+  .hBorderOn_i(phBorderOn),
+  .vBorderOn_i(pvBorderOn),
+  .hBorderOff_i(phBorderOff),
+  .vBorderOff_i(pvBorderOff)
+);
 
 
 reg [31:0] adr;
@@ -86,26 +146,26 @@ if (rst_i) begin
   dat <= 128'h0;
 end
 else begin
-  start_cycle <= 1'b0;
-  start_cycle1 <= start_cycle;
-  case(xb_dat_i[35:32])
-  4'h1: adr[31:0] <= xb_dat_i[31:0];
-  4'h3:
-    begin
-      start_cycle <= xb_dat_i[28];
-      we <= xb_dat_i[31];
-      sel <= xb_dat_i[15:0];
-    end
-  4'h4: dat[31:0] <= xb_dat_i[31:0];
-  4'h5: dat[63:32] <= xb_dat_i[31:0];
-  4'h6: dat[95:64] <= xb_dat_i[31:0];
-  4'h7: dat[127:96] <= xb_dat_i[31:0];
-  endcase
+start_cycle <= 1'b0;
+start_cycle1 <= start_cycle;
+case(xb_dat_i[35:32])
+4'h1: adr[31:0] <= xb_dat_i[31:0];
+4'h3:
+  begin
+    start_cycle <= xb_dat_i[28];
+    we <= xb_dat_i[31];
+    sel <= xb_dat_i[15:0];
+  end
+4'h4: dat[31:0] <= xb_dat_i[31:0];
+4'h5: dat[63:32] <= xb_dat_i[31:0];
+4'h6: dat[95:64] <= xb_dat_i[31:0];
+4'h7: dat[127:96] <= xb_dat_i[31:0];
+endcase
 end
 
 always @(posedge clk_i)
 if (rst_i) begin
-  ostate <= WAIT_LOCKED;
+  ostate <= IDLE;
   data_cap <= 1'b0;
   was_write <= 1'b0;
   dath <= 128'd0;
@@ -135,15 +195,12 @@ if (cyc_o & stb_o & ack_i) begin
   was_write <= we_o;
 end
 
+if (!xb_de_o) begin
+  xb_dat_o[35:32] <= 4'h0;  // send a NOP
+  xb_dat_o[31:0] <= 32'h0;
+end
+else
 case(ostate)
-WAIT_LOCKED:
-  begin
-    xb_sync_o <= 1'b1;
-    if (locked_i) begin
-      xb_sync_o <= 1'b0;
-      ostate <= IDLE;
-    end
-  end
 IDLE:
   begin
     xb_dat_o[35:32] <= 4'h0;

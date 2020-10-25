@@ -69,7 +69,7 @@ use UNISIM.VComponents.all;
 entity xbusInputSERDES is
    Generic (
       kIDLY_TapWidth : natural := 5;   -- number of bits for IDELAYE2 tap counter
-      kParallelWidth : natural := 14); -- number of parallel bits
+      kParallelWidth : natural := 10); -- number of parallel bits
    Port (
       PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
       SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
@@ -96,6 +96,7 @@ architecture Behavioral of xbusInputSERDES is
 
 signal sDataIn, sDataInDly, icascade1, icascade2, SerialClkInv : std_logic;
 signal pDataIn_q : std_logic_vector(kParallelWidth-1 downto 0); --ISERDESE2 can do 1:14 at most
+signal pixelClockn : std_logic;
 begin
 
 -- Differential input buffer for TMDS I/O standard 
@@ -135,6 +136,7 @@ InputDelay: IDELAYE2
 
 --Invert locally for ISERDESE2
 SerialClkInv <= not SerialClk;
+pixelClockn <= not PixelClk;
 
 -- De-serializer, 1:10 (1:5 DDR), master-slave cascaded
 DeserializerMaster: ISERDESE2
@@ -195,10 +197,10 @@ DeserializerSlave: ISERDESE2
       Q2                => open, --not used in cascaded mode
       Q3                => pDataIn_q(8),
       Q4                => pDataIn_q(9),
-      Q5                => pDataIn_q(10),
-      Q6                => pDataIn_q(11),
-      Q7                => pDataIn_q(12),
-      Q8                => pDataIn_q(13),
+      Q5                => open,
+      Q6                => open,
+      Q7                => open,
+      Q8                => open,
       SHIFTOUT1         => open,
       SHIFTOUT2         => open,
       SHIFTIN1          => icascade1, -- Cascade connections from Master ISERDES
@@ -208,7 +210,7 @@ DeserializerSlave: ISERDESE2
       CE2               => '1', -- 1-bit Clock enable input
       CLK               => SerialClk, -- Fast Source Synchronous SERDES clock from BUFIO
       CLKB              => SerialClkInv, -- Locally inverted clock
-      CLKDIV            => PixelClk, -- Slow clock driven by BUFR
+      CLKDIV            => pixelClockn, -- Slow clock driven by BUFR
       CLKDIVP           => '0', --Not used here
       D                 => '0',                                
       DDLY              => '0', -- not used in cascaded Slave mode
@@ -221,15 +223,12 @@ DeserializerSlave: ISERDESE2
       OCLKB            => '0',
       O                => open); -- unregistered output of ISERDESE1
 
--------------------------------------------------------------------------------
--- Input and output SERDES are opposite. To get the same ressult back that
--- was sent, either the input or output bits must be rearranged.
---
+------------------------------------------------------------- 
 -- Concatenate the serdes outputs together. Keep the timesliced
 -- bits together, and placing the earliest bits on the right
 -- ie, if data comes in 0, 1, 2, 3, 4, 5, 6, 7, ...
 -- the output will be 3210, 7654, ...
-------------------------------------------------------------------------------- 
+------------------------------------------------------------- 
 SliceISERDES_q: for slice_count in 0 to kParallelWidth-1 generate begin
     --DVI sends least significant bit first 
    -- This places the first data in time on the right

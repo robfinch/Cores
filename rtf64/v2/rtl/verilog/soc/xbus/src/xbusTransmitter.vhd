@@ -68,9 +68,10 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity xbusTransmitter is
    Generic (
+      kParallelWidth : natural := 14;
       kGenerateSerialClk : boolean := true;
       kClkPrimitive : string := "MMCM"; -- "MMCM" or "PLL" to instantiate, if kGenerateSerialClk true
-      kClkRange : natural := 3;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)      
+      kClkRange : natural := 2;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)      
       kRstActiveHigh : boolean := true); --true, if active-high; false, if active-low
    Port (
       -- DVI 1.0 TMDS video interface
@@ -84,7 +85,7 @@ entity xbusTransmitter is
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
       -- Video in
-      vid_pData : in std_logic_vector(35 downto 0);
+      vid_pData : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       vid_pVDE : in std_logic;
       vid_pHSync : in std_logic;
       vid_pVSync : in std_logic;
@@ -95,8 +96,8 @@ entity xbusTransmitter is
 end xbusTransmitter;
 
 architecture Behavioral of xbusTransmitter is
-type dataOut_t is array (2 downto 0) of std_logic_vector(11 downto 0);
-type dataOutRaw_t is array (2 downto 0) of std_logic_vector(13 downto 0);
+type dataOut_t is array (2 downto 0) of std_logic_vector(kParallelWidth-3 downto 0);
+type dataOutRaw_t is array (2 downto 0) of std_logic_vector(kParallelWidth-1 downto 0);
 signal pDataOut : dataOut_t;
 signal pDataOutRaw : dataOutRaw_t;
 signal pVde, pC0, pC1 : std_logic_vector(2 downto 0);
@@ -149,14 +150,15 @@ LockLostReset: entity work.ResetBridge
 -- Clock needs no encoding, send a pulse
 ClockSerializer: entity work.xbusOutputSERDES
    generic map (
-      kParallelWidth => 14) -- TMDS uses 1:10 serialization
+      kParallelWidth => kParallelWidth) -- TMDS uses 1:10 serialization
    port map(
       PixelClk => PixelClkIO,
       SerialClk => SerialClkIO,
       sDataOut_p => TMDS_Clk_p,
       sDataOut_n => TMDS_Clk_n,
       --Encoded parallel data (raw)
-      pDataOut => "11111110000000",      
+      pDataOut => "11111110000000",
+      --pDataOut => "1111100000",
       aRst => pRstLck);
 
 DataEncoders: for i in 0 to 2 generate
@@ -173,7 +175,7 @@ DataEncoders: for i in 0 to 2 generate
       );
    DataSerializer: entity work.xbusOutputSERDES
       generic map (
-         kParallelWidth => 14) -- TMDS uses 1:10 serialization
+         kParallelWidth => kParallelWidth) -- TMDS uses 1:10 serialization
       port map(
          PixelClk => PixelClkIO,
          SerialClk => SerialClkIO,
@@ -187,9 +189,9 @@ end generate DataEncoders;
 -- DVI Output conform DVI 1.0
 -- except that it sends blank pixel during blanking
 -- for some reason vid_data is packed in RBG order
-pDataOut(2) <= vid_pData(35 downto 24); -- red is channel 2
-pDataOut(1) <= vid_pData(11 downto 0); -- green is channel 1
-pDataOut(0) <= vid_pData(23 downto 12); -- blue is channel 0
+pDataOut(0) <= vid_pData((kParallelWidth-2)*1-1 downto 0); -- green is channel 1
+pDataOut(1) <= vid_pData((kParallelWidth-2)*2-1 downto kParallelWidth-2); -- blue is channel 0
+pDataOut(2) <= vid_pData((kParallelWidth-2)*3-1 downto (kParallelWidth-2)*2); -- red is channel 2
 pC0(2 downto 1) <= (others => '0'); -- default is low for control signals
 pC1(2 downto 1) <= (others => '0'); -- default is low for control signals
 pC0(0) <= vid_pHSync; -- channel 0 carries control signals too

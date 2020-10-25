@@ -73,10 +73,11 @@ use work.xbusConstants.all;
 
 entity xbusReceiver is
    Generic (
+      kParallelWidth : natural := 14;
       kEmulateDDC : boolean := false; --will emulate a DDC EEPROM with basic EDID, if set to yes 
       kRstActiveHigh : boolean := true; --true, if active-high; false, if active-low
       kAddBUFG : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
-      kClkRange : natural := 3;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+      kClkRange : natural := 2;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
       kEdidFileName : string := "900p_edid.txt";  -- Select EDID file to use
       -- 7-series specific
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
@@ -94,7 +95,7 @@ entity xbusReceiver is
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
       -- Video out
-      vid_pData : out std_logic_vector(35 downto 0);
+      vid_pData : out std_logic_vector((kParallelWidth-2)*3-1 downto 0);
       vid_pVDE : out std_logic;
       vid_pHSync : out std_logic;
       vid_pVSync : out std_logic;
@@ -118,7 +119,7 @@ entity xbusReceiver is
 end xbusReceiver;
 
 architecture Behavioral of xbusReceiver is
-type dataIn_t is array (2 downto 0) of std_logic_vector(11 downto 0);
+type dataIn_t is array (2 downto 0) of std_logic_vector(kParallelWidth-3 downto 0);
 type eyeSize_t is array (2 downto 0) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
 signal aLocked, SerialClk_int, PixelClk_int, pLockLostRst: std_logic;
 signal pRdy, pVld, pDE, pAlignErr, pC0, pC1 : std_logic_vector(2 downto 0);
@@ -130,7 +131,7 @@ signal ochval : std_logic_vector(1 downto 0);
 
 signal aRst_int, pRst_int : std_logic;
 
-signal pData : std_logic_vector(35 downto 0);
+signal pData : std_logic_vector((kParallelWidth-2)*3-1 downto 0);
 signal pVDE, pHSync, pVSync : std_logic;
 
 begin
@@ -180,9 +181,10 @@ DataDecoders: for iCh in 2 downto 0 generate
   ochval(1 downto 0) <= pVld((iCh+1) mod 3) & pVld((iCh+2) mod 3); -- tie channels together for channel de-skew
    DecoderX: entity work.xbusDecoder
       generic map (
+         kParallelWidth => kParallelWidth,
          kCtlTknCount => kMinTknCntForBlank, --how many subsequent control tokens make a valid blank detection (DVI spec)
          kTimeoutMs => kBlankTimeoutMs, --what is the maximum time interval for a blank to be detected (DVI spec)
-         kRefClkFrqMHz => 301, --what is the RefClk frequency
+         kRefClkFrqMHz => 300, --what is the RefClk frequency
          kIDLY_TapValuePs => kIDLY_TapValuePs, --delay in ps per tap
          kIDLY_TapWidth => kIDLY_TapWidth) --number of bits for IDELAYE2 tap counter   
       port map (
@@ -202,7 +204,7 @@ DataDecoders: for iCh in 2 downto 0 generate
          pMeRdy                  => pRdy(iCh),                
          pMeVld                  => pVld(iCh),                
          pVde                    => pDE(iCh),                  
-         pDataIn(11 downto 0)    => pDataIn(iCh),   
+         pDataIn(kParallelWidth-3 downto 0)    => pDataIn(iCh),   
          pEyeSize                => pEyeSize(iCh)
       );
 end generate DataDecoders;
@@ -210,9 +212,9 @@ end generate DataDecoders;
 -- RGB Output conform DVI 1.0
 -- except that it sends blank pixel during blanking
 -- for some reason video_data uses RBG packing
-pData(35 downto 24) <= pDataIn(2); -- red is channel 2
-pData(11 downto 0) <= pDataIn(1); -- green is channel 1
-pData(23 downto 12) <= pDataIn(0); -- blue is channel 0
+pData((kParallelWidth-2)-1 downto 0) <= pDataIn(0); -- green is channel 1
+pData((kParallelWidth-2)*2-1 downto kParallelWidth-2) <= pDataIn(1); -- blue is channel 0
+pData((kParallelWidth-2)*3-1 downto (kParallelWidth-2)*2) <= pDataIn(2); -- red is channel 2
 pHSync <= pC0(0); -- channel 0 carries control signals too
 pVSync <= pC1(0); -- channel 0 carries control signals too
 pVDE <= pDE(0); -- since channels are aligned, all of them are either active or blanking at once
@@ -227,6 +229,9 @@ aPixelClkLckd <= aLocked;
 ----------------------------------------------------------------------------------
 GenerateBUFG: if kAddBUFG generate
    ResyncToBUFG_X: entity work.xbusResyncToBUFG
+      generic map (
+        kParallelWidth => kParallelWidth
+      )
       port map (
          -- Video in
          piData => pData,
@@ -258,7 +263,7 @@ end generate DontGenerateBUFG;
 GenerateDDC: if kEmulateDDC generate	
    DDC_EEPROM: entity work.EEPROM_8b
       generic map (
-         kSampleClkFreqInMHz => 280,
+         kSampleClkFreqInMHz => 300,
          kSlaveAddress => "1010000",
          kAddrBits => 7, -- 128 byte EDID 1.x data
          kWritable => false,

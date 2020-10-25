@@ -83,8 +83,9 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity xbusPhaseAlign is
    Generic (
-      kUseFastAlgorithm : boolean := false;
-      kCtlTknCount : natural := 128; --how many subsequent control tokens make a valid blank detection
+      kParallelWidth : natural := 14;
+      kUseFastAlgorithm : boolean := true;
+      kCtlTknCount : natural := 9; -- was 128 how many subsequent control tokens make a valid blank detection
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
       kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter
    Port (
@@ -92,7 +93,7 @@ entity xbusPhaseAlign is
       pTimeoutOvf : in std_logic;   --50ms timeout expired
       pTimeoutRst : out std_logic;  --reset timeout
       PixelClk : in STD_LOGIC;
-      pData : in STD_LOGIC_VECTOR (13 downto 0);
+      pData : in STD_LOGIC_VECTOR (kParallelWidth-1 downto 0);
       pIDLY_CE : out STD_LOGIC;
       pIDLY_INC : out STD_LOGIC;
       pIDLY_CNT : in STD_LOGIC_VECTOR (kIDLY_TapWidth-1 downto 0);
@@ -112,7 +113,7 @@ signal pTkn0Flag, pTkn1Flag, pTkn2Flag, pTkn3Flag : std_logic;
 signal pTkn0FlagQ, pTkn1FlagQ, pTkn2FlagQ, pTkn3FlagQ : std_logic;
 signal pTknFlag, pTknFlagQ, pBlankBegin : std_logic;
 signal pDataQ : std_logic_vector(pData'high downto pData'low);
-
+  
 constant kTapCntEnd : std_logic_vector(pIDLY_CNT'range) := (others => '0');
 constant kFastTapCntEnd : std_logic_vector(pIDLY_CNT'range) := std_logic_vector(to_unsigned(20, pIDLY_CNT'length)); -- fast search limit; if token not found in 20 taps, fail earlier and bitslip
 signal pIDLY_CNT_Q : std_logic_vector(pIDLY_CNT'range);
@@ -276,6 +277,7 @@ begin
    if Rising_Edge(PixelClk) then
       if (pState = ResetSt) then
          pIDLY_LD <= '1';
+         --pIDLY_INC <= '0';
       else
          pIDLY_LD <= '0';
       end if;
