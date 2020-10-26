@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,6 +41,28 @@ class OCODE;
 class PeepList;
 class Var;
 
+// 64 bytes
+class Object
+{
+public:
+	Object();
+	int64_t magic;
+	int size;
+	//	__gc_skip skip1 {
+	__int32 typenum;
+	__int32 id;
+	__int8 state;			// WHITE, GREY, or BLACK
+	__int8 scavangeCount;
+	__int8 owningMap;
+	__int8 pad1;
+	__int32 pad2;
+	unsigned int usedInMap;
+	//	};
+	struct _tagObject* forwardingAddress;
+	void (*finalizer)();
+	int pad3;
+};
+
 class CompilerType
 {
 public:
@@ -64,6 +86,19 @@ struct slit {
 		bool		isString;
 		int8_t pass;
 	char			*nmspace;
+};
+
+struct nlit {
+	struct nlit* next;
+	struct nlit* tail;
+	int    label;
+	int precision;
+	Float128 f128;
+	double f;
+	Posit64 p;
+	int typ;
+	int8_t pass;
+	char* nmspace;
 };
 
 struct scase {
@@ -94,8 +129,28 @@ struct typ;
 class Statement;
 
 class TYP;
-class SYM;
 class TypeArray;
+
+class Value : public CompilerType
+{
+public:
+	Value* MakeNew();
+	TYP* typ;
+	union {
+		int64_t i;
+		uint64_t u;
+		double f;
+		uint16_t wa[8];
+		char* s;
+	} value;
+	// The compiler does not support initialization of complex types in unions.
+	Posit64 posit;
+	Float128 f128;
+	double f1, f2;
+	std::string* sp;
+	std::string* msp;
+	std::string* udnm;			// undecorated name
+};
 
 class DerivedMethod
 {
@@ -115,12 +170,22 @@ public:
 	bool sub;
 	bool IsArg;
 	bool IsColorable;
+	bool isGP;
+	bool isFP;
+	bool isPosit;
 	ENODE *offset;
 	int val;
 public:
 	static bool IsCalleeSave(int regno);
 	bool IsArgReg();
+	bool IsPositReg();
+	bool IsFloatReg();
+	bool ContainsPositConst();
 	static void MarkColorable();
+};
+
+class Factory : public CompilerType
+{
 };
 
 // Class for representing tables. Small footprint.
@@ -139,6 +204,7 @@ public:
 	int Find(std::string na);
 	int Find(std::string na,__int16,TypeArray *typearray, bool exact);
 	int FindRising(std::string na);
+	SYM** GetParameters();
 	TABLE *GetPtr(int n);
 	void SetOwner(int n) { owner = n; };
 	int GetHead() { return head; };
@@ -176,6 +242,7 @@ public:
 	void Remove();
 	void Remove2();
 	void RemoveLinkUnlink();
+	void RemoveGPLoad();
 	void flush();
 	void SetLabelReference();
 	void EliminateUnreferencedLabels();
@@ -185,6 +252,7 @@ public:
 	BasicBlock *Blockize();
 	int CountSPReferences();
 	int CountBPReferences();
+	int CountGPReferences();
 	void RemoveStackAlloc();
 	void RemoveStackCode();
 	void RemoveReturnBlock();
@@ -216,6 +284,7 @@ public:
 	unsigned int IsPascal : 1;
 	unsigned int IsLeaf : 1;
 	unsigned int DoesThrow : 1;
+	unsigned int doesJAL : 1;
 	unsigned int UsesNew : 1;
 	unsigned int UsesPredicate : 1;
 	unsigned int IsVirtual : 1;
@@ -224,10 +293,14 @@ public:
 	unsigned int UsesStackParms : 1;
 	unsigned int hasSPReferences : 1;
 	unsigned int hasBPReferences : 1;
+	unsigned int hasGPReferences : 1;
+	unsigned int has_rodata : 1;
+	unsigned int has_data : 1;
 	unsigned int didRemoveReturnBlock : 1;
 	unsigned int retGenerated : 1;
 	unsigned int alloced : 1;
 	unsigned int hasAutonew : 1;
+	unsigned int alstk : 1;		// stack space was allocated with link
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
@@ -246,6 +319,7 @@ public:
 	DerivedMethod *derivitives;
 	CSet *mask, *rmask;
 	CSet *fpmask, *fprmask;
+	CSet* pmask, * prmask;
 	CSet *vmask, *vrmask;
 	BasicBlock *RootBlock;
 	BasicBlock *LastBlock;
@@ -255,6 +329,7 @@ public:
 	OCODE *spAdjust;				// place where sp adjustment takes place
 	OCODE *rcode;
 public:
+	Function();
 	void RemoveDuplicates();
 	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
@@ -285,14 +360,16 @@ public:
 
 	void SaveGPRegisterVars();
 	void SaveFPRegisterVars();
+	void SavePositRegisterVars();
 	void SaveRegisterVars();
 	void SaveRegisterArguments();
 	int RestoreGPRegisterVars();
 	int RestoreFPRegisterVars();
+	int RestorePositRegisterVars();
 	void RestoreRegisterVars();
 	void RestoreRegisterArguments();
-	void SaveTemporaries(int *sp, int *fsp);
-	void RestoreTemporaries(int sp, int fsp);
+	void SaveTemporaries(int *sp, int *fsp, int* psp);
+	void RestoreTemporaries(int sp, int fsp, int psp);
 
 	void UnlinkStack();
 
@@ -301,9 +378,9 @@ public:
 	void FlushPeep() { pl.flush(); };
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
-	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
 	Operand *MakeImmediate(int64_t i);
 	Operand *MakeIndirect(int i);
@@ -313,9 +390,10 @@ public:
 	Operand *MakeIndexed(ENODE *node, int rg);
 
 	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	int64_t SizeofReturnBlock();
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
-	void GenReturn(Statement *stmt);
+	void GenerateReturn(Statement *stmt);
 	void Gen();
 
 	void CreateVars();
@@ -339,7 +417,8 @@ public:
 	char nameext[4];
 	char *realname;
 	char *stkname;
-    __int8 storage_class;
+  e_sc storage_class;
+	e_sg segment;
 	unsigned int IsInline : 1;
 	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
@@ -357,17 +436,21 @@ public:
 	unsigned int dtor : 1;
 	ENODE *initexp;
 	__int16 reg;
-    union {
+	ENODE* defval;	// default value
+	int16_t parmno;	// parameter number
+	union {
         int64_t i;
         uint64_t u;
         double f;
         uint16_t wa[8];
         char *s;
     } value;
+	Posit64 p;
 	Float128 f128;
 	TYP *tp;
-    Statement *stmt;
+  Statement *stmt;
 
+	Function* MakeFunction(int symnum, bool isPascal);
 	static SYM *Copy(SYM *src);
 	SYM *Find(std::string name);
 	int FindNextExactMatch(int startpos, TypeArray *);
@@ -411,11 +494,11 @@ public:
 	unsigned int isShort : 1;
 	unsigned int isVolatile : 1;
 	unsigned int isIO : 1;
-	unsigned int isConst : 1;	// const in declaration
 	unsigned int isResv : 1;
+	unsigned int isBits : 1;
 	__int16 precision;			// precision of the numeric in bits
-	int8_t		bit_width;
-	int8_t		bit_offset;
+	ENODE* bit_width;
+	ENODE* bit_offset;
 	int8_t		ven;			// vector element number
 	int64_t   size;
 	int64_t struct_offset;
@@ -437,10 +520,12 @@ public:
 	static TYP *Copy(TYP *src);
 	bool IsScalar();
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
+	bool IsPositType() const { return (type == bt_posit); };
 	bool IsVectorType() const { return (type==bt_vector); };
 	bool IsUnion() const { return (type==bt_union); };
 	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
-	bool IsAggregateType() const { return (IsStructType() | isArray); };
+	bool IsArrayType() const { return (type == bt_array); };
+	bool IsAggregateType() const { return (IsStructType() | isArray | IsArrayType()); };
 	static bool IsSameType(TYP *a, TYP *b, bool exact);
 	void put_ty();
 
@@ -493,14 +578,16 @@ public:
 
 class ENODE {
 public:
+	static int segcount[16];
+public:
 	int number;
 	enum e_node nodetype;
 	enum e_node new_nodetype;			// nodetype replaced by optimization
 	int etype;
 	int64_t esize;
-	TYP *tp;
-	SYM *sym;
-	__int8 constflag;
+	TYP* tp;
+	SYM* sym;
+	bool constflag;
 	unsigned int segment : 4;
 	unsigned int predreg : 4;
 	unsigned int isVolatile : 1;
@@ -510,33 +597,40 @@ public:
 	unsigned int isPascal : 1;
 	unsigned int isAutonew : 1;
 	unsigned int isNeg : 1;
-	ENODE *vmask;
-	__int8 bit_width;
-	__int8 bit_offset;
+	unsigned int argref : 1;		// argument reference
+	ENODE* vmask;
+	ENODE* bit_width;
+	ENODE* bit_offset;
 	__int8 scale;
 	short int rg;
 	// The following could be in a value union
+	// Under construction: use value class
+	Value val;
 	int64_t i;
 	double f;
 	double f1, f2;
 	Float128 f128;
-	std::string *sp;
-	std::string *msp;
-	std::string *udnm;			// undecorated name
-	void *ctor;
-	void *dtor;
-	ENODE *p[4];
-	ENODE *pfl;			// postfix list
+	Posit64 posit;
+	std::string* sp;
+	std::string* msp;
+	std::string* udnm;			// undecorated name
+	void* ctor;
+	void* dtor;
+	ENODE* p[5];
+	ENODE* pfl;			// postfix list
 
-	ENODE *Clone();
+	ENODE* Clone();
 
-	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
-	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype==en_addrof); };
-	bool IsFloatType() { return (nodetype==en_addrof || nodetype==en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	void SetType(TYP* t) { tp = t; if (t) etype = t->type; val.typ = tp; };
+	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype == en_addrof); };
+	bool IsFloatType() { return (nodetype == en_addrof || nodetype == en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsPositType() {
+		return (nodetype == en_addrof || nodetype == en_autopcon) ? false : (etype == bt_posit);
+	};
 	bool IsVectorType() { return (etype == bt_vector); };
-	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autocon || nodetype == en_autovcon || nodetype == en_classcon); };
+	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autofcon || nodetype == en_autopcon || nodetype == en_autovcon || nodetype == en_classcon); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
-	bool IsRefType() {	return (nodetype == en_ref);	};
+	bool IsRefType() {	return (nodetype == en_ref || etype==bt_struct || etype==bt_union || etype==bt_class);	};
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
@@ -549,6 +643,7 @@ public:
 	bool HasCall();
 
 	// Parsing
+	void AddToList(ENODE* ele);
 	bool AssignTypeToList(TYP *);
 
 	// Optimization
@@ -559,9 +654,9 @@ public:
 	void update();
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
-	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
 	Operand *MakeImmediate(int64_t i);
 	Operand *MakeIndirect(int i);
@@ -571,22 +666,29 @@ public:
 	Operand *MakeIndexed(ENODE *node, int rg);
 
 	void GenerateHint(int num);
-	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
-	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int typ);
+	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
 	void GenStore(Operand *ap1, Operand *ap3, int size);
 	static void GenRedor(Operand *ap1, Operand *ap2);
 	Operand *GenIndex();
 	Operand *GenHook(int flags, int size);
 	Operand *GenSafeHook(int flags, int size);
-	Operand *GenShift(int flags, int size, int op);
+	Operand *GenerateShift(int flags, int size, int op);
 	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
-	Operand *GenUnary(int flags, int size, int op);
-	Operand *GenBinary(int flags, int size, int op);
-	Operand *GenAssignShift(int flags, int size, int op);
-	Operand *GenAssignAdd(int flags, int size, int op);
-	Operand *GenAssignLogic(int flags, int size, int op);
+	Operand *GenerateUnary(int flags, int size, int op);
+	Operand *GenerateBinary(int flags, int size, int op);
+	Operand *GenerateAssignShift(int flags, int size, int op);
+	Operand *GenerateAssignAdd(int flags, int size, int op);
+	Operand *GenerateAssignLogic(int flags, int size, int op);
 	Operand *GenLand(int flags, int op, bool safe);
+	Operand* GenerateBitfieldDereference(int flags, int size, int opt);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int offset, int width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
+	Operand* GenerateBitfieldAssign(int flags, int size);
+	Operand* GenerateBitfieldAssignAdd(int flags, int size, int op);
+	Operand* GenerateBitfieldAssignLogic(int flags, int size, int op);
 
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);
@@ -598,40 +700,125 @@ public:
 	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
 	static ENODE *GetConstantHex(std::ifstream& ifs);
 
+	// Utility
+	void ResetSegmentCount() { ZeroMemory(&segcount, sizeof(segcount)); };
+	void CountSegments();
+
 	// Debugging
 	std::string nodetypeStr();
 	void Dump();
 };
 
+class ExpressionFactory : public Factory
+{
+public:
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3, ENODE* v4);
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2, ENODE* v3);
+	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
+	ENODE* Makefnode(int nt, double v1);
+	ENODE* Makepnode(int nt, Posit64 v1);
+	ENODE* MakePositNode(int nt, Posit64 v1);
+};
+
 class Expression : public CompilerType
 {
 private:
-	static ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
-	static TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
-	static TYP *ParseUnaryExpression(ENODE **node, int got_pa);
-	static TYP *ParsePostfixExpression(ENODE **node, int got_pa);
-	static TYP *ParseCastExpression(ENODE **node);
-	static TYP *ParseMultOps(ENODE **node);
-	static TYP *ParseAddOps(ENODE **node);
-	static TYP *ParseShiftOps(ENODE **node);
-	static TYP *ParseRelationalOps(ENODE **node);
-	static TYP *ParseEqualOps(ENODE **node);
-	static TYP *ParseBitwiseAndOps(ENODE **node);
-	static TYP *ParseBitwiseXorOps(ENODE **node);
-	static TYP *ParseBitwiseOrOps(ENODE **node);
-	static TYP *ParseAndOps(ENODE **node);
-	static TYP *ParseSafeAndOps(ENODE **node);
-	static TYP *ParseOrOps(ENODE **node);
-	static TYP *ParseSafeOrOps(ENODE **node);
-	static TYP *ParseConditionalOps(ENODE **node);
-	static TYP *ParseNonAssignExpression(ENODE **node);
-	static TYP *ParseCommaOp(ENODE **node);
+	int cnt;				// number of []
+	ENODE* pep1;
+	int numdimen;
+	int64_t sa[10];	// size array - 10 dimensions max
+	int64_t totsz;
 public:
+	bool isMember;
+	TYP* head;
+	TYP* tail;
+	int sizeof_flag;
+	bool got_pa;
+	int parsingAggregate;
+private:
+	void SetRefType(ENODE** node);
+	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
+	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
+	ENODE* ParseCharConst(ENODE** node);
+	ENODE* ParseStringConst(ENODE** node);
+	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
+	ENODE* ParseInlineStringConst(ENODE** node);
+	ENODE* ParseRealConst(ENODE** node);
+	ENODE* ParsePositConst(ENODE** node);
+	ENODE* ParseFloatMax();
+	ENODE* ParseThis(ENODE** node);
+	ENODE* ParseAggregate(ENODE** node);
+	ENODE* ParseNameRef();
+	ENODE* ParseTypenum();
+	ENODE* ParseNew(bool autonew);
+	ENODE* ParseDelete();
+	ENODE* ParseAddressOf();
+	ENODE* ParseMulf();
+	ENODE* ParseBytndx();
+	ENODE* ParseWydndx();
+	// Unary Expression Parsing
+	ENODE* ParseMinus();
+	ENODE* ParseNot();
+	ENODE* ParseCom();
+	ENODE* ParseStar();
+	ENODE* ParseSizeof();
+
+	ENODE* ParseDotOperator(TYP* tp1, ENODE* ep1);
+	ENODE* ParsePointsTo(TYP* tp1, ENODE* ep1);
+	ENODE* ParseOpenpa(TYP* tp1, ENODE* ep1);
+	ENODE* ParseOpenbr(TYP*tp1, ENODE* ep1);
+	ENODE* AdjustForBitArray(int pop, TYP* tp1, ENODE* ep1);
+
+	void ApplyVMask(ENODE* node, ENODE* mask);
+
+	TYP* deref(ENODE** node, TYP* tp);
+	TYP* CondDeref(ENODE** node, TYP* tp);
+
+	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
+	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
+	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
+	TYP *ParseCastExpression(ENODE **node);
+	TYP *ParseMultOps(ENODE **node);
+	TYP *ParseAddOps(ENODE **node);
+	TYP *ParseShiftOps(ENODE **node);
+	TYP *ParseRelationalOps(ENODE **node);
+	TYP *ParseEqualOps(ENODE **node);
+	TYP *ParseBitwiseAndOps(ENODE **node);
+	TYP *ParseBitwiseXorOps(ENODE **node);
+	TYP *ParseBitwiseOrOps(ENODE **node);
+	TYP *ParseAndOps(ENODE **node);
+	TYP *ParseSafeAndOps(ENODE **node);
+	TYP *ParseOrOps(ENODE **node);
+	TYP *ParseSafeOrOps(ENODE **node);
+	TYP *ParseConditionalOps(ENODE **node);
+	TYP *ParseNonAssignExpression(ENODE **node);
+	TYP *ParseCommaOp(ENODE **node);
+	ENODE* MakeStaticNameNode(SYM* sym);
+	ENODE* MakeThreadNameNode(SYM* sp);
+	ENODE* MakeGlobalNameNode(SYM* sp);
+	ENODE* MakeExternNameNode(SYM* sp);
+	ENODE* MakeConstNameNode(SYM* sp);
+	ENODE* MakeMemberNameNode(SYM* sp);
+	ENODE* MakeAutoNameNode(SYM* sp);
+	ENODE* MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args);
+	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
+	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
+	void DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp);
+	void DerefFloat(ENODE** node, TYP* tp, SYM* sp);
+	void DerefDouble(ENODE** node, TYP* tp, SYM* sp);
+	void DerefPosit(ENODE** node, TYP* tp, SYM* sp);
+	void DerefBitfield(ENODE** node, TYP* tp, SYM* sp);
+	ENODE* FindLastMulu(ENODE*, ENODE*);
+public:
+	Expression();
+	TYP* nameref(ENODE** node, int nt);
+	TYP* nameref2(std::string name, ENODE** node, int nt, bool alloc, TypeArray* typearray, TABLE* tbl);
 	// The following is called from declaration processing, so is made public
-	static TYP *ParseAssignOps(ENODE **node);
-	static TYP *ParseNonCommaExpression(ENODE **node);
+	TYP *ParseAssignOps(ENODE **node);
+	TYP *ParseNonCommaExpression(ENODE **node);
 	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
-	static TYP *ParseExpression(ENODE **node);
+	TYP *ParseExpression(ENODE **node);
+	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
 };
 
 class Operand : public CompilerType
@@ -648,7 +835,11 @@ public:
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
+	unsigned int memref : 1;
+	unsigned int argref : 1;	// refers to a function argument
+	unsigned int preserveNextReg : 1;
 	unsigned int type : 16;
+	TYP* tp;
 	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
@@ -663,8 +854,11 @@ public:
 	short int deep2;
 	ENODE *offset;
 	ENODE *offset2;
+	ENODE* bit_offset;
+	ENODE* bit_width;
 	int8_t scale;
 	Operand *next;			// For extended sizes (long)
+	Operand* memop;
 public:
 	Operand *Clone();
 	static bool IsSameType(Operand *ap1, Operand *ap2);
@@ -672,7 +866,7 @@ public:
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
-	Operand *GenSignExtend(int isize, int osize, int flags);
+	Operand *GenerateSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
 	int OptRegConst(int regclass, bool tally=false);
 
@@ -758,21 +952,23 @@ public:
 	void storeHex(txtoStream& ofs);
 };
 
-class OperandFactory
+class OperandFactory : public Factory
 {
 public:
-	Operand *MakeDataLabel(int labno);
+	Operand *MakeDataLabel(int labno, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
-	Operand *MakeStrlab(std::string s);
+	Operand *MakeStrlab(std::string s, e_sg seg);
 	Operand *MakeString(char *s);
-	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *makereg(int r);
 	Operand *makecreg(int r);
 	Operand *makevreg(int r);
 	Operand *makevmreg(int r);
 	Operand *makefpreg(int r);
+	Operand* makepreg(int r);
 	Operand *MakeMask(int mask);
 	Operand *MakeImmediate(int64_t i);
+	Operand* MakeMemoryIndirect(int disp, int regno);
 	Operand *MakeIndirect(short int regno);
 	Operand *MakeIndexedCodeLabel(int lab, int i);
 	Operand *MakeIndexed(int64_t offset, int regno);
@@ -782,12 +978,18 @@ public:
 	Operand *MakeDirect(ENODE *node);
 };
 
+class FunctionFactory : public Factory
+{
+public:
+	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
+};
+
 class CodeGenerator
 {
 public:
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
-	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
 	Operand *MakeImmediate(int64_t i);
 	Operand *MakeIndirect(int i);
@@ -796,49 +998,104 @@ public:
 	Operand *MakeDirect(ENODE *node);
 	Operand *MakeIndexed(ENODE *node, int rg);
 
+	virtual Operand* MakeBoolean(Operand* oper);
 	void GenerateHint(int num);
 	void GenerateComment(char *cm);
-	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
-	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
-	void GenStore(Operand *ap1, Operand *ap3, int size);
+	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int typ);
+	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenerateStore(Operand *ap1, Operand *ap3, int size);
+	virtual Operand* GenerateSafeLand(ENODE *, int flags, int op);
+	virtual void GenerateBranchTrue(Operand* ap, int label);
+	virtual void GenerateBranchFalse(Operand* ap, int label);
 	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit) { return (false); };
+	virtual void GenerateLea(Operand* ap1, Operand* ap2);
+	virtual void SignExtendBitfield(Operand* ap3, uint64_t mask);
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
-	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
+	virtual void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
+	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
+	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
+	virtual Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	Operand* GenerateAddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutofconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateAutopconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateNaconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
+	Operand* GenerateAutovconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateAutovmconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateLabconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
-	Operand *GenerateDereference(ENODE *node, int flags, int size, int su);
+	Operand* GenerateBitoffsetDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int opt);
+	Operand* GenerateFieldrefDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GeneratePositRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand *GenerateDereference(ENODE *node, int flags, int size, int su, int opt);
+	Operand* GenerateDereference2(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, int opt);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
 	Operand *GenerateAssignModiv(ENODE *node, int flags, int size, int op);
 	void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base);
 	void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base);
 	Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
-	Operand *GenAutocon(ENODE *node, int flags, int size, int type);
-	Operand *GenerateAssign(ENODE *node, int flags, int size);
-	Operand *GenerateExpression(ENODE *node, int flags, int size);
+	Operand *GenAutocon(ENODE *node, int flags, int64_t size, int type);
+	Operand* GenFloatcon(ENODE* node, int flags, int64_t size);
+	Operand* GenPositcon(ENODE* node, int flags, int64_t size);
+	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
+	Operand *GenerateAssign(ENODE *node, int flags, int64_t size);
+	Operand *GenerateExpression(ENODE *node, int flags, int64_t size);
 	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
 	void GenLoadConst(Operand *ap1, Operand *ap2);
-	void SaveTemporaries(Function *sym, int *sp, int *fsp);
-	void RestoreTemporaries(Function *sym, int sp, int fsp);
+	void SaveTemporaries(Function *sym, int *sp, int *fsp, int* psp);
+	void RestoreTemporaries(Function *sym, int sp, int fsp, int psp);
 	int GenerateInlineArgumentList(Function *func, ENODE *plist);
 	virtual int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat) { return(0); };
 	virtual int PushArguments(Function *func, ENODE *plist) { return (0); };
 	virtual void PopArguments(Function *func, int howMany) {};
 	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
 	void GenerateFunction(Function *fn) { fn->Gen(); };
+	Operand* GenerateTrinary(ENODE* node, int flags, int size, int op);
 };
 
 class RTF64CodeGenerator : public CodeGenerator
 {
 public:
+	Operand* MakeBoolean(Operand* oper);
+	void GenerateLea(Operand* ap1, Operand* ap2);
+	void GenerateBranchTrue(Operand* ap, int label);
+	void GenerateBranchFalse(Operand* ap, int label);
 	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit);
+	Operand* GenerateEq(ENODE* node);
+	Operand* GenerateNe(ENODE* node);
+	Operand* GenerateLt(ENODE* node);
+	Operand* GenerateLe(ENODE* node);
+	Operand* GenerateGt(ENODE* node);
+	Operand* GenerateGe(ENODE* node);
+	Operand* GenerateLtu(ENODE* node);
+	Operand* GenerateLeu(ENODE* node);
+	Operand* GenerateGtu(ENODE* node);
+	Operand* GenerateGeu(ENODE* node);
+	Operand* GenerateFeq(ENODE* node);
+	Operand* GenerateFne(ENODE* node);
+	Operand* GenerateFlt(ENODE* node);
+	Operand* GenerateFle(ENODE* node);
+	Operand* GenerateFgt(ENODE* node);
+	Operand* GenerateFge(ENODE* node);
 	Operand *GenExpr(ENODE *node);
 	bool IsPascal(ENODE *ep);
 	void LinkAutonew(ENODE *node);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);
 	void PopArguments(Function *func, int howMany, bool isPascal = true);
+	Operand* GenerateSafeLand(ENODE *, int flags, int op);
 	Operand *GenerateFunctionCall(ENODE *node, int flags);
+	void SignExtendBitfield(Operand* ap3, uint64_t mask);
+	void GenerateBitfieldInsert(Operand* dst, Operand* src, int offset, int width);
+	void GenerateBitfieldInsert(Operand* dst, Operand* src, Operand* offset, Operand* width);
+	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
+	Operand* GenerateBitfieldExtract(Operand* src, Operand* offset, Operand* width);
+	Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
 };
 
 // Control Flow Graph
@@ -990,7 +1247,7 @@ public:
 class Map
 {
 public:
-	int newnums[1024];
+	int newnums[3072];
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -1029,7 +1286,7 @@ public:
 	CSet low, high;
 	IntStack *stk;
 	static int k;
-	short int map[1024];
+	short int map[3072];
 	short int pass;
 	// Cost accounting
 	float loads;
@@ -1086,6 +1343,7 @@ public:
 	IntStack *istk;
 	int subscript;
 	int64_t spillOffset;	// offset in stack where spilled
+	e_rc regclass;
 	static int nvar;
 public:
 	static Var *MakeNew();
@@ -1193,6 +1451,7 @@ public:
   short int       reg;            /* AllocateRegisterVarsd register */
   unsigned int    voidf : 1;      /* cannot optimize flag */
   unsigned int    isfp : 1;
+	unsigned int	isPosit : 1;
 public:
 	void AccUses(int val);					// accumulate uses
 	void AccDuses(int val);					// accumulate duses
@@ -1223,6 +1482,7 @@ public:
 	void GenerateRegMask(CSE *csp, CSet *mask, CSet *rmask);
 	int AllocateGPRegisters();
 	int AllocateFPRegisters();
+	int AllocatePositRegisters();
 	int AllocateVectorRegisters();
 	int AllocateRegisterVars();
 	void InitializeTempRegs();
@@ -1256,30 +1516,33 @@ public:
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
 	
+	Statement* MakeStatement(int typ, int gt);
+
 	// Parsing
-	static Statement *ParseStop();
-	static Statement *ParseCompound();
-	static Statement *ParseDo();
-	static Statement *ParseFor();
-	static Statement *ParseForever();
-	static Statement *ParseFirstcall();
-	static Statement *ParseIf();
-	static Statement *ParseCatch();
-	static Statement *ParseCase();
+	Statement* ParseCheckStatement();
+	Statement *ParseStop();
+	Statement *ParseCompound();
+	Statement *ParseDo();
+	Statement *ParseFor();
+	Statement *ParseForever();
+	Statement *ParseFirstcall();
+	Statement *ParseIf();
+	Statement *ParseCatch();
+	Statement *ParseCase();
 	int CheckForDuplicateCases();
-	static Statement *ParseThrow();
-	static Statement *ParseContinue();
-	static Statement *ParseAsm();
-	static Statement *ParseTry();
-	static Statement *ParseExpression();
-	static Statement *ParseLabel();
-	static Statement *ParseWhile();
-	static Statement *ParseUntil();
-	static Statement *ParseGoto();
-	static Statement *ParseReturn();
-	static Statement *ParseBreak();
-	static Statement *ParseSwitch();
-	static Statement *Parse();
+	Statement *ParseThrow();
+	Statement *ParseContinue();
+	Statement *ParseAsm();
+	Statement *ParseTry();
+	Statement *ParseExpression();
+	Statement *ParseLabel();
+	Statement *ParseWhile();
+	Statement *ParseUntil();
+	Statement *ParseGoto();
+	Statement *ParseReturn();
+	Statement *ParseBreak();
+	Statement *ParseSwitch();
+	Statement *Parse();
 
 	// Optimization
 	void scan();
@@ -1290,9 +1553,9 @@ public:
 	void update_compound();
 
 	// Code generation
-	Operand *MakeDataLabel(int lab);
+	Operand *MakeDataLabel(int lab, int ndxreg);
 	Operand *MakeCodeLabel(int lab);
-	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeStringAsNameConst(char *s, e_sg seg);
 	Operand *MakeString(char *s);
 	Operand *MakeImmediate(int64_t i);
 	Operand *MakeIndirect(int i);
@@ -1326,11 +1589,19 @@ public:
 	void GenerateLinearSwitch();
 	void GenerateTabularSwitch();
 	void Generate();
-
+	void CheckReferences(int* sp, int* bp, int* gp, int* gp1);
+	void CheckCompoundReferences(int* sp, int* bp, int* gp, int* gp1);
 	// Debugging
 	void Dump();
 	void DumpCompound();
 };
+
+class StatementFactory : public Factory
+{
+public:
+	Statement* MakeStatement(int typ, int gt);
+};
+
 
 class Stringx
 {
@@ -1340,77 +1611,95 @@ public:
 
 class Declaration
 {
-	static void SetType(SYM *sp);
+	void SetType(SYM* sp);
 public:
+	TYP* head;
+	TYP* tail;
+	int bit_offset;
+	int bit_width;
+	int bit_next;
+	int bit_max;
+public:
+	Declaration();
 	Declaration *next;
-	static void AssignParameterName();
-	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
-	static void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
-	static void ParseEnum(TABLE *table);
-	static void ParseVoid();
-	static void ParseConst();
-	static void ParseTypedef();
-	static void ParseNaked();
-	static void ParseShort();
-	static void ParseLong();
-	static void ParseInt();
-	static void ParseInt80();
-	static void ParseInt64();
-	static void ParseInt40();
-	static void ParseInt32();
-	static void ParseChar();
-	static void ParseInt8();
-	static void ParseByte();
-	static void ParseFloat();
-	static void ParseDouble();
-	static void ParseTriple();
-	static void ParseFloat128();
-	static void ParseVector();
-	static void ParseVectorMask();
-	static SYM *ParseId();
-	static void ParseDoubleColon(SYM *sp);
-	static void ParseBitfieldSpec(bool isUnion);
-	static int ParseSpecifier(TABLE *table);
-	static SYM *ParsePrefixId();
-	static SYM *ParsePrefixOpenpa(bool isUnion);
-	static SYM *ParsePrefix(bool isUnion);
-	static void ParseSuffixOpenbr();
-	static void ParseSuffixOpenpa(Function *);
-	static SYM *ParseSuffix(SYM *sp);
+	void AssignParameterName();
+	int declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype);
+	void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
+	void ParseEnum(TABLE *table);
+	void ParseVoid();
+	void ParseConst();
+	void ParseTypedef();
+	void ParseNaked();
+	void ParseShort();
+	void ParseLong();
+	void ParseBit();
+	void ParseInt();
+	void ParseInt64();
+	void ParseInt32();
+	void ParseChar();
+	void ParseInt8();
+	void ParseByte();
+	void ParseFloat();
+	void ParseDouble();
+	void ParseTriple();
+	void ParseFloat128();
+	void ParsePosit();
+	void ParseClass();
+	int ParseStruct(e_bt typ);
+	void ParseVector();
+	void ParseVectorMask();
+	SYM *ParseId();
+	void ParseDoubleColon(SYM *sp);
+	void ParseBitfieldSpec(bool isUnion);
+	int ParseSpecifier(TABLE *table);
+	SYM *ParsePrefixId();
+	SYM *ParsePrefixOpenpa(bool isUnion);
+	SYM *ParsePrefix(bool isUnion);
+	void ParseSuffixOpenbr();
+	void ParseSuffixOpenpa(Function *);
+	SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
-	static void ParseAssign(SYM *sp);
-	static void DoDeclarationEnd(SYM *sp, SYM *sp1);
-	static void DoInsert(SYM *sp, TABLE *table);
-	static void AllocFunc(SYM *sp, SYM *sp1);
-	static SYM *FindSymbol(SYM *sp, TABLE *table);
+	int ParseFunction(TABLE* table, SYM* sp, e_sc al);
+	void ParseAssign(SYM *sp);
+	void DoDeclarationEnd(SYM *sp, SYM *sp1);
+	void DoInsert(SYM *sp, TABLE *table);
+	SYM *FindSymbol(SYM *sp, TABLE *table);
 
-	static int GenStorage(int nbytes, int al, int ilc);
+	int GenerateStorage(int nbytes, int al, int ilc);
+	static Function* MakeFunction(int symnum, SYM* sym, bool isPascal, bool isInline);
+	static void MakeFunction(SYM* sp, SYM* sp1);
 };
 
 class StructDeclaration : public Declaration
 {
 public:
-	static void ParseMembers(SYM * sym, TYP *tp, int ztype);
-	static int Parse(int ztype);
+	void GetType(TYP** hd, TYP** tl) {
+		*hd = head; *tl = tail;
+	};
+	void ParseMembers(SYM * sym, TYP *tp, int ztype);
+	int Parse(int ztype);
 };
 
 class ClassDeclaration : public Declaration
 {
 public:
-	static void ParseMembers(SYM * sym, int ztype);
-	static int Parse(int ztype);
+	void GetType(TYP** hd, TYP** tl) {
+		*hd = head; *tl = tail;
+	};
+	void ParseMembers(SYM * sym, int ztype);
+	int Parse(int ztype);
 };
 
 class AutoDeclaration : public Declaration
 {
 public:
-	static void Parse(SYM *parent, TABLE *ssyms);
+	void Parse(SYM *parent, TABLE *ssyms);
 };
 
 class ParameterDeclaration : public Declaration
 {
 public:
-	static int Parse(int);
+	int Parse(int);
 };
 
 class GlobalDeclaration : public Declaration
@@ -1430,10 +1719,13 @@ public:
 	Function functionTable[3000];
 	TYP typeTable[32768];
 	OperandFactory of;
+	FunctionFactory ff;
+	ExpressionFactory ef;
+	StatementFactory sf;
 	short int pass;
 public:
+	Compiler() { typenum = 0; };
 	GlobalDeclaration *decls;
-	Compiler();
 	void compile();
 	int PreprocessFile(char *nm);
 	void CloseFiles();

@@ -75,15 +75,11 @@ entity xbusResyncToBUFG is
    Port (
       -- Video in
       piData : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
-      piVDE : in std_logic;
       piHSync : in std_logic;
-      piVSync : in std_logic;
       PixelClkIn : in std_logic;
       -- Video out
       poData : out std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
-      poVDE : out std_logic;
       poHSync : out std_logic;
-      poVSync : out std_logic;
       PixelClkOut : out std_logic
    );
 end xbusResyncToBUFG;
@@ -106,9 +102,7 @@ RegisterData: process(PixelClkInt)
 begin
    if Rising_Edge(PixelClkInt) then
       poData <= piData;
-      poVDE <= piVDE;
       poHSync <= piHSync;
-      poVSync <= piVSync; 
    end if;
 end process RegisterData;
 

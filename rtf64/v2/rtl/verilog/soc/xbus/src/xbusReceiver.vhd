@@ -77,7 +77,7 @@ entity xbusReceiver is
       kEmulateDDC : boolean := false; --will emulate a DDC EEPROM with basic EDID, if set to yes 
       kRstActiveHigh : boolean := true; --true, if active-high; false, if active-low
       kAddBUFG : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
-      kClkRange : natural := 2;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+      kClkRange : natural := 3;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
       kEdidFileName : string := "900p_edid.txt";  -- Select EDID file to use
       -- 7-series specific
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
@@ -94,11 +94,9 @@ entity xbusReceiver is
       aRst : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
-      -- Video out
-      vid_pData : out std_logic_vector((kParallelWidth-2)*3-1 downto 0);
-      vid_pVDE : out std_logic;
-      vid_pHSync : out std_logic;
-      vid_pVSync : out std_logic;
+      -- Data out
+      dat_o : out std_logic_vector((kParallelWidth-2)*3-1 downto 0);
+      sync_o : out std_logic;
       
       PixelClk : out std_logic; --pixel-clock recovered from the DVI interface
       
@@ -235,24 +233,18 @@ GenerateBUFG: if kAddBUFG generate
       port map (
          -- Video in
          piData => pData,
-         piVDE => pVDE,
          piHSync => pHSync,
-         piVSync => pVSync,
          PixelClkIn => PixelClk_int,
-         -- Video out
-         poData => vid_pData,
-         poVDE => vid_pVDE,
-         poHSync => vid_pHSync,
-         poVSync => vid_pVSync,
+         -- Data out
+         poData => dat_o,
+         poHSync => sync_o,
          PixelClkOut => PixelClk
       );
 end generate GenerateBUFG;
 
 DontGenerateBUFG: if not kAddBUFG generate
-   vid_pData <= pData;
-   vid_pVDE <= pVDE;
-   vid_pHSync <= pHSync;
-   vid_pVSync <= pVSync;
+   dat_o <= pData;
+   sync_o <= pHSync;
    PixelClk <= PixelClk_int;
 end generate DontGenerateBUFG;
                  

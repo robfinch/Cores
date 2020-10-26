@@ -65,15 +65,15 @@ use IEEE.STD_LOGIC_1164.ALL;
 package xbusConstants is
    -- xbus Control Tokens
    constant kCtlTkn0 : std_logic_vector(13 downto 0) := "11010101010100";
-   constant kCtlTkn1 : std_logic_vector(13 downto 0) := "00101010101011";
-   constant kCtlTkn2 : std_logic_vector(13 downto 0) := "01010101010100";
-   constant kCtlTkn3 : std_logic_vector(13 downto 0) := "10101010101011";
+--   constant kCtlTkn1 : std_logic_vector(13 downto 0) := "00101010101011";
+--   constant kCtlTkn2 : std_logic_vector(13 downto 0) := "01010101010100";
+--   constant kCtlTkn3 : std_logic_vector(13 downto 0) := "10101010101011";
 --   constant kCtlTkn0 : std_logic_vector(9 downto 0) := "1101010100";
 --   constant kCtlTkn1 : std_logic_vector(9 downto 0) := "0010101011";
 --   constant kCtlTkn2 : std_logic_vector(9 downto 0) := "0101010100";
 --   constant kCtlTkn3 : std_logic_vector(9 downto 0) := "1010101011";
    
-   constant kMinTknCntForBlank : natural := 9; --tB was 128
+   constant kMinTknCntForBlank : natural := 3; --tB was 128
    constant kBlankTimeoutMs : natural := 50;
 end xbusConstants;
 

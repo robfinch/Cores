@@ -38,12 +38,490 @@ void ReleaseTempRegister(Operand *ap);
 Operand *GetTempRegister();
 extern void GenLoad(Operand *ap1, Operand *ap3, int ssize, int size);
 
+void RTF64CodeGenerator::SignExtendBitfield(Operand* ap3, uint64_t mask)
+{
+	Operand* ap2;
+	uint64_t umask;
+
+	umask = 0x8000000000000000LL | ~(mask >> 1);
+	ap2 = GetTempRegister();
+	GenerateDiadic(op_ldi, 0, ap2, cg.MakeImmediate((int64_t)umask));
+	GenerateTriadic(op_add, 0, ap3, ap3, ap2);
+	GenerateTriadic(op_xor, 0, ap3, ap3, ap2);
+	ReleaseTempRegister(ap2);
+}
+
+// Convert a value to a Boolean.
+Operand* RTF64CodeGenerator::MakeBoolean(Operand* ap)
+{
+	Operand* ap1;
+
+	GenerateDiadic(op_tst, 0, ap1 = makecreg(0), ap);
+	return (ap1);
+}
+
+void RTF64CodeGenerator::GenerateLea(Operand* ap1, Operand* ap2)
+{
+	switch (ap2->mode) {
+	case am_reg:
+		GenerateDiadic(op_mov, 0, ap1, ap2);
+		break;
+	default:
+		GenerateDiadic(op_lea, 0, ap1, ap2);
+	}
+}
+
+Operand* RTF64CodeGenerator::GenerateSafeLand(ENODE *node, int flags, int op)
+{
+	Operand* ap1, * ap2, * ap4, * ap5;
+	int lab0;
+	OCODE* ip;
+
+	lab0 = nextlabel++;
+
+	ap1 = GenerateExpression(node->p[0], am_reg|am_creg, node->p[0]->GetNaturalSize());
+	ap2 = GenerateExpression(node->p[1], am_reg|am_creg, node->p[1]->GetNaturalSize());
+
+	if (!ap1->isBool)
+		ap4 = MakeBoolean(ap1);
+	else
+		ap4 = ap1;
+
+	if (!ap2->isBool)
+		ap5 = MakeBoolean(ap2);
+	else
+		ap5 = ap2;
+
+	if (ap4->mode == am_reg)
+		ap4->MakeLegal(am_creg, sizeOfWord);
+	if (ap5->mode == am_reg)
+		ap5->MakeLegal(am_creg, sizeOfWord);
+	ip = currentFn->pl.tail;
+	ip->insn2 = Instruction::Get(op);
+
+	ReleaseTempReg(ap1);
+	//ap2->MakeLegal(flags, sizeOfWord);
+	ap2->isBool = true;
+	return (ap2);
+}
+
+
+void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int offset, int width)
+{
+	int nn;
+	uint64_t mask;
+
+	if (cpu.SupportsBitfield) {
+		ap1->MakeLegal(am_reg, sizeOfWord);
+		ap2->MakeLegal(am_reg, sizeOfWord);
+		Generate4adic(op_dep, 0, ap1, ap2, MakeImmediate(offset), MakeImmediate((int64_t)width - 1));
+		return;
+	}
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateTriadic(op_and, 0, ap2, ap2, MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+	if (offset > 0)
+		GenerateTriadic(op_ror, 0, ap1, ap1, MakeImmediate((int64_t)offset));
+	GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(mask));		// clear bits in target field
+	GenerateTriadic(op_or, 0, ap1, ap1, ap2);
+	if (offset > 0)
+		GenerateTriadic(op_rol, 0, ap1, ap1, MakeImmediate((int64_t)offset));
+}
+
+
+void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width)
+{
+	int nn;
+	uint64_t mask;
+
+	if (cpu.SupportsBitfield) {
+		ap1->MakeLegal(am_reg, sizeOfWord);
+		ap2->MakeLegal(am_reg, sizeOfWord);
+		Generate4adic(op_dep, 0, ap1, ap2, offset, width);
+		return;
+	}
+	/*
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateTriadic(op_and, 0, ap2, ap2, MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+	GenerateTriadic(op_ror, 0, ap1, ap1, offset);
+	GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(mask));		// clear bits in target field
+	GenerateTriadic(op_or, 0, ap1, ap1, ap2);
+	GenerateTriadic(op_rol, 0, ap1, ap1, offset);
+	*/
+}
+
+
+void RTF64CodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width)
+{
+	int nn;
+	uint64_t mask;
+	Operand* ap3, * ap4;
+	OCODE* ip;
+
+	if (cpu.SupportsBitfield) {
+		ap1->MakeLegal(am_reg, sizeOfWord);
+		ap2->MakeLegal(am_reg, sizeOfWord);
+		ip = currentFn->pl.tail;
+		// Try and get immediate operands for both offset and width
+		ap3 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord);
+		ap4 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord);
+		if (ap3->mode != ap4->mode) {
+			ReleaseTempReg(ap4);
+			ReleaseTempReg(ap3);
+			currentFn->pl.tail = ip;
+			ap3 = GenerateExpression(offset, am_reg, sizeOfWord);
+			ap4 = GenerateExpression(width, am_reg, sizeOfWord);
+		}
+		Generate4adic(op_dep, 0, ap1, ap2, ap3, ap4);
+		ReleaseTempReg(ap4);
+		ReleaseTempReg(ap3);
+		return;
+	}
+	/*
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateTriadic(op_and, 0, ap2, ap2, MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+	GenerateTriadic(op_ror, 0, ap1, ap1, offset);
+	GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate(mask));		// clear bits in target field
+	GenerateTriadic(op_or, 0, ap1, ap1, ap2);
+	GenerateTriadic(op_rol, 0, ap1, ap1, offset);
+	*/
+}
+
+
+Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, Operand* offset, Operand* width)
+{
+	Operand* ap1;
+
+	ap1 = GetTempRegister();
+	if (cpu.SupportsBitfield) {
+		if (isSigned)
+			Generate4adic(op_ext, 0, ap1, ap, offset, width);
+		else
+			Generate4adic(op_extu, 0, ap1, ap, offset, width);
+	}
+	else {
+		uint64_t mask;
+		int bit_offset = offset->offset->i;
+
+		mask = 0;
+		while (--width)	mask = mask + mask + 1;
+		if (bit_offset > 0)
+			GenerateTriadic(op_lsr, 0, ap1, ap, offset);
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate((int64_t)mask));
+		if (isSigned)
+			SignExtendBitfield(ap1, mask);
+	}
+	return (ap1);
+}
+
+Operand* RTF64CodeGenerator::GenerateBitfieldExtract(Operand* ap, ENODE* offset, ENODE* width)
+{
+	Operand* ap1;
+	Operand* ap2;
+	Operand* ap3;
+	OCODE* ip;
+
+	ap1 = GetTempRegister();
+	ip = currentFn->pl.tail;
+	ap2 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord);
+	ap3 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord);
+	if (ap2->mode != ap3->mode) {
+		currentFn->pl.tail = ip;
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		ap2 = GenerateExpression(offset, am_reg, sizeOfWord);
+		ap3 = GenerateExpression(width, am_reg, sizeOfWord);
+	}
+	if (cpu.SupportsBitfield) {
+		if (isSigned)
+			Generate4adic(op_ext, 0, ap1, ap, ap2, ap3);
+		else
+			Generate4adic(op_extu, 0, ap1, ap, ap2, ap3);
+	}
+	else {
+		/*
+		uint64_t mask;
+
+		mask = 0;
+		while (--width)	mask = mask + mask + 1;
+		if (bit_offset > 0)
+			GenerateTriadic(op_lsr, 0, ap1, ap, ap2);
+		GenerateTriadic(op_and, 0, ap1, ap1, MakeImmediate((int64_t)mask));
+		if (isSigned)
+			SignExtendBitfield(ap1, mask);
+		*/
+	}
+	ReleaseTempReg(ap3);
+	ReleaseTempReg(ap2);
+	return (ap1);
+}
+
+Operand* RTF64CodeGenerator::GenerateEq(ENODE *node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateNe(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_sne, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateLt(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateLe(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	if (ap2->mode == am_reg)
+		GenerateTriadic(op_sgt, 0, ap3, ap2, ap1);
+	else
+		GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateGt(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
+	if (ap2->mode == am_reg)
+		GenerateTriadic(op_slt, 0, ap3, ap2, ap1);
+	else
+		GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	//		GenerateDiadic(op_sgt,0,ap3,ap3);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateGe(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_sge, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateLtu(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateLeu(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
+	if (ap2->mode == am_reg)
+		GenerateTriadic(op_sgtu, 0, ap3, ap2, ap1);
+	else
+		GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateGtu(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
+	if (ap2->mode == am_reg)
+		GenerateTriadic(op_sltu, 0, ap3, ap2, ap1);
+	else
+		GenerateTriadic(op_sgtu, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	//		GenerateDiadic(op_sgt,0,ap3,ap3);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateGeu(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(0);
+	ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
+	GenerateTriadic(op_sgeu, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFeq(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fseq, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFne(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fsne, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFlt(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fslt, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFle(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fsle, 0, ap3, ap1, ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFgt(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fslt, 0, ap3, ap2, ap1);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
+Operand* RTF64CodeGenerator::GenerateFge(ENODE* node)
+{
+	Operand* ap1, * ap2, * ap3;
+	int size;
+
+	size = node->GetNaturalSize();
+	ap3 = makecreg(1);
+	ap1 = cg.GenerateExpression(node->p[0], am_fpreg, node->p[0]->GetNaturalSize());
+	ap2 = cg.GenerateExpression(node->p[1], am_fpreg, node->p[1]->GetNaturalSize());
+	GenerateTriadic(op_fsle, 0, ap3, ap2, ap1);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return (ap3);
+}
+
 Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 {
 	Operand *ap1,*ap2,*ap3,*ap4;
 	int lab0, lab1;
-	int size;
+	int64_t size = sizeOfWord;
 	int op;
+	OCODE* ip;
 
     lab0 = nextlabel++;
     lab1 = nextlabel++;
@@ -66,7 +544,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 	case en_feq:	op = op_fseq;	break;
 	case en_fne:	op = op_fsne;	break;
 	case en_veq:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -75,7 +553,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_vne:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -84,7 +562,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_vlt:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -93,7 +571,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_vle:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -102,7 +580,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_vgt:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -111,7 +589,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_vge:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
 		ap3 = GetTempVectorRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -120,29 +598,17 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		ReleaseTempReg(ap1);
 		return (ap3);
 	case en_land_safe:
-		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg, size);
-		GenerateTriadic(op_and, 0, ap3, ap1, ap2);
-		ap3->isBool = ap1->isBool && ap2->isBool;
-		if (!ap3->isBool)
-			ENODE::GenRedor(ap3, ap3);
-		ReleaseTempReg(ap2);
-		ReleaseTempReg(ap1);
-		ap3->isBool = true;
-		return(ap3);
+		ap1 = cg.GenerateExpression(node->p[0], am_creg, size);
+		ap2 = cg.GenerateExpression(node->p[1], am_creg, size);
+		ip = currentFn->pl.tail;
+		ip->insn2 = Instruction::Get(op_and);
+		return(ap2);
 	case en_lor_safe:
-		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg, size);
-		GenerateTriadic(op_or, 0, ap3, ap1, ap2);
-		ap3->isBool = ap1->isBool && ap2->isBool;
-		if (!ap3->isBool)
-			ENODE::GenRedor(ap3, ap3);
-		ReleaseTempReg(ap2);
-		ReleaseTempReg(ap1);
-		ap3->isBool = true;
-		return(ap3);
+		ap1 = cg.GenerateExpression(node->p[0], am_creg, size);
+		ap2 = cg.GenerateExpression(node->p[1], am_creg, size);
+		ip = currentFn->pl.tail;
+		ip->insn2 = Instruction::Get(op_or);
+		return(ap2);
 	default:	// en_land, en_lor
 		//ap1 = GetTempRegister();
 		//ap2 = cg.GenerateExpression(node,am_reg,8);
@@ -151,7 +617,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(1));
-		GenerateMonadic(op_bra,0,MakeDataLabel(lab1));
+		GenerateMonadic(op_bra,0,MakeDataLabel(lab1,regZero));
 		GenerateLabel(lab0);
 		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(0));
 		GenerateLabel(lab1);
@@ -160,161 +626,24 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 	}
 
 	switch (node->nodetype) {
-	case en_eq:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
-		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		ap3->isBool = true;
-		return (ap3);
-	case en_ne:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
-		GenerateTriadic(op_sne, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		ap3->isBool = true;
-		return (ap3);
-	case en_lt:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_slt,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_le:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_sle,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_gt:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		if (ap2->mode == am_reg)
-			GenerateTriadic(op_slt, 0, ap3, ap2, ap1);
-		else
-			GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_sgt,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_ge:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		if (ap2->mode == am_reg)
-			GenerateTriadic(op_sle, 0, ap3, ap2, ap1);
-		else
-			GenerateTriadic(op_sge, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_sge,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_ult:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_slt,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_ule:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_sle,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_ugt:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		if (ap2->mode == am_reg)
-			GenerateTriadic(op_sltu, 0, ap3, ap2, ap1);
-		else
-			GenerateTriadic(op_sgtu, 0, ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		//		GenerateDiadic(op_sgt,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_uge:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(0);
-		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		if (ap2->mode == am_reg)
-			GenerateTriadic(op_sleu, 0, ap3, ap2, ap1);
-		else {
-			GenerateTriadic(op_sgeu, 0, ap3, ap1, ap2);
-		}
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-//		GenerateDiadic(op_sge,0,ap3,ap3);
-		ap3->isBool = true;
-		return (ap3);
-	case en_flt:
-	case en_fle:
-	case en_fgt:
-	case en_fge:
-	case en_feq:
-	case en_fne:
-		size = GetNaturalSize(node);
-		ap3 = makecreg(1);
-		ap1 = cg.GenerateExpression(node->p[0], am_fpreg, size);
-		ap2 = cg.GenerateExpression(node->p[1], am_fpreg, size);
-		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		ap3->isBool = true;
-		return (ap3);
-		/*
-	case en_ne:
-	case en_lt:
-	case en_ult:
-	case en_gt:
-	case en_ugt:
-	case en_le:
-	case en_ule:
-	case en_ge:
-	case en_uge:
-		size = GetNaturalSize(node);
-		ap1 = cg.GenerateExpression(node->p[0],am_reg, size);
-		ap2 = cg.GenerateExpression(node->p[1],am_reg|am_imm,size);
-		GenerateTriadic(op,0,ap1,ap1,ap2);
-		ReleaseTempRegister(ap2);
-		return ap1;
-*/
+	case en_eq:	return (GenerateEq(node));
+	case en_ne:	return (GenerateNe(node));
+	case en_lt:	return (GenerateLt(node));
+	case en_le:	return (GenerateLe(node));
+	case en_gt: return (GenerateGt(node));
+	case en_ge:	return (GenerateGe(node));
+	case en_ult:	return (GenerateLtu(node));
+	case en_ule:	return (GenerateLeu(node));
+	case en_ugt:	return (GenerateGtu(node));
+	case en_uge:	return (GenerateGeu(node));
+	case en_flt:	return (GenerateFlt(node));
+	case en_fle:	return (GenerateFle(node));
+	case en_fgt:	return (GenerateFgt(node));
+	case en_fge:	return (GenerateFge(node));
+	case en_feq:	return (GenerateFeq(node));
+	case en_fne:	return (GenerateFne(node));
 	case en_chk:
-		size = GetNaturalSize(node);
+		size = node->GetNaturalSize();
         ap4 = GetTempRegister();         
 		ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 		ap2 = cg.GenerateExpression(node->p[1],am_reg,size);
@@ -329,7 +658,7 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
         ReleaseTempRegister(ap1);
         return ap4;
 	}
-	size = GetNaturalSize(node);
+	size = node->GetNaturalSize();
   ap3 = GetTempRegister();         
 	ap1 = cg.GenerateExpression(node->p[0],am_reg,size);
 	ap2 = cg.GenerateExpression(node->p[1],am_reg|am_imm,size);
@@ -350,23 +679,39 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 	*/
 }
 
+void RTF64CodeGenerator::GenerateBranchTrue(Operand* ap, int label)
+{
+	GenerateDiadic(op_bt, 0, ap, MakeDataLabel(label,regZero));
+}
+
+void RTF64CodeGenerator::GenerateBranchFalse(Operand* ap, int label)
+{
+	GenerateDiadic(op_bf, 0, ap, MakeDataLabel(label,regZero));
+}
+
 bool RTF64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit)
 {
 	int size, sz;
-	Operand *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2;
 	OCODE *ip;
 
 	if ((op == op_nand || op == op_nor || op == op_and || op == op_or) && (node->p[0]->HasCall() || node->p[1]->HasCall()))
 		return (false);
-	size = GetNaturalSize(node);
+	size = node->GetNaturalSize();
 	ip = currentFn->pl.tail;
   if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
     ap1 = cg.GenerateExpression(node->p[0],am_fpreg,size);
 	  ap2 = cg.GenerateExpression(node->p[1],am_fpreg,size);
   }
   else {
-    ap1 = cg.GenerateExpression(node->p[0],am_reg, size);
-	  ap2 = cg.GenerateExpression(node->p[1],am_reg|am_imm,size);
+		if (op == op_nand || op == op_nor || op == op_and || op == op_or) {
+			ap1 = cg.GenerateExpression(node->p[0], am_creg, size);
+			ap2 = cg.GenerateExpression(node->p[1], am_creg, size);
+		}
+		else {
+			ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
+			ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
+		}
   }
 	if (limit && currentFn->pl.Count(ip) > 10) {
 		currentFn->pl.tail = ip;
@@ -454,217 +799,106 @@ bool RTF64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int pred
 	}
 	if (op==op_fbne || op==op_fbeq || op==op_fblt || op==op_fble || op==op_fbgt || op==op_fbge) {
 		switch(op) {
+
 		case op_fbne:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempFPRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbne,sz,ap1,ap3,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fbne,sz,ap1,ap2,MakeCodeLabel(label));
+			GenerateTriadic(op_fsne, 0, makecreg(1), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
+
 		case op_fbeq:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbeq,sz,ap1,ap3,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fbeq,sz,ap1,ap2,MakeCodeLabel(label));
+			GenerateTriadic(op_fseq, 0, makecreg(1), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
+
 		case op_fblt:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fblt,sz,ap1,ap3,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fblt,sz,ap1,ap2,MakeCodeLabel(label));
+			GenerateTriadic(op_fslt, 0, makecreg(1), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
+
 		case op_fble:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbge,sz,ap3,ap1,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fbge,sz,ap2,ap1,MakeCodeLabel(label));
+			GenerateTriadic(op_fsle, 0, makecreg(1), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
+
 		case op_fbgt:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fblt,sz,ap3,ap1,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fblt,sz,ap2,ap1,MakeCodeLabel(label));
+			GenerateTriadic(op_fslt, 0, makecreg(1), ap2, ap1);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
+
 		case op_fbge:
-			if (ap2->mode==am_imm) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
-				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbge,sz,ap1,ap3,MakeCodeLabel(label));
-			}
-			else
-				GenerateTriadic(op_fbge,sz,ap1,ap2,MakeCodeLabel(label));
+			GenerateTriadic(op_fsle, 0, makecreg(1), ap2, ap1);
+			GenerateDiadic(op_bt, 0, makecreg(1), MakeCodeLabel(label));
 			break;
 		}
 	}
 	else {
 		switch(op) {
+
 		case op_band:
-			if (ap2->mode == am_imm) {
-				ap3 = GetTempRegister();
-				if (!ap1->isBool)
-					ENODE::GenRedor(ap1, ap1);
-				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
-					ENODE::GenRedor(ap3, ap2);
-					GenerateTriadic(op_and, 0, ap3, ap1, ap3);
-				}
-				else
-					GenerateTriadic(op_bit, 0, makecreg(0), ap1, ap2);
-				ReleaseTempRegister(ap3);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				ap3 = GetTempRegister();
-				if (!ap1->isBool)
-					ENODE::GenRedor(ap1, ap1);
-				ENODE::GenRedor(ap3, ap2);
-				//GenerateTriadic(op_bit, 0, makecreg(0), ap1, ap3);
-				//GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-				//GenerateTriadic(op_band, 0, ap1, ap2, MakeCodeLabel(label));
-				ip = currentFn->pl.tail;
-				ip->insn2 = Instruction::Get(op_and);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			ip = currentFn->pl.tail;
+			ip->insn2 = Instruction::Get(op_and);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+		
 		case op_bor:
-			if (ap2->mode == am_imm) {
-				ap3 = GetTempRegister();
-				if (!ap1->isBool)
-					ENODE::GenRedor(ap1, ap1);
-				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
-					ENODE::GenRedor(ap3, ap2);
-					GenerateTriadic(op_or, 0, ap3, ap1, ap3);
-				}
-				else
-					GenerateTriadic(op_or, 0, ap3, ap1, ap2);
-				ReleaseTempRegister(ap3);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				ip = currentFn->pl.tail;
-				ip->insn2 = Instruction::Get(op_or);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			ip = currentFn->pl.tail;
+			ip->insn2 = Instruction::Get(op_or);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bnand:
-			if (ap2->mode == am_imm) {
-				ap3 = GetTempRegister();
-				if (!ap1->isBool)
-					ENODE::GenRedor(ap1, ap1);
-				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
-					ENODE::GenRedor(ap3, ap2);
-					GenerateTriadic(op_nand, 0, ap3, ap1, ap3);
-				}
-				else
-					GenerateTriadic(op_nand, 0, ap3, ap1, ap2);
-				ReleaseTempRegister(ap3);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				ip = currentFn->pl.tail;
-				ip->insn2 = Instruction::Get(op_and);
-				GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			ip = currentFn->pl.tail;
+			ip->insn2 = Instruction::Get(op_and);
+			GenerateDiadic(op_bf, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bnor:
-			if (ap2->mode == am_imm) {
-				ap3 = GetTempRegister();
-				if (!ap1->isBool)
-					ENODE::GenRedor(ap1, ap1);
-				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
-					ENODE::GenRedor(ap3, ap2);
-					GenerateTriadic(op_nor, 0, ap3, ap1, ap3);
-				}
-				else
-					GenerateTriadic(op_nor, 0, ap3, ap1, ap2);
-				ReleaseTempRegister(ap3);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				ip = currentFn->pl.tail;
-				ip->insn2 = Instruction::Get(op_or);
-				GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			ip = currentFn->pl.tail;
+			ip->insn2 = Instruction::Get(op_or);
+			GenerateDiadic(op_bf, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_beq:
-			if (ap2->mode==am_imm) {
-				GenerateTriadic(op_seq, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne,0, makecreg(0), MakeCodeLabel(label));
-			}
+			if (ap2->mode == am_imm && ap2->offset->i >= -128 && ap2->offset->i < 128)
+				GenerateTriadic(op_beqi, 0, ap1, ap2, MakeCodeLabel(label));
+			else if (((ap2->mode == am_imm && ap2->offset->i == 0) || (ap2->mode==am_reg && ap2->preg==regZero)) && ap1->preg >= regFirstArg && ap1->preg < regFirstArg+4)
+				GenerateDiadic(op_beqz, 0, ap1, MakeCodeLabel(label));
 			else {
 				GenerateTriadic(op_seq, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
+				GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			}
 			break;
+
 		case op_bne:
-			if (ap2->mode==am_imm) {
-				GenerateTriadic(op_seq, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_beq,0, makecreg(0), MakeCodeLabel(label));
+			if (((ap2->mode == am_imm && ap2->offset->i == 0) || (ap2->mode == am_reg && ap2->preg == regZero)) && ap1->preg >= regFirstArg && ap1->preg < regFirstArg + 4) {
+				GenerateDiadic(op_bnez, 0, ap1, MakeCodeLabel(label));
 			}
 			else {
-				GenerateTriadic(op_seq, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
+				GenerateTriadic(op_sne, 0, makecreg(0), ap1, ap2);
+				GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			}
 			break;
+
 		case op_blt:
-			if (ap2->mode==am_imm) {
-				GenerateTriadic(op_slt, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_slt, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_slt, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_ble:
-			if (ap2->mode == am_imm) {
-				GenerateTriadic(op_sle, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_sle, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sle, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bgt:
-			if (ap2->mode == am_imm) {
-				GenerateTriadic(op_sgt, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_sgt, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sgt, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bge:
-			if (ap2->mode == am_imm) {
-				GenerateTriadic(op_sge, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_sge, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sge, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bltu:
 			if (ap2->mode==am_imm) {
 				// Don't generate any code if testing against unsigned zero.
@@ -672,52 +906,36 @@ bool RTF64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int pred
 				// always be false. Spit out a warning, its probably coded wrong.
 				if (ap2->offset->i == 0)
 					error(ERR_UBLTZ);	//GenerateDiadic(op_bltu,0,ap1,makereg(0),MakeCodeLabel(label));
-				else {
-					GenerateTriadic(op_sltu, 0, makecreg(0), ap1, ap2);
-					GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-					break;
-				}
 			}
-			else {
-				GenerateTriadic(op_sltu, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sltu, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bleu:
-			if (ap2->mode == am_imm) {
-				GenerateTriadic(op_sleu, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_sleu, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sleu, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bgtu:
-			if (ap2->mode == am_imm) {
-				GenerateTriadic(op_sgtu, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
-			else {
-				GenerateTriadic(op_sgtu, 0, makecreg(0), ap1, ap2);
-				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
-			}
+			GenerateTriadic(op_sgtu, 0, makecreg(0), ap1, ap2);
+			GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 			break;
+
 		case op_bgeu:
 			if (ap2->mode == am_imm) {
 				if (ap2->offset->i == 0) {
 					// This branch is always true
 					error(ERR_UBGEQ);
-					GenerateMonadic(op_jmp, 0, MakeCodeLabel(label));
+					GenerateMonadic(op_bra, 0, MakeCodeLabel(label));
 				}
 				else {
 					GenerateTriadic(op_sgeu, 0, makecreg(0), ap1, ap2);
-					GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
+					GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(label));
 				}
 			}
 			else {
 				GenerateDiadic(op_sgeu, 0, ap1, ap2);
-				GenerateMonadic(op_bne, 0, MakeCodeLabel(label));
+				GenerateMonadic(op_bt, 0, MakeCodeLabel(label));
 			}
 			break;
 		}
@@ -733,9 +951,9 @@ static void SaveRegisterSet(SYM *sym)
 {
 	int nn, mm;
 
-	if (!cpu.SupportsPush) {
+	if (!cpu.SupportsPush || true) {
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
+		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
 			GenerateDiadic(op_sto,0,makereg(nn),cg.MakeIndexed(mm,regSP));
@@ -751,7 +969,7 @@ static void RestoreRegisterSet(SYM * sym)
 {
 	int nn, mm;
 
-	if (!cpu.SupportsPop) {
+	if (!cpu.SupportsPop || true) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
 			GenerateDiadic(op_ldo,0,makereg(nn),cg.MakeIndexed(mm,regSP));
@@ -760,7 +978,7 @@ static void RestoreRegisterSet(SYM * sym)
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 	}
-	else
+	else // ToDo: check pop is in reverse order to push
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
 			GenerateMonadic(op_pop,0,makereg(nn));
 }
@@ -775,7 +993,7 @@ void SaveRegisterVars(CSet *rmask)
 
 	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		rmask->resetPtr();
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 			// nn = nregs - 1 - regno
@@ -794,9 +1012,24 @@ void SaveFPRegisterVars(CSet *rmask)
 
 	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 			GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
+		}
+	}
+}
+
+void SavePositRegisterVars(CSet* rmask)
+{
+	int cnt;
+	int nn;
+
+	if (rmask->NumMember()) {
+		cnt = 0;
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			GenerateDiadic(op_psto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 	}
@@ -856,13 +1089,16 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	case bt_triple:	sz = sizeOfFPT; break;
 	case bt_double:	sz = sizeOfFPD; break;
 	case bt_float:	sz = sizeOfFPD; break;
+	case bt_posit:	sz = sizeOfPosit; break;
 	default:	sz = sizeOfWord; break;
 	}
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
 			ap = cg.GenerateExpression(ep,am_reg,sizeOfFP);
+		else if (ep->tp->IsPositType())
+			ap = cg.GenerateExpression(ep, am_preg|am_imm, sizeOfPosit);
 		else
-			ap = cg.GenerateExpression(ep,am_reg|am_imm,GetNaturalSize(ep));
+			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	}
 	else if (ep->etype==bt_quad)
 		ap = cg.GenerateExpression(ep,am_reg,sz);
@@ -872,11 +1108,14 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 		ap = cg.GenerateExpression(ep,am_reg,sz);
 	else if (ep->etype==bt_float)
 		ap = cg.GenerateExpression(ep,am_reg,sz);
+	else if (ep->etype == bt_posit)
+		ap = cg.GenerateExpression(ep, am_reg, sz);
 	else
-		ap = cg.GenerateExpression(ep,am_reg|am_imm,GetNaturalSize(ep));
+		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
+	case am_preg:
 	case am_reg:
   case am_imm:
 /*
@@ -901,7 +1140,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 				if (ap->mode==am_imm) {
 					GenerateDiadic(op_ldi,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
+						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -909,7 +1148,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					*isFloat = true;
 					GenerateDiadic(op_mov,0,makefpreg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sz));
+						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sz));
 						nn = sz/sizeOfWord;
 					}
 				}
@@ -917,7 +1156,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					//ap->preg = regno & 0x7fff;
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
+						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -991,10 +1230,11 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	OCODE *ip;
 	ENODE *p;
 	ENODE *pl[100];
-	int nn, maxnn;
-	bool isFloat;
+	int nn, maxnn, kk;
+	bool isFloat = false;
 	bool sumFloat;
 	bool o_supportsPush;
+	SYM** sy = nullptr;
 
 	sum = 0;
 	if (sym)
@@ -1002,7 +1242,7 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 
 	sumFloat = false;
 	ip = currentFn->pl.tail;
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(0));
+	GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(0));
 	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
 		pl[nn] = p->p[0];
@@ -1016,7 +1256,14 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 				//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
-		sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);
+		if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
+			if (sy==nullptr && sym)
+				sy = sym->params.GetParameters();
+			if (sy)
+				sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+		}
+		else
+			sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);
 		sumFloat |= isFloat;
 //		plist = plist->p[1];
   }
@@ -1024,7 +1271,7 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		ip->fwd->MarkRemove();
 	else
 		ip->fwd->oper3 = MakeImmediate(sum*sizeOfWord);
-	if (!sumFloat && false) {
+	if (!sumFloat) {
 		o_supportsPush = cpu.SupportsPush;
 		cpu.SupportsPush = true;
 		currentFn->pl.tail = ip;
@@ -1034,7 +1281,14 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 			if (pl[nn]->etype == bt_pointer)
 				if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
 					continue;
-			PushArgument(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
+			if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
+				if (sy == nullptr && sym)
+					sy = sym->params.GetParameters();
+				if (sy)
+					PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			}
+			else
+				PushArgument(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
 		}
 		cpu.SupportsPush = o_supportsPush;
 	}
@@ -1083,16 +1337,17 @@ void RTF64CodeGenerator::LinkAutonew(ENODE *node)
 
 Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 { 
-	Operand *ap, *ap1;
+	Operand *ap;
 	Function *sym;
 	Function *o_fn;
 	SYM *s;
     int i;
 	int sp = 0;
 	int fsp = 0;
+	int psp = 0;
 	int ps;
 	TypeArray *ta = nullptr;
-	CSet *mask, *fmask;
+	CSet *mask, *fmask, *pmask;
 
 	sym = nullptr;
 
@@ -1109,7 +1364,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
         }
 */
 //		ReleaseTempRegister(ap);
-		sym->SaveTemporaries(&sp, &fsp);
+		sym->SaveTemporaries(&sp, &fsp, &psp);
 		if (currentFn->HasRegisterParameters())
 			sym->SaveRegisterArguments();
 		// If the symbol is unknown, assume a throw is present
@@ -1124,6 +1379,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			o_fn = currentFn;
 			mask = save_mask;
 			fmask = fpsave_mask;
+			pmask = psave_mask;
 			currentFn = sym;
 			ps = pass;
 			// Each function has it's own peeplist. The generated peeplist for an
@@ -1138,13 +1394,16 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
+			psave_mask = pmask;
 		}
 		else {
-			if (sym && sym->IsLeaf)
-				GenerateMonadic(op_jlr, 0, MakeDirect(node->p[0]));
+			if (sym && sym->IsLeaf) {
+				GenerateMonadic(op_jal, 0, MakeDirect(node->p[0]));
+				currentFn->doesJAL = true;
+			}
 			else
-				GenerateMonadic(op_jsr,0,MakeDirect(node->p[0]));
-			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
+				GenerateMonadic(op_call,0,MakeDirect(node->p[0]));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
@@ -1153,7 +1412,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			if (sym)
 				sym->RestoreRegisterArguments();
 		if (sym)
-			sym->RestoreTemporaries(sp, fsp);
+			sym->RestoreTemporaries(sp, fsp, psp);
 	}
     else
     {
@@ -1171,7 +1430,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 				sym = ap->offset->sym->fi;
 		}
 		if (sym)
-			sym->SaveTemporaries(&sp, &fsp);
+			sym->SaveTemporaries(&sp, &fsp, &psp);
 		if (currentFn->HasRegisterParameters())
 			if (sym)
 				sym->SaveRegisterArguments();
@@ -1189,6 +1448,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			o_fn = currentFn;
 			mask = save_mask;
 			fmask = fpsave_mask;
+			pmask = psave_mask;
 			currentFn = sym;
 			ps = pass;
 			sym->pl.head = sym->pl.tail = nullptr;
@@ -1200,14 +1460,17 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
+			psave_mask = pmask;
 		}
 		else {
 			GenerateDiadic(op_mov, 0, makereg(114), ap);
-			if (sym && sym->IsLeaf)
-				GenerateMonadic(op_jlr,0,MakeIndirect(114));
+			if (sym && sym->IsLeaf) {
+				GenerateMonadic(op_jal, 0, MakeIndirect(114));
+				currentFn->doesJAL = true;
+			}
 			else
-				GenerateMonadic(op_jsr, 0, MakeIndirect(114));
-			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
+				GenerateMonadic(op_call, 0, MakeIndirect(114));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
@@ -1216,7 +1479,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			if (sym)
 				sym->RestoreRegisterArguments();
 		if (sym)
-			sym->RestoreTemporaries(sp, fsp);
+			sym->RestoreTemporaries(sp, fsp, psp);
 		ReleaseTempRegister(ap);
 	}
 	/*

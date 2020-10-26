@@ -32,6 +32,7 @@ extern int64_t initlong();
 extern int64_t initquad();
 extern int64_t initfloat();
 extern int64_t inittriple();
+extern int64_t initPosit();
 int64_t InitializePointer(TYP *);
 extern short int brace_level;
 TYP *typ_vector[100];
@@ -51,6 +52,7 @@ TYP *pop_typ()
 		typ_sp--;
 		return (typ_vector[typ_sp]);
 	}
+	return (nullptr);
 }
 
 bool TYP::IsScalar()
@@ -199,6 +201,7 @@ int64_t TYP::GetElementSize()
 		return 8;
 	case bt_float:
 	case bt_double:
+	case bt_posit:
 		return 8;
 	case bt_struct:
 	case bt_class:
@@ -245,7 +248,10 @@ void TYP::put_ty()
     case bt_double:
             lfs.printf("Double");
             break;
-    case bt_pointer:
+		case bt_posit:
+			lfs.printf("Posit");
+			break;
+		case bt_pointer:
             if( val_flag == 0)
                     lfs.printf("Pointer to ");
             else
@@ -285,6 +291,12 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 	}
 
 	switch (a->type) {
+
+	// None will match any type.
+	// For argument lists where the argument is not specified so a default is
+	// assumed.
+	case bt_none:
+		return (true);
 
 	case bt_float:
 		if (b->type == bt_float)
@@ -683,6 +695,9 @@ j1:
 		case bt_triple:
 			nbytes = inittriple();
 			break;
+		case bt_posit:
+			nbytes = initPosit();
+			break;
 		default:
 			error(ERR_NOINIT);
 			nbytes = 0;
@@ -865,6 +880,8 @@ int64_t TYP::GenerateT(TYP *tp, ENODE *node)
 		nbytes = 8; GenerateFloat((Float128 *)&node->f128); break;
 	case bt_quad:
 		nbytes = 16; GenerateQuad((Float128 *)&node->f128); break;
+	case bt_posit:
+		nbytes = 8; GeneratePosit(node->posit); break;
 	case bt_pointer:
 		if (tp->val_flag) {
 			nbytes = 0;
@@ -1042,6 +1059,7 @@ int TYP::Alignment()
 			return (sizeOfPtr);//isShort ? AL_SHORT : AL_POINTER);
 	case bt_float:          return AL_FLOAT;
 	case bt_double:         return AL_DOUBLE;
+	case bt_posit:					return AL_POSIT;
 	case bt_triple:         return AL_TRIPLE;
 	case bt_class:
 	case bt_struct:
@@ -1077,6 +1095,7 @@ int TYP::walignment()
 		}
 	case bt_float:          return imax(AL_FLOAT, worstAlignment);
 	case bt_double:         return imax(AL_DOUBLE, worstAlignment);
+	case bt_posit:					return imax(AL_POSIT, worstAlignment);
 	case bt_triple:         return imax(AL_TRIPLE, worstAlignment);
 	case bt_class:
 	case bt_struct:

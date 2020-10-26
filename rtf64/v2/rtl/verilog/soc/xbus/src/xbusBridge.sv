@@ -37,7 +37,7 @@
 
 module xbusBridge(rst_i, clk_i, rclk_i, locked_i,
   cyc_i, stb_i, ack_o, berr_o, we_i, sel_i, adr_i, dat_i, dat_o,
-  xbd_o, xb_sync_o, xbd_i);
+  xbd_o, xb_sync_o, xb_de_o, xbd_i);
 parameter kParallelWidth = 14;
 input rst_i;
 input clk_i;    // 43 MHz
@@ -52,9 +52,10 @@ input [15:0] sel_i;
 input [31:0] adr_i;
 input [127:0] dat_i;
 output reg [127:0] dat_o;
-output reg [((kParallelWidth-2)*2)-1:0] xbd_o;
+output reg [((kParallelWidth-2)*3)-1:0] xbd_o;
 output reg xb_sync_o;
-input [((kParallelWidth-2)*2)-1:0] xbd_i;
+output reg xb_de_o;
+input [((kParallelWidth-2)*3)-1:0] xbd_i;
 
 reg [3:0] cnt;
 reg [3:0] state;
@@ -73,6 +74,7 @@ parameter WAIT_LOCK = 4'd8;
 
 reg ackw, ackr = 1'b0;
 assign ack_o = ackw|ackr;
+reg [5:0] ctr;
 
 // Register signals onto this domain.
 reg cyc;
@@ -89,6 +91,7 @@ wire xb_cs = cyc && stb && (adr[31:24]==8'hFB);
 always @(posedge clk_i)
 if (rst_i) begin
   xb_sync_o <= 1'b1;
+  ctr <= 6'd0;
   ackw <= 1'b0;
   state <= WAIT_LOCK;
 end
@@ -96,7 +99,11 @@ else begin
 case(state)
 WAIT_LOCK:
   begin
-    xb_sync_o <= 1'b1;
+    ctr <= ctr + 2'd1;
+    //xb_sync_o <= ctr < 6'd16;
+    xb_de_o <= ctr > 6'd20 && ctr < 6'd60;
+    xbd_o[35:32] <= 4'h0; // Send a NOP
+    xbd_o[31:0] <= 32'h0;
     if (locked_i) begin
       state <= IDLE;
       xb_sync_o <= 1'b0;

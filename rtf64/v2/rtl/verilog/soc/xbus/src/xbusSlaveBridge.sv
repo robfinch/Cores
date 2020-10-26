@@ -37,7 +37,7 @@
 
 module xbusSlaveBridge(rst_i, clk_i, rclk_i, locked_i,
   cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_o, dat_i,
-  xb_dat_i, xb_dat_o, xb_sync_o);
+  xb_dat_i, xb_dat_o, xb_sync_o, xb_de_o);
 input rst_i;
 input clk_i;
 input rclk_i;
@@ -53,6 +53,7 @@ input [127:0] dat_i;
 input [35:0] xb_dat_i;
 output reg [35:0] xb_dat_o;
 output reg xb_sync_o;
+output reg xb_de_o;
 
 reg [3:0] state;
 reg [3:0] ostate;
@@ -73,6 +74,7 @@ reg [31:0] adr;
 reg [127:0] dath, dat;
 reg [15:0] selh, sel;
 reg [8:0] synccnt;
+reg [5:0] ctr;
 reg start_cycle, start_cycle1;
 reg we;
 reg data_cap;
@@ -105,13 +107,14 @@ end
 
 always @(posedge clk_i)
 if (rst_i) begin
-  ostate <= WAIT_LOCKED;
+  ostate <= WAIT_LOCK;
   data_cap <= 1'b0;
   was_write <= 1'b0;
   dath <= 128'd0;
   selh <= 16'h0;
   xb_dat_o[35:32] <= 4'h0;  // send a NOP
   xb_dat_o[31:0] <= 32'h0;
+  ctr <= 6'd0;
 end
 else begin
 if (start_cycle|start_cycle1) begin
@@ -136,9 +139,11 @@ if (cyc_o & stb_o & ack_i) begin
 end
 
 case(ostate)
-WAIT_LOCKED:
+WAIT_LOCK:
   begin
-    xb_sync_o <= 1'b1;
+    ctr <= ctr + 2'd1;
+    //xb_sync_o <= ctr < 6'd16;
+    xb_de_o <= ctr > 6'd20 && ctr < 6'd60;
     if (locked_i) begin
       xb_sync_o <= 1'b0;
       ostate <= IDLE;

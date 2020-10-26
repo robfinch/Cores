@@ -85,7 +85,7 @@ entity xbusPhaseAlign is
    Generic (
       kParallelWidth : natural := 14;
       kUseFastAlgorithm : boolean := true;
-      kCtlTknCount : natural := 9; -- was 128 how many subsequent control tokens make a valid blank detection
+      kCtlTknCount : natural := 3; -- was 128 how many subsequent control tokens make a valid blank detection
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
       kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter
    Port (
@@ -170,9 +170,6 @@ end process ControlTokenCounter;
 
 -- Control Token Detection
 pTkn0Flag <= '1' when pDataQ = kCtlTkn0 else '0';
-pTkn1Flag <= '1' when pDataQ = kCtlTkn1 else '0';
-pTkn2Flag <= '1' when pDataQ = kCtlTkn2 else '0';
-pTkn3Flag <= '1' when pDataQ = kCtlTkn3 else '0';
 
 -- Register pipeline
 ControlTokenDetect: process(PixelClk)
@@ -180,10 +177,7 @@ begin
    if Rising_Edge(PixelClk) then
       pDataQ <= pData; -- level 1      
       pTkn0FlagQ <= pTkn0Flag;
-      pTkn1FlagQ <= pTkn1Flag;
-      pTkn2FlagQ <= pTkn2Flag;
-      pTkn3FlagQ <= pTkn3Flag; -- level 2      
-      pTknFlag <= pTkn0Flag or pTkn1Flag or pTkn2Flag or pTkn3Flag; -- level 3
+      pTknFlag <= pTkn0Flag; -- level 3
       pTknFlagQ <= pTknFlag;
       pBlankBegin <= not pTknFlagQ and pTknFlag; -- level 4
    end if;
@@ -345,6 +339,7 @@ begin
             pStateNxt <= IdleSt;
          elsif (pCtlTknOvf = '1') then
             pStateNxt <= EyeOpenSt;
+            --pStateNxt <= AlignedSt;
          end if;
       
       when JtrZoneSt =>

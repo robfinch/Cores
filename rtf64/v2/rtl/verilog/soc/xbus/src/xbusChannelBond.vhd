@@ -91,46 +91,39 @@ signal pDataFIFO : std_logic_vector(kParallelWidth-1 downto 0);
 signal pRdA, pWrA : natural range 0 to kFIFO_Depth-1;
 signal pRdEn : std_logic;
 signal pAllVld, pAllVld_q, pMeRdy_int: std_logic;
+signal pAllVldn : std_logic;
 signal pBlnkBgnFlag, pTokenFlag, pTokenFlag_q, pAllVldBgnFlag : std_logic;
+
+COMPONENT xbusFifo
+  PORT (
+    clk : IN STD_LOGIC;
+    srst : IN STD_LOGIC;
+    din : IN STD_LOGIC_VECTOR(13 DOWNTO 0);
+    wr_en : IN STD_LOGIC;
+    rd_en : IN STD_LOGIC;
+    dout : OUT STD_LOGIC_VECTOR(13 DOWNTO 0);
+    full : OUT STD_LOGIC;
+    empty : OUT STD_LOGIC;
+    valid : OUT STD_LOGIC;
+    data_count : OUT STD_LOGIC_VECTOR(4 DOWNTO 0)
+  );
+END COMPONENT;
 begin
 
 pAllVld <= pMeVld and pOtherChVld(0) and pOtherChVld(1);
 pDataInBnd <= pDataFIFO; -- raw data with skew removed
 pMeRdy <= pMeRdy_int; -- data is de-skewed and valid
+pAllVldn <= not pAllVld;
 
--- The process below should result in a dual-port distributed RAM with registered output
-FIFO: process (PixelClk)
-begin
-   if Rising_Edge(PixelClk) then
-      if (pAllVld = '1') then -- begin writing in FIFO as soon as all the channels have valid data
-         pFIFO(pWrA) <= pDataInRaw;
-      end if;
-      pDataFIFO <= pFIFO(pRdA); -- register FIFO output
-   end if;
-end process FIFO;
-
--- FIFO address counters
-FIFO_WrA: process (PixelClk)
-begin
-   if Rising_Edge(PixelClk) then
-      if (pAllVld = '1') then
-         pWrA <= pWrA + 1;
-      else -- when invalid data, go back to the beginning
-         pWrA <= 0;
-      end if;
-   end if;
-end process FIFO_WrA;
-
-FIFO_RdA: process (PixelClk)
-begin
-   if Rising_Edge(PixelClk) then
-      if (pAllVld = '0') then
-         pRdA <= 0;
-      elsif (pRdEn = '1') then
-         pRdA <= pRdA + 1;
-      end if;   
-   end if;
-end process FIFO_RdA;
+FIFO : xbusFifo
+  PORT MAP (
+    clk => PixelClk,
+    srst => pAllVldn,
+    din => pDataInRaw,
+    wr_en => pAllVld,
+    rd_en => pRdEn,
+    dout => pDataFIFO
+  );
 
 DataValidFlag: process(PixelClk)
 begin
@@ -163,7 +156,7 @@ end process FIFO_RdEn;
 TokenDetect: process(PixelClk)
 begin
    if Rising_Edge(PixelClk) then
-      if (pRdEn = '0' or pDataFIFO = kCtlTkn0 or pDataFIFO = kCtlTkn1 or pDataFIFO = kCtlTkn2 or pDataFIFO = kCtlTkn3) then
+      if (pRdEn = '0' or pDataFIFO = kCtlTkn0) then
          pTokenFlag <= '1'; --token flag activates on invalid data, which avoids a BlnkBgn pulse if the valid signal goes up in the middle of a blanking period
       else
          pTokenFlag <= '0';

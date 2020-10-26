@@ -105,7 +105,6 @@ entity xbusDecoder is
 end xbusDecoder;
 
 architecture Behavioral of xbusDecoder is
-
 constant kBitslipDelay : natural := 3; --three-period delay after bitslip 
 signal pAlignRst : std_logic; 
 signal pBitslipCnt : natural range 0 to kBitslipDelay - 1 := kBitslipDelay - 1; 
@@ -188,20 +187,27 @@ SyncBaseRst: entity work.SyncBase
       oOut => rTimeoutRst);
         
 -- Phase alignment controller to lock onto data stream
-xbusPhaseAlign: entity work.xbusPhaseAlign
+xbusPhaseAlignX: entity work.xbusPhaseAlign 
+   generic map (
+      kParallelWidth => kParallelWidth,
+      kUseFastAlgorithm => true,   
+      kCtlTknCount => kCtlTknCount,
+      kIDLY_TapValuePs => kIDLY_TapValuePs,
+      kIDLY_TapWidth => kIDLY_TapWidth
+   )
    port map (
-    rst_i => pAlignRst,
-    clk_i => PixelClk,
-    dat_i => pDataInRaw,
---      pTimeoutOvf => pTimeoutOvf,
---      pTimeoutRst => pTimeoutRst,
-    idly_ce => pIDLY_CE,
-    idly_inc => pIDLY_INC,
-    idly_cnt => pIDLY_CNT,
-    idly_ld => pIDLY_LD,
-    aligned => pAligned,
-    error => pAlignErr_int,
-    eye_size => pEyeSize);
+      pRst => pAlignRst,
+      PixelClk => PixelClk,
+      pTimeoutOvf => pTimeoutOvf,
+      pTimeoutRst => pTimeoutRst,
+      pData => pDataInRaw,
+      pIDLY_CE => pIDLY_CE,
+      pIDLY_INC => pIDLY_INC,
+      pIDLY_CNT => pIDLY_CNT,
+      pIDLY_LD => pIDLY_LD,
+      pAligned => pAligned,
+      pError => pAlignErr_int,
+      pEyeSize => pEyeSize);
 
 pAlignErr <= pAlignErr_int;
 pMeVld <= pAligned;

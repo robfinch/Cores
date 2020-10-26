@@ -165,10 +165,7 @@ cond_not_balanced_2 <=  '1' when (cnt_t_3 > 0 and n1q_m_2 > (kParallelWidth-2)/2
 									 (cnt_t_3 < 0 and n1q_m_2 < (kParallelWidth-2)/2) else -- too many 0's
                         '0';
 
-control_token_2 <= 	kCtlTkn0 when pC1_2 = '0' and pC0_2 = '0' else
-                     kCtlTkn1 when pC1_2 = '0' and pC0_2 = '1' else
-                     kCtlTkn2 when pC1_2 = '1' and pC0_2 = '0' else
-                     kCtlTkn3;
+control_token_2 <= 	kCtlTkn0;                                       
 							
 q_out_2 <=  control_token_2												when pVde_2 = '0' else	--control period
 			   not q_m_2(kParallelWidth-2) & q_m_2(kParallelWidth-2) & not q_m_2(kParallelWidth-3 downto 0)    when cond_balanced_2 = '1' and q_m_2(kParallelWidth-2) = '0' else

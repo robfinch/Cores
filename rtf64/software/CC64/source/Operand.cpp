@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -110,7 +110,7 @@ void Operand::GenZeroExtend(int isize, int osize)
 	}
 }
 
-Operand *Operand::GenSignExtend(int isize, int osize, int flags)
+Operand *Operand::GenerateSignExtend(int isize, int osize, int flags)
 {
 	Operand *ap1;
 	Operand *ap = this;
@@ -121,14 +121,13 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		return (ap);
 	if (ap->mode != am_reg && ap->mode != am_fpreg) {
 		ap1 = GetTempRegister();
-		cg.GenLoad(ap1, ap, isize, isize);
+		cg.GenerateLoad(ap1, ap, isize, isize);
 		ReleaseTempRegister(ap);
 		switch (isize)
 		{
 		case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
 		case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
 		case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
-		case 5:	GenerateDiadic(op_sxp, 0, ap1, ap1); break;
 		case 8:	GenerateDiadic(op_sxo, 0, ap1, ap1); break;
 		}
 		//GenStore(ap1, ap, osize);
@@ -147,7 +146,6 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		case 1:	GenerateDiadic(op_sxb, 0, ap, ap); break;
 		case 2:	GenerateDiadic(op_sxw, 0, ap, ap); break;
 		case 4:	GenerateDiadic(op_sxt, 0, ap, ap); break;
-		case 5:	GenerateDiadic(op_sxp, 0, ap, ap); break;
 		case 8:	GenerateDiadic(op_sxo, 0, ap, ap); break;
 		}
 	}
@@ -183,13 +181,40 @@ void Operand::MakeLegal(int flags, int size)
 			else if (flags & am_imm0) {
 				if (i == 0)
 					return;
+				if (flags & am_imm) {
+					if (flags & am_reg) {
+						if (offset->i == 0) {
+							mode = am_reg;
+							preg = 0;
+						}
+					}
+					return;
+				}
 			}
 			// If there is a choice between r0 and #0 choose r0.
 			else if (flags & am_imm) {
-				if (flags & am_reg) {
-					if (offset->i == 0) {
-						mode = am_reg;
-						preg = 0;
+				if (tp && tp->IsFloatType()) {
+					if (flags & am_fpreg) {
+						if (offset->f128.IsZero()) {
+							mode = am_fpreg;
+							preg = 0;
+						}
+					}
+				}
+				else if (tp && tp->IsPositType()) {
+					if (flags & am_preg) {
+						if (offset->posit.val == 0) {
+							mode = am_preg;
+							preg = 0;
+						}
+					}
+				}
+				else {
+					if (flags & am_reg) {
+						if (offset->i == 0) {
+							mode = am_reg;
+							preg = 0;
+						}
 					}
 				}
 				return;
@@ -211,6 +236,13 @@ void Operand::MakeLegal(int flags, int size)
 			if (flags & am_fpreg)
 				return;
 			break;
+		case am_preg:
+			if (flags & am_preg)
+				return;
+			break;
+		case am_creg:
+			if (flags & am_creg)
+				return;
 		case am_ind:
 		case am_indx:
 		case am_indx2:
@@ -233,7 +265,12 @@ void Operand::MakeLegal(int flags, int size)
 		switch (mode) {
 		case am_ind:
 		case am_indx:
-			cg.GenLoad(ap2, this, size, size);
+			ap2->isUnsigned = this->isUnsigned;
+			if (this->tp) {
+				if (this->tp->GetBtp())
+					ap2->isUnsigned = this->tp->GetBtp()->isUnsigned;
+			}
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			cg.GenLoadConst(this, ap2);
@@ -242,11 +279,17 @@ void Operand::MakeLegal(int flags, int size)
 		case am_reg:
 			GenerateDiadic(op_mov, 0, ap2, this);
 			break;
+		case am_preg:
+			GenerateDiadic(op_ptoi, 0, ap2, this);
+			break;
 		case am_fpreg:
 			GenerateDiadic(op_ftoi, fpsize(), ap2, this);
 			break;
+		case am_creg:
+			GenerateTriadic(op_aslx, 0, ap2, makereg(regZero), cg.MakeImmediate((int64_t)1));
+			break;
 		default:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_reg;
@@ -261,6 +304,8 @@ void Operand::MakeLegal(int flags, int size)
 		deep = ap2->deep;
 		pdeep = ap2->pdeep;
 		tempflag = 1;
+		memref = ap2->memref;
+		memop = ap2->memop;
 		return;
 	}
 	if (flags & am_fpreg)
@@ -269,10 +314,11 @@ void Operand::MakeLegal(int flags, int size)
 			return;
 		ReleaseTempReg(this);      /* maybe we can use it... */
 		ap2 = GetTempFPRegister();
+		ap2->tp = this->tp;	// Load needs this
 		switch (mode) {
 		case am_ind:
 		case am_indx:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			ap1 = GetTempRegister();
@@ -284,7 +330,7 @@ void Operand::MakeLegal(int flags, int size)
 			GenerateDiadic(op_itof, ap2->fpsize(), ap2, this);
 			break;
 		default:
-			cg.GenLoad(ap2, this, size, size);
+			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_fpreg;
@@ -300,6 +346,66 @@ void Operand::MakeLegal(int flags, int size)
 		pdeep = ap2->pdeep;
 		tempflag = 1;
 		return;
+	}
+	if (flags & am_preg)
+	{
+		if (mode == am_preg)
+			return;
+		ReleaseTempReg(this);      /* maybe we can use it... */
+		ap2 = GetTempPositRegister();
+		ap2->type = stdposit.GetIndex();
+		ap2->tp = &stdposit;	// load needs this
+		switch (mode) {
+		case am_ind:
+		case am_indx:
+			cg.GenerateLoad(ap2, this, size, size);
+			break;
+		case am_imm:
+			ap1 = GetTempRegister();
+			GenerateDiadic(op_ldi, 0, ap1, this);
+			GenerateDiadic(op_mov, 0, ap2, ap1);
+			ReleaseTempReg(ap1);
+			break;
+		case am_reg:
+			if (regs[preg].ContainsPositConst())
+				GenerateDiadic(op_mov, 0, ap2, this);
+			else
+				GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
+			break;
+		default:
+			cg.GenerateLoad(ap2, this, size, size);
+			break;
+		}
+		mode = am_preg;
+		switch (ap2->fpsize()) {
+		case 'd':	type = stdposit.GetIndex(); break;
+		case 's': type = stdposit32.GetIndex(); break;
+		case 'h': type = stdposit16.GetIndex(); break;
+		default:	type = stdposit.GetIndex(); break;
+		}
+		preg = ap2->preg;
+		deep = ap2->deep;
+		pdeep = ap2->pdeep;
+		tempflag = 1;
+		return;
+	}
+	if (flags & am_creg) {
+		switch (mode) {
+		case am_ind:
+		case am_indx:
+		case am_indx2:
+			ap2 = GetTempRegister();
+			cg.GenerateLoad(ap2, this, size, size);
+			cg.MakeBoolean(ap2);
+			ReleaseTempReg(ap2);
+			return;
+		case am_imm:
+			GenerateTriadic(op_sne, 0, makecreg(0), makereg(regZero), this);
+			return;
+		case am_reg:
+			cg.MakeBoolean(this);
+			return;
+		}
 	}
 	// Here we wanted the mode to be non-register (memory/immed)
 	// Should fix the following to place the result in memory and
@@ -324,7 +430,7 @@ void Operand::MakeLegal(int flags, int size)
 	switch (mode) {
 	case am_ind:
 	case am_indx:
-		cg.GenLoad(ap2, this, size, size);
+		cg.GenerateLoad(ap2, this, size, size);
 		break;
 	case am_imm:
 		cg.GenLoadConst(this, ap2);
@@ -334,7 +440,7 @@ void Operand::MakeLegal(int flags, int size)
 		GenerateDiadic(op_mov, 0, ap2, this);
 		break;
 	default:
-		cg.GenLoad(ap2, this, size, size);
+		cg.GenerateLoad(ap2, this, size, size);
 	}
 	mode = am_reg;
 	preg = ap2->preg;
@@ -502,7 +608,10 @@ void Operand::store(txtoStream& ofs)
 		ofs.printf("vm%d", (int)preg);
 		break;
 	case am_fpreg:
-		ofs.printf("$fp%d", (int)preg);
+		ofs.printf("$f%d", (int)preg);
+		break;
+	case am_preg:
+		ofs.printf("$p%d", (int)preg);
 		break;
 	case am_creg:
 		ofs.printf("$cr%d", (int)preg);
@@ -546,8 +655,14 @@ void Operand::store(txtoStream& ofs)
 		break;
 
 	case am_indx2:
-		if (scale == 1 || scale == 0)
-			ofs.printf("[%s+%s]", RegMoniker(sreg), RegMoniker(preg));
+		if (scale == 1 || scale == 0) {
+			if (sreg==regZero)
+				ofs.printf("[%s]", RegMoniker(preg));
+			else if (preg==regZero)
+				ofs.printf("[%s]", RegMoniker(sreg));
+			else
+				ofs.printf("[%s+%s]", RegMoniker(sreg), RegMoniker(preg));
+		}
 		else
 			ofs.printf("[%s+%s*%d]", RegMoniker(sreg), RegMoniker(preg), scale);
 		break;

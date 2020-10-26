@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,6 +25,8 @@
 //
 #include "stdafx.h"
 
+int ENODE::segcount[16];
+
 void swap_nodes(ENODE *node)
 {
 	ENODE *temp;
@@ -45,6 +47,7 @@ char ENODE::fsize()
 	case bt_double:	return ('d');
 	case bt_triple:	return ('t');
 	case bt_quad:	return ('q');
+	case bt_posit: return (' ');
 	default:	return ('d');
 	}
 }
@@ -106,6 +109,11 @@ int64_t ENODE::GetReferenceSize()
 			return(tp->size);
 		else
 			return (sizeOfFPD);
+	case en_pregvar:
+		if (tp)
+			return(tp->size);
+		else
+			return (sizeOfFPD);
 	case en_tempref:
 	case en_regvar:
 		return (sizeOfWord);
@@ -133,7 +141,7 @@ int ENODE::GetNaturalSize()
 			return (4);
 		return (sizeOfWord);
 	case en_fcon:
-		return (tp->precision / 16);
+		return (tp->precision / 8);
 	case en_tcon: return (6);
 	case en_labcon: case en_clabcon:
 	case en_cnacon: case en_nacon:  case en_autocon: case en_classcon:
@@ -153,6 +161,7 @@ int ENODE::GetNaturalSize()
 			return (tp->size);
 		else
 			return (sizeOfWord);
+	case en_autopcon:
 	case en_autofcon:
 		return (sizeOfWord);
 	case en_ref:
@@ -169,6 +178,9 @@ int ENODE::GetNaturalSize()
 	case en_not:    case en_compl:
 	case en_uminus: case en_assign:
 		return p[0]->GetNaturalSize();
+	case en_padd:	case en_psub:
+	case en_pmul: case en_pdiv:
+	case en_peq:	case en_plt:	case en_ple:
 	case en_fadd:	case en_fsub:
 	case en_fmul:	case en_fdiv:
 	case en_fsadd:	case en_fssub:
@@ -178,13 +190,14 @@ int ENODE::GetNaturalSize()
 	case en_vadds:	case en_vsubs:
 	case en_vmuls:	case en_vdivs:
 	case en_add:    case en_sub:	case en_ptrdif:
+	case en_ext:		case en_extu:
 	case en_mul:    case en_mulu:
 	case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_and:    case en_or:     case en_xor:
 	case en_asl:
 	case en_shl:    case en_shlu:
-	case en_shr:	case en_shru:
+	case en_shr:	case en_shru:	case en_bitoffset:
 	case en_asr:	case en_asrshu:
 	case en_feq:    case en_fne:
 	case en_flt:    case en_fle:
@@ -217,6 +230,7 @@ int ENODE::GetNaturalSize()
 	case en_q2i:
 	case en_t2i:
 		return (sizeOfWord);
+	case en_i2p:
 	case en_i2d:
 		return (sizeOfWord);
 	case en_i2t:
@@ -240,6 +254,13 @@ int ENODE::GetNaturalSize()
 
 bool ENODE::IsBitfield()
 {
+	if (nodetype == en_ref) {
+		if (p[0]->nodetype == en_bitoffset)
+			return (true);
+	}
+	if (this->tp)
+		if (this->tp->type == bt_bit)
+			return (true);
 	return (nodetype == en_fieldref);
 }
 
@@ -286,6 +307,8 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 		return (node1->rg == node2->rg);
 	case en_fpregvar:
 		return (node1->rg == node2->rg);
+	case en_pregvar:
+		return (node1->rg == node2->rg);
 	case en_tempref:
 	case en_tempfpref:
 	case en_icon:
@@ -293,6 +316,7 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 	case en_classcon:	// Check type ?
 	case en_autocon:
 	case en_autovcon:
+	case en_autopcon:
 	case en_autofcon:
 	{
 		return (node1->i == node2->i);
@@ -359,6 +383,26 @@ ENODE *ENODE::Clone()
 // ============================================================================
 // ============================================================================
 
+// AddToList used to build aggregate types.
+
+void ENODE::AddToList(ENODE* ele)
+{
+	ENODE* p, * pp;
+
+	p = this;
+	pp = nullptr;
+	while (p) {
+		pp = p;
+		p = p->p[2];
+	}
+	if (pp) {
+		pp->p[2] = ele;
+	}
+	else
+		this->p[2] = ele;
+}
+
+
 // Assign a type to a whole list.
 
 bool ENODE::AssignTypeToList(TYP *tp)
@@ -373,7 +417,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 
 	esize = 0;
 	this->tp = tp;
-	this->tp->isConst = isConst;
 	this->esize = tp->size;
 	if (tp->isArray) {
 		ne = tp->numele;
@@ -382,7 +425,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 		for (ep = p[0]->p[2]; ep; ep = ep->p[2]) {
 			cnt++;
 			ep->tp = btp;
-			ep->tp->isConst = isConst;
 			ep->esize = btp->size;
 			//if (!ep->tp->isConst)
 			//	isConst = false;
@@ -409,7 +451,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 		thead = SYM::GetPtr(tp->lst.GetHead());
 		for (ep = p[0]->p[2]; thead && ep; ) {
 			ep->tp = thead->tp;
-			ep->tp->isConst = isConst;
 			ep->esize = thead->tp->size;
 			if (thead->tp->IsAggregateType()) {
 				if (ep->nodetype == en_aggregate) {
@@ -442,6 +483,15 @@ void ENODE::repexpr()
 	if (this == nullptr)
 		return;
 	switch (nodetype) {
+	case en_temppref:
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
+			csp->isPosit = TRUE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_pregvar;
+				rg = csp->reg;
+			}
+		}
+		break;
 	case en_fcon:
 	case en_tempfpref:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
@@ -453,6 +503,15 @@ void ENODE::repexpr()
 		}
 		break;
 	// Autofcon resolve to *pointers* which are stored in integer registers.
+	case en_autopcon:
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
+			csp->isPosit = FALSE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_pregvar;
+				rg = csp->reg;
+			}
+		}
+		break;
 	case en_autofcon:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
 			csp->isfp = FALSE; //**** a kludge
@@ -473,6 +532,7 @@ void ENODE::repexpr()
 		*/
 	case en_nacon:
 	case en_labcon:
+	case en_pcon:
 	case en_icon:
 	case en_autovcon:
 	case en_autocon:
@@ -526,10 +586,13 @@ void ENODE::repexpr()
 		p[1]->repexpr();
 		break;
 	*/
-	case en_ref:
 	case en_fieldref:
+		bit_offset->repexpr();
+		bit_width->repexpr();
+	case en_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
+				//nodetype = csp->isfp ? en_fpregvar : csp->isPosit ? en_pregvar : en_regvar;
 				nodetype = en_regvar;
 				rg = csp->reg;
 			}
@@ -556,6 +619,7 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
+	case en_i2p:
 	case en_i2d:
 		p[0]->repexpr();
 		p[1]->repexpr();
@@ -573,11 +637,13 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
+	case en_bytendx:	case en_wydendx:
 	case en_sub:
+	case en_ext: case en_extu:
 	case en_mulf:   case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_shl:	case en_asl:
-	case en_shlu:	case en_shru:	case en_asr:
+	case en_shlu:	case en_shru:	case en_asr: case en_bitoffset:
 	case en_shr:
 	case en_and:
 	case en_or:     case en_xor:
@@ -596,7 +662,9 @@ void ENODE::repexpr()
 	case en_fdadd:  case en_fdsub:
 	case en_fadd: case en_fsub:
 	case en_fmul: case en_fdiv:
-
+	case en_padd:	case en_psub:
+	case en_pmul:	case en_pdiv:
+	case en_peq:  case en_plt: case en_ple:
 	case en_veq:    case en_vne:
 	case en_vlt:    case en_vle:
 	case en_vgt:    case en_vge:
@@ -633,6 +701,7 @@ void ENODE::repexpr()
 		break;
 	case en_regvar:
 	case en_fpregvar:
+	case en_pregvar:
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
@@ -679,10 +748,13 @@ CSE *ENODE::OptInsertRef(int duse)
 
 	csp = nullptr;
 	// Search the chain of refs.
-	for (ep = p[0]; ep->IsRefType(); ep = ep->p[0])
-		;
+	for (ep = p[0]; ep && ep->IsRefType(); ep = ep->p[0])
+		if (ep == nullptr)
+			return (nullptr);
+	if (this == nullptr)
+		return (nullptr);
 	ep = p[0];
-	if (ep->IsAutocon()) {
+	if (ep && ep->IsAutocon()) {
 		csp = currentFn->csetbl->InsertNode(this, duse, &first);
 		// take care: the non-derereferenced use of the autocon node may
 		// already be in the list. In this case, set voidf to 1
@@ -750,6 +822,7 @@ void ENODE::scanexpr(int duse)
 
 	switch (nodetype) {
 	case en_fpregvar:
+	case en_pregvar:
 	case en_regvar:
 		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
@@ -761,10 +834,13 @@ void ENODE::scanexpr(int duse)
 	case en_nacon:
 		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
+	case en_autopcon:
 	case en_autofcon:
+	case en_temppref:
 	case en_tempfpref:
 		csp = OptInsertAutocon(duse);
 		csp->isfp = FALSE;
+		csp->isPosit = false;
 		break;
 	case en_autovcon:
 	case en_autocon:
@@ -783,8 +859,10 @@ void ENODE::scanexpr(int duse)
 	case en_chw:
 		p[0]->scanexpr(duse);
 		break;
-	case en_ref:
 	case en_fieldref:
+		bit_offset->scanexpr(duse);
+		bit_width->scanexpr(duse);
+	case en_ref:
 		OptInsertRef(duse);
 		break;
 	case en_uminus:
@@ -796,6 +874,7 @@ void ENODE::scanexpr(int duse)
 	case en_chk:
 		p[0]->scanexpr(duse);
 		break;
+	case en_i2p:
 	case en_i2d:
 		p[0]->scanexpr(duse);
 		break;
@@ -813,7 +892,8 @@ void ENODE::scanexpr(int duse)
 		p[0]->scanexpr(duse);
 		p[1]->scanexpr(duse);
 		break;
-	case en_mulf:
+	case en_ext: case en_extu:
+	case en_mulf:		case en_bytendx:	case en_wydendx: case en_bitoffset:
 	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
 	case en_mod:    case en_umod:   case en_and:
@@ -825,6 +905,7 @@ void ENODE::scanexpr(int duse)
 	case en_lt:     case en_le:
 	case en_ugt:    case en_uge:
 	case en_ult:    case en_ule:
+
 	case en_feq:    case en_fne:
 	case en_flt:    case en_fle:
 	case en_fgt:    case en_fge:
@@ -832,6 +913,10 @@ void ENODE::scanexpr(int duse)
 	case en_fdadd:  case en_fdsub:
 	case en_fadd: case en_fsub:
 	case en_fmul: case en_fdiv:
+
+	case en_peq:	case en_plt:	case en_ple:
+	case en_padd:	case en_psub:
+	case en_pmul:	case en_pdiv:
 
 	case en_veq:    case en_vne:
 	case en_vlt:    case en_vle:
@@ -905,9 +990,9 @@ void ENODE::update()
 // ============================================================================
 // ============================================================================
 
-Operand *ENODE::MakeDataLabel(int lab)
+Operand *ENODE::MakeDataLabel(int lab, int ndxreg)
 {
-	return (compiler.of.MakeDataLabel(lab));
+	return (compiler.of.MakeDataLabel(lab, ndxreg));
 }
 
 Operand *ENODE::MakeCodeLabel(int lab)
@@ -915,9 +1000,9 @@ Operand *ENODE::MakeCodeLabel(int lab)
 	return (compiler.of.MakeCodeLabel(lab));
 }
 
-Operand *ENODE::MakeStringAsNameConst(char *s)
+Operand *ENODE::MakeStringAsNameConst(char *s, e_sg seg)
 {
-	return (compiler.of.MakeStringAsNameConst(s));
+	return (compiler.of.MakeStringAsNameConst(s, seg));
 }
 
 Operand *ENODE::MakeString(char *s)
@@ -960,18 +1045,18 @@ void ENODE::GenerateHint(int num)
 	GenerateMonadic(op_hint, 0, MakeImmediate(num));
 }
 
-void ENODE::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
+void ENODE::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 {
-	cg.GenLoad(ap3, ap1, ssize, size);
+	cg.GenerateLoad(ap3, ap1, ssize, size);
 }
 void ENODE::GenStore(Operand *ap1, Operand *ap3, int size)
 {
-	cg.GenStore(ap1, ap3, size);
+	cg.GenerateStore(ap1, ap3, size);
 }
 
-void ENODE::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
+void ENODE::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int typ)
 {
-	cg.GenMemop(op, ap1, ap2, ssize);
+	cg.GenMemop(op, ap1, ap2, ssize, typ);
 }
 
 void ENODE::GenRedor(Operand *ap1, Operand *ap2)
@@ -1005,6 +1090,7 @@ Operand *ENODE::GenIndex()
 		ap1->deep2 = ap2->deep2;
 		ap1->offset = makeinode(en_icon, 0);
 		ap1->scale = scale;
+		ap1->isUnsigned = ap2->isUnsigned;
 		return (ap1);
 	}
 	GenerateHint(8);
@@ -1085,12 +1171,34 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	}
 	*/
 	ip1 = currentFn->pl.tail;
+	/* This can't work because it returns -1,0,+1 not -1,+1 */
+	/*
+	if (p[0]->nodetype == en_lt) {
+		ap2 = GetTempRegister();
+		ap3 = cg.GenerateExpression(p[1]->p[0], am_all, size);
+		ap4 = cg.GenerateExpression(p[1]->p[1], am_all, size);
+		if (ap3->mode == am_imm && ap4->mode == am_imm) {
+			if (ap3->offset->i == -1 && ap4->offset->i == 1) {
+				ap3 = cg.GenerateExpression(p[0]->p[0], am_reg, size);
+				ap4 = cg.GenerateExpression(p[0]->p[1], am_reg | am_imm, size);
+				GenerateTriadic(op_slt, 0, ap2, ap3, ap4);
+				GenerateTriadic(op_asl, 0, ap2, ap2, MakeImmediate(1));	// * 2	result will be 0 or 2
+				GenerateTriadic(op_sub, 0, ap2, ap2, MakeImmediate(1));	// - 1	result will be -1 or 1
+				ReleaseTempReg(ap4);
+				ReleaseTempReg(ap3);
+				ap2->MakeLegal(flags, size);
+				return (ap2);
+			}
+		}
+	}
+	*/
+	currentFn->pl.tail = ip1;
 	// cmovenz integer only
 	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, size);
+		ap1 = cg.GenerateExpression(p[0], am_creg, size);
 		ap2 = cg.GenerateExpression(p[1]->p[0], am_reg | am_fpreg, size);
-		ap3 = cg.GenerateExpression(p[1]->p[1], am_reg | am_fpreg | am_imm, size);
+		ap3 = cg.GenerateExpression(p[1]->p[1], am_reg | am_fpreg, size);
 		if (ap2->mode == am_fpreg || ap3->mode == am_fpreg)
 			goto j1;
 		n1 = currentFn->pl.Count(ip1);
@@ -1122,7 +1230,7 @@ j1:
 		cg.GenerateFalseJump(p[0], false_label, 0);
 		node = p[1];
 		ap1 = cg.GenerateExpression(node->p[0], flags, size);
-		GenerateDiadic(op_jmp, 0, MakeCodeLabel(end_label), 0);
+		GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 		GenerateLabel(false_label);
 		ap2 = cg.GenerateExpression(node->p[1], flags, size);
 		if (!IsEqualOperand(ap1, ap2))
@@ -1141,7 +1249,7 @@ j1:
 						ap1->isPtr = true;
 					break;
 				default:
-					GenLoad(ap1, ap2, size, size);
+					GenerateLoad(ap1, ap2, size, size);
 					break;
 				}
 				break;
@@ -1158,7 +1266,7 @@ j1:
 						ap1->isPtr = true;
 					break;
 				default:
-					GenLoad(ap1, ap2, size, size);
+					GenerateLoad(ap1, ap2, size, size);
 					break;
 				}
 				break;
@@ -1177,7 +1285,7 @@ j1:
 	cg.GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
 	ap1 = cg.GenerateExpression(node->p[0], flags, size);
-	GenerateDiadic(op_jmp, 0, MakeCodeLabel(end_label), 0);
+	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	if (!IsEqualOperand(ap1, ap2))
 	{
@@ -1195,7 +1303,7 @@ j1:
 					ap1->isPtr = true;
 				break;
 			default:
-				GenLoad(ap1, ap2, size, size);
+				GenerateLoad(ap1, ap2, size, size);
 				break;
 			}
 			break;
@@ -1212,7 +1320,7 @@ j1:
 					ap1->isPtr = true;
 				break;
 			default:
-				GenLoad(ap1, ap2, size, size);
+				GenerateLoad(ap1, ap2, size, size);
 				break;
 			}
 			break;
@@ -1242,12 +1350,6 @@ Operand *ENODE::GenHook(int flags, int size)
 	end_label = nextlabel++;
 	//flags = (flags & am_reg) | am_volatile;
 	flags |= am_volatile;
-	/*
-	if (p[0]->constflag && p[1]->constflag) {
-	GeneratePredicateMonadic(hook_predreg,op_op_ldi,MakeImmediate(p[0]->i));
-	GeneratePredicateMonadic(hook_predreg,op_ldi,MakeImmediate(p[0]->i));
-	}
-	*/
 	//ip1 = currentFn->pl.tail;
 	//ap2 = cg.GenerateExpression(p[1]->p[1], flags, size);
 	//n1 = currentFn->pl.Count(ip1);
@@ -1262,7 +1364,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], flags, size);
 	ReleaseTempRegister(ap1);
-	GenerateDiadic(op_jmp, 0, MakeCodeLabel(end_label), 0);
+	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	ap2 = cg.GenerateExpression(node->p[1], flags, size);
 	if (!Operand::IsSameType(ap1, ap2) && !voidResult)
@@ -1315,7 +1417,8 @@ Operand *ENODE::GenHook(int flags, int size)
 	return (ap2);
 }
 
-Operand *ENODE::GenShift(int flags, int size, int op)
+// ToDo: ShiftBitfield
+Operand *ENODE::GenerateShift(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
 
@@ -1327,8 +1430,8 @@ Operand *ENODE::GenShift(int flags, int size, int op)
 	if ((op == op_rol || op == op_ror) && ap2->isUnsigned)
 		switch (size) {
 		case 1:	GenerateDiadic(op_zxb, 0, ap3, ap3); break;
-		case 2:	GenerateDiadic(op_zxc, 0, ap3, ap3); break;
-		case 4:	GenerateDiadic(op_zxh, 0, ap3, ap3); break;
+		case 2:	GenerateDiadic(op_zxw, 0, ap3, ap3); break;
+		case 4:	GenerateDiadic(op_zxt, 0, ap3, ap3); break;
 		default:;
 		}
 	ReleaseTempRegister(ap2);
@@ -1337,8 +1440,8 @@ Operand *ENODE::GenShift(int flags, int size, int op)
 	return (ap3);
 }
 
-
-Operand *ENODE::GenAssignShift(int flags, int size, int op)
+// ToDo: AssignShiftBitfield
+Operand *ENODE::GenerateAssignShift(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
 	MachineReg *mr;
@@ -1358,7 +1461,7 @@ Operand *ENODE::GenAssignShift(int flags, int size, int op)
 		return (ap3);
 	}
 	ap1 = GetTempRegister();
-	GenLoad(ap1, ap3, size, size);
+	GenerateLoad(ap1, ap3, size, size);
 	GenerateTriadic(op, size, ap1, ap1, ap2);
 	GenStore(ap1, ap3, size);
 	ReleaseTempRegister(ap1);
@@ -1463,7 +1566,7 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 //
 // Generate code to evaluate a unary minus or complement.
 //
-Operand *ENODE::GenUnary(int flags, int size, int op)
+Operand *ENODE::GenerateUnary(int flags, int size, int op)
 {
 	Operand *ap, *ap2;
 	OCODE* ip;
@@ -1503,7 +1606,7 @@ Operand *ENODE::GenUnary(int flags, int size, int op)
 
 // Generate code for a binary expression
 
-Operand *ENODE::GenBinary(int flags, int size, int op)
+Operand *ENODE::GenerateBinary(int flags, int size, int op)
 {
 	Operand *ap1 = nullptr, *ap2 = nullptr, *ap3, *ap4;
 	bool dup = false;
@@ -1527,6 +1630,27 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
 		else
 			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		ap3->type = ap1->type;
+	}
+	else if (IsPositType())
+	{
+		ap3 = GetTempPositRegister();
+		if (IsEqual(p[0], p[1]))
+			dup = !opt_nocgo;
+		ap1 = cg.GenerateExpression(p[0], am_preg, size);
+		if (!dup)
+			ap2 = cg.GenerateExpression(p[1], am_preg, size);
+		// Generate a convert operation ?
+		if (!dup) {
+			if (ap1->fpsize() != ap2->fpsize()) {
+				if (ap2->fpsize() == 's')
+					GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+			}
+		}
+		if (dup)
+			GenerateTriadic(op, 0, ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, 0, ap3, ap1, ap2);
 		ap3->type = ap1->type;
 	}
 	else if (op == op_vex) {
@@ -1559,7 +1683,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 		ap3 = GetTempRegister();
 		if (ENODE::IsEqual(p[0], p[1]) && !opt_nocgo) {
 			// Duh, subtract operand from itself, result would be zero.
-			if (op == op_sub || op == op_ptrdif)
+			if (op == op_sub || op == op_ptrdif || op == op_eor)
 				GenerateDiadic(op_mov, 0, ap3, makereg(0));
 			else {
 				ap1 = cg.GenerateExpression(p[0], am_reg, size);
@@ -1643,8 +1767,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 	return (ap3);
 }
 
-
-Operand *ENODE::GenAssignAdd(int flags, int size, int op)
+Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3, *ap4;
 	int ssize;
@@ -1657,25 +1780,29 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 		size = ssize;
 	if (p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap4 = GetTempRegister();
 		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
 		//		GenerateDiadic(op_mov, 0, ap3, ap1);
 		//ap1 = cg.GenerateExpression(p[0], am_reg | am_mem, size);
 		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
 		if (ap1->mode == am_reg) {
 			GenerateTriadic(op, 0, ap1, ap1, ap2);
-			cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+			if (ap1->bit_offset < 0)
+				GenerateBitfieldInsert(ap3, ap1, ap1->next, MakeImmediate(1));
+			else
+				GenerateBitfieldInsert(ap3, ap1, ap1->bit_offset, ap1->bit_width);
+			//cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		}
 		else {
-			GenLoad(ap3, ap1, size, size);
-			Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
+			GenerateLoad(ap3, ap1, size, size);
+			//Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
+			ap4 = cg.GenerateBitfieldExtract(ap3, ap1->bit_offset, ap1->bit_width);
 			GenerateTriadic(op, 0, ap4, ap4, ap2);
-			cg.GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
+			cg.GenerateBitfieldInsert(ap3, ap4, ap1->bit_offset, ap1->bit_width);
 			GenStore(ap3, ap1, ssize);
+			ReleaseTempReg(ap4);
 		}
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
-		ReleaseTempReg(ap4);
 		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
@@ -1717,7 +1844,7 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 		return (ap1);
 	}
 	else {
-		GenMemop(op, ap1, ap2, ssize);
+		GenMemop(op, ap1, ap2, ssize, etype);
 	}
 	ReleaseTempReg(ap2);
 	//if (ap1->type != stddouble.GetIndex() && !ap1->isUnsigned)
@@ -1726,7 +1853,7 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 	return (ap1);
 }
 
-Operand *ENODE::GenAssignLogic(int flags, int size, int op)
+Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
 	int ssize;
@@ -1736,17 +1863,7 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 	if (ssize > size)
 		size = ssize;
 	if (p[0]->IsBitfield()) {
-		ap3 = GetTempRegister();
-		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
-		GenerateDiadic(op_mov, 0, ap3, ap1);
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
-		GenerateTriadic(op, 0, ap1, ap1, ap2);
-		cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
-		GenStore(ap3, ap1->next, ssize);
-		ReleaseTempReg(ap2);
-		ReleaseTempReg(ap1->next);
-		ReleaseTempReg(ap1);
-		ap3->MakeLegal( flags, size);
+		ap3 = GenerateBitfieldAssignLogic(flags, size, op);
 		return (ap3);
 	}
 	ap1 = cg.GenerateExpression(p[0], am_all & ~am_fpreg, ssize);
@@ -1761,7 +1878,7 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 		mr->isConst = ap1->isConst && ap2->isConst;
 	}
 	else {
-		GenMemop(op, ap1, ap2, ssize);
+		GenMemop(op, ap1, ap2, ssize, etype);
 	}
 	ReleaseTempRegister(ap2);
 	if (!ap1->isUnsigned && !(flags & am_novalue)) {
@@ -1771,13 +1888,13 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 			}
 			switch (ssize) {
 			case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
-			case 2:	GenerateDiadic(op_sxc, 0, ap1, ap1); break;
-			case 4:	GenerateDiadic(op_sxh, 0, ap1, ap1); break;
+			case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
+			case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
 			}
 			ap1->MakeLegal( flags, size);
 			return (ap1);
 		}
-		ap1 = ap1->GenSignExtend(ssize, size, flags);
+		ap1 = ap1->GenerateSignExtend(ssize, size, flags);
 	}
 	ap1->MakeLegal( flags, size);
 	return (ap1);
@@ -1789,56 +1906,27 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	int lab0, lab1;
 	OCODE* ip;
 
-	if (safe) {
-		lab0 = nextlabel++;
-		//ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, p[0]->GetNaturalSize());
-		ap4 = GetTempRegister();
-		//if (op == op_and) {
-		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), MakeDataLabel(lab0));
-		//	ap2 = cg.GenerateExpression(p[1], am_reg, 8);
-		//}
-		if (!ap1->isBool)
-			GenRedor(ap4, ap1);
-		else {
-			ReleaseTempReg(ap4);
-			ap4 = ap1;
-		}
-		ap2 = cg.GenerateExpression(p[1], am_reg, p[1]->GetNaturalSize());
-		ap5 = GetTempRegister();
-		if (!ap2->isBool)
-			GenRedor(ap5, ap2);
-		else {
-			ReleaseTempReg(ap5);
-			ap5 = ap2;
-		}
-		ip = currentFn->pl.tail;
-		ip->insn2 = Instruction::Get(op);
-		//GenerateTriadic(op, 0, ap3, ap4, ap5);
-		ReleaseTempReg(ap5);
-//		if (ap5 != ap2)
-//			ReleaseTempReg(ap2);
-		if (ap4 != ap1)
-			ReleaseTempReg(ap4);
-		ReleaseTempReg(ap1);
-		ap3->MakeLegal(flags, 8);
-		ap3->isBool = true;
-		return (ap2);
-	}
+	if (safe)
+		return (cg.GenerateSafeLand(this, flags, op));
 	lab0 = nextlabel++;
 	lab1 = nextlabel++;
 	ap1 = GetTempRegister();
+	ap2 = cg.GenerateExpression(this, flags, sizeOfWord);
+	ap1 = cg.MakeBoolean(ap2);
+	ReleaseTempReg(ap2);
+	/*
 	GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(1));
 	cg.GenerateFalseJump(this, lab0, 0);
 	GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(0));
 	GenerateLabel(lab0);
+	*/
 	ap1->MakeLegal(flags, 8);
 	ap1->isBool = true;
 	return (ap1);
 }
 
 // return the natural evaluation size of a node.
-
+/* Dead Code
 int GetNaturalSize(ENODE *node)
 { 
 	int siz0, siz1;
@@ -1865,11 +1953,13 @@ int GetNaturalSize(ENODE *node)
 	case en_cbw: case en_cubw:
 	case en_ccw: case en_cucw:
 	case en_chw: case en_cuhw:
-	case en_cbu: case en_ccu: case en_chu:
+	case en_cbu: case en_chu:
 	case en_cubu: case en_cucu: case en_cuhu:
 	case en_ccwp: case en_cucwp:
 	case en_sxb:	case en_sxc:	case en_sxh:
 		return (sizeOfWord);
+	case en_ccu:
+		return (2);
 	case en_fcall:
 	case en_regvar:
 	case en_fpregvar:
@@ -1892,7 +1982,7 @@ int GetNaturalSize(ENODE *node)
 		return (8);
 	case en_not:    case en_compl:
 	case en_uminus: case en_assign:
-		return GetNaturalSize(node->p[0]);
+		return node->p[0]->GetNaturalSize();
 	case en_fadd:	case en_fsub:
 	case en_fmul:	case en_fdiv:
 	case en_fsadd:	case en_fssub:
@@ -1926,16 +2016,16 @@ int GetNaturalSize(ENODE *node)
 	case en_asmod:  case en_asmodu: case en_asand:
 	case en_asor:   case en_asxor:	case en_aslsh:
 	case en_asrsh:
-		siz0 = GetNaturalSize(node->p[0]);
-		siz1 = GetNaturalSize(node->p[1]);
+		siz0 = node->p[0]->GetNaturalSize();
+		siz1 = node->p[1]->GetNaturalSize();
 		if( siz1 > siz0 )
 			return (siz1);
 		else
 			return (siz0);
 	case en_void:   case en_cond:	case en_safe_cond:
-		return (GetNaturalSize(node->p[1]));
+		return (node->p[1]->GetNaturalSize());
 	case en_bchk:
-		return (GetNaturalSize(node->p[0]));
+		return (node->p[0]->GetNaturalSize());
 	case en_chk:
 		return 8;
 	case en_q2i:
@@ -1951,7 +2041,7 @@ int GetNaturalSize(ENODE *node)
 	case en_t2q:
 		return (sizeOfFPQ);
 	case en_object_list:
-		return (GetNaturalSize(node->p[0]));
+		return (node->p[0]->GetNaturalSize());
 	case en_addrof:
 		return (sizeOfPtr);
 	default:
@@ -1960,19 +2050,22 @@ int GetNaturalSize(ENODE *node)
 	}
 	return (0);
 }
-
+*/
 
 
 void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt)
 {
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
+	Posit16 pos16;
+	Posit32 pos32;
 
 	// Used only by lea for subtract
 	if (isNeg)
 		ofs.write("-");
 	switch (nodetype)
 	{
+	case en_autopcon:
 	case en_autofcon:
 		sprintf_s(buf, sizeof(buf), "%lld", i);
 		ofs.write(buf);
@@ -1982,6 +2075,18 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 			goto j1;
 		// The following spits out a warning, but is okay.
 		sprintf_s(buf, sizeof(buf), "0x%llx", f);
+		ofs.write(buf);
+		break;
+	case en_pcon:
+		//if (!opt)
+		//	goto j1;
+		switch (tp->precision) {
+		case 16:	pos16 = posit.ConvertTo16();  sprintf_s(buf, sizeof(buf), "0x%04x", pos16.val); break;
+		case 32:	pos32 = posit.ConvertTo32();  sprintf_s(buf, sizeof(buf), "0x%08x", pos32.val); break;
+		default:
+			// The following spits out a warning, but is okay.
+			sprintf_s(buf, sizeof(buf), "0x%I64x", posit.val);
+		}
 		ofs.write(buf);
 		break;
 	case en_autovcon:
@@ -2085,6 +2190,7 @@ ENODE *ENODE::GetConstantHex(std::ifstream& ifs)
 	buf[2] = '\0';
 	ep->nodetype = (e_node)strtol(buf, nullptr, 16);
 	switch (ep->nodetype) {
+	case en_autopcon:
 	case en_autofcon:
 		ifs.read(buf, 8);
 		buf[8] = '\0';
@@ -2113,10 +2219,12 @@ void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int r
 	ofs.printf("N%02X", nodetype);
 	switch (nodetype)
 	{
+	case en_autopcon:
 	case en_autofcon:
-		sprintf_s(buf, sizeof(buf), "%08LLX", i);
+		sprintf_s(buf, sizeof(buf), "%08I64X", i);
 		ofs.write(buf);
 		break;
+	case en_pcon:
 	case en_fcon:
 		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
 		ofs.write(buf);
@@ -2259,6 +2367,7 @@ int ENODE::PutStructConst(txtoStream& ofs)
 	ENODE *ep1;
 	ENODE *ep = this;
 	bool isStruct;
+	bool isArray;
 
 	if (ep == nullptr)
 		return (0);
@@ -2266,6 +2375,9 @@ int ENODE::PutStructConst(txtoStream& ofs)
 		return (0);
 
 	isStruct = ep->tp->IsStructType();
+	isArray = ep->tp->type == bt_array;
+	if (isArray)
+		ofs.printf("\talign %ld\n", (int)ep->p[0]->p[2]->tp->walignment());
 	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
 		if (ep1->nodetype == en_aggregate) {
 			k = ep1->PutStructConst(ofs);
@@ -2278,22 +2390,24 @@ int ENODE::PutStructConst(txtoStream& ofs)
 				}
 				k = ep1->tp->struct_offset + ep1->esize;
 			}
+			else if (isArray)
+				k = ep1->tp->struct_offset + ep1->esize;
 			else
 				k = ep1->esize;
 			switch (ep1->esize) {
-			case 1:	ofs.printf("db\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 2:	ofs.printf("dc\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 4:	ofs.printf("dh\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 8:	ofs.printf("dw\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 1:	ofs.printf("\tdcb\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 2:	ofs.printf("\tdcw\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 4:	ofs.printf("\tdct\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			case 8:	ofs.printf("\tdco\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
 			default:
-				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
-				ofs.printf("db\t");
+				ofs.printf("\tfill.b %ld,0x00\n", ep1->esize - 1);
+				ofs.printf("\tdcb\t");
 				ep1->PutConstant(ofs, 0, 0, true);
 				ofs.printf("\n");
 				break;
 			}
 		}
-		if (isStruct)
+		if (isStruct|isArray)
 			n = k;
 		else
 			n = n + k;
@@ -2353,4 +2467,20 @@ void ENODE::Dump()
 	p[1]->Dump();
 	p[2]->Dump();
 	level--;
+}
+
+void ENODE::CountSegments()
+{
+	if (this) {
+		segcount[segment]++;
+		if (p[0])	p[0]->CountSegments();
+		if (p[1])	p[1]->CountSegments();
+		if (p[2])	p[2]->CountSegments();
+		if (p[3])	p[3]->CountSegments();
+	}
+}
+
+void ENODE::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width)
+{
+	cg.GenerateBitfieldInsert(ap1, ap2, offset, width);
 }

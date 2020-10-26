@@ -85,10 +85,9 @@ entity xbusTransmitter is
       aRst_n : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
       
       -- Video in
-      vid_pData : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
-      vid_pVDE : in std_logic;
-      vid_pHSync : in std_logic;
-      vid_pVSync : in std_logic;
+      dat_i : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
+      sync_i : in std_logic;
+      de_i : in std_logic;
       PixelClk : in std_logic; --pixel-clock recovered from the DVI interface
       
       SerialClk : in std_logic); -- 5x PixelClk
@@ -189,13 +188,13 @@ end generate DataEncoders;
 -- DVI Output conform DVI 1.0
 -- except that it sends blank pixel during blanking
 -- for some reason vid_data is packed in RBG order
-pDataOut(0) <= vid_pData((kParallelWidth-2)*1-1 downto 0); -- green is channel 1
-pDataOut(1) <= vid_pData((kParallelWidth-2)*2-1 downto kParallelWidth-2); -- blue is channel 0
-pDataOut(2) <= vid_pData((kParallelWidth-2)*3-1 downto (kParallelWidth-2)*2); -- red is channel 2
+pDataOut(0) <= dat_i((kParallelWidth-2)*1-1 downto 0); -- green is channel 1
+pDataOut(1) <= dat_i((kParallelWidth-2)*2-1 downto kParallelWidth-2); -- blue is channel 0
+pDataOut(2) <= dat_i((kParallelWidth-2)*3-1 downto (kParallelWidth-2)*2); -- red is channel 2
 pC0(2 downto 1) <= (others => '0'); -- default is low for control signals
 pC1(2 downto 1) <= (others => '0'); -- default is low for control signals
-pC0(0) <= vid_pHSync; -- channel 0 carries control signals too
-pC1(0) <= vid_pVSync; -- channel 0 carries control signals too
-pVde <= vid_pVDE & vid_pVDE & vid_pVDE; -- all of them are either active or blanking at once
+pC0(0) <= sync_i; -- channel 0 carries control signals too
+pC1(0) <= '0'; -- channel 0 carries control signals too
+pVde <= de_i & de_i & de_i; -- all of them are either active or blanking at once
 
 end Behavioral;

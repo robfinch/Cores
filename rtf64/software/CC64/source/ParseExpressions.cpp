@@ -31,7 +31,6 @@ extern SYM *currentClass;
 extern int defaultcc;
 static unsigned char sizeof_flag = 0;
 extern void backup();
-extern char *inpline;
 extern int parsingParameterList;
 extern SYM *gsearch2(std::string , __int16, TypeArray *,bool);
 extern SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray);
@@ -48,6 +47,7 @@ int laststrlen;
 //static unsigned char expr_flag = 0;
 
 TYP				stdvoid;
+TYP stdbit;
 TYP             stdint;
 TYP             stduint;
 TYP             stdlong;
@@ -68,6 +68,9 @@ TYP				stdtriple;
 TYP				stdflt;
 TYP				stddouble;
 TYP				stdquad;
+TYP				stdposit;
+TYP				stdposit32;
+TYP				stdposit16;
 TYP             stdfunc;
 TYP             stdexception;
 extern TYP      *head;          /* shared with ParseSpecifier */
@@ -223,24 +226,6 @@ ENODE *makeinode(int nt, int64_t v1)
     return ep;
 }
 
-ENODE *makefnode(int nt, double v1)
-{
-	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
-	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
-	ep->esize = -1;
-	ep->f = v1;
-  ep->f1 = v1;
-//    ep->f2 = v2;
-	ep->p[0] = 0;
-	ep->p[1] = 0;
-	ep->p[2] = 0;
-  return ep;
-}
-
 ENODE *makefqnode(int nt, Float128 *f128)
 {
 	ENODE *ep;
@@ -248,7 +233,7 @@ ENODE *makefqnode(int nt, Float128 *f128)
   ep->nodetype = (enum e_node)nt;
   ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
+	ep->etype = bt_quad;
 	ep->esize = -1;
   Float128::Assign(&ep->f128,f128);
 //    ep->f2 = v2;
@@ -288,23 +273,6 @@ char *GetStrConst()
 	return (str);
 }
 
-void AddToList(ENODE *list, ENODE *ele)
-{
-	ENODE *p, *pp;
-
-	p = list;
-	pp = nullptr;
-	while (p) {
-		pp = p;
-		p = p->p[2];
-	}
-	if (pp) {
-		pp->p[2] = ele;
-	}
-	else
-		list->p[2] = ele;
-}
-
 bool IsMemberOperator(int op)
 {
   return op==dot || op==pointsto || op==double_colon;
@@ -341,11 +309,118 @@ void PromoteConstFlag(ENODE *ep)
 	ep->constflag = ep->p[0]->constflag && ep->p[1]->constflag;
 }
 
+void Expression::SetRefType(ENODE** node)
+{
+	int64_t sz = (*node)->esize;
+
+	if ((*node)->bit_offset != nullptr) {
+		ENODE* pnode, * qnode;
+		pnode = (*node)->bit_offset;
+		qnode = (*node)->bit_width;
+		sz = (*node)->esize;
+		*node = makenode(en_fieldref, *node, (ENODE*)NULL);
+		(*node)->bit_offset = pnode;
+		(*node)->bit_width = qnode;
+	}
+	else
+		*node = makenode(en_ref, *node, (ENODE*)NULL);
+	(*node)->esize = sz;
+}
+
+void Expression::DerefBit(ENODE** node, TYP* tp, SYM* sp)
+{
+	ENODE* pnode;
+	*node = makenode(en_fieldref, *node, (ENODE*)NULL);
+	if (tp->isUnsigned)
+		(*node)->isUnsigned = true;
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stdbit;//&stduint;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+	pnode = makenode(en_sub, tp->bit_width, makeinode(en_icon, 1));
+	(*node)->bit_width = pnode;
+	(*node)->bit_offset = tp->bit_offset;
+}
+
+void Expression::DerefByte(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	if (tp->isUnsigned)
+		(*node)->isUnsigned = true;
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	if (tp->isUnsigned)
+		tp = &stdubyte;//&stduint;
+	else
+		tp = &stdbyte;//&stdint;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	(*node)->isUnsigned = TRUE;
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stdubyte;//&stduint;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefFloat(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stdflt;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefBitfield(ENODE** node, TYP* tp, SYM* sp)
+{
+	*node = makenode(en_fieldref, *node, (ENODE*)NULL);
+	if (tp->isUnsigned)
+		(*node)->isUnsigned = true;
+	(*node)->bit_width = tp->bit_width;
+	(*node)->bit_offset = tp->bit_offset;
+	
+	// maybe it should be 'unsigned'
+	
+	(*node)->etype = tp->type;//(enum e_bt)stdint.type;
+	(*node)->esize = tp->size;
+	tp = &stdint;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefDouble(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stddouble;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
+void Expression::DerefPosit(ENODE** node, TYP* tp, SYM* sp)
+{
+	SetRefType(node);
+	(*node)->esize = tp->size;
+	(*node)->etype = (enum e_bt)tp->type;
+	tp = &stdposit;
+	(*node)->sym = sp;
+	(*node)->tp = tp;
+}
+
 //
 // Build the proper dereference operation for a node using the
 // type pointer tp.
 //
-TYP *deref(ENODE **node, TYP *tp)
+TYP* Expression::deref(ENODE **node, TYP *tp)
 {
 	SYM *sp;
 
@@ -354,59 +429,42 @@ TYP *deref(ENODE **node, TYP *tp)
     throw new C64PException(ERR_NULLPOINTER,8);
 	sp = (*node)->sym;
 	switch(tp->type) {
+
+	case bt_bit:
+		DerefBit(node, tp, sp);
+		break;
+
 	case bt_byte:
+		DerefByte(node, tp, sp);
+    break;
+
+	case bt_ubyte:
+		DerefUnsignedByte(node, tp, sp);
+		break;
+
+	case bt_ichar:
+	case bt_iuchar:
+		SetRefType(node);
 		if (tp->isUnsigned) {
-			*node = makenode(en_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
-		}
-		else {
-			*node = makenode(en_ref,*node,(ENODE *)NULL);
 		}
 		(*node)->esize = tp->size;
 		(*node)->etype = (enum e_bt)tp->type;
 		if (tp->isUnsigned)
-	          tp = &stdubyte;//&stduint;
+			tp = &stdiuchar;
 		else
-	          tp = &stdbyte;//&stdint;
+			tp = &stdichar;
 		(*node)->sym = sp;
 		(*node)->tp = tp;
-    break;
+		break;
 
-		case bt_ubyte:
-			*node = makenode(en_ref,*node,(ENODE *)NULL);
-			(*node)->isUnsigned = TRUE;
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-            tp = &stdubyte;//&stduint;
-						(*node)->sym = sp;
-						(*node)->tp = tp;
-						break;
-		case bt_ichar:
-		case bt_iuchar:
-			if (tp->isUnsigned) {
-				*node = makenode(en_ref, *node, (ENODE *)NULL);
-				(*node)->isUnsigned = TRUE;
-			}
-			else
-				*node = makenode(en_ref, *node, (ENODE *)NULL);
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-			if (tp->isUnsigned)
-				tp = &stdiuchar;
-			else
-				tp = &stdichar;
-			(*node)->sym = sp;
-			(*node)->tp = tp;
-			break;
 		case bt_uchar:
 		case bt_char:
         case bt_enum:
-			if (tp->isUnsigned) {
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
+					SetRefType(node);
+					if (tp->isUnsigned) {
 				(*node)->isUnsigned = TRUE;
 			}
-			else
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
 			//(*node)->esize = sizeOfPtr;
 			//(*node)->etype = bt_pointer;
 			//(*node)->tp = TYP::Make(bt_pointer, sizeOfPtr);
@@ -427,14 +485,14 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_ushort:
 		case bt_short:
 			if (tp->isUnsigned) {
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
+				SetRefType(node);
 				(*node)->esize = tp->size;
 				(*node)->etype = (enum e_bt)tp->type;
 				(*node)->isUnsigned = TRUE;
 				tp = &stdushort;
 			}
 			else {
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
+				SetRefType(node);
 				(*node)->esize = tp->size;
 				(*node)->etype = (enum e_bt)tp->type;
 				(*node)->isUnsigned = FALSE;
@@ -448,7 +506,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
 			(*node)->isUnsigned = TRUE;
-			*node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->sym = sp;
 			(*node)->tp = tp;
 			break;
@@ -457,12 +515,9 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_long:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
+			SetRefType(node);
 			if (tp->isUnsigned) {
 				(*node)->isUnsigned = TRUE;
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
-			}
-			else {
-				*node = makenode(en_ref,*node,(ENODE *)NULL);
 			}
 			(*node)->sym = sp;
 			(*node)->tp = tp;
@@ -471,7 +526,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_vector:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-      *node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			(*node)->tp = tp;
@@ -480,7 +535,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_vector_mask:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-      *node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->isUnsigned = TRUE;
 			(*node)->vmask = (*node)->p[0]->vmask;
 			(*node)->sym = sp;
@@ -492,7 +547,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_pointer:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-			*node = makenode(en_ref, *node, (ENODE *)NULL);
+			SetRefType(node);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			(*node)->tp = tp;
@@ -501,14 +556,14 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-      *node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			(*node)->tp = tp;
 			break;
 
     case bt_triple:
-            *node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdtriple;
@@ -516,47 +571,28 @@ TYP *deref(ENODE **node, TYP *tp)
 						(*node)->tp = tp;
 						break;
 		case bt_quad:
-            *node = makenode(en_ref,*node,(ENODE *)NULL);
+			SetRefType(node);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdquad;
 						(*node)->sym = sp;
 						(*node)->tp = tp;
 						break;
-        case bt_double:
-            *node = makenode(en_ref,*node,(ENODE *)NULL);
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-            tp = &stddouble;
-						(*node)->sym = sp;
-						(*node)->tp = tp;
-						break;
-        case bt_float:
-            *node = makenode(en_ref,*node,(ENODE *)NULL);
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-            tp = &stdflt;
-						(*node)->sym = sp;
-						(*node)->tp = tp;
-						break;
+
+    case bt_double:
+			DerefDouble(node, tp, sp);
+			break;
+
+    case bt_float:
+			DerefFloat(node, tp, sp);
+			break;
+
+		case bt_posit:
+			DerefPosit(node, tp, sp);
+			break;
+
 		case bt_bitfield:
-			if (tp->isUnsigned){
-				*node = makenode(en_fieldref, *node, (ENODE *)NULL);
-				(*node)->isUnsigned = TRUE;
-			}
-			else {
-				*node = makenode(en_fieldref, *node, (ENODE *)NULL);
-			}
-			(*node)->bit_width = tp->bit_width;
-			(*node)->bit_offset = tp->bit_offset;
-			/*
-			* maybe it should be 'unsigned'
-			*/
-			(*node)->etype = tp->type;//(enum e_bt)stdint.type;
-			(*node)->esize = tp->size;
-			tp = &stdint;
-			(*node)->sym = sp;
-			(*node)->tp = tp;
+			DerefBitfield(node, tp, sp);
 			break;
 		//case bt_func:
 		//case bt_ifunc:
@@ -582,7 +618,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_void:
 			(*node)->esize = 0;
 			(*node)->etype = (enum e_bt)tp->type;
-			*node = makenode(en_ref, *node, (ENODE *)NULL);
+			SetRefType(node);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			(*node)->tp = tp;
@@ -596,11 +632,11 @@ TYP *deref(ENODE **node, TYP *tp)
 			break;
     }
 	(*node)->isVolatile = tp->isVolatile;
-	(*node)->constflag = tp->isConst;
+	//(*node)->constflag = tp->isConst;
 	(*node)->sym = sp;
 	(*node)->tp = tp;
 	dfs.printf("</Deref>");
-    return tp;
+  return (tp);
 }
 
 /*
@@ -609,7 +645,7 @@ TYP *deref(ENODE **node, TYP *tp)
 * pointer size if this code is not executed on behalf of a sizeof
 * operator
 */
-TYP *CondDeref(ENODE **node, TYP *tp)
+TYP *Expression::CondDeref(ENODE **node, TYP *tp)
 {
 	TYP *tp1;
 	int64_t sz;
@@ -665,12 +701,11 @@ TYP *CondDeref(ENODE **node, TYP *tp)
  *      is coerced to an external function name. non-value references
  *      generate an additional level of indirection.
  */
-TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typearray, TABLE *tbl)
+TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typearray, TABLE *tbl)
 {
 	SYM *sp = nullptr;
 	Function *fn;
 	TYP *tp;
-	int typ;
 	std::string stnm;
 
 	dfs.puts("<nameref2>\n");
@@ -730,26 +765,15 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 	if( sp == NULL ) {
 		while( my_isspace(lastch) )
 			getch();
-		if( lastch == '(') {
-			sp = allocSYM();
-			sp->fi = allocFunction(sp->id);
-			sp->fi->sym = sp;
-			sp->fi->IsPascal = defaultcc == 1;
-			sp->tp = &stdfunc;
-			sp->SetName(*(new std::string(lastid)));
-			sp->storage_class = sc_external;
-			sp->IsUndefined = TRUE;
-			dfs.printf("Insert at nameref\r\n");
-			typearray->Print();
-			//    gsyms[0].insert(sp);
-			tp = &stdfunc;
-			*node = makesnode(en_cnacon,sp->name, sp->BuildSignature(1),sp->value.i);
-			(*node)->constflag = TRUE;
-			(*node)->sym = sp;
-			if (sp->tp->isUnsigned)
-				(*node)->isUnsigned = TRUE;
-			(*node)->esize = 8;
-			(*node)->isPascal = sp->fi->IsPascal;
+		if (lastch == '(') {
+			ENODE* args;
+			std::string nm(lastid);//???
+			NextToken();
+			NextToken();
+			args = ParseArgumentList(nullptr, typearray);
+			*node = MakeUnknownFunctionNameNode(name, &tp, typearray, args);
+			sp = (*node)->sym;
+			nt = false;
 		}
 		else {
 			dfs.printf("Undefined symbol2 in nameref\r\n");
@@ -759,6 +783,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 		}
 	}
 	else {
+j1:
 		dfs.printf("sp is not null\n");
 		typearray->Print();
 		if( (tp = sp->tp) == NULL ) {
@@ -766,122 +791,37 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			goto xit;            // guard against untyped entries
 		}
 		switch( sp->storage_class ) {
+
 		case sc_static:
-			if (sp->tp->type==bt_func || sp->tp->type==bt_ifunc) {
-				//strcpy(stnm,GetNamespace());
-				//strcat(stnm,"_");
-				stnm = "";
-				stnm += *sp->name;
-				*node = makesnode(en_cnacon,new std::string(stnm), sp->fi->BuildSignature(),sp->value.i);
-				(*node)->isPascal = sp->fi->IsPascal;
-				(*node)->constflag = TRUE;
-				(*node)->esize = 8;
-				//*node = makesnode(en_nacon,sp->name);
-				//(*node)->constflag = TRUE;
-			}
-			else {
-				*node = makeinode(en_labcon,sp->value.i);
-				(*node)->constflag = TRUE;
-				(*node)->esize = sp->tp->size;//8;
-				(*node)->segment = dataseg;
-			}
-			if (sp->tp->isUnsigned) {
-				(*node)->isUnsigned = TRUE;
-				(*node)->esize = sp->tp->size;
-			}
-			(*node)->etype = bt_pointer;//sp->tp->type;
+			*node = MakeStaticNameNode(sp);
 			break;
 
 		case sc_thread:
-			*node = makeinode(en_labcon,sp->value.i);
-			(*node)->segment = tlsseg;
-			(*node)->constflag = TRUE;
-			(*node)->esize = sp->tp->size;
-			(*node)->etype = bt_pointer;//sp->tp->type;
-			if (sp->tp->isUnsigned)
-				(*node)->isUnsigned = TRUE;
+			*node = MakeThreadNameNode(sp);
 			break;
 
 		case sc_global:
+			*node = MakeGlobalNameNode(sp);
+			break;
+
 		case sc_external:
-			if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
-				*node = makesnode(en_cnacon, sp->name, sp->mangledName, sp->value.i);
-				(*node)->isPascal = sp->fi->IsPascal;
-			}
-			else
-				*node = makesnode(en_nacon,sp->name,sp->mangledName,sp->value.i);
-			(*node)->constflag = TRUE;
-			(*node)->esize = sp->tp->size;
-			(*node)->etype = bt_pointer;//sp->tp->type;
-			(*node)->isUnsigned = TRUE;// sp->tp->isUnsigned;
+			*node = MakeExternNameNode(sp);
 			break;
 
 		case sc_const:
-			if (sp->tp->type==bt_quad)
-				*node = makefqnode(en_fqcon,&sp->f128);
-			else if (sp->tp->type==bt_float || sp->tp->type==bt_double || sp->tp->type==bt_triple)
-				*node = makefnode(en_fcon,sp->value.f);
-			else {
-				*node = makeinode(en_icon,sp->value.i);
-				if (sp->tp->isUnsigned)
-				(*node)->isUnsigned = TRUE;
-			}
-			(*node)->constflag = TRUE;
-			(*node)->esize = sp->tp->size;
+			*node = MakeConstNameNode(sp);
+			break;
+
+		case sc_member:
+			*node = MakeMemberNameNode(sp);
+			break;
+
+		case sc_auto:
+			*node = MakeAutoNameNode(sp);
 			break;
 
 		default:        /* auto and any errors */
-			if (sp->storage_class == sc_member) {	// will get this for a class member
-				// If it's a member we need to pass r25 the class pointer on
-				// the stack.
-				isMember = true;
-				if ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc) 
-				||(sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type == bt_func ||sp->tp->GetBtp()->type == bt_ifunc)))
-				{
-					*node = makesnode(en_cnacon,sp->name, sp->fi->BuildSignature(),25);
-					(*node)->isPascal = sp->fi->IsPascal;
-				}
-				else {
-					*node = makeinode(en_classcon,sp->value.i);
-				}
-				if (sp->tp->isUnsigned || sp->tp->type==bt_pointer)
-					(*node)->isUnsigned = TRUE;
-			}
-			else {
-				if( sp->storage_class != sc_auto) {
-					error(ERR_ILLCLASS);
-				}
-				//sc_member
-				if (sp->tp->IsVectorType())
-					*node = makeinode(en_autovcon,sp->value.i);
-				else if (sp->tp->type==bt_vector_mask)
-					*node = makeinode(en_autovmcon,sp->value.i);
-				else if (sp->tp->IsFloatType())
-					*node = makeinode(en_autofcon,sp->value.i);
-				else {
-					*node = makeinode(en_autocon,sp->value.i);
-					if (sp->tp->isUnsigned)
-						(*node)->isUnsigned = TRUE;
-				}
-				if (sp->IsRegister) {
-					if (sp->tp->IsFloatType())
-						(*node)->nodetype = en_fpregvar;
-					else
-						(*node)->nodetype = en_regvar;
-					//(*node)->i = sp->reg;
-					(*node)->rg = sp->reg;
-					(*node)->tp = sp->tp;
-					//(*node)->tp->val_flag = TRUE;
-				}
-			}
-			(*node)->esize = sp->tp->size;
-			switch((*node)->nodetype) {
-			case en_regvar:		(*node)->etype = bt_long;	break;//sp->tp->type;
-			case en_fpregvar:	(*node)->etype = sp->tp->type;	break;//sp->tp->type;
-			default:			(*node)->etype = bt_pointer;break;//sp->tp->type;
-			}
-			//(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
-			break;
+			error(ERR_ILLCLASS);
 		}
 		(*node)->SetType(sp->tp);
 		(*node)->sym = sp;
@@ -905,12 +845,10 @@ xit:
 	return (tp);
 }
 
-TYP *nameref(ENODE **node,int nt)
+TYP *Expression::nameref(ENODE **node,int nt)
 {
 	TYP *tp;
 	std::string str;
-	Function *fn;
-	SYM *sym;
 
 	dfs.puts("<Nameref>");
 	dfs.printf("GSearchfor:%s|",lastid);
@@ -957,34 +895,39 @@ ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 		ep1 = makenode(en_void,hidden,ep1);
 	}
 	typearray->Clear();
-	while( lastst != closepa)
-	{
-		typ = ParseNonCommaExpression(&ep2);          // evaluate a parameter
-		if (typ)
-			dfs.printf("%03d ", typ->typeno);
-		else
-			dfs.printf("%03d ", 0);
-		if (ep2==nullptr)
-			ep2 = makeinode(en_icon, 0);
-		if (typ==nullptr) {
-			error(ERR_BADARG);
-			typearray->Add((int)bt_long,0);
-		}
-		else {
-			// If a function pointer is passed, we want a pointer type
-			if (typ->typeno==bt_func || typ->typeno == bt_ifunc)
-				typearray->Add((int)bt_pointer,0);
+	if (lastst != closepa) {
+		while (1)
+		{
+			typ = ParseNonCommaExpression(&ep2);          // evaluate a parameter
+			if (typ)
+				dfs.printf("%03d ", typ->typeno);
 			else
-				typearray->Add(typ,0);
+				dfs.printf("%03d ", 0);
+			if (ep2 == nullptr) {
+				ep2 = makeinode(en_icon, 0);
+				ep2->etype = bt_none;
+			}
+			if (typ == nullptr) {
+				//error(ERR_BADARG);
+				typearray->Add((int)bt_none, 0);
+			}
+			else {
+				// If a function pointer is passed, we want a pointer type
+				if (typ->typeno == bt_func || typ->typeno == bt_ifunc)
+					typearray->Add((int)bt_pointer, 0);
+				else
+					typearray->Add(typ, 0);
+			}
+			ep1 = makenode(en_void, ep2, ep1);
+			if (lastst != comma) {
+				dfs.printf("lastst=%d", lastst);
+				break;
+			}
+			NextToken();
 		}
-		ep1 = makenode(en_void,ep2,ep1);
-		if(lastst != comma) {
-			dfs.printf("lastst=%d", lastst);
-			break;
-		}
-		NextToken();
 	}
-	NextToken();
+	if (lastst==closepa)
+		NextToken();
 	dfs.printf("</ArgumentList>\n");
 	return ep1;
 }
@@ -1113,30 +1056,6 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 }
 
 // ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-
-ENODE *Sub1(TYP *tptr, int64_t val)
-{
-	ENODE *pnode;
-
-	tptr->isConst = TRUE;
-	pnode = makeinode(en_icon, val);
-	pnode->constflag = TRUE;
-	if (val >= -128 && ival < 128)
-		pnode->esize = 1;
-	else if (val >= -32768 && val < 32768)
-		pnode->esize = 2;
-	else if (val >= -2147483648LL && val < 2147483648LL)
-		pnode->esize = 4;
-	else if (val >= -54975581300LL && val < 54975581300LL)
-		pnode->esize = 5;
-	else
-		pnode->esize = 2;
-	pnode->SetType(tptr);
-	return (pnode);
-}
-
-// ----------------------------------------------------------------------------
 //      primary will parse a primary expression and set the node pointer
 //      returning the type of the expression parsed. primary expressions
 //      are any of:
@@ -1145,6 +1064,7 @@ ENODE *Sub1(TYP *tptr, int64_t val)
 //                      string
 //                      ( expression )
 //                      this
+//                      { aggregate }
 // ----------------------------------------------------------------------------
 TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
 {
@@ -1172,315 +1092,72 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
     return (tptr);
   }
   switch( lastst ) {
+
 	case ellipsis:
   case id:
-    tptr = nameref(&pnode,TRUE);
-		// Convert a reference to a constant to a constant. Need this for
-		// GetIntegerExpression().
-		if (pnode->IsRefType()) {
-			if (pnode->p[0]->nodetype == en_icon) {
-				pnode = Sub1(tptr, pnode->p[0]->i);
-			}
-			//else if (pnode->p[0]->nodetype == en_fcon) {
-			//	rval = pnode->p[0]->f;
-			//	rval128 = pnode->p[0]->f128;
-			//	goto j2;
-			//}
-		}
-				//pnode->p[3] = (ENODE *)tptr->size;
-//				if (pnode->nodetype==en_nacon)
-//					pnode->p[0] = makenode(en_list,tptr->BuildEnodeTree(),nullptr);
-		//else if (sp = gsyms->Find(lastid, false)) {
-		//	if (TABLE::matchno > 1) {
-		//		for (i = 0; i < TABLE::matchno) {
-		//			sp = TABLE::match[i];
-		//		}
-		//	}
-		//	if (sp->tp == &stdconst) {
-		//		ival = sp->value.i;
-		//		lastst = iconst;
-		//		return;
-		//	}
-		//}
-
-/*
-		// Try and find the symbol, if not found, assume a function
-		// but only if it's followed by a (
-		if (TABLE::matchno==0) {
-			while( my_isspace(lastch) )
-				getch();
-			if( lastch == '(') {
-				NextToken();
-				tptr = ExprFunction(nullptr, &pnode);
-			}
-			else {
-				tptr = nameref(&pnode,TRUE);
-			}
-		}
-		else
-*/
-		/*
-		if (tptr==NULL) {
-			tptr = allocTYP();
-			tptr->type = bt_long;
-			tptr->typeno = bt_long;
-			tptr->alignment = 8;
-			tptr->bit_offset = 0;
-			tptr->GetBtp() = nullptr;
-			tptr->isArray = false;
-			tptr->isConst = false;
-			tptr->isIO = false;
-			tptr->isShort = false;
-			tptr->isUnsigned = false;
-			tptr->size = 8;
-			tptr->sname = my_strdup(lastid);
-		}
-		*/
-        break;
-  case cconst:
-    tptr = &stdchar;
-    tptr->isConst = TRUE;
-    pnode = makeinode(en_icon,ival);
-    pnode->constflag = TRUE;
-		pnode->esize = 1;
-    pnode->SetType(tptr);
-    NextToken();
+		pnode = ParseNameRef();
     break;
+
+  case cconst:
+		pnode = ParseCharConst(node);
+    break;
+
   case iconst:
     tptr = &stdint;
-		pnode = Sub1(tptr, ival);
+		pnode = SetIntConstSize(tptr, ival);
+		pnode->SetType(tptr);
     NextToken();
     break;
 
 	case kw_floatmax:
-    tptr = &stdquad;
-    tptr->isConst = TRUE;
-    pnode = makefnode(en_fcon,rval);
-    pnode->constflag = TRUE;
-    pnode->SetType(tptr);
-		pnode->i = quadlit(Float128::FloatMax());
-    NextToken();
+		pnode = ParseFloatMax();
 		break;
 
-    case rconst:
-j2:
-      pnode = makefnode(en_fcon,rval);
-      pnode->constflag = TRUE;
-			pnode->i = quadlit(&rval128);
-			pnode->f128 = rval128;
-			switch(float_precision) {
-			case 'Q': case 'q':
-				tptr = &stdquad;
-				//getch();
-				break;
-			case 'D': case 'd':
-				tptr = &stddouble;
-				//getch();
-				break;
-			case 'T': case 't':
-				tptr = &stdtriple;
-				//getch();
-				break;
-			case 'S': case 's':
-				tptr = &stdflt;
-				//getch();
-				break;
-			default:
-				tptr = &stddouble;
-				break;
-			}
-      pnode->SetType(tptr);
-      tptr->isConst = TRUE;
-      NextToken();
-      break;
+  case rconst:
+		pnode = ParseRealConst(node);
+    break;
+
+	case pconst:
+		pnode = ParsePositConst(node);
+		break;
 
 	case sconst:
-	{
-		char *str;
-
-		str = GetStrConst();
-		if (sizeof_flag) {
-			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(str) + 1;
-			tptr->btp = TYP::Make(bt_char, 2)->GetIndex();// stdchar.GetIndex();
-			tptr->GetBtp()->isConst = TRUE;
-			tptr->val_flag = 1;
-			tptr->isConst = TRUE;
-			tptr->isUnsigned = TRUE;
-		}
-		else {
-			tptr = &stdstring;
-		}
-		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
-		if (sizeof_flag == 0)
-			pnode->i = stringlit(str);
-		free(str);
-		pnode->etype = bt_pointer;
-		pnode->esize = 2;
-		pnode->constflag = TRUE;
-		pnode->segment = rodataseg;
-		pnode->SetType(tptr);
-		tptr->isConst = TRUE;
-	}
-  break;
-	case asconst:
-	{
-		char *str;
-
-		str = GetStrConst();
-		if (sizeof_flag) {
-			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(str) + 1;
-			switch (str[0]) {
-			case 'B':
-				tptr->btp = TYP::Make(bt_byte, 1)->GetIndex();
-				break;
-			case 'C':
-				tptr->btp = TYP::Make(bt_char, 2)->GetIndex();
-				break;
-			case 'H':
-				tptr->btp = TYP::Make(bt_short, 4)->GetIndex();
-				break;
-			case 'W':
-				tptr->btp = TYP::Make(bt_long, 8)->GetIndex();
-				break;
-			}
-			tptr->GetBtp()->isConst = TRUE;
-			tptr->val_flag = 1;
-			tptr->isConst = TRUE;
-			tptr->isUnsigned = TRUE;
-		}
-		else {
-			tptr = &stdastring;
-		}
-		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
-		if (sizeof_flag == 0)
-			pnode->i = stringlit(str);
-		switch (str[0]) {
-		case 'B': pnode->esize = 1; break;
-		case 'W': pnode->esize = 2; break;
-		case 'T': pnode->esize = 4; break;
-		case 'O': pnode->esize = 8; break;
-		}
-		free(str);
-		pnode->etype = bt_pointer;
-		pnode->constflag = TRUE;
-		pnode->segment = rodataseg;
-		pnode->SetType(tptr);
-		tptr->isConst = TRUE;
-	}
-	break;
-	case isconst:
-	{
-		char *str;
-
-		str = GetStrConst();
-		if (sizeof_flag) {
-			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(str) + 1;
-			tptr->btp = TYP::Make(bt_ichar, 2)->GetIndex();// stdchar.GetIndex();
-			tptr->GetBtp()->isConst = TRUE;
-			tptr->val_flag = 1;
-			tptr->isConst = TRUE;
-			tptr->isUnsigned = TRUE;
-		}
-		else {
-			tptr = &stdistring;
-		}
-		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
-		if (sizeof_flag == 0)
-			pnode->i = stringlit(str);
-		free(str);
-		pnode->etype = bt_pointer;
-		pnode->esize = 2;
-		pnode->constflag = TRUE;
-		pnode->segment = rodataseg;
-		pnode->SetType(tptr);
-		tptr->isConst = TRUE;
-	}
-	break;
-
-    case openpa:
-        NextToken();
-
-//        if( !IsBeginningOfTypecast(lastst) ) {
-//		expr_flag = 0;
-        tptr = expression(&pnode);
-        pnode->SetType(tptr);
-        needpunc(closepa,8);
-//        }
-        //else {			/* cast operator */
-        //    ParseSpecifier(0); /* do cast ParseSpecifieraration */
-        //    ParseDeclarationPrefix(FALSE);
-        //    tptr = head;
-        //    needpunc(closepa);
-        //    if( ParseUnaryExpression(&pnode) == NULL ) {
-        //        error(ERR_IDEXPECT);
-        //        tptr = NULL;
-        //    }
-        //}
-        break;
-
-    case kw_this:
-		dfs.puts("<ExprThis>");
-		TYP *tptr2;
-
-		tptr2 = TYP::Make(bt_class,0);
-		if (currentClass==nullptr) {
-			error(ERR_THIS);
-		}
-		else {
-			memcpy(tptr2,currentClass->tp,sizeof(TYP));
-		}
-		NextToken();
-		tptr = TYP::Make(bt_pointer,sizeOfPtr);
-		tptr->btp = tptr2->GetIndex();
-		tptr->isUnsigned = TRUE;
-		dfs.puts((char *)tptr->GetBtp()->sname->c_str());
-		pnode = makeinode(en_regvar,regCLP);
-		dfs.puts("</ExprThis>");
-        break;
-
-	case begin:
-		{
-			int sz = 0;
-			ENODE *list;
-
-			NextToken();
-			head = tail = nullptr;
-			list = makenode(en_list,nullptr,nullptr);
-			while (lastst != end) {
-				tptr = ParseNonCommaExpression(&pnode);
-				pnode->SetType(tptr);
-				//sz = sz + tptr->size;
-				sz = sz + pnode->esize;
-				list->esize = pnode->esize;
-				AddToList(list, pnode);
-				if (lastst!=comma)
-					break;
-				NextToken();
-			}
-			needpunc(end,9);
-			pnode = makenode(en_aggregate,list,nullptr);
-			pnode->SetType(tptr = TYP::Make(bt_struct,sz));
-			pnode->esize = sz;
-			pnode->i = litlist(pnode);
-			list->i = pnode->i;
-		}
+		pnode = ParseStringConst(node);
 		break;
 
-    default:
-        Leave("ParsePrimary", 0);
-        return (TYP *)NULL;
-    }
-	*node = pnode;
-    if (*node)
-       (*node)->SetType(tptr);
-    if (tptr)
-    Leave("ParsePrimary", tptr->type);
-    else
+	case asconst:
+		pnode = ParseStringConstWithSizePrefix(node);
+		break;
+
+	case isconst:
+		pnode = ParseInlineStringConst(node);
+		break;
+
+  case openpa:
+    NextToken();
+    tptr = expression(&pnode);
+    pnode->SetType(tptr);
+    needpunc(closepa,8);
+    break;
+
+  case kw_this:
+		pnode = ParseThis(node);
+    break;
+
+	case begin:
+		pnode = ParseAggregate(node);
+		break;
+
+  default:
     Leave("ParsePrimary", 0);
-    return tptr;
+    return (TYP *)NULL;
+  }
+	*node = pnode;
+  if (pnode->tp)
+  Leave("ParsePrimary", pnode->tp->type);
+  else
+  Leave("ParsePrimary", 0);
+  return (pnode->tp);
 }
 
 //
@@ -1581,7 +1258,7 @@ int IsLValue(ENODE *node)
 // ----------------------------------------------------------------------------
 TYP *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 {
-	ENODE *ep1, *ep2, *ep3;
+	ENODE *ep1, *ep2;
 	TYP *typ;
 	int su;
 
@@ -1626,7 +1303,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 }
 
 
-void ApplyVMask(ENODE *node, ENODE *mask)
+void Expression::ApplyVMask(ENODE *node, ENODE *mask)
 {
 	if (node==nullptr || mask==nullptr)
 		return;
@@ -1639,6 +1316,59 @@ void ApplyVMask(ENODE *node, ENODE *mask)
 	if (node->vmask==nullptr)
 		node->vmask = mask;
 	return;
+}
+
+static ENODE* last_mulu = nullptr;
+
+ENODE* Expression::FindLastMulu(ENODE* ep, ENODE *pep)
+{
+	ENODE* pep1, *pep2;
+	static int depth = 0;
+	static int last_mulu_depth = 0;
+
+	if (ep == nullptr)
+		return (nullptr);
+	if (ep->nodetype == en_mulu) {
+		if (depth > last_mulu_depth) 
+		{
+			last_mulu_depth = depth;
+			last_mulu = pep;
+		}
+		return (ep);
+	}
+	depth++;
+	pep1 = FindLastMulu(ep->p[0], ep);
+	pep2 = FindLastMulu(ep->p[1], ep);
+	depth--;
+	if (pep2)
+		return (ep);
+	if (pep1)
+		return (ep);
+	return (nullptr);
+}
+
+ENODE* Expression::AdjustForBitArray(int pop, TYP*tp1, ENODE* ep1)
+{
+	ENODE* ep, *mep;
+
+	mep = nullptr;
+	if (pop == openbr) {
+		if (tp1->type == bt_pointer) {
+			if (tp1->GetBtp()->type == bt_bit) {
+				FindLastMulu(ep1, nullptr);
+				mep = last_mulu;
+				if (mep) {
+					if (mep->p[1] && mep->p[1]->nodetype == en_mulu) {
+						mep->p[1] = makenode(en_bitoffset, mep->p[1], makeinode(en_icon, 6));
+					}
+					else {
+						mep->p[0] = makenode(en_bitoffset, mep->p[0], makeinode(en_icon, 6));
+					}
+				}
+			}
+		}
+	}
+	return (ep1);
 }
 
 // ----------------------------------------------------------------------------
@@ -1655,22 +1385,13 @@ void ApplyVMask(ENODE *node, ENODE *mask)
 
 TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 {
-	TYP *tp1, *tp2, *tp3, *tp4;
-	ENODE *ep1, *ep2, *ep3, *ep4;
-	ENODE *rnode, *qnode, *pnode;
-	SYM *sp, *sp1;
-	int iu;
-	int ii;
+	TYP *tp1, *firstType = nullptr;
+	ENODE *ep1;
 	bool classdet = false;
-	TypeArray typearray;
-	std::string name;
-	int cf, uf, numdimen;
-	int sz1, cnt, cnt2, totsz;
-	int sa[20];
-	bool firstBr = true;
-	int64_t elesize;
+	bool wasBr = false;
 
-  ep1 = (ENODE *)NULL;
+  ep1 = (ENODE* )nullptr;
+	tp1 = (TYP* ) nullptr;
   Enter("<ParsePostfix>");
   *node = (ENODE *)NULL;
 	tp1 = ParsePrimaryExpression(&ep1, got_pa);
@@ -1680,394 +1401,77 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 //	   printf("DIAG: ParsePostFix: ep1 is NULL\r\n");
 	}
 	if (tp1 == NULL) {
-        Leave("</ParsePostfix>",0);
+		Leave("</ParsePostfix>",0);
 		return ((TYP *)NULL);
-    }
+  }
 	pep1 = nullptr;
 	cnt = 0;
+	// Note that tp1, ep1 is passed to items in this list as they build on
+	// previous values.
 	while (1) {
 		pop = lastst;
 		switch(lastst) {
+
 		case openbr:
-			pnode = ep1;
-			if (tp1==NULL) {
-				error(ERR_UNDEFINED);
-				goto j1;
-			}
-			NextToken();
-			if( tp1->type == bt_pointer ) {
-				tp2 = expression(&rnode);
-				tp3 = tp1;
-				tp4 = tp1;
-				if (rnode==nullptr) {
-					error(ERR_EXPREXPECT);
-					throw new C64PException(ERR_EXPREXPECT,9);
-				}
-			}
-			else {
-				tp2 = tp1;
-				rnode = pnode;
-				tp3 = expression(&pnode);
-				if (tp3==NULL) {
-					error(ERR_UNDEFINED);
-					throw new C64PException(ERR_UNDEFINED,10);
-					goto j1;
-				}
-				tp1 = tp3;
-				tp4 = tp1;
-			}
-			if (cnt==0) {
-				numdimen = tp1->dimen;
-				cnt2 = 1;
-				for (; tp4; tp4 = tp4->GetBtp()) {
-					sa[cnt2] = max(tp4->numele,1);
-					cnt2++;
-					if (cnt2 > 19) {
-						error(ERR_TOOMANYDIMEN);
-						break;
-					}
-				}
-				if (tp1->type == bt_pointer) {
-					sa[numdimen + 1] = tp1->GetBtp()->size;
-					sa[numdimen + 1] = ep1->esize;
-				}
-				else
-					sa[numdimen+1] = tp1->size;
-			}
-			if (cnt==0)
-				totsz = tp1->size;
-			firstBr = false;
-			if (tp1->type != bt_pointer)
-				error(ERR_NOPOINTER);
-			else
-				tp1 = tp1->GetBtp();
-			//if (cnt==0) {
-			//	switch(numdimen) {
-			//	case 1: sz1 = sa[numdimen+1]; break;
-			//	case 2: sz1 = sa[1]*sa[numdimen+1]; break;
-			//	case 3: sz1 = sa[1]*sa[2]*sa[numdimen+1]; break;
-			//	default:
-			//		sz1 = sa[numdimen+1];	// could be a void = 0
-			//		for (cnt2 = 1; cnt2 < numdimen; cnt2++)
-			//			sz1 = sz1 * sa[cnt2];
-			//	}
-			//}
-			//else if (cnt==1) {
-			//	switch(numdimen) {
-			//	case 2:	sz1 = sa[numdimen+1]; break;
-			//	case 3: sz1 = sa[1]*sa[numdimen+1]; break;
-			//	default:
-			//		sz1 = sa[numdimen+1];	// could be a void = 0
-			//		for (cnt2 = 1; cnt2 < numdimen-1; cnt2++)
-			//			sz1 = sz1 * sa[cnt2];
-			//	}
-			//}
-			//else if (cnt==2) {
-			//	switch(numdimen) {
-			//	case 3: sz1 = sa[numdimen+1]; break;
-			//	default:
-			//		sz1 = sa[numdimen+1];	// could be a void = 0
-			//		for (cnt2 = 1; cnt2 < numdimen-2; cnt2++)
-			//			sz1 = sz1 * sa[cnt2];
-			//	}
-			//}
-			//else
-			{
-				if (numdimen) {
-					sz1 = 1;
-					for (cnt2 = 1; cnt2 <= numdimen; cnt2++)
-						sz1 = sz1 * sa[cnt2];
-					elesize = sa[numdimen + 1] / sz1;
-				}
-				else
-					elesize = tp1->size;
-				sa[0] = elesize;
-				sz1 = sa[0];// sa[numdimen + 1];	// could be a void = 0
-				for (cnt2 = 1; cnt2 < numdimen - cnt; cnt2++)
-					sz1 = sz1 * sa[cnt2];
-			}
-			qnode = makeinode(en_icon,sz1);
-			qnode->etype = bt_ushort;
-			qnode->esize = 8;
-			qnode->constflag = TRUE;
-			qnode->isUnsigned = TRUE;
-			cf = qnode->constflag;
-
-			qnode = makenode(en_mulu, qnode, rnode);
-			qnode->etype = bt_short;
-			qnode->esize = 8;
-			qnode->constflag = cf & rnode->constflag;
-			qnode->isUnsigned = rnode->isUnsigned;
-			if (rnode->sym)
-				qnode->sym = rnode->sym;
-
-			//(void) cast_op(&qnode, &tp_int32, tp1);
-			cf = pnode->constflag;
-			uf = pnode->isUnsigned;
-			sp1 = pnode->sym;
-			pnode = makenode(en_add, qnode, pnode);
-			pnode->etype = bt_pointer;
-			pnode->esize = sizeOfPtr;
-			pnode->constflag = cf & qnode->constflag;
-			pnode->isUnsigned = uf & qnode->isUnsigned;
-			if (pnode->sym == nullptr)
-				pnode->sym = sp1;
-			if (pnode->sym == nullptr)
-				pnode->sym = qnode->sym;
-
-			tp1 = CondDeref(&pnode, tp1);
-			pnode->tp = tp1;
-			ep1 = pnode;
-			needpunc(closebr,9);
-			cnt++;
+			ep1 = ParseOpenbr(tp1, ep1);
+			tp1 = ep1->tp;
+			wasBr = true;
 			break;
 
 		case openpa:
 			cnt = 0;
-			if (tp1==NULL) {
-				error(ERR_UNDEFINED);
-				goto j1;
-			}
-			tp2 = ep1->tp;
-			if (tp2==nullptr) {
-				error(ERR_UNDEFINED);
-				goto j1;
-			}
-			if (tp2->type==bt_vector_mask) {
-				NextToken();
-				tp1 = expression(&ep2);
-				needpunc(closepa,9);
-				ApplyVMask(ep2,ep1);
-				ep1 = ep2;
-				break;
-			}
-			if (tp2->type == bt_pointer) {
-				dfs.printf("Got function pointer.\n");
-			}
-			dfs.printf("tp2->type=%d",tp2->type);
-			name = lastid;
+			wasBr = false;
+			ep1 = AdjustForBitArray(pop, tp1, ep1);
 			NextToken();
-			tp3 = tp1->GetBtp();
-			ep4 = nullptr;
-			if (tp3) {
-				if (tp3->type==bt_struct || tp3->type==bt_union || tp3->type==bt_class)
-					ep4 = makenode(en_regvar,NULL,NULL);
-			}
-			//ep2 = ArgumentList(ep1->p[2],&typearray);
-			ep2 = ParseArgumentList(ep4,&typearray);
-			typearray.Print();
-			dfs.printf("Got Type: %d",tp1->type);
-			if (tp1->type==bt_pointer) {
-				dfs.printf("Got function pointer.\n");
-				ep1 = makefcnode(en_fcall,ep1,ep2,nullptr);
-				currentFn->IsLeaf = FALSE;
-				break;
-			}
-			dfs.printf("openpa calling gsearch2");
-			sp = ep1->sym;
-			/*
-			sp = nullptr;
-			ii = tp1->lst.FindRising(name);
-			if (ii) {
-				sp = Function::FindExactMatch(TABLE::matchno, name, bt_long, &typearray)->sym;
-			}
-			if (!sp)
-				sp = gsearch2(name,bt_long,&typearray,true);
-			*/
-			if (sp==nullptr) {
-				sp = allocSYM();
-				sp->fi = allocFunction(sp->id);
-				sp->fi->sym = sp;
-				sp->storage_class = sc_external;
-				sp->SetName(name);
-				sp->tp = TYP::Make(bt_func,0);
-				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
-				sp->fi->AddProto(&typearray);
-				sp->mangledName = sp->fi->BuildSignature();
-				gsyms[0].insert(sp);
-			}
-			else if (sp->IsUndefined) {
-				sp->tp = TYP::Make(bt_func,0);
-				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
-				if (!sp->fi) {
-					sp->fi = allocFunction(sp->id);
-					sp->fi->sym = sp;
-				}
-				sp->fi->AddProto(&typearray);
-				sp->mangledName = sp->fi->BuildSignature();
-				gsyms[0].insert(sp);
-				sp->IsUndefined = false;
-			}
-			if (sp->tp->type==bt_pointer) {
-				dfs.printf("Got function pointer");
-				ep1 = makefcnode(en_fcall,ep1,ep2,sp);
-				currentFn->IsLeaf = FALSE;
-			}
-			else {
-				dfs.printf("Got direct function %s ", (char *)sp->name->c_str());
-				ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
-				ep1 = makefcnode(en_fcall,ep3,ep2,sp);
-				//if (sp->fi)
-				{
-					if (!sp->fi->IsInline)
-						currentFn->IsLeaf = FALSE;
-				}
-				//else
-				//	currentFn->IsLeaf = FALSE;
-			}
-			tp1 = sp->tp->GetBtp();
-//			tp1 = ExprFunction(tp1, &ep1);
+			ep1 = ParseOpenpa(tp1, ep1);
 			break;
 
 		case pointsto:
-			{
-				//int reftype = sizeOfPtr==4 ? en_h_ref : en_w_ref;
-				int reftype = sizeOfPtr==4 ? en_ref : en_ref;
-				
-				cnt = 0;
-				if (tp1==NULL) {
-					error(ERR_UNDEFINED);
-					goto j1;
-				}
-				if (tp1->type == bt_struct) {
-					//printf("hello");
-					//ep1 = makenode(reftype, ep1, (ENODE *)NULL);
-				}
-				else
-				if( tp1->type != bt_pointer) {
-					error(ERR_NOPOINTER);
-				}
-				else {
-					tp1 = tp1->GetBtp();
-				}
-				if( tp1->val_flag == FALSE ) {
-					ep1 = makenode(en_ref,ep1,(ENODE *)NULL);
-					ep1->isPascal = ep1->p[0]->isPascal;
-					ep1->tp = tp1;
-				}
-			}
-
-		 // fall through to dot operation
-		case dot:
-			ExpressionHasReference = true;
 			cnt = 0;
-			if (tp1==NULL) {
-				error(ERR_UNDEFINED);
-				goto j1;
-			}
-			NextToken();       /* past -> or . */
-			if (tp1->IsVectorType()) {
-				ParseNonAssignExpression(&qnode);
-				ep2 = makenode(en_shl,qnode,makeinode(en_icon,3));
-				// The dot operation will deference the result below so the
-				// old dereference operation isn't needed. It is stripped 
-				// off by using ep->p[0] rather than ep.
-				ep1 = makenode(en_add,ep1->p[0],ep2);
-				tp1 = tp1->GetBtp();
-				tp1 = CondDeref(&ep1,tp1);
-				break;
-			}
-			if(lastst != id) {
-				error(ERR_IDEXPECT);
-				break;
-			}
-			dfs.printf("dot search: %p\r\n", (char *)&tp1->lst);
-			ptp1 = tp1;
-			pep1 = ep1;
-			name = lastid;
-			ii = tp1->lst.FindRising(name);
-			if (ii==0) {
-				dfs.printf("Nomember1");
-				error(ERR_NOMEMBER);
-				break;
-			}
-			sp = TABLE::match[ii-1];
-			sp = sp->FindRisingMatch();
-			if( sp == NULL ) {
-				dfs.printf("Nomember2");
-				error(ERR_NOMEMBER);
-				break;
-			}
-			if (sp->IsPrivate && sp->parent != currentFn->sym->parent) {
-				error(ERR_PRIVATE);
-				break;
-			}
-			tp1 = sp->tp;
-			dfs.printf("tp1->type:%d",tp1->type);
-			if (tp1==nullptr)
-				throw new C64PException(ERR_NULLPOINTER,5);
-			if (tp1->type==bt_ifunc || tp1->type==bt_func) {
-				// build the name vector and create a nacon node.
-				dfs.printf("%s is a func\n",(char *)sp->name->c_str());
-				NextToken();
-				if (lastst==openpa) {
-					NextToken();
-					ep2 = ParseArgumentList(pep1,&typearray);
-					typearray.Print();
-					sp = Function::FindExactMatch(ii,name,bt_long,&typearray)->sym;
-					if (sp) {
-//						sp = TABLE::match[TABLE::matchno-1];
-						ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
-						ep3->isPascal == sp->fi->IsPascal;
-						ep1 = makenode(en_fcall,ep3,ep2);
-						ep1->isPascal = ep3->isPascal;
-						tp1 = sp->tp->GetBtp();
-						currentFn->IsLeaf = FALSE;
-					}
-					else {
-						error(ERR_METHOD_NOTFOUND);
-						goto j1;
-					}
-					ep1->SetType(tp1);
-					break;
-				}
-				// Else: we likely wanted the addres of the function since the
-        // function is referenced without o parameter list indicator. Goto
-        // the regular processing code.
-				goto j2;
-			}
-			else {
-j2:
-				dfs.printf("tp1->type:%d",tp1->type);
-				qnode = makeinode(en_icon,sp->value.i);
-				qnode->constflag = TRUE;
-				iu = ep1->isUnsigned;
-				ep1 = makenode(en_add,ep1,qnode);
-				ep1->isPascal = ep1->p[0]->isPascal;
-				ep1->constflag = ep1->p[0]->constflag;
-				ep1->isUnsigned = iu;
-				ep1->esize = 8;
-				ep1->p[2] = pep1;
-				//if (tp1->type==bt_pointer && (tp1->GetBtp()->type==bt_func || tp1->GetBtp()->type==bt_ifunc))
-				//	dfs.printf("Pointer to func");
-				//else
-					tp1 = CondDeref(&ep1,tp1);
-				ep1->SetType(tp1);
-				dfs.printf("tp1->type:%d",tp1->type);
-			}
-			if (tp1==nullptr)
-				getchar();
-			NextToken();       /* past id */
-			dfs.printf("B");
+			wasBr = false;
+			ep1 = AdjustForBitArray(pop, tp1, ep1);
+			ep1 = ParsePointsTo(tp1, ep1);
+			tp1 = ep1->tp;
+			ep1 = ParseDotOperator(tp1, ep1);
+			tp1 = ep1->tp;
+			break;
+
+		case dot:
+			cnt = 0;
+			wasBr = false;
+			ep1 = AdjustForBitArray(pop, tp1, ep1);
+			ep1 = ParseDotOperator(tp1, ep1);
+			tp1 = ep1->tp;
 			break;
 
 		case autodec:
 			cnt = 0;
+			wasBr = false;
+			ep1 = AdjustForBitArray(pop, tp1, ep1);
 			NextToken();
 			Autoincdec(tp1,&ep1,1,true);
 			break;
+
 		case autoinc:
 			cnt = 0;
+			wasBr = false;
+			ep1 = AdjustForBitArray(pop, tp1, ep1);
 			NextToken();
 			Autoincdec(tp1,&ep1,0,true);
 			break;
-		default:	goto j1;
+
+		default:
+			goto j1;	// break out of loop
 		}
+		if (firstType == nullptr)
+			firstType = tp1;
 	}
 j1:
+	if (wasBr)
+		ep1 = AdjustForBitArray(openbr, firstType, ep1);
 	*node = ep1;
 	if (ep1)
-    (*node)->SetType(tp1);
+		tp1 = ep1->tp;
 	if (tp1)
 	Leave("</ParsePostfix>", tp1->type);
 	else
@@ -2093,43 +1497,46 @@ j1:
  *                      sizeof unary
  *                      typenum(typecast)
 												__mulf(a,b)
+												__bytendx(a,b)
+												__wydendx(a,b)
  //                     new 
  *
  */
 TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 {
-	TYP *tp, *tp1, *tp2;
-  ENODE *ep1, *ep2, *ep3;
-  int flag2;
-	int typ;
+	TYP *tp = nullptr;
+  ENODE *ep1;
 	bool autonew = false;
+	Declaration decl;
 
 	Enter("<ParseUnary>");
     ep1 = NULL;
     *node = (ENODE *)NULL;
-	flag2 = FALSE;
 	if (got_pa) {
-        tp = ParsePostfixExpression(&ep1, got_pa);
+    tp = ParsePostfixExpression(&ep1, got_pa);
 		*node = ep1;
-        if (ep1)
-    		(*node)->SetType(tp);
-        if (tp)
-        Leave("</ParseUnary>", tp->type);
-        else
-        Leave("</ParseUnary>", 0);
+    if (ep1)
+    (*node)->SetType(tp);
+    if (tp)
+    Leave("</ParseUnary>", tp->type);
+    else
+    Leave("</ParseUnary>", 0);
 		return (tp);
 	}
   switch(lastst) {
+
   case autodec:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,1,false);
 		break;
+
   case autoinc:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,0,false);
 		break;
+
 	case plus:
     NextToken();
     tp = ParseCastExpression(&ep1);
@@ -2140,347 +1547,85 @@ TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
     break;
 
 	// Negative constants are trapped here and converted to proper form.
-    case minus:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-		else if (ep1->constflag && (ep1->nodetype==en_icon)) {
-			ep1->i = -ep1->i;
-		}
-		else if (ep1->constflag && (ep1->nodetype==en_fcon)) {
-			ep1->f = -ep1->f;
-			ep1->f128.sign = !ep1->f128.sign;
-			// A new literal label is required.
-			ep1->i = quadlit(&ep1->f128);
-		}
-		else
-		
-		{
-			ep1 = makenode(en_uminus,ep1,(ENODE *)NULL);
-			ep1->constflag = ep1->p[0]->constflag;
-			ep1->isUnsigned = ep1->p[0]->isUnsigned;
-			ep1->esize = tp->size;
-			ep1->etype = (e_bt)tp->type;
-		}
-        break;
-
-    case nott:
-    case kw_not:
-		NextToken();
-		tp = ParseCastExpression(&ep1);
-		if( tp == NULL ) {
-			error(ERR_IDEXPECT);
-			return (TYP *)NULL;
-		}
-		ep1 = makenode(en_not,ep1,(ENODE *)NULL);
-		ep1->constflag = ep1->p[0]->constflag;
-		ep1->isUnsigned = ep1->p[0]->isUnsigned;
-		ep1->SetType(tp);
-		ep1->esize = tp->size;
-		break;
-
-    case cmpl:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return 0;
-        }
-        ep1 = makenode(en_compl,ep1,(ENODE *)NULL);
-        ep1->constflag = ep1->p[0]->constflag;
-		ep1->isUnsigned = ep1->p[0]->isUnsigned;
-		ep1->SetType(tp);
-		ep1->esize = tp->size;
-        break;
-
-    case star:
-      NextToken();
-      tp = ParseCastExpression(&ep1);
-      if(tp == NULL) {
-        error(ERR_IDEXPECT);
-        return (TYP *)NULL;
-      }
-      if( tp->GetBtp() == NULL )
-			  error(ERR_DEREF);
-      else {
-				// A star before a function pointer just means that we want to
-				// invoke the function. We want to retain the pointer to the
-				// function as the type.
-				if (tp->GetBtp()->type != bt_func && tp->GetBtp()->type != bt_ifunc) {
-					tp = tp->GetBtp();
-				}
-				else
-					break;
-				//else {
-				//	tp1 = tp;
-				//	break;	// Don't derefence the function pointer
-				//}
-      }
-	    tp1 = tp;
-			if (tp->type == bt_pointer)
-				typ = tp->GetBtp()->type;
-		//Autoincdec(tp,&ep1);
-	    tp = CondDeref(&ep1,tp);
-      break;
-
-    case bitandd:
-		{
-			int t;
-
-			NextToken();
-			tp = ParseCastExpression(&ep1);
-			if (tp == NULL) {
-				error(ERR_IDEXPECT);
-				return (TYP *)NULL;
-			}
-			if (ep1) {
-/*
-				t = ep1->tp->type;
-//				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
-				if (t == bt_struct || t == bt_union || t == bt_class) {
-					////ep1 = ep1->p[0];
-					//if (ep1) {
-					//	ep1 = makenode(en_addrof, ep1, nullptr);
-					//	ep1->esize = 8;     // converted to a pointer so size is now 8
-					//}
-				}
-				else */
-				ep2 = ep1;
-				if (IsLValue(ep1)) {
-					if (ep1->nodetype != en_add) {	// array or pointer manipulation
-						if (ep1->p[0])	// Cheesy hack
-							ep1 = ep1->p[0];
-					}
-				}
-				ep1->esize = 8;     // converted to a pointer so size is now 8
-				tp1 = TYP::Make(bt_pointer, 8);
-				tp1->btp = tp->GetIndex();
-				tp1->val_flag = FALSE;
-				tp1->isUnsigned = TRUE;
-				tp = tp1;
-			}
-		}
+  case minus:
+		ep1 = ParseMinus();
+		if (ep1 == nullptr)
+			return (nullptr);
     break;
 
+  case nott:
+  case kw_not:
+		ep1 = ParseNot();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+  case cmpl:
+		ep1 = ParseCom();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+  case star:
+		ep1 = ParseStar();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+  case bitandd:
+		ep1 = ParseAddressOf();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
 	case kw_mulf:
+		ep1 = ParseMulf();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+	case kw_bytendx:
+		ep1 = ParseBytndx();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+	case kw_wydendx:
+		ep1 = ParseWydndx();
+		if (ep1 == nullptr)
+			return (nullptr);
+		break;
+
+  case kw_sizeof:
+		ep1 = ParseSizeof();
+		break;
+
+	case kw_auto:
 		NextToken();
-		needpunc(openpa,46);
-		tp1 = ParseNonCommaExpression(&ep1);
-		needpunc(comma, 47);
-		tp2 = ParseNonCommaExpression(&ep2);
-		needpunc(closepa, 48);
-		ep1 = makenode(en_mulf, ep1, ep2);
-		ep1->isUnsigned = TRUE;
-		ep1->esize = 8;
-		tp = &stduint;
-		break;
-/*
-	case kw_abs:
-		NextToken();
-		if (lastst==openpa) {
-			flag2 = TRUE;
-			NextToken();
-		}
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-        ep1 = makenode(en_abs,ep1,(ENODE *)NULL);
-        ep1->constflag = ep1->p[0]->constflag;
-		ep1->isUnsigned = ep1->p[0]->isUnsigned;
-		ep1->esize = tp->size;
-		if (flag2)
-			needpunc(closepa,2);
-		break;
+		if (lastst != kw_new)
+			break;
+		autonew = true;
 
-	case kw_max:
-	case kw_min:
-		{
-			TYP *tp1, *tp2, *tp3;
-
-			flag2 = lastst==kw_max;
-			NextToken();
-			needpunc(comma,2);
-			tp1 = ParseCastExpression(&ep1);
-			if( tp1 == NULL ) {
-				error(ERR_IDEXPECT);
-				return (TYP *)NULL;
-			}
-			needpunc(comma,2);
-			tp2 = ParseCastExpression(&ep2);
-			if( tp1 == NULL ) {
-				error(ERR_IDEXPECT);
-				return (TYP *)NULL;
-			}
-			if (lastst==comma) {
-				NextToken();
-				tp3 = ParseCastExpression(&ep3);
-				if( tp1 == NULL ) {
-					error(ERR_IDEXPECT);
-					return (TYP *)NULL;
-				}
-			}
-			else
-				tp3 = nullptr;
-			tp = forcefit(&ep2,tp2,&ep1,tp1,1);
-			tp = forcefit(&ep3,tp3,&ep2,tp,1);
-			ep1 = makenode(flag2 ? en_max : en_min,ep1,ep2);
-			ep1->p[2] = ep3;
-			ep1->constflag = ep1->p[0]->constflag & ep2->p[0]->constflag & ep3->p[0]->constflag;
-			ep1->isUnsigned = ep1->p[0]->isUnsigned;
-			ep1->esize = tp->size;
-			needpunc(closepa,2);
-		}
-		break;
-*/
-    case kw_sizeof:
-      NextToken();
-			if (lastst==openpa) {
-				flag2 = TRUE;
-				NextToken();
-			}
-			if (flag2 && IsBeginningOfTypecast(lastst)) {
-				tp = head;
-				tp1 = tail;
-				Declaration::ParseSpecifier(0);
-				Declaration::ParsePrefix(FALSE);
-				if( head != NULL )
-					ep1 = makeinode(en_icon,head->size);
-				else {
-					error(ERR_IDEXPECT);
-					ep1 = makeinode(en_icon,1);
-				}
-				head = tp;
-				tail = tp1;
-			}
-			else {
-				sizeof_flag++;
-				tp = ParseUnaryExpression(&ep1, false);
-				sizeof_flag--;
-				if (tp == 0) {
-					error(ERR_SYNTAX);
-					ep1 = makeinode(en_icon,1);
-				} else
-					ep1 = makeinode(en_icon, (long) tp->size);
-			}
-			if (flag2)
-				needpunc(closepa,2);
-			ep1->constflag = TRUE;
-			ep1->esize = 2;
-			tp = &stdint;
-      break;
-
-		case kw_auto:
-			NextToken();
-			if (lastst != kw_new)
-				break;
-			autonew = true;
-
-    case kw_new:
-		{
-			ENODE *ep4, *ep5;
-			std::string *name = new std::string(autonew ? "__autonew" : "__new");
-
-			currentFn->UsesNew = TRUE;
-			currentFn->IsLeaf = FALSE;
-			NextToken();
-			if (IsBeginningOfTypecast(lastst)) {
-
-				tp = head;
-				tp1 = tail;
-  				Declaration::ParseSpecifier(0);
-  				Declaration::ParsePrefix(FALSE);
-  				if( head != NULL )
-  					ep1 = makeinode(en_icon,head->size);
-  				else {
-  					error(ERR_IDEXPECT);
-  					ep1 = makeinode(en_icon,1);
-  				}
-				ep4 = nullptr;
-				ep2 = makeinode(en_icon,head->GetHash());
-				ep3 = makenode(en_object_list,nullptr,nullptr);
-				ep4 = makeinode(en_icon, head->typeno);
-				ep5 = makenode(en_void,ep1,nullptr);
-				//ep5 = nullptr;
-				//ep5 = makenode(en_void,ep2,ep5);
-				//ep5 = makenode(en_void,ep3,ep5);
-				//ep5 = makenode(en_void, ep4, ep5);
-				ep2 = makesnode(en_cnacon, name, name, 0);
-  				ep1 = makefcnode(en_fcall, ep2, ep5, nullptr);
-					ep1->isAutonew = autonew;
-  				head = tp;
-  				tail = tp1;
-			}
-      else {
-  			sizeof_flag++;
-  			tp = ParseUnaryExpression(&ep1, got_pa);
-  			sizeof_flag--;
-  			if (tp == 0) {
-  				error(ERR_SYNTAX);
-  				ep1 = makeinode(en_icon,1);
-  			} else
-  				ep1 = makeinode(en_icon, (long) tp->size);
-  			ep3 = makenode(en_void,ep1,nullptr);
-  			ep2 = makesnode(en_cnacon, name, name, 0);
-  			ep1 = makefcnode(en_fcall, ep2, ep3, nullptr);
-			}
-		}
+  case kw_new:
+		ep1 = ParseNew(autonew);
 		break;
 
   case kw_delete:
-		currentFn->IsLeaf = FALSE;
-		NextToken();
-		{
-			std::string *name = new std::string("__delete");
-        
-  		if (lastst==openbr) {
-				NextToken();
-    		needpunc(closebr,50);
-		  }
-			tp = ParseCastExpression(&ep1);
-			tp = deref(&ep1, tp);
-  		ep2 = makesnode(en_cnacon, name, name, 0);
-  		ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
-    }
-    break;
+		ep1 = ParseDelete();
+		break;
 
   case kw_typenum:
-		NextToken();
-		needpunc(openpa,3);
-		tp = head;
-		tp1 = tail;
-		Declaration::ParseSpecifier(0);
-		Declaration::ParsePrefix(FALSE);
-		if( head != NULL )
-			ep1 = makeinode(en_icon,head->GetHash());
-		else {
-			error(ERR_IDEXPECT);
-			ep1 = makeinode(en_icon,1);
-		}
-		head = tp;
-		tail = tp1;
-		ep1->constflag = TRUE;
-		ep1->esize = 2;
-		tp = &stdint;
-		needpunc(closepa,4);
+		ep1 = ParseTypenum();
 		break;
 
   default:
     tp = ParsePostfixExpression(&ep1, got_pa);
+		if (ep1) ep1->SetType(tp);
     break;
   }
   *node = ep1;
-  if (ep1)
-	  (*node)->SetType(tp);
-  if (tp)
-  Leave("</ParseUnary>", tp->type);
-  else
   Leave("</ParseUnary>", 0);
-  return tp;
+  return (ep1 ? ep1->tp : nullptr);
 }
 
 // ----------------------------------------------------------------------------
@@ -2493,6 +1638,7 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 {
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
+	Declaration decl;
 
   Enter("ParseCast ");
   *node = (ENODE *)NULL;
@@ -2527,10 +1673,10 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 	case openpa:
 		NextToken();
 		if (IsBeginningOfTypecast(lastst)) {
-			Declaration::ParseSpecifier(0); // do cast declaration
-			Declaration::ParsePrefix(FALSE);
-			tp = head;
-			tp1 = tail;
+			decl.ParseSpecifier(0); // do cast declaration
+			decl.ParsePrefix(FALSE);
+			tp = decl.head;
+			tp1 = decl.tail;
 			needpunc(closepa, 5);
 			if ((tp2 = ParseCastExpression(&ep1)) == NULL) {
 				error(ERR_IDEXPECT);
@@ -2580,14 +1726,15 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 					//ep2->etype = ep1->etype;
 					//ep2->esize = ep1->esize;
 	//				forcefit(&ep2,tp,&ep1,tp2,false);
-					forcefit(&ep1, tp2, &ep2, tp, false, true);
+					tp = forcefit(&ep1, tp2, &ep2, tp, false, true);
 				}
 				//			forcefit(&ep2,tp2,&ep1,tp,false);
 			}
 			head = tp;
 			tail = tp1;
-			*node = ep1;
-      (*node)->SetType(tp);
+//			*node = ep1;
+			*node = ep2;
+			(*node)->SetType(tp);
 			return (tp);
         }
 		else {
@@ -2669,6 +1816,11 @@ TYP *Expression::ParseMultOps(ENODE **node)
 										ep1->esize = sizeOfFP;
 										ep1->etype = bt_double;
 										break;
+									case bt_posit:
+										ep1 = makenode(en_pmul, ep1, ep2);
+										ep1->esize = sizeOfPosit;
+										ep1->etype = bt_posit;
+										break;
 									case bt_vector:
 										if (isScalar)
 											ep1 = makenode(en_vmuls,ep1,ep2);
@@ -2715,7 +1867,12 @@ TYP *Expression::ParseMultOps(ENODE **node)
 									ep1->esize = sizeOfFP;
 									ep1->etype = bt_double;
 								}
-                else if( tp1->isUnsigned )
+								else if (tp1->type == bt_posit) {
+									ep1 = makenode(en_pdiv, ep1, ep2);
+									ep1->esize = sizeOfPosit;
+									ep1->etype = bt_posit;
+								}
+								else if( tp1->isUnsigned )
                     ep1 = makenode(en_udiv,ep1,ep2);
                 else
                     ep1 = makenode(en_div,ep1,ep2);
@@ -2786,7 +1943,8 @@ TYP *Expression::ParseAddOps(ENODE **node)
 		// Divide the result by the size of the pointed to object.
 		if (!oper && (tp1->type == bt_pointer) && (tp2->type == bt_pointer) && (sz1==sz2))
 		{
-			if (sz1 == 1 || sz1 == 2 || sz1 == 4 || sz1 == 8 || sz1 == 16 || sz1 == 32 || sz1 == 64 || sz1 == 128) {
+			if (sz1 == 1 || sz1 == 2 || sz1 == 4 || sz1 == 8 || sz1 == 16 || sz1 == 32 || sz1 == 64 || sz1 == 128 ||
+				sz1==256 || sz1==512 || sz1==1024 || sz1==2048 || sz1==4096 || sz1==8192 || sz1==16384 || sz1==32768) {
 				ep1 = makenode(en_ptrdif, ep1, ep2);
 				ep1->p[4] = makeinode(en_icon, (int64_t)pwrof2(sz1));
 			}
@@ -2852,6 +2010,10 @@ TYP *Expression::ParseAddOps(ENODE **node)
 			case bt_float:
     		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 				ep1->esize = sizeOfFPS;
+				break;
+			case bt_posit:
+				ep1 = makenode(oper ? en_padd : en_psub, ep1, ep2);
+				ep1->esize = sizeOfPosit;
 				break;
 			case bt_vector:
 				if (isScalar)
@@ -2978,7 +2140,9 @@ TYP *Expression::ParseRelationalOps(ENODE **node)
 				nt = en_vlt;
 			else if (tp1->IsFloatType())
         nt = en_flt;
-      else if( tp1->isUnsigned )
+			else if (tp1->IsPositType())
+				nt = en_plt;
+			else if( tp1->isUnsigned )
         nt = en_ult;
       else
         nt = en_lt;
@@ -2988,7 +2152,9 @@ TYP *Expression::ParseRelationalOps(ENODE **node)
 				nt = en_vgt;
 			else if (tp1->IsFloatType())
         nt = en_fgt;
-      else if( tp1->isUnsigned )
+			else if (tp1->IsPositType())
+				nt = en_pgt;
+			else if( tp1->isUnsigned )
         nt = en_ugt;
       else
         nt = en_gt;
@@ -2998,7 +2164,9 @@ TYP *Expression::ParseRelationalOps(ENODE **node)
 				nt = en_vle;
 			else if (tp1->IsFloatType())
         nt = en_fle;
-      else if( tp1->isUnsigned )
+			else if (tp1->IsPositType())
+				nt = en_ple;
+			else if( tp1->isUnsigned )
         nt = en_ule;
       else
         nt = en_le;
@@ -3008,7 +2176,9 @@ TYP *Expression::ParseRelationalOps(ENODE **node)
 				nt = en_vge;
 			else if (tp1->IsFloatType())
         nt = en_fge;
-      else if( tp1->isUnsigned )
+			else if (tp1->IsPositType())
+				nt = en_pge;
+			else if( tp1->isUnsigned )
         nt = en_uge;
       else
         nt = en_ge;
@@ -3069,6 +2239,8 @@ TYP *Expression::ParseEqualOps(ENODE **node)
 					ep1 = makenode(oper ? en_veq : en_vne, ep1, ep2);
 				else if (tp1->IsFloatType())
 					ep1 = makenode(oper ? en_feq : en_fne, ep1, ep2);
+				else if (tp1->IsPositType())
+					ep1 = makenode(oper ? en_peq : en_pne, ep1, ep2);
 				else
 					ep1 = makenode(oper ? en_eq : en_ne, ep1, ep2);
 				ep1->esize = 2;
@@ -3378,7 +2550,7 @@ TYP *safe_orop(ENODE **node)
 TYP *Expression::ParseConditionalOps(ENODE **node)
 {
 	TYP *tp1, *tp2, *tp3;
-  ENODE *ep1, *ep2, *ep3, *ep4;
+  ENODE *ep1, *ep2, *ep3;
 	bool sh;
 
   Enter("Conditional");
@@ -3565,23 +2737,22 @@ TYP *Expression::ParseNonAssignExpression(ENODE **node)
 TYP *Expression::ParseNonCommaExpression(ENODE **node)
 {
 	TYP *tp;
-	ENODE *ep1;
 	ENODE *o_pfl = postfixList;
 
 	postfixList = nullptr;
 	pep1 = nullptr;
 	Enter("NonCommaExpression");
-    *node = (ENODE *)NULL;
-    tp = ParseAssignOps(node);
-    if( tp == (TYP *)NULL )
-        *node =(ENODE *)NULL;
-    Leave("NonCommaExpression",tp ? tp->type : 0);
-		if (postfixList)
-			(*node)->pfl = postfixList;
-		postfixList = o_pfl;
-		if (*node)
-     	(*node)->SetType(tp);
-    return tp;
+  *node = (ENODE *)NULL;
+  tp = ParseAssignOps(node);
+  if( tp == (TYP *)NULL )
+    *node =(ENODE *)NULL;
+  Leave("NonCommaExpression",tp ? tp->type : 0);
+	if (postfixList)
+		(*node)->pfl = postfixList;
+	postfixList = o_pfl;
+	if (*node)
+    (*node)->SetType(tp);
+  return (tp);
 }
 
 /*
@@ -3681,5 +2852,6 @@ TYP *Expression::ParseExpression(ENODE **node)
 
 TYP *expression(ENODE **node)
 {
-	return (Expression::ParseExpression(node));
+	Expression k;
+	return (k.ParseExpression(node));
 }
