@@ -1020,6 +1020,21 @@ void SaveFPRegisterVars(CSet *rmask)
 	}
 }
 
+void SavePositRegisterVars(CSet* rmask)
+{
+	int cnt;
+	int nn;
+
+	if (rmask->NumMember()) {
+		cnt = 0;
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			GenerateDiadic(op_psto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
+		}
+	}
+}
+
 // Restore registers used as register variables.
 
 static void RestoreRegisterVars()
@@ -1074,12 +1089,14 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	case bt_triple:	sz = sizeOfFPT; break;
 	case bt_double:	sz = sizeOfFPD; break;
 	case bt_float:	sz = sizeOfFPD; break;
-	case bt_posit:	sz = sizeOfFPD; break;
+	case bt_posit:	sz = sizeOfPosit; break;
 	default:	sz = sizeOfWord; break;
 	}
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
 			ap = cg.GenerateExpression(ep,am_reg,sizeOfFP);
+		else if (ep->tp->IsPositType())
+			ap = cg.GenerateExpression(ep, am_preg|am_imm, sizeOfPosit);
 		else
 			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	}
@@ -1098,6 +1115,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
+	case am_preg:
 	case am_reg:
   case am_imm:
 /*
@@ -1212,10 +1230,11 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	OCODE *ip;
 	ENODE *p;
 	ENODE *pl[100];
-	int nn, maxnn;
-	bool isFloat;
+	int nn, maxnn, kk;
+	bool isFloat = false;
 	bool sumFloat;
 	bool o_supportsPush;
+	SYM** sy = nullptr;
 
 	sum = 0;
 	if (sym)
@@ -1237,7 +1256,14 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 				//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
-		sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);
+		if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
+			if (sy==nullptr && sym)
+				sy = sym->params.GetParameters();
+			if (sy)
+				sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+		}
+		else
+			sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);
 		sumFloat |= isFloat;
 //		plist = plist->p[1];
   }
@@ -1255,7 +1281,14 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 			if (pl[nn]->etype == bt_pointer)
 				if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
 					continue;
-			PushArgument(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
+			if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
+				if (sy == nullptr && sym)
+					sy = sym->params.GetParameters();
+				if (sy)
+					PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			}
+			else
+				PushArgument(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
 		}
 		cpu.SupportsPush = o_supportsPush;
 	}
@@ -1314,7 +1347,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	int psp = 0;
 	int ps;
 	TypeArray *ta = nullptr;
-	CSet *mask, *fmask;
+	CSet *mask, *fmask, *pmask;
 
 	sym = nullptr;
 
@@ -1346,6 +1379,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			o_fn = currentFn;
 			mask = save_mask;
 			fmask = fpsave_mask;
+			pmask = psave_mask;
 			currentFn = sym;
 			ps = pass;
 			// Each function has it's own peeplist. The generated peeplist for an
@@ -1360,6 +1394,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
+			psave_mask = pmask;
 		}
 		else {
 			if (sym && sym->IsLeaf) {
@@ -1413,6 +1448,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			o_fn = currentFn;
 			mask = save_mask;
 			fmask = fpsave_mask;
+			pmask = psave_mask;
 			currentFn = sym;
 			ps = pass;
 			sym->pl.head = sym->pl.tail = nullptr;
@@ -1424,6 +1460,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
+			psave_mask = pmask;
 		}
 		else {
 			GenerateDiadic(op_mov, 0, makereg(114), ap);

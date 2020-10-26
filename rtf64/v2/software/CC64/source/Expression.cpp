@@ -39,7 +39,6 @@ ENODE* Expression::SetIntConstSize(TYP* tptr, int64_t val)
 {
 	ENODE* pnode;
 
-	tptr->isConst = TRUE;
 	pnode = makeinode(en_icon, val);
 	pnode->constflag = TRUE;
 	if (val >= -128 && ival < 128)
@@ -68,7 +67,6 @@ ENODE* Expression::ParseCharConst(ENODE** node)
 	TYP* tptr;
 
 	tptr = &stdchar;
-	tptr->isConst = TRUE;
 	pnode = makeinode(en_icon, ival);
 	pnode->constflag = TRUE;
 	pnode->esize = 1;
@@ -83,7 +81,6 @@ ENODE* Expression::ParseFloatMax()
 	TYP* tptr;
 
 	tptr = &stdquad;
-	tptr->isConst = TRUE;
 	pnode = compiler.ef.Makefnode(en_fcon, rval);
 	pnode->constflag = TRUE;
 	pnode->SetType(tptr);
@@ -124,7 +121,6 @@ ENODE* Expression::ParseRealConst(ENODE** node)
 		break;
 	}
 	pnode->SetType(tptr);
-	tptr->isConst = TRUE;
 	NextToken();
 	return (pnode);
 }
@@ -137,9 +133,9 @@ ENODE* Expression::ParsePositConst(ENODE** node)
 	pnode = compiler.ef.MakePositNode(en_pcon, pval64);
 	pnode->constflag = TRUE;
 	pnode->posit = pval64;
-	if (parsingAggregate==0 && sizeof_flag == 0)
-		pnode->i = NumericLiteral(pnode);
-	pnode->segment = rodataseg;
+	//if (parsingAggregate==0 && sizeof_flag == 0)
+	//	pnode->i = NumericLiteral(pnode);
+	pnode->segment = codeseg;
 	tptr = &stdposit;
 	switch (float_precision) {
 	case 'D': case 'd':
@@ -160,7 +156,6 @@ ENODE* Expression::ParsePositConst(ENODE** node)
 		break;
 	}
 	pnode->SetType(tptr);
-	tptr->isConst = TRUE;
 	NextToken();
 	return (pnode);
 }
@@ -176,9 +171,7 @@ ENODE* Expression::ParseStringConst(ENODE** node)
 		tptr = (TYP*)TYP::Make(bt_pointer, 0);
 		tptr->size = strlen(str) + (int64_t)1;
 		tptr->btp = TYP::Make(bt_char, 2)->GetIndex();// stdchar.GetIndex();
-		tptr->GetBtp()->isConst = TRUE;
 		tptr->val_flag = 1;
-		tptr->isConst = TRUE;
 		tptr->isUnsigned = TRUE;
 	}
 	else {
@@ -193,7 +186,6 @@ ENODE* Expression::ParseStringConst(ENODE** node)
 	pnode->constflag = TRUE;
 	pnode->segment = rodataseg;
 	pnode->SetType(tptr);
-	tptr->isConst = TRUE;
 	return (pnode);
 }
 
@@ -208,9 +200,7 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 		tptr = (TYP*)TYP::Make(bt_pointer, 0);
 		tptr->size = strlen(str) + (int64_t)1;
 		tptr->btp = TYP::Make(bt_ichar, 2)->GetIndex();// stdchar.GetIndex();
-		tptr->GetBtp()->isConst = TRUE;
 		tptr->val_flag = 1;
-		tptr->isConst = TRUE;
 		tptr->isUnsigned = TRUE;
 	}
 	else {
@@ -225,7 +215,6 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 	pnode->constflag = TRUE;
 	pnode->segment = rodataseg;
 	pnode->SetType(tptr);
-	tptr->isConst = TRUE;
 	return (pnode);
 }
 
@@ -253,9 +242,7 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 			tptr->btp = TYP::Make(bt_long, 8)->GetIndex();
 			break;
 		}
-		tptr->GetBtp()->isConst = TRUE;
 		tptr->val_flag = 1;
-		tptr->isConst = TRUE;
 		tptr->isUnsigned = TRUE;
 	}
 	else {
@@ -275,7 +262,6 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 	pnode->constflag = TRUE;
 	pnode->segment = rodataseg;
 	pnode->SetType(tptr);
-	tptr->isConst = TRUE;
 	return (pnode);
 }
 
@@ -323,7 +309,7 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 	tptr2 = nullptr;
 	while (lastst != end) {
 		tptr = ParseNonCommaExpression(&pnode);
-		if (!tptr->isConst)
+		if (!pnode->constflag)
 			cnst = false;
 		if (tptr2 != nullptr && tptr->type != tptr2->type)
 			consistentType = false;
@@ -1405,6 +1391,7 @@ ENODE* Expression::MakeMemberNameNode(SYM* sp)
 	switch (node->nodetype) {
 	case en_regvar:		node->etype = bt_long;	break;//sp->tp->type;
 	case en_fpregvar:	node->etype = sp->tp->type;	break;//sp->tp->type;
+	case en_pregvar:	node->etype = sp->tp->type;	break;//sp->tp->type;
 	default:			node->etype = bt_pointer;break;//sp->tp->type;
 	}
 	return (node);
@@ -1432,6 +1419,8 @@ ENODE* Expression::MakeAutoNameNode(SYM* sp)
 	if (sp->IsRegister) {
 		if (sp->tp->IsFloatType())
 			node->nodetype = en_fpregvar;
+		else if (sp->tp->IsPositType())
+			node->nodetype = en_pregvar;
 		else
 			node->nodetype = en_regvar;
 		//(*node)->i = sp->reg;
@@ -1443,6 +1432,7 @@ ENODE* Expression::MakeAutoNameNode(SYM* sp)
 	switch (node->nodetype) {
 	case en_regvar:		node->etype = bt_long;	break;//sp->tp->type;
 	case en_fpregvar:	node->etype = sp->tp->type;	break;//sp->tp->type;
+	case en_pregvar:	node->etype = sp->tp->type;	break;//sp->tp->type;
 	default:			node->etype = bt_pointer;break;//sp->tp->type;
 	}
 	return (node);

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -284,4 +284,26 @@ SYM *TABLE::Find(std::string na, bool opt)
 	return match[matchno-1];
 }
 
+SYM** TABLE::GetParameters()
+{
+	static SYM* params[30];
 
+	SYM* thead, * first;
+
+	ZeroMemory(&params, sizeof(params));
+	thead = SYM::GetPtr(head);
+	first = thead;
+	while (thead != nullptr) {
+		if (thead->IsParameter) {
+			if (thead->parmno < 30) {
+				params[thead->parmno] = thead;
+			}
+		}
+		thead = thead->GetNextPtr();
+		if (thead == first) {
+			dfs.printf("Circular list.\n");
+			throw new C64PException(ERR_CIRCULAR_LIST, 1);
+		}
+	}
+	return (&params[0]);
+}

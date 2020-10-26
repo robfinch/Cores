@@ -147,7 +147,6 @@ void Declaration::ParseVoid()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst==kw_interrupt) {
 		isInterrupt = TRUE;
@@ -190,7 +189,6 @@ void Declaration::ParseShort()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	head->isShort = TRUE;
 }
 
@@ -251,7 +249,6 @@ void Declaration::ParseLong()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 }
 
 void Declaration::ParseInt()
@@ -271,7 +268,6 @@ void Declaration::ParseInt()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == colon) {
 		NextToken();
@@ -327,7 +323,6 @@ void Declaration::ParseBit()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	head->isBits = true;
 	NextToken();
 	head->size = 8;
@@ -340,7 +335,6 @@ void Declaration::ParseFloat()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == colon) {
 		NextToken();
@@ -374,7 +368,6 @@ void Declaration::ParseDouble()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst==kw_vector) {
 		int btp = head->GetIndex();
@@ -393,7 +386,6 @@ void Declaration::ParsePosit()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == colon) {
 		NextToken();
@@ -429,7 +421,6 @@ void Declaration::ParseTriple()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == kw_vector) {
 		int btp = head->GetIndex();
@@ -449,7 +440,6 @@ void Declaration::ParseFloat128()
 	head->precision = 128;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == kw_vector) {
 		int btp = head->GetIndex();
@@ -470,7 +460,6 @@ void Declaration::ParseVector()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	btp = head->GetIndex();
 	head = TYP::Make(bt_vector,512);
@@ -487,7 +476,6 @@ void Declaration::ParseVectorMask()
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	head->numele = maxVL;
 	NextToken();
 	bit_max = head->precision;
@@ -510,7 +498,6 @@ void Declaration::ParseInt32()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	head->isShort = TRUE;
 }
 
@@ -531,7 +518,6 @@ void Declaration::ParseInt64()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	head->isShort = TRUE;
 }
 
@@ -548,7 +534,6 @@ void Declaration::ParseChar()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst == colon) {
 		NextToken();
@@ -588,7 +573,6 @@ void Declaration::ParseInt8()
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	NextToken();
 	if (lastst==kw_oscall) {
 		isOscall = TRUE;
@@ -615,7 +599,6 @@ void Declaration::ParseByte()
 	head->isUnsigned = !isSigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
-	head->isConst = isConst;
 	bit_max = head->precision;
 }
 
@@ -801,7 +784,6 @@ int Declaration::ParseSpecifier(TABLE *table)
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
-				head->isConst = isConst;
 				NextToken();
 				bit_max = 32;
 				goto lxit;
@@ -818,7 +800,6 @@ int Declaration::ParseSpecifier(TABLE *table)
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
-				head->isConst = isConst;
 				NextToken();
 				bit_max = head->precision;
 				goto lxit;
@@ -853,7 +834,6 @@ int Declaration::ParseSpecifier(TABLE *table)
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
-				head->isConst = isConst;
 				NextToken();
 				bit_max = 64;
 				goto lxit;
@@ -1357,6 +1337,7 @@ j2:
 SYM *Declaration::ParseSuffix(SYM *sp)
 {
 	TYP* tp;
+	ENODE* node;
 
 	dfs.printf("<ParseDeclSuffix>\n");
 
@@ -1382,6 +1363,12 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 			ParseSuffixOpenpa(sp->fi);
 			goto lxit;
       
+		case assign:
+			NextToken();
+			GetConstExpression(&node);
+			sp->defval = node;
+			goto lxit;
+
 		default:
 			goto lxit;
 		}
@@ -1754,8 +1741,6 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			}
 			sp->storage_class = al;
 			sp->isConst = isConst;
-			if (isConst)
-				sp->tp->isConst = TRUE;
 			if (al != sc_member && !parsingParameterList) {
 				//							sp->isTypedef = isTypedef;
 				if (isTypedef) {

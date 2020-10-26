@@ -131,6 +131,27 @@ class Statement;
 class TYP;
 class TypeArray;
 
+class Value : public CompilerType
+{
+public:
+	Value* MakeNew();
+	TYP* typ;
+	union {
+		int64_t i;
+		uint64_t u;
+		double f;
+		uint16_t wa[8];
+		char* s;
+	} value;
+	// The compiler does not support initialization of complex types in unions.
+	Posit64 posit;
+	Float128 f128;
+	double f1, f2;
+	std::string* sp;
+	std::string* msp;
+	std::string* udnm;			// undecorated name
+};
+
 class DerivedMethod
 {
 public:
@@ -149,11 +170,17 @@ public:
 	bool sub;
 	bool IsArg;
 	bool IsColorable;
+	bool isGP;
+	bool isFP;
+	bool isPosit;
 	ENODE *offset;
 	int val;
 public:
 	static bool IsCalleeSave(int regno);
 	bool IsArgReg();
+	bool IsPositReg();
+	bool IsFloatReg();
+	bool ContainsPositConst();
 	static void MarkColorable();
 };
 
@@ -177,6 +204,7 @@ public:
 	int Find(std::string na);
 	int Find(std::string na,__int16,TypeArray *typearray, bool exact);
 	int FindRising(std::string na);
+	SYM** GetParameters();
 	TABLE *GetPtr(int n);
 	void SetOwner(int n) { owner = n; };
 	int GetHead() { return head; };
@@ -301,6 +329,7 @@ public:
 	OCODE *spAdjust;				// place where sp adjustment takes place
 	OCODE *rcode;
 public:
+	Function();
 	void RemoveDuplicates();
 	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
@@ -364,7 +393,7 @@ public:
 	int64_t SizeofReturnBlock();
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
-	void GenReturn(Statement *stmt);
+	void GenerateReturn(Statement *stmt);
 	void Gen();
 
 	void CreateVars();
@@ -407,7 +436,9 @@ public:
 	unsigned int dtor : 1;
 	ENODE *initexp;
 	__int16 reg;
-    union {
+	ENODE* defval;	// default value
+	int16_t parmno;	// parameter number
+	union {
         int64_t i;
         uint64_t u;
         double f;
@@ -463,7 +494,6 @@ public:
 	unsigned int isShort : 1;
 	unsigned int isVolatile : 1;
 	unsigned int isIO : 1;
-	unsigned int isConst : 1;	// const in declaration
 	unsigned int isResv : 1;
 	unsigned int isBits : 1;
 	__int16 precision;			// precision of the numeric in bits
@@ -574,6 +604,8 @@ public:
 	__int8 scale;
 	short int rg;
 	// The following could be in a value union
+	// Under construction: use value class
+	Value val;
 	int64_t i;
 	double f;
 	double f1, f2;
@@ -589,7 +621,7 @@ public:
 
 	ENODE* Clone();
 
-	void SetType(TYP* t) { tp = t; if (t) etype = t->type; };
+	void SetType(TYP* t) { tp = t; if (t) etype = t->type; val.typ = tp; };
 	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype == en_addrof); };
 	bool IsFloatType() { return (nodetype == en_addrof || nodetype == en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
 	bool IsPositType() {
@@ -997,6 +1029,7 @@ public:
 	Operand* GenerateFieldrefDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand* GenerateRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand* GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
+	Operand* GeneratePositRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size);
 	Operand *GenerateDereference(ENODE *node, int flags, int size, int su, int opt);
 	Operand* GenerateDereference2(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, int opt);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
@@ -1214,7 +1247,7 @@ public:
 class Map
 {
 public:
-	int newnums[1024];
+	int newnums[3072];
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -1253,7 +1286,7 @@ public:
 	CSet low, high;
 	IntStack *stk;
 	static int k;
-	short int map[1024];
+	short int map[3072];
 	short int pass;
 	// Cost accounting
 	float loads;
@@ -1310,6 +1343,7 @@ public:
 	IntStack *istk;
 	int subscript;
 	int64_t spillOffset;	// offset in stack where spilled
+	e_rc regclass;
 	static int nvar;
 public:
 	static Var *MakeNew();
@@ -1417,6 +1451,7 @@ public:
   short int       reg;            /* AllocateRegisterVarsd register */
   unsigned int    voidf : 1;      /* cannot optimize flag */
   unsigned int    isfp : 1;
+	unsigned int	isPosit : 1;
 public:
 	void AccUses(int val);					// accumulate uses
 	void AccDuses(int val);					// accumulate duses
@@ -1447,6 +1482,7 @@ public:
 	void GenerateRegMask(CSE *csp, CSet *mask, CSet *rmask);
 	int AllocateGPRegisters();
 	int AllocateFPRegisters();
+	int AllocatePositRegisters();
 	int AllocateVectorRegisters();
 	int AllocateRegisterVars();
 	void InitializeTempRegs();

@@ -193,10 +193,28 @@ void Operand::MakeLegal(int flags, int size)
 			}
 			// If there is a choice between r0 and #0 choose r0.
 			else if (flags & am_imm) {
-				if (flags & am_reg) {
-					if (offset->i == 0) {
-						mode = am_reg;
-						preg = 0;
+				if (tp && tp->IsFloatType()) {
+					if (flags & am_fpreg) {
+						if (offset->f128.IsZero()) {
+							mode = am_fpreg;
+							preg = 0;
+						}
+					}
+				}
+				else if (tp && tp->IsPositType()) {
+					if (flags & am_preg) {
+						if (offset->posit.val == 0) {
+							mode = am_preg;
+							preg = 0;
+						}
+					}
+				}
+				else {
+					if (flags & am_reg) {
+						if (offset->i == 0) {
+							mode = am_reg;
+							preg = 0;
+						}
 					}
 				}
 				return;
@@ -260,6 +278,9 @@ void Operand::MakeLegal(int flags, int size)
 			break;
 		case am_reg:
 			GenerateDiadic(op_mov, 0, ap2, this);
+			break;
+		case am_preg:
+			GenerateDiadic(op_ptoi, 0, ap2, this);
 			break;
 		case am_fpreg:
 			GenerateDiadic(op_ftoi, fpsize(), ap2, this);
@@ -331,8 +352,9 @@ void Operand::MakeLegal(int flags, int size)
 		if (mode == am_preg)
 			return;
 		ReleaseTempReg(this);      /* maybe we can use it... */
-		ap2 = GetTempFPRegister();
-		ap2->tp = this->tp;	// Load needs this
+		ap2 = GetTempPositRegister();
+		ap2->type = stdposit.GetIndex();
+		ap2->tp = &stdposit;	// load needs this
 		switch (mode) {
 		case am_ind:
 		case am_indx:
@@ -345,13 +367,16 @@ void Operand::MakeLegal(int flags, int size)
 			ReleaseTempReg(ap1);
 			break;
 		case am_reg:
-			GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
+			if (regs[preg].ContainsPositConst())
+				GenerateDiadic(op_mov, 0, ap2, this);
+			else
+				GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
 			break;
 		default:
 			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		}
-		mode = am_fpreg;
+		mode = am_preg;
 		switch (ap2->fpsize()) {
 		case 'd':	type = stdposit.GetIndex(); break;
 		case 's': type = stdposit32.GetIndex(); break;

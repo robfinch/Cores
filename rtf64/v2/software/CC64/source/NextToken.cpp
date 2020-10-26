@@ -441,7 +441,7 @@ void getnum()
 {       register int    i;
   bool isPosit = false;
         i = 0;
-        
+        float_precision = ' ';
         ival = 0;
         rval = 0.0;
         pval64.Zero();

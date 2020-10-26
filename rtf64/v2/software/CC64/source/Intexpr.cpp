@@ -179,6 +179,10 @@ int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
 		if (pnode)
 			*pnode = node;
 		return ((int64_t)&node->f128);
+	case en_pcon:
+		if (pnode)
+			*pnode = node;
+		return (node->posit.val);
 	case en_icon:
 	case en_cnacon:
 		if (pnode)

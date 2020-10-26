@@ -109,6 +109,11 @@ int64_t ENODE::GetReferenceSize()
 			return(tp->size);
 		else
 			return (sizeOfFPD);
+	case en_pregvar:
+		if (tp)
+			return(tp->size);
+		else
+			return (sizeOfFPD);
 	case en_tempref:
 	case en_regvar:
 		return (sizeOfWord);
@@ -302,6 +307,8 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 		return (node1->rg == node2->rg);
 	case en_fpregvar:
 		return (node1->rg == node2->rg);
+	case en_pregvar:
+		return (node1->rg == node2->rg);
 	case en_tempref:
 	case en_tempfpref:
 	case en_icon:
@@ -410,7 +417,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 
 	esize = 0;
 	this->tp = tp;
-	this->tp->isConst = isConst;
 	this->esize = tp->size;
 	if (tp->isArray) {
 		ne = tp->numele;
@@ -419,7 +425,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 		for (ep = p[0]->p[2]; ep; ep = ep->p[2]) {
 			cnt++;
 			ep->tp = btp;
-			ep->tp->isConst = isConst;
 			ep->esize = btp->size;
 			//if (!ep->tp->isConst)
 			//	isConst = false;
@@ -446,7 +451,6 @@ bool ENODE::AssignTypeToList(TYP *tp)
 		thead = SYM::GetPtr(tp->lst.GetHead());
 		for (ep = p[0]->p[2]; thead && ep; ) {
 			ep->tp = thead->tp;
-			ep->tp->isConst = isConst;
 			ep->esize = thead->tp->size;
 			if (thead->tp->IsAggregateType()) {
 				if (ep->nodetype == en_aggregate) {
@@ -479,6 +483,15 @@ void ENODE::repexpr()
 	if (this == nullptr)
 		return;
 	switch (nodetype) {
+	case en_temppref:
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
+			csp->isPosit = TRUE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_pregvar;
+				rg = csp->reg;
+			}
+		}
+		break;
 	case en_fcon:
 	case en_tempfpref:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
@@ -491,6 +504,14 @@ void ENODE::repexpr()
 		break;
 	// Autofcon resolve to *pointers* which are stored in integer registers.
 	case en_autopcon:
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
+			csp->isPosit = FALSE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_pregvar;
+				rg = csp->reg;
+			}
+		}
+		break;
 	case en_autofcon:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
 			csp->isfp = FALSE; //**** a kludge
@@ -511,6 +532,7 @@ void ENODE::repexpr()
 		*/
 	case en_nacon:
 	case en_labcon:
+	case en_pcon:
 	case en_icon:
 	case en_autovcon:
 	case en_autocon:
@@ -570,6 +592,7 @@ void ENODE::repexpr()
 	case en_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
+				//nodetype = csp->isfp ? en_fpregvar : csp->isPosit ? en_pregvar : en_regvar;
 				nodetype = en_regvar;
 				rg = csp->reg;
 			}
@@ -678,6 +701,7 @@ void ENODE::repexpr()
 		break;
 	case en_regvar:
 	case en_fpregvar:
+	case en_pregvar:
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
@@ -798,6 +822,7 @@ void ENODE::scanexpr(int duse)
 
 	switch (nodetype) {
 	case en_fpregvar:
+	case en_pregvar:
 	case en_regvar:
 		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
@@ -811,9 +836,11 @@ void ENODE::scanexpr(int duse)
 		break;
 	case en_autopcon:
 	case en_autofcon:
+	case en_temppref:
 	case en_tempfpref:
 		csp = OptInsertAutocon(duse);
 		csp->isfp = FALSE;
+		csp->isPosit = false;
 		break;
 	case en_autovcon:
 	case en_autocon:
@@ -1605,14 +1632,14 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
 		ap3->type = ap1->type;
 	}
-	if (IsPositType())
+	else if (IsPositType())
 	{
-		ap3 = GetTempFPRegister();
+		ap3 = GetTempPositRegister();
 		if (IsEqual(p[0], p[1]))
 			dup = !opt_nocgo;
-		ap1 = cg.GenerateExpression(p[0], am_fpreg, size);
+		ap1 = cg.GenerateExpression(p[0], am_preg, size);
 		if (!dup)
-			ap2 = cg.GenerateExpression(p[1], am_fpreg, size);
+			ap2 = cg.GenerateExpression(p[1], am_preg, size);
 		// Generate a convert operation ?
 		if (!dup) {
 			if (ap1->fpsize() != ap2->fpsize()) {
@@ -1621,9 +1648,9 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 			}
 		}
 		if (dup)
-			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
+			GenerateTriadic(op, 0, ap3, ap1, ap1);
 		else
-			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+			GenerateTriadic(op, 0, ap3, ap1, ap2);
 		ap3->type = ap1->type;
 	}
 	else if (op == op_vex) {
@@ -2051,8 +2078,8 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		ofs.write(buf);
 		break;
 	case en_pcon:
-		if (!opt)
-			goto j1;
+		//if (!opt)
+		//	goto j1;
 		switch (tp->precision) {
 		case 16:	pos16 = posit.ConvertTo16();  sprintf_s(buf, sizeof(buf), "0x%04x", pos16.val); break;
 		case 32:	pos32 = posit.ConvertTo32();  sprintf_s(buf, sizeof(buf), "0x%08x", pos32.val); break;

@@ -292,6 +292,12 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 
 	switch (a->type) {
 
+	// None will match any type.
+	// For argument lists where the argument is not specified so a default is
+	// assumed.
+	case bt_none:
+		return (true);
+
 	case bt_float:
 		if (b->type == bt_float)
 			return (true);

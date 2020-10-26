@@ -128,7 +128,7 @@ void CodeGenerator::GenerateComment(char *cm)
 
 void CodeGenerator::GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 {
-	if (ap3->tp->IsPositType()) {
+	if (ap3->type==stdposit.GetIndex()) {
 		switch (ap3->tp->precision) {
 		case 16:
 			GenerateDiadic(op_pldw, 0, ap3, ap1);
@@ -189,7 +189,20 @@ void CodeGenerator::GenerateStore(Operand *ap1, Operand *ap3, int size)
 	//	GenerateDiadic(op_std, 0, ap1, ap3);
 	//}
 	//else
-	if (ap1->type==stdvector.GetIndex())
+	if (ap3->tp->IsPositType()) {
+		switch (ap3->tp->precision) {
+		case 16:
+			GenerateDiadic(op_pstw, 0, ap1, ap3);
+			break;
+		case 32:
+			GenerateDiadic(op_pstt, 0, ap1, ap3);
+			break;
+		default:
+			GenerateDiadic(op_psto, 0, ap1, ap3);
+			break;
+		}
+	}
+	else if (ap1->type==stdvector.GetIndex())
 	    GenerateDiadic(op_sv,0,ap1,ap3);
 	else if (ap1->type == stdflt.GetIndex()) {
 		GenerateDiadic(op_fsto, 0, ap1, ap3);
@@ -511,6 +524,24 @@ Operand* CodeGenerator::GenerateFPRegvarDereference(ENODE* node, TYP* tp, bool i
 	return (ap1);
 }
 
+Operand* CodeGenerator::GeneratePositRegvarDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
+{
+	Operand* ap1;
+
+	/*error(ERR_DEREF)*/;
+	ap1 = allocOperand();
+	ap1->isPtr = isRefType;
+	ap1->mode = (node->rg >= regFirstArg && node->rg <= regLastArg) ? am_preg : am_ind;
+	ap1->preg = node->rg;
+	ap1->tp = tp;
+	switch (node->tp->type) {
+	case bt_posit:	ap1->type = stdposit.GetIndex(); break;
+	}
+	ap1->MakeLegal(flags, size);
+	Leave("</Genderef>", 3);
+	return (ap1);
+}
+
 Operand* CodeGenerator::GenerateLabconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
 {
 	Operand* ap1;
@@ -605,6 +636,7 @@ Operand* CodeGenerator::GenerateDereference2(ENODE* node, TYP* tp, bool isRefTyp
 	case en_labcon: return (GenerateLabconDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_regvar: return (GenerateRegvarDereference(node, tp, isRefType, flags, size));
 	case en_fpregvar: return (GenerateFPRegvarDereference(node, tp, isRefType, flags, size));
+	case en_pregvar: return (GeneratePositRegvarDereference(node, tp, isRefType, flags, size));
 	case en_bitoffset: return (GenerateBitoffsetDereference(node, tp, isRefType, flags, size, opt));
 	default:	return (nullptr);
 	}
@@ -753,7 +785,7 @@ void CodeGenerator::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int 
 	Operand *ap3;
 	int tp;
 
-	if (typ == bt_double || typ == bt_float || typ == bt_posit) {
+	if (typ == bt_double || typ == bt_float) {
 		ap3 = GetTempFPRegister();
 		GenerateLoad(ap3, ap1, ssize, ssize);
 		GenerateTriadic(op, 0, ap3, ap3, ap2);
@@ -761,7 +793,15 @@ void CodeGenerator::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int 
 		ReleaseTempReg(ap3);
 		return;
 	}
-	if (ap1->type==stddouble.GetIndex() || ap1->type==stdposit.GetIndex()) {
+	if (typ == bt_posit) {
+		ap3 = GetTempPositRegister();
+		GenerateLoad(ap3, ap1, ssize, ssize);
+		GenerateTriadic(op, 0, ap3, ap3, ap2);
+		GenerateStore(ap3, ap1, ssize);
+		ReleaseTempReg(ap3);
+		return;
+	}
+	if (ap1->type==stddouble.GetIndex()) {
      	ap3 = GetTempFPRegister();
 		GenerateLoad(ap3,ap1,ssize,ssize);
 		GenerateTriadic(op,ap1->FloatSize,ap3,ap3,ap2);
@@ -769,7 +809,15 @@ void CodeGenerator::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize, int 
 		ReleaseTempReg(ap3);
 		return;
 	}
-	else if (ap1->type==stdvector.GetIndex()) {
+	if (ap1->type == stdposit.GetIndex()) {
+		ap3 = GetTempPositRegister();
+		GenerateLoad(ap3, ap1, ssize, ssize);
+		GenerateTriadic(op, ap1->FloatSize, ap3, ap3, ap2);
+		GenerateStore(ap3, ap1, ssize);
+		ReleaseTempReg(ap3);
+		return;
+	}
+	if (ap1->type==stdvector.GetIndex()) {
    		ap3 = GetTempVectorRegister();
 		GenerateLoad(ap3,ap1,ssize,ssize);
 		GenerateTriadic(op,0,ap3,ap3,ap2);
@@ -829,19 +877,24 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
 		return (ap3);
 	}
 	if (node->IsFloatType()) {
-      ap1 = GenerateExpression(node->p[0],am_fpreg | am_mem,ssize);
-      ap2 = GenerateExpression(node->p[1],am_fpreg,size);
-      op = op_fmul;
-    }
-    else if (node->etype==bt_vector) {
-      ap1 = GenerateExpression(node->p[0],am_reg | am_mem,ssize);
-      ap2 = GenerateExpression(node->p[1],am_reg,size);
-			op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
-    }
-    else {
-      ap1 = GenerateExpression(node->p[0],am_all & ~am_imm,ssize);
-      ap2 = GenerateExpression(node->p[1],am_reg | am_imm,size);
-    }
+    ap1 = GenerateExpression(node->p[0],am_fpreg | am_mem,ssize);
+    ap2 = GenerateExpression(node->p[1],am_fpreg,size);
+    op = op_fmul;
+  }
+	else if (node->IsPositType()) {
+		ap1 = GenerateExpression(node->p[0], am_preg | am_mem, ssize);
+		ap2 = GenerateExpression(node->p[1], am_preg, size);
+		op = op_pmul;
+	}
+	else if (node->etype==bt_vector) {
+    ap1 = GenerateExpression(node->p[0],am_reg | am_mem,ssize);
+    ap2 = GenerateExpression(node->p[1],am_reg,size);
+		op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
+  }
+  else {
+    ap1 = GenerateExpression(node->p[0],am_all & ~am_imm,ssize);
+    ap2 = GenerateExpression(node->p[1],am_reg | am_imm,size);
+  }
 	if (ap1->mode==am_reg) {
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
 			if (op == op_mulu || op == op_mul) {
@@ -856,6 +909,12 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
 	    GenerateTriadic(op,ssize==4?'s':ssize==8?'d':ssize==12?'t':ssize==16 ? 'q' : 'd',ap1,ap1,ap2);
 	    ReleaseTempReg(ap2);
 	    ap1->MakeLegal(flags,size);
+		return (ap1);
+	}
+	else if (ap1->mode == am_preg) {
+		GenerateTriadic(op, ssize == 4 ? 's' : ssize == 8 ? ' ' : ssize == 2 ? 'h' : ' ', ap1, ap1, ap2);
+		ReleaseTempReg(ap2);
+		ap1->MakeLegal(flags, size);
 		return (ap1);
 	}
 	else {
@@ -1112,6 +1171,9 @@ void CodeGenerator::GenLoadConst(Operand *ap1, Operand *ap2)
 	}
 	else
 		GenerateDiadic(op_ldi, 0, ap2, ap1);
+	// ap2 inherits type from ap1
+	ap2->tp = ap1->tp;
+	regs[ap2->preg].offset = ap1->offset;
 }
 
 void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
@@ -1264,15 +1326,17 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 	//	ap2 = GenerateExpression(node->p[1],am_mem,size);
 	//}
 	//else {
-		ap1 = GenerateExpression(node->p[0], am_reg | am_fpreg | am_mem | am_vreg | am_vmreg, ssize);
+		ap1 = GenerateExpression(node->p[0], am_reg | am_fpreg | am_preg | am_mem | am_vreg | am_vmreg, ssize);
 		flg = am_all;
 		if (ap1->type == stddouble.GetIndex())
 			flg = am_fpreg;
+		else if (ap1->type == stdposit.GetIndex())
+			flg = am_preg;
 		ap2 = GenerateExpression(node->p[1],flg,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    ap2->GenZeroExtend(size,ssize);
 //	}
-	if (ap1->mode == am_reg || ap1->mode==am_fpreg) {
+	if (ap1->mode == am_reg || ap1->mode==am_fpreg || ap1->mode == am_preg) {
 		mr = &regs[ap1->preg];
 		if (mr->assigned)
 			mr->modified = true;
@@ -1310,13 +1374,26 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 				GenerateDiadic(op_mov,0,ap1,ap2);
 			mr->modified = true;
 			break;
+		case am_preg:
+			GenerateHint(2);
+			if (ap1->mode == am_preg)
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+			else
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+			mr->modified = true;
+			break;
 		case am_imm:
 			//if (ap2->isPtr)
 			//	GenerateZeradic(op_setwb);
 			GenLoadConst(ap2, ap1);
 			//GenerateDiadic(op_ldi,0,ap1,ap2);
 			ap1->isPtr = ap2->isPtr;
-			mr->val = ap2->offset->i;
+			if (ap2->mode == am_preg)
+				mr->val = ap2->offset->posit.val;
+			else if (ap2->mode == am_fpreg)
+				mr->val = ap2->offset->f;
+			else
+				mr->val = ap2->offset->i;
 			mr->offset = ap2->offset;
 			mr->isConst = true;
 			break;
@@ -1336,7 +1413,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 	}
 	// ap1 is memory
 	else {
-		if (ap2->mode == am_reg || ap2->mode == am_fpreg) {
+		if (ap2->mode == am_reg || ap2->mode == am_fpreg || ap2->mode == am_preg) {
 		    GenerateStore(ap2,ap1,ssize);
         }
 		else if (ap2->mode == am_imm) {
@@ -1589,16 +1666,23 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 	case en_fcon:
 		ap1 = GenFloatcon(node, flags, size);
 		goto retpt;
-
+/*
 	case en_pcon:
 		ap1 = GenPositcon(node, flags, size);
 		goto retpt;
-
+*/
+	case en_pcon:
+		ap1 = allocOperand();
+		ap1->mode = am_imm;
+		ap1->offset = node;
+		ap1->offset->i = ap1->offset->posit.val;
+		ap1->tp = node->tp;
+		Leave("GenExpression", 3);
+		goto retpt;
 	case en_icon:
     ap1 = allocOperand();
     ap1->mode = am_imm;
     ap1->offset = node;
-    ap1->MakeLegal(flags,size);
 		ap1->tp = node->tp;
 		Leave("GenExpression",3);
 		goto retpt;
@@ -1736,6 +1820,22 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ap1->tp = node->tp;
 		goto retpt;
 
+	case en_temppref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_preg;
+		ap1->preg = node->rg;
+		ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_posit: ap1->type = stdposit.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stdposit.GetIndex();
+		ap1->tp = node->tp;
+		goto retpt;
+
 	case en_fpregvar:
 //    case en_fptempref:
     ap1 = allocOperand();
@@ -1755,6 +1855,23 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		else
 			ap1->type = stddouble.GetIndex();
 		ap1->MakeLegal(flags,size);
+		goto retpt;
+
+	case en_pregvar:
+		//    case en_fptempref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_preg;
+		ap1->preg = node->rg;
+		ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_posit: ap1->type = stdposit.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stdposit.GetIndex();
+		ap1->MakeLegal(flags, size);
 		goto retpt;
 
 	case en_abs:	return node->GenerateUnary(flags,size,op_abs);

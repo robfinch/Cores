@@ -28,6 +28,13 @@ extern char irfile[256];
 extern int defaultcc;
 extern bool isLeaf;
 
+Function::Function()
+{
+	rmask = CSet::MakeNew();
+	fprmask = CSet::MakeNew();
+	prmask = CSet::MakeNew();
+}
+
 Statement *Function::ParseBody()
 {
 	std::string lbl;
@@ -295,13 +302,15 @@ void Function::SaveGPRegisterVars()
 	int cnt;
 	int nn;
 
-	if (rmask->NumMember()) {
-		cnt = 0;
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
-		rmask->resetPtr();
-		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
-			GenerateDiadic(op_sth, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
-			cnt += sizeOfWord;
+	if (rmask) {
+		if (rmask->NumMember()) {
+			cnt = 0;
+			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+			rmask->resetPtr();
+			for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+				GenerateDiadic(op_sth, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				cnt += sizeOfWord;
+			}
 		}
 	}
 }
@@ -311,13 +320,15 @@ void Function::SaveFPRegisterVars()
 	int cnt;
 	int nn;
 
-	if (fprmask->NumMember()) {
-		cnt = 0;
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
-		fprmask->resetPtr();
-		for (nn = fprmask->lastMember(); nn >= 0; nn = fprmask->prevMember()) {
-			GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
-			cnt += sizeOfWord;
+	if (fprmask) {
+		if (fprmask->NumMember()) {
+			cnt = 0;
+			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
+			fprmask->resetPtr();
+			for (nn = fprmask->lastMember(); nn >= 0; nn = fprmask->prevMember()) {
+				GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				cnt += sizeOfWord;
+			}
 		}
 	}
 }
@@ -327,13 +338,15 @@ void Function::SavePositRegisterVars()
 	int cnt;
 	int nn;
 
-	if (prmask->NumMember()) {
-		cnt = 0;
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(prmask->NumMember() * 8));
-		prmask->resetPtr();
-		for (nn = prmask->lastMember(); nn >= 0; nn = prmask->prevMember()) {
-			GenerateDiadic(op_psto, ' ', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
-			cnt += sizeOfWord;
+	if (prmask) {	// optimization may be off
+		if (prmask->NumMember()) {
+			cnt = 0;
+			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(prmask->NumMember() * 8));
+			prmask->resetPtr();
+			for (nn = prmask->lastMember(); nn >= 0; nn = prmask->prevMember()) {
+				GenerateDiadic(op_psto, ' ', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				cnt += sizeOfWord;
+			}
 		}
 	}
 }
@@ -342,6 +355,7 @@ void Function::SaveRegisterVars()
 {
 	SaveGPRegisterVars();
 	SaveFPRegisterVars();
+	SavePositRegisterVars();
 }
 
 
@@ -434,6 +448,8 @@ int Function::RestoreGPRegisterVars()
 	int cnt2 = 0, cnt;
 	int nn;
 
+	if (save_mask == nullptr)
+		return (0);
 	if (save_mask->NumMember()) {
 		cnt2 = cnt = save_mask->NumMember()*sizeOfWord;
 		cnt = 0;
@@ -452,6 +468,8 @@ int Function::RestoreFPRegisterVars()
 	int cnt2 = 0, cnt;
 	int nn;
 
+	if (fpsave_mask == nullptr)
+		return (0);
 	if (fpsave_mask->NumMember()) {
 		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfWord;
 		fpsave_mask->resetPtr();
@@ -469,8 +487,10 @@ int Function::RestorePositRegisterVars()
 	int cnt2 = 0, cnt;
 	int nn;
 
+	if (psave_mask == nullptr)
+		return (0);
 	if (psave_mask->NumMember()) {
-		cnt2 = cnt = (fpsave_mask->NumMember() - 1) * sizeOfWord;
+		cnt2 = cnt = (psave_mask->NumMember() - 1) * sizeOfWord;
 		psave_mask->resetPtr();
 		for (nn = psave_mask->nextMember(); nn >= 1; nn = psave_mask->nextMember()) {
 			GenerateDiadic(op_pldo, ' ', compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
@@ -483,6 +503,7 @@ int Function::RestorePositRegisterVars()
 
 void Function::RestoreRegisterVars()
 {
+	RestorePositRegisterVars();
 	RestoreFPRegisterVars();
 	RestoreGPRegisterVars();
 }
@@ -627,7 +648,7 @@ void Function::SetupReturnBlock()
 
 // Generate a return statement.
 //
-void Function::GenReturn(Statement *stmt)
+void Function::GenerateReturn(Statement *stmt)
 {
 	Operand *ap, *ap2;
 	int nn;
@@ -643,8 +664,10 @@ void Function::GenReturn(Statement *stmt)
 		initstack();
 		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
 		isPosit = sym->tp->GetBtp() && sym->tp->GetBtp()->IsPositType();
-		if (isFloat|isPosit)
+		if (isFloat)
 			ap = cg.GenerateExpression(stmt->exp, am_fpreg, sizeOfFP);
+		else if (isPosit)
+			ap = cg.GenerateExpression(stmt->exp, am_preg, sizeOfPosit);
 		else
 			ap = cg.GenerateExpression(stmt->exp, am_reg | am_imm, sizeOfWord);
 		GenerateMonadic(op_hint, 0, MakeImmediate(2));
@@ -707,8 +730,14 @@ void Function::GenReturn(Statement *stmt)
 			}
 		}
 		else if (ap->mode == am_fpreg) {
-			if (isFloat|isPosit)
+			if (isFloat)
 				GenerateDiadic(op_fmov, 0, makefpreg(regFirstArg), ap);
+			else
+				GenerateDiadic(op_mov, 0, makereg(regFirstArg), ap);
+		}
+		else if (ap->mode == am_preg) {
+			if (isPosit)
+				GenerateDiadic(op_mov, 0, compiler.of.makepreg(regFirstArg), ap);
 			else
 				GenerateDiadic(op_mov, 0, makereg(regFirstArg), ap);
 		}
@@ -818,7 +847,7 @@ void Function::GenReturn(Statement *stmt)
 				if (ta->preg[nn] && (ta->preg[nn] & 0x8000) == 0)
 					;
 				else
-					toAdd += sizeOfFPD;
+					toAdd += sizeOfPosit;
 				break;
 			default:
 				if (ta->preg[nn] && (ta->preg[nn] & 0x8000) == 0)
@@ -913,10 +942,9 @@ void Function::Gen()
 			currentFn->csetbl = new CSETable;
 		currentFn->csetbl->Optimize(stmt);
 	}
-	else {
-		fpsave_mask = CSet::MakeNew();
-		save_mask = CSet::MakeNew();
-	}
+	fpsave_mask = ::fpsave_mask;// CSet::MakeNew();
+	save_mask = ::save_mask;// CSet::MakeNew();
+	psave_mask = ::psave_mask;// CSet::MakeNew();
 	stmt->Generate();
 
 	if (exceptions) {
@@ -932,7 +960,7 @@ void Function::Gen()
 	}
 
 //	if (!IsInline)
-		GenReturn(nullptr);
+		GenerateReturn(nullptr);
 
 	/*
 	// Inline code needs to branch around the default exception handler.
@@ -1228,6 +1256,7 @@ void Function::BuildParameterList(int *num, int *numa)
 			sp1 = makeint2(names[i].str);
 			//			lsyms.insert(sp1);
 		}
+		sp1->parmno = i;
 		sp1->parent = sym->parent;
 		sp1->IsParameter = true;
 		sp1->value.i = poffset;
@@ -1280,6 +1309,8 @@ void Function::BuildParameterList(int *num, int *numa)
 			if (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union || sym->tp->GetBtp()->type == bt_class) {
 				if (sym->tp->GetBtp()->size > sizeOfWord) {
 					sp1 = makeStructPtr("_pHiddenStructPtr");
+					sp1->parmno = i;
+					sp1->IsParameter = true;
 					sp1->parent = sym->parent;
 					sp1->value.i = poffset;
 					poffset += sizeOfWord;

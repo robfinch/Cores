@@ -632,7 +632,7 @@ TYP* Expression::deref(ENODE **node, TYP *tp)
 			break;
     }
 	(*node)->isVolatile = tp->isVolatile;
-	(*node)->constflag = tp->isConst;
+	//(*node)->constflag = tp->isConst;
 	(*node)->sym = sp;
 	(*node)->tp = tp;
 	dfs.printf("</Deref>");
@@ -895,32 +895,36 @@ ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 		ep1 = makenode(en_void,hidden,ep1);
 	}
 	typearray->Clear();
-	while( lastst != closepa)
-	{
-		typ = ParseNonCommaExpression(&ep2);          // evaluate a parameter
-		if (typ)
-			dfs.printf("%03d ", typ->typeno);
-		else
-			dfs.printf("%03d ", 0);
-		if (ep2==nullptr)
-			ep2 = makeinode(en_icon, 0);
-		if (typ==nullptr) {
-			error(ERR_BADARG);
-			typearray->Add((int)bt_long,0);
-		}
-		else {
-			// If a function pointer is passed, we want a pointer type
-			if (typ->typeno==bt_func || typ->typeno == bt_ifunc)
-				typearray->Add((int)bt_pointer,0);
+	if (lastst != closepa) {
+		while (1)
+		{
+			typ = ParseNonCommaExpression(&ep2);          // evaluate a parameter
+			if (typ)
+				dfs.printf("%03d ", typ->typeno);
 			else
-				typearray->Add(typ,0);
+				dfs.printf("%03d ", 0);
+			if (ep2 == nullptr) {
+				ep2 = makeinode(en_icon, 0);
+				ep2->etype = bt_none;
+			}
+			if (typ == nullptr) {
+				//error(ERR_BADARG);
+				typearray->Add((int)bt_none, 0);
+			}
+			else {
+				// If a function pointer is passed, we want a pointer type
+				if (typ->typeno == bt_func || typ->typeno == bt_ifunc)
+					typearray->Add((int)bt_pointer, 0);
+				else
+					typearray->Add(typ, 0);
+			}
+			ep1 = makenode(en_void, ep2, ep1);
+			if (lastst != comma) {
+				dfs.printf("lastst=%d", lastst);
+				break;
+			}
+			NextToken();
 		}
-		ep1 = makenode(en_void,ep2,ep1);
-		if(lastst != comma) {
-			dfs.printf("lastst=%d", lastst);
-			break;
-		}
-		NextToken();
 	}
 	if (lastst==closepa)
 		NextToken();
@@ -2748,7 +2752,7 @@ TYP *Expression::ParseNonCommaExpression(ENODE **node)
 	postfixList = o_pfl;
 	if (*node)
     (*node)->SetType(tp);
-  return tp;
+  return (tp);
 }
 
 /*
