@@ -59,7 +59,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -87,6 +87,7 @@ entity xbusInputSERDES is
       pIDLY_CE : in STD_LOGIC;   --IDELAYE2 CE
       pIDLY_INC : in STD_LOGIC;  --IDELAYE2 Tap Increment
       pIDLY_CNT : out std_logic_vector(kIDLY_TapWidth-1 downto 0);  --IDELAYE2 Current Tap Count
+      pIDLY_CNTI : in std_logic_vector(kIDLY_TapWidth-1 downto 0);
       
       aRst : in STD_LOGIC
    );
@@ -96,7 +97,17 @@ architecture Behavioral of xbusInputSERDES is
 
 signal sDataIn, sDataInDly, icascade1, icascade2, SerialClkInv : std_logic;
 signal pDataIn_q : std_logic_vector(kParallelWidth-1 downto 0); --ISERDESE2 can do 1:14 at most
+signal pIDLY_CNTq : std_logic_vector(4 downto 0);
 begin
+
+IDLY_CNT_PROC: process (PixelClk) is
+begin
+  if (aRst = '1') then
+    pIDLY_CNTq <= std_logic_vector(to_unsigned(0,5));
+  else
+    pIDLY_CNTq <= pIDLY_CNTI;
+  end if;
+end process IDLY_CNT_PROC;
 
 -- Differential input buffer for TMDS I/O standard 
 InputBuffer: IBUFDS
@@ -114,7 +125,7 @@ InputDelay: IDELAYE2
       CINVCTRL_SEL           => "FALSE",     -- TRUE, FALSE
       DELAY_SRC              => "IDATAIN",   -- IDATAIN, DATAIN
       HIGH_PERFORMANCE_MODE  => "TRUE",      -- TRUE, FALSE
-      IDELAY_TYPE            => "VARIABLE",  -- FIXED, VARIABLE, or VAR_LOADABLE
+      IDELAY_TYPE            => "VAR_LOADABLE",  -- FIXED, VARIABLE, or VAR_LOADABLE
       IDELAY_VALUE           => 0,           -- 0 to 31
       REFCLK_FREQUENCY       => 300.0,
       PIPE_SEL               => "FALSE",
@@ -129,7 +140,7 @@ InputDelay: IDELAYE2
       LD                     => pIDLY_LD,
       REGRST                 => '0', --not used in VARIABLE mode
       LDPIPEEN               => '0',
-      CNTVALUEIN             => "00000", --not used in VARIABLE mode
+      CNTVALUEIN             => pIDLY_CNTq,
       CNTVALUEOUT            => pIDLY_CNT, -- current tap value
       CINVCTRL               => '0');
 

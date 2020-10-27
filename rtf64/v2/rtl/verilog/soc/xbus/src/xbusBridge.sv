@@ -35,10 +35,11 @@
 //
 // ============================================================================
 
-module xbusBridge(rst_i, clk_i, rclk_i, locked_i,
+module xbusBridge(bridge_num_i, rst_i, clk_i, rclk_i, locked_i,
   cyc_i, stb_i, ack_o, berr_o, we_i, sel_i, adr_i, dat_i, dat_o,
-  xbd_o, xb_sync_o, xb_de_o, xbd_i);
+  xbd_o, xb_sync_o, xb_de_o, xbd_i, xb_sync_i, xb_de_i);
 parameter kParallelWidth = 14;
+input [3:0] bridge_num_i;
 input rst_i;
 input clk_i;    // 43 MHz
 input rclk_i;
@@ -56,6 +57,8 @@ output reg [((kParallelWidth-2)*3)-1:0] xbd_o;
 output reg xb_sync_o;
 output reg xb_de_o;
 input [((kParallelWidth-2)*3)-1:0] xbd_i;
+input xb_sync_i;
+input xb_de_i;
 
 reg [3:0] cnt;
 reg [3:0] state;
@@ -71,10 +74,103 @@ parameter XD64_95 = 4'd5;
 parameter XD96_127 = 4'd6;
 parameter WAIT_ACK = 4'd7;
 parameter WAIT_LOCK = 4'd8;
+parameter XA0_31 = 4'd9;
 
-reg ackw, ackr = 1'b0;
-assign ack_o = ackw|ackr;
+reg ackw, ackr = 1'b0, ackb;
+assign ack_o = ackw|ackb;
+reg [127:0] rdat_o;
 reg [5:0] ctr;
+reg [5:0] synccnt;
+reg [5:0] de_cnt;
+reg device_ready;
+reg [16:0] dev_timeout_cnt;
+reg dev_timeout;
+reg [5:0] dev_sel;
+reg sync_locked;
+reg rst_sl;
+reg [63:0] dev_ready_flag;
+reg [5:0] master_num;
+
+always @(posedge clk_i)
+if (rst_sl)
+  synccnt <= 6'd0;
+else begin
+  if (xb_sync_i)
+    synccnt <= synccnt + 2'd1;
+  else
+    synccnt <= 6'd0;
+end
+
+always @(posedge clk_i)
+if (rst_sl)
+  sync_locked <= 1'b0;
+else begin
+  if (synccnt[5])
+    sync_locked <= 1'b1;
+end
+
+// Wait up to 65536 (about 1/2 ms @ 100MHz) cycles for device to time out.
+always @(posedge clk_i)
+if (rst_sl)
+  dev_timeout_cnt <= 17'd0;
+else begin
+  dev_timeout_cnt <= dev_timeout_cnt + 2'd1;
+end
+
+always @(posedge clk_i)
+if (rst_sl)
+  dev_timeout <= 1'b0;
+else begin
+  if (dev_timeout_cnt[16])
+    dev_timeout <= 1'b1;
+end
+
+always @(posedge clk_i)
+if (rst_sl)
+  de_cnt <= 6'd0;
+else begin
+  if (xb_de_i)
+    de_cnt <= de_cnt + 2'd1;
+  else
+    de_cnt <= 6'd0;
+end
+
+always @(posedge clk_i)
+if (rst_sl)
+  device_ready <= 1'b0;
+else begin
+  if (de_cnt[5:4]==2'b11)
+    device_ready <= 1'b1;
+end
+
+// Bridge control port.
+wire cs_bridge = cyc_i && stb_i && adr_i[31:4]=={24'hFFDCF0,bridge_num_i};
+
+always @(posedge clk_i)
+if (rst_i) begin
+  ackb <= 1'b0;
+  rst_sl <= 1'b1;
+  dev_sel <= 6'd1;  //6'd0;
+  master_num <= bridge_num_i;
+end
+else begin
+  rst_sl <= 1'b0;
+  if (cs_bridge) begin
+    ackb <= 1'b1;
+    if (we_i) begin
+      if (dat_i[7]) begin
+        rst_sl <= 1'b1;
+        dev_sel <= 6'd1;//dat_i[5:0];
+      end
+    end
+    else
+      dat_o <= dev_ready_flag;
+  end
+  else begin
+    dat_o <= rdat_o;
+    ackb <= ackr;
+  end
+end
 
 // Register signals onto this domain.
 reg cyc;
@@ -90,34 +186,57 @@ wire xb_cs = cyc && stb && (adr[31:24]==8'hFB);
 
 always @(posedge clk_i)
 if (rst_i) begin
-  xb_sync_o <= 1'b1;
+  xb_sync_o <= 1'b0;
+  xb_de_o <= 1'b0;
   ctr <= 6'd0;
   ackw <= 1'b0;
-  state <= WAIT_LOCK;
+  dev_ready_flag <= 64'd0;
+  state <= WAIT_LOCK;//IDLE;
 end
 else begin
 case(state)
+
 WAIT_LOCK:
   begin
     ctr <= ctr + 2'd1;
     //xb_sync_o <= ctr < 6'd16;
-    xb_de_o <= ctr > 6'd20 && ctr < 6'd60;
+    xb_de_o <= ctr >= 6'd16 && ctr < 6'd60;
+    xb_sync_o <= ctr >= 6'd32 && ctr < 6'd48;
     xbd_o[35:32] <= 4'h0; // Send a NOP
-    xbd_o[31:0] <= 32'h0;
-    if (locked_i) begin
+    xbd_o[31:4] <= 28'h0;
+    xbd_o[7] <= 1'b1;
+    xbd_o[29:24] <= master_num;
+    xbd_o[5:0] <= dev_sel;
+    if (sync_locked & device_ready) begin
       state <= IDLE;
       xb_sync_o <= 1'b0;
+      xb_de_o <= 1'b1;
+      dev_ready_flag[dev_sel] <= 1'b1;
+    end
+    else if (dev_timeout) begin
+      dev_ready_flag[dev_sel] <= 1'b0;
+      state <= IDLE;
     end
   end
+
 IDLE:
   begin
     xbd_o[35:32] <= 4'h0; // Send a NOP
     xbd_o[31:0] <= 32'h0;
-    if (xb_cs) begin
-      xbd_o[35:32] <= 4'h1; // Send the address
-      xbd_o[31: 0] <= adr_i[31:0];
-      state <= XCTRL;
+    if (rst_sl)
+      state <= WAIT_LOCK;
+    else if (xb_cs) begin
+      xbd_o[35:32] <= 4'h0; // Send select
+      xbd_o[29:24] <= master_num;
+      xbd_o[5:0] <= dev_sel;
+      state <= XA0_31;
     end
+  end
+XA0_31:
+  begin
+    xbd_o[35:32] <= 4'h1; // Send the address
+    xbd_o[31: 0] <= adr_i[31:0];
+    state <= XCTRL;
   end
 XCTRL:
   begin
@@ -182,14 +301,17 @@ WAIT_ACK:
   begin
     ackw <= we_i;
     xbd_o[35:32] <= 4'h3; // Send a tran complete
-    xbd_o[31:0] <= 32'h0;
+    xbd_o[23:0] <= 24'h0;
     xbd_o[31] <= we_i;
-    xbd_o[29] <= 1'b1;
-    xbd_o[28] <= 1'b1;    // start slave cycle
+    xbd_o[30] <= 1'b1;
+    xbd_o[29:24] <= master_num;
+    xbd_o[23] <= 1'b1;    // start slave cycle
     xbd_o[15:0] <= sel_i;
     if (!cyc_i) begin
-      xbd_o[35:32] <= 4'h0; // Send a NOP
-      xbd_o[31:0] <= 32'h0;
+      xbd_o[35:32] <= 4'h0; // Send a deselect
+      xbd_o[31:6] <= 26'h0;
+      xbd_o[29:24] <= master_num;
+      xbd_o[5:0] <= 6'd0;   // deselect
       ackw <= 1'b0;
       state <= IDLE;
     end
@@ -217,14 +339,12 @@ always @(posedge rclk_i)
 if (rst_i) begin
   berr_cnt <= 9'h00;
   ackr <= 1'b0;
-  istate <= WAIT_LOCK;
+  istate <= IDLE;
 end
 else begin
 berr_cnt <= berr_cnt + 2'd1;
 case(istate)
-WAIT_LOCK:
-  if (locked_i)
-    state <= IDLE; 
+
 IDLE:
   begin
     ackr <= 1'b0;
@@ -240,12 +360,12 @@ RCV:
     else
       case(xbd_i[35:32])
       4'h3: // Might receive a NOP here, if so ignore
-        if (xbd_i[30:29]!=2'b00)
+        if (xbd_i[30]!=1'b0)
           istate <= WAIT_ACK;
-      4'h4: dat_o[31:0] <= xbd_i[31:0];
-      4'h5: dat_o[63:32] <= xbd_i[31:0];
-      4'h6: dat_o[95:64] <= xbd_i[31:0];
-      4'h7: dat_o[127:96] <= xbd_i[31:0];
+      4'h4: rdat_o[31:0] <= xbd_i[31:0];
+      4'h5: rdat_o[63:32] <= xbd_i[31:0];
+      4'h6: rdat_o[95:64] <= xbd_i[31:0];
+      4'h7: rdat_o[127:96] <= xbd_i[31:0];
       default:  ;
       endcase
   end

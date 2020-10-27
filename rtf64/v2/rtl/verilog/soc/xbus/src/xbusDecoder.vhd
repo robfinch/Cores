@@ -61,7 +61,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use work.xbusConstants.ALL;
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -97,7 +97,9 @@ entity xbusDecoder is
       pOtherChRdy : in std_logic_vector(1 downto 0);
       pMeVld : out std_logic;
       pMeRdy : out std_logic;
-      
+
+      pDeviceNum : in natural range 0 to 63;
+            
       --Status and debug
       pRst : in std_logic; -- Synchronous reset to restart lock procedure
       pAlignErr : out std_logic; 
@@ -119,7 +121,45 @@ signal pIDLY_CNT : std_logic_vector(kIDLY_TapWidth-1 downto 0);
 constant kTimeoutEnd : natural := 5; --kTimeoutMs * 1000 * kRefClkFrqMHz;
 signal rTimeoutCnt : natural range 0 to kTimeoutEnd-1;
 signal pTimeoutRst, pTimeoutOvf, rTimeoutRst, rTimeoutOvf : std_logic;
+type ConfigRam_t is array (0 to 63) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
+signal pConfigRam : ConfigRam_t;
+signal pConfigRamo : std_logic_vector(kIDLY_TapWidth-1 downto 0);
+signal dev_config_flag : std_logic_vector (63 downto 0);
+signal need_rst : std_logic;
+signal last_dev : natural range 0 to 63;
+signal pRestoreDeviceConfig : std_logic;
+signal clr_restore : std_logic;
+signal devnum : natural range 0 to 63;
 begin
+
+devnum <= pDeviceNum;
+
+ConfigStore: process (PixelClk)
+begin
+  if Rising_Edge(PixelClk) then
+    if (aRst = '1') then
+      last_dev <= 0;
+      need_rst <= '0';
+      pRestoreDeviceConfig <= '0';
+      dev_config_flag <= std_logic_vector(to_unsigned(0,64));
+    else
+      if (pAligned = '1') then
+        pConfigRam(devnum) <= pIDLY_CNT;
+        dev_config_flag(devnum) <= '1';
+      end if;
+      pConfigRamo <= pConfigRam(devnum);
+      last_dev <= pDeviceNum;
+      if (pDeviceNum /= last_dev) then
+        need_rst <= '1';
+        pRestoreDeviceConfig <= dev_config_flag(devnum);
+      else
+        need_rst <= '0';
+        pRestoreDeviceConfig <= '0';
+      end if;
+    end if;
+  end if;
+end process ConfigStore;
+
 
 -- Deserialization block
 xbusInputSERDES_X: entity work.xbusInputSERDES
@@ -142,6 +182,7 @@ xbusInputSERDES_X: entity work.xbusInputSERDES
       pIDLY_CE => pIDLY_CE,
       pIDLY_INC => pIDLY_INC,
       pIDLY_CNT => pIDLY_CNT,
+      pIDLY_CNTI => pConfigRamo,
       
       aRst => aRst
    );
@@ -201,7 +242,10 @@ xbusPhaseAlign: entity work.xbusPhaseAlign
     idly_ld => pIDLY_LD,
     aligned => pAligned,
     error => pAlignErr_int,
-    eye_size => pEyeSize);
+    eye_size => pEyeSize,
+    restore => pRestoreDeviceConfig,
+    clr_restore => clr_restore
+    );
 
 pAlignErr <= pAlignErr_int;
 pMeVld <= pAligned;
@@ -217,15 +261,20 @@ end process Bitslip;
 
 ResetAlignment: process(PixelClk, aRst)
 begin
-   if (aRst = '1') then
+  if (aRst = '1') then
+    pAlignRst <= '1';
+    clr_restore <= '1';
+  elsif Rising_Edge(PixelClk) then
+    clr_restore <= '0';
+    if (pRst = '1' or need_rst = '1') then
+      clr_restore <= '1';
+    end if;
+    if (pRst = '1' or pBitslip = '1' or need_rst = '1') then
       pAlignRst <= '1';
-   elsif Rising_Edge(PixelClk) then
-      if (pRst = '1' or pBitslip = '1') then
-         pAlignRst <= '1';
-      elsif (pBitslipCnt = 0) then
-         pAlignRst <= '0';
-      end if;
-   end if;
+    elsif (pBitslipCnt = 0) then
+      pAlignRst <= '0';
+    end if;
+  end if;
 end process ResetAlignment;
 
 -- Reset phase aligment module after bitslip + 3 CLKDIV cycles (ISERDESE2 requirement)

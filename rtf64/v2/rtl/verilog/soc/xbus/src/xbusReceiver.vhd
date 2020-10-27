@@ -112,7 +112,9 @@ entity xbusReceiver is
       DDC_SCL_T : out std_logic;
       
       pRst : in std_logic; -- synchronous reset; will restart locking procedure
-      pRst_n : in std_logic -- synchronous reset; will restart locking procedure
+      pRst_n : in std_logic; -- synchronous reset; will restart locking procedure
+      
+      pDeviceNum : in natural range 0 to 63
    );
 end xbusReceiver;
 
@@ -203,7 +205,8 @@ DataDecoders: for iCh in 2 downto 0 generate
          pMeVld                  => pVld(iCh),                
          pVde                    => pDE(iCh),                  
          pDataIn(kParallelWidth-3 downto 0)    => pDataIn(iCh),   
-         pEyeSize                => pEyeSize(iCh)
+         pEyeSize                => pEyeSize(iCh),
+         pDeviceNum              => pDeviceNum
       );
 end generate DataDecoders;
 

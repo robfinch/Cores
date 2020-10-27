@@ -57,7 +57,9 @@ entity xbusPhaseAlign is
     idly_ld : out std_logic;
     aligned : out std_logic;
     error : out std_logic;
-    eye_size : out std_logic_vector(4 downto 0)
+    eye_size : out std_logic_vector(4 downto 0);
+    restore : in std_logic;
+    clr_restore : in std_logic
   );
 end xbusPhaseAlign;
 
@@ -91,6 +93,7 @@ signal reset_timeout : std_logic;
 signal timeout : std_logic;
 signal err1 : std_logic;
 signal eye_size1 : unsigned(7 downto 0);
+signal did_restore : std_logic;
 
 begin
 
@@ -147,17 +150,21 @@ begin
       reset_timeout <= '0';
       idly_ce <= '0';
       idly_inc <= '0';
-      idly_ld <= '0';
+      idly_ld <= restore;
       aligned <= '0';
       err1 <= '0';
       state <= INIT;
-    else
+      if (clr_restore = '1') then
+        did_restore <= '0';
+      else
+        did_restore <= restore;
+      end if;
       reset_found_token <= '0';
       reset_timeout <= '0';
       idly_ce <= '0';
       idly_inc <= '0';
       idly_ld <= '0';
-    
+
       case(state) is
         
       when INIT =>
@@ -168,16 +175,25 @@ begin
 				start_pos <= to_unsigned(0,8);
 				state <= LOOK_FOR_TOKEN;
 			
+			-- If the IDLY count was restored because there is a return to a
+			-- previously timed device, then skip over the delay increment /
+			-- decrement. Assume the delay is correct, but the bitslip may
+			-- need to be reset.
       when LOOK_FOR_TOKEN =>
         if (err1 = '0') then
-          if (idly_cnt = x"1F") then
+          if (idly_cnt = x"1F" or did_restore = '1') then
             err1 <= '1';
           end if;
           if (timeout = '1') then
             state <= INC_DELAY2;
           end if;
           if (found_token = '1') then
-            state <= LOOPX;
+            err1 <= '0';
+            if (did_restore = '1') then
+              state <= DONE;
+            else
+              state <= LOOPX;
+            end if;
           end if;
         end if;
           
