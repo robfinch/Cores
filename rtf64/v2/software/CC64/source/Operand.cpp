@@ -370,7 +370,7 @@ void Operand::MakeLegal(int flags, int size)
 			if (regs[preg].ContainsPositConst())
 				GenerateDiadic(op_mov, 0, ap2, this);
 			else
-				GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
+				GenerateDiadic(op_itop, 0, ap2, this);
 			break;
 		default:
 			cg.GenerateLoad(ap2, this, size, size);

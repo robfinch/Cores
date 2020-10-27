@@ -45,7 +45,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[280] =
+Instruction opl[284] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -173,6 +173,7 @@ Instruction opl[280] =
 { "iret", op_iret,2,0,false,0,0,0,0 },
 { "isnull", op_isnullptr,1,1,false,am_reg,am_reg,0,0 },
 { "itof", op_itof, 2, 1, false, am_fpreg, am_reg, 0, 0 },
+{ "itop", op_itop, 2, 1, false, am_preg, am_reg, 0, 0 },
 { "jal", op_jal,1,1,false },
 { "jmp",op_jmp,1,0,false,am_mem,0,0,0 },
 { "jsr", op_jsr,1,1,false },
@@ -237,6 +238,9 @@ Instruction opl[280] =
 { "pmul", op_pmul, 8, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
 { "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
+{ "psto", op_psto,4,1,true,am_reg,am_mem,0,0 },
+{ "pstt", op_pstt,4,1,true,am_reg,am_mem,0,0 },
+{ "pstw", op_pstw,4,1,true,am_reg,am_mem,0,0 },
 { "psub", op_psub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
 { "ptrdif",op_ptrdif,1,1,false,am_reg,am_reg,am_reg,am_imm },
 { "push",op_push,4,1,true,am_reg|am_imm,am_reg,0,0 },

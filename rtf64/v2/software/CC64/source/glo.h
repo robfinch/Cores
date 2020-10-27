@@ -108,7 +108,7 @@ extern int sizeOfFPD;
 extern int sizeOfFPQ;
 extern int sizeOfPosit;
 extern int maxVL;
-extern MachineReg regs[1024];
+extern MachineReg regs[3072];
 extern int nregs;
 extern int max_reg_in_use;
 
@@ -413,7 +413,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[280];
+extern Instruction opl[284];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 extern char inpline[520];
