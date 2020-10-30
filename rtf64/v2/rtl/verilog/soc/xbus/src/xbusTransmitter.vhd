@@ -69,9 +69,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity xbusTransmitter is
    Generic (
       kParallelWidth : natural := 14;
-      kGenerateSerialClk : boolean := true;
-      kClkPrimitive : string := "MMCM"; -- "MMCM" or "PLL" to instantiate, if kGenerateSerialClk true
-      kClkRange : natural := 2;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)      
+      kGenerateBitClk : boolean := true;
+      kClkPrimitive : string := "MMCM"; -- "MMCM" or "PLL" to instantiate, if kGenerateBitClk true
+      kClkRange : natural := 2;  -- MULT_F = kClkRange*5 (choose >=114MHz=1, >=57MHz=2, >=28MHz=3)      
       kRstActiveHigh : boolean := true); --true, if active-high; false, if active-low
    Port (
       -- DVI 1.0 TMDS video interface
@@ -88,9 +88,9 @@ entity xbusTransmitter is
       dat_i : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       sync_i : in std_logic;
       de_i : in std_logic;     -- device enable
-      PixelClk : in std_logic; --pixel-clock recovered from the DVI interface
+      PacketClk : in std_logic; --pixel-clock recovered from the DVI interface
       
-      SerialClk : in std_logic); -- 5x PixelClk
+      BitClk : in std_logic); -- 5x PacketClk
    
 end xbusTransmitter;
 
@@ -100,8 +100,9 @@ type dataOutRaw_t is array (2 downto 0) of std_logic_vector(kParallelWidth-1 dow
 signal pDataOut : dataOut_t;
 signal pDataOutRaw : dataOutRaw_t;
 signal pVde, pC0, pC1 : std_logic_vector(2 downto 0);
-signal aRst_int, aPixelClkLckd : std_logic;
-signal PixelClkIO, SerialClkIO, aRstLck, pRstLck : std_logic;
+signal aRst_int, aPacketClkLckd : std_logic;
+signal PacketClkIO, BitClkIO, aRstLck, pRstLck : std_logic;
+signal pClockOut : std_logic_vector (kParallelWidth-1 downto 0);
 begin
 
 ResetActiveLow: if not kRstActiveHigh generate
@@ -112,38 +113,45 @@ ResetActiveHigh: if kRstActiveHigh generate
    aRst_int <= aRst;
 end generate ResetActiveHigh;
 
--- Generate SerialClk internally?
-ClockGenInternal: if kGenerateSerialClk generate
+-- Generate BitClk internally?
+ClockGenInternal: if kGenerateBitClk generate
    ClockGenX: entity work.xbusClockGen
       Generic map (
          kClkRange => kClkRange,  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
-         kClkPrimitive => kClkPrimitive) -- "MMCM" or "PLL" to instantiate, if kGenerateSerialClk true
+         kClkPrimitive => kClkPrimitive) -- "MMCM" or "PLL" to instantiate, if kGenerateBitClk true
       Port map (
-         PixelClkIn => PixelClk,
-         PixelClkOut => PixelClkIO,
-         SerialClk => SerialClkIO,
+         PacketClkIn => PacketClk,
+         PacketClkOut => PacketClkIO,
+         BitClk => BitClkIO,
          aRst => aRst_int,
-         aLocked => aPixelClkLckd);
+         aLocked => aPacketClkLckd);
    --TODO revise this
-   aRstLck <= not aPixelClkLckd;         
+   aRstLck <= not aPacketClkLckd;         
 end generate ClockGenInternal;
 
-ClockGenExternal: if not kGenerateSerialClk generate
-   PixelClkIO <= PixelClk;
-   SerialClkIO <= SerialClk;
+ClockGenExternal: if not kGenerateBitClk generate
+   PacketClkIO <= PacketClk;
+   BitClkIO <= BitClk;
    aRstLck <= aRst_int;
 end generate ClockGenExternal;
 
+ClockPat10: if kParallelWidth = 10 generate
+    pClockOut <= "1111100000";
+end generate ClockPat10;
+ClockPat14: if kParallelWidth = 14 generate
+    pClockOut <= "11111110000000";
+end generate ClockPat14;
+
 -- We need a reset bridge to use the asynchronous aLocked signal to reset our circuitry
 -- and decrease the chance of metastability. The signal pLockLostRst can be used as
--- asynchronous reset for any flip-flop in the PixelClk domain, since it will be de-asserted
+-- asynchronous reset for any flip-flop in the PacketClk domain, since it will be de-asserted
 -- synchronously.
 LockLostReset: entity work.ResetBridge
    generic map (
       kPolarity => '1')
    port map (
       aRst => aRstLck,
-      OutClk => PixelClk,
+      OutClk => PacketClk,
       oRst => pRstLck);
 
 -- Clock needs no encoding, send a pulse
@@ -151,20 +159,20 @@ ClockSerializer: entity work.xbusOutputSERDES
    generic map (
       kParallelWidth => kParallelWidth) -- TMDS uses 1:10 serialization
    port map(
-      PixelClk => PixelClkIO,
-      SerialClk => SerialClkIO,
+      PacketClk => PacketClkIO,
+      BitClk => BitClkIO,
       sDataOut_p => TMDS_Clk_p,
       sDataOut_n => TMDS_Clk_n,
       --Encoded parallel data (raw)
-      pDataOut => "11111110000000",
+      pDataOut => pClockOut,
       --pDataOut => "1111100000",
       aRst => pRstLck);
 
 DataEncoders: for i in 0 to 2 generate
    DataEncoder: entity work.xbusEncoder
       port map (
-         PixelClk => PixelClk,
-         SerialClk => SerialClk,
+         PacketClk => PacketClk,
+         BitClk => BitClk,
          pDataOutRaw => pDataOutRaw(i),
          aRst => pRstLck,
          pDataOut => pDataOut(i),
@@ -176,8 +184,8 @@ DataEncoders: for i in 0 to 2 generate
       generic map (
          kParallelWidth => kParallelWidth) -- TMDS uses 1:10 serialization
       port map(
-         PixelClk => PixelClkIO,
-         SerialClk => SerialClkIO,
+         PacketClk => PacketClkIO,
+         BitClk => BitClkIO,
          sDataOut_p => TMDS_Data_p(i),
          sDataOut_n => TMDS_Data_n(i),
          --Encoded parallel data (raw)

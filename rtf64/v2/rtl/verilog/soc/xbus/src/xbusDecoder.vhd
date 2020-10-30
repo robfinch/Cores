@@ -77,10 +77,10 @@ entity xbusDecoder is
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
       kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter
    Port (
-      PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
-      SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
-      RefClk : std_logic;        --300 MHz reference clock
-      aRst : in std_logic;       --asynchronous reset; must be reset when PixelClk/SerialClk is not within spec
+      PacketClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
+      BitClk : in std_logic;  --Recovered TMDS clock x7 (CLK)
+      RefClk : std_logic;        --400 MHz reference clock
+      aRst : in std_logic;       --asynchronous reset; must be reset when PacketClk/BitClk is not within spec
       
       --Encoded serial data
       sDataIn_p : in std_logic;  --TMDS data channel positive
@@ -111,6 +111,9 @@ architecture Behavioral of xbusDecoder is
 constant kBitslipDelay : natural := 3; --three-period delay after bitslip 
 signal pAlignRst : std_logic; 
 signal pBitslipCnt : natural range 0 to kBitslipDelay - 1 := kBitslipDelay - 1; 
+signal BitslipVal : natural range 0 to 15;
+signal BitslipValSLV : std_logic_vector(3 downto 0);
+signal BitslipValResetDone : std_logic;
 signal pDataIn8b : std_logic_vector(kParallelWidth-3 downto 0);
 signal pDataInBnd : std_logic_vector(kParallelWidth-1 downto 0);
 signal pDataInRaw : std_logic_vector(kParallelWidth-1 downto 0);
@@ -121,30 +124,33 @@ signal pIDLY_CNT : std_logic_vector(kIDLY_TapWidth-1 downto 0);
 constant kTimeoutEnd : natural := 5; --kTimeoutMs * 1000 * kRefClkFrqMHz;
 signal rTimeoutCnt : natural range 0 to kTimeoutEnd-1;
 signal pTimeoutRst, pTimeoutOvf, rTimeoutRst, rTimeoutOvf : std_logic;
-type ConfigRam_t is array (0 to 63) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
+type ConfigRam_t is array (0 to 63) of std_logic_vector(kIDLY_TapWidth+3 downto 0);
 signal pConfigRam : ConfigRam_t;
-signal pConfigRamo : std_logic_vector(kIDLY_TapWidth-1 downto 0);
+signal pConfigRamo : std_logic_vector(kIDLY_TapWidth+3 downto 0);
 signal dev_config_flag : std_logic_vector (63 downto 0);
 signal need_rst : std_logic;
 signal last_dev : natural range 0 to 63;
 signal pRestoreDeviceConfig : std_logic;
+signal pRestoreBitslip : std_logic;
 signal clr_restore : std_logic;
 signal devnum : natural range 0 to 63;
 begin
 
 devnum <= pDeviceNum;
+BitslipValSLV <= std_logic_vector(to_unsigned(BitslipVal,4));
 
-ConfigStore: process (PixelClk)
+ConfigStore: process (PacketClk)
 begin
-  if Rising_Edge(PixelClk) then
+  if Rising_Edge(PacketClk) then
     if (aRst = '1') then
       last_dev <= 0;
       need_rst <= '0';
       pRestoreDeviceConfig <= '0';
       dev_config_flag <= std_logic_vector(to_unsigned(0,64));
+      pConfigRamo <= std_logic_vector(to_unsigned(0,5));
     else
       if (pAligned = '1') then
-        pConfigRam(devnum) <= pIDLY_CNT;
+        pConfigRam(devnum) <= BitslipValSLV & pIDLY_CNT;
         dev_config_flag(devnum) <= '1';
       end if;
       pConfigRamo <= pConfigRam(devnum);
@@ -168,8 +174,8 @@ xbusInputSERDES_X: entity work.xbusInputSERDES
       kParallelWidth => kParallelWidth -- TMDS uses 1:10 serialization
       )
    port map (
-      PixelClk => PixelClk,
-      SerialClk => SerialClk,
+      PacketClk => PacketClk,
+      BitClk => BitClk,
       sDataIn_p => sDataIn_p,
       sDataIn_n => sDataIn_n,
       
@@ -182,7 +188,7 @@ xbusInputSERDES_X: entity work.xbusInputSERDES
       pIDLY_CE => pIDLY_CE,
       pIDLY_INC => pIDLY_INC,
       pIDLY_CNT => pIDLY_CNT,
-      pIDLY_CNTI => pConfigRamo,
+      pIDLY_CNTI => pConfigRamo(kIDLY_TapWidth-1 downto 0),
       
       aRst => aRst
    );
@@ -214,7 +220,7 @@ SyncBaseOvf: entity work.SyncBase
       aReset => aRst,
       InClk => RefClk,
       iIn => rTimeoutOvf,
-      OutClk => PixelClk,
+      OutClk => PacketClk,
       oOut => pTimeoutOvf);
       
 SyncBaseRst: entity work.SyncBase
@@ -223,7 +229,7 @@ SyncBaseRst: entity work.SyncBase
       kStages => 2) --use double FF synchronizer
    port map (
       aReset => aRst,
-      InClk => PixelClk,
+      InClk => PacketClk,
       iIn => pTimeoutRst,
       OutClk => RefClk,
       oOut => rTimeoutRst);
@@ -232,7 +238,7 @@ SyncBaseRst: entity work.SyncBase
 xbusPhaseAlign: entity work.xbusPhaseAlign
    port map (
     rst_i => pAlignRst,
-    clk_i => PixelClk,
+    clk_i => PacketClk,
     dat_i => pDataInRaw,
 --      pTimeoutOvf => pTimeoutOvf,
 --      pTimeoutRst => pTimeoutRst,
@@ -244,27 +250,54 @@ xbusPhaseAlign: entity work.xbusPhaseAlign
     error => pAlignErr_int,
     eye_size => pEyeSize,
     restore => pRestoreDeviceConfig,
-    clr_restore => clr_restore
+    clr_restore => clr_restore,
+    BitslipValReset => BitslipValResetDone
     );
 
 pAlignErr <= pAlignErr_int;
 pMeVld <= pAligned;
 
 -- Bitslip when phase alignment exhausted the whole tap range and still no lock
-Bitslip: process(PixelClk)
+Bitslip: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       pAlignErr_q <= pAlignErr_int;
       pBitslip <= not pAlignErr_q and pAlignErr_int; -- single pulse bitslip on failed alignment attempt
    end if;
 end process Bitslip;
 
-ResetAlignment: process(PixelClk, aRst)
+ResetBitslipVal: process(PacketClk)
+begin
+   if Rising_Edge(PacketClk) then
+      if (aRst = '1') then
+        BitslipVal <= 0;
+      end if;
+      if (pBitslip = '1') then
+        BitslipVal <= BitslipVal + 1;
+      end if;
+   end if;
+end process ResetBitslipVal;
+
+ResetBitslip: process(PacketClk)
+begin
+   if Rising_Edge(PacketClk) then
+      if (aRst = '1') then
+        BitslipValResetDone <= '0';
+      end if;
+      if (std_logic_vector(to_unsigned(BitslipVal,4)) = pConfigRamo(kIDLY_TapWidth+3 downto kIDLY_TapWidth)) then
+        BitslipValResetDone <= '1';
+      else
+        BitslipValResetDone <= '0';
+      end if;
+   end if;
+end process ResetBitslip;
+
+ResetAlignment: process(PacketClk, aRst)
 begin
   if (aRst = '1') then
     pAlignRst <= '1';
     clr_restore <= '1';
-  elsif Rising_Edge(PixelClk) then
+  elsif Rising_Edge(PacketClk) then
     clr_restore <= '0';
     if (pRst = '1' or need_rst = '1') then
       clr_restore <= '1';
@@ -278,9 +311,9 @@ begin
 end process ResetAlignment;
 
 -- Reset phase aligment module after bitslip + 3 CLKDIV cycles (ISERDESE2 requirement)
-BitslipDelay: process(PixelClk)
+BitslipDelay: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pBitslip = '1') then
          pBitslipCnt <= kBitslipDelay - 1;
       elsif (pBitslipCnt /= 0) then
@@ -295,7 +328,7 @@ xbusChannelBondX: entity work.xbusChannelBond
       kParallelWidth => kParallelWidth
    )
    port map (
-      PixelClk => PixelClk,
+      PacketClk => PacketClk,
       pDataInRaw => pDataInRaw,
       pMeVld => pAligned,
       pOtherChVld => pOtherChVld,
@@ -309,20 +342,22 @@ pMeRdy <= pMeRdy_int;
 pDataIn8b <=   pDataInBnd(kParallelWidth-3 downto 0) when pDataInBnd(kParallelWidth-1) = '0' else
                not pDataInBnd(kParallelWidth-3 downto 0);
                
-xbusDecode: process (PixelClk)
+xbusDecode: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pMeRdy_int = '1' and pOtherChRdy = "11") then
          pDataIn <= x"000"; --added for VGA-compatibility (blank pixel needed during blanking)
          
          case (pDataInBnd) is
             --Control tokens decode straight to C0, C1 values
             when kCtlTkn0 =>
-               pC0 <= '0';
+               pC0 <= '1';
                pC1 <= '0';
                pVde <= '0';
             --If not control token, it's encoded data
             when others =>
+               pC0 <= '0';
+               pC1 <= '0';
                pVde <= '1'; 
                pDataIn(0) <= pDataIn8b(0);
                for iBit in 1 to kParallelWidth-3 loop

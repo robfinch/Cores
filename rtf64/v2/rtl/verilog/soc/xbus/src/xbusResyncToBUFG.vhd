@@ -48,7 +48,7 @@
 -------------------------------------------------------------------------------
 --
 -- Purpose:
--- This module inserts a BUFG on the PixelClk path so that the pixel bus can be
+-- This module inserts a BUFG on the PacketClk path so that the pixel bus can be
 -- routed globally on the device. It also synchronizes data to the new BUFG
 -- clock. 
 --  
@@ -76,33 +76,36 @@ entity xbusResyncToBUFG is
       -- Video in
       piData : in std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       piHSync : in std_logic;
-      PixelClkIn : in std_logic;
+      piDe : in std_logic;
+      PacketClkIn : in std_logic;
       -- Video out
       poData : out std_logic_vector(((kParallelWidth-2)*3)-1 downto 0);
       poHSync : out std_logic;
-      PixelClkOut : out std_logic
+      poDe : out std_logic;
+      PacketClkOut : out std_logic
    );
 end xbusResyncToBUFG;
 
 architecture Behavioral of xbusResyncToBUFG is
 
-signal PixelClkInt : std_logic;
+signal PacketClkInt : std_logic;
 
 begin
 -- Insert BUFG on clock path
 InstBUFG: BUFG
    port map (
-      O => PixelClkInt, -- 1-bit output: Clock output
-      I => PixelClkIn  -- 1-bit input: Clock input
+      O => PacketClkInt, -- 1-bit output: Clock output
+      I => PacketClkIn  -- 1-bit input: Clock input
    );
-PixelClkOut <= PixelClkInt;
+PacketClkOut <= PacketClkInt;
 
 -- Try simple registering
-RegisterData: process(PixelClkInt)
+RegisterData: process(PacketClkInt)
 begin
-   if Rising_Edge(PixelClkInt) then
+   if Rising_Edge(PacketClkInt) then
       poData <= piData;
       poHSync <= piHSync;
+      poDe <= piDe;
    end if;
 end process RegisterData;
 

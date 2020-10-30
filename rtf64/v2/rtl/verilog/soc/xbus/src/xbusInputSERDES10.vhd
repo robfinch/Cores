@@ -71,8 +71,8 @@ entity xbusInputSERDES is
       kIDLY_TapWidth : natural := 5;   -- number of bits for IDELAYE2 tap counter
       kParallelWidth : natural := 10); -- number of parallel bits
    Port (
-      PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
-      SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
+      PacketClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
+      BitClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
       
       --Encoded serial data
       sDataIn_p : in std_logic;  --TMDS data channel positive
@@ -94,7 +94,7 @@ end xbusInputSERDES;
 
 architecture Behavioral of xbusInputSERDES is
 
-signal sDataIn, sDataInDly, icascade1, icascade2, SerialClkInv : std_logic;
+signal sDataIn, sDataInDly, icascade1, icascade2, BitClkInv : std_logic;
 signal pDataIn_q : std_logic_vector(kParallelWidth-1 downto 0); --ISERDESE2 can do 1:14 at most
 signal pixelClockn : std_logic;
 begin
@@ -123,7 +123,7 @@ InputDelay: IDELAYE2
    port map (
       DATAOUT                => sDataInDly, -- Delayed signal
       DATAIN                 => '0', -- Not used; IDATAIN instead
-      C                      => PixelClk, -- Clock for control signals (CE,INC...)
+      C                      => PacketClk, -- Clock for control signals (CE,INC...)
       CE                     => pIDLY_CE,
       INC                    => pIDLY_INC,
       IDATAIN                => sDataIn, -- Driven by IOB
@@ -135,8 +135,8 @@ InputDelay: IDELAYE2
       CINVCTRL               => '0');
 
 --Invert locally for ISERDESE2
-SerialClkInv <= not SerialClk;
-pixelClockn <= not PixelClk;
+BitClkInv <= not BitClk;
+pixelClockn <= not PacketClk;
 
 -- De-serializer, 1:10 (1:5 DDR), master-slave cascaded
 DeserializerMaster: ISERDESE2
@@ -164,9 +164,9 @@ DeserializerMaster: ISERDESE2
       BITSLIP           => pBitslip, -- 1-bit Invoke Bitslip. This can be used with any 
       CE1               => '1', -- 1-bit Clock enable input
       CE2               => '1', -- 1-bit Clock enable input
-      CLK               => SerialClk, -- Fast Source Synchronous SERDES clock from BUFIO
-      CLKB              => SerialClkInv, -- Locally inverted clock
-      CLKDIV            => PixelClk, -- Slow clock driven by BUFR
+      CLK               => BitClk, -- Fast Source Synchronous SERDES clock from BUFIO
+      CLKB              => BitClkInv, -- Locally inverted clock
+      CLKDIV            => PacketClk, -- Slow clock driven by BUFR
       CLKDIVP           => '0', --Not used here
       D                 => '0',                                
       DDLY              => sDataInDly, -- 1-bit Input signal from IODELAYE1.
@@ -208,8 +208,8 @@ DeserializerSlave: ISERDESE2
       BITSLIP           => pBitslip, -- 1-bit Invoke Bitslip. This can be used with any 
       CE1               => '1', -- 1-bit Clock enable input
       CE2               => '1', -- 1-bit Clock enable input
-      CLK               => SerialClk, -- Fast Source Synchronous SERDES clock from BUFIO
-      CLKB              => SerialClkInv, -- Locally inverted clock
+      CLK               => BitClk, -- Fast Source Synchronous SERDES clock from BUFIO
+      CLKB              => BitClkInv, -- Locally inverted clock
       CLKDIV            => pixelClockn, -- Slow clock driven by BUFR
       CLKDIVP           => '0', --Not used here
       D                 => '0',                                

@@ -35,14 +35,13 @@
 //
 // ============================================================================
 
-module xbusSlaveBridge(dev_num_i, rst_i, clk_i, rclk_i, locked_i,
+module xbusSlaveBridge(dev_num_i, rst_i, clk_i, rclk_i,
   cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_o, dat_i,
   xb_dat_i, xb_dat_o, xb_sync_o, xb_de_o, xb_sync_i, xb_de_i, xb_en_o);
 input [3:0] dev_num_i; 
 input rst_i;
 input clk_i;
 input rclk_i;
-input locked_i;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
@@ -53,13 +52,12 @@ output reg [127:0] dat_o;
 input [127:0] dat_i;
 input [35:0] xb_dat_i;
 output reg [35:0] xb_dat_o;
-output reg xb_sync_o;
-output reg xb_de_o;
+output xb_sync_o;
+output xb_de_o;
 input xb_sync_i;
 input xb_de_i;
-output reg xb_en_o;
+output reg xb_en_o = 1'b0;
 
-reg [3:0] state;
 reg [3:0] ostate;
 parameter IDLE = 4'd0;
 parameter XD0_31 = 4'd3;
@@ -77,58 +75,31 @@ assign ack_o = ackw|ackr;
 reg [31:0] adr;
 reg [127:0] dath, dat;
 reg [15:0] selh, sel;
-reg [8:0] synccnt2;
-reg [5:0] ctr;
-reg [5:0] synccnt;
-reg start_cycle, start_cycle1;
+reg start_cycle = 1'b0, start_cycle1 = 1'b0;
 reg we;
 reg data_cap;
 reg was_write;
-reg sync_locked;
-reg sync_req;
-reg [16:0] sync_req_cnt;
-reg reset_sync_req_timeout;
-reg sync_req_timeout;
-reg [5:0] master_num;
+wire sync_locked;
+reg [5:0] master_num = 6'd0;
 reg [63:0] valid_master;
+reg stream_sync = 1'b0;
 
-always @(posedge rclk_i)
-if (rst_i)
-  synccnt <= 6'd0;
-else begin
-  if (xb_sync_i)
-    synccnt <= synccnt + 2'd1;
-  else
-    synccnt <= 6'd0;
-end
+xbusSyncLocked usl1
+(
+  .rst_i(rst_i),
+  .clk_i(rclk_i),
+  .sync_i(xb_sync_i),
+  .locked_o(sync_locked)
+);
 
-always @(posedge rclk_i)
-if (rst_i)
-  sync_locked <= 1'b0;
-else begin
-  if (synccnt > 6'd10)
-    sync_locked <= 1'b1;
-end
-
-always @(posedge clk_i)
-if (rst_i)
-  sync_req_cnt <= 17'd0;
-else begin
-  if (sync_req)
-    sync_req_cnt <= sync_req_cnt + 2'd1;
-  else
-    sync_req_cnt <= 17'd0;
-end
-
-always @(posedge clk_i)
-if (rst_i)
-  sync_req_timeout <= 1'b0;
-else begin
-  if (reset_sync_req_timeout)
-    sync_req_timeout <= 1'b0;
-  else if (sync_req_cnt[16])
-    sync_req_timeout <= 1'b1;
-end
+xbusSyncGen usg1
+(
+  .rst_i(rst_i),
+  .clk_i(clk_i),
+  .stream_i(stream_sync),
+  .sync_o(xb_sync_o),
+  .de_o(xb_de_o)
+);
 
 always @(posedge rclk_i)
 if (rst_i) begin
@@ -139,6 +110,7 @@ if (rst_i) begin
   start_cycle <= 1'b0;
   start_cycle1 <= 1'b0;
   xb_en_o <= 1'b0;
+  stream_sync <= 1'b0;
 end
 else begin
   if (sync_locked) begin
@@ -147,24 +119,23 @@ else begin
     case(xb_dat_i[35:32])
     4'h0:
       begin
-        master_num <= xb_dat_i[29:24];
-        if (valid_master[xb_dat_i[29:24]]) begin
-          if (xb_dat_i[5:0]==dev_num_i) begin
+        master_num <= xb_dat_i[27:22];
+        if (valid_master[xb_dat_i[22:22]]) begin
+          if (xb_dat_i[21:16]==dev_num_i) begin
             xb_en_o <= 1'b1;
-            sync_req <= xb_dat_i[7];
+            stream_sync <= xb_dat_i[29];
           end
+          // Keep output buffer enabled if streaming syncs.
           else begin
-            xb_en_o <= 1'b0;
+            xb_en_o <= stream_sync;
           end
         end
-        else
-          sync_req <= 1'b0;
       end
     4'h1: adr[31:0] <= xb_dat_i[31:0];
     4'h3:
       begin
-        if (valid_master[xb_dat_i[29:24]]) begin
-          start_cycle <= xb_dat_i[23];
+        if (valid_master[xb_dat_i[27:22]]) begin
+          start_cycle <= xb_dat_i[30];
           we <= xb_dat_i[31];
           sel <= xb_dat_i[15:0];
         end
@@ -186,11 +157,11 @@ if (rst_i) begin
   selh <= 16'h0;
   xb_dat_o[35:32] <= 4'h0;  // send a NOP
   xb_dat_o[31:0] <= 32'h0;
-  xb_sync_o <= 1'b0;
-  xb_de_o <= 1'b1;
   valid_master <= 64'hFFFFFFFFFFFFFFFF;
-  reset_sync_req_timeout <= 1'b0;
-  ctr <= 6'd0;
+  cyc_o <= 1'b0;
+  stb_o <= 1'b0;
+  we_o <= 1'b0;
+  sel_o <= 16'h0;
 end
 else begin
 if (start_cycle|start_cycle1) begin
@@ -213,27 +184,25 @@ if (cyc_o & stb_o & ack_i) begin
   data_cap <= 1'b1;
   was_write <= we_o;
 end
-reset_sync_req_timeout <= 1'b0;
 
+  if (xb_de_o)
 case(ostate)
 
 IDLE:
   begin
-    if (sync_req) begin
-      ctr <= ctr + 2'd1;
-      //xb_sync_o <= ctr < 6'd16;
-      xb_de_o <= ctr >= 6'd16 && ctr < 6'd60;
-      xb_sync_o <= ctr >= 6'd32 && ctr < 6'd48;
+    if (stream_sync) begin
       xb_dat_o[35:32] <= 4'h0;
-      xb_dat_o[31:6] <= 28'h0;
-      xb_dat_o[7] <= 1'b1;
-      xb_dat_o[29:24] <= dev_num_i;
-      xb_dat_o[5:0] <= master_num;
+      xb_dat_o[31:60] <= 32'h0;
+      xb_dat_o[29] <= 1'b1;
+      xb_dat_o[27:22] <= dev_num_i;
+      xb_dat_o[21:16] <= master_num;
       valid_master[master_num] <= 1'b1;
+      /*
       if (sync_req_timeout) begin
         reset_sync_req_timeout <= 1'b1;
         valid_master[master_num] <= 1'b0;
       end
+      */
     end
     else begin
       xb_dat_o[35:32] <= 4'h0;
@@ -276,8 +245,8 @@ WAIT_ACK:
       xb_dat_o[35:32] <= 4'h3;
       xb_dat_o[31:0] <= 32'h0;
       xb_dat_o[30] <= 1'b1; // Send read ack / tran complete
-      xb_dat_o[29:24] <= dev_num_i;
-      xb_dat_o[5:0] <= master_num;
+      xb_dat_o[27:22] <= dev_num_i;
+      xb_dat_o[21:16] <= master_num;
       ostate <= IDLE;
     end
   end
@@ -330,8 +299,8 @@ WAIT_NACK:
     xb_dat_o[35:32] <= 4'h3;
     xb_dat_o[31:0] <= 32'h0;
     xb_dat_o[30] <= 1'b1; // Send read ack / tran complete
-    xb_dat_o[29:24] <= dev_num_i;
-    xb_dat_o[5:0] <= master_num;
+    xb_dat_o[27:22] <= dev_num_i;
+    xb_dat_o[21:16] <= master_num;
   end
 endcase
 

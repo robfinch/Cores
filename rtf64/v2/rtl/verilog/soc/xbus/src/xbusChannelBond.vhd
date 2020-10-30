@@ -72,7 +72,7 @@ entity xbusChannelBond is
    Generic (
       kParallelWidth : natural := 14); -- number of parallel bits
    Port (
-      PixelClk : in std_logic;
+      PacketClk : in std_logic;
       pDataInRaw : in std_logic_vector(kParallelWidth-1 downto 0);
       pMeVld : in std_logic;
       pOtherChVld : in std_logic_vector(1 downto 0);
@@ -117,7 +117,7 @@ pAllVldn <= not pAllVld;
 
 FIFO : xbusFifo
   PORT MAP (
-    clk => PixelClk,
+    clk => PacketClk,
     srst => pAllVldn,
     din => pDataInRaw,
     wr_en => pAllVld,
@@ -125,9 +125,9 @@ FIFO : xbusFifo
     dout => pDataFIFO
   );
 
-DataValidFlag: process(PixelClk)
+DataValidFlag: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       pAllVld_q <= pAllVld;
       pAllVldBgnFlag <= not pAllVld_q and pAllVld; -- this flag used below delays enabling read, thus making sure data is written first before being read
    end if;
@@ -139,9 +139,9 @@ end process DataValidFlag;
 -- 2 When marker is found on this channel, FIFO read is paused, thus holding data
 -- 3 When all channels report the marker, FIFO read begins again, thus syncing markers  
 -------------------------------------------------------------------------------
-FIFO_RdEn: process(PixelClk)
+FIFO_RdEn: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pAllVld = '0') then
          pRdEn <= '0';
       elsif (pAllVldBgnFlag = '1' or (pMeRdy_int = '1' and pOtherChRdy = "11")) then
@@ -153,9 +153,9 @@ begin
 end process FIFO_RdEn;
 
 -- Detect blanking period begin
-TokenDetect: process(PixelClk)
+TokenDetect: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pRdEn = '0' or pDataFIFO = kCtlTkn0) then
          pTokenFlag <= '1'; --token flag activates on invalid data, which avoids a BlnkBgn pulse if the valid signal goes up in the middle of a blanking period
       else
@@ -167,9 +167,9 @@ begin
 end process TokenDetect;
 
 -- Ready signal when marker is received
-IAmReady: process(PixelClk)
+IAmReady: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pAllVld = '0') then -- if not all channels are valid, we are not ready either
          pMeRdy_int <= '0';
       elsif (pBlnkBgnFlag = '1') then

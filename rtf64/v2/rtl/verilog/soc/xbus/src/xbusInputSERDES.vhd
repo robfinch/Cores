@@ -71,8 +71,8 @@ entity xbusInputSERDES is
       kIDLY_TapWidth : natural := 5;   -- number of bits for IDELAYE2 tap counter
       kParallelWidth : natural := 14); -- number of parallel bits
    Port (
-      PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
-      SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
+      PacketClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
+      BitClk : in std_logic;  --Recovered TMDS clock x7 (CLK)
       
       --Encoded serial data
       sDataIn_p : in std_logic;  --TMDS data channel positive
@@ -95,12 +95,12 @@ end xbusInputSERDES;
 
 architecture Behavioral of xbusInputSERDES is
 
-signal sDataIn, sDataInDly, icascade1, icascade2, SerialClkInv : std_logic;
+signal sDataIn, sDataInDly, icascade1, icascade2, BitClkInv : std_logic;
 signal pDataIn_q : std_logic_vector(kParallelWidth-1 downto 0); --ISERDESE2 can do 1:14 at most
 signal pIDLY_CNTq : std_logic_vector(4 downto 0);
 begin
 
-IDLY_CNT_PROC: process (PixelClk) is
+IDLY_CNT_PROC: process (PacketClk) is
 begin
   if (aRst = '1') then
     pIDLY_CNTq <= std_logic_vector(to_unsigned(0,5));
@@ -125,15 +125,15 @@ InputDelay: IDELAYE2
       CINVCTRL_SEL           => "FALSE",     -- TRUE, FALSE
       DELAY_SRC              => "IDATAIN",   -- IDATAIN, DATAIN
       HIGH_PERFORMANCE_MODE  => "TRUE",      -- TRUE, FALSE
-      IDELAY_TYPE            => "VAR_LOADABLE",  -- FIXED, VARIABLE, or VAR_LOADABLE
+      IDELAY_TYPE            => "VAR_LOAD",  -- FIXED, VARIABLE, or VAR_LOADABLE
       IDELAY_VALUE           => 0,           -- 0 to 31
-      REFCLK_FREQUENCY       => 300.0,
+      REFCLK_FREQUENCY       => 400.0,
       PIPE_SEL               => "FALSE",
       SIGNAL_PATTERN         => "DATA")      -- CLOCK, DATA
    port map (
       DATAOUT                => sDataInDly, -- Delayed signal
       DATAIN                 => '0', -- Not used; IDATAIN instead
-      C                      => PixelClk, -- Clock for control signals (CE,INC...)
+      C                      => PacketClk, -- Clock for control signals (CE,INC...)
       CE                     => pIDLY_CE,
       INC                    => pIDLY_INC,
       IDATAIN                => sDataIn, -- Driven by IOB
@@ -145,7 +145,7 @@ InputDelay: IDELAYE2
       CINVCTRL               => '0');
 
 --Invert locally for ISERDESE2
-SerialClkInv <= not SerialClk;
+BitClkInv <= not BitClk;
 
 -- De-serializer, 1:10 (1:5 DDR), master-slave cascaded
 DeserializerMaster: ISERDESE2
@@ -173,9 +173,9 @@ DeserializerMaster: ISERDESE2
       BITSLIP           => pBitslip, -- 1-bit Invoke Bitslip. This can be used with any 
       CE1               => '1', -- 1-bit Clock enable input
       CE2               => '1', -- 1-bit Clock enable input
-      CLK               => SerialClk, -- Fast Source Synchronous SERDES clock from BUFIO
-      CLKB              => SerialClkInv, -- Locally inverted clock
-      CLKDIV            => PixelClk, -- Slow clock driven by BUFR
+      CLK               => BitClk, -- Fast Source Synchronous SERDES clock from BUFIO
+      CLKB              => BitClkInv, -- Locally inverted clock
+      CLKDIV            => PacketClk, -- Slow clock driven by BUFR
       CLKDIVP           => '0', --Not used here
       D                 => '0',                                
       DDLY              => sDataInDly, -- 1-bit Input signal from IODELAYE1.
@@ -217,9 +217,9 @@ DeserializerSlave: ISERDESE2
       BITSLIP           => pBitslip, -- 1-bit Invoke Bitslip. This can be used with any 
       CE1               => '1', -- 1-bit Clock enable input
       CE2               => '1', -- 1-bit Clock enable input
-      CLK               => SerialClk, -- Fast Source Synchronous SERDES clock from BUFIO
-      CLKB              => SerialClkInv, -- Locally inverted clock
-      CLKDIV            => PixelClk, -- Slow clock driven by BUFR
+      CLK               => BitClk, -- Fast Source Synchronous SERDES clock from BUFIO
+      CLKB              => BitClkInv, -- Locally inverted clock
+      CLKDIV            => PacketClk, -- Slow clock driven by BUFR
       CLKDIVP           => '0', --Not used here
       D                 => '0',                                
       DDLY              => '0', -- not used in cascaded Slave mode

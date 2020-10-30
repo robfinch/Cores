@@ -70,8 +70,8 @@ entity xbusOutputSERDES is
    Generic (
       kParallelWidth : natural := 14); -- number of parallel bits
    Port (
-      PixelClk : in STD_LOGIC;   --TMDS clock x1 (CLKDIV)
-      SerialClk : in STD_LOGIC;  --TMDS clock x5 (CLK)
+      PacketClk : in STD_LOGIC;   --TMDS clock x1 (CLKDIV)
+      BitClk : in STD_LOGIC;  --TMDS clock x5 (CLK)
       
       --Encoded serial data
       sDataOut_p : out STD_LOGIC;
@@ -117,8 +117,8 @@ SerializerMaster: OSERDESE2
       TBYTEOUT          => open,   -- 1-bit output: Byte group tristate
       TFB               => open,      -- 1-bit output: 3-state control
       TQ                => open,      -- 1-bit output: 3-state control
-      CLK               => SerialClk, -- 1-bit input: High speed clock
-      CLKDIV            => PixelClk,  -- 1-bit input: Divided clock
+      CLK               => BitClk, -- 1-bit input: High speed clock
+      CLKDIV            => PacketClk,  -- 1-bit input: Divided clock
       -- D1 - D8: 1-bit (each) input: Parallel data inputs (1-bit each)
       D1                => pDataOut(0),
       D2                => pDataOut(1),
@@ -160,8 +160,8 @@ SerializerSlave: OSERDESE2
       TBYTEOUT          => open,   -- 1-bit output: Byte group tristate
       TFB               => open,             -- 1-bit output: 3-state control
       TQ                => open,               -- 1-bit output: 3-state control
-      CLK               => SerialClk,             -- 1-bit input: High speed clock
-      CLKDIV            => PixelClk,       -- 1-bit input: Divided clock
+      CLK               => BitClk,             -- 1-bit input: High speed clock
+      CLKDIV            => PacketClk,       -- 1-bit input: Divided clock
       -- D1 - D8: 1-bit (each) input: Parallel data inputs (1-bit each)
       D1                => '0',
       D2                => '0',

@@ -71,14 +71,14 @@ use UNISIM.VComponents.all;
 
 entity xbusClocking is
    Generic (
-      kClkRange : natural := 3);  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
+      kClkRange : natural := 3);  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
    Port (
       TMDS_Clk_p : in std_logic;
       TMDS_Clk_n : in std_logic;
-      RefClk : in std_logic; -- 300MHz reference clock for IDELAY primitives; independent of DVI_Clk!
+      RefClk : in std_logic; -- 400MHz reference clock for IDELAY primitives; independent of DVI_Clk!
       aRst : in std_logic; --asynchronous reset; must be reset when RefClk is not within spec
-      SerialClk : out std_logic;
-      PixelClk : out std_logic;
+      BitClk : out std_logic;
+      PacketClk : out std_logic;
       aLocked : out std_logic);
 end xbusClocking;
 
@@ -242,19 +242,19 @@ DVI_ClkGenerator: MMCME2_ADV
       RST                 => rMMCM_Reset_q(0));
 
 -- 5x fast serial clock
-SerialClkBuffer: BUFIO
+BitClkBuffer: BUFIO
    port map (
-      O => SerialClk, -- 1-bit output: Clock output (connect to I/O clock loads).
+      O => BitClk, -- 1-bit output: Clock output (connect to I/O clock loads).
       I => CLK_OUT_7x_xbus_clk  -- 1-bit input: Clock input (connect to an IBUF or BUFMR).
    );
 -- 1x slow parallel clock
-PixelClkBuffer: BUFR
+PacketClkBuffer: BUFR
    generic map (
       BUFR_DIVIDE => "7",   -- Values: "BYPASS, 1, 2, 3, 4, 5, 6, 7, 8" 
       SIM_DEVICE => "7SERIES"  -- Must be set to "7SERIES" 
    )
    port map (
-      O => PixelClk,     -- 1-bit output: Clock output port
+      O => PacketClk,     -- 1-bit output: Clock output port
       CE => '1',   -- 1-bit input: Active high, clock enable (Divided modes only)
       CLR => rBUFR_Rst, -- 1-bit input: Active high, asynchronous clear (Divided modes only)        
       I => CLK_OUT_7x_xbus_clk      -- 1-bit input: Clock buffer input driven by an IBUF, MMCM or local interconnect

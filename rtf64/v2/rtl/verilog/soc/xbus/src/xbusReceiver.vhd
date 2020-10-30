@@ -64,7 +64,7 @@ use work.xbusConstants.all;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -76,14 +76,14 @@ entity xbusReceiver is
       kParallelWidth : natural := 14;
       kEmulateDDC : boolean := false; --will emulate a DDC EEPROM with basic EDID, if set to yes 
       kRstActiveHigh : boolean := true; --true, if active-high; false, if active-low
-      kAddBUFG : boolean := true; --true, if PixelClk should be re-buffered with BUFG 
-      kClkRange : natural := 3;  -- MULT_F = kClkRange*7 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3)
+      kAddBUFG : boolean := true; --true, if PacketClk should be re-buffered with BUFG 
+      kClkRange : natural := 2;  -- MULT_F = kClkRange*7 (choose >=114MHz=1, >=57MHz=2, >=28MHz=3)
       kEdidFileName : string := "900p_edid.txt";  -- Select EDID file to use
       -- 7-series specific
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
       kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter   
    Port (
-      -- DVI 1.0 TMDS video interface
+      -- TMDS interface
       TMDS_Clk_p : in std_logic;
       TMDS_Clk_n : in std_logic;
       TMDS_Data_p : in std_logic_vector(2 downto 0);
@@ -97,11 +97,12 @@ entity xbusReceiver is
       -- Data out
       dat_o : out std_logic_vector((kParallelWidth-2)*3-1 downto 0);
       sync_o : out std_logic;
+      de_o : out std_logic;
       
-      PixelClk : out std_logic; --pixel-clock recovered from the DVI interface
+      PacketClk : out std_logic; --pixel-clock recovered from the DVI interface
       
-      SerialClk : out std_logic; -- advanced use only; 7x PixelClk
-      aPixelClkLckd : out std_logic; -- advanced use only; PixelClk and SerialClk stable
+      BitClk : out std_logic; -- advanced use only; 7x PacketClk
+      aPacketClkLckd : out std_logic; -- advanced use only; PacketClk and BitClk stable
       
       -- Optional DDC port
       DDC_SDA_I : in std_logic;
@@ -114,14 +115,14 @@ entity xbusReceiver is
       pRst : in std_logic; -- synchronous reset; will restart locking procedure
       pRst_n : in std_logic; -- synchronous reset; will restart locking procedure
       
-      pDeviceNum : in natural range 0 to 63
+      pDeviceNum : in std_logic_vector(5 downto 0)
    );
 end xbusReceiver;
 
 architecture Behavioral of xbusReceiver is
 type dataIn_t is array (2 downto 0) of std_logic_vector(kParallelWidth-3 downto 0);
 type eyeSize_t is array (2 downto 0) of std_logic_vector(kIDLY_TapWidth-1 downto 0);
-signal aLocked, SerialClk_int, PixelClk_int, pLockLostRst: std_logic;
+signal aLocked, BitClk_int, PacketClk_int, pLockLostRst: std_logic;
 signal pRdy, pVld, pDE, pAlignErr, pC0, pC1 : std_logic_vector(2 downto 0);
 signal pDataIn : dataIn_t;
 signal pEyeSize : eyeSize_t;
@@ -133,8 +134,10 @@ signal aRst_int, pRst_int : std_logic;
 
 signal pData : std_logic_vector((kParallelWidth-2)*3-1 downto 0);
 signal pVDE, pHSync, pVSync : std_logic;
-
+signal pDeviceNumI : natural range 0 to 63;
 begin
+  
+pDeviceNumI <= to_integer(unsigned(pDeviceNum));
 
 ResetActiveLow: if not kRstActiveHigh generate
    aRst_int <= not aRst_n;
@@ -159,20 +162,20 @@ xbusClockingX: entity work.xbusClocking
       TMDS_Clk_n => TMDS_Clk_n,
 
       aLocked    => aLocked,  
-      PixelClk   => PixelClk_int, -- slow parallel clock
-      SerialClk  => SerialClk_int -- fast serial clock
+      PacketClk   => PacketClk_int, -- slow parallel clock
+      BitClk  => BitClk_int -- fast serial clock
    );
    
 -- We need a reset bridge to use the asynchronous aLocked signal to reset our circuitry
 -- and decrease the chance of metastability. The signal pLockLostRst can be used as
--- asynchronous reset for any flip-flop in the PixelClk domain, since it will be de-asserted
+-- asynchronous reset for any flip-flop in the PacketClk domain, since it will be de-asserted
 -- synchronously.
 LockLostReset: entity work.ResetBridge
    generic map (
       kPolarity => '1')
    port map (
       aRst => notALocked,
-      OutClk => PixelClk_int,
+      OutClk => PacketClk_int,
       oRst => pLockLostRst);
          
 -- Three data channel decoders
@@ -184,13 +187,13 @@ DataDecoders: for iCh in 2 downto 0 generate
          kParallelWidth => kParallelWidth,
          kCtlTknCount => kMinTknCntForBlank, --how many subsequent control tokens make a valid blank detection (DVI spec)
          kTimeoutMs => kBlankTimeoutMs, --what is the maximum time interval for a blank to be detected (DVI spec)
-         kRefClkFrqMHz => 300, --what is the RefClk frequency
+         kRefClkFrqMHz => 400, --what is the RefClk frequency
          kIDLY_TapValuePs => kIDLY_TapValuePs, --delay in ps per tap
          kIDLY_TapWidth => kIDLY_TapWidth) --number of bits for IDELAYE2 tap counter   
       port map (
          aRst                    => pLockLostRst,               
-         PixelClk                => PixelClk_int,
-         SerialClk               => SerialClk_int,   
+         PacketClk                => PacketClk_int,
+         BitClk               => BitClk_int,   
          RefClk                  => RefClk,          
          pRst                    => pRst_int,
          sDataIn_p               => TMDS_Data_p(iCh),                           
@@ -206,7 +209,7 @@ DataDecoders: for iCh in 2 downto 0 generate
          pVde                    => pDE(iCh),                  
          pDataIn(kParallelWidth-3 downto 0)    => pDataIn(iCh),   
          pEyeSize                => pEyeSize(iCh),
-         pDeviceNum              => pDeviceNum
+         pDeviceNum              => pDeviceNumI
       );
 end generate DataDecoders;
 
@@ -221,10 +224,10 @@ pVSync <= pC1(0); -- channel 0 carries control signals too
 pVDE <= pDE(0); -- since channels are aligned, all of them are either active or blanking at once
 
 -- Clock outputs
-SerialClk <= SerialClk_int; -- fast 5x pixel clock for advanced use only
-aPixelClkLckd <= aLocked;
+BitClk <= BitClk_int; -- fast 7x pixel clock for advanced use only
+aPacketClkLckd <= aLocked;
 ----------------------------------------------------------------------------------
--- Re-buffer PixelClk with a BUFG so that it can reach the whole device, unlike
+-- Re-buffer PacketClk with a BUFG so that it can reach the whole device, unlike
 -- through a BUFR. Since BUFG introduces a delay on the clock path, pixel data is
 -- re-registered here.
 ----------------------------------------------------------------------------------
@@ -237,18 +240,21 @@ GenerateBUFG: if kAddBUFG generate
          -- Video in
          piData => pData,
          piHSync => pHSync,
-         PixelClkIn => PixelClk_int,
+         piDe => pVDE,
+         PacketClkIn => PacketClk_int,
          -- Data out
          poData => dat_o,
          poHSync => sync_o,
-         PixelClkOut => PixelClk
+         poDe => de_o,
+         PacketClkOut => PacketClk
       );
 end generate GenerateBUFG;
 
 DontGenerateBUFG: if not kAddBUFG generate
    dat_o <= pData;
    sync_o <= pHSync;
-   PixelClk <= PixelClk_int;
+   de_o <= pVDE;
+   PacketClk <= PacketClk_int;
 end generate DontGenerateBUFG;
                  
 ----------------------------------------------------------------------------------
@@ -258,7 +264,7 @@ end generate DontGenerateBUFG;
 GenerateDDC: if kEmulateDDC generate	
    DDC_EEPROM: entity work.EEPROM_8b
       generic map (
-         kSampleClkFreqInMHz => 300,
+         kSampleClkFreqInMHz => 400,
          kSlaveAddress => "1010000",
          kAddrBits => 7, -- 128 byte EDID 1.x data
          kWritable => false,

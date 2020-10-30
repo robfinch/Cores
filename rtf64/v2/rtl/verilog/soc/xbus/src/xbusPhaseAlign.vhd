@@ -92,7 +92,7 @@ entity xbusPhaseAlign is
       pRst : in STD_LOGIC;
       pTimeoutOvf : in std_logic;   --50ms timeout expired
       pTimeoutRst : out std_logic;  --reset timeout
-      PixelClk : in STD_LOGIC;
+      PacketClk : in STD_LOGIC;
       pData : in STD_LOGIC_VECTOR (kParallelWidth-1 downto 0);
       pIDLY_CE : out STD_LOGIC;
       pIDLY_INC : out STD_LOGIC;
@@ -151,9 +151,9 @@ constant AlignErrorSt : state_t :=  "10000000000";
 
 begin
 
-ControlTokenCounter: process(PixelClk)
+ControlTokenCounter: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pCtlTknRst = '1') then
          pCtlTknCnt <= 0;
       else
@@ -172,9 +172,9 @@ end process ControlTokenCounter;
 pTkn0Flag <= '1' when pDataQ = kCtlTkn0 else '0';
 
 -- Register pipeline
-ControlTokenDetect: process(PixelClk)
+ControlTokenDetect: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       pDataQ <= pData; -- level 1      
       pTkn0FlagQ <= pTkn0Flag;
       pTknFlag <= pTkn0Flag; -- level 3
@@ -184,9 +184,9 @@ begin
 end process ControlTokenDetect;
 
 -- Open Eye Width Counter
-EyeOpenCnt: process (PixelClk)
+EyeOpenCnt: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pEyeOpenRst = '1') then
          pEyeOpenCnt <= (others => '0');
          pCenterTap <= unsigned(pIDLY_CNT_Q) & '1'; -- 1 extra bit for 1/2 increments; start with 1/2
@@ -200,9 +200,9 @@ end process EyeOpenCnt;
 pEyeSize <= std_logic_vector(pEyeOpenCnt);
 
 -- Tap Delay Overflow
-TapDelayCnt: process (PixelClk)
+TapDelayCnt: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       pIDLY_CNT_Q <= pIDLY_CNT;
       if (pIDLY_CNT_Q = kTapCntEnd) then
          pDelayOvf <= '1';
@@ -218,9 +218,9 @@ begin
 end process TapDelayCnt;
 
 -- Tap Delay Center
-TapDelayCenter: process (PixelClk)
+TapDelayCenter: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (unsigned(pIDLY_CNT_Q) = SHIFT_RIGHT(pCenterTap, 1)) then
          pDelayCenter <= '1';
       else
@@ -229,9 +229,9 @@ begin
    end if;
 end process TapDelayCenter;
 
-DelayIncWaitCounter: process (PixelClk)
+DelayIncWaitCounter: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pDelayWaitRst = '1') then
          pDelayWaitCnt <= 0;
       else
@@ -246,9 +246,9 @@ begin
 end process DelayIncWaitCounter;
 
 -- FSM
-FSM_Sync: process (PixelClk)
+FSM_Sync: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pRst = '1') then
          pState <= ResetSt;
       else
@@ -266,9 +266,9 @@ pEyeOpenRst <= '1'   when pState = ResetSt or (pState = JtrZoneSt and pFoundEyeF
 pEyeOpenEn <= '1'    when pState = EyeOpenSt else '0';
 
 --FSM Registered Outputs
-FSM_RegOut: process (PixelClk)
+FSM_RegOut: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pState = ResetSt) then
          pIDLY_LD <= '1';
          --pIDLY_INC <= '0';
@@ -300,9 +300,9 @@ begin
    end if;
 end process FSM_RegOut;
 
-FSM_Flags: process (PixelClk)
+FSM_Flags: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       case (pState) is
          when ResetSt =>
             pFoundEyeFlag <= '0';

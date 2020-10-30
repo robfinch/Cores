@@ -5,10 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	intToPosit.sv
-//    - integer to posit number converter
-//    - parameterized width
-//
+//	xbusSyncGen.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -35,82 +32,44 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// ============================================================================
 //
-`timescale 1ns / 1ps
-module intToPosit_tb_v;
+// ============================================================================
 
-function [31:0] log2;
-input reg [31:0] value;
-	begin
-	value = value-1;
-	for (log2=0; value>0; log2=log2+1)
-        	value = value>>1;
-      	end
-endfunction
+module xbusSyncGen(rst_i, clk_i, stream_i, sync_o, de_o);
+input rst_i;
+input clk_i;
+input stream_i;
+output reg sync_o;
+output reg de_o;
 
-parameter N=32;
-parameter E=8;
-parameter Bs=log2(N);
-parameter es = 2;
+reg [9:0] counter;
 
-reg clk;
-reg [15:0] cnt;
-
-wire signed [N-1:0] out, outi;
-
-reg [N-1:0] a, a1;
-
-reg [31:0] fa;
-wire [31:0] f2po;
-fpToPosit #(.FPWID(32)) ufp1 (.i(fa), .o(f2po));
-
-wire [63:0] double = {fa[31], fa[30], {3{~fa[30]}}, fa[29:23], fa[22:0], {29{1'b0}}};
-
-// Instantiate the Unit Under Test (UUT)
-intToPosit #(.PSTWID(N), .es(es)) u2 (.i(a), .o(out));
-positToInt #(.PSTWID(N), .es(es)) u3 (.i(f2po), .o(outi));
-
-//FP_to_posit #(.N(32), .E(8), .es(es)) u3 (in, out3);
-//Posit_to_FP #(.N(32), .E(8), .es(es)) u5 (out, out3);
-
-
-	initial begin
-	  a = $urandom(1);
-		// Initialize Inputs
-		clk = 1;
-		cnt = 0;
-		// Wait 100 ns for global reset to finish
-		#325150 
-		$fclose(outfile);
-		$finish;
-	end
-	
-always #5 clk=~clk;
-always @(posedge clk) begin
-  a <= $urandom();
-  cnt <= cnt + 1;
-  if (cnt > 1000) begin
-    fa <= $urandom();
-  end
-  else
-  case (cnt)
-  2:  fa <= 32'h3f000001; // 0.5 + 1ulp
-  3:  fa <= 32'h3EFFFFFF; // 0.4999...
-  4:  a <= 32'h17cf4600;
-  5:  a <= 10;
-  6:  a <= -1;
-  7:  a <= -10;
-  8:  a <= 100;
-  default:   a <= $urandom();
-  endcase
+always @(posedge clk_i)
+if (rst_i)
+  counter <= 10'd0;
+else begin
+  counter <= counter + 2'd1;
+  if (stream_i && counter[5:3]==3'b101)
+    counter <= 10'd0;  
 end
 
-integer outfile;
-initial outfile = $fopen("d:/cores2020/rtf64/v2/rtl/verilog/cpu/pau/test_bench/intToPosit_tvo32.txt", "wb");
-  always @(posedge clk) begin
-     $fwrite(outfile, "%h\t%d\t%h\t%d\t%e\n",f2po,a,out,outi,$bitstoreal(double));
-  end
+always @(posedge clk_i)
+if (rst_i)
+  de_o <= 1'b0;
+else begin
+  de_o <= 1'b1;
+  if (counter < 10'd32)
+    de_o <= 1'b0;
+end
+
+always @(posedge clk_i)
+if (rst_i)
+  sync_o <= 1'b0;
+else begin
+  sync_o <= 1'b0;
+  if (counter >= 10'd8 && counter < 10'd24)
+    sync_o <= 1'b1;
+end
 
 endmodule
 

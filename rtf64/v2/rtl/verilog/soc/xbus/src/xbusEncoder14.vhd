@@ -70,9 +70,9 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity xbusEncoder is
    Port (
-      PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
-      SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
-      aRst : in std_logic;       --asynchronous reset; must be reset when PixelClk/SerialClk is not within spec
+      PacketClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
+      BitClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
+      aRst : in std_logic;       --asynchronous reset; must be reset when PacketClk/BitClk is not within spec
       
       --Encoded parallel data
       pDataOutRaw : out std_logic_vector(13 downto 0);
@@ -110,9 +110,9 @@ begin
 -- DVI 1.0 Specs Figure 3-5
 -- Pipeline stage 1, minimise transitions
 ----------------------------------------------------------------------------------
-Stage1: process(PixelClk)
+Stage1: process(PacketClk)
 begin
-	if Rising_Edge(PixelClk) then
+	if Rising_Edge(PacketClk) then
 		pVde_1 <= pVde;
 
 		n1d_1 <= sum_bits(pDataOut(11 downto 0));
@@ -145,9 +145,9 @@ n1q_m_1 <= sum_bits(q_m_1(11 downto 0));
 ----------------------------------------------------------------------------------
 -- Pipeline stage 2, balance DC
 ----------------------------------------------------------------------------------
-Stage2: process(PixelClk)
+Stage2: process(PacketClk)
 begin
-	if Rising_Edge(PixelClk) then
+	if Rising_Edge(PacketClk) then
 		n1q_m_2 <= n1q_m_1;
 		n0q_m_2 <= 12 - n1q_m_1;
 		q_m_2 <= q_m_1;
@@ -185,9 +185,9 @@ cnt_t_2 <=  to_signed(0, cnt_t_2'length)                                   when 
 ----------------------------------------------------------------------------------
 -- Pipeline stage 3, registered output
 ----------------------------------------------------------------------------------
-Stage3: process(PixelClk)
+Stage3: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       cnt_t_3 <= cnt_t_2;
       pDataOutRaw <= q_out_2; --encoded, ready to be serialized
    end if;

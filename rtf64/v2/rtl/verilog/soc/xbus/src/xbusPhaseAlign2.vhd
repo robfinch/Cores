@@ -44,7 +44,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 entity xbusPhaseAlign is
   generic (
     pParallelWidth : natural := 14;
-    pCtrlTokenCnt : natural := 3;
+    pCtrlTokenCnt : natural := 2;
     pCtrlToken : std_logic_vector(13 downto 0) := "11010101010100"
   );
   port (
@@ -59,7 +59,8 @@ entity xbusPhaseAlign is
     error : out std_logic;
     eye_size : out std_logic_vector(4 downto 0);
     restore : in std_logic;
-    clr_restore : in std_logic
+    clr_restore : in std_logic;
+    BitslipValReset : in std_logic
   );
 end xbusPhaseAlign;
 
@@ -78,6 +79,7 @@ constant DONE : natural := 10;
 constant LOOK_FOR_TOKEN : natural := 11;
 constant INC_DELAY2 : natural := 12;
 constant INC2 : natural := 13;
+constant RESET_BITSLIP : natural := 14;
 
 signal state : natural range 0 to 15;
 signal cnt : natural range 0 to 15;
@@ -153,12 +155,17 @@ begin
       idly_ld <= restore;
       aligned <= '0';
       err1 <= '0';
-      state <= INIT;
+      if (restore = '1') then
+        state <= RESET_BITSLIP;
+      else
+        state <= INIT;
+      end if;
       if (clr_restore = '1') then
         did_restore <= '0';
       else
         did_restore <= restore;
       end if;
+    else
       reset_found_token <= '0';
       reset_timeout <= '0';
       idly_ce <= '0';
@@ -197,6 +204,14 @@ begin
           end if;
         end if;
           
+      when RESET_BITSLIP =>
+        if (BitslipValReset = '1') then
+          err1 <= '0';
+          state <= DONE;
+        else
+          err1 <= '1';
+        end if;
+          
       when INC_DELAY2 =>
 				reset_timeout <= '1';
 				idly_ce <= '1';
@@ -209,7 +224,7 @@ begin
       -- Loop four time to get average eye.
       when LOOPX =>
 				pos_count <= pos_count + 1;
-				if (pos_count = 3) then
+				if (pos_count = 4) then
 					state <= CALC_CENTER;
 				else
 					state <= INC_DELAY;
@@ -254,13 +269,13 @@ begin
 					start_pos <= start_pos + conv_integer(idly_cnt);
 				end if;
 				if (found_token = '1') then
-					 state <= DEC_DELAY;
+          state <= DEC_DELAY;
 				end if;
 
       when CALC_CENTER =>
 				eye_size1 <= shift_right(unsigned(
-					((end_pos - start_pos) + 1)),3);
-				center <= shift_right(unsigned((end_pos - start_pos) + 1),2);
+					((end_pos - start_pos) + 1)),2);
+				center <= shift_right(unsigned((end_pos + start_pos) + 1),3);
 				state <= MOVE_TO_CENTER;
 
       when MOVE_TO_CENTER =>
@@ -269,15 +284,7 @@ begin
 				else
 					idly_ce <= '1';
 					idly_inc <= '1';
-					state <= MTC1;
 				end if;
-
-      -- Delay a couple of clocks between settings of idly.
-      when MTC1 =>
-        state <= MTC2;
-
-      when MTC2 =>
-        state <= MOVE_TO_CENTER;
 
       -- Stay in done state unless reset.
       when DONE =>

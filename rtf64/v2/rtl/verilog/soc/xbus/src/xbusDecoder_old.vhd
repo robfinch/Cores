@@ -77,10 +77,10 @@ entity xbusDecoder is
       kIDLY_TapValuePs : natural := 78; --delay in ps per tap
       kIDLY_TapWidth : natural := 5); --number of bits for IDELAYE2 tap counter
    Port (
-      PixelClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
-      SerialClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
+      PacketClk : in std_logic;   --Recovered TMDS clock x1 (CLKDIV)
+      BitClk : in std_logic;  --Recovered TMDS clock x5 (CLK)
       RefClk : std_logic;        --300 MHz reference clock
-      aRst : in std_logic;       --asynchronous reset; must be reset when PixelClk/SerialClk is not within spec
+      aRst : in std_logic;       --asynchronous reset; must be reset when PacketClk/BitClk is not within spec
       
       --Encoded serial data
       sDataIn_p : in std_logic;  --TMDS data channel positive
@@ -127,8 +127,8 @@ xbusInputSERDES_X: entity work.xbusInputSERDES
       kParallelWidth => kParallelWidth -- TMDS uses 1:10 serialization
       )
    port map (
-      PixelClk => PixelClk,
-      SerialClk => SerialClk,
+      PacketClk => PacketClk,
+      BitClk => BitClk,
       sDataIn_p => sDataIn_p,
       sDataIn_n => sDataIn_n,
       
@@ -172,7 +172,7 @@ SyncBaseOvf: entity work.SyncBase
       aReset => aRst,
       InClk => RefClk,
       iIn => rTimeoutOvf,
-      OutClk => PixelClk,
+      OutClk => PacketClk,
       oOut => pTimeoutOvf);
       
 SyncBaseRst: entity work.SyncBase
@@ -181,7 +181,7 @@ SyncBaseRst: entity work.SyncBase
       kStages => 2) --use double FF synchronizer
    port map (
       aReset => aRst,
-      InClk => PixelClk,
+      InClk => PacketClk,
       iIn => pTimeoutRst,
       OutClk => RefClk,
       oOut => rTimeoutRst);
@@ -197,7 +197,7 @@ xbusPhaseAlignX: entity work.xbusPhaseAlign
    )
    port map (
       pRst => pAlignRst,
-      PixelClk => PixelClk,
+      PacketClk => PacketClk,
       pTimeoutOvf => pTimeoutOvf,
       pTimeoutRst => pTimeoutRst,
       pData => pDataInRaw,
@@ -213,19 +213,19 @@ pAlignErr <= pAlignErr_int;
 pMeVld <= pAligned;
 
 -- Bitslip when phase alignment exhausted the whole tap range and still no lock
-Bitslip: process(PixelClk)
+Bitslip: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       pAlignErr_q <= pAlignErr_int;
       pBitslip <= not pAlignErr_q and pAlignErr_int; -- single pulse bitslip on failed alignment attempt
    end if;
 end process Bitslip;
 
-ResetAlignment: process(PixelClk, aRst)
+ResetAlignment: process(PacketClk, aRst)
 begin
    if (aRst = '1') then
       pAlignRst <= '1';
-   elsif Rising_Edge(PixelClk) then
+   elsif Rising_Edge(PacketClk) then
       if (pRst = '1' or pBitslip = '1') then
          pAlignRst <= '1';
       elsif (pBitslipCnt = 0) then
@@ -235,9 +235,9 @@ begin
 end process ResetAlignment;
 
 -- Reset phase aligment module after bitslip + 3 CLKDIV cycles (ISERDESE2 requirement)
-BitslipDelay: process(PixelClk)
+BitslipDelay: process(PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pBitslip = '1') then
          pBitslipCnt <= kBitslipDelay - 1;
       elsif (pBitslipCnt /= 0) then
@@ -252,7 +252,7 @@ xbusChannelBondX: entity work.xbusChannelBond
       kParallelWidth => kParallelWidth
    )
    port map (
-      PixelClk => PixelClk,
+      PacketClk => PacketClk,
       pDataInRaw => pDataInRaw,
       pMeVld => pAligned,
       pOtherChVld => pOtherChVld,
@@ -266,9 +266,9 @@ pMeRdy <= pMeRdy_int;
 pDataIn8b <=   pDataInBnd(kParallelWidth-3 downto 0) when pDataInBnd(kParallelWidth-1) = '0' else
                not pDataInBnd(kParallelWidth-3 downto 0);
                
-xbusDecode: process (PixelClk)
+xbusDecode: process (PacketClk)
 begin
-   if Rising_Edge(PixelClk) then
+   if Rising_Edge(PacketClk) then
       if (pMeRdy_int = '1' and pOtherChRdy = "11") then
          pDataIn <= x"000"; --added for VGA-compatibility (blank pixel needed during blanking)
          

@@ -43,47 +43,47 @@ use UNISIM.VComponents.all;
 
 entity ClockGen is
    Generic (
-      kClkRange : natural := 1;  -- MULT_F = kClkRange*5 (choose >=120MHz=1, >=60MHz=2, >=40MHz=3, >=30MHz=4, >=25MHz=5
-      kClkPrimitive : string := "MMCM"); -- "MMCM" or "PLL" to instantiate, if kGenerateSerialClk true
+      kClkRange : natural := 2;  -- MULT_F = kClkRange*7 (choose >=114MHz=1, >=57MHz=2, >=28MHz=3
+      kClkPrimitive : string := "MMCM"); -- "MMCM" or "PLL" to instantiate, if kGenerateBitClk true
    Port (
-      PixelClkIn : in STD_LOGIC;
-      PixelClkOut : out STD_LOGIC;
-      SerialClk : out STD_LOGIC;
+      PacketClkIn : in STD_LOGIC;
+      PacketClkOut : out STD_LOGIC;
+      BitClk : out STD_LOGIC;
       aRst : in STD_LOGIC;
       aLocked : out STD_LOGIC);
 end ClockGen;
 
 architecture Behavioral of ClockGen is
-signal PixelClkInX1, PixelClkInX5, FeedbackClk : std_logic;
+signal PacketClkInX1, PacketClkInX5, FeedbackClk : std_logic;
 signal aLocked_int, pLocked, pRst, pLockWasLost : std_logic;
 signal pLocked_q : std_logic_vector(2 downto 0) := (others => '1');
 begin
 
 -- We need a reset bridge to use the asynchronous aRst signal to reset our circuitry
 -- and decrease the chance of metastability. The signal pRst can be used as
--- asynchronous reset for any flip-flop in the PixelClkIn domain, since it will be de-asserted
+-- asynchronous reset for any flip-flop in the PacketClkIn domain, since it will be de-asserted
 -- synchronously.
 LockLostReset: entity work.ResetBridge
    generic map (
       kPolarity => '1')
    port map (
       aRst => aRst,
-      OutClk => PixelClkIn,
+      OutClk => PacketClkIn,
       oRst => pRst);
 
 PLL_LockSyncAsync: entity work.SyncAsync
    port map (
       aReset => '0',
       aIn => aLocked_int,
-      OutClk => PixelClkIn,
+      OutClk => PacketClkIn,
       oOut => pLocked);
       
-PLL_LockLostDetect: process(PixelClkIn)
+PLL_LockLostDetect: process(PacketClkIn)
 begin
    if (pRst = '1') then
       pLocked_q <= (others => '1');
       pLockWasLost <= '1'; 
-   elsif Rising_Edge(PixelClkIn) then
+   elsif Rising_Edge(PacketClkIn) then
       pLocked_q <= pLocked_q(pLocked_q'high-1 downto 0) & pLocked;
       pLockWasLost <= (not pLocked_q(0) or not pLocked_q(1)) and pLocked_q(2); --two-pulse 
    end if;
@@ -149,9 +149,9 @@ DVI_ClkGenerator: MMCME2_ADV
    (
       CLKFBOUT            => FeedbackClk,
       CLKFBOUTB           => open,
-      CLKOUT0             => PixelClkInX5,
+      CLKOUT0             => PacketClkInX5,
       CLKOUT0B            => open,
-      CLKOUT1             => PixelClkInX1,
+      CLKOUT1             => PacketClkInX1,
       CLKOUT1B            => open,
       CLKOUT2             => open,
       CLKOUT2B            => open,
@@ -162,7 +162,7 @@ DVI_ClkGenerator: MMCME2_ADV
       CLKOUT6             => open,
       -- Input clock control
       CLKFBIN             => FeedbackClk,
-      CLKIN1              => PixelClkIn,
+      CLKIN1              => PacketClkIn,
       CLKIN2              => '0',
       -- Tied to always select the primary input clock
       CLKINSEL            => '1',
@@ -208,15 +208,15 @@ DVI_ClkGenerator: PLLE2_ADV
    -- Output clocks
    (
       CLKFBOUT            => FeedbackClk,
-      CLKOUT0             => PixelClkInX5,
-      CLKOUT1             => PixelClkInX1,
+      CLKOUT0             => PacketClkInX5,
+      CLKOUT1             => PacketClkInX1,
       CLKOUT2             => open,
       CLKOUT3             => open,
       CLKOUT4             => open,
       CLKOUT5             => open,
       -- Input clock control
       CLKFBIN             => FeedbackClk,
-      CLKIN1              => PixelClkIn,
+      CLKIN1              => PacketClkIn,
       CLKIN2              => '0',
       -- Tied to always select the primary input clock
       CLKINSEL            => '1',
@@ -237,8 +237,8 @@ end generate;
 
 --No buffering used
 --These clocks will only drive the OSERDESE2 primitives
-SerialClk <= PixelClkInX5;
-PixelClkOut <= PixelClkInX1;
+BitClk <= PacketClkInX5;
+PacketClkOut <= PacketClkInX1;
 aLocked <= aLocked_int;
 
 end Behavioral;

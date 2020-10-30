@@ -998,6 +998,7 @@ fpDecompReg #(FPWID) u10 (.clk(clk_g), .ce(1'b1), .i(fres), .sgn(), .exp(), .fra
 wire [63:0] pas1_o, pas_o;
 wire [63:0] pmul1_o, pmul_o;
 wire [63:0] pdiv1_o, pdiv_o;
+wire [63:0] itop_o, ptoi_o;
 wire pmulz_o, pmuli_o;
 wire pmulz1_o, pmuli1_o;
 wire pdivz_o, pdivi_o;
@@ -1039,6 +1040,9 @@ positDivide #(.PSTWID(PSTWID), .es(es)) up6
 delay6 #(PSTWID) upd3 (.clk(clk_g), .ce(1'b1), .i(pdiv1_o), .o(pdiv_o));
 delay6 #(1) upd4 (.clk(clk_g), .ce(1'b1), .i(pdivz1_o), .o(pdivz_o));
 delay6 #(1) upd5 (.clk(clk_g), .ce(1'b1), .i(pdivi1_o), .o(pdivi_o));
+
+intToPosit #(.PSTWID(PSTWID), .es(es)) uitop1(ia, itop_o);
+positToInt #(.PSTWID(PSTWID), .es(es)) uptoi1(ia, ptoi_o);
 
 wire pcmpnan = ia==64'h8000000000000000 || ib==64'h8000000000000000;
 wire pinf_o = ia==64'h8000000000000000 || ib==64'h8000000000000000;
@@ -3346,13 +3350,20 @@ EXECUTE:
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 		`PST2:	// Float
 			case(efltfunct5)
+			`PST1:
+			  case(eRs2)
+  	    `PTOI:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
+  	    `ITOP:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
 //			`PST1:
-//			  case(eRs2)
-//			  endcase
+        default:  ;
+			  endcase
 			`PADD:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PADD
 			`PSUB:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PSUB
 			`PMUL:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PMUL
 			`PDIV:	begin execute_done <= FALSE; mathCnt <= 8'd9; egoto(FLOAT); end	// PDIV
+			`PSLE:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSLE
+		  `PSLT:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSLT
+			`PSEQ:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSEQ
 			default:	;
 			endcase
     endcase
@@ -3783,6 +3794,12 @@ FLOAT:
   		  endcase   // FLT2
 			`PST2:
 				case(efltfunct5)
+				`PST1:
+				  case(eRs2)
+				  `ITOP:  res <= itop_o;
+				  `PTOI:  res <= ptoi_o;
+				  default:  ;
+				  endcase
 				`PADD,`PSUB:
 					begin
 						res <= pas_o;	// FADD
