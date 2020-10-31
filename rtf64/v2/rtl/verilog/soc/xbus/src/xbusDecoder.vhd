@@ -147,7 +147,7 @@ begin
       need_rst <= '0';
       pRestoreDeviceConfig <= '0';
       dev_config_flag <= std_logic_vector(to_unsigned(0,64));
-      pConfigRamo <= std_logic_vector(to_unsigned(0,5));
+      pConfigRamo <= std_logic_vector(to_unsigned(0,9));
     else
       if (pAligned = '1') then
         pConfigRam(devnum) <= BitslipValSLV & pIDLY_CNT;

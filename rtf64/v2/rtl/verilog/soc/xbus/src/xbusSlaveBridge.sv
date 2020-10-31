@@ -192,7 +192,7 @@ IDLE:
   begin
     if (stream_sync) begin
       xb_dat_o[35:32] <= 4'h0;
-      xb_dat_o[31:60] <= 32'h0;
+      xb_dat_o[31:0] <= 32'h0;
       xb_dat_o[29] <= 1'b1;
       xb_dat_o[27:22] <= dev_num_i;
       xb_dat_o[21:16] <= master_num;
