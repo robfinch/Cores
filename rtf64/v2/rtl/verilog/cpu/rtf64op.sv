@@ -39,13 +39,12 @@
 `define DATH    63:32
 `endif
 
-`include "../fpu/fpConfig.sv"
+import fp::*;
 `include "../pau/positConfig.sv"
 
-module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
+module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, div_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
-parameter FPWID = 64;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter pL1CacheLines = 128;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
@@ -53,6 +52,7 @@ input [7:0] hartid_i;
 input rst_i;
 input clk_i;
 input wc_clk_i;
+input div_clk_i;
 input nmi_i;
 input irq_i;
 input [7:0] cause_i;
@@ -141,7 +141,6 @@ parameter WRITEBACK_WAIT = 6'd53;
 parameter IFETCH_INCR = 6'd54;
 parameter MEMORY0 = 6'd55;
 
-`include "../fpu/fpSize.sv"
 `include "../pau/positSize.sv"
 
 reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
@@ -841,70 +840,48 @@ wire [128: 0] shlr = {ia,ir[27:24]==`ASLX ? cds[0] : 1'b0} << ib[5:0];
 wire [128:-1] shrr = {ir[27:24]==`LSRX ? cds[0] : 1'b0,ia,65'd0} >> ib[5:0];
 wire [128: 0] shli = {ia,ir[27:24]==`ASLXI  ? cds[0] : 1'b0} << imm[5:0];
 wire [128:-1] shri = {ir[27:24]==`LSRXI ? cds[0] : 1'b0,ia,65'd0} >> imm[5:0];
+wire [63:0] bfo;
 
-wire [5:0] mb = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[23:18] : ib[5:0];
-wire [5:0] mw = (d_exti|d_extui|d_flipi|d_depi|d_depii|d_ffoi) ? ir[29:24] : ic[5:0];
-wire [5:0] me = mb + mw;
-reg [63:0] bfo1, bfo2, bfo, mask;
-integer nn;
-always @*
-	for (nn = 0; nn < 64; nn = nn + 1)
-		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
-
-always @*
-if (d_depi|d_depr) begin
-	bfo2 = ia << mb;
-	for (n = 0; n < 64; n = n + 1)
-	  bfo[n] = (mask[n] ? bfo2[n] : id[n]);
-end
-else if (d_depii) begin
-	bfo2 = imm << mb;
-	for (n = 0; n < 64; n = n + 1)
-	  bfo[n] = (mask[n] ? bfo2[n] : id[n]);
-end
-else if (d_flipr|d_flipi) begin
-  for (n = 0; n < 64; n = n + 1)
-    bfo[n] = mask[n] ? ia[n]^id[n] : id[n];
-end
-else if (d_extr|d_exti) begin
-	for (n = 0; n < 64; n = n + 1)
-		bfo1[n] = mask[n] ? ia[n] : 1'b0;
-	bfo2 = bfo1 >> mb;
-	for (n = 0; n < 64; n = n + 1)
-		bfo[n] = n > mw ? bfo2[mw] : bfo2[n];
-end
-else if (d_extur|d_extui) begin
-	for (n = 0; n < 64; n = n + 1)
-		bfo1[n] = mask[n] ? ia[n] : 1'b0;
-	bfo = bfo1 >> mb;
-end
-else if (d_ffoi|d_ffor) begin
-  bfo2 = {64{1'b1}};
-	for (n = 0; n < 64; n = n + 1)
-		bfo1[n] = mask[n] ? ia[n] : 1'b0;
-  for (n = 0; n < 64; n = n + 1)
-    if (bfo1[n]==1'b1)
-      bfo2 = n;
-	bfo = bfo2[63] ? bfo2 : bfo2 - mb;
-end
-else
-	bfo = {64{1'b0}};
-
+bitfield ubf1
+( 
+  .clk(clk_g),
+  .ce(1'b1),
+  .ir(eir),
+  .d_i(d_exti|d_extui|d_flipi|d_depi|d_ffoi),
+  .d_ext(d_exti|d_extr),
+  .d_extu(d_extui|d_extur),
+  .d_flip(d_flipi|d_flipr),
+  .d_dep(d_depi|d_depr),
+  .d_depi(d_depii),
+  .d_ffo(d_ffoi|d_ffor),
+  .a(ia),
+  .b(ib),
+  .c(ic),
+  .d(id),
+  .imm(imm),
+  .o(bfo)
+);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Multiply / Divide support logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg sgn;
-wire [WID*2-1:0] prod = ia * ib;
-wire [WID*2-1:0] nprod = -prod;
+wire [WID*2-1:0] produ = ia * ib;
+wire [WID*2-1:0] prods = $signed(ia) * $signed(ib);
+wire [WID*2-1:0] prodsu = $signed(ia) * ib;
+  
 wire [WID*2-1:0] div_q;
 wire [WID*2-1:0] ndiv_q = -div_q;
 wire [WID-1:0] div_r = ia - (ib * div_q[WID*2-1:WID]);
 wire [WID-1:0] ndiv_r = -div_r;
-reg ldd;
+reg ldd,ldd1,ldd2;
+always @(posedge clk_g)
+  ldd1 <= ldd;
+always @(posedge clk_g)
+  ldd2 <= ldd1;
 fpdivr16 #(WID) u16 (
-	.clk(clk_g),
-	.ld(ldd),
+	.clk(div_clk),
+	.ld(ldd|ldd1|ldd2),
 	.a(ia),
 	.b(ib),
 	.q(div_q),
@@ -941,19 +918,19 @@ wire fb_qnan, fb_snan, fb_nan;
 wire finf, fdn;
 always @(posedge clk_g)
 	ld1 <= ld;
-fpDecomp #(FPWID) u12 (.i(ia), .sgn(), .exp(), .man(), .fract(), .xz(fa_xz), .mz(), .vz(fa_vz), .inf(fa_inf), .xinf(), .qnan(fa_qnan), .snan(fa_snan), .nan(fa_nan));
-fpDecomp #(FPWID) u13 (.i(ib), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(fb_qnan), .snan(fb_snan), .nan(fb_nan));
-fpCompare #(.FPWID(FPWID)) u1 (.a(ia), .b(ib), .o(fcmp_o), .nan(cmpnan), .snan(cmpsnan));
+fpDecomp u12 (.i(ia), .sgn(), .exp(), .man(), .fract(), .xz(fa_xz), .mz(), .vz(fa_vz), .inf(fa_inf), .xinf(), .qnan(fa_qnan), .snan(fa_snan), .nan(fa_nan));
+fpDecomp u13 (.i(ib), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(fb_qnan), .snan(fb_snan), .nan(fb_nan));
+fpCompare u1 (.a(ia), .b(ib), .o(fcmp_o), .nan(cmpnan), .snan(cmpsnan));
 assign fcmp_res = fcmp_o[1] ? {FPWID{1'd1}} : fcmp_o[0] ? 1'd0 : 1'd1;
-i2f #(.FPWID(FPWID)) u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
-f2i #(.FPWID(FPWID)) u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(ia), .o(ftoi_res), .overflow());
-fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(fltfunct5==`FSUB), .a(ia), .b(ib), .o(fas_o));
-fpMul #(.FPWID(FPWID)) u5 (.clk(clk_g), .ce(1'b1), .a(ia), .b(ib), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
-fpDiv #(.FPWID(FPWID)) u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
+i2f u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
+f2i u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(ia), .o(ftoi_res), .overflow());
+fpAddsub u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(fltfunct5==`FSUB), .a(ia), .b(ib), .o(fas_o));
+fpMultiply u5 (.clk(clk_g), .ce(1'b1), .a(ia), .b(ib), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
+fpDivide u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
 	.a(ia), .b(ib), .o(fdiv_o), .done(), .sign_exe(), .overflow(div_of), .underflow(div_uf));
-fpSqrt #(.FPWID(FPWID)) u7 (.rst(rst_i), .clk(clk_g), .ce(1'b1), .ld(ld),
+fpSqrt u7 (.rst(rst_i), .clk(clk_g), .ce(1'b1), .ld(ld),
 	.a(ia), .o(fsqrt_o), .done(sqrt_done), .sqrinf(sqrinf), .sqrneg(sqrneg));
-fpFMA #(.FPWID(FPWID)) u14
+fpFMA u14
 (
 	.clk(clk_g),
 	.ce(1'b1),
@@ -998,62 +975,57 @@ case(opcode)
 	endcase
 default:	fnorm_uf <= 1'b0;
 endcase
-fpNormalize #(.FPWID(FPWID)) u8 (.clk(clk_g), .ce(1'b1), .i(fnorm_i), .o(fnorm_o), .under_i(fnorm_uf), .under_o(norm_uf), .inexact_o(norm_nx));
-fpRound #(.FPWID(FPWID)) u9 (.clk(clk_g), .ce(1'b1), .rm(rmq), .i(fnorm_o), .o(fres));
-fpDecompReg #(FPWID) u10 (.clk(clk_g), .ce(1'b1), .i(fres), .sgn(), .exp(), .fract(), .xz(fdn), .vz(), .inf(finf), .nan() );
+fpNormalize u8 (.clk(clk_g), .ce(1'b1), .i(fnorm_i), .o(fnorm_o), .under_i(fnorm_uf), .under_o(norm_uf), .inexact_o(norm_nx));
+fpRound u9 (.clk(clk_g), .ce(1'b1), .rm(rmq), .i(fnorm_o), .o(fres));
+fpDecompReg u10 (.clk(clk_g), .ce(1'b1), .i(fres), .sgn(), .exp(), .fract(), .xz(fdn), .vz(), .inf(finf), .nan() );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Posit Arithmetic Logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-wire [63:0] pas1_o, pas_o;
-wire [63:0] pmul1_o, pmul_o;
-wire [63:0] pdiv1_o, pdiv_o;
-wire [63:0] itop_o, ptoi_o;
+wire [63:0] pas_o;
+wire [63:0] pmul_o;
+wire [63:0] pdiv_o;
+wire [63:0] itop_o, ptoi_o, itopd, ptoid;
 wire pmulz_o, pmuli_o;
-wire pmulz1_o, pmuli1_o;
 wire pdivz_o, pdivi_o;
-wire pdivz1_o, pdivi1_o;
 
-positAddsub #(.PSTWID(PSTWID), .es(es)) up4
+positAddsub_rt up4
 (
+  .clk(clk_g),
+  .ce(1'b1),
   .op(fltfunct5==`PSUB),
   .a(ia),
   .b(ib),
-  .o(pas1_o)
+  .o(pas_o)
 );
-delay6 #(PSTWID) upd1 (.clk(clk_g), .ce(1'b1), .i(pas1_o), .o(pas_o));
 
-positMul #(.PSTWID(PSTWID), .es(es)) up5
-(
-  .a(ia),
-  .b(ib),
-  .o(pmul1_o),
-  .zero(pmulz1_o),
-  .inf(pmuli1_o)
-);
-delay6 #(PSTWID) upd2 (.clk(clk_g), .ce(1'b1), .i(pmul1_o), .o(pmul_o));
-delay6 #(1) upd6 (.clk(clk_g), .ce(1'b1), .i(pmulz1_o), .o(pmulz_o));
-delay6 #(1) upd7 (.clk(clk_g), .ce(1'b1), .i(pmuli1_o), .o(pmuli_o));
-
-positDivide #(.PSTWID(PSTWID), .es(es)) up6
+positMultiply up5
 (
   .clk(clk_g),
   .ce(1'b1),
   .a(ia),
   .b(ib),
-  .o(pdiv1_o),
-  .start(),
-  .done(),
-  .zero(pdivz1_o),
-  .inf(pdivi1_o)
+  .o(pmul_o),
+  .zero(pmulz_o),
+  .inf(pmuli_o)
 );
-delay6 #(PSTWID) upd3 (.clk(clk_g), .ce(1'b1), .i(pdiv1_o), .o(pdiv_o));
-delay6 #(1) upd4 (.clk(clk_g), .ce(1'b1), .i(pdivz1_o), .o(pdivz_o));
-delay6 #(1) upd5 (.clk(clk_g), .ce(1'b1), .i(pdivi1_o), .o(pdivi_o));
 
-intToPosit #(.PSTWID(PSTWID), .es(es)) uitop1(ia, itop_o);
-positToInt #(.PSTWID(PSTWID), .es(es)) uptoi1(ia, ptoi_o);
+positDivide up6
+(
+  .clk(div_clk_i),
+  .ce(1'b1),
+  .a(ia),
+  .b(ib),
+  .o(pdiv_o),
+  .zero(pdivz_o),
+  .inf(pdivi_o)
+);
+
+intToPosit uitop1(ia, itopd);
+positToInt uptoi1(clk, 1'b1, ia, ptoi_o);
+// Pipelining stages for conversions.
+delay3 #(PSTWID) updl1 (.clk(clk_g), .ce(1'b1), .i(itopd), .o(itop_o));
 
 wire pcmpnan = ia==64'h8000000000000000 || ib==64'h8000000000000000;
 wire pinf_o = ia==64'h8000000000000000 || ib==64'h8000000000000000;
@@ -1154,18 +1126,6 @@ end
 task tReset;
 begin
   if (rst_i) begin
-	rstate <= REGFETCH_WAIT;
-	estate <= EXECUTE_WAIT;
-	mstate <= MEMORY_WAIT;
-	wstate <= WRITEBACK_WAIT;
-	regfetch_done <= TRUE;
-	execute_done <= TRUE;
-	memory_done <= TRUE;
-	writeback_done <= TRUE;
-
-	icvalid <= 64'd0;
-	ic_invline <= 1'b0;
-	pc_reload <= TRUE;
 	for (n = 0; n < 8; n = n + 1) begin
 	  tvec[n] <= 32'hFFFC0000;
 	  status[n] <= 32'h0;
@@ -1186,6 +1146,7 @@ begin
   dat_o <= 128'd0;
 	sr_o <= 1'b0;
 	cr_o <= 1'b0;
+
 	ld_time <= 1'b0;
 	wc_times <= 1'b0;
 	wc_time_irq_clr <= 6'h3F;
@@ -1298,6 +1259,9 @@ begin
 if (rst_i) begin
 	istate <= IFETCH1;
 	ifetch_done <= FALSE;
+	icvalid <= 64'd0;
+	ic_invline <= 1'b0;
+	pc_reload <= TRUE;
 	pc <= RSTPC;
 	ipc <= {AWID{1'b0}};
 end
@@ -2233,6 +2197,7 @@ DECODE:
 				Rs2x <= 5'd1;
 				Rs3x <= 5'd1;
 				wrirf <= 1'b1;
+				illegal_insn <= FALSE;
 			end
 		`FLT2:
 			begin
@@ -2243,7 +2208,9 @@ DECODE:
 				    Rdx <= Rdx1;
 				    wrirf <= 1'b1;
 				  end
-				`FSEQ,`FSLT,`FSLE,`FCMP:  begin Cd <= ir[9:8]; d_fltcmp <= 1'b1; wrcrf <= 1'b1; end
+				`FADD,`FSUB,`FMUL,`FDIV:
+				  illegal_insn <= FALSE;
+				`FSEQ,`FSLT,`FSLE,`FCMP:  begin Cd <= ir[9:8]; d_fltcmp <= 1'b1; wrcrf <= 1'b1; illegal_insn <= FALSE; end
 				default:
 				  begin
 				    Rdx <= 5'd1;
@@ -2262,6 +2229,7 @@ DECODE:
 				Rs2x <= 5'd2;
 				Rs3x <= 5'd2;
 				wrprf <= 1'b1;
+				illegal_insn <= FALSE;
 			end
 		`PST2:
 			begin
@@ -2272,7 +2240,10 @@ DECODE:
 				    Rdx <= rsStack[4:0];
 				    wrirf <= 1'b1;
 				  end
-				`FSEQ,`FSLT,`FSLE,`FCMP:  begin 
+				`PADD,`PSUB,`PMUL,`PDIV:
+				  illegal_insn <= FALSE;
+				`PSEQ,`PSLT,`PSLE:  begin 
+				  illegal_insn <= FALSE;
 				  Rd <= {5'b11100,ir[9:8]};
 				  Cd <= ir[9:8]; d_fltcmp <= 1'b1; wrcrf <= 1'b1; end
 				default:
@@ -2322,6 +2293,8 @@ endtask
 task tRegfetch;
 begin
 if (rst_i) begin
+	rstate <= REGFETCH_WAIT;
+	regfetch_done <= TRUE;
   rpc <= RSTPC;
 end
 else
@@ -2484,6 +2457,8 @@ endtask
 task tExecute;
 begin
 if (rst_i) begin
+	estate <= EXECUTE_WAIT;
+	execute_done <= TRUE;
   expc <= RSTPC;
   res <= 64'd0;
   res2 <= 64'd0;
@@ -2512,18 +2487,18 @@ EXECUTE:
       `ENORR2:res <= ~(ia ^ ib);
       `ADDR2: res <= ia + ib;
       `SUBR2: res <= ia - ib;
-      `MULR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `MULUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `MULSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `MULHR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `MULUHR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `MULSUHR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd0; end
-      `DIVR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
-      `DIVUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
-      `DIVSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
-      `REMR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
-      `REMUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
-      `REMSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd20; end
+      `MULR2: res <= prods[WID-1:0];
+      `MULUR2: res <= produ[WID-1:0];
+      `MULSUR2: res <= prodsu[WID-1:0];
+      `MULHR2: res <= prods[WID*2-1:WID];
+      `MULUHR2: res <= produ[WID*2-1:WID];
+      `MULSUHR2: res <= prodsu[WID*2-1:WID];
+      `DIVR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `DIVUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `DIVSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `REMR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `REMUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `REMSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
       `PERMR2:
         begin
           res[ 7: 0] <= ia >> {ib[2:0],3'b0};
@@ -2880,7 +2855,7 @@ EXECUTE:
           res[n] <= ia[n] ? ib[n] : ic[n];
       `ADDR3A: res <= ia + ib + ic;
       `SUBR3A: res <= ia - ib - ic;
-      `FLIPR3A:  res <= bfo;
+      `FLIPR3A:  begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end //res <= bfo;
       default:  ;
       endcase
     `R3B:
@@ -2895,9 +2870,9 @@ EXECUTE:
           res[23:16] <= blendR1[15:8] + blendR2[15:8];
           res[63:24] <= ia[63:24];
         end
-      `EXTR3B: res <= bfo;
-      `EXTUR3B:  res <= bfo;
-      `DEPR3B: res <= bfo;
+      `EXTR3B: begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
+      `EXTUR3B:  begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
+      `DEPR3B: begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
       default:  ;
       endcase
     `ADD:   res <= ia + imm;
@@ -2906,6 +2881,14 @@ EXECUTE:
     `ADD2R: res <= ia + ib;
     `SUBF: res <= imm - ia;
     `MUL: res <= $signed(ia) * $signed(imm);
+    `MULU: res <= ia * imm;
+    `MULSU: res <= $signed(ia) * imm;
+    `DIV: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `DIVU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `DIVSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `REM: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `REMU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `REMSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
     `GCSUB: res <= ia - imm;
     `GCSUB10: res <= ia - imm;
     `SHIFT:
@@ -3014,10 +2997,10 @@ EXECUTE:
         res[63:56] <= ia >> {eir[46:43],3'b0};
       end
     // Bitfield
-    `EXT: res <= bfo;
-    `DEP: res <= bfo;
-    `DEPI:  res <= bfo;
-    `FFO: res <= bfo;
+    `EXT: begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
+    `DEP: begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
+    `DEPI:  begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
+    `FFO: begin execute_done <= FALSE; mathCnt <= 8'd08; estate <= FLOAT; end
     `BYTNDX:
       begin
         if (ia[7:0]==imm[7:0])
@@ -3316,11 +3299,13 @@ EXECUTE:
 			  endcase
 			`PADD:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PADD
 			`PSUB:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PSUB
-			`PMUL:	begin execute_done <= FALSE; mathCnt <= 8'd7; egoto(FLOAT); end	// PMUL
-			`PDIV:	begin execute_done <= FALSE; mathCnt <= 8'd9; egoto(FLOAT); end	// PDIV
-			`PSLE:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSLE
-		  `PSLT:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSLT
-			`PSEQ:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// FSEQ
+			`PMUL:	begin execute_done <= FALSE; mathCnt <= 8'd15; egoto(FLOAT); end	// PMUL
+			`PDIV:	begin execute_done <= FALSE; mathCnt <= 8'd21; egoto(FLOAT); end	// PDIV
+			`PSLE:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// PSLE
+		  `PSLT:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// PSLT
+			`PSEQ:	begin execute_done <= FALSE; mathCnt <= 8'd03; egoto(FLOAT); end	// PSEQ
+  	  `PMIN:  begin execute_done <= FALSE; mathCnt <= 8'd01; egoto(FLOAT); end	// PMIN / PMAX
+  	  `PMAX:  begin execute_done <= FALSE; mathCnt <= 8'd01; egoto(FLOAT); end	// PMIN / PMAX
 			default:	;
 			endcase
     endcase
@@ -3336,26 +3321,21 @@ MUL1:
 		case(eopcode)
 		`R2,`R2B:
 	    case(eir[30:26])
-	    `MULR2,`DIVR2,`REMR2,`MULHR2:
+	    `DIVR2,`REMR2:
   		  begin
   				sgn <= ia[WID-1] ^ ib[WID-1];	// compute output sign
   				if (ia[WID-1]) ia <= -ia;			// Make both values positive
   				if (ib[WID-1]) ib <= -ib;
   		  end
-  		`MULSUR2,`MULSUHR2:
-  			begin
-  				sgn <= ia[WID-1];
-  				if (ia[WID-1]) ia <= -ia;
-  			end
   	  default:  ;
 	    endcase
-		`MUL,`DIV,`REM:
+		`DIV,`REM:
 		  begin
 				sgn <= ia[WID-1] ^ imm[WID-1];	// compute output sign
 				if (ia[WID-1]) ia <= -ia;			// Make both values positive
 				if (ib[WID-1]) ib <= -imm; else ib <= imm;
 		  end
-		`MULU,`DIVU,`REMU:
+		`DIVU,`REMU:
 		  ib <= imm;
 		default:  ;
 	  endcase
@@ -3369,12 +3349,6 @@ MUL2:
 			case(eopcode)
 			`R2,`R2B:
 			  case(eir[30:26])
-			  `MULR2:   res <= sgn ? nprod[WID-1:0] : prod[WID-1:0];
-			  `MULUR2:  res <= prod[WID-1:0];
-			  `MULSUR2: res <= sgn ? nprod[WID-1:0] : prod[WID-1:0];
-			  `MULHR2:  res <= sgn ? nprod[WID*2-1:WID] : prod[WID*2-1:WID];
-			  `MULUHR2: res <= prod[WID*2-1:WID];
-			  `MULSUHR2:res <= sgn ? nprod[WID*2-1:WID] : prod[WID*2-1:WID];
 			  `DIVR2:   res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
 			  `DIVUR2:  res <= div_q[WID*2-1:WID];
 			  `DIVSUR2: res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
@@ -3383,8 +3357,6 @@ MUL2:
 			  `REMSUR2: res <= sgn ? ndiv_r : div_r;
 			  default:  ;
 			  endcase
-			`MUL,`MULSU:  res <= sgn ? nprod[WID-1:0] : prod[WID-1:0];
-			`MULU: res <= prod[WID-1:0];
 			`DIV:  res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
 			`DIVU: res <= div_q[WID*2-1:WID];
 			`DIVSU:res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
@@ -3419,6 +3391,24 @@ FLOAT:
 		mathCnt <= mathCnt - 2'd1;
 		if (mathCnt==8'd0) begin
 			case(eopcode)
+			// Bitfield ops
+			`R3A:
+			  case(eir[30:28])
+			  `FLIPR3A: res <= bfo;
+			  default:  ;
+			  endcase
+			`R3B:
+			  case(eir[30:28])
+        `EXTR3B: res <= bfo;
+        `EXTUR3B:  res <= bfo;
+        `DEPR3B: res <= bfo;
+			  default:  ;
+			  endcase
+      `EXT: res <= bfo;
+      `DEP: res <= bfo;
+      `DEPI:  res <= bfo;
+      `FFO: res <= bfo;
+
 			`FMA,`FMS,`FNMA,`FNMS:
 				begin
 					res <= fres;
@@ -4000,6 +3990,8 @@ endtask
 task tMemory;
 begin
 if (rst_i) begin
+	mstate <= MEMORY_WAIT;
+	memory_done <= TRUE;
   mpc <= RSTPC;
   mres <= 64'd0;
   mres2 <= 64'd0;
@@ -4365,6 +4357,8 @@ endtask
 task tWriteback;
 begin
 if (rst_i) begin
+	wstate <= WRITEBACK_WAIT;
+	writeback_done <= TRUE;
   wres <= 64'd0;
   wres2 <= 64'd0;
 end

@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positSqrt.v
+//	positSqrt.sv
 //    - posit number square root function
 //    - parameterized width
 //
@@ -25,10 +25,9 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
 module positSqrt(clk, ce, i, o, start, done, zero, inf);
-`include "positSize.sv"
 localparam rs = $clog2(PSTWID-1)-1;
 input clk;
 input ce;
@@ -49,7 +48,7 @@ wire infi;
 wire inf = infi;
 wire zero = zeri;
 
-positDecompose #(PSTWID,es) u1 (
+positDecompose #(PSTWID) u1 (
   .i(i),
   .sgn(si),
   .rgs(rgsi),

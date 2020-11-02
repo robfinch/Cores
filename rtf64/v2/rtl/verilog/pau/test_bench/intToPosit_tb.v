@@ -55,7 +55,7 @@ parameter Bs=log2(N);
 parameter es = 2;
 
 reg clk;
-reg [15:0] cnt;
+reg [19:0] cnt;
 
 wire signed [N-1:0] out, outi;
 
@@ -69,7 +69,7 @@ wire [63:0] double = {fa[31], fa[30], {3{~fa[30]}}, fa[29:23], fa[22:0], {29{1'b
 
 // Instantiate the Unit Under Test (UUT)
 intToPosit #(.PSTWID(N), .es(es)) u2 (.i(a), .o(out));
-positToInt #(.PSTWID(N), .es(es)) u3 (.i(f2po), .o(outi));
+positToInt #(.PSTWID(N), .es(es)) u3 (.clk(clk), .ce(1'b1), .i(f2po), .o(outi));
 
 //FP_to_posit #(.N(32), .E(8), .es(es)) u3 (in, out3);
 //Posit_to_FP #(.N(32), .E(8), .es(es)) u5 (out, out3);
@@ -81,7 +81,7 @@ positToInt #(.PSTWID(N), .es(es)) u3 (.i(f2po), .o(outi));
 		clk = 1;
 		cnt = 0;
 		// Wait 100 ns for global reset to finish
-		#325150 
+		#1000000 
 		$fclose(outfile);
 		$finish;
 	end
@@ -90,11 +90,12 @@ always #5 clk=~clk;
 always @(posedge clk) begin
   a <= $urandom();
   cnt <= cnt + 1;
-  if (cnt > 1000) begin
-    fa <= $urandom();
+  if (cnt > 10000) begin
+    if (cnt[4:0]==5'd0)
+      fa <= $urandom();
   end
   else
-  case (cnt)
+  case (cnt[19:5])
   2:  fa <= 32'h3f000001; // 0.5 + 1ulp
   3:  fa <= 32'h3EFFFFFF; // 0.4999...
   4:  a <= 32'h17cf4600;
@@ -102,13 +103,16 @@ always @(posedge clk) begin
   6:  a <= -1;
   7:  a <= -10;
   8:  a <= 100;
-  default:   a <= $urandom();
+  default: 
+    if (cnt[4:0]==5'h0)
+      a <= $urandom();
   endcase
 end
 
 integer outfile;
 initial outfile = $fopen("d:/cores2020/rtf64/v2/rtl/verilog/cpu/pau/test_bench/intToPosit_tvo32.txt", "wb");
   always @(posedge clk) begin
+    if (cnt[4:0]==5'h1F)
      $fwrite(outfile, "%h\t%d\t%h\t%d\t%e\n",f2po,a,out,outi,$bitstoreal(double));
   end
 

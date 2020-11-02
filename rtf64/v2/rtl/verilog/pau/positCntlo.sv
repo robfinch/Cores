@@ -1,4 +1,3 @@
-`include "positConfig.sv"
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2020  Robert Finch, Waterloo
@@ -23,6 +22,8 @@
 //
 // ============================================================================
 //
+import posit::PSTWID;
+
 module positCntlo(i, o);
 parameter PSTWID = `PSTWID;
 input [PSTWID-2:0] i;

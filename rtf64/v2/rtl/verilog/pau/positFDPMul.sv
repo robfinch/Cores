@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positFDPMul.v
+//	positFDPMul.sv
 //    - fused dot product posit number multiplier
 //    - parameterized width
 //    - perform a multiplication but retain all the product bits
@@ -27,11 +27,9 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
 module positFDPMul(a, b, o, zero, inf);
-`include "positSize.sv"
-localparam rs = $clog2(PSTWID-1);
 input [PSTWID-1:0] a;
 input [PSTWID-1:0] b;
 output reg [PSTWID+es+(PSTWID-es)*2-1:0] o;
@@ -50,7 +48,7 @@ wire infa, infb;
 wire inf = infa|infb;
 wire zero = zera|zerb;
 
-positDecompose #(PSTWID,es) u1 (
+positDecompose #(PSTWID) u1 (
   .i(a),
   .sgn(sa),
   .rgs(rgsa),
@@ -61,7 +59,7 @@ positDecompose #(PSTWID,es) u1 (
   .inf(infa)
 );
 
-positDecompose #(PSTWID,es) u2 (
+positDecompose #(PSTWID) u2 (
   .i(b),
   .sgn(sb),
   .rgs(rgsb),

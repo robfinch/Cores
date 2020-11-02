@@ -1,4 +1,3 @@
-`include "positConfig.sv"
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2020  Robert Finch, Waterloo
@@ -23,12 +22,11 @@
 //
 // ============================================================================
 //
-`include "positConfig.sv"
+import posit::*;
 
 // Decompose a posit number.
 module positDecompose(i, sgn, rgs, rgm, exp, sig, zer, inf);
-`include "positSize.sv"
-localparam rs = $clog2(PSTWID-1);
+parameter PSTWID = `PSTWID;
 input [PSTWID-1:0] i;
 output sgn;                       // sign of number
 output rgs;                       // sign of regime
@@ -48,8 +46,8 @@ assign zer = ~|i;
 wire [PSTWID-1:0] ii = sgn ? -i : i;
 assign rgs = ii[PSTWID-2];
 
-positCntlz #(PSTWID) u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
-positCntlo #(PSTWID) u2 (.i(ii[PSTWID-2:0]), .o(locnt));
+positCntlz u1 (.i(ii[PSTWID-2:0]), .o(lzcnt));
+positCntlo u2 (.i(ii[PSTWID-2:0]), .o(locnt));
 
 assign rgm = rgs ? locnt - 1 : lzcnt;
 wire [rs:0] shamt = rgs ? locnt + 2'd1 : lzcnt + 2'd1;
@@ -61,7 +59,7 @@ endmodule
 
 // Decompose posit number and register outputs.
 module positDecomposeReg(clk, ce, i, sgn, rgs, rgm, exp, sig, zer, inf);
-`include "positSize.sv"
+parameter PSTWID = `PSTWID;
 input clk;
 input ce;
 input [PSTWID-1:0] i;
@@ -81,16 +79,17 @@ wire [PSTWID-es-1:0] isig;
 wire izer;
 wire iinf;
 
-positDecompose #(PSTWID) u1 (i, isgn, irgs, irgm, iexp, isig, iinf);
+positDecompose #(PSTWID) u1 (i, isgn, irgs, irgm, iexp, isig, izer, iinf);
 
 always @(posedge clk)
 if (ce) begin
-  sgn = isgn;
-  rgs = irgs;
-  rgm = irgm;
-  exp = iexp;
-  sig = isig;
-  inf = iinf;
+  sgn <= isgn;
+  rgs <= irgs;
+  rgm <= irgm;
+  exp <= iexp;
+  sig <= isig;
+  inf <= iinf;
+  zer <= izer;
 end
 
 endmodule

@@ -44,7 +44,7 @@
 module rtf64(hartid_i, rst_i, clk_i, wc_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
-parameter FPWID = 64;
+parameter FPWID = `FPWID;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter pL1CacheLines = 128;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;

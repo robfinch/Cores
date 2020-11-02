@@ -41,20 +41,19 @@
 //
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
 module positDivide(clk, ce, a, b, o, start, done, zero, inf);
-`include "positSize.sv"
-localparam rs = $clog2(PSTWID-1);
+localparam rs = $clog2(PSTWID-1)-1;
 input clk;
 input ce;
 input [PSTWID-1:0] a;
 input [PSTWID-1:0] b;
 output reg [PSTWID-1:0] o;
 input start;
-output done;
-output zero;
-output inf;
+output reg done;
+output reg zero;
+output reg inf;
 
 localparam N = PSTWID;
 localparam M = N-es;
@@ -71,13 +70,10 @@ wire [rs:0] rgma, rgmb;
 wire rgsa, rgsb;
 wire [es-1:0] expa, expb;
 wire [M-1:0] siga, sigb;
-wire sigbd;
 wire zera, zerb;
 wire infa, infb;
-wire inf = infa|zerb;
-wire zero = zera|infb;
 
-positDecompose #(PSTWID,es) u1 (
+positDecompose #(PSTWID) u1 (
   .i(a),
   .sgn(sa),
   .rgs(rgsa),
@@ -88,7 +84,7 @@ positDecompose #(PSTWID,es) u1 (
   .inf(infa)
 );
 
-positDecompose #(PSTWID,es) u2 (
+positDecompose #(PSTWID) u2 (
   .i(b),
   .sgn(sb),
   .rgs(rgsb),
@@ -109,26 +105,19 @@ wire [Bs+1:0] argmb = rgsb ? {2'b0,rgmb} : -rgmb;
 
 generate begin : gDivLut
 if (M < AW_MAX)
-div_lut lut1 (.clk(clk), .i({m2[M-1:0],{AW_MAX-M{1'b0}}}), .o(m2_inv0_tmp));
+div_lut lut1 (.clk(clk), .ce(ce), .i({m2[M-1:0],{AW_MAX-M{1'b0}}}), .o(m2_inv0_tmp));
 else if (M==AW_MAX)
-div_lut lut1 (.clk(clk), .i(m2[M-1:0]), .o(m2_inv0_tmp));
-else if (M > AW_MAX) begin
-wire [AW_MAX-1:0] m2ndx = m2[M-1:M-AW_MAX];
-div_lut lut1 (.clk(clk), .i(m2ndx), .o(m2_inv0_tmp));
-end
+div_lut lut1 (.clk(clk), .ce(ce), .i(m2[M-1:0]), .o(m2_inv0_tmp));
+else if (M > AW_MAX)
+div_lut lut1 (.clk(clk), .ce(ce), .i(m2[M-1:M-AW_MAX]), .o(m2_inv0_tmp));
 end
 endgenerate
 
 wire [IW:0] m2_inv0;
 assign m2_inv0 = m2_inv0_tmp[15:5];
-// Register signals to match LUT timing.
-wire [M:0] m1d, m2d;
-delay1 #(M+1) ud1 (.clk(clk), .ce(ce), .i(m1), .o(m1d));
-delay1 #(M+1) ud2 (.clk(clk), .ce(ce), .i(m2), .o(m2d));
-delay1 #(1) ud3 (.clk(clk), .ce(ce), .i(~|sigb[M-2:0]), .o(sigbd));
-delay1 #(1) ud4 (.clk(clk), .ce(ce), .i(start), .o(done));
 
 wire [2*M+1:0] div_m;
+wire [2*M+1:0] div_m4;
 
 genvar i;
 generate begin
@@ -138,8 +127,8 @@ generate begin
 		assign m2_inv[0] = {1'b0,m2_inv0,{M-IW{1'b0}},{M{1'b0}}};
 		wire [2*M+1:0] m2_inv_X_m2 [NR_Iter-1:0];
 		wire [M+1:0] two_m2_inv_X_m2 [NR_Iter-1:0];
-		for (i = 0; i < NR_Iter; i=i+1)begin : NR_Iteration
-			assign m2_inv_X_m2[i] = {m2_inv[i][2*M:2*M-IW*(i+1)],{2*M-IW*(i+1)-M{1'b0}}} * m2d;
+		for (i = 0; i < NR_Iter; i=i+1) begin : NR_Iteration
+			assign m2_inv_X_m2[i] = {m2_inv[i][2*M:2*M-IW*(i+1)],{2*M-IW*(i+1)-M{1'b0}}} * m2;
 			assign two_m2_inv_X_m2[i] = {1'b1,{M{1'b0}}} - {1'b0,m2_inv_X_m2[i][2*M+1:M+3],|m2_inv_X_m2[i][M+2:0]};
 			assign m2_inv[i+1] = {m2_inv[i][2*M:2*M-IW*(i+1)],{M-IW*(i+1){1'b0}}} * {two_m2_inv_X_m2[i][M-1:0],1'b0};
 		end
@@ -147,22 +136,27 @@ generate begin
 	else begin
 		assign m2_inv[0] = {1'b0,m2_inv0,{M{1'b0}}};
 	end
-	assign div_m = sigbd ? {1'b0,m1,{M{1'b0}}} : m1d * m2_inv[NR_Iter][2*M:M];
+	assign div_m4 = ~|sigb[M-2:0] ? {1'b0,m1,{M{1'b0}}} : m1 * m2_inv[NR_Iter][2*M:M];
 end
 endgenerate
+
+delay #(.WID(PSTWID), .DEP(4)) ud4 (.clk(clk), .ce(ce), .i(div_m4), .o(div_m));
+delay #(.WID(1),.DEP(5)) ud1 (.clk(clk), .ce(ce), .i(start), .o(done));
+delay #(.WID(1),.DEP(5)) ud2 (.clk(clk), .ce(ce), .i(infa|infb), .o(inf));
+delay #(.WID(1),.DEP(5)) ud3 (.clk(clk), .ce(ce), .i(zera|zerb), .o(zero));
 
 wire div_m_udf = div_m[2*M+1];
 wire [2*M+1:0] div_mN = ~div_m_udf ? div_m << 1'b1 : div_m;
 
 //Exponent and Regime Computation
-wire bin = (sigbd | div_m_udf) ? 0 : 1;
+wire bin = (~|sigb[M-2:0] | div_m_udf) ? 0 : 1;
 wire [Bs+es+1:0] div_e = {argma, expa} - {argmb, expb} - bin;// 1 + ~|mant2 + div_m_udf;
 wire [es-1:0] e_o = div_e[es-1:0];
 wire [Bs+es:0] exp_oN = div_e[es+Bs+1] ? -div_e[es+Bs:0] : div_e[es+Bs:0];
 wire [Bs:0] r_o = (~div_e[es+Bs+1] || |(exp_oN[es-1:0])) ? exp_oN[Bs+es:es] + 1 : exp_oN[es+Bs:es];
 
 //Exponent and Mantissa Packing
-wire [2*N-1+3:0] tmp_o = {{N{~div_e[es+Bs+1]}},div_e[es+Bs+1],e_o,div_mN[2*M:M],|div_mN[M-1:0] };
+wire [2*N-1+3:0] tmp_o = {{N{~div_e[es+Bs+1]}},div_e[es+Bs+1],e_o,div_mN[2*M:2*M-(N-es-1)+1], div_mN[2*M-(N-es-1):2*M-(N-es-1)-1],|div_mN[2*M-(N-es-1)-2:0] };
 
 //Including Regime bits in Exponent-Mantissa Packing
 wire [3*N-1+3:0] tmp1_o = {tmp_o,{N{1'b0}}} >> (r_o[Bs] ? {Bs{1'b1}} : r_o);
@@ -177,6 +171,7 @@ wire [N-1:0] tmp1_o_rnd = (r_o < M-2) ? tmp1_o_rnd_ulp[N-1:0] : tmp1_o[2*N-1+3:N
 
 //Final Output
 wire [N-1:0] tmp1_oN = so ? -tmp1_o_rnd : tmp1_o_rnd;
-assign o = inf|zero|(~div_mN[2*M+1]) ? {inf,{N-1{1'b0}}} : {so, tmp1_oN[N-1:1]};
+always @(posedge clk)
+  if (ce) o <= inf|zero|(~div_mN[2*M+1]) ? {inf,{N-1{1'b0}}} : {so, tmp1_oN[N-1:1]};
 
 endmodule

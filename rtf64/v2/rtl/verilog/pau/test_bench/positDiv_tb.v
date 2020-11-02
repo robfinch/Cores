@@ -23,8 +23,8 @@ wire [N-1:0] out, out2, out3;
 
 reg [N-1:0] a1, b1;
 wire [N-1:0] a, b;
-wire [N-1:0] p, fsum, fa, fb, ad, bd, psumd, out2d, p1;
-wire i,z,d,i1,z1,d1;
+wire [N-1:0] p, fsum, fb, ad, bd, psumd, out2d, p1, sum1;
+wire i,z,d,i1,z1,d1,i2,z2,d2;
 wire done;
 reg start;
 
@@ -32,10 +32,15 @@ reg start;
 
 //intToPosit #(.PSTWID(N), .es(es)) u1a (.i(a1), .o(a));
 //intToPosit #(.PSTWID(N), .es(es)) u1b (.i(b1), .o(b));
+reg [63:0] fa;
+wire [63:0] f2po;
+fpToPosit #(.FPWID(64)) ufp1 (.i(fa), .o(f2po));
+
 assign a = a1;
 assign b = b1;
 positDivide #(.PSTWID(N), .es(es)) udiv1 (clk, 1'b1, a, b, p, start, d, z, i);
 posit_div #(.N(N),.es(es)) udiv2 (a, b, start, p1, i1, z1, d1);
+posit_add #(.N(N),.es(es)) uadd2 (a, b, start, sum1, i2, z2, d2);
 
 	initial begin
 	  a1 = $urandom(1);
@@ -81,11 +86,30 @@ start <= 0;
     begin
       a1 = 64'h63DB000000000000;
       b1 = 64'h63E8000000000000;
+      fa = $realtobits(100.987);
     end
   15:
     begin
       a1 = 64'h63DB000000000000;
       b1 = 64'h63E8000000000000;
+      fa = $realtobits(10.0);
+    end
+  16:
+    begin
+      a1 = 64'h63DB000000000000;
+      b1 = 64'h63E8000000000000;
+      fa = $realtobits(100.987);
+    end
+  17:
+    begin
+      a1 = 64'h5A40000000000000;
+      b1 = 64'h3F87654321000000;
+    end
+  18:
+    begin
+      a1 = 64'h5A40000000000000;
+      b1 = //64'h3F87654321000000;
+        64'h3fe5604189374bc6;
     end
   default:
     begin

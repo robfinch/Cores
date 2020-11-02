@@ -25,7 +25,8 @@
 // ============================================================================
 //
 
-module rtf64_mpu(hartid_i,rst_i, clk4x_i, clk2x_i, clk_i, tm_clk_i,
+module rtf64_mpu(hartid_i, rst_i,
+  clk4x_i, clk2x_i, clk_i, tm_clk_i, div_clk_i,
 	pit_clk2, pit_gate2, pit_out2,
 	irq_o,
     i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
@@ -36,6 +37,7 @@ input [63:0] hartid_i;
 input rst_i;
 input clk2x_i;
 input clk4x_i;
+input div_clk_i;
 input clk_i;
 input tm_clk_i;
 input pit_clk2;
@@ -239,6 +241,7 @@ rtf64op ucpu1
 //    .clk2x_i(clk2x_i),
 //    .clk4x_i(clk4x_i),
     .wc_clk_i(tm_clk_i),
+    .div_clk_i(div_clk_i),
     .irq_i(irq),
     .cause_i(cause),
 //    .cti_o(cti),

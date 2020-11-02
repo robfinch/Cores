@@ -26,10 +26,9 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
 module positFDP(op, a, b, c, d, o, zero, inf);
-`include "positSize.sv"
 input op;
 input [PSTWID-1:0] a;
 input [PSTWID-1:0] b;
@@ -42,8 +41,8 @@ output inf;
 wire [PSTWID+es+(PSTWID-es)*2-1:0] o1;
 wire [PSTWID+es+(PSTWID-es)*2-1:0] o2;
 
-positFDPMul #(.PSTWID(PSTWID), .es(es)) u1 (a, b, o1, zero1, inf1);
-positFDPMul #(.PSTWID(PSTWID), .es(es)) u2 (c, d, o2, zero2, inf2);
-positFDPAddsub #(.PSTWID(PSTWID), .es(es)) u3 (op, o1, o2, o, zero, inf);
+positFDPMul u1 (a, b, o1, zero1, inf1);
+positFDPMul u2 (c, d, o2, zero2, inf2);
+positFDPAddsub u3 (op, o1, o2, o, zero, inf);
 
 endmodule

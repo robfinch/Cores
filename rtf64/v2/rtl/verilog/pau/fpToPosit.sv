@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpToPosit.v
+//	fpToPosit.sv
 //    - floating point to posit number convertor
 //    - can issue every clock cycle
 //    - parameterized width
@@ -28,14 +28,10 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
-`include "fpConfig.sv"
-`include "fpTypes.sv"
+import fp::*;
+import posit::*;
 
 module fpToPosit(i, o);
-parameter FPWID = 32;
-`include "fpSize.sv"
-`include "positSize.sv"
 input [FPWID-1:0] i;
 output reg [FPWID-1:0] o;
 
@@ -55,7 +51,7 @@ wire xainf;
 wire aInf;
 wire aNan;
 
-fpDecomp #(FPWID) u1 (.i(i), .sgn(sa), .exp(xa), .man(ma), .fract(fracta), .xz(adn), .vz(az), .xinf(xaInf), .inf(aInf), .nan(aNan) );
+fpDecomp #(.FPWID(FPWID)) u1 (.i(i), .sgn(sa), .exp(xa), .man(ma), .fract(fracta), .xz(adn), .vz(az), .xinf(xaInf), .inf(aInf), .nan(aNan) );
 assign sgno = sa;
 wire [$clog2(FMSB+1):0] lzcnt;
 generate begin : gCntlz

@@ -25,10 +25,11 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
-module positToInt(i, o);
-`include "positSize.sv"
+module positToInt(clk, ce, i, o);
+input clk;
+input ce;
 input [PSTWID-1:0] i;
 output reg [PSTWID-1:0] o;
 
@@ -43,34 +44,124 @@ wire [N-es-1:0] sig;
 wire zer;
 wire inf;
 
-positDecompose #(.PSTWID(PSTWID), .es(es)) u1 (.i(i), .sgn(sgn), .rgs(rgs), .rgm(rgm), .exp(exp), .sig(sig), .zer(zer), .inf(inf));
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #1
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+positDecomposeReg #(.PSTWID(PSTWID)) u1 (
+  .clk(clk),
+  .ce(ce),
+  .i(i),
+  .sgn(sgn),
+  .rgs(rgs),
+  .rgm(rgm),
+  .exp(exp),
+  .sig(sig),
+  .zer(zer),
+  .inf(inf)
+ );
 
 wire [N-1:0] m = {sig,{es{1'b0}}};
 wire isZero = zer;
-wire [15:0] argm = rgs ? rgm : -rgm;
-wire [15:0] ex1 = (argm << es) + exp;
-wire exv = ~ex1[15] && ex1 > PSTWID-1;
-wire [N*2-1:0] mo = {m,{N{1'b0}}} >> (PSTWID-ex1-1);
-wire L = mo[N];
-wire G = mo[N-1];
-wire R = mo[N-2];
-wire St = |mo[N-3:0];
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #2
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+reg [15:0] argm2;
+reg [es-1:0] exp2;
+reg [N-1:0] m2;
+always @(posedge clk)
+  if (ce) exp2 <= exp;
+always @(posedge clk)
+  if (ce) m2 <= m;
+always @(posedge clk)
+  if (ce) argm2 <= rgs ? rgm : -rgm;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #3
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+reg [15:0] ex3;
+reg [N-1:0] m3;
+always @(posedge clk)
+  if (ce) ex3 <= (argm2 << es) + exp2;
+always @(posedge clk)
+  if (ce) m3 <= m2;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #4
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+reg exv4;
+reg [15:0] ex4;
+reg [N*2-1:0] mo4;
+always @(posedge clk)
+  if (ce) exv4 <= ~ex3[15] && ex3 > PSTWID-1;
+always @(posedge clk)
+  if (ce) ex4 <= ex3;
+always @(posedge clk)
+  if (ce) mo4 = {m3,{N{1'b0}}} >> (PSTWID-ex3-1);
+ 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #5
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+reg [15:0] ex5;
+reg [N*2-1:0] mo5;
+reg L, G, R, St;
+always @(posedge clk)
+  if (ce) ex5 <= ex4;
+always @(posedge clk)
+  if (ce) mo5 = mo4;
+always @(posedge clk)
+  if (ce) L <= mo4[N];
+always @(posedge clk)
+  if (ce) G <= mo4[N-1];
+always @(posedge clk)
+  if (ce) R <= mo4[N-2];
+always @(posedge clk)
+  if (ce) St <= |mo4[N-3:0];
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #6
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // If regime+exp == -1 then the value is 0.5 or greater, so round up.
 // If the regime+exp < -1 then the values is 0.25 or less, do not round up.
 // Otherwise use rounding rules.
-wire ulp = (~ex1[15] && ((G & (R | St)) | (L & G & ~(R | St)))) ||
-              (ex1==16'hFFFF);
+reg [N*2-1:0] mo6;
+reg ulp;
+always @(posedge clk)
+  if (ce) mo6 = mo5;
+always @(posedge clk)
+  if (ce) ulp <= (~ex5[15] && ((G & (R | St)) | (L & G & ~(R | St)))) ||
+              (ex5==16'hFFFF);
 wire [PSTWID-1:0] rnd_ulp = {{PSTWID-1{1'b0}},ulp};
-wire [PSTWID-1:0] tmp = ~rgs ? rnd_ulp : mo[N*2-1:N] + rnd_ulp;
 
-always @*
-casez({isZero,inf|exv})    // exponent all ones or exponent overflow?
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #7
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+reg [PSTWID-1:0] tmp7;
+wire rgs6;
+delay #(.WID(1), .DEP(5)) ud1 (.clk(clk), .ce(ce), .i(rgs), .o(rgs6));
+
+always @(posedge clk)
+  if (ce) tmp7 <= ~rgs6 ? rnd_ulp : mo6[N*2-1:N] + rnd_ulp;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Clock #8
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+wire isZero7, inf7, sgn7, exv7;
+delay #(.WID(1), .DEP(6)) ud2 (.clk(clk), .ce(ce), .i(isZero), .o(isZero7));
+delay #(.WID(1), .DEP(6)) ud3 (.clk(clk), .ce(ce), .i(inf), .o(inf7));
+delay #(.WID(1), .DEP(6)) ud4 (.clk(clk), .ce(ce), .i(sgn), .o(sgn7));
+delay #(.WID(1), .DEP(3)) ud5 (.clk(clk), .ce(ce), .i(exv4), .o(exv7));
+
+always @(posedge clk)
+if (ce)
+casez({isZero7,inf7|exv7,sgn7})    // exponent all ones or exponent overflow?
 // convert to +0.0 zero-in zero-out (the sign will always be plus)
-2'b1?:  o = {PSTWID{1'b0}};
+3'b1??:  o <= {PSTWID{1'b0}};
 // Infinity in or exponent overflow in conversion = infinity out
-2'b01:  o = {1'b1,{PSTWID-1{1'b0}}};
-// Other numbers
-default:  o = sgn ? -tmp : tmp;
+3'b01?:  o <= {1'b1,{PSTWID-1{1'b0}}};
+3'b001:  o <= ~tmp7 + 2'd1;
+3'b000:  o <= tmp7;
 endcase
 
 endmodule

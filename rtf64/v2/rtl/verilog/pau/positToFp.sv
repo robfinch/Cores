@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positToFp.v
+//	positToFp.sv
 //    - posit number to floating point convertor
 //    - can issue every clock cycle
 //    - parameterized width
@@ -28,14 +28,11 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
-`include "fpConfig.sv"
-`include "fpTypes.sv"
+import posit::*;
+import fp::*;
+`include "../fpu/fpTypes.sv"
 
 module positToFp(i, o);
-parameter FPWID = 32;
-`include "fpSize.sv"
-`include "positSize.sv"
 input [FPWID-1:0] i;
 output reg [FPWID-1:0] o;
 
@@ -54,7 +51,7 @@ wire [N-es-1:0] sig;
 wire zer;
 wire inf;
 
-positDecompose #(.PSTWID(PSTWID), .es(es)) u1 (.i(i), .sgn(sgn), .rgs(rgs), .rgm(rgm), .exp(exp), .sig(sig), .zer(zer), .inf(inf));
+positDecompose #(.PSTWID(PSTWID)) u1 (.i(i), .sgn(sgn), .rgs(rgs), .rgm(rgm), .exp(exp), .sig(sig), .zer(zer), .inf(inf));
 
 wire [N-1:0] m = {sig,{es{1'b0}}};
 wire [EO+1:0] e;

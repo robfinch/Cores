@@ -5,9 +5,9 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positDivide.sv
-//    - posit number division function
-//    - parameterized width
+//	div_lut.sv
+//    - divide reciprocal lookup table
+//    - 2048 entries (1 block ram)
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,12 +25,14 @@
 //                                                                          
 // ============================================================================
 
-module div_lut(clk, i, o);
+module div_lut(clk, ce, i, o);
 input clk;
+input ce;
 input [10:0] i;
 output reg [15:0] o;
 
 always @(posedge clk)
+if (ce)
 case(i)
 11'h000: o <= 16'hFFFF;
 11'h001: o <= 16'hFFE0;

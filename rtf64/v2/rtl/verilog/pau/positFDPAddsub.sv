@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	positFDPAddsub.v
+//	positFDPAddsub.sv
 //    - posit number adder/subtracter
 //    - parameterized width
 //
@@ -25,10 +25,9 @@
 //                                                                          
 // ============================================================================
 
-`include "positConfig.sv"
+import posit::*;
 
 module positFDPAddsub(op, a, b, o, z, i);
-`include "positSize.sv"
 localparam rs = $clog2(PSTWID-1)-1;
 input op;
 input [PSTWID+es+(PSTWID-es)*2-1:0] a;
@@ -51,7 +50,7 @@ wire [PSTWID+es+(PSTWID-es)*2-1:0] aa, bb;
 wire inf = infa|infb;
 wire zero = zera & zerb;
 
-positDecompose #(PSTWID+es+(PSTWID-es)*2,es) u1 (
+positDecompose #(PSTWID+es+(PSTWID-es)*2) u1 (
   .i(a),
   .sgn(sa),
   .rgs(rgsa),
@@ -62,7 +61,7 @@ positDecompose #(PSTWID+es+(PSTWID-es)*2,es) u1 (
   .inf(infa)
 );
 
-positDecompose #(PSTWID+es+(PSTWID-es)*2,es) u2 (
+positDecompose #(PSTWID+es+(PSTWID-es)*2) u2 (
   .i(b),
   .sgn(sb),
   .rgs(rgsb),
