@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,6 +45,7 @@ initial begin
 	end
 end
 
+reg [WID-1:0] bd;
 wire [7:0] maxcnt;
 reg [DMSB:0] rxx = 1'd0;
 reg [8:0] cnt = 1'd0;				// iteration count
@@ -56,21 +57,21 @@ reg gotnz = 0;
 
 assign maxcnt = WID*2/4-1;
 always @*
-	b0 = b <= {rxx,q[WID*2-1]};
+	b0 = bd <= {rxx,q[WID*2-1]};
 always @*
-	r1 = b0 ? {rxx,q[WID*2-1]} - b : {rxx,q[WID*2-1]};
+	r1 = b0 ? {rxx,q[WID*2-1]} - bd : {rxx,q[WID*2-1]};
 always @*
-	b1 = b <= {r1,q[WID*2-2]};
+	b1 = bd <= {r1,q[WID*2-2]};
 always @*
-	r2 = b1 ? {r1,q[WID*2-2]} - b : {r1,q[WID*2-2]};
+	r2 = b1 ? {r1,q[WID*2-2]} - bd : {r1,q[WID*2-2]};
 always @*
-	b2 = b <= {r2,q[WID*2-3]};
+	b2 = bd <= {r2,q[WID*2-3]};
 always @*
-	r3 = b2 ? {r2,q[WID*2-3]} - b : {r2,q[WID*2-3]};
+	r3 = b2 ? {r2,q[WID*2-3]} - bd : {r2,q[WID*2-3]};
 always @*
-	b3 = b <= {r3,q[WID*2-4]};
+	b3 = bd <= {r3,q[WID*2-4]};
 always @*
-	r4 = b3 ? {r3,q[WID*2-4]} - b : {r3,q[WID*2-4]};
+	r4 = b3 ? {r3,q[WID*2-4]} - bd : {r3,q[WID*2-4]};
 
 reg [2:0] state = 0;
 
@@ -116,6 +117,7 @@ if (ld) begin
 	cnt <= {1'b0,maxcnt};
 	q <= {(a << REM),{WID{1'b0}}};
       rxx <= {WID{1'b0}};
+  bd <= b;
 	state <= 3'd1;
 end
 end

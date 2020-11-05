@@ -33,7 +33,7 @@
 // should be a multiple of four
 `define EXTRA_BITS		0
 
-`define FPWID		32
+`define FPWID		64
 
 // This file contains defintions for fields to ease dealing with different fp
 // FPWIDths. Some of the code still needs to be modified to support FPWIDths

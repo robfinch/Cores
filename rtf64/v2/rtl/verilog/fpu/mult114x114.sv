@@ -31,7 +31,7 @@ input [113:0] b;
 output reg [227:0] p;
 
 reg [113:0] p1d;
-wire [113:0] z0, z2, p1;
+wire [113:0] z0, z2, p1, z0a, z2a;
 reg [113:0] z1;
 wire [113:0] ad, bd;
 reg [57:0] a1, b1;
@@ -42,6 +42,7 @@ always @(posedge clk)
 	if (ce) a1 <= a[56:0] - a[113:57];
 always @(posedge clk)
 	if (ce) b1 <= b[113:57] - b[56:0];
+
 always @(posedge clk)
 	if (ce) a2 <= a1[57] ? -a1 : a1;
 always @(posedge clk)
@@ -80,8 +81,11 @@ always @(posedge clk)
 
 always @(posedge clk)
 	if (ce) z1 <= p1d + z2 + z0;
-
 always @(posedge clk)
-	if (ce) p <= {z2,z0} + {z1,57'd0};
+  if (ce) z2a <= z2;
+always @(posedge clk)
+  if (ce) z0a <= z0;
+always @(posedge clk)
+	if (ce) p <= {z2a,z0a} + {z1,57'd0};
 
 endmodule

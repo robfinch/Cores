@@ -40,13 +40,13 @@
 `endif
 
 import fp::*;
-`include "../pau/positConfig.sv"
+import posit::*;
 
 module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, div_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
-parameter pL1CacheLines = 128;
+parameter pL1CacheLines = 64;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
 input [7:0] hartid_i;
 input rst_i;
@@ -141,10 +141,8 @@ parameter WRITEBACK_WAIT = 6'd53;
 parameter IFETCH_INCR = 6'd54;
 parameter MEMORY0 = 6'd55;
 
-`include "../pau/positSize.sv"
-
 reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
-reg [AWID-1:0] pc, ipc, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
+reg [AWID-1:0] pc, ipc, ipc2, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
 reg [AWID-1:0] dpc, rpc, expc, mpc, wpc;
 reg [3:0] dilen, rilen;
 reg illegal_insn, rillegal_insn, eillegal_insn, millegal_insn, willegal_insn;
@@ -730,24 +728,67 @@ rtf64_predecoder uil1 (.i(iir[7:0]), .o(predecodeo));
 // Instruction cache
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [3:0] icnt;
+reg [1:0] waycnt = 2'd0;
 (* ram_style="distributed" *)
-reg [255:0] icache [0:pL1CacheLines-1];
+reg [255:0] icache0 [0:pL1CacheLines-1];
+reg [255:0] icache1 [0:pL1CacheLines-1];
+reg [255:0] icache2 [0:pL1CacheLines-1];
+reg [255:0] icache3 [0:pL1CacheLines-1];
 initial begin
-  for (n = 0; n < pL1CacheLines; n = n + 1)
-    icache[n] = {64{8'hEA}};
+  for (n = 0; n < pL1CacheLines; n = n + 1) begin
+    icache0[n] = `NOP_INSN;
+    icache1[n] = `NOP_INSN;
+    icache2[n] = `NOP_INSN;
+    icache3[n] = `NOP_INSN;
+  end
 end
 (* ram_style="distributed" *)
-reg [AWID-1:0] ictag [0:pL1CacheLines-1];
+reg [AWID-1:0] ictag0 [0:pL1CacheLines-1];
+reg [AWID-1:0] ictag1 [0:pL1CacheLines-1];
+reg [AWID-1:0] ictag2 [0:pL1CacheLines-1];
+reg [AWID-1:0] ictag3 [0:pL1CacheLines-1];
 (* ram_style="distributed" *)
-reg [pL1CacheLines-1:0] icvalid;
+reg [pL1CacheLines-1:0] icvalid0;
+reg [pL1CacheLines-1:0] icvalid1;
+reg [pL1CacheLines-1:0] icvalid2;
+reg [pL1CacheLines-1:0] icvalid3;
 reg ic_invline;
-wire ihit1 = ictag[ipc[pL1msb:5]][AWID-1:5]==ipc[AWID-1:5] && icvalid[ipc[pL1msb:5]];
-wire ihit2 = ictag[ipc[pL1msb:5]+2'd1][AWID-1:5]==ipc[AWID-1:5]+2'd1 && icvalid[ipc[pL1msb:5]+2'd1];
-wire ihit = ihit1 & ihit2;
+reg ihit1a, ihit2a;
+reg ihit1b, ihit2b;
+reg ihit1c, ihit2c;
+reg ihit1d, ihit2d;
+always @(posedge clk_g)
+  ihit1a <= ictag0[pc[pL1msb:5]][AWID-1:5]==pc[AWID-1:5] && icvalid0[pc[pL1msb:5]];
+always @(posedge clk_g)
+  ihit1b <= ictag1[pc[pL1msb:5]][AWID-1:5]==pc[AWID-1:5] && icvalid1[pc[pL1msb:5]];
+always @(posedge clk_g)
+  ihit1c <= ictag2[pc[pL1msb:5]][AWID-1:5]==pc[AWID-1:5] && icvalid2[pc[pL1msb:5]];
+always @(posedge clk_g)
+  ihit1d <= ictag3[pc[pL1msb:5]][AWID-1:5]==pc[AWID-1:5] && icvalid3[pc[pL1msb:5]];
+always @(posedge clk_g)
+  ihit2a <= ictag0[pc[pL1msb:5]+2'd1][AWID-1:5]==pc[AWID-1:5]+2'd1 && icvalid0[pc[pL1msb:5]+2'd1];
+always @(posedge clk_g)
+  ihit2b <= ictag1[pc[pL1msb:5]+2'd1][AWID-1:5]==pc[AWID-1:5]+2'd1 && icvalid1[pc[pL1msb:5]+2'd1];
+always @(posedge clk_g)
+  ihit2c <= ictag2[pc[pL1msb:5]+2'd1][AWID-1:5]==pc[AWID-1:5]+2'd1 && icvalid2[pc[pL1msb:5]+2'd1];
+always @(posedge clk_g)
+  ihit2d <= ictag3[pc[pL1msb:5]+2'd1][AWID-1:5]==pc[AWID-1:5]+2'd1 && icvalid3[pc[pL1msb:5]+2'd1];
+wire ihitw0 = (ihit1a & ihit2a);
+wire ihitw1 = (ihit1b & ihit2b);
+wire ihitw2 = (ihit1c & ihit2c);
+wire ihitw3 = (ihit1d & ihit2d);
+wire ihit = ihitw0 | ihitw1 | ihitw2 | ihitw3;
 initial begin
-  icvalid = {pL1CacheLines{1'd0}};
-  for (n = 0; n < pL1CacheLines; n = n + 1)
-    ictag[n] = 32'd1;
+  icvalid0 = {pL1CacheLines{1'd0}};
+  icvalid1 = {pL1CacheLines{1'd0}};
+  icvalid2 = {pL1CacheLines{1'd0}};
+  icvalid3 = {pL1CacheLines{1'd0}};
+  for (n = 0; n < pL1CacheLines; n = n + 1) begin
+    ictag0[n] = 32'd1;
+    ictag1[n] = 32'd1;
+    ictag2[n] = 32'd1;
+    ictag3[n] = 32'd1;
+  end
 end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -831,7 +872,7 @@ wire [6:0] cntlzo, cntloo, cntpopo;
 
 cntlz64 uclz1 (ia, cntlzo);
 cntlo64 uclo1 (ia, cntloo);
-cntpop64 ucpop1 (ia, cntpopo);
+cntpop64reg ucpop1 (clk_g, 1'b1, ia, cntpopo);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Shift / Bitfield
@@ -869,18 +910,39 @@ reg sgn;
 wire [WID*2-1:0] produ = ia * ib;
 wire [WID*2-1:0] prods = $signed(ia) * $signed(ib);
 wire [WID*2-1:0] prodsu = $signed(ia) * ib;
-  
+wire [WID*2-1:0] produi = ia * imm;
+wire [WID*2-1:0] prodsi = $signed(ia) * $signed(imm);
+wire [WID*2-1:0] prodsui = $signed(ia) * imm;
+wire [WID*2-1:0] produ6, prods6, prodsu6;
+wire [WID*2-1:0] produi6, prodsi6, prodsui6;
+
+delay #(.WID(WID*2),.DEP(6)) umd1 (.clk(clk_g), .ce(1'b1), .i(produ), .o(produ6));
+delay #(.WID(WID*2),.DEP(6)) umd2 (.clk(clk_g), .ce(1'b1), .i(prods), .o(prods6));
+delay #(.WID(WID*2),.DEP(6)) umd3 (.clk(clk_g), .ce(1'b1), .i(prodsu), .o(prodsu6));
+delay #(.WID(WID*2),.DEP(6)) umd4 (.clk(clk_g), .ce(1'b1), .i(produi), .o(produi6));
+delay #(.WID(WID*2),.DEP(6)) umd5 (.clk(clk_g), .ce(1'b1), .i(prodsi), .o(prodsi6));
+delay #(.WID(WID*2),.DEP(6)) umd6 (.clk(clk_g), .ce(1'b1), .i(prodsui), .o(prodsui6));
+
 wire [WID*2-1:0] div_q;
-wire [WID*2-1:0] ndiv_q = -div_q;
-wire [WID-1:0] div_r = ia - (ib * div_q[WID*2-1:WID]);
-wire [WID-1:0] ndiv_r = -div_r;
+reg [WID*2-1:0] ndiv_q, sdiv_q;
+reg [WID-1:0] div_r,ndiv_r,sdiv_r;
+always @(posedge clk_g)
+  ndiv_q <= -div_q;
+always @(posedge clk_g)
+  sdiv_q <= sgn ? ndiv_q : div_q;
+always @(posedge clk_g)
+  div_r <= ia - (ib * div_q[WID*2-1:WID]);
+always @(posedge clk_g)
+  ndiv_r <= (ib * div_q[WID*2-1:WID]) - ia;
+always @(posedge clk_g)
+  sdiv_r <= sgn ? ndiv_r : div_r;
 reg ldd,ldd1,ldd2;
 always @(posedge clk_g)
   ldd1 <= ldd;
 always @(posedge clk_g)
   ldd2 <= ldd1;
 fpdivr16 #(WID) u16 (
-	.clk(div_clk),
+	.clk(div_clk_i),
 	.ld(ldd|ldd1|ldd2),
 	.a(ia),
 	.b(ib),
@@ -910,7 +972,7 @@ wire sqrt_done;
 wire cmpnan, cmpsnan;
 reg [EX:0] fnorm_i;
 wire [MSB+3:0] fnorm_o;
-reg ld1;
+reg ld1,ld2;
 wire sqrneg, sqrinf;
 wire fa_inf, fa_xz, fa_vz;
 wire fa_qnan, fa_snan, fa_nan;
@@ -918,6 +980,8 @@ wire fb_qnan, fb_snan, fb_nan;
 wire finf, fdn;
 always @(posedge clk_g)
 	ld1 <= ld;
+always @(posedge clk_g)
+	ld2 <= ld1;
 fpDecomp u12 (.i(ia), .sgn(), .exp(), .man(), .fract(), .xz(fa_xz), .mz(), .vz(fa_vz), .inf(fa_inf), .xinf(), .qnan(fa_qnan), .snan(fa_snan), .nan(fa_nan));
 fpDecomp u13 (.i(ib), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(fb_qnan), .snan(fb_snan), .nan(fb_nan));
 fpCompare u1 (.a(ia), .b(ib), .o(fcmp_o), .nan(cmpnan), .snan(cmpsnan));
@@ -926,7 +990,7 @@ i2f u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
 f2i u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(ia), .o(ftoi_res), .overflow());
 fpAddsub u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(fltfunct5==`FSUB), .a(ia), .b(ib), .o(fas_o));
 fpMultiply u5 (.clk(clk_g), .ce(1'b1), .a(ia), .b(ib), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
-fpDivide u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
+fpDivide u6 (.rst(rst_i), .clk(div_clk_i), .clk4x(1'b0), .ce(1'b1), .ld(ld|ld1|ld2), .op(1'b0),
 	.a(ia), .b(ib), .o(fdiv_o), .done(), .sign_exe(), .overflow(div_of), .underflow(div_uf));
 fpSqrt u7 (.rst(rst_i), .clk(clk_g), .ce(1'b1), .ld(ld),
 	.a(ia), .o(fsqrt_o), .done(sqrt_done), .sqrinf(sqrinf), .sqrneg(sqrneg));
@@ -947,11 +1011,11 @@ fpFMA u14
 );
 
 always @(posedge clk_g)
-case(opcode)
+case(eopcode)
 `FMA,`FMS,`FNMA,`FNMS:
 	fnorm_i <= fma_o;
 `FLT2:
-	case(fltfunct5)
+	case(efltfunct5)
 	`FADD:	fnorm_i <= fas_o;
 	`FSUB:	fnorm_i <= fas_o;
 	`FMUL:	fnorm_i <= fmul_o;
@@ -964,11 +1028,11 @@ endcase
 reg fnorm_uf;
 wire norm_uf;
 always @(posedge clk_g)
-case(opcode)
+case(eopcode)
 `FMA,`FMS,`FNMA,`FNMS:
 	fnorm_uf <= fma_uf;
 `FLT2:
-	case(fltfunct5)
+	case(efltfunct5)
 	`FMUL:	fnorm_uf <= mul_uf;
 	`FDIV:	fnorm_uf <= div_uf;
 	default:	fnorm_uf <= 1'b0;
@@ -1102,7 +1166,8 @@ BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
 
 wire [3:0] ea_acr = sregfile[segsel][3:0];
 wire [3:0] pc_acr = sregfile[pc[AWID-1:AWID-4]][3:0];
-wire iaccess_pending = istate==IFETCH3 && !((ihit && icnt==4'h0) || (ihit1 && ipc[4:0] < 5'h9 && icnt==4'h0));
+wire iaccess_pending = istate==IFETCH3 && !(((ihitw0|ihitw1|ihitw2|ihitw3) && icnt==4'h0) ||
+                          ((ihit1a|ihit1b|ihit1c|ihit1d) && ipc[4:0] < 5'h9 && icnt==4'h0));
 
 always @(posedge clk_g)
 begin
@@ -1259,10 +1324,14 @@ begin
 if (rst_i) begin
 	istate <= IFETCH1;
 	ifetch_done <= FALSE;
-	icvalid <= 64'd0;
+	icvalid0 <= 64'd0;
+	icvalid1 <= 64'd0;
+	icvalid2 <= 64'd0;
+	icvalid3 <= 64'd0;
 	ic_invline <= 1'b0;
 	pc_reload <= TRUE;
 	pc <= RSTPC;
+	iadr <= RSTPC;
 	ipc <= {AWID{1'b0}};
 end
 else begin
@@ -1307,18 +1376,49 @@ IFETCH1:
   end
 IFETCH2:
   begin
-    if (ihit1)
+    ipc2 <= ipc;
+    if (ihit1a|ihit1b|ihit1c|ihit1d)
       icnt <= 4'h8;
     else
       icnt <= 4'd0;
-		if (ihit) begin
-		  iri1 <= icache[ipc[pL1msb:5]];
-		  iri2 <= icache[ipc[pL1msb:5]+2'd1];
+		if (ihitw0) begin
+		  iri1 <= icache0[pc[pL1msb:5]];
+		  iri2 <= icache0[pc[pL1msb:5]+2'd1];
 		  igoto (INSTRUCTION_ALIGN);
 	  end
-	  else if (ihit1 && ipc[4:0] < 5'h9) begin
-		  iri1 <= icache[ipc[pL1msb:5]];
-		  iri2 <= icache[ipc[pL1msb:5]+2'd1];
+	  else if (ihit1a && pc[4:0] < 5'h9) begin
+		  iri1 <= icache0[pc[pL1msb:5]];
+		  iri2 <= icache0[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw1) begin
+		  iri1 <= icache1[pc[pL1msb:5]];
+		  iri2 <= icache1[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1b && pc[4:0] < 5'h9) begin
+		  iri1 <= icache1[pc[pL1msb:5]];
+		  iri2 <= icache1[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw2) begin
+		  iri1 <= icache2[pc[pL1msb:5]];
+		  iri2 <= icache2[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1c && pc[4:0] < 5'h9) begin
+		  iri1 <= icache2[pc[pL1msb:5]];
+		  iri2 <= icache2[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw3) begin
+		  iri1 <= icache3[pc[pL1msb:5]];
+		  iri2 <= icache3[pc[pL1msb:5]+2'd1];
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1d && pc[4:0] < 5'h9) begin
+		  iri1 <= icache3[pc[pL1msb:5]];
+		  iri2 <= icache3[pc[pL1msb:5]+2'd1];
 		  igoto (INSTRUCTION_ALIGN);
 	  end
 	  else begin
@@ -1337,15 +1437,51 @@ IFETCH2a:
 IFETCH3:
   begin
  		xlaten <= FALSE;
-		if (ihit && icnt==4'h0) begin
-		  iri1 <= icache[ipc[pL1msb:5]];
-		  iri2 <= icache[ipc[pL1msb:5]+2'd1];
+		if (ihitw0 && icnt==4'h0) begin
+		  iri1 <= icache0[pc[pL1msb:5]];
+		  iri2 <= icache0[pc[pL1msb:5]+2'd1];
 		  icaccess <= FALSE;
 		  igoto (INSTRUCTION_ALIGN);
 	  end
-	  else if (ihit1 && ipc[4:0] < 5'h9 && icnt==4'h0) begin
-		  iri1 <= icache[ipc[pL1msb:5]];
-		  iri2 <= icache[ipc[pL1msb:5]+2'd1];
+	  else if (ihit1a && pc[4:0] < 5'h9 && icnt==4'h0) begin
+		  iri1 <= icache0[pc[pL1msb:5]];
+		  iri2 <= icache0[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw1 && icnt==4'h0) begin
+		  iri1 <= icache1[pc[pL1msb:5]];
+		  iri2 <= icache1[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1b && pc[4:0] < 5'h9 && icnt==4'h0) begin
+		  iri1 <= icache1[pc[pL1msb:5]];
+		  iri2 <= icache1[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw2 && icnt==4'h0) begin
+		  iri1 <= icache2[pc[pL1msb:5]];
+		  iri2 <= icache2[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1c && pc[4:0] < 5'h9 && icnt==4'h0) begin
+		  iri1 <= icache2[pc[pL1msb:5]];
+		  iri2 <= icache2[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+		else if (ihitw3 && icnt==4'h0) begin
+		  iri1 <= icache3[pc[pL1msb:5]];
+		  iri2 <= icache3[pc[pL1msb:5]+2'd1];
+		  icaccess <= FALSE;
+		  igoto (INSTRUCTION_ALIGN);
+	  end
+	  else if (ihit1d && pc[4:0] < 5'h9 && icnt==4'h0) begin
+		  iri1 <= icache3[pc[pL1msb:5]];
+		  iri2 <= icache3[pc[pL1msb:5]+2'd1];
 		  icaccess <= FALSE;
 		  igoto (INSTRUCTION_ALIGN);
 	  end
@@ -1354,8 +1490,8 @@ IFETCH3:
   		igoto (IFETCH3a);
 `ifdef RTF64_TLB  		
   		if (tlbmiss) begin
-			  iException(32'h80000004,ipc);
-			  badaddr[3'd5] <= ipc;
+			  iException(32'h80000004,ipc2);
+			  badaddr[3'd5] <= ipc2;
 			  vpa_o <= FALSE;
 			end
 			else
@@ -1444,18 +1580,53 @@ IFETCH5:
   begin
 `ifdef CPU_B128
     if (icnt[2]==1'd1)
-      ictag[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      case(waycnt)
+      2'd0: ictag0[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd1: ictag1[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd2: ictag2[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd3: ictag3[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      endcase
 `endif
 `ifdef CPU_B64
     if (icnt[2:1]==2'd3)
-      ictag[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      case (waycnt)
+      2'd0: ictag0[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd1: ictag1[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd2: ictag2[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd3: ictag3[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      endcase
 `endif
 `ifdef CPU_B32
     if (icnt[2:0]==3'd7)
-      ictag[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      case(waycnt)
+      2'd0: ictag0[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd1: ictag1[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd2: ictag2[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      2'd3: ictag3[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+      endcase
 `endif
-    icvalid[iadr[pL1msb:5]] <= 1'b1;
-    icache[iadr[pL1msb:5]] <= ici;
+    case(waycnt)
+    2'd0:
+      begin
+        icvalid0[iadr[pL1msb:5]] <= 1'b1;
+        icache0[iadr[pL1msb:5]] <= ici;
+      end
+    2'd1:
+      begin
+        icvalid1[iadr[pL1msb:5]] <= 1'b1;
+        icache1[iadr[pL1msb:5]] <= ici;
+      end
+    2'd2:
+      begin
+        icvalid2[iadr[pL1msb:5]] <= 1'b1;
+        icache2[iadr[pL1msb:5]] <= ici;
+      end
+    2'd3:
+      begin
+        icvalid3[iadr[pL1msb:5]] <= 1'b1;
+        icache3[iadr[pL1msb:5]] <= ici;
+      end
+    endcase
     if (~ack_i) begin
 `ifdef CPU_B128
       icnt <= icnt + 4'd4;
@@ -1471,7 +1642,8 @@ IFETCH5:
   end
 INSTRUCTION_ALIGN:
   begin
-    iir <= {iri2,iri1} >> {ipc[4:0],3'b0};
+    waycnt <= waycnt + 2'd1;
+    iir <= {iri2,iri1} >> {ipc2[4:0],3'b0};
     igoto (IFETCH_INCR);
   end
 IFETCH_INCR:
@@ -1482,7 +1654,7 @@ IFETCH_INCR:
 IFETCH_WAIT:
   if (advance_pipe) begin
     ir <= iir;
-    dpc <= ipc;
+    dpc <= ipc2;
     dilen <= ilen;
     if (wmod_pc)
       pc <= wnext_pc;
@@ -1611,7 +1783,13 @@ DECODE:
           case(ir[9:8])
           2'd0: ;
           2'd1: ic_invline <= 1'b1;
-          2'd2: icvalid <= 64'd0;
+          2'd2: 
+            begin
+              icvalid0 <= 64'd0;
+              icvalid1 <= 64'd0;
+              icvalid2 <= 64'd0;
+              icvalid3 <= 64'd0;
+            end
           3'd3: ;
           endcase
 		      illegal_insn <= 1'b0;
@@ -1882,26 +2060,26 @@ DECODE:
       begin
         dmod_pc <= TRUE;
         case(ir[9:8])
-        2'b00:  dnext_pc <= {ipc[AWID-1:24],ir[31:10],2'b00};
-        2'b01:  dnext_pc <= ipc + {{34{ir[39]}},ir[39:10]};
-        2'b10:  dnext_pc <= {ipc[AWID-1:24],ir[31:10],2'b00} + cao;
-        2'b11:  dnext_pc <= ipc + {{34{ir[39]}},ir[39:10]};
+        2'b00:  dnext_pc <= {dpc[AWID-1:24],ir[31:10],2'b00};
+        2'b01:  dnext_pc <= dpc + {{34{ir[39]}},ir[39:10]};
+        2'b10:  dnext_pc <= {dpc[AWID-1:24],ir[31:10],2'b00} + cao;
+        2'b11:  dnext_pc <= dpc + {{34{ir[39]}},ir[39:10]};
         endcase
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
-        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
-          dException(`FLT_BT, ipc);
+        if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
+          dException(`FLT_BT, dpc);
       end
     `JAL:
       begin
         // Assume instruction will not crap out and write ra0,ra1 here rather
         // than at WRITEBACK.
-        rares <= ipc;
+        rares <= dpc;
         wrra <= 1'b1;
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
-        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
-          dException(`FLT_BT, ipc);
+        if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
+          dException(`FLT_BT, dpc);
       end
     `JSR:
       begin
@@ -1913,8 +2091,8 @@ DECODE:
         wrirf <= 1'b1;
         d_wha <= TRUE;
         illegal_insn <= 1'b0;
-//        if (ipc=={ipc[AWID-1:24],ir[31:10],2'b00})
-//          tException(`FLT_BT, ipc);
+//        if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
+//          tException(`FLT_BT, dpc);
       end
     `JSR18:
       begin
@@ -2487,18 +2665,18 @@ EXECUTE:
       `ENORR2:res <= ~(ia ^ ib);
       `ADDR2: res <= ia + ib;
       `SUBR2: res <= ia - ib;
-      `MULR2: res <= prods[WID-1:0];
-      `MULUR2: res <= produ[WID-1:0];
-      `MULSUR2: res <= prodsu[WID-1:0];
-      `MULHR2: res <= prods[WID*2-1:WID];
-      `MULUHR2: res <= produ[WID*2-1:WID];
-      `MULSUHR2: res <= prodsu[WID*2-1:WID];
-      `DIVR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-      `DIVUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-      `DIVSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-      `REMR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-      `REMUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-      `REMSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+      `MULR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `MULUR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `MULSUR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `MULHR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `MULUHR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `MULSUHR2: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+      `DIVR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+      `DIVUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+      `DIVSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+      `REMR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
+      `REMUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
+      `REMSUR2: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
       `PERMR2:
         begin
           res[ 7: 0] <= ia >> {ib[2:0],3'b0};
@@ -2574,7 +2752,7 @@ EXECUTE:
         case(eir[22:18])
         `CNTLZR1: res <= cntlzo;
         `CNTLOR1: res <= cntloo;
-        `CNTPOPR1:res <= cntpopo;
+        `CNTPOPR1:begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd03; end
         `COMR1:   res <= ~ia;
         `NOTR1:   res <= ia==64'd0;
         `NEGR1:   res <= -ia;
@@ -2880,15 +3058,15 @@ EXECUTE:
     `ADD22: res <= id + imm;
     `ADD2R: res <= ia + ib;
     `SUBF: res <= imm - ia;
-    `MUL: res <= $signed(ia) * $signed(imm);
-    `MULU: res <= ia * imm;
-    `MULSU: res <= $signed(ia) * imm;
-    `DIV: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-    `DIVU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-    `DIVSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-    `REM: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-    `REMU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
-    `REMSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd60; end
+    `MUL: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+    `MULU: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+    `MULSU: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
+    `DIV: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+    `DIVU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+    `DIVSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd160; end
+    `REM: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
+    `REMU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
+    `REMSU: begin execute_done <= FALSE; egoto (MUL1); mathCnt <= 8'd164; end
     `GCSUB: res <= ia - imm;
     `GCSUB10: res <= ia - imm;
     `SHIFT:
@@ -3048,7 +3226,7 @@ EXECUTE:
       end
     `ANDUI: res <= id & imm;
     `ORUI: res <= id & imm;
-    `AUIIP: res <= ipc + imm;
+    `AUIIP: res <= dpc + imm;
     `CSR:
       begin
         res <= 64'd0;
@@ -3347,22 +3525,36 @@ MUL2:
 		if (mathCnt==8'd0) begin
 		  adv_ex();
 			case(eopcode)
+			`R1:
+			  case(eir[22:18])
+        `CNTPOPR1:  res <= cntpopo;
+        default:  ;
+        endcase
 			`R2,`R2B:
 			  case(eir[30:26])
-			  `DIVR2:   res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
+        `MULR2: res <= prods6[WID-1:0];
+        `MULUR2: res <= produ6[WID-1:0];
+        `MULSUR2: res <= prodsu6[WID-1:0];
+        `MULHR2: res <= prods6[WID*2-1:WID];
+        `MULUHR2: res <= produ6[WID*2-1:WID];
+        `MULSUHR2: res <= prodsu6[WID*2-1:WID];
+			  `DIVR2:   res <= sdiv_q[WID*2-1:WID];
 			  `DIVUR2:  res <= div_q[WID*2-1:WID];
-			  `DIVSUR2: res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
-			  `REMR2:   res <= sgn ? ndiv_r : div_r;
+			  `DIVSUR2: res <= sdiv_q[WID*2-1:WID];
+			  `REMR2:   res <= sdiv_r;
 			  `REMUR2:  res <= div_r;
-			  `REMSUR2: res <= sgn ? ndiv_r : div_r;
+			  `REMSUR2: res <= sdiv_r;
 			  default:  ;
 			  endcase
-			`DIV:  res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
+			`MUL:  res <= prods6[WID-1:0];
+			`MULU: res <= produ6[WID-1:0];
+			`MULSU: res <= prodsu6[WID-1:0];
+			`DIV:  res <= sdiv_q[WID*2-1:WID];
 			`DIVU: res <= div_q[WID*2-1:WID];
-			`DIVSU:res <= sgn ? ndiv_q[WID*2-1:WID] : div_q[WID*2-1:WID];
-			`REM:  res <= sgn ? ndiv_r : div_r;
+			`DIVSU:res <= sdiv_q[WID*2-1:WID];
+			`REM:  res <= sdiv_r;
 			`REMU: res <= div_r;
-			`REMSU:res <= sgn ? ndiv_r : div_r;
+			`REMSU:res <= sdiv_r;
 			default:  ;
 		  endcase
 		end
@@ -4130,7 +4322,10 @@ MEMORY3:
 MEMORY4:
   begin
     if (d_cache) begin
-      icvalid[adr_o[pL1msb:5]] <= 1'b0;
+      icvalid0[adr_o[pL1msb:5]] <= 1'b0;
+      icvalid1[adr_o[pL1msb:5]] <= 1'b0;
+      icvalid2[adr_o[pL1msb:5]] <= 1'b0;
+      icvalid3[adr_o[pL1msb:5]] <= 1'b0;
       adv_mem(1'b0);
     end
     else if (acki & ~icaccess) begin

@@ -50,7 +50,7 @@ input under_i;
 output under_o;
 output inexact_o;
 
-
+integer n;
 // ----------------------------------------------------------------------------
 // No Clock required
 // ----------------------------------------------------------------------------
@@ -68,7 +68,7 @@ always @*
 // ----------------------------------------------------------------------------
 reg xInf1a, xInf1b, xInf1c;
 wire [FX:0] i1;
-delay1 #(FX+1) u11 (.clk(clk), .ce(ce), .i(i), .o(i1));
+delay #(.WID(FX+1),.DEP(1)) u11 (.clk(clk), .ce(ce), .i(i), .o(i1));
 
 always @(posedge clk)
 	if (ce) xInf1a <= &xo0 & !under_i;
@@ -87,10 +87,10 @@ always @(posedge clk)
 wire xInf2c, xInf2b;
 wire [EMSB:0] xo2;
 reg incExpByOne2, incExpByTwo2;
-delay1 u21 (.clk(clk), .ce(ce), .i(xInf1c), .o(xInf2c));
-delay1 u22 (.clk(clk), .ce(ce), .i(xInf1b), .o(xInf2b));
-delay2 #(EMSB+1) u23 (.clk(clk), .ce(ce), .i(xo0), .o(xo2));
-delay2 u24 (.clk(clk), .ce(ce), .i(under_i), .o(under2));
+delay #(.WID(1),.DEP(1)) u21 (.clk(clk), .ce(ce), .i(xInf1c), .o(xInf2c));
+delay #(.WID(1),.DEP(1)) u22 (.clk(clk), .ce(ce), .i(xInf1b), .o(xInf2b));
+delay #(.WID(EMSB+1),.DEP(2)) u23 (.clk(clk), .ce(ce), .i(xo0), .o(xo2));
+delay #(.WID(1),.DEP(2)) u24 (.clk(clk), .ce(ce), .i(under_i), .o(under2));
 
 always @(posedge clk)
 	if (ce) incExpByTwo2 <= !xInf1b & i1[FX];
@@ -108,9 +108,9 @@ wire incExpByOne3;
 wire [FX:0] i3;
 reg [EMSB:0] xo3;
 reg zeroMan3;
-delay1 u31 (.clk(clk), .ce(ce), .i(incExpByTwo2), .o(incExpByTwo3));
-delay1 u32 (.clk(clk), .ce(ce), .i(incExpByOne2), .o(incExpByOne3));
-delay3 #(FX+1) u33 (.clk(clk), .ce(ce), .i(i[FX:0]), .o(i3));
+delay #(.WID(1),.DEP(1)) u31 (.clk(clk), .ce(ce), .i(incExpByTwo2), .o(incExpByTwo3));
+delay #(.WID(1),.DEP(1)) u32 (.clk(clk), .ce(ce), .i(incExpByOne2), .o(incExpByOne3));
+delay #(.WID(FX+1),.DEP(3)) u33 (.clk(clk), .ce(ce), .i(i[FX:0]), .o(i3));
 wire [EMSB+1:0] xv3a = xo2 + {incExpByTwo2,1'b0};
 wire [EMSB+1:0] xv3b = xo2 + incExpByOne2;
 
@@ -129,63 +129,99 @@ always @(posedge clk)
 // - create sticky bit
 // ----------------------------------------------------------------------------
 
-reg [FMSB+4:0] mo4;
+reg [FMSB+5:0] mo4;
 reg inexact4;
 
 always @(posedge clk)
 if(ce)
 casez({zeroMan3,incExpByTwo3,incExpByOne3})
 3'b1??:	mo4 <= 1'd0;
-3'b01?:	mo4 <= {i3[FX:FMSB+1],|i3[FMSB:0]};
-3'b001:	mo4 <= {i3[FX-1:FMSB],|i3[FMSB-1:0]};
-default:	mo4 <= {i3[FX-2:FMSB-1],|i3[FMSB-2:0]};
+3'b01?:	mo4 <= {i3[FX:FMSB],|i3[FMSB-1:0]};
+3'b001:	mo4 <= {i3[FX-1:FMSB-1],|i3[FMSB-2:0]};
+default:	mo4 <= {i3[FX-2:FMSB-2],|i3[FMSB-3:0]};
 endcase
 
 always @(posedge clk)
 if(ce)
 casez({zeroMan3,incExpByTwo3,incExpByOne3})
 3'b1??:	inexact4 <= 1'd0;
-3'b01?:	inexact4 <= |i3[FMSB:0];
-3'b001:	inexact4 <= |i3[FMSB-1:0];
-default:	inexact4 <= |i3[FMSB-2:0];
+3'b01?:	inexact4 <= |i3[FMSB+1:0];
+3'b001:	inexact4 <= |i3[FMSB:0];
+default:	inexact4 <= |i3[FMSB-1:0];
 endcase
 
 // ----------------------------------------------------------------------------
 // Clock edge #5
 // - count leading zeros
 // ----------------------------------------------------------------------------
-wire [7:0] leadingZeros5;
+reg [7:0] leadingZeros5;
 wire [EMSB:0] xo5;
 wire xInf5;
-delay2 #(EMSB+1) u51 (.clk(clk), .ce(ce), .i(xo3), .o(xo5));
-delay3 #(1)      u52 (.clk(clk), .ce(ce), .i(xInf2c), .o(xInf5) );
+delay #(.WID(EMSB+1),.DEP(2)) u51 (.clk(clk), .ce(ce), .i(xo3), .o(xo5));
+delay #(.WID(1),.DEP(3)) u52 (.clk(clk), .ce(ce), .i(xInf2c), .o(xInf5) );
 
+/* Lookup table based leading zero count modules give slightly better
+   performance but cases must be coded.
 generate
 begin
 if (FPWID <= 32) begin
-cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo4,5'b0}), .o(leadingZeros5) );
+cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo4,4'b0}), .o(leadingZeros5) );
 assign leadingZeros5[7:6] = 2'b00;
 end
 else if (FPWID<=64) begin
 assign leadingZeros5[7] = 1'b0;
-cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo4,8'h0}), .o(leadingZeros5) );
+cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo4,7'h0}), .o(leadingZeros5) );
 end
 else if (FPWID<=80) begin
 assign leadingZeros5[7] = 1'b0;
-cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
+cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo4,11'b0}), .o(leadingZeros5) );
 end
 else if (FPWID<=84) begin
 assign leadingZeros5[7] = 1'b0;
-cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,24'b0}), .o(leadingZeros5) );
+cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,23'b0}), .o(leadingZeros5) );
 end
 else if (FPWID<=96) begin
 assign leadingZeros5[7] = 1'b0;
-cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
+cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,11'b0}), .o(leadingZeros5) );
 end
 else if (FPWID<=128)
-cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
+cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo4,11'b0}), .o(leadingZeros5) );
 end
 endgenerate
+*/
+
+// Sideways add.
+// Normally there would be only one to two leading zeros. It is tempting then
+// to check for only one or two. But, denormalized numbers might have more
+// leading zeros. If denormals were not supported this could be made smaller
+// and faster.
+`ifdef SUPPORT_DENORMALS
+reg [7:0] lzc;
+reg got_one;
+always @*
+begin
+  got_one = 1'b0;
+  lzc = 8'h00;
+  for (n = FMSB+5; n >= 0; n = n - 1) begin
+    if (!got_one) begin
+      if (mo4[n])
+        got_one = 1'b1;
+      else
+        lzc = lzc + 1'b1;
+    end
+  end
+end      
+always @(posedge clk)
+  if (ce) leadingZeros5 <= lzc;
+`else
+always @(posedge clk)
+if (ce)
+casez(mo4[FMSB+5:FMSB+4])
+2'b1?:  leadingZeros5 <= 8'd0;
+2'b01:  leadingZeros5 <= 8'd1;
+2'b00:  leadingZeros5 <= 8'd2;
+endcase
+`endif
 
 
 // ----------------------------------------------------------------------------
@@ -204,13 +240,13 @@ reg [7:0] rshiftAmt6;
 wire rightOrLeft6;	// 0=left,1=right
 wire xInf6;
 wire [EMSB:0] xo6;
-wire [FMSB+4:0] mo6;
+wire [FMSB+5:0] mo6;
 wire zeroMan6;
 vtdl #(1) u61 (.clk(clk), .ce(ce), .a(4'd5), .d(under_i), .q(rightOrLeft6) );
-delay1 #(EMSB+1) u62 (.clk(clk), .ce(ce), .i(xo5), .o(xo6));
-delay2 #(FMSB+5) u63 (.clk(clk), .ce(ce), .i(mo4), .o(mo6) );
-delay1 #(1)      u64 (.clk(clk), .ce(ce), .i(xInf5), .o(xInf6) );
-delay3 u65 (.clk(clk), .ce(ce),  .i(zeroMan3), .o(zeroMan6));
+delay #(.WID(EMSB+1),.DEP(1)) u62 (.clk(clk), .ce(ce), .i(xo5), .o(xo6));
+delay #(.WID(FMSB+6),.DEP(2)) u63 (.clk(clk), .ce(ce), .i(mo4), .o(mo6) );
+delay #(.WID(1),.DEP(1)) u64 (.clk(clk), .ce(ce), .i(xInf5), .o(xInf6) );
+delay #(.WID(1),.DEP(3)) u65 (.clk(clk), .ce(ce),  .i(zeroMan3), .o(zeroMan6));
 
 always @(posedge clk)
 	if (ce) lshiftAmt6 <= leadingZeros5 > xo5 ? xo5 : leadingZeros5;
@@ -220,14 +256,16 @@ always @(posedge clk)
 
 // ----------------------------------------------------------------------------
 // Clock edge #7
-// - fogure exponent
+// - figure exponent
 // - shift mantissa
+// - figure sticky bit
 // ----------------------------------------------------------------------------
 
 reg [EMSB:0] xo7;
 wire rightOrLeft7;
-reg [FMSB+4:0] mo7l, mo7r;
-delay1 u71 (.clk(clk), .ce(ce), .i(rightOrLeft6), .o(rightOrLeft7));
+reg [FMSB+5:0] mo7l, mo7r;
+reg St6,St7;
+delay #(.WID(1),.DEP(1)) u71 (.clk(clk), .ce(ce), .i(rightOrLeft6), .o(rightOrLeft7));
 
 always @(posedge clk)
 if (ce)
@@ -241,6 +279,15 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce) mo7l <= mo6 << lshiftAmt6;
 
+// The sticky bit is set if the bits shifted out on a right shift are set.
+always @*
+begin
+  St6 = 1'b0;
+  for (n = 0; n < FMSB+5; n = n + 1)
+    if (n <= rshiftAmt6 + 1) St6 = St6|mo6[n];
+end
+always @(posedge clk)
+  if (ce) St7 <= St6;
 
 // ----------------------------------------------------------------------------
 // Clock edge #8
@@ -249,16 +296,16 @@ always @(posedge clk)
 
 wire so;
 wire [EMSB:0] xo;
-reg [FMSB+4:0] mo;
+reg [FMSB+5:0] mo;
 vtdl #(1) u81 (.clk(clk), .ce(ce), .a(4'd7), .d(so0), .q(so) );
-delay1 #(EMSB+1) u82 (.clk(clk), .ce(ce), .i(xo7), .o(xo));
+delay #(.WID(EMSB+1),.DEP(1)) u82 (.clk(clk), .ce(ce), .i(xo7), .o(xo));
 vtdl u83 (.clk(clk), .ce(ce), .a(4'd3), .d(inexact4), .q(inexact_o));
-delay1 u84 (.clk(clk), .ce(ce), .i(rightOrLeft7), .o(under_o));
+delay #(.WID(1),.DEP(1)) u84 (.clk(clk), .ce(ce), .i(rightOrLeft7), .o(under_o));
 
 always @(posedge clk)
-	if (ce) mo <= rightOrLeft7 ? mo7r : mo7l;
+	if (ce) mo <= rightOrLeft7 ? mo7r|{St7,2'b0} : mo7l;
 
-assign o = {so,xo,mo[FMSB+4:1]};
+assign o = {so,xo,mo[FMSB+5:2]};
 
 endmodule
 	
