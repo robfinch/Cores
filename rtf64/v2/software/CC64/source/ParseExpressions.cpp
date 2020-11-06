@@ -1401,6 +1401,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 //	   printf("DIAG: ParsePostFix: ep1 is NULL\r\n");
 	}
 	if (tp1 == NULL) {
+		*node = ep1;
 		Leave("</ParsePostfix>",0);
 		return ((TYP *)NULL);
   }

@@ -1056,6 +1056,7 @@ public:
 	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
 	void GenerateFunction(Function *fn) { fn->Gen(); };
 	Operand* GenerateTrinary(ENODE* node, int flags, int size, int op);
+	virtual void GenerateUnlink();
 };
 
 class RTF64CodeGenerator : public CodeGenerator
@@ -1096,6 +1097,7 @@ public:
 	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	Operand* GenerateBitfieldExtract(Operand* src, Operand* offset, Operand* width);
 	Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	void GenerateUnlink();
 };
 
 // Control Flow Graph
@@ -1515,6 +1517,7 @@ public:
 	char *lptr2;			// pointer to source code
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
+	e_sym kw;				// statement's keyword
 	
 	Statement* MakeStatement(int typ, int gt);
 
@@ -1594,6 +1597,12 @@ public:
 	// Debugging
 	void Dump();
 	void DumpCompound();
+	void ListCompoundVars();
+	// Serialization
+	void storeHex(txtoStream& ofs);
+	void storeHexIf(txtoStream& ofs);
+	void storeHexWhile(txtoStream& fs);
+	void storeHexCompound(txtoStream& ofs);
 };
 
 class StatementFactory : public Factory

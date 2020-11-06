@@ -1345,9 +1345,9 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 		switch (lastst) {
 
 		case openbr:
-			ParseSuffixOpenbr();  
+			ParseSuffixOpenbr();
 			break;                // We want to loop back for more brackets
-  
+
 		case openpa:
 			// The declaration doesn't have to have an identifier name; it could
 			// just be a type chain. so sp incoming might be null. We need a place
@@ -1355,20 +1355,24 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 			// the symbol here if it isn't yet defined.
 			if (sp == nullptr) {
 				sp = allocSYM();
-				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
+				sp->fi = MakeFunction(sp->id, sp, defaultcc == 1, isInline);
 			}
 			else if (sp->fi == nullptr) {
-				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
+				sp->fi = MakeFunction(sp->id, sp, defaultcc == 1, isInline);
 			}
 			ParseSuffixOpenpa(sp->fi);
 			goto lxit;
-      
-		case assign:
-			NextToken();
-			GetConstExpression(&node);
-			sp->defval = node;
-			goto lxit;
 
+		case assign:
+			if (parsingParameterList) {
+				NextToken();
+				currentSym = sp;
+				SetType(sp);
+				GetConstExpression(&node);
+				sp->defval = node;
+			}
+			goto lxit;
+		
 		default:
 			goto lxit;
 		}
@@ -1405,20 +1409,26 @@ void Declaration::ParseAssign(SYM *sp)
 	exp.head = head;
 	exp.tail = tail;
 
-	tp1 = exp.nameref(&ep1, TRUE);
-	op = en_assign;
-	tp2 = exp.ParseAssignOps(&ep2);
-	if (tp2 == nullptr || !IsLValue(ep1))
-		error(ERR_LVALUE);
-	else {
-		tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
-		ep1 = makenode(op, ep1, ep2);
-		ep1->tp = tp1;
+	if (parsingParameterList) {
+		GetConstExpression(&ep2);
+		sp->defval = ep2;
 	}
-	// Move vars with initialization data over to the data segment.
-	if (ep1->segment == bssseg)
-		ep1->segment = dataseg;
-	sp->initexp = ep1;
+	else {
+		tp1 = exp.nameref(&ep1, TRUE);
+		op = en_assign;
+		tp2 = exp.ParseAssignOps(&ep2);
+		if (tp2 == nullptr || !IsLValue(ep1))
+			error(ERR_LVALUE);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
+			ep1 = makenode(op, ep1, ep2);
+			ep1->tp = tp1;
+		}
+		// Move vars with initialization data over to the data segment.
+		if (ep1->segment == bssseg)
+			ep1->segment = dataseg;
+		sp->initexp = ep1;
+	}
 }
 
 

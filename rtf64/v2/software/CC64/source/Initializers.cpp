@@ -259,6 +259,7 @@ int64_t InitializePointer(TYP *tp2)
 	int64_t lng;
 	TYP *tp;
 	bool need_end = false;
+	Expression exp;
 
 	sp = nullptr;
 	if (lastst == begin) {
@@ -274,7 +275,8 @@ int64_t InitializePointer(TYP *tp2)
 	}
     if(lastst == bitandd) {     /* address of a variable */
         NextToken();
-				tp = expression(&n);
+				//tp = expression(&n);
+				tp = exp.ParseNonCommaExpression(&n);
 				opt_const(&n);
 				if (n->nodetype != en_icon) {
 					if (n->nodetype == en_ref) {
@@ -369,8 +371,9 @@ int64_t InitializePointer(TYP *tp2)
 				GenerateLabelReference(n->p[1]->i, n->p[0]->i);
 		}
 		else {
-			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
-        }
+//			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
+			GenerateLong(lng);
+		}
 	}
 	if (need_end)
 		needpunc(end, 8);

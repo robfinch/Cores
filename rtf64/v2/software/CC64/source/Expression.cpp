@@ -341,6 +341,13 @@ ENODE* Expression::ParseNameRef()
 	TYP* tptr;
 
 	tptr = nameref(&pnode, TRUE);
+	if (tptr == nullptr) {
+		if (currentSym) {
+			if (currentSym->name->compare(lastid) == 0) {
+				tptr = currentSym->tp;
+			}
+		}
+	}
 	// Convert a reference to a constant to a constant. Need this for
 	// GetIntegerExpression().
 	if (pnode->IsRefType()) {

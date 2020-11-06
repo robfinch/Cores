@@ -174,6 +174,7 @@ extern int opt_size;
 extern int exceptions;
 extern int mixedSource;
 extern Function *currentFn;
+extern SYM* currentSym;
 extern int iflevel;
 extern int foreverlevel;
 extern int looplevel;
@@ -419,5 +420,7 @@ extern Instruction *GetInsn(int);
 extern char inpline[520];
 extern bool ExpressionHasReference;
 extern Object *_GarbageList;
+
+extern txtoStream irfs;
 
 #endif

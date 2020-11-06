@@ -375,7 +375,25 @@ void OCODE::OptLoad()
 	if (oper2->mode != am_imm)
 		return;
 	// This optimization is also caught by the code generator.
-	if (oper2->offset->i == 0) {
+	if (oper2->tp && oper2->tp->IsPositType()) {
+		if (oper2->offset->posit.val == 0) {
+			opcode = op_mov;
+			oper2->mode = am_preg;
+			oper2->preg = 0;
+			optimized++;
+			return;
+		}
+	}
+	else if (oper2->tp && oper2->tp->IsFloatType()) {
+		if (oper2->offset->f128.IsZero()) {
+			opcode = op_mov;
+			oper2->mode = am_fpreg;
+			oper2->preg = 0;
+			optimized++;
+			return;
+		}
+	}
+	else if (oper2->offset->i == 0) {
 		opcode = op_mov;
 		oper2->mode = am_reg;
 		oper2->preg = 0;
@@ -612,8 +630,11 @@ void OCODE::OptUctran()
 	}
 }
 
+// JAL is used only to call routines so the Uctran opt is not valid.
+// The JAL is encoded as a JMP for unconditional transfers.
 void OCODE::OptJAL()
 {
+	return;
 	if (oper1->preg != 0)
 		return;
 	OptUctran();
@@ -792,6 +813,9 @@ void OCODE::OptDoubleTargetRemoval()
 		return;
 	//if (rg3 == regSP)
 	//	return;
+	// Set type instructions can merge results into previous target cr.
+	if (ip2->insn->IsSetInsn() && ip2->insn2 != nullptr)
+		return;
 	MarkRemove();
 	optimized++;
 }
@@ -1351,10 +1375,6 @@ void OCODE::store(txtoStream& ofs)
 				ofs.printf(".");
 				nn = nn + insn2->store(ofs) + 1;
 			}
-			if (dot) {
-				ofs.printf(".");
-				nn = nn + 1;
-			}
 			buf[0] = '\0';
 			if (length) {
 				if (length <= 16) {
@@ -1365,11 +1385,15 @@ void OCODE::store(txtoStream& ofs)
 					}
 				}
 				else {
-					if (length != 'w' && length != 'W') {
+					if (length != 'w' && length != 'W' && length != ' ') {
 						sprintf_s(buf, sizeof(buf), ".%c", length);
 						nn += 2;
 					}
 				}
+			}
+			if (dot) {
+				ofs.printf(".");
+				nn = nn + 1;
 			}
 			ofs.write(buf);
 			// The longest mnemonic is 7 chars

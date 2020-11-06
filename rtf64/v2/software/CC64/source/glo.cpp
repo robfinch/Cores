@@ -87,6 +87,8 @@ std::ifstream *ifs;
 txtoStream ofs;
 txtoStream lfs;
 txtoStream dfs;
+txtoStream irfs;
+
 /*
 FILE            *input = 0,
                 *list = 0,

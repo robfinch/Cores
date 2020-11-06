@@ -1192,7 +1192,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 							ap3 = GetTempRegister();
 							regs[ap3->preg].IsArg = true;
 							GenLoadConst(ap, ap3);
-	         				GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
+	         		GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
 						else {
@@ -1203,8 +1203,12 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					else {
 						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
 							*isFloat = true;
-							GenerateDiadic(op_stf,'d',ap,MakeIndexed(stkoffs,regSP));
+							GenerateDiadic(op_fsto,0,ap,MakeIndexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
+						}
+						else if (ap->type == stdposit.GetIndex() || ap->mode == am_preg) {
+							GenerateDiadic(op_psto, 0, ap, MakeIndexed(stkoffs, regSP));
+							nn = 1;
 						}
 						else {
 							regs[ap->preg].IsArg = true;
@@ -1271,9 +1275,10 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		ip->fwd->MarkRemove();
 	else
 		ip->fwd->oper3 = MakeImmediate(sum*sizeOfWord);
+	/*
 	if (!sumFloat) {
 		o_supportsPush = cpu.SupportsPush;
-		cpu.SupportsPush = true;
+		cpu.SupportsPush = false;
 		currentFn->pl.tail = ip;
 		currentFn->pl.tail->fwd = nullptr;
 		i = maxnn-1;
@@ -1292,9 +1297,10 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		}
 		cpu.SupportsPush = o_supportsPush;
 	}
+	*/
 	if (ta)
 		delete ta;
-    return (sum);
+  return (sum);
 }
 
 // Pop parameters off the stack
@@ -1567,4 +1573,17 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	}
     return result;
 	*/
+}
+
+void RTF64CodeGenerator::GenerateUnlink()
+{
+	/*
+	if (cpu.SupportsUnlink)
+		GenerateZeradic(op_unlk);
+	else
+	*/
+	{
+		GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
+		GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
+	}
 }

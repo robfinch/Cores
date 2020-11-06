@@ -267,6 +267,7 @@ Statement *Statement::ParseIf()
 	currentFn->UsesPredicate = TRUE;
 	snp = MakeStatement(st_if, FALSE);
 	snp->predreg = iflevel;
+	snp->kw = kw_if;
 	iflevel++;
 	if (lastst != openpa)
 		needpa = false;
@@ -289,11 +290,13 @@ Statement *Statement::ParseIf()
 	if (lastst == kw_else) {
 		NextToken();
 		snp->s2 = Statement::Parse();
+		snp->s2->kw = kw_else;
 		if (snp->s2)
 			snp->s2->outer = snp;
 	}
 	else if (lastst == kw_elsif) {
 		snp->s2 = ParseIf();
+		snp->s2->kw = kw_elsif;
 		if (snp->s2)
 			snp->s2->outer = snp;
 	}
@@ -2084,7 +2087,7 @@ void Statement::Generate()
 			}
 			break;
 		case st_return:
-			currentFn->GenReturn(stmt);
+			currentFn->GenerateReturn(stmt);
 			break;
 		case st_if:
 			stmt->GenerateIf();
@@ -2453,6 +2456,99 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			break;
 		}
 		block = block->next;
+	}
+}
+
+//=============================================================================
+//=============================================================================
+// D E B U G G I N G
+//=============================================================================
+//=============================================================================
+
+// Recursively list the vars contained in compound statements.
+
+void Statement::ListCompoundVars()
+{
+	Statement* ss1;
+
+	ListTable(&ssyms, 0);
+	for (ss1 = s1; ss1; ss1 = ss1->next) {
+		if (ss1->stype == st_compound)
+			ss1->ListCompoundVars();
+		if (ss1->s1) {
+			if (ss1->s1->stype == st_compound)
+				ss1->s1->ListCompoundVars();
+		}
+		if (ss1->s2) {
+			if (ss1->s2->stype == st_compound)
+				ss1->s2->ListCompoundVars();
+		}
+	}
+}
+
+void Statement::storeHexWhile(txtoStream& fs)
+{
+	fs.printf("while (");
+	if (exp)
+		exp->storeHex(fs);
+	fs.printf(") {\n");
+	if (s1)
+		s1->storeHex(fs);
+	fs.printf("}\n");
+}
+
+void Statement::storeHexIf(txtoStream& fs)
+{
+	fs.printf("if (");
+	exp->storeHex(fs);
+	if (prediction >= 2)
+		fs.printf(";%d", (int)prediction);
+	fs.printf(")\n");
+	s1->storeHex(fs);
+	if (s2) {
+		if (s2->kw == kw_else)
+			fs.printf(" else\n");
+		else if (s2->kw == kw_elsif) {
+			fs.printf(" elsif (");
+			s2->exp->storeHex(fs);
+			if (s2->prediction >= 2)
+				fs.printf(";%d", (int)s2->prediction);
+			fs.printf(")\n");
+		}
+		s2->storeHex(fs);
+	}
+}
+
+void Statement::storeHexCompound(txtoStream& fs)
+{
+	Statement* sp;
+
+	for (sp = s1; sp; sp = sp->next) {
+		sp->storeHex(fs);
+	}
+}
+
+void Statement::storeHex(txtoStream& fs)
+{
+	switch (stype) {
+	case st_compound:
+		storeHexCompound(fs);
+		break;
+	case st_while:
+		storeHexWhile(fs);
+		break;
+	case st_if:
+		storeHexIf(fs);
+		break;
+	case st_return:
+		fs.printf("ret(");
+		if (exp)
+			exp->storeHex(fs);
+		fs.printf(");\n");
+		break;
+	case st_expr:
+		exp->storeHex(fs);
+		break;
 	}
 }
 

@@ -552,12 +552,7 @@ void Function::UnlinkStack()
 		if (alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord + stkspace, regSP));
 	}
-	if (cpu.SupportsUnlink)
-		GenerateZeradic(op_unlk);
-	else {
-		GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
-		GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
-	}
+	cg.GenerateUnlink();
 	if (!IsLeaf && doesJAL) {
 		if (!alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
@@ -618,7 +613,7 @@ void Function::SetupReturnBlock()
 	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
 	n = 0;
-	if (!IsLeaf && doesJAL) {
+	if (!currentFn->IsLeaf && doesJAL) {
 		n |= 2;
 		if (alstk) {
 			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord + stkspace, regSP));
@@ -805,8 +800,16 @@ void Function::GenerateReturn(Statement *stmt)
 		return;
 	}
 	UnlinkStack();
-	if (!alstk)
-		toAdd = SizeofReturnBlock() * sizeOfWord;
+	if (!alstk) {
+		// The size of the return block is included in the link instruction, so the
+		// unlink instruction will reverse the allocation.
+		if (cpu.SupportsLink)
+			toAdd = 0;
+		else
+			toAdd = SizeofReturnBlock() * sizeOfWord;
+	}
+	else if (currentFn->IsLeaf)
+		toAdd = 0;
 	else
 		toAdd = sizeOfWord;
 
@@ -1442,6 +1445,7 @@ void Function::CheckForUndefinedLabels()
 void Function::Summary(Statement *stmt)
 {
 	dfs.printf("<FuncSummary>\n");
+	irfs.printf("\nFunction:%s\n", (char *)this->sym->name->c_str());
 	nl();
 	CheckForUndefinedLabels();
 	lc_auto = 0;
@@ -1449,10 +1453,11 @@ void Function::Summary(Statement *stmt)
 	ListTable(&sym->lsyms, 0);
 	// Should recurse into all the compound statements
 	if (stmt == NULL)
-		dfs.printf("DIAG: null statement in funcbottom.\r\n");
+		dfs.printf("DIAG: null statement in Function::Summary.\r\n");
 	else {
 		if (stmt->stype == st_compound)
-			ListCompound(stmt);
+			stmt->ListCompoundVars();
+		stmt->storeHex(irfs);
 	}
 	lfs.printf("\n\n\n");
 	//    ReleaseLocalMemory();        // release local symbols

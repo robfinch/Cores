@@ -189,7 +189,7 @@ void CodeGenerator::GenerateStore(Operand *ap1, Operand *ap3, int size)
 	//	GenerateDiadic(op_std, 0, ap1, ap3);
 	//}
 	//else
-	if (ap3->tp->IsPositType()) {
+	if (ap3->tp && ap3->tp->IsPositType()) {
 		switch (ap3->tp->precision) {
 		case 16:
 			GenerateDiadic(op_pstw, 0, ap1, ap3);
@@ -201,6 +201,9 @@ void CodeGenerator::GenerateStore(Operand *ap1, Operand *ap3, int size)
 			GenerateDiadic(op_psto, 0, ap1, ap3);
 			break;
 		}
+	}
+	if (ap3->type==stdposit.GetIndex()) {
+		GenerateDiadic(op_psto, 0, ap1, ap3);
 	}
 	else if (ap1->type==stdvector.GetIndex())
 	    GenerateDiadic(op_sv,0,ap1,ap3);
@@ -1398,7 +1401,13 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int64_t size)
 			mr->isConst = true;
 			break;
 		default:
-			GenerateLoad(ap1,ap2,ssize, node->p[1]->GetReferenceSize());
+			if (ap1->isPtr) {
+				ap3 = GetTempRegister();
+				GenerateLoad(ap3, ap2, ssize, node->p[1]->GetReferenceSize());
+				GenerateStore(ap3, MakeIndirect(ap1->preg), ssize);
+			}
+			else
+				GenerateLoad(ap1,ap2,ssize, node->p[1]->GetReferenceSize());
 			ap1->isPtr = ap2->isPtr;
 			mr->modified = true;
 			break;

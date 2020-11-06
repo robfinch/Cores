@@ -550,12 +550,12 @@ void GenerateChar(int64_t val)
 void GenerateHalf(int64_t val)
 {
 	if( gentype == halfgen && outcol < 60) {
-        ofs.printf(",%ld",(long)(val & 0xffffFFffff));
+        ofs.printf(",%ld",(long)(val & 0xffffffffLL));
         outcol += 10;
     }
     else {
         nl();
-        ofs.printf("\tdcp\t%ld",(long)(val & 0xffffFFffff));
+        ofs.printf("\tdct\t%ld",(long)(val & 0xffffffffLL));
         gentype = halfgen;
         outcol = 25;
     }
@@ -565,12 +565,12 @@ void GenerateHalf(int64_t val)
 void GenerateWord(int64_t val)
 {
 	if( gentype == wordgen && outcol < 58) {
-        ofs.printf(",%lld",val);
+        ofs.printf(",%I64d",val);
         outcol += 18;
     }
     else {
         nl();
-        ofs.printf("\tdcd\t%lld",val);
+        ofs.printf("\tdco\t%I64d",val);
         gentype = wordgen;
         outcol = 33;
     }
@@ -580,12 +580,12 @@ void GenerateWord(int64_t val)
 void GenerateLong(int64_t val)
 { 
 	if( gentype == longgen && outcol < 56) {
-                ofs.printf(",%lld",val);
+                ofs.printf(",%I64d",val);
                 outcol += 10;
                 }
         else    {
                 nl();
-                ofs.printf("\tdcd\t%lld",val);
+                ofs.printf("\tdco\t%I64d",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -770,8 +770,10 @@ int litlist(ENODE *node)
 
 	lp = strtab;
 	while (lp) {
-		if (lp->isString)
+		if (lp->isString) {
+			lp = lp->next;
 			continue;
+		}
 		ep = (ENODE *)lp->str;
 		if (node->IsEqual(node, ep)) {
 			return (lp->label);

@@ -82,6 +82,9 @@ int main(int argc, char **argv)
 	int cnt;
 	txtoStream ofs;
 	Int128 aa, bb, cc, qq, rr;
+	aa = Int128::Convert(0x769bdd5fLL);
+	bb = Int128::Convert(0xbcc6f09eLL);
+	Int128::Mul(&cc, &aa, &bb);
 	/*
 	aa.low = 0;
 	aa.high = 100;
@@ -145,10 +148,10 @@ int main(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
-	cpu.SupportsPop = true;
-	cpu.SupportsPush = true;
-	cpu.SupportsLink = true;
-	cpu.SupportsUnlink = true;
+	cpu.SupportsPop = false;
+	cpu.SupportsPush = false;
+	cpu.SupportsLink = false;
+	cpu.SupportsUnlink = false;
 	cpu.SupportsBitfield = true;
 
 //	printf("c64 starting...\r\n");
@@ -302,8 +305,11 @@ int openfiles(char *s)
         //        }
 		ofs.open(outfile,std::ios::out|std::ios::trunc);
 		dfs.open(dbgfile.c_str(),std::ios::out|std::ios::trunc);
+		irfs.open(irfile, std::ios::out | std::ios::trunc);
+		irfs.level = 1;
+		irfs.puts("CC64 Hex Intermediate File\n");
 		dfs.level = 1;
-		dfs.puts("<title>C64D Compiler debug file</title>\n");
+		dfs.puts("<title>CC64 Compiler debug file</title>\n");
 		dfs.level = 1;
 		lfs.level = 1;
 		ofs.level = 1;
@@ -369,6 +375,8 @@ void closefiles()
 	dfs.printf("<closefiles>\n");
 	ifs->close();
 	delete ifs;
+	irfs.flush();
+	irfs.close();
 	dfs.printf("A");
 	lfs.close();
 	dfs.printf("B");

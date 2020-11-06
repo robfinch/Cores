@@ -28,6 +28,7 @@
 char *prefix;
 extern int nparms;
 extern bool isRegister;
+SYM* currentSym = nullptr;
 
 Function* SYM::MakeFunction(int symnum, bool isPascal) {
 	Function* fn = compiler.ff.MakeFunction(symnum, this, isPascal);
