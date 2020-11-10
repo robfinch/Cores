@@ -450,6 +450,8 @@ public:
 	Float128 f128;
 	TYP *tp;
   Statement *stmt;
+	std::streampos storage_pos;
+	std::streampos storage_endpos;
 
 	Function* MakeFunction(int symnum, bool isPascal);
 	bool IsTypedef();
@@ -544,7 +546,7 @@ public:
 	int64_t InitializeStruct();
 	int64_t InitializeUnion();
 	int64_t Initialize(int64_t val);
-	int64_t Initialize(TYP *);
+	int64_t Initialize(TYP *, int opt);
 
 	// Serialization
 	void storeHex(txtoStream& ofs);
@@ -1709,6 +1711,7 @@ public:
 	void GetType(TYP** hd, TYP** tl) {
 		*hd = head; *tl = tail;
 	};
+	void ParseAttribute(SYM* sym);
 	void ParseMembers(SYM* sym, int ztype);
 	int Parse(TABLE* table, int ztype, SYM** sym);
 };

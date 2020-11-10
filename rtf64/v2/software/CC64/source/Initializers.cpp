@@ -60,6 +60,7 @@ void doinit(SYM *sp)
   std::streampos endpoint;
 	TYP *tp;
 
+	sp->storage_pos = ofs.tellp();
   hasPointer = false;
   if (first) {
 	  firstPrim = true;
@@ -135,7 +136,7 @@ void doinit(SYM *sp)
 	}
 	if (lastst == kw_firstcall) {
         GenerateByte(1);
-        return;
+        goto xit;
     }
 	else if( lastst != assign) {
 		hasPointer = sp->tp->FindPointer();
@@ -151,7 +152,7 @@ void doinit(SYM *sp)
 			push_typ(tp);
 		}
 		brace_level = 0;
-		sp->tp->Initialize(nullptr);
+		sp->tp->Initialize(nullptr,1);
 		if (sp->tp->numele == 0) {
 			if (sp->tp->GetBtp()) {
 				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar
@@ -182,6 +183,8 @@ void doinit(SYM *sp)
     endinit();
 	if (sp->storage_class == sc_global)
 		ofs.printf("\nendpublic\n");
+xit:
+	sp->storage_endpos = ofs.tellp();
 }
 
 
@@ -204,51 +207,51 @@ void doInitCleanup()
 	}
 }
 
-int64_t initbyte()
+int64_t initbyte(int opt)
 {   
-	GenerateByte((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateByte(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (1LL);
 }
 
-int64_t initchar()
+int64_t initchar(int opt)
 {   
-	GenerateChar((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateChar(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (2LL);
 }
 
-int64_t initshort()
+int64_t initshort(int opt)
 {
-	GenerateHalf((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateHalf(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (4LL);
 }
 
-int64_t initlong()
+int64_t initlong(int opt)
 {
-	GenerateLong(GetIntegerExpression((ENODE **)NULL));
+	GenerateLong(opt ? GetIntegerExpression((ENODE **)NULL) : 0);
     return (8LL);
 }
 
-int64_t initquad()
+int64_t initquad(int opt)
 {
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
+	GenerateQuad(opt ? GetFloatExpression((ENODE **)NULL) : Float128::Zero());
 	return (16LL);
 }
 
-int64_t initfloat()
+int64_t initfloat(int opt)
 {
-	GenerateFloat(GetFloatExpression((ENODE **)NULL));
+	GenerateFloat(opt ? GetFloatExpression((ENODE **)NULL): Float128::Zero());
 	return (8LL);
 }
 
-int64_t initPosit()
+int64_t initPosit(int opt)
 {
-	GeneratePosit(GetPositExpression((ENODE**)NULL));
+	GeneratePosit(opt ? GetPositExpression((ENODE**)NULL) : 0);
 	return (8LL);
 }
 
-int64_t inittriple()
+int64_t inittriple(int opt)
 {
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
+	GenerateQuad(opt ? GetFloatExpression((ENODE **)NULL) : Float128::Zero());
 	return (12LL);
 }
 
@@ -267,7 +270,7 @@ int64_t InitializePointer(TYP *tp2)
 		NextToken();
 		if (lastst == begin) {
 			NextToken();
-			lng = tp2->Initialize(nullptr);
+			lng = tp2->Initialize(nullptr,1);
 			needpunc(end, 13);
 			needpunc(end, 14);
 			return (lng);

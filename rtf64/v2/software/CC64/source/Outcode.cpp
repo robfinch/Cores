@@ -706,13 +706,15 @@ void genstorageskip(int nbytes)
 	}
 }
 
-void genstorage(int64_t nbytes)
+std::streampos genstorage(int64_t nbytes)
 {
+	std::streampos pos = ofs.tellp();
 	nl();
 	if (nbytes) {
 		ofs.printf("\tfill.b\t%lld,0x00                    \n", nbytes);
 	}
 	genst_cumulative += nbytes;
+	return (pos);
 }
 
 void GenerateLabelReference(int n, int64_t offset)

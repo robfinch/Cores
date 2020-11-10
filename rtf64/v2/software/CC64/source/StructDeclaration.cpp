@@ -34,6 +34,33 @@ extern bool isPrivate;
 
 int16_t typeno = bt_last;
 
+void StructDeclaration::ParseAttribute(SYM* sym)
+{
+  int opa_cnt = 0;
+
+  NextToken();
+  needpunc(openpa, 0);
+  while (lastst == openpa) {
+    NextToken();
+    opa_cnt++;
+  }
+  do {
+    switch (lastst) {
+    case id:
+      NextToken();
+      break;
+    }
+  } while (lastst == comma);
+  while (lastst == closepa) {
+    NextToken();
+    opa_cnt--;
+    if (opa_cnt == 0)
+      break;
+  }
+  needpunc(closepa, 0);
+}
+
+
 int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
 {
   SYM *sp;
@@ -52,6 +79,8 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
+  if (lastst == kw_attribute)
+    ParseAttribute(nullptr);
   if(lastst == id) {
     if((sp = tagtable.Find(lastid,false)) == NULL) {
       sp = allocSYM();
@@ -65,9 +94,15 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
       sp->tp->alignment = 0;
       NextToken();
 
-			if (lastst == kw_align) {
-        NextToken();
-        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      for (;;) {
+        if (lastst == kw_attribute)
+          ParseAttribute(nullptr);
+        else if (lastst == kw_align) {
+          NextToken();
+          sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+        }
+        else
+          break;
       }
 
 			// Could be a forward structure declaration like:
@@ -95,9 +130,15 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
     // Else it is a known structure
 		else {
       NextToken();
-      if (lastst==kw_align) {
-        NextToken();
-        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      for (;;) {
+        if (lastst == kw_attribute)
+          ParseAttribute(nullptr);
+        else if (lastst == kw_align) {
+          NextToken();
+          sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+        }
+        else
+          break;
       }
 			if (lastst==begin) {
         NextToken();
@@ -121,9 +162,15 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
       sp->tp->sname = new std::string(*sp->name);
       sp->tp->alignment = 0;
 
-      if (lastst == kw_align) {
-        NextToken();
-        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      for (;;) {
+        if (lastst == kw_attribute)
+          ParseAttribute(nullptr);
+        else if (lastst == kw_align) {
+          NextToken();
+          sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+        }
+        else
+          break;
       }
 
       // Could be a forward structure declaration like:
@@ -151,9 +198,15 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
     // Else it is a known structure
     else {
       NextToken();
-      if (lastst == kw_align) {
-        NextToken();
-        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      for (;;) {
+        if (lastst == kw_attribute)
+          ParseAttribute(nullptr);
+        else if (lastst == kw_align) {
+          NextToken();
+          sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+        }
+        else
+          break;
       }
       if (lastst == begin) {
         NextToken();
@@ -162,6 +215,7 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
     }
     head = sp->tp;
     goto xit;
+    //***** DEAD code follows *****
     sp->SetName(*(new std::string(nmbuf)));
     cnt++;
     sp->tp = allocTYP();
@@ -191,7 +245,17 @@ int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
     head = tp;
   }
 xit:
-	isStructDecl = psd;
+for (;;) {
+  if (lastst == kw_attribute)
+    ParseAttribute(nullptr);
+  else if (lastst == kw_align) {
+    NextToken();
+    sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+  }
+  else
+    break;
+}
+isStructDecl = psd;
   *sym = sp;
 	return (ret);
 }

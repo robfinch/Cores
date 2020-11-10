@@ -1436,6 +1436,7 @@ TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 			ep1 = AdjustForBitArray(pop, tp1, ep1);
 			NextToken();
 			ep1 = ParseOpenpa(tp1, ep1);
+			tp1 = ep1->tp;
 			break;
 
 		case pointsto:

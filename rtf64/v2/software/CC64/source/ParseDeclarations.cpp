@@ -1723,6 +1723,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 	static int decl_level = 0;
 	int itdef;
 	int insState = 0;
+	SYM* fp;
 
 	itdef = isTypedef;
 	decl_level++;
@@ -1736,6 +1737,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 	if (ParseSpecifier(table, &sp, al)) {
 		goto xit1;
 	}
+	ofs.write(" ");
 	dfs.printf("B");
 	dhead = head;
 	for(;;) {
@@ -1767,10 +1769,25 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 		if (declid->length() > 0 || classname->length() != 0) {      // otherwise just struct tag...
 			if (sp == nullptr) {
 				sp = allocSYM();
+				sp->name = declid;
 				//if (funcdecl > 0)
 				//	sp->fi = MakeFunction(sp->id, sp, isPascal, isInline);
 			}
 			SetType(sp);
+			fp = FindSymbol(sp, table);
+			// If storage has already been allocated, go back and blank it out.
+			if (fp && fp->storage_pos != 0) {
+				int cnt = 0;
+				std::streampos cpos = ofs.tellp();
+				std::streampos pos = fp->storage_pos;
+				ofs.seekp(fp->storage_pos);
+				while (pos < fp->storage_endpos && fp->storage_endpos > fp->storage_pos && cnt < 65536) {
+					cnt++;
+					ofs.write(" ");
+				}
+				ofs.seekp(cpos);
+			}
+			sp->storage_pos = ofs.tellp();
 			if (funcdecl <= 0)
 				sp->IsInline = isInline;
 			sp->IsRegister = isRegister;
@@ -1823,8 +1840,10 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			if (sp->storage_class == sc_member)
 				table->insert(sp);
 			else
-				if (ParseFunction(table, sp, al))
+				if (ParseFunction(table, sp, al)) {
+					sp->storage_endpos = ofs.tellp();
 					return (nbytes);
+				}
 //			}
 		}
 		if (funcdecl>0) {
@@ -1869,6 +1888,8 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
   }
   NextToken();
 xit1:
+	if (sp)
+		sp->storage_endpos = ofs.tellp();
 	if (decl_level == 1) {
 		if (sp && sp->tp->IsStructType()) {
 			TYP* tp;

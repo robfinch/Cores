@@ -25,14 +25,14 @@
 //
 #include "stdafx.h"
 
-extern int64_t initbyte();
-extern int64_t initchar();
-extern int64_t initshort();
-extern int64_t initlong();
-extern int64_t initquad();
-extern int64_t initfloat();
-extern int64_t inittriple();
-extern int64_t initPosit();
+extern int64_t initbyte(int opt);
+extern int64_t initchar(int opt);
+extern int64_t initshort(int opt);
+extern int64_t initlong(int opt);
+extern int64_t initquad(int opt);
+extern int64_t initfloat(int opt);
+extern int64_t inittriple(int opt);
+extern int64_t initPosit(int opt);
 int64_t InitializePointer(TYP *);
 extern short int brace_level;
 TYP *typ_vector[100];
@@ -626,7 +626,7 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 
 // Initialize the type. Unions can't be initialized.
 
-int64_t TYP::Initialize(TYP *tp2)
+int64_t TYP::Initialize(TYP *tp2, int opt)
 {
 	int64_t nbytes;
 	TYP *tp;
@@ -657,16 +657,16 @@ j1:
 		switch (tp->type) {
 		case bt_ubyte:
 		case bt_byte:
-			nbytes = initbyte();
+			nbytes = initbyte(opt);
 			break;
 		case bt_uchar:
 		case bt_char:
 		case bt_enum:
-			nbytes = initchar();
+			nbytes = initchar(opt);
 			break;
 		case bt_ushort:
 		case bt_short:
-			nbytes = initshort();
+			nbytes = initshort(opt);
 			break;
 		case bt_pointer:
 			if (tp->val_flag)
@@ -677,7 +677,7 @@ j1:
 		case bt_exception:
 		case bt_ulong:
 		case bt_long:
-			nbytes = initlong();
+			nbytes = initlong(opt);
 			break;
 		case bt_struct:
 			nbytes = tp->InitializeStruct();
@@ -686,17 +686,17 @@ j1:
 			nbytes = tp->InitializeUnion();
 			break;
 		case bt_quad:
-			nbytes = initquad();
+			nbytes = initquad(opt);
 			break;
 		case bt_float:
 		case bt_double:
-			nbytes = initfloat();
+			nbytes = initfloat(opt);
 			break;
 		case bt_triple:
-			nbytes = inittriple();
+			nbytes = inittriple(opt);
 			break;
 		case bt_posit:
-			nbytes = initPosit();
+			nbytes = initPosit(opt);
 			break;
 		default:
 			error(ERR_NOINIT);
@@ -736,15 +736,33 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 	int64_t nbytes;
 	char *p;
 	char *str;
+	int64_t pos = 0;
+	int64_t n;
+	ENODE* cnode;
+	int64_t fill = 0;
 
 	nbytes = 0;
 //	if (lastst == begin)
 	{
 //		NextToken();               /* skip past the brace */
 		while (lastst != end) {
+			if (lastst == openbr) {
+				NextToken();
+				n = GetConstExpression(&cnode);
+				fill = min(1000000, n - pos + 1);
+				needpunc(closebr,50);
+				needpunc(assign,50);
+			}
 			// Allow char array initialization like { "something", "somethingelse" }
 			if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar
 				|| GetBtp()->type == bt_ichar || GetBtp()->type == bt_iuchar)) {
+				if (fill > 0) {
+					while (fill > 0) {
+						fill--;
+						GenerateChar(0);
+						pos++;
+					}
+				}
 				str = GetStrConst();
 				nbytes = strlen(str) * 2 + 2;
 				p = str;
@@ -752,8 +770,14 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 					GenerateChar(*p++);
 				GenerateChar(0);
 				free(str);
+				pos++;
 			}
 			else if (lastst == asconst && GetBtp()->type == bt_byte) {
+				while (fill > 0) {
+					fill--;
+					GenerateByte(0);
+					pos++;
+				}
 				str = GetStrConst();
 				nbytes = strlen(str) * 1 + 1;
 				p = str;
@@ -761,11 +785,27 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 					GenerateByte(*p++);
 				GenerateByte(0);
 				free(str);
+				pos++;
 			}
-			else
-				nbytes += GetBtp()->Initialize(GetBtp());
-			if (lastst == comma)
+			else {
+				if (fill > 0) {
+					while (fill > 0) {
+						fill--;
+						nbytes += GetBtp()->Initialize(GetBtp(), fill == 0);
+						pos++;
+					}
+				}
+				else {
+					nbytes += GetBtp()->Initialize(GetBtp(), 1);
+					pos++;
+				}
+			}
+			// Allow an extra comma at the end of the list of values
+			if (lastst == comma) {
 				NextToken();
+				if (lastst == end)
+					break;
+			}
 			else if (lastst == end) {
 				//brace_level--;
 				break;
@@ -793,7 +833,7 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 		nbytes = maxsz;
 	}
 	else if (maxsz != 0 && nbytes > maxsz)
-		error(ERR_INITSIZE);    /* too many initializers */
+		;// error(ERR_INITSIZE);    /* too many initializers */
 	return (nbytes);
 }
 
@@ -813,7 +853,7 @@ int64_t TYP::InitializeStruct()
 			GenerateByte(0);
 			nbytes++;
 		}
-		nbytes += sp->tp->Initialize(sp->tp);
+		nbytes += sp->tp->Initialize(sp->tp,1);
 		if (lastst == comma)
 			NextToken();
 		else if (lastst == end || lastst==semicolon) {

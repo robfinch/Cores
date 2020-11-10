@@ -297,10 +297,12 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 	ENODE* pnode;
 	TYP* tptr;
 	int64_t sz = 0;
-	ENODE* list;
+	ENODE* list, * cnode;
 	bool cnst = true;
 	bool consistentType = true;
 	TYP* tptr2;
+	int64_t n;
+	int64_t pos = 0;
 
 	parsingAggregate++;
 	NextToken();
@@ -308,6 +310,16 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 	list = makenode(en_list, nullptr, nullptr);
 	tptr2 = nullptr;
 	while (lastst != end) {
+		if (lastst == openbr) {
+			n = GetConstExpression(&cnode);
+			needpunc(closebr,49);
+			while (pos < n && pos < 1000000) {
+				pnode = makenode(en_void, nullptr, nullptr);
+				pnode->SetType(tptr2);
+				list->AddToList(pnode);
+				pos++;
+			}
+		}
 		tptr = ParseNonCommaExpression(&pnode);
 		if (!pnode->constflag)
 			cnst = false;
@@ -318,6 +330,7 @@ ENODE* Expression::ParseAggregate(ENODE** node)
 		sz = sz + pnode->esize;
 		list->esize = pnode->esize;
 		list->AddToList(pnode);
+		pos++;
 		if (lastst != comma)
 			break;
 		NextToken();

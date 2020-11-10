@@ -13,6 +13,7 @@ void GenerateHint(int num);
 
 void SaveRegisterVars(CSet *rmask);
 void SaveFPRegisterVars(CSet *fprmask);
+void SavePositRegisterVars(CSet *prmask);
 void funcbottom(Statement *stmt);
 SYM *makeint2(std::string na);
 int64_t round10(int64_t n);
@@ -30,7 +31,7 @@ extern int litlist(ENODE *);
 void FreeFunction(Function *fn);
 
 // Outcode.cpp
-extern void genstorage(int64_t nbytes);
+extern std::streampos genstorage(int64_t nbytes);
 extern void GenerateByte(int64_t val);
 extern void GenerateChar(int64_t val);
 extern void GenerateHalf(int64_t val);
