@@ -196,7 +196,17 @@ void Declaration::ParseLong()
 {
 	NextToken();
 	if (lastst==kw_int) {
-		bit_max = 64;
+		head = (TYP*)TYP::Make(bt_long, sizeOfWord);
+		tail = head;
+		bit_max = head->precision;
+		NextToken();
+	}
+	else if (lastst == kw_long) {
+		//head = (TYP*)TYP::Make(bt_i128, sizeOfWord * 2);
+		//bit_max = 128;
+		head = (TYP*)TYP::Make(bt_long, sizeOfWord);
+		tail = head;
+		bit_max = head->precision;
 		NextToken();
 	}
 	else if (lastst==kw_float) {
@@ -647,7 +657,7 @@ void Declaration::ParseClass()
 	bit_width = cd.bit_width;
 }
 
-int Declaration::ParseStruct(e_bt typ)
+int Declaration::ParseStruct(TABLE* table, e_bt typ, SYM **sp)
 {
 	StructDeclaration sd;
 	int rv;
@@ -657,7 +667,7 @@ int Declaration::ParseStruct(e_bt typ)
 	sd.bit_next = bit_next;
 	sd.bit_offset = bit_offset;
 	sd.bit_width = bit_width;
-	rv = sd.Parse(typ);
+	rv = sd.Parse(table, typ, sp);
 	sd.GetType(&head, &tail);
 	bit_max = sd.bit_max;
 	bit_next = sd.bit_next;
@@ -670,7 +680,7 @@ int Declaration::ParseStruct(e_bt typ)
 // Returns:
 // 0 usually, 1 if only a specifier is present
 //
-int Declaration::ParseSpecifier(TABLE *table)
+int Declaration::ParseSpecifier(TABLE* table, SYM** sym, e_sc sc)
 {
 	SYM *sp;
 	ClassDeclaration cd;
@@ -820,13 +830,19 @@ int Declaration::ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_struct:
-				if (ParseStruct(bt_struct))
+				if (ParseStruct(table, bt_struct, &sp)) {
+					*sym = sp;
 					return (1);
+				}
+				*sym = sp;
 				goto lxit;
 
 			case kw_union:
-				if (ParseStruct(bt_union))
+				if (ParseStruct(table, bt_union, &sp)) {
+					*sym = sp;
 					return (1);
+				}
+				*sym = sp;
 				goto lxit;
 
       case kw_exception:
@@ -1414,7 +1430,11 @@ void Declaration::ParseAssign(SYM *sp)
 		sp->defval = ep2;
 	}
 	else {
-		tp1 = exp.nameref(&ep1, TRUE);
+		NextToken();
+		ep1 = exp.MakeAutoNameNode(sp);
+		ep1->sym = sp;
+		tp1 = exp.CondDeref(&ep1, sp->tp);
+		//tp1 = exp.nameref(&ep1, TRUE);
 		op = en_assign;
 		tp2 = exp.ParseAssignOps(&ep2);
 		if (tp2 == nullptr || !IsLValue(ep1))
@@ -1653,6 +1673,26 @@ int Declaration::ParseFunction(TABLE* table, SYM* sp, e_sc al)
 	return (0);
 }
 
+void Declaration::FigureStructOffsets(int64_t bgn, SYM* sp)
+{
+	TABLE* pt;
+	SYM* hd;
+	int64_t nn;
+	int64_t ps;
+	int64_t bt;
+
+	ps = bgn;
+	for (hd = SYM::GetPtr(sp->tp->lst.head); hd; hd = hd->GetNextPtr()) {
+		hd->value.i = ps;
+		hd->tp->struct_offset = ps;
+		if (hd->tp->IsStructType())
+			FigureStructOffsets(ps, hd);
+		if (hd->tp->bit_offset > 0)
+			continue;
+		if (sp->tp->type != bt_union)
+			ps = ps + hd->tp->size;
+	}
+}
 
 /*
  *      process declarations of the form:
@@ -1691,13 +1731,15 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 	insState = 0;
 	dfs.printf("A");
 	classname = new std::string("");
+	sp = nullptr;
 	sp1 = nullptr;
-	if (ParseSpecifier(table))
+	if (ParseSpecifier(table, &sp, al)) {
 		goto xit1;
+	}
 	dfs.printf("B");
 	dhead = head;
 	for(;;) {
-	    if (declid) delete declid;
+	  if (declid) delete declid;
 		declid = nullptr;
 		dfs.printf("b");
 		bit_width = -1;
@@ -1758,7 +1800,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 				}
 				isTypedef = FALSE;
 			}
-			if (sp->storage_class != sc_typedef)
+			if (!sp->IsTypedef())
 				nbytes = GenerateStorage(nbytes, al, ilc);
 			dfs.printf("G");
 			if ((sp->tp->type == bt_func) && sp->storage_class == sc_global)
@@ -1777,10 +1819,13 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			name = *sp->name;
 			//if (strcmp(name.c_str(), "__Skip") == 0)
 			//	printf("hl");
-			if (sp->name->length() > 0) {
+//			if (sp->name->length() > 0) {
+			if (sp->storage_class == sc_member)
+				table->insert(sp);
+			else
 				if (ParseFunction(table, sp, al))
 					return (nbytes);
-			}
+//			}
 		}
 		if (funcdecl>0) {
 			if (lastst == closepa) {
@@ -1824,6 +1869,14 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
   }
   NextToken();
 xit1:
+	if (decl_level == 1) {
+		if (sp && sp->tp->IsStructType()) {
+			TYP* tp;
+			tp = sp->tp->Copy(sp->tp);
+			sp->tp = tp;
+			FigureStructOffsets(0,sp);
+		}
+	}
 	dfs.printf("</declare>\n");
 	isTypedef = itdef;
 	decl_level--;
@@ -1989,9 +2042,10 @@ xit:
 	;
 }
 
-void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
+ENODE *AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 {
 	SYM *sp;
+	ENODE* ep1;
 
 //	printf("Enter ParseAutoDecls\r\n");
     for(;;) {
@@ -2062,6 +2116,14 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 	}
 xit:
 	;
+	ep1 = nullptr;
+	for (sp = SYM::GetPtr(ssyms->GetHead()); sp; sp = sp->GetNextPtr()) {
+		if (sp->initexp) {
+			ep1 = makenode(en_list, ep1, nullptr);
+			ep1->p[3] = sp->initexp;
+		}
+	}
+	return (ep1);
 //	printf("Leave ParseAutoDecls\r\n");
 }
 

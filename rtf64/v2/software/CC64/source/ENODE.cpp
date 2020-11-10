@@ -26,6 +26,8 @@
 #include "stdafx.h"
 
 int ENODE::segcount[16];
+CSet* ru;
+CSet* rru;
 
 void swap_nodes(ENODE *node)
 {
@@ -489,6 +491,8 @@ void ENODE::repexpr()
 			if (csp->reg > 0) {
 				nodetype = en_pregvar;
 				rg = csp->reg;
+				ru->add(rg);
+				rru->add(nregs - 1 - rg);
 			}
 		}
 		break;
@@ -499,6 +503,8 @@ void ENODE::repexpr()
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
 				rg = csp->reg;
+				ru->add(rg);
+				rru->add(nregs - 1 - rg);
 			}
 		}
 		break;
@@ -509,6 +515,8 @@ void ENODE::repexpr()
 			if (csp->reg > 0) {
 				nodetype = en_pregvar;
 				rg = csp->reg;
+				ru->add(rg);
+				rru->add(nregs - 1 - rg);
 			}
 		}
 		break;
@@ -518,6 +526,8 @@ void ENODE::repexpr()
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
 				rg = csp->reg;
+				ru->add(rg);
+				rru->add(nregs - 1 - rg);
 			}
 		}
 		break;
@@ -545,6 +555,8 @@ void ENODE::repexpr()
 				if (csp->reg > 0) {
 					nodetype = en_regvar;
 					rg = csp->reg;
+					ru->add(rg);
+					rru->add(nregs - 1 - rg);
 				}
 			}
 		}
@@ -595,6 +607,8 @@ void ENODE::repexpr()
 				//nodetype = csp->isfp ? en_fpregvar : csp->isPosit ? en_pregvar : en_regvar;
 				nodetype = en_regvar;
 				rg = csp->reg;
+				ru->add(rg);
+				rru->add(nregs - 1 - rg);
 			}
 			else
 				p[0]->repexpr();
@@ -1073,7 +1087,7 @@ void ENODE::GenRedor(Operand *ap1, Operand *ap2)
 // No reason to ReleaseTempReg() because the registers used are transported
 // forward.
 // ----------------------------------------------------------------------------
-Operand *ENODE::GenIndex()
+Operand *ENODE::GenIndex(bool neg)
 {
 	Operand *ap1, *ap2;
 
@@ -1112,6 +1126,11 @@ Operand *ENODE::GenIndex()
 		GenerateHint(9);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
+		if (neg && pass==1) {
+			ap2->offset->i = -ap2->offset->i;
+			if (ap2->offset2)
+				ap2->offset2->i = -ap2->offset2->i;
+		}
 		ap2->isUnsigned = ap1->isUnsigned;
 		return (ap2);
 	}
@@ -1124,19 +1143,24 @@ Operand *ENODE::GenIndex()
 		//ap2->deep = ap1->deep;
 		ap1->offset = ap2->offset;
 		ap1->offset2 = ap2->offset2;
+		if (neg && pass==1) {
+			ap1->offset->i = -ap1->offset->i;
+			if (ap1->offset2)
+				ap1->offset2->i = -ap1->offset2->i;
+		}
 		return (ap1);
 	}
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		ap2->mode = am_indx2;
 		ap2->sreg = ap1->preg;
 		ap2->deep2 = ap1->deep;
-		return ap2;
+		return (ap2);
 	}
 	if (ap2->mode == am_direct && ap1->mode == am_reg) {
 		ap2->mode = am_indx;
 		ap2->preg = ap1->preg;
 		ap2->deep = ap1->deep;
-		return ap2;
+		return (ap2);
 	}
 	// ap1->mode must be am_reg
 	ap2->MakeLegal( am_reg, 8);
@@ -1145,7 +1169,7 @@ Operand *ENODE::GenIndex()
 	ap1->deep2 = ap2->deep;
 	ap1->offset = makeinode(en_icon, 0);
 	ap1->scale = scale;
-	return ap1;                     /* return indexed */
+	return (ap1);                     /* return indexed */
 }
 
 
@@ -1197,9 +1221,11 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
 		ap1 = cg.GenerateExpression(p[0], am_creg, size);
-		ap2 = cg.GenerateExpression(p[1]->p[0], am_reg | am_fpreg, size);
-		ap3 = cg.GenerateExpression(p[1]->p[1], am_reg | am_fpreg, size);
+		ap2 = cg.GenerateExpression(p[1]->p[0], am_reg | am_fpreg | am_preg, size);
+		ap3 = cg.GenerateExpression(p[1]->p[1], am_reg | am_fpreg | am_preg, size);
 		if (ap2->mode == am_fpreg || ap3->mode == am_fpreg)
+			goto j1;
+		if (ap2->mode == am_preg || ap3->mode == am_preg)
 			goto j1;
 		n1 = currentFn->pl.Count(ip1);
 		if (n1 < 20 && !currentFn->pl.HasCall(ip1)) {
@@ -2052,6 +2078,77 @@ int GetNaturalSize(ENODE *node)
 }
 */
 
+static char* NodeTypeStr[] = {
+	"unknown", "void", "nop",
+	"list", "aggregate",
+	"cbu", "ccu", "chu",
+	"cubu", "cucu", "cuhu",
+	"cbw", "ccw", "chw",
+	"cubw", "cucw", "cuhw",
+	"cucwp", "ccwp", "cuc",
+
+	"cbc", "cbh", "cbuc", "cubc",
+	"cch",
+	"cwl", "cld", "cfd",
+	"sxb", "sxc", "sxh",
+	"zxb", "zxc", "zxh",
+	"i2p", "p2i",
+			"icon", "fcon", "fqcon", "dcon", "tcon", "scon", "labcon", "nacon",
+			"autocon", "autofcon", "autopcon", "classcon",
+	"clabcon", "cnacon",
+	"dlabcon", "dnacon", // 30<-
+
+			 "fcall","ifcall",
+			 "tempref","regvar","fpregvar","pregvar","tempfpref","temppref",
+	"add","sub","mul","mod",
+	"ftadd","ftsub","ftmul","ftdiv",
+	"fdadd","fdsub","fdmul","fddiv",
+	"fsadd","fssub","fsmul","fsdiv",
+	"fadd","fsub","fmul","fdiv",
+	"padd","psub","pmul","pdiv","ptoi","itop","peq","pne","plt","ple","pcon","pgt","pge",
+	"d2t","d2q","t2q",
+	"i2d","i2t","i2q","d2i","q2i","s2q","t2i",// 63<-
+			"div","asl","shl","shlu","shr","shru","asr","rol","ror","ext","extu",
+	"cond","safe_cond","assign",
+			"asadd","assub","asmul","asdiv","asdivu","asmod","asmodu",
+			"asfmul",
+	"asrsh","asrshu","asmulu",//81
+			"aslsh","asand","asor","asxor","uminus","not","compl",
+			"eq","ne","lt","le","gt","ge",
+			"feq","fne","flt","fle","fgt","fge",
+			"veq","vne","vlt","vle","vgt","vge",
+	"and","or","land","lor","land_safe","lor_safe",//104
+			"xor","mulu","udiv","umod","ugt",
+			"uge","ule","ult",
+	"ref","fieldref","ursh",
+	"bchk","chk","bytendx","bitoffset",
+	"abs","max","min","addrof","ptrdif","wydendx",
+	// Vector
+	"autovcon","autovmcon","vector_ref","vex","veins",
+	"vadd","vsub","vmul","vdiv",
+	"vadds","vsubs","vmuls","vdivs",
+	"mulf","isnullptr",
+	"en_object_list",
+	nullptr
+};
+
+char* NodetypeToString(e_node n)
+{
+	return (NodeTypeStr[n]);
+}
+
+e_node StringToNodetype(char* str)
+{
+	int n = en_unknown;
+
+	while (NodeTypeStr[n]) {
+		if (strncmp(str, NodeTypeStr[n], strlen(NodeTypeStr[n])) == 0)
+			return ((e_node)n);
+		n++;
+	}
+	return ((e_node)-1);
+};
+
 
 void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt)
 {
@@ -2355,10 +2452,64 @@ void ENODE::loadHex(txtiStream& ifs)
 
 void ENODE::store(txtoStream& ofs)
 {
+	if (this == nullptr)
+		return;
+	ofs.printf("<ENODE><number:%d>", number);
+	ofs.printf("<nodetype:%s>", NodetypeToString(nodetype));
+	p[0]->store(ofs);
+	ofs.printf(",");
+	p[1]->store(ofs);
+	ofs.printf(",");
+	p[2]->store(ofs);
+	ofs.printf(",");
+	p[3]->store(ofs);
+	ofs.printf("</ENODE>");
 }
 
 void ENODE::load(txtiStream& ifs)
 {
+	static char buf[8000];
+	int nt;
+
+	ifs.read(buf, 16);
+	if (buf[0] == '(') {
+		nt = StringToNodetype(&buf[1]);
+		if (nt >= 0) {
+			p[0]->load(ifs);
+			p[1]->load(ifs);
+			p[2]->load(ifs);
+			p[3]->load(ifs);
+		}
+	}
+}
+
+int ENODE::load(char *buf)
+{
+	int nt;
+	int ndx;
+
+	if (buf[0] == '\0')
+		return (0);
+	if (strncmp(&buf[0],"<number:",8)==0) {
+		number = atoi(&buf[8]);
+		for (ndx = 8; buf[ndx]; ndx++)
+			if (buf[ndx] == '>')
+				break;
+		if (buf[ndx] == '\0');
+			return (ndx);
+		ndx++;
+		if (strncmp(&buf[ndx], "<nodetype:", 10) == 0) {
+			nodetype = StringToNodetype(&buf[ndx+10]);
+		}
+		p[0] = compiler.ef.Makenode();
+		ndx += p[0]->load(&buf[ndx]);
+		p[1] = compiler.ef.Makenode();
+		ndx += p[1]->load(&buf[ndx]);
+		p[2] = compiler.ef.Makenode();
+		ndx += p[2]->load(&buf[ndx]);
+		p[3] = compiler.ef.Makenode();
+		ndx += p[3]->load(&buf[ndx]);
+	}
 }
 
 int ENODE::PutStructConst(txtoStream& ofs)

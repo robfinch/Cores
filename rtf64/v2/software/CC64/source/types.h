@@ -243,6 +243,7 @@ public:
 	void Remove2();
 	void RemoveLinkUnlink();
 	void RemoveGPLoad();
+	void RemoveRegsave();
 	void flush();
 	void SetLabelReference();
 	void EliminateUnreferencedLabels();
@@ -451,6 +452,7 @@ public:
   Statement *stmt;
 
 	Function* MakeFunction(int symnum, bool isPascal);
+	bool IsTypedef();
 	static SYM *Copy(SYM *src);
 	SYM *Find(std::string name);
 	int FindNextExactMatch(int startpos, TypeArray *);
@@ -670,7 +672,7 @@ public:
 	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
 	void GenStore(Operand *ap1, Operand *ap3, int size);
 	static void GenRedor(Operand *ap1, Operand *ap2);
-	Operand *GenIndex();
+	Operand *GenIndex(bool neg);
 	Operand *GenHook(int flags, int size);
 	Operand *GenSafeHook(int flags, int size);
 	Operand *GenerateShift(int flags, int size, int op);
@@ -690,8 +692,10 @@ public:
 	Operand* GenerateBitfieldAssignAdd(int flags, int size, int op);
 	Operand* GenerateBitfieldAssignLogic(int flags, int size, int op);
 
+	// Serialization
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);
+	int load(char* bufptr);
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);
 
@@ -717,6 +721,7 @@ public:
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
 	ENODE* Makefnode(int nt, double v1);
 	ENODE* Makepnode(int nt, Posit64 v1);
+	ENODE* Makenode();
 	ENODE* MakePositNode(int nt, Posit64 v1);
 };
 
@@ -772,7 +777,6 @@ private:
 	void ApplyVMask(ENODE* node, ENODE* mask);
 
 	TYP* deref(ENODE** node, TYP* tp);
-	TYP* CondDeref(ENODE** node, TYP* tp);
 
 	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
 	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
@@ -799,7 +803,6 @@ private:
 	ENODE* MakeExternNameNode(SYM* sp);
 	ENODE* MakeConstNameNode(SYM* sp);
 	ENODE* MakeMemberNameNode(SYM* sp);
-	ENODE* MakeAutoNameNode(SYM* sp);
 	ENODE* MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args);
 	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
 	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
@@ -811,6 +814,8 @@ private:
 	ENODE* FindLastMulu(ENODE*, ENODE*);
 public:
 	Expression();
+	TYP* CondDeref(ENODE** node, TYP* tp);
+	ENODE* MakeAutoNameNode(SYM* sp);
 	TYP* nameref(ENODE** node, int nt);
 	TYP* nameref2(std::string name, ENODE** node, int nt, bool alloc, TypeArray* typearray, TABLE* tbl);
 	// The following is called from declaration processing, so is made public
@@ -819,6 +824,8 @@ public:
 	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
 	TYP *ParseExpression(ENODE **node);
 	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
+	SYM* FindMember(TYP* tp1, char* name);
+	SYM* FindMember(TABLE* tbl, char* name);
 };
 
 class Operand : public CompilerType
@@ -946,6 +953,7 @@ public:
 	void OptPush();
 	void OptBne();
 	void OptBeq();
+	void OptScc();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
@@ -1015,6 +1023,7 @@ public:
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	virtual Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	Operand* GenerateAsaddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, bool neg);
 	Operand* GenerateAddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
@@ -1497,7 +1506,8 @@ public:
 
 class Statement {
 public:
-	__int8 stype;
+	int number;
+	e_stmt stype;
 	Statement *outer;
 	Statement *next;
 	Statement *prolog;
@@ -1507,6 +1517,7 @@ public:
 	ENODE *exp;         // condition or expression
 	ENODE *initExpr;    // initialization expression - for loops
 	ENODE *incrExpr;    // increment expression - for loops
+	ENODE* iexp;
 	Statement *s1, *s2; // internal statements
 	int num;			// resulting expression type (hash code for throw)
 	int64_t *label;     // label number for goto
@@ -1522,6 +1533,8 @@ public:
 	Statement* MakeStatement(int typ, int gt);
 
 	// Parsing
+	int64_t* GetCasevals();
+	Statement* ParseDefault();
 	Statement* ParseCheckStatement();
 	Statement *ParseStop();
 	Statement *ParseCompound();
@@ -1584,6 +1597,7 @@ public:
 	void GenerateDoOnce();
 	void GenerateCompound();
 	void GenerateCase();
+	void GenerateDefault();
 	void GenerateTry();
 	void GenerateThrow();
 	void GenerateCheck();
@@ -1599,9 +1613,18 @@ public:
 	void DumpCompound();
 	void ListCompoundVars();
 	// Serialization
+	void store(txtoStream& fs);
+	void storeIf(txtoStream& ofs);
+	void storeWhile(txtoStream& fs);
+	void storeCompound(txtoStream& ofs);
+
 	void storeHex(txtoStream& ofs);
 	void storeHexIf(txtoStream& ofs);
-	void storeHexWhile(txtoStream& fs);
+	void storeHexDo(txtoStream& ofs, e_stmt st);
+	void storeHexWhile(txtoStream& fs, e_stmt st);
+	void storeHexFor(txtoStream& fs);
+	void storeHexForever(txtoStream& fs);
+	void storeHexSwitch(txtoStream& fs);
 	void storeHexCompound(txtoStream& ofs);
 };
 
@@ -1654,13 +1677,13 @@ public:
 	void ParseFloat128();
 	void ParsePosit();
 	void ParseClass();
-	int ParseStruct(e_bt typ);
+	int ParseStruct(TABLE* table, e_bt typ, SYM** sym);
 	void ParseVector();
 	void ParseVectorMask();
 	SYM *ParseId();
 	void ParseDoubleColon(SYM *sp);
 	void ParseBitfieldSpec(bool isUnion);
-	int ParseSpecifier(TABLE *table);
+	int ParseSpecifier(TABLE* table, SYM** sym, e_sc sc);
 	SYM *ParsePrefixId();
 	SYM *ParsePrefixOpenpa(bool isUnion);
 	SYM *ParsePrefix(bool isUnion);
@@ -1677,6 +1700,7 @@ public:
 	int GenerateStorage(int nbytes, int al, int ilc);
 	static Function* MakeFunction(int symnum, SYM* sym, bool isPascal, bool isInline);
 	static void MakeFunction(SYM* sp, SYM* sp1);
+	void FigureStructOffsets(int64_t bgn, SYM* sp);
 };
 
 class StructDeclaration : public Declaration
@@ -1685,8 +1709,8 @@ public:
 	void GetType(TYP** hd, TYP** tl) {
 		*hd = head; *tl = tail;
 	};
-	void ParseMembers(SYM * sym, TYP *tp, int ztype);
-	int Parse(int ztype);
+	void ParseMembers(SYM* sym, int ztype);
+	int Parse(TABLE* table, int ztype, SYM** sym);
 };
 
 class ClassDeclaration : public Declaration
@@ -1702,7 +1726,7 @@ public:
 class AutoDeclaration : public Declaration
 {
 public:
-	void Parse(SYM *parent, TABLE *ssyms);
+	ENODE* Parse(SYM *parent, TABLE *ssyms);
 };
 
 class ParameterDeclaration : public Declaration

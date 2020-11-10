@@ -381,6 +381,31 @@ Statement *Statement::ParseCatch()
 	return snp;
 }
 
+int64_t* Statement::GetCasevals()
+{
+	int nn;
+	int64_t* bf;
+	int64_t buf[257];
+
+	NextToken();
+	nn = 0;
+	do {
+		buf[nn] = GetIntegerExpression((ENODE**)NULL);
+		nn++;
+		if (lastst != comma)
+			break;
+		NextToken();
+	} while (nn < 256);
+	if (nn == 256)
+		error(ERR_TOOMANYCASECONSTANTS);
+	bf = (int64_t*)xalloc(sizeof(int64_t) * (nn + 1));
+	bf[0] = nn;
+	for (; nn > 0; nn--)
+		bf[nn] = buf[nn - 1];
+	needpunc(colon, 35);
+	return (bf);
+}
+
 Statement *Statement::ParseCase()
 {
 	Statement *snp;
@@ -410,18 +435,22 @@ Statement *Statement::ParseCase()
 		for (; nn > 0; nn--)
 			bf[nn] = buf[nn - 1];
 		snp->casevals = (int64_t *)bf;
+		needpunc(colon, 35);
 	}
 	else if (lastst == kw_default) {
 		NextToken();
 		snp->s2 = (Statement *)1;
 		snp->stype = st_default;
+		needpunc(colon, 35);
 	}
 	else {
-		error(ERR_NOCASE);
-		return (Statement *)NULL;
+		snp = Parse();
+		snp->s2 = nullptr;
+		//error(ERR_NOCASE);
+		//return (Statement *)NULL;
 	}
-	needpunc(colon, 35);
 	head = (Statement *)NULL;
+
 	while (lastst != end && lastst != kw_case && lastst != kw_default) {
 		if (head == NULL) {
 			head = tail = Statement::Parse();
@@ -438,6 +467,19 @@ Statement *Statement::ParseCase()
 		tail->next = 0;
 	}
 	snp->s1 = head;
+	return (snp);
+}
+
+Statement* Statement::ParseDefault()
+{
+	Statement* snp;
+
+	snp = MakeStatement(st_default, FALSE);
+	NextToken();
+	snp->s2 = (Statement*)1;
+	snp->stype = st_default;
+	needpunc(colon, 35);
+	snp->s1 = Parse();
 	return (snp);
 }
 
@@ -483,6 +525,7 @@ Statement *Statement::ParseSwitch()
 {
 	Statement *snp;
 	Statement *head, *tail;
+	bool needEnd = true;
 
 	snp = MakeStatement(st_switch, TRUE);
 	snp->nkd = false;
@@ -499,16 +542,20 @@ Statement *Statement::ParseSwitch()
 		}
 	}
 	needpunc(closepa, 0);
-	needpunc(begin, 36);
+	if (lastst != begin)
+		needEnd = false;
+	else
+		NextToken();
+	//needpunc(begin, 36);
 	head = 0;
 	while (lastst != end) {
 		if (head == (Statement *)NULL) {
-			head = tail = ParseCase();
+			head = tail = Parse();
 			if (head)
 				head->outer = snp;
 		}
 		else {
-			tail->next = ParseCase();
+			tail->next = Parse();
 			if (tail->next != (Statement *)NULL) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -516,9 +563,12 @@ Statement *Statement::ParseSwitch()
 		}
 		if (tail == (Statement *)NULL) break;	// end of file in switch
 		tail->next = (Statement *)NULL;
+		if (!needEnd)
+			break;
 	}
 	snp->s1 = head;
-	NextToken();
+	if (needEnd)
+		NextToken();
 	if (head->CheckForDuplicateCases())
 		error(ERR_DUPCASE);
 	iflevel--;
@@ -748,6 +798,9 @@ Statement *Statement::ParseCompound()
 		}
 		else
 		{
+			if (tail) {
+				tail->iexp = ad.Parse(NULL, &snp->ssyms);
+			}
 			tail->next = Statement::Parse();
 			if (tail->next != NULL) {
 				tail->next->outer = snp;
@@ -827,8 +880,11 @@ Statement *Statement::ParseGoto()
 
 Statement *Statement::Parse()
 {
-	Statement *snp;
+	Statement *snp = nullptr;
+	int64_t* bf = nullptr;
+
 	dfs.puts("<Parse>");
+j1:
 	switch (lastst) {
 	case semicolon:
 		snp = MakeStatement(st_empty, 1);
@@ -863,6 +919,8 @@ Statement *Statement::Parse()
 	case kw_do:
 	case kw_loop: snp = ParseDo(); break;
 	case kw_switch: snp = ParseSwitch(); break;
+	case kw_case:	bf = GetCasevals(); goto j1;
+	case kw_default: snp = ParseDefault(); break;
 	case kw_try: snp = ParseTry(); break;
 	case kw_throw: snp = ParseThrow(); break;
 	case kw_stop: snp = ParseStop(); break;
@@ -878,6 +936,8 @@ Statement *Statement::Parse()
 	}
 	if (snp != NULL) {
 		snp->next = (Statement *)NULL;
+		snp->casevals = bf;
+		bf = nullptr;
 	}
 	dfs.puts("</Parse>");
 	return (snp);
@@ -1177,11 +1237,13 @@ void Statement::GenStore(Operand *ap1, Operand *ap3, int size) { cg.GenerateStor
 void Statement::GenMixedSource()
 {
 	if (mixedSource) {
-		rtrim(lptr);
-		if (strcmp(lptr, last_rem) != 0) {
-			GenerateMonadic(op_remark, 0, cg.MakeStringAsNameConst(lptr,codeseg));
-			strncpy_s(last_rem, 131, lptr, 130);
-			last_rem[131] = '\0';
+		if (lptr) {
+			rtrim(lptr);
+			if (strcmp(lptr, last_rem) != 0) {
+				GenerateMonadic(op_remark, 0, cg.MakeStringAsNameConst(lptr, codeseg));
+				strncpy_s(last_rem, 131, lptr, 130);
+				last_rem[131] = '\0';
+			}
 		}
 	}
 }
@@ -1189,11 +1251,13 @@ void Statement::GenMixedSource()
 void Statement::GenMixedSource2()
 {
 	if (mixedSource) {
-		rtrim(lptr2);
-		if (strcmp(lptr2, last_rem) != 0) {
-			GenerateMonadic(op_remark, 0, cg.MakeStringAsNameConst(lptr2,codeseg));
-			strncpy_s(last_rem, 131, lptr2, 130);
-			last_rem[131] = '\0';
+		if (lptr2) {
+			rtrim(lptr2);
+			if (strcmp(lptr2, last_rem) != 0) {
+				GenerateMonadic(op_remark, 0, cg.MakeStringAsNameConst(lptr2, codeseg));
+				strncpy_s(last_rem, 131, lptr2, 130);
+				last_rem[131] = '\0';
+			}
 		}
 	}
 }
@@ -1223,7 +1287,7 @@ void Statement::GenerateWhile()
 	contlab = nextlabel++;
 	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
-	if (!opt_nocgo)
+	if (!opt_nocgo && !opt_size)
 		cg.GenerateFalseJump(exp, breaklab, 2);
 	GenerateLabel(contlab);
 	if (s1 != NULL)
@@ -1235,7 +1299,7 @@ void Statement::GenerateWhile()
 		}
 		s1->Generate();
 		looplevel--;
-		if (!opt_nocgo) {
+		if (!opt_nocgo && !opt_size) {
 			initstack();
 			cg.GenerateTrueJump(exp, contlab, 2);
 		}
@@ -1264,7 +1328,7 @@ void Statement::GenerateUntil()
 	contlab = nextlabel++;
 	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
-	if (!opt_nocgo)
+	if (!opt_nocgo && !opt_size)
 		cg.GenerateTrueJump(exp, breaklab, 2);
 	GenerateLabel(contlab);
 	if (s1 != NULL)
@@ -1276,7 +1340,7 @@ void Statement::GenerateUntil()
 		}
 		s1->Generate();
 		looplevel--;
-		if (!opt_nocgo) {
+		if (!opt_nocgo && !opt_size) {
 			initstack();
 			cg.GenerateFalseJump(exp, contlab, 2);
 		}
@@ -1310,14 +1374,14 @@ void Statement::GenerateFor()
 		ReleaseTempRegister(cg.GenerateExpression(initExpr, am_all | am_novalue
 			, initExpr->GetNaturalSize()));
 	loophead = currentFn->pl.tail;
-	if (!opt_nocgo) {
+	if (!opt_nocgo && !opt_size) {
 		if (exp != NULL) {
 			initstack();
 			cg.GenerateFalseJump(exp, exit_label, 2);
 		}
 	}
 	GenerateLabel(loop_label);
-	if (opt_nocgo) {
+	if (opt_nocgo||opt_size) {
 		if (exp != NULL) {
 			initstack();
 			cg.GenerateFalseJump(exp, exit_label, 2);
@@ -1335,7 +1399,7 @@ void Statement::GenerateFor()
 		initstack();
 		ReleaseTempRegister(cg.GenerateExpression(incrExpr, am_all | am_novalue, incrExpr->GetNaturalSize()));
 	}
-	if (opt_nocgo)
+	if (opt_nocgo||opt_size)
 		GenerateMonadic(op_bra, 0, cg.MakeCodeLabel(loop_label));
 	else {
 		initstack();
@@ -1660,20 +1724,22 @@ void Statement::GenerateLinearSwitch()
 		}
 		else
 		{
-			bf = (int64_t *)stmt->casevals;
-			for (nn = (int)bf[0]; nn >= 1; nn--) {
-				/* Can't use bbs here! There could be other bits in the value besides the one tested.
-				if ((jj = pwrof2(bf[nn])) != -1) {
-					GenerateTriadic(op_bbs, 0, ap, MakeImmediate(jj), MakeCodeLabel(curlab));
-				}
-				else
-				*/
-				if (bf[nn] >= -128 && bf[nn] < 127) {
-					GenerateTriadic(op_beqi, 0, ap, MakeImmediate(bf[nn]), MakeCodeLabel(curlab));
-				}
-				else {
-					GenerateTriadic(op_seq, 0, makecreg(0), ap, MakeImmediate(bf[nn]));
-					GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(curlab));
+				bf = (int64_t*)stmt->casevals;
+				if (bf) {
+					for (nn = (int)bf[0]; nn >= 1; nn--) {
+					/* Can't use bbs here! There could be other bits in the value besides the one tested.
+					if ((jj = pwrof2(bf[nn])) != -1) {
+						GenerateTriadic(op_bbs, 0, ap, MakeImmediate(jj), MakeCodeLabel(curlab));
+					}
+					else
+					*/
+					if (bf[nn] >= -128 && bf[nn] < 127) {
+						GenerateTriadic(op_beqi, 0, ap, MakeImmediate(bf[nn]), MakeCodeLabel(curlab));
+					}
+					else {
+						GenerateTriadic(op_seq, 0, makecreg(0), ap, MakeImmediate(bf[nn]));
+						GenerateDiadic(op_bt, 0, makecreg(0), MakeCodeLabel(curlab));
+					}
 				}
 			}
 			//GenerateDiadic(op_dw,0,MakeDataLabel(curlab), make_direct(stmt->label));
@@ -1694,19 +1760,36 @@ void Statement::GenerateLinearSwitch()
 //
 void Statement::GenerateCase()
 {
-	Statement *stmt;
+	Statement *stmt = this;
 
-	for (stmt = this; stmt != (Statement *)NULL; stmt = stmt->next)
-	{
+//	for (stmt = this; stmt != (Statement *)NULL; stmt = stmt->next)
+//	{
 		stmt->GenMixedSource();
 		// Still need to generate the label for the benefit of a tabular switch
 		// even if there is no code.
 		GenerateLabel((int)stmt->label);
 		if (stmt->s1 != (Statement *)NULL)
 			stmt->s1->Generate();
-		else if (stmt->next == (Statement *)NULL)
-			GenerateLabel((int)stmt->label);
-	}
+//		else if (stmt->next == (Statement *)NULL)
+//			GenerateLabel((int)stmt->label);
+//	}
+}
+
+void Statement::GenerateDefault()
+{
+	Statement* stmt = this;
+
+	//	for (stmt = this; stmt != (Statement *)NULL; stmt = stmt->next)
+	//	{
+	stmt->GenMixedSource();
+	// Still need to generate the label for the benefit of a tabular switch
+	// even if there is no code.
+	GenerateLabel((int)stmt->label);
+	if (stmt->s1 != (Statement*)NULL)
+		stmt->s1->Generate();
+	//		else if (stmt->next == (Statement *)NULL)
+	//			GenerateLabel((int)stmt->label);
+	//	}
 }
 
 static int casevalcmp(const void *a, const void *b)
@@ -1768,14 +1851,16 @@ void Statement::GenerateSwitch()
 		}
 		else {
 			bf = st->casevals;
-			for (nn = bf[0]; nn >= 1; nn--) {
-				minv = min(bf[nn], minv);
-				maxv = max(bf[nn], maxv);
-				st->label = (int64_t *)curlab;
-				casetab[mm].label = curlab;
-				casetab[mm].val = bf[nn];
-				casetab[mm].pass = pass;
-				mm++;
+			if (bf) {
+				for (nn = bf[0]; nn >= 1; nn--) {
+					minv = min(bf[nn], minv);
+					maxv = max(bf[nn], maxv);
+					st->label = (int64_t*)curlab;
+					casetab[mm].label = curlab;
+					casetab[mm].val = bf[nn];
+					casetab[mm].pass = pass;
+					mm++;
+				}
 			}
 			curlab = nextlabel++;
 		}
@@ -2041,9 +2126,24 @@ void Statement::Generate()
 {
 	Operand *ap;
 	Statement *stmt;
+	SYM* sp;
+	ENODE* ep1;
 
 	for (stmt = this; stmt != NULL; stmt = stmt->next)
 	{
+		/*
+		for (ep1 = stmt->iexp; ep1; ep1 = ep1->p[2]) {
+			initstack();
+			ReleaseTempRegister(cg.GenerateExpression(ep1->p[3], am_all, 8));
+		}
+		*/
+		/*
+		for (sp = SYM::GetPtr(stmt->lst.GetHead()); sp; sp = sp->GetNextPtr()) {
+			if (sp->initexp) {
+				initstack();
+				ReleaseTempRegister(cg.GenerateExpression(sp->initexp, am_all, 8));
+			}
+		}*/
 		stmt->GenMixedSource();
 		switch (stmt->stype)
 		{
@@ -2132,6 +2232,12 @@ void Statement::Generate()
 			break;
 		case st_switch:
 			stmt->GenerateSwitch();
+			break;
+		case st_case:
+			stmt->GenerateCase();
+			break;
+		case st_default:
+			stmt->GenerateDoUntil();
 			break;
 		case st_empty:
 			break;
@@ -2486,31 +2592,130 @@ void Statement::ListCompoundVars()
 	}
 }
 
-void Statement::storeHexWhile(txtoStream& fs)
+void Statement::storeHexDo(txtoStream& fs, e_stmt st)
 {
-	fs.printf("while (");
-	if (exp)
-		exp->storeHex(fs);
-	fs.printf(") {\n");
+	fs.printf("%02X:", st);
 	if (s1)
 		s1->storeHex(fs);
-	fs.printf("}\n");
+	if (exp)
+		exp->storeHex(fs);
+	fs.printf(":\n");
+}
+
+void Statement::storeHexWhile(txtoStream& fs, e_stmt st)
+{
+	fs.printf("%02X:", st);
+	if (exp)
+		exp->storeHex(fs);
+	fs.printf(":\n");
+	if (s1)
+		s1->storeHex(fs);
+}
+
+void Statement::storeHexFor(txtoStream& fs)
+{
+	fs.printf("%02X:", st_for);
+	if (initExpr)
+		initExpr->storeHex(fs);
+	fs.printf(":");
+	if (exp)
+		exp->storeHex(fs);
+	fs.printf(":");
+	if (incrExpr)
+		incrExpr->storeHex(fs);
+	fs.printf(":");
+	if (s1)
+		s1->storeHex(fs);
+}
+
+void Statement::storeHexForever(txtoStream& fs)
+{
+	fs.printf("%02X:", st_forever);
+	if (s1)
+		s1->storeHex(fs);
+}
+
+void Statement::storeHexSwitch(txtoStream& fs)
+{
+	Statement* st;
+	int64_t* bf;
+	int nn;
+
+	fs.printf("%02X:", st_switch);
+	if (exp)
+		exp->storeHex(fs);
+	fs.printf(":");
+	for (st = s1; st != (Statement*)NULL; st = st->next)
+	{
+		if (st->s2) {
+			fs.printf("%02X:", st_default);
+			s2->storeHex(fs);
+		}
+		else {
+			fs.printf("%02X:", st_case);
+			bf = st->casevals;
+			if (bf) {
+				fs.printf("%02X:", bf[0]);
+				for (nn = bf[0]; nn >= 1; nn--) {
+					fs.printf("%02X", bf[nn]);
+					if (nn > 1)
+						fs.printf(",");
+					else
+						fs.printf(":");
+				}
+			}
+			if (s1)
+				s1->storeHex(fs);
+		}
+	}
+}
+
+void Statement::storeWhile(txtoStream& fs)
+{
+	fs.printf("while(");
+	if (exp)
+		exp->store(fs);
+	fs.printf(")\n");
+	if (s1)
+		s1->storeHex(fs);
 }
 
 void Statement::storeHexIf(txtoStream& fs)
 {
-	fs.printf("if (");
+	fs.printf("%02X:", st_if);
 	exp->storeHex(fs);
 	if (prediction >= 2)
 		fs.printf(";%d", (int)prediction);
-	fs.printf(")\n");
+	fs.printf(":\n");
 	s1->storeHex(fs);
 	if (s2) {
 		if (s2->kw == kw_else)
-			fs.printf(" else\n");
+			fs.printf("%02X:", st_else);
 		else if (s2->kw == kw_elsif) {
-			fs.printf(" elsif (");
+			fs.printf("%02X:", st_elsif);
 			s2->exp->storeHex(fs);
+			if (s2->prediction >= 2)
+				fs.printf(";%d", (int)s2->prediction);
+			fs.printf(":\n");
+		}
+		s2->storeHex(fs);
+	}
+}
+
+void Statement::storeIf(txtoStream& fs)
+{
+	fs.printf("if(");
+	exp->store(fs);
+	if (prediction >= 2)
+		fs.printf(";%d", (int)prediction);
+	fs.printf(")\n");
+	s1->store(fs);
+	if (s2) {
+		if (s2->kw == kw_else)
+			fs.printf("else\n");
+		else if (s2->kw == kw_elsif) {
+			fs.printf("elsif(");
+			s2->exp->store(fs);
 			if (s2->prediction >= 2)
 				fs.printf(";%d", (int)s2->prediction);
 			fs.printf(")\n");
@@ -2523,32 +2728,101 @@ void Statement::storeHexCompound(txtoStream& fs)
 {
 	Statement* sp;
 
+	fs.printf("%02X:", st_compound);
 	for (sp = s1; sp; sp = sp->next) {
 		sp->storeHex(fs);
 	}
 }
 
+void Statement::storeCompound(txtoStream& fs)
+{
+	Statement* sp;
+
+	for (sp = s1; sp; sp = sp->next) {
+		sp->store(fs);
+	}
+}
+
 void Statement::storeHex(txtoStream& fs)
 {
+	if (this == nullptr)
+		return;
 	switch (stype) {
 	case st_compound:
 		storeHexCompound(fs);
 		break;
+	case st_label:
+		fs.printf("%02X:", st_label);
+		fs.printf("%02X:", (int64_t)label);
+		fs.printf(";");
+		break;
+	case st_goto:
+		fs.printf("%02X:", st_goto);
+		fs.printf("%02X:", (int64_t)label);
+		fs.printf(";");
+		break;
+	case st_do:
+	case st_dowhile:
+	case st_dountil:
+	case st_doonce:
+		storeHexDo(fs, stype);
+		break;
 	case st_while:
-		storeHexWhile(fs);
+	case st_until:
+		storeHexWhile(fs, stype);
+		break;
+	case st_for:
+		storeHexFor(fs);
+		break;
+	case st_forever:
+		storeHexForever(fs);
+		break;
+	case st_break:
+	case st_continue:
+		fs.printf("%02X;", stype);
 		break;
 	case st_if:
 		storeHexIf(fs);
 		break;
 	case st_return:
-		fs.printf("ret(");
-		if (exp)
+		fs.printf("%02X:", st_return);
+		if (exp) {
+			fs.printf("%02X:", st_expr);
 			exp->storeHex(fs);
-		fs.printf(");\n");
+		}
+		fs.printf(";\n");
+		break;
+	case st_switch:
+		storeHexSwitch(fs);
 		break;
 	case st_expr:
+		fs.printf("%02X:", st_expr);
 		exp->storeHex(fs);
+		fs.printf(";\n");
 		break;
 	}
 }
 
+void Statement::store(txtoStream& fs)
+{
+	switch (stype) {
+	case st_compound:
+		storeCompound(fs);
+		break;
+	case st_while:
+		storeWhile(fs);
+		break;
+	case st_if:
+		storeIf(fs);
+		break;
+	case st_return:
+		fs.printf("return(");
+		if (exp)
+			exp->store(fs);
+		fs.printf(");\n");
+		break;
+	case st_expr:
+		exp->store(fs);
+		break;
+	}
+}

@@ -38,7 +38,7 @@ int token_sp = 0;
 int inComment = FALSE;
 int      my_errno[80];
 int      numerrs;
-char     inpline[520];
+char     inpline[100000];
 int             total_errors = 0;
 extern char     *lptr;          /* shared with preproc */
 extern std::ifstream *inclfile[10];  /* shared with preproc */
@@ -110,7 +110,7 @@ int getline(int listflag)
     }
     ++lineno;
 	memset(inpline, 0, sizeof(inpline));
-    ifs->getline(inpline,512);
+    ifs->getline(inpline,sizeof(inpline)-2);
 	strcat_s(inpline,sizeof(inpline),"\n");
 	rv = ifs->gcount()==0;
 	//printf("line:%.60s\r\n", inpline);
@@ -555,8 +555,8 @@ restart:        /* we come back here after comments */
   }
   else if(isidch(lastch)) {
 		getid();
-		if (lastch == '"' && lastid[0] == '_' && (lastid[1]=='B' || lastid[1]=='C' || lastid[1]=='H' || lastid[1]=='W'
-			|| lastid[1] == 'b' || lastid[1] == 'c' || lastid[1] == 'h' || lastid[1] == 'w')) {
+		if (lastch == '"' && lastid[0] == '_' && (lastid[1]=='B' || lastid[1]=='W' || lastid[1]=='T' || lastid[1]=='O'
+			|| lastid[1] == 'b' || lastid[1] == 'w' || lastid[1] == 't' || lastid[1] == 'o')) {
 			getch();
 			laststr[0] = toupper(lastid[1]);
 			for (i = 1; i < MAX_STRLEN; ++i) {
@@ -576,7 +576,7 @@ restart:        /* we come back here after comments */
 		}
 		else if (lastch == '"' && lastid[0]=='_' && lastid[1]=='I' && lastid[2]=='\0') {
 			getch();
-			laststr[0] = 'C';
+			laststr[0] = 'W';
 			for (i = 1; i < MAX_STRLEN; ++i) {
 				if (lastch == '\"')
 					break;
@@ -781,7 +781,7 @@ restart:        /* we come back here after comments */
                         break;
                 case '\"':
                         getch();
-												laststr[0] = 'C';
+												laststr[0] = 'W';
                         for(i = 1;i < MAX_STRLEN;++i) {
                                 if(lastch == '\"')
                                         break;

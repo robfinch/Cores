@@ -265,16 +265,18 @@ void Function::PeepOpt()
 		//currentFn->pl.Dump();
 		// Remove the link and unlink instructions if no references
 		// to BP.
-		hasSPReferences = (pl.CountSPReferences() != 0);
+		if (ru->isEmpty())
+			pl.RemoveRegsave();
+			hasSPReferences = (pl.CountSPReferences() != 0);
 		hasBPReferences = (pl.CountBPReferences() != 0);
 		hasGPReferences = (pl.CountGPReferences() != 0);
 
-//		if (!hasBPReferences)
-//			pl.RemoveLinkUnlink();
-//		if (IsLeaf && !hasSPReferences && !hasBPReferences)
-//			pl.RemoveStackCode();
-//		if (!hasSPReferences && !hasBPReferences)
-//			pl.RemoveReturnBlock();
+		if (!hasBPReferences)
+			pl.RemoveLinkUnlink();
+		if (IsLeaf && !hasSPReferences && !hasBPReferences)
+			pl.RemoveStackCode();
+		if (!hasSPReferences && !hasBPReferences)
+			pl.RemoveReturnBlock();
 		if (!hasGPReferences)
 			pl.RemoveGPLoad();
 		pl.Remove();

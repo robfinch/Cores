@@ -7,18 +7,31 @@
 //
 //	rtf64op.sv
 //
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
 //`define SIM   1'b1
@@ -143,12 +156,14 @@ parameter MEMORY0 = 6'd55;
 
 reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
 reg [AWID-1:0] pc, ipc, ipc2, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
-reg [AWID-1:0] dpc, rpc, expc, mpc, wpc;
-reg [3:0] dilen, rilen, eilen, milen;
+reg [AWID-1:0] dpc, rpc, expc, mpc, wpc, tpc, upc, vpc;
+reg [3:0] dilen, rilen, eilen, milen, wilen, tilen, uilen, vilen;
 reg illegal_insn, rillegal_insn, eillegal_insn, millegal_insn, willegal_insn;
-reg [63:0] iir, ir, rir, eir, mir, wir;
+reg [63:0] iir, ir, rir, eir, mir, wir, tir, uir, vir;
 reg [255:0] iri1, iri2, ici;
-reg ibrpred, dbrpred, rbrpred, ebrpred, mbrpred;
+reg ibrpred, dbrpred, rbrpred, ebrpred, mbrpred, wbrpred, tbrpred, ubrpred, vbrpred;
+reg e_bubble, m_bubble, w_bubble, t_bubble, u_bubble, v_bubble;
+reg [2:0] loop_mode;
 wire [7:0] opcode = ir[7:0];
 wire [7:0] ropcode = rir[7:0];
 wire [7:0] eopcode = eir[7:0];
@@ -159,12 +174,13 @@ wire [4:0] efunct5 = eir[30:26];
 wire [4:0] wfunct5 = wir[30:26];
 wire [2:0] mop = eir[12:10];
 wire [2:0] rm3 = eir[31:29];
-reg [6:0] Rd, Rd2;
-reg [6:0] rRd, rRd2;
-reg [6:0] eRd, eRd2;
-reg [6:0] mRd, mRd2;
-reg [6:0] wRd, wRd2;
-reg [1:0] Cd, Cs;
+reg [6:0] Rd;
+reg [6:0] rRd;
+reg [6:0] eRd;
+reg [6:0] mRd;
+reg [6:0] wRd;
+reg [6:0] tRd;
+reg [1:0] Cd, Cs, rCd, eCd, mCd, wCd, tCd, rCs;
 reg [6:0] Rs1, Rs2, Rs3;
 reg [6:0] rRs1, eRs1, rRs2, eRs2, mRs1, wRs1, rRs3;
 reg [4:0] Rdx, Rs1x, Rs2x, Rs3x;
@@ -178,8 +194,8 @@ reg [63:0] ia,ib,ic,id,imm,dimm;
 reg [63:0] ria,rib,ric,rid,rimm;
 reg [63:0] mia, wia, mid, mib, wib;
 reg [64:0] res;
-reg [63:0] mres, wres;
-reg [7:0] crres;
+reg [63:0] mres, wres, tres;
+reg [7:0] crres, mcrres, wcrres, tcrres;
 reg pc_reload;
 reg wrra, wrca;
 reg ewrra, ewrca;
@@ -194,6 +210,7 @@ reg rwrcrf;
 reg rwrcrf32;
 reg rwrra;
 reg rwrca;
+reg [3:0] ebubble_cnt;
 wire memmode, UserMode, SupervisorMode, HypervisorMode, MachineMode, InterruptMode, DebugMode;
 wire st_writeback = wstate==WRITEBACK || wstate==WRITEBACK2;
 wire st_ifetch2 = istate==IFETCH2;
@@ -328,13 +345,13 @@ wire [31:0] cds322 = cregfile[Rs2x];
 always @(posedge clk_g)
   if (wwrcrf && wstate==WRITEBACK2)
     case(Cd)
-    2'd0: cregfile[Rdx] <= {cd32[31:8],crres[7:0]};
-    2'd1: cregfile[Rdx] <= {cd32[31:16],crres[7:0],cd32[7:0]};
-    2'd2: cregfile[Rdx] <= {cd32[31:24],crres[7:0],cd32[15:0]};
-    2'd3: cregfile[Rdx] <= {crres[7:0],cd32[23:0]};
+    2'd0: cregfile[Rdx] <= {cd32[31:8],wcrres[7:0]};
+    2'd1: cregfile[Rdx] <= {cd32[31:16],wcrres[7:0],cd32[7:0]};
+    2'd2: cregfile[Rdx] <= {cd32[31:24],wcrres[7:0],cd32[15:0]};
+    2'd3: cregfile[Rdx] <= {wcrres[7:0],cd32[23:0]};
     endcase
   else if (wrcrf32 & st_writeback)
-    cregfile[Rdx] <= res[31:0];
+    cregfile[Rdx] <= wres[31:0];
 initial begin
   for (n = 0; n < 32; n = n + 1)
     cregfile[n] <= 32'h0;
@@ -342,6 +359,7 @@ end
 wire [7:0] cd = cd32 >> {Cs,3'b0};
 wire [7:0] cd2 = cds322 >> {Cs,3'b0};
 wire [7:0] cds = cds32 >> {Rs1[1:0],3'b0};
+reg [7:0] cdb;
 
 // CSRs
 reg [7:0] cause [0:7];
@@ -404,9 +422,6 @@ reg [AWID-1:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
-reg r_fltcmp, r_tst, r_set, r_cmp;
-reg r_ld, r_st;
-
 reg d_lea, d_cache, d_jsr, d_rts, d_push_reg;
 reg d_cmp,d_set,d_tst,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
 reg d_shiftr, d_st, d_ld, d_cbranch, d_bra, d_wha;
@@ -415,18 +430,55 @@ reg setto, getto, decto, getzl, popto;
 reg pushq, popq, peekq, statq; 
 reg d_exti, d_extr, d_extur, d_extui, d_depi, d_depr, d_depii, d_flipi, d_flipr;
 reg d_ffoi, d_ffor;
+reg d_loop_bust;
 
+reg r_fltcmp, r_tst, r_set, r_cmp;
+reg r_ld, r_st, r_jsr, r_rts;
 reg r_cbranch;
+reg r_exti, r_extr, r_extur, r_extui, r_depi, r_depr, r_depii, r_flipi, r_flipr;
+reg r_ffoi, r_ffor;
+reg r_loop_bust;
+
 reg e_cmp, e_set, e_tst, e_fltcmp;
-reg e_ld, e_st;
+reg e_ld, e_st, e_jsr, e_rts;
 reg e_cbranch;
+reg e_exti, e_extr, e_extur, e_extui, e_depi, e_depr, e_depii, e_flipi, e_flipr;
+reg e_ffoi, e_ffor;
+reg e_loop_bust;
+
 reg m_cmp, m_set, m_tst, m_fltcmp;
 reg m_ld, m_st;
 reg m_cbranch;
 reg w_cmp, w_set, w_tst, w_fltcmp;
+reg m_loop_bust;
+
+reg w_cbranch;
+reg w_loop_bust;
+
+reg t_cbranch;
+reg t_loop_bust;
+
+reg u_cbranch;
+reg u_loop_bust;
+
+wire cbranch_in_pipe = 
+  r_cbranch |
+  e_cbranch |
+  m_cbranch |
+  w_cbranch |
+  t_cbranch |
+  u_cbranch ;
+
+wire loop_bust =
+  r_loop_bust |
+  e_loop_bust |
+  m_loop_bust |
+  w_loop_bust |
+  t_loop_bust |
+  u_loop_bust ; 
 
 // Stall pipe if a memory op is taking place and the result needs to be forwarded.
-assign stall_idr_pipe = (e_ld | e_st) && ((rRs1==eRd) || (rRs2==eRd) || (rRs3==eRd) || (rRd==eRd));
+assign stall_idr_pipe = (e_ld | e_st | e_jsr | e_rts) && ((rRs1==eRd) || (rRs2==eRd) || (rRs3==eRd) || (rRd==eRd));
   
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -509,7 +561,7 @@ rtf64_TLB utlb (
   .xlaten_i(xlaten),
   .we_i(we_o),
   .ladr_i(ladr),
-  .iacc_i(icaccess),
+  .iacc_i(icaccess||(istate==IFETCH3a && (!maccess && !ack_i))),
   .iadr_i(iadr),
   .padr_o(adr_o), // ToDo: fix this for icache access
   .acr_o(tlbacr),
@@ -660,6 +712,7 @@ reg [5:0] br_hcnt;
 reg [5:0] br_rcnt;
 reg [63:0] br_history;
 wire [63:0] trace_dout;
+wire [9:0] trace_data_count;
 wire trace_full;
 wire trace_empty;
 wire trace_valid;
@@ -901,10 +954,10 @@ cntpop64reg ucpop1 (clk_g, 1'b1, ia, cntpopo);
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Shift / Bitfield
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-wire [128: 0] shlr = {ia,ir[27:24]==`ASLX ? cds[0] : 1'b0} << ib[5:0];
-wire [128:-1] shrr = {ir[27:24]==`LSRX ? cds[0] : 1'b0,ia,65'd0} >> ib[5:0];
-wire [128: 0] shli = {ia,ir[27:24]==`ASLXI  ? cds[0] : 1'b0} << imm[5:0];
-wire [128:-1] shri = {ir[27:24]==`LSRXI ? cds[0] : 1'b0,ia,65'd0} >> imm[5:0];
+wire [128: 0] shlr = {ia,eir[27:24]==`ASLX ? cds[0] : 1'b0} << ib[5:0];
+wire [128:-1] shrr = {eir[27:24]==`LSRX ? cds[0] : 1'b0,ia,65'd0} >> ib[5:0];
+wire [128: 0] shli = {ia,eir[27:24]==`ASLXI  ? cds[0] : 1'b0} << imm[5:0];
+wire [128:-1] shri = {eir[27:24]==`LSRXI ? cds[0] : 1'b0,ia,65'd0} >> imm[5:0];
 wire [63:0] bfo;
 
 bitfield ubf1
@@ -912,13 +965,13 @@ bitfield ubf1
   .clk(clk_g),
   .ce(1'b1),
   .ir(eir),
-  .d_i(d_exti|d_extui|d_flipi|d_depi|d_ffoi),
-  .d_ext(d_exti|d_extr),
-  .d_extu(d_extui|d_extur),
-  .d_flip(d_flipi|d_flipr),
-  .d_dep(d_depi|d_depr),
-  .d_depi(d_depii),
-  .d_ffo(d_ffoi|d_ffor),
+  .d_i(e_exti|e_extui|e_flipi|e_depi|e_ffoi),
+  .d_ext(e_exti|e_extr),
+  .d_extu(e_extui|e_extur),
+  .d_flip(e_flipi|e_flipr),
+  .d_dep(e_depi|e_depr),
+  .d_depi(e_depii),
+  .d_ffo(e_ffoi|e_ffor),
   .a(ia),
   .b(ib),
   .c(ic),
@@ -1207,6 +1260,11 @@ begin
   tExecute();
   tMemory();
   tWriteback();
+
+  // Trailer stages, used to support loop mode
+  tTStage();
+  tUStage();
+  tVStage();
   
   // Invalidate portions of pipeline due to branch or exceptions.
   tInvalidate();
@@ -1223,7 +1281,6 @@ begin
 	gcie <= 32'h0;
 	wrirf <= 1'b0;
 	wrfrf <= 1'b0;
-	wrcrf <= 1'b0;
 	wrcrf32 <= 1'b0;
 	// Reset bus
 	vpa_o <= LOW;
@@ -1231,7 +1288,6 @@ begin
   stb_o <= LOW;
   we_o <= LOW;
   sel_o <= 4'h0;
-  adr_o <= 32'd0;
   dat_o <= 128'd0;
 	sr_o <= 1'b0;
 	cr_o <= 1'b0;
@@ -1280,6 +1336,7 @@ begin
 	icaccess <= FALSE;
 	maccess <= FALSE;
 	rd_ci <= FALSE;
+	loop_mode <= 3'd0;
   end
 end
 endtask
@@ -1371,7 +1428,6 @@ IFETCH1:
 	  Rs1x <= Rs1x1;
 	  Rs2x <= Rs2x1;
 	  Rs3x <= Rs3x1;
-		instfetch <= instfetch + 2'd1;
 		ipc <= pc;
 		wrirf <= 1'b0;
 		wrfrf <= 1'b0;
@@ -1452,7 +1508,6 @@ IFETCH2:
     igoto (IFETCH3);
 `endif
     end
-    wrcrf <= 1'b0;
   end
 IFETCH2a:
   begin
@@ -1557,7 +1612,6 @@ IFETCH3a:
 `ifdef CPU_B32
 		sel_o <= 4'hF;
 `endif
-    adr_o <= iadr;
     igoto (IFETCH4);
   end
   else
@@ -1680,10 +1734,7 @@ IFETCH_INCR:
   end
 IFETCH_WAIT:
   if (advance_idr_pipe) begin
-    ir <= iir;
-    dpc <= ipc2;
-    dilen <= ilen;
-    dbrpred <= ibrpred;
+		instfetch <= instfetch + 2'd1;
     if (wmod_pc)
       pc <= wnext_pc;
     else if (mmod_pc)
@@ -1696,8 +1747,24 @@ IFETCH_WAIT:
       pc <= dnext_pc;
     else
       pc <= pc + ilen;
-    ifetch_done <= FALSE;
-    igoto (IFETCH1);
+    case(loop_mode)
+    3'd0: begin ir <= iir; dpc <= ipc2; dilen <= ilen; dbrpred <= ibrpred; end // loop mode not active
+    3'd1: begin ir <= rir; dpc <= rpc; dilen <= rilen; dbrpred <= rbrpred; end
+    3'd2: begin ir <= eir; dpc <= expc; dilen <= eilen; dbrpred <= ebrpred; end
+    3'd3: begin ir <= mir; dpc <= mpc; dilen <= milen; dbrpred <= mbrpred; end
+    3'd4: begin ir <= wir; dpc <= wpc; dilen <= wilen; dbrpred <= wbrpred; end
+    3'd5: begin ir <= tir; dpc <= tpc; dilen <= tilen; dbrpred <= tbrpred; end
+    3'd6: begin ir <= uir; dpc <= upc; dilen <= uilen; dbrpred <= ubrpred; end
+    3'd7: begin ir <= vir; dpc <= vpc; dilen <= vilen; dbrpred <= vbrpred; end
+    endcase
+    if (|loop_mode) begin
+      ifetch_done <= TRUE;
+      igoto(IFETCH_WAIT);
+    end
+    else begin
+      ifetch_done <= FALSE;
+      igoto (IFETCH1);
+    end
   end
 endcase
 end
@@ -1713,10 +1780,14 @@ begin
 if (rst_i) begin
   dpc <= RSTPC;
   illegal_insn <= FALSE;
-  rRs1 <= 5'd0;
-  rRs2 <= 5'd0;
-  rRs3 <= 5'd0;
-  rRd <= 5'd0;
+  rRs1 <= 7'd0;
+  rRs2 <= 7'd0;
+  rRs3 <= 7'd0;
+  rRd <= 7'd0;
+  d_cbranch <= FALSE;
+  r_jsr <= FALSE;
+  r_rts <= FALSE;
+  dbrpred <= FALSE;
 	dstate <= DECODE_WAIT;
 	decode_done <= TRUE;
 end
@@ -1731,8 +1802,8 @@ EXPAND_CI:
 DECODE:
   begin
     illegal_insn <= TRUE;
-    decode_done <= TRUE;
     wrirf <= 1'b0;
+    wrcrf <= FALSE;
     wrcrf32 <= 1'b0;
     wrra <= 1'b0;
     dmod_pc <= FALSE;
@@ -1770,6 +1841,7 @@ DECODE:
     d_jsr <= FALSE;
     d_rts <= FALSE;
     d_push_reg <= FALSE;
+    d_loop_bust <= FALSE;
     rd_ci <= FALSE;
     /* Decode is faster than the slowest stage meaning it'll always transition
        to the DECODE_WAIT state. Save some hardware by not checking for
@@ -1792,7 +1864,6 @@ DECODE:
       dgoto(DECODE_WAIT);
     end
     Rd <= 7'd0;
-    Rd2 <= 7'd0;
     Rs1 <= {2'b00,ir[17:13]};
     Rs2 <= {2'b00,ir[22:18]};
     Rs3 <= {2'b00,ir[27:23]};
@@ -2070,8 +2141,8 @@ DECODE:
     `DEPI: begin Rd <={2'b00, ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depii <= TRUE; end
     `EXT: begin Rd <= {2'b00,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_exti <= ~ir[30]; d_extui <= ir[30]; end
     `FFO: begin Rd <= {2'b00,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_ffoi <= ~ir[30]; d_ffor <= ir[30]; end
-    `ADDUI,`ORUI,`AUIIP: begin Rd <= {2'b00,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],13'd0}; illegal_insn <= 1'b0; end
-    `ANDUI: begin Rd <= {2'b00,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],{13{1'd1}}}; illegal_insn <= 1'b0; end
+    `ADDUI,`ORUI,`AUIIP: begin Rd <= {2'b00,ir[12:8]}; Rs1 <= {2'b00,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],13'd0}; illegal_insn <= 1'b0; end
+    `ANDUI: begin Rd <= {2'b00,ir[12:8]}; Rs1 <= {2'b00,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],{13{1'd1}}}; illegal_insn <= 1'b0; end
     `CSR: if (omode >= ir[35:33]) begin Rd <= {2'b00,ir[12:8]}; wrirf <= 1'b1; dimm <= ir[17:13]; illegal_insn <= 1'b0; end
     `MOV:
       begin
@@ -2103,6 +2174,7 @@ DECODE:
         illegal_insn <= 1'b0;
         if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
           dException(`FLT_BT, dpc);
+        d_loop_bust <= TRUE;
       end
     `JAL:
       begin
@@ -2114,6 +2186,7 @@ DECODE:
         illegal_insn <= 1'b0;
         if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
           dException(`FLT_BT, dpc);
+        d_loop_bust <= TRUE;
       end
     `JSR:
       begin
@@ -2124,6 +2197,7 @@ DECODE:
         Rs1 <= 7'd31;
         wrirf <= 1'b1;
         d_wha <= TRUE;
+        d_loop_bust <= TRUE;
         illegal_insn <= 1'b0;
 //        if (dpc=={dpc[AWID-1:24],ir[31:10],2'b00})
 //          tException(`FLT_BT, dpc);
@@ -2135,6 +2209,7 @@ DECODE:
         Rs1 <= 7'd31;
         wrirf <= 1'b1;
         d_wha <= TRUE;
+        d_loop_bust <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTL:
@@ -2144,6 +2219,7 @@ DECODE:
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
         d_wha <= TRUE;
+        d_loop_bust <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTS:
@@ -2154,6 +2230,7 @@ DECODE:
         wrirf <= 1'b1;
         imm <= {{51{ir[31]}},ir[30:21],3'b00};
         d_wha <= TRUE;
+        d_loop_bust <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTX:
@@ -2164,6 +2241,7 @@ DECODE:
         wrirf <= 1'b1;
         imm <= 64'd8;
         d_wha <= TRUE;
+        d_loop_bust <= TRUE;
         illegal_insn <= 1'b0;
       end
     `RTE:
@@ -2178,31 +2256,35 @@ DECODE:
 			  Rs3x1 <= rsStack[9:5];
 				dnext_pc <= epc[rsStack[4:0]];
 				d_wha <= TRUE;
+        d_loop_bust <= TRUE;
 				illegal_insn <= 1'b0;
       end
     `BEQI,`BBC,`BBS:
       begin
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
-        if (dbrpred) begin
+        if (dbrpred & ~|loop_mode) begin
           dmod_pc <= TRUE;
           dnext_pc <= dpc + {{52{ir[31]}},ir[31:21]};
+          tLoop(dpc + {{52{ir[31]}},ir[31:21]});
         end
       end
     `BT:
       begin
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
-        if (dbrpred) begin
+        if (dbrpred & ~|loop_mode) begin
           dmod_pc <= TRUE;
           dnext_pc <= dpc + {{58{ir[15]}},ir[15:10]};
+          tLoop(dpc + {{58{ir[15]}},ir[15:10]});
         end
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
       begin
-        if (dbrpred) begin
+        if (dbrpred & ~|loop_mode) begin
           dmod_pc <= TRUE;
           dnext_pc <= dpc + {{50{ir[23]}},ir[23:10]};
+          tLoop(dpc + {{50{ir[23]}},ir[23:10]});
         end
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
@@ -2210,15 +2292,19 @@ DECODE:
     `BRA:
       begin
         d_bra <= TRUE;
-        dmod_pc <= TRUE;
-        dnext_pc <= dpc + {{50{ir[23]}},ir[23:10]};
+        if (~|loop_mode) begin
+          dmod_pc <= TRUE;
+          dnext_pc <= dpc + {{50{ir[23]}},ir[23:10]};
+          tLoop(dpc + {{50{ir[23]}},ir[23:10]});
+        end
         illegal_insn <= 1'b0;
       end
     `BEQZ,`BNEZ:
       begin
-        if (dbrpred) begin
+        if (dbrpred & ~|loop_mode) begin
           dmod_pc <= TRUE;
           dnext_pc <= dpc + {{50{ir[23]}},ir[23:10]};
+          tLoop(dpc + {{50{ir[23]}},ir[23:10]});
         end
         Rd <= {5'b00101,ir[9:8]};
         d_cbranch <= TRUE;
@@ -2374,6 +2460,9 @@ DECODE:
 		`FMA,`FMS,`FNMA,`FNMS:
 			begin
 				Rd <= {2'b01,ir[12:8]};
+				Rs1[6:5] <= 2'b01;
+				Rs2[6:5] <= 2'b01;
+				Rs3[6:5] <= 2'b01;
 				Rdx <= 5'd1;
 				Rs1x <= 5'd1;
 				Rs2x <= 5'd1;
@@ -2384,14 +2473,20 @@ DECODE:
 		`FLT2:
 			begin
 				Rd <= {2'b01,ir[12:8]};
+				Rs1[6:5] <= 2'b01;
+				Rs2[6:5] <= 2'b01;
 				case(fltfunct5)
 				5'd20,5'd24,5'd28:
 				  begin
+				    Rd[6:5] <= 2'b00;
 				    Rdx <= Rdx1;
 				    wrirf <= 1'b1;
 				  end
 				`FADD,`FSUB,`FMUL,`FDIV:
-				  illegal_insn <= FALSE;
+				  begin
+				    wrirf <= TRUE;
+				    illegal_insn <= FALSE;
+				  end
 				`FSEQ,`FSLT,`FSLE,`FCMP:  begin Cd <= ir[9:8]; d_fltcmp <= 1'b1; wrcrf <= 1'b1; illegal_insn <= FALSE; end
 				default:
 				  begin
@@ -2406,6 +2501,9 @@ DECODE:
 		`PMA,`PMS,`PNMA,`PNMS:
 			begin
 				Rd <= {2'b10,ir[12:8]};
+				Rs1[6:5] <= 2'b10;
+				Rs2[6:5] <= 2'b10;
+				Rs3[6:5] <= 2'b10;
 				Rdx <= 5'd2;
 				Rs1x <= 5'd2;
 				Rs2x <= 5'd2;
@@ -2416,6 +2514,8 @@ DECODE:
 		`PST2:
 			begin
 				Rd <= {2'b10,ir[12:8]};
+				Rs1[6:5] <= 2'b10;
+				Rs2[6:5] <= 2'b10;
 				case(fltfunct5)
 				5'd20,5'd24,5'd28:
 				  begin
@@ -2423,7 +2523,10 @@ DECODE:
 				    wrirf <= 1'b1;
 				  end
 				`PADD,`PSUB,`PMUL,`PDIV:
-				  illegal_insn <= FALSE;
+				  begin
+				    wrirf <= TRUE;
+				    illegal_insn <= FALSE;
+				  end
 				`PSEQ,`PSLT,`PSLE:  begin 
 				  illegal_insn <= FALSE;
 				  Rd <= {5'b11100,ir[9:8]};
@@ -2435,6 +2538,7 @@ DECODE:
           end
 			  endcase
 			end
+	  default:  ;
     endcase
   end
 DECODE_WAIT:
@@ -2444,8 +2548,9 @@ DECODE_WAIT:
     rRs2 <= Rs2;
     rRs3 <= Rs3;
     rRd <= Rd;
-    rRd2 <= Rd2;
     rRdx <= Rdx;
+    rCs <= Cs;
+    rCd <= Cd;
     rir <= ir;
     rpc <= dpc;
     rilen <= dilen;
@@ -2462,11 +2567,29 @@ DECODE_WAIT:
     r_st <= d_st;
     rbrpred <= dbrpred;
     r_cbranch <= d_cbranch;
+    r_jsr <= d_jsr;
+    r_rts <= d_rts;
+    rnext_pc <= dnext_pc;
+    
+    r_exti <= d_exti;
+    r_extr <= d_extr;
+    r_extui <= d_extui;
+    r_extur <= d_extur;
+    r_depi <= d_depi;
+    r_depr <= d_depr;
+    r_depii <= d_depii;
+    r_flipi <= d_flipi;
+    r_flipr <= d_flipr;
+    r_ffoi <= d_ffoi;
+    r_ffor <= d_ffor;
+    r_loop_bust <= d_loop_bust;
+
     rillegal_insn <= illegal_insn;
     dmod_pc <= FALSE;
     decode_done <= FALSE;
     dgoto (DECODE);
   end
+default: ;
 endcase
 end
 endtask
@@ -2480,8 +2603,13 @@ if (rst_i) begin
 	rstate <= REGFETCH_WAIT;
 	regfetch_done <= TRUE;
   rpc <= RSTPC;
+  r_cbranch <= FALSE;
   e_ld <= FALSE;
   e_st <= FALSE;
+  e_jsr <= FALSE;
+  e_rts <= FALSE;
+  ebubble_cnt <= 4'd0;
+  e_bubble <= FALSE;
   eRd <= 5'd0;
 end
 else
@@ -2489,6 +2617,7 @@ case(rstate)
 // Need a state to read Rd from block ram.
 REGFETCH1:
   begin
+    e_bubble <= FALSE;
     rmod_pc <= FALSE;
     rgoto (REGFETCH2);
   end
@@ -2504,20 +2633,22 @@ REGFETCH2:
       begin
         rmod_pc <= TRUE;
         case(rir[9:8])
-        2'b00:  rnext_pc <= {rpc[AWID-1:24],ir[31:10],2'b00};
-        2'b01:  rnext_pc <= rpc + {{34{ir[39]}},ir[39:10]};
-        2'b10:  rnext_pc <= {rpc[AWID-1:24],ir[31:10],2'b00} + cao;
-        2'b11:  rnext_pc <= rpc + {{34{ir[39]}},ir[39:10]};
+        2'b00:  rnext_pc <= {rpc[AWID-1:24],rir[31:10],2'b00};
+        2'b01:  rnext_pc <= rpc + {{34{rir[39]}},rir[39:10]};
+        2'b10:  rnext_pc <= {rpc[AWID-1:24],rir[31:10],2'b00} + cao;
+        2'b11:  rnext_pc <= rpc + {{34{rir[39]}},rir[39:10]};
         endcase
       end
     `JSR18:
       begin
         rmod_pc <= TRUE;
-        rnext_pc <= rpc + {{48{ir[23]}},ir[23:8]};
+        rnext_pc <= rpc + {{48{rir[23]}},rir[23:8]};
       end
     default:  ;
     endcase
-    rgoto (REGFETCH3);
+    ret_pc <= rao;
+    regfetch_done <= TRUE;
+    rgoto (REGFETCH_WAIT);
   end
 REGFETCH3:
   begin
@@ -2540,6 +2671,8 @@ REGFETCH_WAIT:
         ia <= mres;
       else if (rRs1==wRd)
         ia <= wres;
+      else if (rRs1==tRd)
+        ia <= tres;
       else
         ia <= irfoRs1;
 
@@ -2551,6 +2684,8 @@ REGFETCH_WAIT:
         ib <= mres;
       else if (rRs2==wRd)
         ib <= wres;
+      else if (rRs2==tRd)
+        ib <= tres;
       else
         ib <= irfoRs2;
 
@@ -2562,10 +2697,12 @@ REGFETCH_WAIT:
         ic <= mres;
       else if (rRs3==wRd)
         ic <= wres;
+      else if (rRs3==tRd)
+        ic <= tres;
       else
         ic <= irfoRs3;
 
-      if (d_jsr)
+      if (r_jsr)
         id <= rpc + rilen; // pc is addressing next instruction
       else if (rRd[4:0]==5'd0 && rRd[6:5]!=2'b11)
         id <= 64'd0;
@@ -2575,6 +2712,8 @@ REGFETCH_WAIT:
         id <= mres;
       else if (rRd==wRd)
         id <= wres;
+      else if (rRd==tRd)
+        id <= tres;
       else
         casez(rRd)
         7'b110000?: id <= rao;
@@ -2584,14 +2723,26 @@ REGFETCH_WAIT:
         7'b1111101: id <= cds322;
         default:  id <= irfoRd;
         endcase
+
+      if (rCs==eCd)
+        cdb <= crres;
+      else if (rCs==mCd)
+        cdb <= mcrres;
+      else if (rCs==wCd)
+        cdb <= wcrres;
+      else if (rCs==tCd)
+        cdb <= tcrres;
+      else
+        cdb <= cd;
+
       eir <= rir;
       eilen <= rilen;
       expc <= rpc;
       eRs1 <= rRs1;
       eRs2 <= rRs2;
       eRd <= rRd;
-      eRd2 <= rRd2;
       eRdx <= rRdx;
+      eCd <= rCd;
       eillegal_insn <= rillegal_insn;
       ewrirf <= rwrirf;
       ewrcrf <= rwrcrf;
@@ -2604,7 +2755,23 @@ REGFETCH_WAIT:
   		e_fltcmp <= r_fltcmp;
       e_ld <= r_ld;
       e_st <= r_st;
+      e_jsr <= r_jsr;
+      e_rts <= r_rts;
       e_cbranch <= r_cbranch;
+      e_loop_bust <= r_loop_bust;
+
+      e_exti <= r_exti;
+      e_extr <= r_extr;
+      e_extui <= r_extui;
+      e_extur <= r_extur;
+      e_depi <= r_depi;
+      e_depr <= r_depr;
+      e_depii <= r_depii;
+      e_flipi <= r_flipi;
+      e_flipr <= r_flipr;
+      e_ffoi <= r_ffoi;
+      e_ffor <= r_ffor;
+      
       ebrpred <= rbrpred;
       rmod_pc <= FALSE;
       regfetch_done <= FALSE;
@@ -2616,11 +2783,14 @@ REGFETCH_WAIT:
       ic <= 64'd0;
       id <= 64'd0;
       eir <= `NOP_INSN;
+      ebubble_cnt <= ebubble_cnt + 1'b1;
+      e_bubble <= TRUE;
       eilen <= eilen;
       expc <= expc;
-      eRs1 <= 5'd0;
-      eRs2 <= 5'd0;
-      eRd <= 5'd0;
+      eRs1 <= 7'd0;
+      eRs2 <= 7'd0;
+      eRd <= 7'd0;
+      eCd <= 2'b00;
       eillegal_insn <= FALSE;
       ewrirf <= FALSE;
       ewrcrf <= FALSE;
@@ -2633,8 +2803,22 @@ REGFETCH_WAIT:
   		e_fltcmp <= FALSE;
       e_ld <= FALSE;
       e_st <= FALSE;
+      e_jsr <= FALSE;
+      e_rts <= FALSE;
       e_cbranch <= FALSE;
+      e_exti <= FALSE;
+      e_extr <= FALSE;
+      e_extui <= FALSE;
+      e_extur <= FALSE;
+      e_depi <= FALSE;
+      e_depr <= FALSE;
+      e_depii <= FALSE;
+      e_flipi <= FALSE;
+      e_flipr <= FALSE;
+      e_ffoi <= FALSE;
+      e_ffor <= FALSE;
       ebrpred <= 1'b0;
+      enext_pc <= rnext_pc;
     end
   end
 endcase
@@ -2650,8 +2834,11 @@ if (rst_i) begin
 	estate <= EXECUTE_WAIT;
 	execute_done <= TRUE;
   expc <= RSTPC;
+  e_cbranch <= FALSE;
   mRd <= 5'd0;
+  m_bubble <= FALSE;
   res <= 64'd0;
+  crres <= 8'h00;
 end
 else
 case(estate)
@@ -2786,47 +2973,47 @@ EXECUTE:
                 end
               `CMP_AND:
                 begin
-                  crres[0] <= cd && ia!=64'd0;
-                  crres[1] <= cd && ia==64'd0;
+                  crres[0] <= cdb[0] && ia!=64'd0;
+                  crres[1] <= cdb[1] && ia==64'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ^ia;
-                  crres[5] <= cd & ia[0];
+                  crres[4] <= cdb[4] & ^ia;
+                  crres[5] <= cdb[5] & ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ia[63];
+                  crres[7] <= cdb[7] & ia[63];
                 end
               `CMP_OR:
                 begin
-                  crres[0] <= cd || ia!=64'd0;
-                  crres[1] <= cd || ia==64'd0;
+                  crres[0] <= cdb[0] || ia!=64'd0;
+                  crres[1] <= cdb[1] || ia==64'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ^ia;
-                  crres[5] <= cd | ia[0];
+                  crres[4] <= cdb[4] | ^ia;
+                  crres[5] <= cdb[5] | ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ia[63];
+                  crres[7] <= cdb[7] | ia[63];
                 end
               `CMP_ANDCM:
                 begin
-                  crres[0] <= cd && !(ia!=64'd0);
-                  crres[1] <= cd && !(ia==64'd0);
+                  crres[0] <= cdb[0] && !(ia!=64'd0);
+                  crres[1] <= cdb[1] && !(ia==64'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ~^ia;
-                  crres[5] <= cd & ~ia[0];
+                  crres[4] <= cdb[4] & ~^ia;
+                  crres[5] <= cdb[5] & ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ~ia[63];
+                  crres[7] <= cdb[7] & ~ia[63];
                 end
               `CMP_ORCM:
                 begin
-                  crres[0] <= cd || !(ia!=64'd0);
-                  crres[1] <= cd || !(ia==64'd0);
+                  crres[0] <= cdb[0] || !(ia!=64'd0);
+                  crres[1] <= cdb[1] || !(ia==64'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ~^ia;
-                  crres[5] <= cd | ~ia[0];
+                  crres[4] <= cdb[4] | ~^ia;
+                  crres[5] <= cdb[5] | ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ~ia[63];
+                  crres[7] <= cdb[7] | ~ia[63];
                 end
               default:  ;
               endcase
@@ -2845,47 +3032,47 @@ EXECUTE:
                 end
               `CMP_AND:
                 begin
-                  crres[0] <= cd && ia[31:0]!=32'd0;
-                  crres[1] <= cd && ia[31:0]==32'd0;
+                  crres[0] <= cdb[0] && ia[31:0]!=32'd0;
+                  crres[1] <= cdb[1] && ia[31:0]==32'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ^ia[31:0];
-                  crres[5] <= cd & ia[0];
+                  crres[4] <= cdb[4] & ^ia[31:0];
+                  crres[5] <= cdb[5] & ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ia[31];
+                  crres[7] <= cdb[7] & ia[31];
                 end
               `CMP_OR:
                 begin
-                  crres[0] <= cd || ia[31:0]!=32'd0;
-                  crres[1] <= cd || ia[31:0]==32'd0;
+                  crres[0] <= cdb[0] || ia[31:0]!=32'd0;
+                  crres[1] <= cdb[1] || ia[31:0]==32'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ^ia[31:0];
-                  crres[5] <= cd | ia[0];
+                  crres[4] <= cdb[4] | ^ia[31:0];
+                  crres[5] <= cdb[5] | ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ia[31];
+                  crres[7] <= cdb[7] | ia[31];
                 end
               `CMP_ANDCM:
                 begin
-                  crres[0] <= cd && !(ia[31:0]!=32'd0);
-                  crres[1] <= cd && !(ia[31:0]==32'd0);
+                  crres[0] <= cdb[0] && !(ia[31:0]!=32'd0);
+                  crres[1] <= cdb[1] && !(ia[31:0]==32'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ~^ia[31:0];
-                  crres[5] <= cd & ~ia[0];
+                  crres[4] <= cdb[4] & ~^ia[31:0];
+                  crres[5] <= cdb[5] & ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ~ia[31];
+                  crres[7] <= cdb[7] & ~ia[31];
                 end
               `CMP_ORCM:
                 begin
-                  crres[0] <= cd || !(ia[31:0]!=32'd0);
-                  crres[1] <= cd || !(ia[31:0]==32'd0);
+                  crres[0] <= cdb[0] || !(ia[31:0]!=32'd0);
+                  crres[1] <= cdb[1] || !(ia[31:0]==32'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ~^ia[31:0];
-                  crres[5] <= cd | ~ia[0];
+                  crres[4] <= cdb[4] | ~^ia[31:0];
+                  crres[5] <= cdb[5] | ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ~ia[31];
+                  crres[7] <= cdb[7] | ~ia[31];
                 end
               default:  ;
               endcase
@@ -2904,47 +3091,47 @@ EXECUTE:
                 end
               `CMP_AND:
                 begin
-                  crres[0] <= cd && ia[15:0]!=16'd0;
-                  crres[1] <= cd && ia[15:0]==16'd0;
+                  crres[0] <= cdb[0] && ia[15:0]!=16'd0;
+                  crres[1] <= cdb[1] && ia[15:0]==16'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ^ia[15:0];
-                  crres[5] <= cd & ia[0];
+                  crres[4] <= cdb[4] & ^ia[15:0];
+                  crres[5] <= cdb[5] & ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ia[15];
+                  crres[7] <= cdb[7] & ia[15];
                 end
               `CMP_OR:
                 begin
-                  crres[0] <= cd || ia[15:0]!=16'd0;
-                  crres[1] <= cd || ia[15:0]==16'd0;
+                  crres[0] <= cdb[0] || ia[15:0]!=16'd0;
+                  crres[1] <= cdb[1] || ia[15:0]==16'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ^ia[15:0];
-                  crres[5] <= cd | ia[0];
+                  crres[4] <= cdb[4] | ^ia[15:0];
+                  crres[5] <= cdb[5] | ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ia[15];
+                  crres[7] <= cdb[7] | ia[15];
                 end
               `CMP_ANDCM:
                 begin
-                  crres[0] <= cd && !(ia[15:0]!=16'd0);
-                  crres[1] <= cd && !(ia[15:0]==16'd0);
+                  crres[0] <= cdb[0] && !(ia[15:0]!=16'd0);
+                  crres[1] <= cdb[1] && !(ia[15:0]==16'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ~^ia[15:0];
-                  crres[5] <= cd & ~ia[0];
+                  crres[4] <= cdb[4] & ~^ia[15:0];
+                  crres[5] <= cdb[5] & ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ~ia[15];
+                  crres[7] <= cdb[7] & ~ia[15];
                 end
               `CMP_ORCM:
                 begin
-                  crres[0] <= cd || !(ia[15:0]!=16'd0);
-                  crres[1] <= cd || !(ia[15:0]==16'd0);
+                  crres[0] <= cdb[0] || !(ia[15:0]!=16'd0);
+                  crres[1] <= cdb[1] || !(ia[15:0]==16'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ~^ia[15:0];
-                  crres[5] <= cd | ~ia[0];
+                  crres[4] <= cdb[4] | ~^ia[15:0];
+                  crres[5] <= cdb[5] | ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ~ia[15];
+                  crres[7] <= cdb[7] | ~ia[15];
                 end
               default:  ;
               endcase
@@ -2963,47 +3150,47 @@ EXECUTE:
                 end
               `CMP_AND:
                 begin
-                  crres[0] <= cd && ia[7:0]!=8'd0;
-                  crres[1] <= cd && ia[7:0]==8'd0;
+                  crres[0] <= cdb[0] && ia[7:0]!=8'd0;
+                  crres[1] <= cdb[1] && ia[7:0]==8'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ^ia[7:0];
-                  crres[5] <= cd & ia[0];
+                  crres[4] <= cdb[4] & ^ia[7:0];
+                  crres[5] <= cdb[5] & ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ia[7];
+                  crres[7] <= cdb[7] & ia[7];
                 end
               `CMP_OR:
                 begin
-                  crres[0] <= cd || ia[7:0]!=8'd0;
-                  crres[1] <= cd || ia[7:0]==8'd0;
+                  crres[0] <= cdb[0] || ia[7:0]!=8'd0;
+                  crres[1] <= cdb[1] || ia[7:0]==8'd0;
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ^ia[7:0];
-                  crres[5] <= cd | ia[0];
+                  crres[4] <= cdb[4] | ^ia[7:0];
+                  crres[5] <= cdb[5] | ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ia[7];
+                  crres[7] <= cdb[7] | ia[7];
                 end
               `CMP_ANDCM:
                 begin
-                  crres[0] <= cd && !(ia[7:0]!=8'd0);
-                  crres[1] <= cd && !(ia[7:0]==8'd0);
+                  crres[0] <= cdb[0] && !(ia[7:0]!=8'd0);
+                  crres[1] <= cdb[1] && !(ia[7:0]==8'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd & ~^ia[7:0];
-                  crres[5] <= cd & ~ia[0];
+                  crres[4] <= cdb[4] & ~^ia[7:0];
+                  crres[5] <= cdb[5] & ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd & ~ia[7];
+                  crres[7] <= cdb[7] & ~ia[7];
                 end
               `CMP_ORCM:
                 begin
-                  crres[0] <= cd || !(ia[7:0]!=8'd0);
-                  crres[1] <= cd || !(ia[7:0]==8'd0);
+                  crres[0] <= cdb[0] || !(ia[7:0]!=8'd0);
+                  crres[1] <= cdb[1] || !(ia[7:0]==8'd0);
                   crres[2] <= 1'b0;
                   crres[3] <= 1'b0;
-                  crres[4] <= cd | ~^ia[7:0];
-                  crres[5] <= cd | ~ia[0];
+                  crres[4] <= cdb[4] | ~^ia[7:0];
+                  crres[5] <= cdb[5] | ~ia[0];
                   crres[6] <= 1'b0;
-                  crres[7] <= cd | ~ia[7];
+                  crres[7] <= cdb[7] | ~ia[7];
                 end
               default:  ;
               endcase
@@ -3237,7 +3424,7 @@ EXECUTE:
         res <= id + imm;
       end
     `ANDUI: res <= id & imm;
-    `ORUI: res <= id & imm;
+    `ORUI: res <= id | imm;
     `AUIIP: res <= dpc + imm;
     `CSR:
       begin
@@ -3288,11 +3475,17 @@ EXECUTE:
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,
     `BLEU,`BGTU,`BOD,`BPS,`BEQZ,`BNEZ,`BRA:
-      brdat <= {56'd0,cd};
+      begin
+        brdat <= {56'd0,cdb};
+      end
     `BEQI,`BBC,`BBS:
-      brdat <= id;
+      begin
+        brdat <= id;
+      end
     `BT:
-      brdat <= {56'd0,cd};
+      begin
+        brdat <= {56'd0,cdb};
+      end
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3415,7 +3608,7 @@ EXECUTE:
 		`FLT2:	// Float
 			case(efltfunct5)
 			`FLT1:
-			  case(eRs2)
+			  case(eRs2[4:0])
   	    `FMOV:  begin execute_done <= FALSE; mathCnt <= 8'd00; estate <= FLOAT; end	// FMOV
   	    `FTOI:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
   	    `ITOF:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
@@ -3460,7 +3653,7 @@ EXECUTE:
 		`PST2:	// Posit
 			case(efltfunct5)
 			`PST1:
-			  case(eRs2)
+			  case(eRs2[4:0])
   	    `PTOI:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
   	    `ITOP:  begin execute_done <= FALSE; mathCnt <= 8'd03; estate <= FLOAT; end
 //			`PST1:
@@ -3670,46 +3863,46 @@ FLOAT:
 			      `CMP_AND:
 			        begin
     			      crres[0] <= 1'b0;
-    			      crres[1] <= cd[1] & fcmp_o[0] & ~cmpnan;
+    			      crres[1] <= cdb[1] & fcmp_o[0] & ~cmpnan;
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & finf;
-    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+    			      crres[6] <= cdb[6] & finf;
+    			      crres[7] <= cdb[7] & fcmp_o[1] & ~cmpnan;
 			        end
 			      `CMP_OR:
 			        begin
-    			      crres[0] <= cd[0];
-    			      crres[1] <= cd[1] | (fcmp_o[0] & ~cmpnan);
+    			      crres[0] <= cdb[0];
+    			      crres[1] <= cdb[1] | (fcmp_o[0] & ~cmpnan);
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | finf;
-    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | finf;
+    			      crres[7] <= cdb[7] | (fcmp_o[1] & ~cmpnan);
 			        end
 			      `CMP_ANDCM:
 			        begin
-    			      crres[0] <= cd[0];
-    			      crres[1] <= cd[1] & ~(fcmp_o[0] & ~cmpnan);
+    			      crres[0] <= cdb[0];
+    			      crres[1] <= cdb[1] & ~(fcmp_o[0] & ~cmpnan);
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~finf;
-    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~finf;
+    			      crres[7] <= cdb[7] & ~(fcmp_o[1] & ~cmpnan);
 			        end
 			      `CMP_ORCM:
 			        begin
-    			      crres[0] <= cd[0];
-    			      crres[1] <= cd[1] | ~(fcmp_o[0] & ~cmpnan);
+    			      crres[0] <= cdb[0];
+    			      crres[1] <= cdb[1] | ~(fcmp_o[0] & ~cmpnan);
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~finf;
-    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~finf;
+    			      crres[7] <= cdb[7] | ~(fcmp_o[1] & ~cmpnan);
 			        end
 			      default:  crres <= cd;
 			      endcase
@@ -3730,49 +3923,49 @@ FLOAT:
 					    end
 					  `CMP_AND:
 					    begin
-    						crres[0] <= cd[0] & fcmp_o[2] & ~cmpnan;	// FSLE
-    						crres[1] <= cd[1] & fcmp_o[2] & ~cmpnan;	// FSLE
+    						crres[0] <= cdb[0] & fcmp_o[2] & ~cmpnan;	// FSLE
+    						crres[1] <= cdb[1] & fcmp_o[2] & ~cmpnan;	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & finf;
-    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+    			      crres[6] <= cdb[6] & finf;
+    			      crres[7] <= cdb[7] & fcmp_o[1] & ~cmpnan;
 					    end
 					  `CMP_OR:
 					    begin
-    						crres[0] <= cd[0] | (fcmp_o[2] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] | (fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] | (fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] | (fcmp_o[2] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | finf;
-    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | finf;
+    			      crres[7] <= cdb[7] | (fcmp_o[1] & ~cmpnan);
 					    end
 					  `CMP_ANDCM:
 					    begin
-    						crres[0] <= cd[0] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] & ~(fcmp_o[2] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~finf;
-    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~finf;
+    			      crres[7] <= cdb[7] & ~(fcmp_o[1] & ~cmpnan);
 					    end
 					  `CMP_ORCM:
 					    begin
-    						crres[0] <= cd[0] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] | ~(fcmp_o[2] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~finf;
-    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~finf;
+    			      crres[7] <= cdb[7] | ~(fcmp_o[1] & ~cmpnan);
 					    end
-			      default:  crres <= cd;
+			      default:  crres <= cdb;
 					  endcase
 						if (cmpnan)
 							fnv <= 1'b1;
@@ -3793,47 +3986,47 @@ FLOAT:
 					    end
 					  `CMP_AND:
 					    begin
-    						crres[0] <= cd[0] & fcmp_o[1] & ~cmpnan;	// FSLE
-    						crres[1] <= cd[1] & fcmp_o[1] & ~cmpnan;	// FSLE
+    						crres[0] <= cdb[0] & fcmp_o[1] & ~cmpnan;	// FSLE
+    						crres[1] <= cdb[1] & fcmp_o[1] & ~cmpnan;	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & finf;
-    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+    			      crres[6] <= cdb[6] & finf;
+    			      crres[7] <= cdb[7] & fcmp_o[1] & ~cmpnan;
 					    end
 					  `CMP_OR:
 					    begin
-    						crres[0] <= cd[0] | (fcmp_o[1] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] | (fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] | (fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] | (fcmp_o[1] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | finf;
-    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | finf;
+    			      crres[7] <= cdb[7] | (fcmp_o[1] & ~cmpnan);
 					    end
 					  `CMP_ANDCM:
 					    begin
-    						crres[0] <= cd[0] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] & ~(fcmp_o[1] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~finf;
-    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~finf;
+    			      crres[7] <= cdb[7] & ~(fcmp_o[1] & ~cmpnan);
 					    end
 					  `CMP_ORCM:
 					    begin
-    						crres[0] <= cd[0] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
-    						crres[1] <= cd[1] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[0] <= cdb[0] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
+    						crres[1] <= cdb[1] | ~(fcmp_o[1] & ~cmpnan);	// FSLE
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~finf;
-    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~finf;
+    			      crres[7] <= cdb[7] | ~(fcmp_o[1] & ~cmpnan);
 					    end
 			      default:  crres <= cd;
 					  endcase
@@ -3856,47 +4049,47 @@ FLOAT:
 			        end
 			      `CMP_AND:
 			        begin
-    						crres[0] <= cd[0] & fcmp_o[0] & ~cmpnan;	// FSEQ
-    						crres[1] <= cd[1] & fcmp_o[0] & ~cmpnan;	// FSEQ
+    						crres[0] <= cdb[0] & fcmp_o[0] & ~cmpnan;	// FSEQ
+    						crres[1] <= cdb[1] & fcmp_o[0] & ~cmpnan;	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & finf;
-    			      crres[7] <= cd[7] & fcmp_o[1] & ~cmpnan;
+    			      crres[6] <= cdb[6] & finf;
+    			      crres[7] <= cdb[7] & fcmp_o[1] & ~cmpnan;
 			        end
 			      `CMP_OR:
 			        begin
-    						crres[0] <= cd[0] | (fcmp_o[0] & ~cmpnan);	// FSEQ
-    						crres[1] <= cd[1] | (fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | (fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | (fcmp_o[0] & ~cmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | finf;
-    			      crres[7] <= cd[7] | (fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | finf;
+    			      crres[7] <= cdb[7] | (fcmp_o[1] & ~cmpnan);
 			        end
 			      `CMP_ANDCM:
 			        begin
-    						crres[0] <= cd[0] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
-    						crres[1] <= cd[1] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[0] <= cdb[0] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cdb[1] & ~(fcmp_o[0] & ~cmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~finf;
-    			      crres[7] <= cd[7] & ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~finf;
+    			      crres[7] <= cdb[7] & ~(fcmp_o[1] & ~cmpnan);
 			        end
 			      `CMP_ORCM:
 			        begin
-    						crres[0] <= cd[0] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
-    						crres[1] <= cd[1] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | ~(fcmp_o[0] & ~cmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~finf;
-    			      crres[7] <= cd[7] | ~(fcmp_o[1] & ~cmpnan);
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~finf;
+    			      crres[7] <= cdb[7] | ~(fcmp_o[1] & ~cmpnan);
 			        end
 			      default:  crres <= cd;
 			      endcase
@@ -3904,7 +4097,7 @@ FLOAT:
 							fnv <= 1'b1;
 					end
 				`FLT1:
-				  case(eRs2)
+				  case(eRs2[4:0])
 					`FSQRT:
   					begin
   						res <= fres;	// FSQRT
@@ -3925,7 +4118,7 @@ FLOAT:
 			`PST2:
 				case(efltfunct5)
 				`PST1:
-				  case(eRs2)
+				  case(eRs2[4:0])
 				  `ITOP:  res <= itop_o;
 				  `PTOI:  res <= ptoi_o;
 				  default:  ;
@@ -3963,47 +4156,47 @@ FLOAT:
 			        end
 			      `CMP_AND:
 			        begin
-    						crres[0] <= cd[0] & pseq_o & ~pcmpnan;	// FSEQ
-    						crres[1] <= cd[1] & pseq_o & ~pcmpnan;	// FSEQ
+    						crres[0] <= cdb[0] & pseq_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cdb[1] & pseq_o & ~pcmpnan;	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[6] <= cdb[6] & pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_OR:
 			        begin
-    						crres[0] <= cd[0] | (pseq_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | (pseq_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | (pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | (pseq_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ANDCM:
 			        begin
-    						crres[0] <= cd[0] & ~(pseq_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] & ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] & ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] & ~(pseq_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ORCM:
 			        begin
-    						crres[0] <= cd[0] | ~(pseq_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | ~(pseq_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | ~(pseq_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      default:  crres <= cd;
 			      endcase
@@ -4024,47 +4217,47 @@ FLOAT:
 			        end
 			      `CMP_AND:
 			        begin
-    						crres[0] <= cd[0] & pslt_o & ~pcmpnan;	// FSEQ
-    						crres[1] <= cd[1] & pslt_o & ~pcmpnan;	// FSEQ
+    						crres[0] <= cdb[0] & pslt_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cdb[1] & pslt_o & ~pcmpnan;	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[6] <= cdb[6] & pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_OR:
 			        begin
-    						crres[0] <= cd[0] | (pslt_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | (pslt_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | (pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | (pslt_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ANDCM:
 			        begin
-    						crres[0] <= cd[0] & ~(pslt_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] & ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] & ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] & ~(pslt_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ORCM:
 			        begin
-    						crres[0] <= cd[0] | ~(pslt_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | ~(pslt_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | ~(pslt_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      default:  crres <= cd;
 			      endcase
@@ -4085,49 +4278,49 @@ FLOAT:
 			        end
 			      `CMP_AND:
 			        begin
-    						crres[0] <= cd[0] & psle_o & ~pcmpnan;	// FSEQ
-    						crres[1] <= cd[1] & psle_o & ~pcmpnan;	// FSEQ
+    						crres[0] <= cdb[0] & psle_o & ~pcmpnan;	// FSEQ
+    						crres[1] <= cdb[1] & psle_o & ~pcmpnan;	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
     			      crres[4] <= 1'b0;
     			      crres[5] <= 1'b0;
-    			      crres[6] <= cd[6] & pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[6] <= cdb[6] & pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_OR:
 			        begin
-    						crres[0] <= cd[0] | (psle_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | (psle_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | (psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | (psle_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ANDCM:
 			        begin
-    						crres[0] <= cd[0] & ~(psle_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] & ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] & ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] & ~(psle_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] & ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] & ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
 			      `CMP_ORCM:
 			        begin
-    						crres[0] <= cd[0] | ~(psle_o & ~pcmpnan);	// FSEQ
-    						crres[1] <= cd[1] | ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[0] <= cdb[0] | ~(psle_o & ~pcmpnan);	// FSEQ
+    						crres[1] <= cdb[1] | ~(psle_o & ~pcmpnan);	// FSEQ
     			      crres[2] <= 1'b0;
     			      crres[3] <= 1'b0;
-    			      crres[4] <= cd[4];
-    			      crres[5] <= cd[5];
-    			      crres[6] <= cd[6] | ~pinf_o;
-    			      crres[7] <= cd[7];
+    			      crres[4] <= cdb[4];
+    			      crres[5] <= cdb[5];
+    			      crres[6] <= cdb[6] | ~pinf_o;
+    			      crres[7] <= cdb[7];
 			        end
-			      default:  crres <= cd;
+			      default:  crres <= cdb;
 			      endcase
 			    end
   			default:  ;
@@ -4148,7 +4341,9 @@ EXECUTE_WAIT:
     mRs1 <= eRs1;
     mRd <= eRd;
     mRdx <= eRdx;
+    mCd <= eCd;
     mres <= res;
+    mcrres <= crres;
     mwrirf <= ewrirf;
     mwrcrf <= ewrcrf;
     mwrcrf32 <= ewrcrf32;
@@ -4157,9 +4352,24 @@ EXECUTE_WAIT:
     mbrdat <= brdat;
     m_cbranch <= e_cbranch;
     mbrpred <= ebrpred;
+    mnext_pc <= enext_pc;
+    m_loop_bust <= e_loop_bust;
+    m_bubble <= e_bubble;
     ea <= eea;
     emod_pc <= FALSE;
     millegal_insn <= eillegal_insn;
+    if (~e_cmp & ~e_set & ~e_tst & ~e_fltcmp & ~eillegal_insn & ewrcrf) begin
+      crres[0] <= res[64];
+      crres[1] <= res[63:0]==64'd0;
+      crres[2] <= 1'b0;
+      crres[3] <= 1'b0;
+      crres[4] <= ^res[63:0];
+      crres[5] <= res[0];
+      crres[6] <= res[64]^res[63];
+      crres[7] <= res[63];
+      writeback_done <= FALSE;
+      wgoto (WRITEBACK2);
+    end
     execute_done <= FALSE;
     egoto(EXECUTE);
   end
@@ -4179,7 +4389,9 @@ if (rst_i) begin
 	memory_done <= TRUE;
   mpc <= RSTPC;
   mres <= 64'd0;
+  m_cbranch <= FALSE;
   wRd <= 5'd0;
+  w_bubble <= FALSE;
 end
 else
 case(mstate)
@@ -4210,6 +4422,7 @@ MEMORY1:
         else if (!takb & mbrpred) begin
           mmod_pc <= TRUE;
           mnext_pc <= mpc + milen;
+          loop_mode <= 3'd0;
         end
         adv_mem(takb);
       end
@@ -4224,6 +4437,7 @@ MEMORY1:
         else if (!takb & mbrpred) begin
           mmod_pc <= TRUE;
           mnext_pc <= mpc + milen;
+          loop_mode <= 3'd0;
         end
         adv_mem(takb);
       end
@@ -4238,6 +4452,7 @@ MEMORY1:
         else if (!takb & mbrpred) begin
           mmod_pc <= TRUE;
           mnext_pc <= mpc + milen;
+          loop_mode <= 3'd0;
         end
         adv_mem(takb);
       end
@@ -4248,7 +4463,8 @@ MEMORY1:
     end
     else begin
       // Must have a memory op to continue.
-      if (mopcode[7:4]==4'h8 || mopcode[7:4]==4'h9 || mopcode[7:4]==4'hA || mopcode[7:4]==4'hB) begin
+      if (mopcode[7:4]==4'h8 || mopcode[7:4]==4'h9 || mopcode[7:4]==4'hA || mopcode[7:4]==4'hB ||
+        mopcode==`JSR || mopcode==`JSR18 || mopcode==`RTS || mopcode==`RTX) begin
         if (iaccess_pending)
           mstate <= mstate;
         else begin
@@ -4315,6 +4531,7 @@ MEMORY3:
       dat_o <= dat[31:0];
 `endif
       case(mopcode)
+      `JSR,`JSR18,
       `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
       `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS:
         we_o <= HIGH;
@@ -4523,11 +4740,19 @@ DATA_ALIGN:
     `LDT,`LDTS:   mres <= {{32{datis[31]}},datis[31:0]};
     `LDTU,`LDTUS:  mres <= {{32{1'b0}},datis[31:0]};
     `LDO,`LDOS:   mres <= datis[63:0];
-    `LDOT:  begin crres <= datis[31:0]; rares <= datis[AWID-1:0]; end
+    `LDOT:  begin mcrres <= datis[31:0]; rares <= datis[AWID-1:0]; end
     `LDOR,`LDORS: mres <= datis[63:0];
     `FLDO,`PLDO:  mres <= datis[63:0];
-    `RTS:    pc <= datis[63:0] + {ir[12:9],2'b00};
-    `RTX:    pc <= datis[63:0];
+    `RTS:    
+      begin
+        mmod_pc <= TRUE;
+        mnext_pc <= datis[63:0];// + {mir[12:9],2'b00};
+      end
+    `RTX:
+      begin
+        mmod_pc <= TRUE;
+        mnext_pc <= datis[63:0];
+      end
     default:  ;
     endcase
   end
@@ -4540,15 +4765,22 @@ MEMORY_WAIT:
     wRs1 <= mRs1;
     wRd <= mRd;
     wRdx <= mRdx;
+    wCd <= mCd;
     wres <= mres;
+    wcrres <= mcrres;
     wpc <= mpc;
     wwrirf <= mwrirf;
     wwrcrf <= mwrcrf;
     wwrcrf32 <= mwrcrf32;
     wwrra <= mwrra;
     wwrca <= mwrca;
+    wbrpred <= mbrpred;
+    wilen <= milen;
+    wnext_pc <= mnext_pc;
+    w_loop_bust <= m_loop_bust;
     mmod_pc <= FALSE;
     willegal_insn <= millegal_insn;
+    w_bubble <= m_bubble;
     memory_done <= FALSE;
     mgoto(MEMORY1);
   end
@@ -4565,6 +4797,8 @@ if (rst_i) begin
 	wstate <= WRITEBACK_WAIT;
 	writeback_done <= TRUE;
   wres <= 64'd0;
+  w_cbranch <= FALSE;
+  t_bubble <= FALSE;
 end
 else
 case(wstate)
@@ -4572,26 +4806,7 @@ WRITEBACK:
   begin
     wmod_pc <= FALSE;
     writeback_done <= TRUE;
-    /*
-    if (advance_pipe) begin
-      writeback_done <= FALSE;
-      wgoto (WRITEBACK);
-    end
-    else
-    */
-      wgoto (WRITEBACK_WAIT);
-    // Compares and sets already update crres
-    if (~w_cmp & ~w_set & ~w_tst & ~w_fltcmp & ~willegal_insn & wwrcrf) begin
-      crres[0] <= wres[64];
-      crres[1] <= wres[63:0]==64'd0;
-      crres[2] <= 1'b0;
-      crres[3] <= 1'b0;
-      crres[4] <= ^wres[63:0];
-      crres[5] <= wres[0];
-      crres[6] <= wres[64]^wres[63];
-      crres[7] <= wres[63];
-      wgoto (WRITEBACK2);
-    end
+    wgoto (WRITEBACK_WAIT);
 		if (willegal_insn)
 		  wException(32'd37, wpc);
     else begin
@@ -4603,8 +4818,8 @@ WRITEBACK:
       7'b110000?: begin wrra <= 1'b1; rad <= wRd[0]; end
       7'b110001?: begin wrca <= 1'b1; rad <= wRd[0]; end
       7'b1100111: epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]] <= wres;
-      7'b11100??: begin wrcrf <= 1'b1; Cd <= wRd[1:0]; crres <= wres; end
-      7'b1111101: begin wrcrf32 <= 1'b1; crres <= wres; end
+      7'b11100??: begin Cd <= wRd[1:0]; wcrres <= wres; end
+      7'b1111101: begin wrcrf32 <= 1'b1; wcrres <= wres; end
       default:  ;
       endcase
       case (wopcode)
@@ -4621,7 +4836,7 @@ WRITEBACK:
               5'b0000?: begin wrra <= 1'b1; rad <= wRd[0]; end
               5'b0001?: begin wrca <= 1'b1; rad <= wRd[0]; end
               5'b00111: epc[rprv[1] ? rsStack[9:5] : rsStack[4:0]] <= wres;
-              5'b100??: begin wrcrf <= 1'b1; Cd <= wRd[1:0]; end
+              5'b100??: begin Cd <= wRd[1:0]; end
               5'b11101: wrcrf32 <= 1'b1;
               default:  ;
               endcase
@@ -4704,10 +4919,81 @@ WRITEBACK_WAIT:
     $display("wir:%c%h", willegal_insn ? "*" : " ", wir);
     $display("wRd=%d  wres: %h", wRd, wres);
 `endif
+    t_bubble <= w_bubble;
     writeback_done <= FALSE;
     wgoto (WRITEBACK);
   end
 endcase
+end
+endtask
+
+task tTStage;
+begin
+  if (rst_i) begin
+    tir <= `NOP_INSN;
+    tRd <= 7'd0;
+    tCd <= 2'b00;
+    tbrpred <= FALSE;
+    t_cbranch <= FALSE;
+    t_loop_bust <= FALSE;
+    u_bubble <= FALSE;
+  end
+  else if (advance_emw_pipe) begin
+    tir <= wir;
+    tpc <= wpc;
+    tRd <= wRd;
+    tres <= wres;
+    tCd <= wCd;
+    tcrres <= wcrres;
+    t_loop_bust <= w_loop_bust;
+    t_cbranch <= w_cbranch;
+    tbrpred <= wbrpred;
+    tilen <= wilen;
+    u_bubble <= t_bubble;
+  end
+end
+endtask
+
+task tUStage;
+begin
+  if (rst_i) begin
+    uir <= `NOP_INSN;
+    ubrpred <= FALSE;
+    u_loop_bust <= FALSE;
+    u_cbranch <= FALSE;
+    v_bubble <= FALSE;
+  end
+  else if (advance_emw_pipe) begin
+    uir <= tir;
+    upc <= tpc;
+    ubrpred <= tbrpred;
+    uilen <= tilen;
+    u_loop_bust <= t_loop_bust;
+    u_cbranch <= t_cbranch;
+    v_bubble <= u_bubble;
+  end
+end
+endtask
+
+task tVStage;
+begin
+  if (rst_i) begin
+    vir <= `NOP_INSN;
+    vbrpred <= FALSE;
+  end
+  else if (advance_emw_pipe) begin
+    // Retire bubbles
+    if (v_bubble) begin
+      if (!(rstate==REGFETCH_WAIT && !advance_idr_pipe & advance_emw_pipe))
+        ebubble_cnt <= ebubble_cnt - 1'b1;
+      else
+        ebubble_cnt <= ebubble_cnt;
+    end
+    vir <= uir;
+    vpc <= upc;
+    vbrpred <= ubrpred;
+    vilen <= uilen;
+  end
 end
 endtask
 
@@ -5089,6 +5375,55 @@ begin
   wnext_pc <= tvec[3'd5] + {omode,6'h00};
   writeback_done <= TRUE;
   dgoto (WRITEBACK_WAIT);
+end
+endtask
+
+task tLoop;
+input [AWID-1:0] ad;
+begin
+  if (!cbranch_in_pipe && !loop_bust) begin
+    case(ad[31:0])  
+    rpc[31:0]:
+      begin
+        loop_mode <= 3'd1;
+        dmod_pc <= FALSE;
+      end
+    expc[31:0]:
+      begin
+        loop_mode <= 3'd2;
+        dmod_pc <= FALSE;
+      end
+    mpc[31:0]:
+      begin
+        loop_mode <= 3'd3;
+        dmod_pc <= FALSE;
+      end
+    wpc[31:0]:
+      begin
+        loop_mode <= 3'd4;
+        dmod_pc <= FALSE;
+      end
+    tpc[31:0]:
+      begin
+        loop_mode <= 3'd5;
+        dmod_pc <= FALSE;
+      end
+    upc[31:0]:
+      begin
+        loop_mode <= 3'd6;
+        dmod_pc <= FALSE;
+      end
+    vpc[31:0]:
+      begin
+        loop_mode <= 3'd7;
+        dmod_pc <= FALSE;
+      end
+    default:
+      begin
+        loop_mode <= 3'd0;
+      end
+    endcase
+  end
 end
 endtask
 

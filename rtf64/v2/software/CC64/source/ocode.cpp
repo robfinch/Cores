@@ -567,7 +567,7 @@ void OCODE::OptStore()
 void OCODE::OptBeq()
 {
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
-		if (back->back && back->back->opcode == op_ldi) {
+		if (back->back && back->back->opcode & 0x7fff == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
 				if (back->back->oper2->offset->i != 0) {
 					back->MarkRemove();
@@ -582,7 +582,7 @@ void OCODE::OptBeq()
 void OCODE::OptBne()
 {
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
-		if (back->back && back->back->opcode == op_ldi) {
+		if (back->back && back->back->opcode & 0x7fff == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
 				if (back->back->oper2->offset->i != 0) {
 					back->MarkRemove();
@@ -784,6 +784,29 @@ void PeepoptMuldiv(OCODE *ip, int op)
 	ip->opcode = op;
 	ip->length = 2;
 	optimized++;
+}
+
+// Search backwards for the same set operation.
+
+void OCODE::OptScc()
+{
+	OCODE* ip;
+
+	for (ip = back; ip; ip = ip->back) {
+		if (ip->opcode == op_label)
+			return;
+		if (ip->insn->IsFlowControl())
+			return;
+		if (ip->insn->IsSetInsn()) {
+			if (ip->opcode != opcode)
+				return;
+			if (IsEqualOperand(ip->oper1, oper1) && IsEqualOperand(ip->oper2, oper2) && IsEqualOperand(ip->oper3, oper3)) {
+				MarkRemove();
+				optimized++;
+				return;
+			}
+		}
+	}
 }
 
 void OCODE::OptDoubleTargetRemoval()
@@ -1007,14 +1030,15 @@ void OCODE::OptHint()
 		// It didn't set the back->oper1 properly.
 		if (fwd == nullptr || back == nullptr)
 			break;
-		if (back->opcode != op_mov || fwd->opcode != op_mov) {
+//		if (back->opcode != op_mov || fwd->opcode != op_mov) {
+		if (fwd->opcode != op_mov) {
 			break;
 		}
 		if (IsEqualOperand(fwd->oper2, back->oper1)) {
 			if (back->HasTargetReg()) {
 				int rg1, rg2;
 				back->GetTargetReg(&rg1, &rg2);
-				if (!(fwd->oper1->mode == am_fpreg && back->opcode == op_ldi)) {
+				if (!(fwd->oper1->mode == am_fpreg && back->opcode & 0x7fff == op_ldi)) {
 					// Search forward to see if the target register is used anywhere.
 					for (frwd = fwd->fwd; frwd; frwd = frwd->fwd) {
 						// If the register has been targeted again, it is okay to opt.
@@ -1165,7 +1189,7 @@ void OCODE::OptLdi()
 		if (ip->HasTargetReg()) {
 			int rg1, rg2;
 			ip->GetTargetReg(&rg1, &rg2);
-			if (ip->opcode == op_ldi) {
+			if (ip->opcode & 0x7fff == op_ldi) {
 				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();
@@ -1217,7 +1241,7 @@ void OCODE::OptLea()
 		if (ip->HasTargetReg()) {
 			int rg1, rg2;
 			ip->GetTargetReg(&rg1, &rg2);
-			if (ip->opcode == op_ldi) {
+			if (ip->opcode & 0x7fff == op_ldi) {
 				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();

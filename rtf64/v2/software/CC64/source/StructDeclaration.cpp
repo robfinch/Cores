@@ -34,7 +34,7 @@ extern bool isPrivate;
 
 int16_t typeno = bt_last;
 
-int StructDeclaration::Parse(int ztype)
+int StructDeclaration::Parse(TABLE* table, int ztype, SYM** sym)
 {
   SYM *sp;
   TYP *tp;
@@ -42,6 +42,8 @@ int StructDeclaration::Parse(int ztype)
 	int psd;
 	ENODE nd;
 	ENODE *pnd = &nd;
+  static int cnt = 0;
+  char nmbuf[500];
 
   sp = nullptr;
 	psd = isStructDecl;
@@ -73,18 +75,21 @@ int StructDeclaration::Parse(int ztype)
 			if (lastst==semicolon) {
 				ret = 1;
         tagtable.insert(sp);
+        table->insert(sp);
         NextToken();
 			}
 			// Defining a pointer to an unknown struct ?
 			else if (lastst == star) {
         tagtable.insert(sp);
-			}
+        table->insert(sp);
+      }
       else if(lastst != begin)
         error(ERR_INCOMPLETE);
       else {
         tagtable.insert(sp);
+        table->insert(sp);
         NextToken();
-        ParseMembers(sp, sp->tp,ztype);
+        ParseMembers(sp, ztype);
       }
     }
     // Else it is a known structure
@@ -96,13 +101,77 @@ int StructDeclaration::Parse(int ztype)
       }
 			if (lastst==begin) {
         NextToken();
-        ParseMembers(sp,sp->tp,ztype);
+        ParseMembers(sp, ztype);
 			}
 		}
     head = sp->tp;
   }
   // Else there was no tag identifier
   else {
+    sprintf(nmbuf, "__noname%d", cnt);
+    cnt++;
+    if ((sp = tagtable.Find(nmbuf, false)) == NULL) {
+      sp = allocSYM();
+      sp->SetName(*(new std::string(nmbuf)));
+      sp->tp = allocTYP();
+      sp->tp->type = (e_bt)ztype;
+      sp->tp->typeno = typeno++;
+      sp->tp->lst.Clear();
+      sp->storage_class = sc_type;
+      sp->tp->sname = new std::string(*sp->name);
+      sp->tp->alignment = 0;
+
+      if (lastst == kw_align) {
+        NextToken();
+        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      }
+
+      // Could be a forward structure declaration like:
+      // struct buf;
+      if (lastst == semicolon) {
+        ret = 1;
+        tagtable.insert(sp);
+        table->insert(sp);
+        NextToken();
+      }
+      // Defining a pointer to an unknown struct ?
+      else if (lastst == star) {
+        tagtable.insert(sp);
+        table->insert(sp);
+      }
+      else if (lastst != begin)
+        error(ERR_INCOMPLETE);
+      else {
+        tagtable.insert(sp);
+        table->insert(sp);
+        NextToken();
+        ParseMembers(sp, ztype);
+      }
+    }
+    // Else it is a known structure
+    else {
+      NextToken();
+      if (lastst == kw_align) {
+        NextToken();
+        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
+      }
+      if (lastst == begin) {
+        NextToken();
+        ParseMembers(sp, ztype);
+      }
+    }
+    head = sp->tp;
+    goto xit;
+    sp->SetName(*(new std::string(nmbuf)));
+    cnt++;
+    sp->tp = allocTYP();
+    sp->tp->type = (e_bt)ztype;
+    sp->tp->typeno = typeno++;
+    sp->tp->lst.Clear();
+    sp->storage_class = sc_type;
+    sp->tp->sname = new std::string(*sp->name);
+    sp->tp->alignment = 0;
+
     tp = allocTYP();
     tp->type = (e_bt)ztype;
 	  tp->typeno = typeno++;
@@ -117,35 +186,37 @@ int StructDeclaration::Parse(int ztype)
       error(ERR_INCOMPLETE);
     else {
 			NextToken();
-			ParseMembers(sp,tp,ztype);
+			ParseMembers(sp,ztype);
     }
     head = tp;
   }
+xit:
 	isStructDecl = psd;
-	return ret;
+  *sym = sp;
+	return (ret);
 }
 
-void StructDeclaration::ParseMembers(SYM *sym, TYP *tp, int ztype)
+void StructDeclaration::ParseMembers(SYM *sym, int ztype)
 {
 	int slc;
 	bool priv;
 
 	slc = 0;
-	tp->val_flag = 1;
+	sym->tp->val_flag = 1;
 	//	tp->val_flag = FALSE;
 	while( lastst != end) {
 		priv = isPrivate;
 		isPrivate = false;    
 		if(ztype == bt_struct || ztype==bt_class)
-			slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
+			slc += declare(sym,&(sym->tp->lst),sc_member,slc,ztype);
 		else // union
-			slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
+			slc = imax(slc,declare(sym,&(sym->tp->lst),sc_member,0,ztype));
 		isPrivate = priv;
 	}
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-	tp->size = tp->alignment ? tp->alignment : slc;
+	sym->tp->size = sym->tp->alignment ? sym->tp->alignment : slc;
 	//ListTable(&tp->lst,0);
 	NextToken();
 }

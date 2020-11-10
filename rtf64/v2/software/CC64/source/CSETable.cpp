@@ -24,9 +24,14 @@
 // ============================================================================
 //
 #include "stdafx.h"
+extern CSet* ru, * rru;
 
 CSETable::CSETable()
 {
+	ZeroMemory(table, sizeof(table));
+	csendx = 0;
+	cseiter = 0;
+	searchpos = 0;
 }
 
 CSETable::~CSETable()
@@ -304,6 +309,7 @@ void CSETable::InitializeTempRegs()
 	ENODE *exptr;
 	int size;
 
+	cg.GenerateHint(begin_regvar_init);
 	for (csp = First(); csp; csp = Next()) {
 		if (csp->reg != -1)
 		{               // see if preload needed
@@ -356,7 +362,7 @@ void CSETable::InitializeTempRegs()
 			}
 		}
 	}
-
+	cg.GenerateHint(end_regvar_init);
 }
 
 void CSETable::GenerateRegMask(CSE *csp, CSet *msk, CSet *rmsk)
@@ -438,7 +444,9 @@ int CSETable::AllocateRegisterVars()
 	Dump();
 
 	// Push temporaries on the stack.
+	cg.GenerateHint(begin_save_regvars);
 	SaveRegisterVars(rmask);
+	cg.GenerateHint(end_save_regvars);
 	SaveFPRegisterVars(fprmask);
 	SavePositRegisterVars(prmask);
 

@@ -6,18 +6,31 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 //
 //		Encodes discrete interrupt request signals into five
@@ -83,10 +96,10 @@ module rtf64_pic
 		i8, i9, i10, i11, i12, i13, i14, i15,
 		i16, i17, i18, i19, i20, i21, i22, i23,
 		i24, i25, i26, i27, i28, i29, i30, i31,
-	output [3:0] irqo,	// normally connected to the processor irq
+	output reg [3:0] irqo,	// normally connected to the processor irq
 	input nmii,		// nmi input connected to nmi requester
-	output nmio,	// normally connected to the nmi of cpu
-	output [7:0] causeo
+	output reg nmio,	// normally connected to the nmi of cpu
+	output reg [7:0] causeo
 );
 parameter pIOAddress = 32'hFFDC_0F00;
 
@@ -173,9 +186,12 @@ begin
 		dat_o <= 32'h0000;
 end
 
-assign irqo = (irqenc == 5'h0) ? 4'd0 : irq[irqenc] & {4{ie[irqenc]}};
-assign causeo = (irqenc == 5'h0) ? 8'd0 : cause[irqenc];
-assign nmio = nmii & ie[0];
+always @(posedge clk)
+  irqo <= (irqenc == 5'h0) ? 4'd0 : irq[irqenc] & {4{ie[irqenc]}};
+always @(posedge clk)
+  causeo <= (irqenc == 5'h0) ? 8'd0 : cause[irqenc];
+always @(posedge clk)
+  nmio <= nmii & ie[0];
 
 // Edge detect circuit
 always @(posedge clk)

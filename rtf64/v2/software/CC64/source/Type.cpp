@@ -709,7 +709,7 @@ j1:
 		//}
 		if (tp2 != nullptr)
 			return (nbytes);
-		if (lastst != comma)
+		if (lastst != comma || brace_level==0)
 			break;
 		NextToken();
 		if (lastst == end)

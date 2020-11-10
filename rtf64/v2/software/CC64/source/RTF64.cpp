@@ -55,8 +55,13 @@ void RTF64CodeGenerator::SignExtendBitfield(Operand* ap3, uint64_t mask)
 Operand* RTF64CodeGenerator::MakeBoolean(Operand* ap)
 {
 	Operand* ap1;
+	OCODE* ip;
 
-	GenerateDiadic(op_tst, 0, ap1 = makecreg(0), ap);
+	ap1 = makecreg(0);
+	ip = currentFn->pl.tail;
+	if (ip->opcode & 0x8000)
+		return (ap1);
+	GenerateDiadic(op_tst, 0, ap1, ap);
 	return (ap1);
 }
 
@@ -616,10 +621,10 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		//ReleaseTempReg(ap2);
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(1));
+		GenerateDiadic(op_ldi|op_dot,0,ap1,MakeImmediate(1));
 		GenerateMonadic(op_bra,0,MakeDataLabel(lab1,regZero));
 		GenerateLabel(lab0);
-		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(0));
+		GenerateDiadic(op_ldi|op_dot,0,ap1,MakeImmediate(0));
 		GenerateLabel(lab1);
 		ap1->isBool = true;
 		return (ap1);
@@ -1263,8 +1268,10 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
 			if (sy==nullptr && sym)
 				sy = sym->params.GetParameters();
-			if (sy)
-				sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			if (sy) {
+				if (sy[nn])
+					sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			}
 		}
 		else
 			sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);

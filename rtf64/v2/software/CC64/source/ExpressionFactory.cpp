@@ -130,3 +130,9 @@ ENODE* ExpressionFactory::Makenode(int nt, ENODE* v1, ENODE* v2)
 	return (ep);
 }
 
+ENODE* ExpressionFactory::Makenode()
+{
+	ENODE* ep;
+	ep = (ENODE*)xalloc(sizeof(ENODE));
+	return (ep);
+}

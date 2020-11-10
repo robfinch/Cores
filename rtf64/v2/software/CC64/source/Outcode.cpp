@@ -707,10 +707,10 @@ void genstorageskip(int nbytes)
 }
 
 void genstorage(int64_t nbytes)
-{       
+{
 	nl();
 	if (nbytes) {
-		ofs.printf("\tfill.b\t%lld,0x00\n", nbytes);
+		ofs.printf("\tfill.b\t%lld,0x00                    \n", nbytes);
 	}
 	genst_cumulative += nbytes;
 }
@@ -1127,12 +1127,14 @@ void align(int n)
 
 void cseg()
 {
-	if( curseg != codeseg || true) {
-		nl();
-		ofs.printf("\tcode\n");
-		ofs.printf("\talign\t16\n");
-		curseg = codeseg;
-  }
+	{
+		if (curseg != codeseg || true) {
+			nl();
+			ofs.printf("\tcode\n");
+			ofs.printf("\talign\t16\n");
+			curseg = codeseg;
+		}
+	}
 }
 
 void dseg()

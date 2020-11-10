@@ -36,7 +36,7 @@ void Declaration::ParseEnum(TABLE *table)
 	int amt = 1;
 
   if(lastst == id) {
-    if((sp = search(lastid,&tagtable)) == NULL) {
+    if((sp = search(std::string(lastid),&tagtable)) == NULL) {
       sp = allocSYM();
       sp->tp = TYP::Make(bt_enum,1);
       sp->storage_class = sc_type;

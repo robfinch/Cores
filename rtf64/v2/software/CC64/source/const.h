@@ -5,7 +5,7 @@ enum e_bt {
 	bt_none,
 	bt_byte, bt_ubyte, bt_bit,
 	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_posit, bt_pointer,
-	bt_ichar, bt_iuchar,
+	bt_ichar, bt_iuchar, bt_i128,
 	bt_uchar, bt_ushort, bt_ulong,
   bt_unsigned, bt_vector, bt_vector_mask,
   bt_array, bt_struct, bt_union, bt_class, bt_enum, bt_void,
@@ -37,7 +37,7 @@ enum e_node {
 		en_dlabcon, en_dnacon, // 30<-
 		
 		     en_fcall, en_ifcall,
-         en_tempref, en_regvar, en_fpregvar, en_tempfpref,
+         en_tempref, en_regvar, en_fpregvar, en_pregvar, en_tempfpref, en_temppref,
 		en_add, en_sub, en_mul, en_mod,
 		en_ftadd, en_ftsub, en_ftmul, en_ftdiv,
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,
@@ -76,7 +76,7 @@ enum e_stmt {
 		st_dountil, st_doloop, st_dowhile, st_doonce,
 		st_try, st_catch, st_throw, st_critical, st_spinlock, st_spinunlock,
 		st_for,
-		st_do, st_if, st_switch, st_default,
+		st_do, st_if, st_else, st_elsif, st_switch, st_default,
         st_case, st_goto, st_break, st_continue, st_label,
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
@@ -115,13 +115,19 @@ enum e_sym {
 	kw_unique, kw_virtual, kw_this,
 	kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
 	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf, kw_bytendx, kw_is_nullptr,
+	kw_compound, kw_expr, kw_label,
 	kw_nullptr,
 	my_eof
 };
 
 enum e_sc {
+	sc_none,
 	sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
 	sc_member, sc_label, sc_ulabel, sc_typedef, sc_register
+};
+
+enum e_rc {
+	rc_none, rc_int, rc_float, rc_posit, rc_cmp
 };
 
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
@@ -305,7 +311,13 @@ enum e_hint {
 	begin_return_block,
 	end_return_block,
 	begin_stack_unlink,
-	end_stack_unlink
+	end_stack_unlink,
+	begin_save_regvars,
+	end_save_regvars,
+	begin_restore_regvars,
+	end_restore_regvars,
+	begin_regvar_init,
+	end_regvar_init
 };
 
 #define LR		1

@@ -192,6 +192,7 @@ int	options(char *s)
 			case 'p':     ::opt_nopeep = TRUE; break;
             case 'x':     opt_noexpr = TRUE; break;
 			case 'c':	  opt_nocgo = TRUE; break;
+			case 's':		opt_size = TRUE; break;
             }
         }
         if (nn==2) {

@@ -85,6 +85,8 @@ void Compiler::compile()
 	classname = nullptr;
 	//pCSETable = new CSETable;
 	//pCSETable->Clear();
+	ru = CSet::MakeNew();
+	rru = CSet::MakeNew();
 	ZeroMemory(&gsyms[0],sizeof(gsyms));
 	ZeroMemory(&defsyms,sizeof(defsyms));
 	ZeroMemory(&tagtable,sizeof(tagtable));

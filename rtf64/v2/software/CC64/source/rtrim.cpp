@@ -13,6 +13,8 @@ char *rtrim(char *str)
 {
    int ii;
 
+   if (str == nullptr)
+     return "";
    ii = strlen(str);
    if (ii)
    {

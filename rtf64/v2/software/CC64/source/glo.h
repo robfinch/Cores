@@ -417,10 +417,11 @@ extern IGraph iGraph;
 extern Instruction opl[284];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
-extern char inpline[520];
+extern char inpline[100000];
 extern bool ExpressionHasReference;
 extern Object *_GarbageList;
 
 extern txtoStream irfs;
+extern CSet* ru, * rru;
 
 #endif

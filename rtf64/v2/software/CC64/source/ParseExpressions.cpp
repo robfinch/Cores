@@ -35,6 +35,7 @@ extern int parsingParameterList;
 extern SYM *gsearch2(std::string , __int16, TypeArray *,bool);
 extern SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray);
 extern int round10(int n);
+ENODE* Autoincdec(TYP* tp, ENODE** node, int flag, bool isPostfix);
 
 bool ExpressionHasReference = false;
 
@@ -1081,6 +1082,14 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
     tptr = expression(&pnode);
     needpunc(closepa,7);
     *node = pnode;
+		if (pnode) {
+			qnode1 = pnode->pfl;
+			pnode->pfl = nullptr;
+			if (qnode1) {
+				*node = makenode(en_void, *node, qnode1);
+				(*node)->p[1]->pfl = nullptr;
+			}
+		}
     if (pnode==NULL)
       dfs.printf("pnode is NULL\r\n");
     else
@@ -1136,7 +1145,8 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
   case openpa:
     NextToken();
     tptr = expression(&pnode);
-    pnode->SetType(tptr);
+		if (pnode)
+			pnode->SetType(tptr);
     needpunc(closepa,8);
     break;
 
@@ -1153,10 +1163,11 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
     return (TYP *)NULL;
   }
 	*node = pnode;
-  if (pnode->tp)
-  Leave("ParsePrimary", pnode->tp->type);
+	if (pnode)
+		if (pnode->tp)
+			Leave("ParsePrimary", pnode->tp->type);
   else
-  Leave("ParsePrimary", 0);
+		Leave("ParsePrimary", 0);
   return (pnode->tp);
 }
 
@@ -1256,7 +1267,7 @@ int IsLValue(ENODE *node)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-TYP *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
+ENODE *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 {
 	ENODE *ep1, *ep2;
 	TYP *typ;
@@ -1299,7 +1310,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 		if (*node)
 		    (*node)->SetType(tp);
 	}
-	return tp;
+	return (*node);
 }
 
 
@@ -1640,6 +1651,7 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
 	Declaration decl;
+	SYM* sp;
 
   Enter("ParseCast ");
   *node = (ENODE *)NULL;
@@ -1674,7 +1686,7 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 	case openpa:
 		NextToken();
 		if (IsBeginningOfTypecast(lastst)) {
-			decl.ParseSpecifier(0); // do cast declaration
+			decl.ParseSpecifier(0, &sp, sc_none); // do cast declaration
 			decl.ParsePrefix(FALSE);
 			tp = decl.head;
 			tp1 = decl.tail;
@@ -1692,6 +1704,10 @@ TYP *Expression::ParseCastExpression(ENODE **node)
 			opt_const(&ep1);
 			if (tp == nullptr)
 				error(ERR_NULLPOINTER);
+			if (ep1 == nullptr) {
+				error(ERR_NULLPOINTER);
+				ep1 = compiler.ef.Makenode();
+			}
 			// This is a bad idea
 			if (ep1->nodetype == en_aggregate) {
 				if (!ep1->AssignTypeToList(tp)) {

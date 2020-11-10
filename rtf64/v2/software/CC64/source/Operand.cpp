@@ -52,6 +52,8 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 		return (ENODE::IsEqual(ap1->offset, ap2->offset));
 	case am_fpreg:
 	case am_reg:
+	case am_creg:
+	case am_preg:
 		return (ap1->preg == ap2->preg);
 	case am_ind:
 	case am_indx:

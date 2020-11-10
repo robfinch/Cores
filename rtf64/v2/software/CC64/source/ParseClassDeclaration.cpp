@@ -211,7 +211,7 @@ lxit:
 	classname = new std::string(idsave);
 	currentClass = cls;
 	dfs.puts("</ParseClassDeclaration>\n");
-	return ret;
+	return (ret);
 }
 
 void ClassDeclaration::ParseMembers(SYM *sym, int ztype)

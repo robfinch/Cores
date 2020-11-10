@@ -69,6 +69,20 @@ int SYM::GetIndex()
   return this - &compiler.symbolTable[0];
 };
 
+bool SYM::IsTypedef()
+{
+	SYM* p, * q;
+
+	q = nullptr;
+	for (p = GetParentPtr(); p; p = GetParentPtr())
+		q = p;
+	if (q)
+		if (q->storage_class == sc_typedef)
+			return (true);
+	return (storage_class == sc_typedef);
+}
+
+
 uint8_t hashadd(char *nm)
 {
 	uint8_t hsh;
@@ -83,7 +97,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 	SYM *thead;
 	TypeArray *ta;
 
-	if (na=="" || tbl==nullptr)
+	if (&na == nullptr || tbl==nullptr || na == "")
 		return nullptr;
 //	printf("Enter search2\r\n");
 	if (tbl==&gsyms[0])
@@ -91,7 +105,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 	else
 		thead = &compiler.symbolTable[tbl->GetHead()];
 	while( thead != NULL) {
-		if (thead->name->length() != 0) {
+		if (thead->name && thead->name->length() != 0) {
 		  /*
 			if (prefix)
 				strncpy(namebuf,prefix,sizeof(namebuf)-1);

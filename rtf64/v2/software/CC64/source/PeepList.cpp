@@ -302,7 +302,7 @@ int PeepList::CountSPReferences()
 				if (ip->insn->opcode == op_push || ip->insn->opcode == op_pop) {
 					refSP++;
 				}
-				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
+				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_gcsub && ip->insn->opcode != op_mov) {
 					if (ip->oper1) {
 						if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
 							refSP++;
@@ -552,6 +552,26 @@ void PeepList::OptConstReg()
 }
 
 
+void PeepList::RemoveRegsave()
+{
+	OCODE* ip;
+	bool rmv = false;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_hint) {
+			if (ip->oper1->offset->i == begin_save_regvars || ip->oper1->offset->i==begin_restore_regvars || ip->oper1->offset->i==begin_regvar_init)
+				rmv = true;
+			if (rmv)
+				ip->MarkRemove();
+			if (ip->oper1->offset->i == end_save_regvars || ip->oper1->offset->i == end_restore_regvars || ip->oper1->offset->i == end_regvar_init)
+				rmv = false;
+		}
+	}
+}
+
+
+
 void PeepList::RemoveCompilerHints()
 {
 	OCODE *ip;
@@ -635,7 +655,7 @@ void PeepList::OptInstructions()
 	for (ip = head; ip != NULL; ip = ip->fwd)
 	{
 		if (!ip->remove) {
-			switch (ip->opcode)
+			switch (ip->opcode & 0x7fff)
 			{
 			case op_remark:
 				if (ip->fwd) {
@@ -663,6 +683,7 @@ void PeepList::OptInstructions()
 			case op_brk:
 			case op_jmp:
 			case op_ret:
+			case op_rtl:
 			case op_rts:
 			case op_rte:
 			case op_rtd:	ip->OptUctran(); break;
@@ -676,6 +697,8 @@ void PeepList::OptInstructions()
 			case op_mulu:	ip->OptMulu(); break;
 			case op_div:	ip->OptDiv(); break;
 			case op_push:	ip->OptPush(); break;
+			case op_seq:	ip->OptScc(); break;
+			case op_sne:	ip->OptScc(); break;
 			}
 		}
 	}
@@ -841,7 +864,7 @@ void PeepList::RemoveReturnBlock()
 		if (ip->oper2 && ip->oper2->mode == am_indx && ip->oper2->preg == regFP) {
 			ip->oper2->preg = regSP;
 		}
-		if (ip->opcode == op_ret || ip->opcode == op_rts)
+		if (ip->opcode == op_ret || ip->opcode == op_rts || ip->opcode == op_rtl)
 			if (ip->oper1)
 				ip->oper1->offset->i = 0;
 	}

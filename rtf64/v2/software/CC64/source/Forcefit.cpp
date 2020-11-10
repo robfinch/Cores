@@ -39,6 +39,10 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 	ENODE *n2;
 	int nt, typ;
 
+	if (dsttp == nullptr || srctp == nullptr) {
+		error(ERR_NULLPOINTER);
+		return (&stdint);
+	};
 	if (dstnode)
 		n2 = *dstnode;
 	else
@@ -193,8 +197,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_short: nt = en_chw; break;
 			case bt_ushort: nt = en_cuhw; break;
 			case bt_exception:
-			case bt_long: *dstnode = *srcnode; return (dsttp);
-			case bt_ulong: *dstnode = *srcnode; return (dsttp);
+			case bt_long: return (dsttp);// *dstnode = *srcnode; return (dsttp);
+			case bt_ulong: return (dsttp);// *dstnode = *srcnode; return (dsttp);
 			case bt_ubitfield:
 			case bt_bitfield: goto j1;
 			case bt_float:	nt = en_d2i; break;

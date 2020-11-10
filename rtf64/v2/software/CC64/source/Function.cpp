@@ -27,6 +27,7 @@
 extern char irfile[256];
 extern int defaultcc;
 extern bool isLeaf;
+extern CSet* ru, * rru;
 
 Function::Function()
 {
@@ -505,7 +506,9 @@ void Function::RestoreRegisterVars()
 {
 	RestorePositRegisterVars();
 	RestoreFPRegisterVars();
+	cg.GenerateHint(begin_restore_regvars);
 	RestoreGPRegisterVars();
+	cg.GenerateHint(end_restore_regvars);
 }
 
 void Function::SaveTemporaries(int *sp, int *fsp, int* psp)
@@ -873,8 +876,6 @@ void Function::GenerateReturn(Statement *stmt)
 	if (!IsInline) {
 		if (toAdd > 65536)
 			;
-		else if (toAdd == sizeOfWord)
-			GenerateZeradic(currentFn->IsLeaf ? op_rtl : op_ret);
 		else
 			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
 	}

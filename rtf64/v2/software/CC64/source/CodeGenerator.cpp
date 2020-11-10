@@ -267,7 +267,7 @@ Operand* CodeGenerator::GenerateAddDereference(ENODE* node, TYP* tp, bool isRefT
 {
 	Operand* ap1;
 
-	ap1 = node->GenIndex();
+	ap1 = node->GenIndex(false);
 	ap1->isUnsigned = !su;//node->isUnsigned;
 // *** may have to fix for stackseg
 	ap1->segment = dataseg;
@@ -284,6 +284,19 @@ Operand* CodeGenerator::GenerateAddDereference(ENODE* node, TYP* tp, bool isRefT
 		ap1->MakeLegal(flags, siz1);
 	ap1->MakeLegal(flags, size);
 	return (ap1);
+}
+
+Operand* CodeGenerator::GenerateAsaddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, bool neg)
+{
+	Operand* ap1, * ap2;
+
+	ap2 = GetTempRegister();
+	ap1 = GenerateExpression(node, flags, size);
+	ap1->mode = am_ind;
+	GenerateLoad(ap2, ap1, size, size);
+	ReleaseTempRegister(ap1);
+	ap2->MakeLegal(flags, size);
+	return (ap2);
 }
 
 Operand* CodeGenerator::GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
@@ -628,6 +641,8 @@ Operand* CodeGenerator::GenerateDereference2(ENODE* node, TYP* tp, bool isRefTyp
 
 	switch (node->nodetype) {
 	case en_fieldref: return (GenerateFieldrefDereference(node, tp, isRefType, flags, size));
+	case en_asadd:	return (GenerateAsaddDereference(node, tp, isRefType, flags, size, siz1, su, false));
+	case en_assub:	return (GenerateAsaddDereference(node, tp, isRefType, flags, size, siz1, su, true));
 	case en_add: return (GenerateAddDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_autocon: return (GenerateAutoconDereference(node, tp, isRefType, flags, size, siz1, su));
 	case en_classcon: return (GenerateClassconDereference(node, tp, isRefType, flags, size, siz1, su));
@@ -641,6 +656,24 @@ Operand* CodeGenerator::GenerateDereference2(ENODE* node, TYP* tp, bool isRefTyp
 	case en_fpregvar: return (GenerateFPRegvarDereference(node, tp, isRefType, flags, size));
 	case en_pregvar: return (GeneratePositRegvarDereference(node, tp, isRefType, flags, size));
 	case en_bitoffset: return (GenerateBitoffsetDereference(node, tp, isRefType, flags, size, opt));
+		/*
+	case en_ref:
+		ap2 = GetTempRegister();
+		ap1 = GenerateExpression(node, am_reg, sizeOfWord);
+		ap1->isPtr = isRefType;
+		ap1->tp = tp;
+		ap1->segment = dataseg;
+		//ap1->MakeLegal(flags, size);
+		ap2->isPtr = TRUE;
+		ap1->mode = am_ind;
+		ap3 = MakeIndirect(ap1->preg);
+		GenerateLoad(ap2, ap3, size, size);
+		ReleaseTempRegister(ap3);
+		ReleaseTempRegister(ap1);
+		//ap2->MakeLegal(flags, size);
+		return (ap2);
+		return (GenerateDereference2(node->p[0], tp, isRefType, flags, size, siz1, su, opt));
+		*/
 	default:	return (nullptr);
 	}
 /*
@@ -695,7 +728,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
   {
 			// This seems a bit of a kludge. If we are dereferencing and there's a
 			// pointer in the register, then we want the value at the pointer location.
-			if (ap1->isPtr && !IsLValue(node)) {
+			if (ap1->isPtr){// && !IsLValue(node)) {
 				int sz = node->GetReferenceSize();
 				int rg = ap1->preg;
 				ReleaseTempRegister(ap1);
@@ -1173,7 +1206,7 @@ void CodeGenerator::GenLoadConst(Operand *ap1, Operand *ap2)
 		GenerateDiadic(op_lea, 0, ap2, ap3);
 	}
 	else
-		GenerateDiadic(op_ldi, 0, ap2, ap1);
+		GenerateDiadic(op_ldi|op_dot, 0, ap2, ap1);
 	// ap2 inherits type from ap1
 	ap2->tp = ap1->tp;
 	regs[ap2->preg].offset = ap1->offset;
@@ -1851,7 +1884,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		ap1->isPtr = node->IsPtr();
 		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
     ap1->preg = node->rg;
-    ap1->tempflag = 0;      /* not a temporary */
+		ap1->tempflag = 0;      /* not a temporary */
 		if (node->tp)
 			switch (node->tp->type) {
 			case bt_float:	ap1->type = stdflt.GetIndex(); break;
@@ -2229,6 +2262,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 	return(0);
 retpt:
 	ap1->MakeLegal(flags, size);
+retpt2:
 	if (node->pfl) {
 		ReleaseTempRegister(cg.GenerateExpression(node->pfl, flags, size));
 	}
@@ -2379,9 +2413,14 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 			if (ap->preg >= regFirstArg && ap->preg < regFirstArg + 4)
 				GenerateDiadic(op_beqz, 0, ap, MakeCodeLabel(label));
 			else {
-				ap1 = MakeBoolean(ap);
-				ReleaseTempReg(ap);
-				GenerateBranchFalse(ap1, label);
+//				if (ap->offset->nodetype==en_icon && ap->offset->i != 0)
+//					GenerateMonadic(op_bra, 0, MakeCodeLabel(label));
+//				else
+				{
+					ap1 = MakeBoolean(ap);
+					ReleaseTempReg(ap);
+					GenerateBranchFalse(ap1, label);
+				}
 			}
 		}
 		break;

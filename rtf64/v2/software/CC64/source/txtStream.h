@@ -6,7 +6,7 @@
 
 class txtoStream : public std::ofstream
 {
-	char buf[500];
+	char buf[5000];
 public:
 	int level;
 public:
