@@ -1,0 +1,39 @@
+   	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#24
+  lea      $gp1,__rodata_start
+  sto      $s0,0[$sp]
+; 	p = "hello";
+  lea      $t0,T00025_1[$gp1]
+  mov      $s0,$t0
+; 	return strlen(p) - 5;
+  sto      $t0,-16[$fp]
+  gcsub    $sp,$sp,#8
+  sto      $s0,0[$sp]
+  call     _strlen
+  mov      $t1,$a0
+  sub      $a0,$t1,#5
+T00025_6:
+T00025_9:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ret      #8
+endpublic
+
+	rodata
+	align	16
+	align	8
+T00025_1:	; hello
+	dcw	104,101,108,108,111,0
+;	global	_main
+	extern	_strlen

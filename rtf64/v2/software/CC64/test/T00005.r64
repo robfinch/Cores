@@ -1,0 +1,65 @@
+ 	code
+	align	16
+   	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#48
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+  sto      $s2,16[$sp]
+  lea      $s0,-8[$fp]
+  lea      $s1,-16[$fp]
+; 	x = 0;
+  sto      $x0,[$s0]
+; 	p = &x;
+  sto      $s0,[$s1]
+; 	pp = &p;
+  mov      $s2,$s1
+; 	if(*p)
+  ldo      $t0,[$s1]
+  ldo      $t0,[$t0]
+  tst      $ra,$t0
+  bf       $ra,T00005_15
+; 		return 1;
+  ldi      $a0,#1
+T00005_14:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  ldo      $s2,16[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00005_15:
+; 	if(**pp)
+  ldo      $t0,[$s2]
+  ldo      $t0,[$t0]
+  tst      $ra,$t0
+  bf       $ra,T00005_17
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00005_14
+T00005_17:
+; 	if(x)
+  ldo      $t0,[$s0]
+  tst      $ra,$t0
+  bf       $ra,T00005_19
+; 		return 0;
+  mov      $a0,$x0
+  bra      T00005_14
+T00005_19:
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00005_14
+T00005_20:
+  bra      T00005_14
+endpublic
+
+	rodata
+	align	16
+;	global	_main

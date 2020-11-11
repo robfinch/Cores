@@ -1,0 +1,31 @@
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	if(0 ? 1 : 0)
+  ldi.     $t0,#0
+  bf       $ra,T00076_13
+; 		return 1;
+  ldi      $a0,#1
+T00076_12:
+  rtl      #0
+T00076_13:
+; 	if(1 ? 0 : 1)
+  ldi.     $t0,#0
+  bf       $ra,T00076_15
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00076_12
+T00076_15:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00076_12
+endpublic
+
+	rodata
+	align	16
+;	global	_main

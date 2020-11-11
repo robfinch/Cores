@@ -246,6 +246,7 @@ void OCODE::OptAdd()
 void OCODE::OptSubtract()
 {
 	OCODE *ip2;
+	OCODE* fsbi;
 
 	ip2 = fwd;
 	// Subtract zero from self.
@@ -280,15 +281,50 @@ void OCODE::OptSubtract()
 	//		}
 	//	}
 	//}
+	// Find the first subtract
+	fsbi = nullptr;
+	for (ip2 = fwd; ip2; ip2 = ip2->fwd) {
+		if (ip2->IsSubiSP()) {
+			fsbi = ip2;
+			break;
+		}
+	}
+	if (fsbi == nullptr)
+		return;
+	ip2 = ip2->fwd;
+	// Find subsequent subtracts
 	while (ip2->opcode == op_hint)
 		ip2 = ip2->fwd;
+	for (; ip2; ip2 = ip2->fwd) {
+		if (ip2->opcode == op_label)
+			return;
+		if (ip2->insn->IsFlowControl())
+			return;
+		if (!ip2->IsSubiSP()) {
+			if (ip2->oper1 && ip2->oper1->preg == regSP)
+				return;
+			if (ip2->oper2 && ip2->oper2->preg == regSP)
+				return;
+			if (ip2->oper3 && ip2->oper3->preg == regSP)
+				return;
+			if (ip2->oper4 && ip2->oper4->preg == regSP)
+				return;
+		}
+		else {
+			fsbi->oper3->offset->i += ip2->oper3->offset->i;
+			ip2->MarkRemove();
+		}
+	}
+	/*
 	if (IsSubiSP() && ip2->fwd)
 		if (ip2->IsSubiSP()) {
 			oper3->offset->i += ip2->oper3->offset->i;
 			ip2->MarkRemove();
 		}
-	if (IsSubiSP() && oper3->offset->i == 0)
-		MarkRemove();
+	*/
+	for (ip2 = fwd; ip2; ip2 = ip2->fwd)
+		if (ip2->IsSubiSP() && ip2->oper3->offset->i == 0)
+			MarkRemove();
 	return;
 	if (opcode == op_subui) {
 		if (oper3) {

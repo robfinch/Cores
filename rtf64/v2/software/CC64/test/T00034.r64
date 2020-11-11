@@ -1,0 +1,82 @@
+ 	code
+	align	16
+ 	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  sto      $s0,0[$sp]
+; 	x = 0;
+  mov      $s0,$x0
+; 	while(1)
+  ldi.     $t0,#1
+  bf       $ra,T00034_25
+T00034_24:
+T00034_25:
+; 	while(1) {
+  ldi.     $t0,#1
+  bf       $ra,T00034_27
+T00034_26:
+; 		if (x == 5) {
+  sne      $ra,$s0,#5
+  bt       $ra,T00034_28
+; 			break;
+  bra      T00034_27
+T00034_28:
+; 		x = x + 1;
+  add      $s0,$s0,#1
+; 		continue;
+  bra      T00034_26
+T00034_27:
+T00034_30:
+; 		if (x == 10) {
+  sne      $ra,$s0,#10
+  bt       $ra,T00034_33
+; 			break;
+  bra      T00034_31
+T00034_33:
+; 		x = x + 1;
+  add      $s0,$s0,#1
+T00034_31:
+T00034_35:
+; 		if (x == 15) {
+  sne      $ra,$s0,#15
+  bt       $ra,T00034_37
+; 			break;
+  bra      T00034_36
+T00034_37:
+; 		x = x + 1;
+  add      $s0,$s0,#1
+; 		continue;
+  bra      T00034_35
+T00034_36:
+; 	return x - 15;
+  sub      $a0,$s0,#15
+T00034_20:
+T00034_23:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+endpublic
+
+	rodata
+	align	16
+;	global	_main

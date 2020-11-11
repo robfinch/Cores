@@ -1,0 +1,75 @@
+ 	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  lea      $gp1,__rodata_start
+  sto      $s0,0[$sp]
+; 	s = "abc" "def";
+  lea      $s0,T00058_1[$gp1]
+; 	if(s[0] != 'a') return 1;
+  ldw      $t0,[$s0]
+  beqi     $t0,#97,T00058_24
+  ldi      $a0,#1
+T00058_20:
+T00058_23:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00058_24:
+; 	if(s[1] != 'b') return 2;
+  ldw      $t0,2[$s0]
+  beqi     $t0,#98,T00058_26
+  ldi      $a0,#2
+  bra      T00058_23
+T00058_26:
+; 	if(s[2] != 'c') return 3;
+  ldw      $t0,4[$s0]
+  beqi     $t0,#99,T00058_28
+  ldi      $a0,#3
+  bra      T00058_23
+T00058_28:
+; 	if(s[3] != 'd') return 4;
+  ldw      $t0,6[$s0]
+  beqi     $t0,#100,T00058_30
+  ldi      $a0,#4
+  bra      T00058_23
+T00058_30:
+; 	if(s[4] != 'e') return 5;
+  ldw      $t0,8[$s0]
+  beqi     $t0,#101,T00058_32
+  ldi      $a0,#5
+  bra      T00058_23
+T00058_32:
+; 	if(s[5] != 'f') return 6;
+  ldw      $t0,10[$s0]
+  beqi     $t0,#102,T00058_34
+  ldi      $a0,#6
+  bra      T00058_23
+T00058_34:
+; 	if(s[6] != 0) return 7;
+  ldw      $t0,12[$s0]
+  seq      $ra,$t0,$x0
+  bt       $ra,T00058_36
+  ldi      $a0,#7
+  bra      T00058_23
+T00058_36:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00058_23
+endpublic
+
+	rodata
+	align	16
+	align	8
+T00058_1:	; abcWdef
+	dcw	97,98,99,87,100,101,102,0
+;	global	_main

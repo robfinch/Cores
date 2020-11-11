@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,8 +43,8 @@ void Declaration::ParseEnum(TABLE *table)
       sp->SetName(*(new std::string(lastid)));
       sp->tp->sname = new std::string(*sp->name);
       NextToken();
-      if(lastst != begin)
-        error(ERR_INCOMPLETE);
+      if (lastst != begin)
+        ;// error(ERR_INCOMPLETE);
       else {
 				tagtable.insert(sp);
 				NextToken();

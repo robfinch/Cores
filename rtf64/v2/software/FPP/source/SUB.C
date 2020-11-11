@@ -231,6 +231,7 @@ void DoPastes(char *buf)
    char *p = buf;
    int QuoteToggle = 0;
    int len = strlen(buf);
+   int ls = 0, ts = 0;
 
    while (1)
    {
@@ -255,9 +256,16 @@ void DoPastes(char *buf)
       }
 
       if (*p == '#' && *(p+1) == '#') {
-         memmove(p, p+2, len - (p - buf)); // shift over top ## in input buffer
-         buf[len-1] = 0;
-         buf[len-2] = 0;
+        ls = -1;
+        while (isspace(p[ls]))
+          ls--;
+        ls++;
+        ts = 2;
+        while (isspace(p[ts]))
+          ts++;
+        ts-=2;
+         memmove(p+ls, p+2+ts, len - (p+ls - buf)); // shift over top ## in input buffer
+         memset(&buf[len - 1 + ls - ts], 0, ts - ls + 2);
          --p;
       }
       p++;

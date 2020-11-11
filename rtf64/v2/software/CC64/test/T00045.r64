@@ -1,0 +1,61 @@
+ 	data
+	align	2
+public data _x:
+	dco	5
+endpublic
+ 
+	align	2
+public data _y:
+	dco	6
+endpublic
+ 
+	align	8
+public data _p:
+dco _p_dat
+endpublic
+public data _p_dat:
+	dco	0
+endpublic
+ 
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	if (x != 5)
+  ldo      $t0,_x[$gp]
+  beqi     $t0,#5,T00045_15
+; 		return 1;
+  ldi      $a0,#1
+T00045_14:
+  rtl      #0
+T00045_15:
+; 	if (y != 6)
+  ldo      $t0,_y[$gp]
+  beqi     $t0,#6,T00045_17
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00045_14
+T00045_17:
+; 	if (*p != 5)
+  ldo      $t0,_p[$gp]
+  ldo      $t0,[$t0]
+  beqi     $t0,#5,T00045_19
+; 		return 3;
+  ldi      $a0,#3
+  bra      T00045_14
+T00045_19:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00045_14
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_p
+;	global	_x
+;	global	_y

@@ -249,7 +249,7 @@ Operand *OperandFactory::makefpreg(int r)
 	Operand *ap;
 	ap = allocOperand();
 	ap->mode = am_fpreg;
-	ap->preg = r;
+	ap->preg = r|0x20;
 	ap->type = stddouble.GetIndex();
 	return (ap);
 }
@@ -259,7 +259,7 @@ Operand* OperandFactory::makepreg(int r)
 	Operand* ap;
 	ap = allocOperand();
 	ap->mode = am_preg;
-	ap->preg = r;
+	ap->preg = r|0x40;
 	ap->type = stdposit.GetIndex();
 	return (ap);
 }
@@ -269,7 +269,7 @@ Operand *OperandFactory::makecreg(int r)
 	Operand *ap;
 	ap = allocOperand();
 	ap->mode = am_creg;
-	ap->preg = r;
+	ap->preg = r|=0x70;
 	ap->isBool = true;
 	return (ap);
 }

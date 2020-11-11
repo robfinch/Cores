@@ -219,7 +219,7 @@ int Function::Parse()
 	}
 	dfs.printf("C");
 
-	if (sp != osp) {
+	if (sp && sp != osp) {
 		dfs.printf("Function::Parse: sp changed\n");
 		params.CopyTo(&sp->params);
 		proto.CopyTo(&sp->proto);
@@ -232,18 +232,37 @@ int Function::Parse()
 		NextToken();
 		while (lastst == kw_attribute)
 			Declaration::ParseFunctionAttribute(sp);
+		//if (lastst == closepa)
+		//	NextToken();
+		if (lastst == openpa) {
+			int np, na;
+			SYM* sp = (SYM*)allocSYM();
+			Function* fn = compiler.ff.MakeFunction(sym->number, sp, false);
+			fn->BuildParameterList(&np, &na);
+			if (lastst == closepa) {
+				NextToken();
+				while (lastst == kw_attribute)
+					Declaration::ParseFunctionAttribute(fn);
+			}
+		}
 	}
 	dfs.printf("D");
-	if (sp->sym->tp->type == bt_pointer) {
+	if (sp && sp->sym->tp->type == bt_pointer) {
 		if (lastst == assign) {
-			doinit(sp->sym);	// was doinit(sym);
+			ENODE* node;
+			Expression exp;
+
+			exp.nameref2(sp->sym->name->c_str(), &node, en_ref, true, nullptr, nullptr);
+			exp.CondDeref(&node, sp->sym->tp);
+			sp->sym->initexp->p[0] = node;
+			doinit(sp->sym);
 		}
 		sp->Init();
 		return (1);
 	}
 j2:
 	dfs.printf("E");
-	if (lastst == semicolon || lastst == comma) {	// Function prototype
+	if (sp && (lastst == semicolon || lastst == comma)) {	// Function prototype
 		dfs.printf("e");
 		sp->IsPrototype = 1;
 		sp->Init();
@@ -256,7 +275,7 @@ j2:
 		}
 		goto j2;
 	}
-	else if (lastst != begin) {
+	else if (sp && lastst != begin) {
 		dfs.printf("F");
 		//			NextToken();
 		//			ParameterDeclaration::Parse(2);
@@ -282,13 +301,15 @@ j2:
 	//                error(ERR_BLOCK);
 	else {
 		dfs.printf("G");
-		sp->Init();
-		// Parsing declarations sets the storage class to extern when it really
-		// should be global if there is a function body.
-		if (sp->sym->storage_class == sc_external)
-			sp->sym->storage_class = sc_global;
-		sp->sym->stmt = ParseBody();
-		Summary(sp->sym->stmt);
+		if (sp) {
+			sp->Init();
+			// Parsing declarations sets the storage class to extern when it really
+			// should be global if there is a function body.
+			if (sp->sym->storage_class == sc_external)
+				sp->sym->storage_class = sc_global;
+			sp->sym->stmt = ParseBody();
+			Summary(sp->sym->stmt);
+		}
 	}
 j1:
 	dfs.printf("F");
@@ -309,7 +330,7 @@ void Function::SaveGPRegisterVars()
 			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
 			rmask->resetPtr();
 			for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
-				GenerateDiadic(op_sth, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				GenerateDiadic(op_sto, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -327,7 +348,7 @@ void Function::SaveFPRegisterVars()
 			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
 			fprmask->resetPtr();
 			for (nn = fprmask->lastMember(); nn >= 0; nn = fprmask->prevMember()) {
-				GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				GenerateDiadic(op_fsto, 0, makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -475,7 +496,7 @@ int Function::RestoreFPRegisterVars()
 		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfWord;
 		fpsave_mask->resetPtr();
 		for (nn = fpsave_mask->nextMember(); nn >= 1; nn = fpsave_mask->nextMember()) {
-			GenerateDiadic(op_ldf, 'd', makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			GenerateDiadic(op_fldo, 0, makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
@@ -494,7 +515,7 @@ int Function::RestorePositRegisterVars()
 		cnt2 = cnt = (psave_mask->NumMember() - 1) * sizeOfWord;
 		psave_mask->resetPtr();
 		for (nn = psave_mask->nextMember(); nn >= 1; nn = psave_mask->nextMember()) {
-			GenerateDiadic(op_pldo, ' ', compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			GenerateDiadic(op_pldo, 0, compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
@@ -1002,6 +1023,8 @@ TypeArray *Function::GetParameterTypes()
 	SYM *sp;
 	int nn;
 
+	if (this == nullptr)
+		return (nullptr);
 	//	printf("Enter GetParameterTypes()\r\n");
 	i16 = new TypeArray();
 	i16->Clear();
@@ -1223,7 +1246,7 @@ Function *Function::FindExactMatch(int mm, std::string name, int rettype, TypeAr
 void Function::BuildParameterList(int *num, int *numa)
 {
 	int64_t poffset;
-	int i, preg, fpreg;
+	int i, reg, fpreg, preg;
 	SYM *sp1;
 	int onp;
 	int np;
@@ -1242,8 +1265,9 @@ void Function::BuildParameterList(int *num, int *numa)
 		oldnames[np] = names[np];
 	onp = nparms;
 	nparms = 0;
-	preg = regFirstArg;
-	fpreg = regFirstArg;
+	reg = regFirstArg;
+	fpreg = regFirstArg|0x20;
+	preg = regFirstArg | 0x40;
 	// Parameters will be inserted into the symbol's parameter list when
 	// declarations are processed.
 	//if (strcmp(sym->name->c_str(), "__Skip") == 0)
@@ -1266,7 +1290,7 @@ void Function::BuildParameterList(int *num, int *numa)
 		sp1->value.i = poffset;
 		noParmOffset = false;
 		if (sp1->tp->IsFloatType()) {
-			if (fpreg > regLastArg)
+			if (fpreg > regLastArg|0x20)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? fpreg | 0x8000 : fpreg;
@@ -1279,13 +1303,27 @@ void Function::BuildParameterList(int *num, int *numa)
 			else
 				sp1->IsRegister = false;
 		}
-		else {
-			if (preg > regLastArg)
+		else if (sp1->tp->IsPositType()) {
+			if (preg > regLastArg | 0x40)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
 				preg++;
 				if ((preg & 0x8000) == 0) {
+					noParmOffset = true;
+					sp1->value.i = -1;
+				}
+			}
+			else
+				sp1->IsRegister = false;
+		}
+		else {
+			if (reg > regLastArg)
+				sp1->IsRegister = false;
+			if (sp1->IsRegister && sp1->tp->size < 11) {
+				sp1->reg = sp1->IsAuto ? reg | 0x8000 : reg;
+				reg++;
+				if ((reg & 0x8000) == 0) {
 					noParmOffset = true;
 					sp1->value.i = -1;
 				}
@@ -1322,12 +1360,12 @@ void Function::BuildParameterList(int *num, int *numa)
 					sp1->IsAuto = false;
 					sp1->next = 0;
 					sp1->IsRegister = true;
-					if (preg > regLastArg)
+					if (reg > regLastArg)
 						sp1->IsRegister = false;
 					if (sp1->IsRegister && sp1->tp->size < 11) {
-						sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
+						sp1->reg = sp1->IsAuto ? reg | 0x8000 : reg;
 						preg++;
-						if ((preg & 0x8000) == 0) {
+						if ((reg & 0x8000) == 0) {
 							noParmOffset = true;
 							sp1->value.i = -1;
 						}

@@ -1,0 +1,109 @@
+  	code
+	align	16
+  	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _foo:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#816
+  sto      $s0,0[$sp]
+; 	y[0] = 2000;
+  ldi.     $t0,#2000
+  sto      $t0,-800[$fp]
+; 	if(x[0] != 1000)
+  ldo      $t0,32[$fp]
+  seq      $ra,$t0,#1000
+  bt       $ra,T00077_19
+; 		return 1;
+  ldi      $a0,#1
+T00077_18:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #16
+T00077_19:
+; 	p = x;
+  lea      $s0,32[$fp]
+; 	if(p[0] != 1000)
+  ldo      $t0,[$s0]
+  seq      $ra,$t0,#1000
+  bt       $ra,T00077_21
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00077_18
+T00077_21:
+; 	p = y;
+  lea      $s0,-800[$fp]
+; 	if(p[0] != 2000)
+  ldo      $t0,[$s0]
+  seq      $ra,$t0,#2000
+  bt       $ra,T00077_23
+; 		return 3;
+  ldi      $a0,#3
+  bra      T00077_18
+T00077_23:
+; 	if(sizeof(x) != sizeof(void*))
+  ldi.     $t0,#1
+  bf       $ra,T00077_25
+; 		return 4;
+  ldi      $a0,#4
+  bra      T00077_18
+T00077_25:
+; 	if(sizeof(y) <= sizeof(x))
+  ldi.     $t0,#1
+  bf       $ra,T00077_27
+; 		return 5;
+  ldi      $a0,#5
+  bra      T00077_18
+T00077_27:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00077_18
+endpublic
+
+ 	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#16
+  sto      $fp,[$sp]
+  sto      $ra,8[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#808
+; 	x[0] = 1000;
+  ldi.     $t0,#1000
+  sto      $t0,-800[$fp]
+; 	return foo(x);
+  lea      $t0,-800[$fp]
+  sto      $t0,0[$sp]
+  jal      _foo
+T00077_33:
+T00077_36:
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ldo      $ra,8[$sp]
+  ret      #16
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_foo

@@ -1,0 +1,16 @@
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  mov      $a0,$x0
+T00061_8:
+  rtl      #0
+endpublic
+
+	rodata
+	align	16
+;	global	_main

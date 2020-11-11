@@ -1,0 +1,53 @@
+ 	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  sto      $s0,0[$sp]
+; 	for(x = 10; x; x = x - 1)
+  ldi.     $s0,#10
+  bf       $ra,T00007_18
+T00007_17:
+; 		;
+  sub      $s0,$s0,#1
+  tst      $ra,$s0
+  bt       $ra,T00007_17
+T00007_18:
+; 	if(x)
+  tst      $ra,$s0
+  bf       $ra,T00007_20
+; 		return 1;
+  ldi      $a0,#1
+T00007_16:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00007_20:
+; 	x = 10;
+  ldi.     $s0,#10
+; 	for (;x;)
+  tst      $ra,$s0
+  bf       $ra,T00007_23
+T00007_22:
+; 		x = x - 1;
+  sub      $s0,$s0,#1
+T00007_24:
+  tst      $ra,$s0
+  bt       $ra,T00007_22
+T00007_23:
+; 	return x;
+  mov      $a0,$s0
+  bra      T00007_16
+endpublic
+
+	rodata
+	align	16
+;	global	_main

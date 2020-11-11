@@ -1104,11 +1104,46 @@ TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
 
 	case ellipsis:
   case id:
+		if (strcmp(lastid, "_L") == 0 || strcmp(lastid, "_l") == 0) {
+			if (lastch == '\'') {
+				NextToken();
+				pnode = ParseCharConst(node,sizeOfWord);
+				break;
+			}
+		}
+		else if (strcmp(lastid, "_B") == 0 || strcmp(lastid, "_b") == 0) {
+			if (lastch == '\'') {
+				NextToken();
+				pnode = ParseCharConst(node, 1);
+				break;
+			}
+		}
+		else if (strcmp(lastid, "_W") == 0 || strcmp(lastid, "_w") == 0) {
+			if (lastch == '\'') {
+				NextToken();
+				pnode = ParseCharConst(node, 2);
+				break;
+			}
+		}
+		else if (strcmp(lastid, "_T") == 0 || strcmp(lastid, "_t") == 0) {
+			if (lastch == '\'') {
+				NextToken();
+				pnode = ParseCharConst(node, 4);
+				break;
+			}
+		}
+		else if (strcmp(lastid, "_O") == 0 || strcmp(lastid, "_o") == 0) {
+			if (lastch == '\'') {
+				NextToken();
+				pnode = ParseCharConst(node, 8);
+				break;
+			}
+		}
 		pnode = ParseNameRef();
     break;
 
   case cconst:
-		pnode = ParseCharConst(node);
+		pnode = ParseCharConst(node,1);
     break;
 
   case iconst:
@@ -1483,8 +1518,8 @@ j1:
 	if (wasBr)
 		ep1 = AdjustForBitArray(openbr, firstType, ep1);
 	*node = ep1;
-	if (ep1)
-		tp1 = ep1->tp;
+//	if (ep1)
+//		tp1 = ep1->tp;
 	if (tp1)
 	Leave("</ParsePostfix>", tp1->type);
 	else
@@ -2261,10 +2296,10 @@ TYP *Expression::ParseEqualOps(ENODE **node)
 					ep1 = makenode(oper ? en_peq : en_pne, ep1, ep2);
 				else
 					ep1 = makenode(oper ? en_eq : en_ne, ep1, ep2);
-				ep1->esize = 2;
+				ep1->esize = 1;
 				if (isVector)
 					tp1 = TYP::Make(bt_vector_mask, sizeOfWord);
-				ep1->etype = tp1->type;
+				ep1->etype = stdint.GetIndex(); //tp1->type;
 				PromoteConstFlag(ep1);
 			}
 		}

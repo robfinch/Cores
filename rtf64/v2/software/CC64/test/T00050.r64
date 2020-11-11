@@ -1,0 +1,72 @@
+           	data
+	align	8
+	align	8
+	dw	$FFF0200000000005
+public data _v:
+	dco	1,2,3,4,5
+endpublic
+ 
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	if(v.a != 1)
+  ldo      $t0,_v[$gp]
+  beqi     $t0,#1,T00050_20
+; 		return 1;
+  ldi      $a0,#1
+T00050_19:
+  rtl      #0
+T00050_20:
+; 	if(v.b != 2)
+  lea      $t0,_v[$gp]
+  ldo      $t0,8[$t0]
+  beqi     $t0,#2,T00050_22
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00050_19
+T00050_22:
+; 	if(v.c != 3 || v.d != 3)
+  lea      $t0,_v[$gp]
+  ldo      $t0,16[$t0]
+  sne      $ra,$t0,#3
+  bt       $ra,T00050_26
+  lea      $t0,_v[$gp]
+  ldo      $t0,16[$t0]
+  beqi     $t0,#3,T00050_24
+T00050_26:
+; 		return 3;
+  ldi      $a0,#3
+  bra      T00050_19
+T00050_24:
+; 	if(v.s.a != 4)
+  lea      $t1,_v[$gp]
+  add      $t0,$t1,#24
+  ldo      $t0,24[$t0]
+  beqi     $t0,#4,T00050_27
+; 		return 4;
+  ldi      $a0,#4
+  bra      T00050_19
+T00050_27:
+; 	if(v.s.b != 5)
+  lea      $t1,_v[$gp]
+  add      $t0,$t1,#24
+  ldo      $t0,32[$t0]
+  beqi     $t0,#5,T00050_29
+; 		return 5;
+  ldi      $a0,#5
+  bra      T00050_19
+T00050_29:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00050_19
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_v

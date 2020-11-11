@@ -130,7 +130,7 @@ void ddefine()
          free(parms[n]);
 
    // Do pasteing
-   DoPastes(ptr);
+   //DoPastes(ptr);
 
    // See if the macro is already defined. If it is then if the definition
    // is not the same spit out an error, otherwise spit out warning.
@@ -297,7 +297,7 @@ void dline()
    SearchAndSub();
    DoPastes(inbuf);
    InLineNo = atoi(inptr);
-   sprintf(bbline.body, "%5d", InLineNo);
+   sprintf(bbline.body, "%5d", InLineNo-2);
    if ((ptr = strchr(inptr, '"')) != NULL)
    {
       inptr = ptr;
@@ -351,7 +351,7 @@ int directive()
       "if",      2, dif,      // must come after ifdef/ifndef
       "undef",   5, dundef,  
       "line",    4, dline,   
-      "pragma",  6, dpragma 
+      "pragma",  6, dpragma,
    };
 
    // Skip any whitespace following '#'
@@ -367,10 +367,10 @@ int directive()
 		 // scans to the end of the line
 		 //ScanPastEOL();
          //for (; *inptr != 0; inptr++); // skip to eol
-         return (TRUE);
+         return (i+1);
       }
    }
-   return (FALSE);
+   return (0);
 }
 
 
@@ -385,16 +385,21 @@ int directive()
 void ProcLine()
 {
    int ch;
+   int def = 0;
+   char* ptr;
 
    //printf("Processing line: %d\r", InLineNo);
    inptr = inbuf;
+   ptr = inbuf;
    memset(inbuf, 0, sizeof(inbuf));
 //   ch = NextCh();          // get first character
    ch = NextNonSpace(0);
    if (ch == '#') {
       if (ShowLines)
          fprintf(stdout, "#line %5d\n", InLineNo);
-      directive();
+      def = directive()==1;
+      if (def)
+        ptr = inptr;
    }
    else {
       inptr = inbuf;
@@ -409,7 +414,7 @@ void ProcLine()
 		  printf("fputs failed.\n");
    }
    InLineNo++;          // Update line number (including __LINE__).
-   sprintf(bbline.body, "%5d", InLineNo);
+   sprintf(bbline.body, "%5d", InLineNo-1);
 }
 
 /* -----------------------------------------------------------------------------

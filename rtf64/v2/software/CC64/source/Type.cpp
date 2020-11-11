@@ -626,12 +626,13 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 
 // Initialize the type. Unions can't be initialized.
 
-int64_t TYP::Initialize(TYP *tp2, int opt)
+int64_t TYP::Initialize(ENODE* pnode, TYP *tp2, int opt)
 {
 	int64_t nbytes;
 	TYP *tp;
 	int base, nn;
 	int64_t sizes[100];
+	ENODE* node;
 
 	for (base = typ_sp-1; base >= 0; base--) {
 		if (typ_vector[base]->isArray)
@@ -791,12 +792,12 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 				if (fill > 0) {
 					while (fill > 0) {
 						fill--;
-						nbytes += GetBtp()->Initialize(GetBtp(), fill == 0);
+						nbytes += GetBtp()->Initialize(nullptr, GetBtp(), fill == 0);
 						pos++;
 					}
 				}
 				else {
-					nbytes += GetBtp()->Initialize(GetBtp(), 1);
+					nbytes += GetBtp()->Initialize(nullptr, GetBtp(), 1);
 					pos++;
 				}
 			}
@@ -853,7 +854,7 @@ int64_t TYP::InitializeStruct()
 			GenerateByte(0);
 			nbytes++;
 		}
-		nbytes += sp->tp->Initialize(sp->tp,1);
+		nbytes += sp->tp->Initialize(nullptr, sp->tp,1);
 		if (lastst == comma)
 			NextToken();
 		else if (lastst == end || lastst==semicolon) {

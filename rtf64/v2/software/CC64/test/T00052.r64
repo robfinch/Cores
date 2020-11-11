@@ -1,0 +1,27 @@
+ 	code
+	align	16
+  	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  sto      $s0,0[$sp]
+; 		s.x = 0;
+  mov      $a0,$x0
+T00052_8:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+endpublic
+
+	rodata
+	align	16
+;	global	_main

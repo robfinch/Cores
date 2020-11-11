@@ -1019,7 +1019,7 @@ void SaveFPRegisterVars(CSet *rmask)
 		cnt = 0;
 		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
-			GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
+			GenerateDiadic(op_fsto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 	}
@@ -1069,7 +1069,7 @@ static void RestoreFPRegisterVars()
 		cnt = 0;
 		fpsave_mask->resetPtr();
 		for (nn = fpsave_mask->nextMember(); nn >= 0; nn = fpsave_mask->nextMember()) {
-			GenerateDiadic(op_ldf, 'd', makefpreg(nn), cg.MakeIndexed(cnt, regSP));
+			GenerateDiadic(op_fldo, 0, makefpreg(nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
@@ -1099,24 +1099,24 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	}
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
-			ap = cg.GenerateExpression(ep,am_reg,sizeOfFP);
+			ap = cg.GenerateExpression(ep,am_fpreg,sizeOfFP);
 		else if (ep->tp->IsPositType())
-			ap = cg.GenerateExpression(ep, am_preg|am_imm, sizeOfPosit);
+			ap = cg.GenerateExpression(ep, am_preg, sizeOfPosit);
 		else
-			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
+			ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
 	}
 	else if (ep->etype==bt_quad)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_double)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_triple)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_float)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype == bt_posit)
-		ap = cg.GenerateExpression(ep, am_reg, sz);
+		ap = cg.GenerateExpression(ep, am_preg, sz);
 	else
-		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
+		ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
@@ -1196,7 +1196,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 						if (ap->offset->i!=0) {
 							ap3 = GetTempRegister();
 							regs[ap3->preg].IsArg = true;
-							GenLoadConst(ap, ap3);
+							GenerateLoadConst(ap, ap3);
 	         		GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}

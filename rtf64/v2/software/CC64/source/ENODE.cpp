@@ -105,7 +105,7 @@ int64_t ENODE::GetReferenceSize()
 	{
 	case en_ref:
 	case en_fieldref:
-		return (tp->size);
+		return (esize);// tp->size);
 	case en_fpregvar:
 		if (tp)
 			return(tp->size);
@@ -604,8 +604,8 @@ void ENODE::repexpr()
 	case en_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
-				//nodetype = csp->isfp ? en_fpregvar : csp->isPosit ? en_pregvar : en_regvar;
-				nodetype = en_regvar;
+				nodetype = csp->isfp ? en_fpregvar : csp->isPosit ? en_pregvar : en_regvar;
+				//nodetype = en_regvar;
 				rg = csp->reg;
 				ru->add(rg);
 				rru->add(nregs - 1 - rg);
@@ -1270,7 +1270,7 @@ j1:
 					GenerateDiadic(op_mov, 0, ap1, ap2);
 					break;
 				case am_imm:
-					cg.GenLoadConst(ap2, ap1);
+					cg.GenerateLoadConst(ap2, ap1);
 					if (ap2->isPtr)
 						ap1->isPtr = true;
 					break;
@@ -1324,7 +1324,7 @@ j1:
 				GenerateDiadic(op_mov, 0, ap1, ap2);
 				break;
 			case am_imm:
-				cg.GenLoadConst(ap2, ap1);
+				cg.GenerateLoadConst(ap2, ap1);
 				if (ap2->isPtr)
 					ap1->isPtr = true;
 				break;

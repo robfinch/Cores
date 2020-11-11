@@ -58,7 +58,9 @@ void doinit(SYM *sp)
   enum e_sg oseg;
   char buf[500];
   std::streampos endpoint;
+	std::streampos lblpoint;
 	TYP *tp;
+	int n;
 
 	sp->storage_pos = ofs.tellp();
   hasPointer = false;
@@ -132,6 +134,7 @@ void doinit(SYM *sp)
 			ofs.printf(buf);
 		}
 		strcpy_s(glbl2, sizeof(glbl2), sp->name->c_str());
+		lblpoint = ofs.tellp();
 		gen_strlab(lbl);
 	}
 	if (lastst == kw_firstcall) {
@@ -143,7 +146,23 @@ void doinit(SYM *sp)
 		genstorage(sp->tp->size);
 	}
 	else {
+		ENODE* node;
+		Expression exp;
+
 		NextToken();
+		if (lastst == bitandd) {
+			char buf[400];
+			char buf2[40];
+			if (sp->storage_class == sc_global)
+				strcpy(buf2, "endpublic\n");
+			else
+				strcpy(buf2, "");
+			sprintf(buf, "%s:\ndco %s_dat\n%s%s_dat:\n", lbl, sp->name->c_str(), buf2, lbl);
+			ofs.seekp(lblpoint);
+			ofs.write(buf);
+			while (lastst != begin && lastst != semicolon && lastst != my_eof)
+				NextToken();
+		}
 		hasPointer = sp->tp->FindPointer();
 		typ_sp = 0;
 		tp = sp->tp;
@@ -152,7 +171,7 @@ void doinit(SYM *sp)
 			push_typ(tp);
 		}
 		brace_level = 0;
-		sp->tp->Initialize(nullptr,1);
+		sp->tp->Initialize(nullptr, nullptr, 1);
 		if (sp->tp->numele == 0) {
 			if (sp->tp->GetBtp()) {
 				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar
@@ -270,7 +289,7 @@ int64_t InitializePointer(TYP *tp2)
 		NextToken();
 		if (lastst == begin) {
 			NextToken();
-			lng = tp2->Initialize(nullptr,1);
+			lng = tp2->Initialize(nullptr, nullptr,1);
 			needpunc(end, 13);
 			needpunc(end, 14);
 			return (lng);

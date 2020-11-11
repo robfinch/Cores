@@ -61,7 +61,7 @@ ENODE* Expression::SetIntConstSize(TYP* tptr, int64_t val)
 }
 
 
-ENODE* Expression::ParseCharConst(ENODE** node)
+ENODE* Expression::ParseCharConst(ENODE** node, int sz)
 {
 	ENODE* pnode;
 	TYP* tptr;
@@ -69,7 +69,7 @@ ENODE* Expression::ParseCharConst(ENODE** node)
 	tptr = &stdchar;
 	pnode = makeinode(en_icon, ival);
 	pnode->constflag = TRUE;
-	pnode->esize = 1;
+	pnode->esize = sz;
 	pnode->SetType(tptr);
 	NextToken();
 	return (pnode);

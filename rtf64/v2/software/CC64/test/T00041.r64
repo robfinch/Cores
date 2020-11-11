@@ -1,0 +1,83 @@
+ 	code
+	align	16
+    	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#64
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+  sto      $s2,16[$sp]
+  sto      $s3,24[$sp]
+; 	c = 0;
+  mov      $s2,$x0
+; 	n = 2;
+  ldi.     $s1,#2
+; 	while (n < 5000) {
+  sge      $ra,$s1,#5000
+  bt       $ra,T00041_20
+T00041_19:
+; 		t = 2;
+  ldi.     $s0,#2
+; 		p = 1;
+  ldi.     $s3,#1
+; 		while (t*t <= n) {
+  mul      $t0,$s0,$s0
+  sgt      $ra,$t0,$s1
+  bt       $ra,T00041_22
+T00041_21:
+; 			if (n % t == 0)
+  rem      $t0,$s1,$s0
+  sne      $ra,$t0,$x0
+  bt       $ra,T00041_23
+; 				p = 0;
+  mov      $s3,$x0
+T00041_23:
+; 			t++;
+  add      $s0,$s0,#1
+  mul      $t0,$s0,$s0
+  sle      $ra,$t0,$s1
+  bt       $ra,T00041_21
+T00041_22:
+; 		n++;
+  add      $s1,$s1,#1
+; 		if (p)
+  tst      $ra,$s3
+  bf       $ra,T00041_25
+; 			c++;
+  add      $s2,$s2,#1
+T00041_25:
+  slt      $ra,$s1,#5000
+  bt       $ra,T00041_19
+T00041_20:
+; 	if (c != 669)
+  seq      $ra,$s2,#669
+  bt       $ra,T00041_27
+; 		return 1;
+  ldi      $a0,#1
+T00041_18:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  ldo      $s2,16[$sp]
+  ldo      $s3,24[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00041_27:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00041_18
+endpublic
+
+	rodata
+	align	16
+;	global	_main

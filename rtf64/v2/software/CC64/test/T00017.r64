@@ -1,0 +1,36 @@
+ 	code
+	align	16
+   	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#24
+  sto      $s0,0[$sp]
+  lea      $s0,-16[$fp]
+; 	s.x = 3;
+  ldi.     $t0,#3
+  sto      $t0,[$s0]
+; 	s.y = 5;
+  ldi.     $t0,#5
+  sto      $t0,8[$s0]
+; 	return s.y - s.x - 2;
+  ldo      $t2,8[$s0]
+  ldo      $t3,[$s0]
+  sub      $t1,$t2,$t3
+  sub      $a0,$t1,#2
+T00017_5:
+T00017_8:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+endpublic
+
+	rodata
+	align	16
+;	global	_main

@@ -458,7 +458,21 @@ void getnum()
                         getbase(16);
                         }
                 else getbase(8);
+                // Ignore 'U' unsigned suffix
+                if (lastch == 'U' || lastch == 'u') {
+                  getch();
                 }
+                // Ignore 'L' unsigned suffix
+                if (lastch == 'L' || lastch == 'l') {
+                  getch();
+                  if (lastch == 'L' || lastch == 'l') {
+                    getch();
+                    if (lastch == 'U' || lastch == 'u') {
+                      getch();
+                    }
+                  }
+                }
+        }
         else    {
                 getbase(10);
 j1:
@@ -499,7 +513,17 @@ j1:
 				if (lastch=='U' || lastch=='u') {
 					getch();
 				}
-				}
+        // Ignore 'L' unsigned suffix
+        if (lastch == 'L' || lastch == 'l') {
+          getch();
+          if (lastch == 'L' || lastch == 'l') {
+            getch();
+            if (lastch == 'U' || lastch == 'u') {
+              getch();
+            }
+          }
+        }
+      }
     numstrptr[-1]='\0';
     numstrptr = NULL;
 //    dd_real::read(numstr,rval);

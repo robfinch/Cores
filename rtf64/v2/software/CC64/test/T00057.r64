@@ -1,0 +1,24 @@
+ 	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	if(sizeof(a) != sizeof(b))
+  ldi.     $t0,#0
+  bf       $ra,T00057_11
+; 		return 1;
+  ldi      $a0,#1
+T00057_10:
+  rtl      #0
+T00057_11:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00057_10
+endpublic
+
+	rodata
+	align	16
+;	global	_main

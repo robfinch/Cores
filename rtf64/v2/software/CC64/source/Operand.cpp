@@ -275,7 +275,7 @@ void Operand::MakeLegal(int flags, int size)
 			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
-			cg.GenLoadConst(this, ap2);
+			cg.GenerateLoadConst(this, ap2);
 			//GenerateDiadic(op_ldi, 0, ap2, this);
 			break;
 		case am_reg:
@@ -435,7 +435,7 @@ void Operand::MakeLegal(int flags, int size)
 		cg.GenerateLoad(ap2, this, size, size);
 		break;
 	case am_imm:
-		cg.GenLoadConst(this, ap2);
+		cg.GenerateLoadConst(this, ap2);
 		//GenerateDiadic(op_ldi, 0, ap2, this);
 		break;
 	case am_reg:
@@ -609,14 +609,10 @@ void Operand::store(txtoStream& ofs)
 	case am_vmreg:
 		ofs.printf("vm%d", (int)preg);
 		break;
-	case am_fpreg:
-		ofs.printf("$f%d", (int)preg);
-		break;
-	case am_preg:
-		ofs.printf("$p%d", (int)preg);
-		break;
 	case am_creg:
-		ofs.printf("$cr%d", (int)preg);
+	case am_preg:
+	case am_fpreg:
+		ofs.printf("%s", RegMoniker(preg));
 		break;
 	case am_ind:
 		if (preg == 0)

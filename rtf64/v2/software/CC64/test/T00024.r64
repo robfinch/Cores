@@ -1,0 +1,38 @@
+    	bss
+	align	8
+	align	8
+	dw	$FFF0200000000002
+public bss _v:
+	fill.b	16,0x00                    
+
+endpublic
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	v.x = 1;
+  ldi.     $t0,#1
+  sto      $t0,_v[$gp]
+; 	v.y = 2;
+  lea      $t0,_v[$gp]
+  ldi.     $t1,#2
+  sto      $t1,8[$t0]
+; 	return 3 - v.x - v.y;
+  ldi.     $t2,#3
+  ldo      $t3,_v[$gp]
+  sub      $t1,$t2,$t3
+  lea      $t2,_v[$gp]
+  ldo      $t2,8[$t2]
+  sub      $a0,$t1,$t2
+T00024_8:
+  rtl      #0
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_v

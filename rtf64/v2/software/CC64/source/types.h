@@ -546,7 +546,7 @@ public:
 	int64_t InitializeStruct();
 	int64_t InitializeUnion();
 	int64_t Initialize(int64_t val);
-	int64_t Initialize(TYP *, int opt);
+	int64_t Initialize(ENODE* node, TYP *, int opt);
 
 	// Serialization
 	void storeHex(txtoStream& ofs);
@@ -746,7 +746,7 @@ private:
 	void SetRefType(ENODE** node);
 	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
 	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
-	ENODE* ParseCharConst(ENODE** node);
+	ENODE* ParseCharConst(ENODE** node, int sz);
 	ENODE* ParseStringConst(ENODE** node);
 	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
 	ENODE* ParseInlineStringConst(ENODE** node);
@@ -781,7 +781,6 @@ private:
 	TYP* deref(ENODE** node, TYP* tp);
 
 	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
-	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
 	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
 	TYP *ParseCastExpression(ENODE **node);
 	TYP *ParseMultOps(ENODE **node);
@@ -816,6 +815,7 @@ private:
 	ENODE* FindLastMulu(ENODE*, ENODE*);
 public:
 	Expression();
+	TYP* ParseUnaryExpression(ENODE** node, int got_pa);
 	TYP* CondDeref(ENODE** node, TYP* tp);
 	ENODE* MakeAutoNameNode(SYM* sp);
 	TYP* nameref(ENODE** node, int nt);
@@ -1057,7 +1057,7 @@ public:
 	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
-	void GenLoadConst(Operand *ap1, Operand *ap2);
+	void GenerateLoadConst(Operand *ap1, Operand *ap2);
 	void SaveTemporaries(Function *sym, int *sp, int *fsp, int* psp);
 	void RestoreTemporaries(Function *sym, int sp, int fsp, int psp);
 	int GenerateInlineArgumentList(Function *func, ENODE *plist);
@@ -1694,6 +1694,7 @@ public:
 	SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
 	int ParseFunction(TABLE* table, SYM* sp, e_sc al);
+	void ParseFunctionJ2(Function* fn);
 	void ParseAssign(SYM *sp);
 	void DoDeclarationEnd(SYM *sp, SYM *sp1);
 	void DoInsert(SYM *sp, TABLE *table);

@@ -96,6 +96,7 @@ void dooper(ENODE *node)
 		ep->posit.IntToPosit(ep->p[0]->i);
 		ep->SetType(ep->tp);
 		break;
+
 	case en_fadd:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f + ep->p[1]->f;
@@ -135,25 +136,21 @@ void dooper(ENODE *node)
 
 	case en_padd:
 		ep->nodetype = en_pcon;
-		ep->f = ep->p[0]->f + ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		ep->posit.Add(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_psub:
 		ep->nodetype = en_pcon;
-		ep->f = ep->p[0]->f - ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		ep->posit.Sub(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_pmul:
 		ep->nodetype = en_pcon;
-		ep->f = ep->p[0]->f * ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		ep->posit.Multiply(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 	case en_pdiv:
 		ep->nodetype = en_pcon;
-		ep->f = ep->p[0]->f / ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		ep->posit.Divide(ep->p[0]->posit, ep->p[1]->posit);
 		break;
@@ -437,7 +434,15 @@ static void opt0(ENODE **node)
 								Float128::Assign(&ep->f128,&ep->p[0]->f128);
               }
               return;
-			case en_vadd:
+						case en_temppref:
+							opt0(&(ep->p[0]));
+							if (ep->p[0] && ep->p[0]->nodetype == en_pcon)
+							{
+								ep->nodetype = en_pcon;
+								ep->posit = ep->p[0]->posit;
+							}
+							return;
+						case en_vadd:
 			case en_vsub:
             case en_add:
             case en_sub:
@@ -852,6 +857,17 @@ static int64_t xfold(ENODE *node)
                         i = node->i;
                         node->i = 0;
                         return i;
+								case en_pcon:
+									i = node->posit.val;
+									node->posit.val = 0;
+									return i;
+								case en_pregvar:
+									if (node->rg == regZero) {
+										i = 0;
+										node->posit = 0;
+										return (i);
+									}
+									return (0);
 								case en_regvar:
 									if (node->rg == regZero) {
 										i = 0;

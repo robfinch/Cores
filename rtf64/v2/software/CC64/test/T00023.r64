@@ -1,0 +1,26 @@
+ 	bss
+	align	2
+public bss _x:
+	fill.b	8,0x00                    
+
+endpublic
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	x = 0;
+  sto      $x0,_x[$gp]
+; 	return x;
+  ldo      $a0,_x[$gp]
+T00023_8:
+  rtl      #0
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_x

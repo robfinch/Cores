@@ -1,0 +1,106 @@
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _f:
+  ldi      $a0,#100
+T00030_8:
+  rtl      #0
+endpublic
+
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#16
+  sto      $fp,[$sp]
+  sto      $ra,8[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#8
+; 	if (f() > 1000)
+  jal      _f
+  mov      $t0,$a0
+  sle      $ra,$t0,#1000
+  bt       $ra,T00030_29
+; 		return 1;
+  ldi      $a0,#1
+T00030_25:
+T00030_28:
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ldo      $ra,8[$sp]
+  ret      #16
+T00030_29:
+; 	if (f() >= 1000)
+  jal      _f
+  mov      $t0,$a0
+  slt      $ra,$t0,#1000
+  bt       $ra,T00030_31
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00030_28
+T00030_31:
+; 	if (1000 < f())
+  ldi.     $t0,#1000
+  sto      $t0,-8[$fp]
+  jal      _f
+  ldo      $t0,-8[$fp]
+  mov      $t1,$a0
+  sge      $ra,$t0,$t1
+  bt       $ra,T00030_33
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00030_28
+T00030_33:
+; 	if (1000 <= f())
+  ldi.     $t0,#1000
+  sto      $t0,-8[$fp]
+  jal      _f
+  ldo      $t0,-8[$fp]
+  mov      $t1,$a0
+  sgt      $ra,$t0,$t1
+  bt       $ra,T00030_35
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00030_28
+T00030_35:
+; 	if (1000 == f())
+  ldi.     $t0,#1000
+  sto      $t0,-8[$fp]
+  jal      _f
+  ldo      $t0,-8[$fp]
+  mov      $t1,$a0
+  sne      $ra,$t0,$t1
+  bt       $ra,T00030_37
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00030_28
+T00030_37:
+; 	if (100 != f())
+  ldi.     $t0,#100
+  sto      $t0,-8[$fp]
+  jal      _f
+  ldo      $t0,-8[$fp]
+  mov      $t1,$a0
+  seq      $ra,$t0,$t1
+  bt       $ra,T00030_39
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00030_28
+T00030_39:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00030_28
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_f

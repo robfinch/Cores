@@ -1,0 +1,132 @@
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _zero:
+  mov      $a0,$x0
+T00031_8:
+  rtl      #0
+endpublic
+
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _one:
+  ldi      $a0,#1
+T00031_16:
+  rtl      #0
+endpublic
+
+ 	code
+	align	16
+  	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#16
+  sto      $fp,[$sp]
+  sto      $ra,8[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#32
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+; 	x = zero();
+  jal      _zero
+  mov      $s0,$a0
+; 	y = ++x;
+  add      $s0,$s0,#1
+  mov      $s1,$s0
+; 	if (x != 1)
+  beqi     $s0,#1,T00031_41
+; 		return 1;
+  ldi      $a0,#1
+T00031_37:
+T00031_40:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ldo      $ra,8[$sp]
+  ret      #16
+T00031_41:
+; 	if (y != 1)
+  beqi     $s1,#1,T00031_43
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_43:
+; 	x = one();
+  jal      _one
+  mov      $s0,$a0
+; 	y = --x;
+  sub      $s0,$s0,#1
+  mov      $s1,$s0
+; 	if (x != 0)
+  seq      $ra,$s0,$x0
+  bt       $ra,T00031_45
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_45:
+; 	if (y != 0)
+  seq      $ra,$s1,$x0
+  bt       $ra,T00031_47
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_47:
+; 	x = zero();
+  jal      _zero
+  mov      $s1,$a0
+; 	y = x++;
+  add      $s0,$s0,#1
+; 	if (x != 1)
+  beqi     $s0,#1,T00031_49
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_49:
+; 	if (y != 0)
+  seq      $ra,$s1,$x0
+  bt       $ra,T00031_51
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_51:
+; 	x = one();
+  jal      _one
+  mov      $s1,$a0
+; 	y = x--;
+  sub      $s0,$s0,#1
+; 	if (x != 0)
+  seq      $ra,$s0,$x0
+  bt       $ra,T00031_53
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_53:
+; 	if (y != 1)
+  beqi     $s1,#1,T00031_55
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00031_40
+T00031_55:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00031_40
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_zero
+;	global	_one

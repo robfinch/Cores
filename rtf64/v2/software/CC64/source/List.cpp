@@ -179,15 +179,17 @@ void list_var(SYM *sp, int i)
     if (sp->tp) {
   		if (sp->tp->type==bt_ifunc || sp->tp->type==bt_func) {
 			fn = sp->fi;
-  			lfs.printf("\t\tParameters:\n\t\t\t");
-  			ta = fn->GetProtoTypes();
-  			ta->Print(&lfs);
-  			if (ta)
-  				delete ta;
-			lfs.printf("Stack Space:\n\t\t");
-			lfs.printf("Argbot: %d\n\t\t", fn->argbot);
-			lfs.printf("Tmpbot: %d\n\t\t", fn->tempbot);
-			lfs.printf("Stkspc: %d\n\t\t", fn->stkspace);
+      if (fn) {
+        lfs.printf("\t\tParameters:\n\t\t\t");
+        ta = fn->GetProtoTypes();
+        ta->Print(&lfs);
+        if (ta)
+          delete ta;
+        lfs.printf("Stack Space:\n\t\t");
+        lfs.printf("Argbot: %d\n\t\t", fn->argbot);
+        lfs.printf("Tmpbot: %d\n\t\t", fn->tempbot);
+        lfs.printf("Stkspc: %d\n\t\t", fn->stkspace);
+      }
   		}
 	  }
 	  if (sp->tp) {

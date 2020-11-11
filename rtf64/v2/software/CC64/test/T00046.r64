@@ -1,0 +1,68 @@
+            	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  sto      $s0,0[$sp]
+  lea      $s0,-8[$fp]
+; 	v.a = 1;
+  ldi.     $t0,#1
+  sto      $t0,[$s0]
+; 	v.b1 = 2;
+  ldi.     $t0,#2
+  sto      $t0,8[$s0]
+; 	v.c = 3;
+  ldi.     $t0,#3
+  sto      $t0,16[$s0]
+; 	v.d = 4;
+  ldi.     $t0,#4
+  sto      $t0,24[$s0]
+; 	if (v.a != 1)
+  ldo      $t0,[$s0]
+  beqi     $t0,#1,T00046_17
+; 		return 1;
+  ldi      $a0,#1
+T00046_16:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00046_17:
+; 	if (v.b1 != 2 && v.b2 != 2)
+  ldo      $t0,8[$s0]
+  beqi     $t0,#2,T00046_19
+  ldo      $t0,8[$s0]
+  beqi     $t0,#2,T00046_19
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00046_16
+T00046_19:
+; 	if (v.c != 3)
+  ldo      $t0,16[$s0]
+  beqi     $t0,#3,T00046_21
+; 		return 3;
+  ldi      $a0,#3
+  bra      T00046_16
+T00046_21:
+; 	if (v.d != 4)
+  ldo      $t0,24[$s0]
+  beqi     $t0,#4,T00046_23
+; 		return 4;
+  ldi      $a0,#4
+  bra      T00046_16
+T00046_23:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00046_16
+endpublic
+
+	rodata
+	align	16
+;	global	_main

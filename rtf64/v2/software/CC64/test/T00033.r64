@@ -1,0 +1,160 @@
+ 	bss
+	align	2
+public bss _g:
+	fill.b	8,0x00                    
+
+endpublic
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _effect:
+; 	g = 1;
+  ldi.     $t0,#1
+  sto      $t0,_g[$gp]
+; 	return 1;
+  ldi      $a0,#1
+T00033_8:
+  rtl      #0
+endpublic
+
+ 	code
+	align	16
+ 	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#16
+  sto      $fp,[$sp]
+  sto      $ra,8[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  lea      $gp,__data_start
+  sto      $s0,0[$sp]
+;     g = 0;
+  sto      $x0,_g[$gp]
+;     x = 0;
+  mov      $s0,$x0
+;     if(x && effect())
+  tst      $ra,$s0
+  bf       $ra,T00033_35
+  jal      _effect
+  mov      $t0,$a0
+  tst      $ra,$t0
+  bf       $ra,T00033_35
+;     	return 1;
+  ldi      $a0,#1
+T00033_31:
+T00033_34:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ldo      $ra,8[$sp]
+  ret      #16
+T00033_35:
+;     if(g)
+  ldo      $t0,_g[$gp]
+  tst      $ra,$t0
+  bf       $ra,T00033_37
+;     	return 2;
+  ldi      $a0,#2
+  bra      T00033_34
+T00033_37:
+;     x = 1;
+  ldi.     $s0,#1
+;     if(x && effect()) {
+  tst      $ra,$s0
+  bf       $ra,T00033_39
+  jal      _effect
+  mov      $t0,$a0
+  tst      $ra,$t0
+  bf       $ra,T00033_39
+;     	if(g != 1)
+  ldo      $t0,_g[$gp]
+  beqi     $t0,#1,T00033_41
+;     		return 3;
+  ldi      $a0,#3
+  bra      T00033_34
+T00033_41:
+  bra      T00033_40
+T00033_39:
+;     	return 4;
+  ldi      $a0,#4
+  bra      T00033_34
+T00033_40:
+;     g = 0;
+  sto      $x0,_g[$gp]
+;     x = 1;
+  ldi.     $s0,#1
+;     if(x || effect()) {
+  tst      $ra,$s0
+  bt       $ra,T00033_45
+  jal      _effect
+  mov      $t0,$a0
+  tst      $ra,$t0
+  bf       $ra,T00033_43
+T00033_45:
+;     	if(g)
+  ldo      $t0,_g[$gp]
+  tst      $ra,$t0
+  bf       $ra,T00033_46
+;     		return 5;
+  ldi      $a0,#5
+  bra      T00033_34
+T00033_46:
+  bra      T00033_44
+T00033_43:
+;     	return 6;
+  ldi      $a0,#6
+  bra      T00033_34
+T00033_44:
+;     x = 0;
+  mov      $s0,$x0
+;     if(x || effect()) {
+  tst      $ra,$s0
+  bt       $ra,T00033_50
+  jal      _effect
+  mov      $t0,$a0
+  tst      $ra,$t0
+  bf       $ra,T00033_48
+T00033_50:
+;     	if(g != 1)
+  ldo      $t0,_g[$gp]
+  beqi     $t0,#1,T00033_51
+;     		return 7;
+  ldi      $a0,#7
+  bra      T00033_34
+T00033_51:
+  bra      T00033_49
+T00033_48:
+;     	return 8;
+  ldi      $a0,#8
+  bra      T00033_34
+T00033_49:
+;     return 0;
+  mov      $a0,$x0
+  bra      T00033_34
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_g
+;	global	_effect

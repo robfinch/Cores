@@ -72,7 +72,7 @@ int verbose = 0;
 int use_gp = 1;
 int address_bits = 32;
 int maxVL = 64;
-int nregs = 64;
+int nregs = 128;
 
 int64_t sizeOfWord = 8;
 int sizeOfFP = 8;

@@ -1,0 +1,52 @@
+ 	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+; 	if (sizeof(0) < 2)
+  ldi.     $t0,#0
+  bf       $ra,T00038_19
+; 		return 1;
+  ldi      $a0,#1
+T00038_18:
+  rtl      #0
+T00038_19:
+; 	if (sizeof 0 < 2)
+  ldi.     $t0,#0
+  bf       $ra,T00038_21
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00038_18
+T00038_21:
+; 	if (sizeof(char) < 1)
+  ldi.     $t0,#0
+  bf       $ra,T00038_23
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00038_18
+T00038_23:
+; 	if (sizeof(int) - 2 < 0)
+  ldi.     $t0,#0
+  bf       $ra,T00038_25
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00038_18
+T00038_25:
+; 	if (sizeof(&x) != sizeof p)
+  ldi.     $t0,#0
+  bf       $ra,T00038_27
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00038_18
+T00038_27:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00038_18
+endpublic
+
+	rodata
+	align	16
+;	global	_main

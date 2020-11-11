@@ -1,0 +1,112 @@
+                                                                                                                                                  	code
+	align	16
+ 	code
+	align	16
+  ;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#64
+  lea      $gp1,__rodata_start
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+  sto      $s2,16[$sp]
+  sto      $s3,24[$sp]
+;    int a;
+  ldi.     $s0,#64
+  ldi.     $s2,#12
+  ldi.     $s3,#34
+;    a = 42;
+  ldi.     $s1,#42
+;    printf("%d\n", a);
+  gcsub    $sp,$sp,#16
+  lea      $t0,T00056_1[$gp1]
+  sto      $t0,0[$sp]
+  sto      $s1,8[$sp]
+  call     _printf
+;    printf("%d\n", b);
+  gcsub    $sp,$sp,#16
+  lea      $t0,T00056_2[$gp1]
+  sto      $t0,0[$sp]
+  sto      $s0,8[$sp]
+  call     _printf
+;    printf("%d, %d\n", c, d);
+  gcsub    $sp,$sp,#24
+  lea      $t0,T00056_3[$gp1]
+  sto      $t0,0[$sp]
+  sto      $s2,8[$sp]
+  sto      $s3,16[$sp]
+  call     _printf
+;    return 0;
+  mov      $a0,$x0
+T00056_8:
+T00056_11:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  ldo      $s2,16[$sp]
+  ldo      $s3,24[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ret      #8
+endpublic
+
+	rodata
+	align	16
+	align	8
+T00056_1:	; %d
+	dcw	37,100,10,0
+T00056_2:	; %d
+	dcw	37,100,10,0
+T00056_3:	; %d, %d
+	dcw	37,100,44,32,37,100,10,0
+	extern	_getc
+;	global	_main
+	extern	_gets
+	extern	_putc
+	extern	_puts
+	extern	__Setjmp
+	extern	_getchar
+	extern	_freopen
+	extern	_tmpfile
+	extern	_putchar
+	extern	_fgetpos
+	extern	_fprintf
+	extern	_setvbuf
+	extern	_fread
+	extern	_fsetpos
+	extern	_sprintf
+	extern	_fgetc
+	extern	_vprintf
+	extern	_scanf
+	extern	_fseek
+	extern	_fseek
+	extern	_ftell
+	extern	_fopen
+	extern	_fgets
+	extern	_fputc
+	extern	_fputs
+	extern	_clearerr
+	extern	__Files
+	extern	__Fgpos
+	extern	__Fspos
+	extern	_vfprintf
+	extern	_fscanf
+	extern	_rename
+	extern	_fclose
+	extern	_vsprintf
+	extern	_sscanf
+	extern	_ungetc
+	extern	_fflush
+	extern	_rewind
+	extern	_setbuf
+	extern	_tmpnam
+	extern	_remove
+	extern	_ferror
+	extern	_fwrite
+	extern	_printf
+	extern	_perror
+	extern	_feof
+	extern	_fseek

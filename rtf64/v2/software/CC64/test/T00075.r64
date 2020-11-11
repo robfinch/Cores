@@ -1,0 +1,2 @@
+	rodata
+	align	16

@@ -1,0 +1,37 @@
+ 	code
+	align	16
+  	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#24
+  sto      $s0,0[$sp]
+; 	x = 2;
+  ldi.     $t0,#2
+  sto      $t0,-16[$fp]
+; 	p = &x;
+  lea      $s0,-16[$fp]
+; 	if(*((int*)p) != 2)
+  ldo      $t0,[$s0]
+  beqi     $t0,#2,T00039_11
+; 		return 1;
+  ldi      $a0,#1
+T00039_10:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00039_11:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00039_10
+endpublic
+
+	rodata
+	align	16
+;	global	_main

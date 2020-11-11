@@ -1,0 +1,8 @@
+                  	data
+	align	8
+        	rodata
+	align	16
+	extern	__Setjmp
+	extern	_abort
+	extern	_abs
+	extern	_atexit

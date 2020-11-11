@@ -238,8 +238,51 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			(*dstnode)->esize = sizeOfPtr;
 			return (dsttp);
 
-		//case bt_float:
-		//case bt_double:
+		case bt_float:
+			switch (srctp->type) {
+			case bt_byte:	nt = en_i2d; break;
+			case bt_ubyte: nt = en_i2d; break;
+			case bt_char:	nt = en_i2d; break;
+			case bt_uchar: nt = en_i2d; break;
+			case bt_ichar:	nt = en_i2d; break;
+			case bt_iuchar: nt = en_i2d; break;
+			case bt_short:	nt = en_i2d; break;
+			case bt_ushort: nt = en_i2d; break;
+			case bt_exception:
+			case bt_long:	nt = en_i2d; break;
+			case bt_ulong: nt = en_i2d; break;
+			case bt_pointer:	*srcnode = *dstnode; return (dsttp);
+			case bt_float:	return (dsttp);
+			case bt_double: return(dsttp);
+			case bt_posit:	nt = en_p2d; break;
+			default:	goto j1;
+			}
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = sizeOfFPD;
+			return (dsttp);
+		case bt_double:
+			switch (srctp->type) {
+			case bt_byte:	nt = en_i2d; break;
+			case bt_ubyte: nt = en_i2d; break;
+			case bt_char:	nt = en_i2d; break;
+			case bt_uchar: nt = en_i2d; break;
+			case bt_ichar:	nt = en_i2d; break;
+			case bt_iuchar: nt = en_i2d; break;
+			case bt_short:	nt = en_i2d; break;
+			case bt_ushort: nt = en_i2d; break;
+			case bt_exception:
+			case bt_long:	nt = en_i2d; break;
+			case bt_ulong: nt = en_i2d; break;
+			case bt_pointer:	*srcnode = *dstnode; return (dsttp);
+			case bt_float:	return (dsttp);
+			case bt_double: return(dsttp);
+			case bt_posit:	nt = en_p2d; break;
+			default:	goto j1;
+			}
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = sizeOfFPD;
+			return (dsttp);
+			//case bt_double:
 		//	return (dsttp);
 		}
 	}

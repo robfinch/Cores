@@ -1,0 +1,51 @@
+   	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _foo:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  ldo      $t2,32[$fp]
+  add      $t1,$t2,#2
+  ldo      $t2,40[$fp]
+  sub      $a0,$t1,$t2
+T00021_8:
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #24
+endpublic
+
+ 	code
+	align	16
+	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#16
+  sto      $fp,[$sp]
+  sto      $ra,8[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  ldi.     $t0,#1
+  sto      $t0,0[$sp]
+  ldi.     $t0,#3
+  sto      $t0,8[$sp]
+  jal      _foo
+T00021_13:
+T00021_16:
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  ldo      $ra,8[$sp]
+  ret      #16
+endpublic
+
+	rodata
+	align	16
+;	global	_main
+;	global	_foo

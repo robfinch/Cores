@@ -1,0 +1,47 @@
+  	code
+	align	16
+ 	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#16
+  sto      $s0,0[$sp]
+; 	if(x != 0)
+  ldi.     $t0,#0
+  bf       $ra,T00055_15
+; 		return 1;
+  ldi      $a0,#1
+T00055_14:
+  ldo      $s0,0[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00055_15:
+; 	if(y != 2)
+  ldi.     $t0,#0
+  bf       $ra,T00055_17
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00055_14
+T00055_17:
+; 	if(z != 3)
+  ldi.     $t0,#0
+  bf       $ra,T00055_19
+; 		return 3;
+  ldi      $a0,#3
+  bra      T00055_14
+T00055_19:
+; 	e = x;
+  mov      $a0,$x0
+; 	return e;
+  bra      T00055_14
+endpublic
+
+	rodata
+	align	16
+;	global	_main

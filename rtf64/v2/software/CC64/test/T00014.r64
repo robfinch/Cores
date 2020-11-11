@@ -1,0 +1,35 @@
+ 	code
+	align	16
+  	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#32
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+  lea      $s0,-8[$fp]
+; 	x = 1;
+  ldi.     $t0,#1
+  sto      $t0,[$s0]
+; 	p = &x;
+  mov      $s1,$s0
+; 	p[0] = 0;
+  sto      $x0,[$s1]
+; 	return x;
+  ldo      $a0,[$s0]
+T00014_8:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+endpublic
+
+	rodata
+	align	16
+;	global	_main

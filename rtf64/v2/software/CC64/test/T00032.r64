@@ -1,0 +1,90 @@
+ 	code
+	align	16
+  	code
+	align	16
+;====================================================
+; Basic Block 0
+;====================================================
+public code _main:
+  gcsub    $sp,$sp,#8
+  sto      $fp,[$sp]
+  mov      $fp,$sp
+  gcsub    $sp,$sp,#40
+  sto      $s0,0[$sp]
+  sto      $s1,8[$sp]
+  lea      $s0,-16[$fp]
+; 	arr[0] = 2;
+  ldi.     $t0,#2
+  sto      $t0,[$s0]
+; 	arr[1] = 3;
+  ldi.     $t0,#3
+  sto      $t0,8[$s0]
+; 	p = &arr[0];
+  mov      $s1,$s0
+; 	if(*(p++) != 2)
+  add      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#2,T00032_21
+; 		return 1;
+  ldi      $a0,#1
+T00032_20:
+  ldo      $s0,0[$sp]
+  ldo      $s1,8[$sp]
+  mov      $sp,$fp
+  ldo      $fp,[$sp]
+  rtl      #8
+T00032_21:
+; 	if(*(p++) != 3)
+  add      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#3,T00032_23
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00032_20
+T00032_23:
+; 	p = &arr[1];
+  add      $s1,$s0,#8
+; 	if(*(p--) != 3)
+  sub      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#3,T00032_25
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00032_20
+T00032_25:
+; 	if(*(p--) != 2)
+  sub      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#2,T00032_27
+; 		return 2;
+  ldi      $a0,#2
+  bra      T00032_20
+T00032_27:
+; 	p = &arr[0];
+  mov      $s1,$s0
+; 	if(*(++p) != 3)
+  add      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#3,T00032_29
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00032_20
+T00032_29:
+; 	p = &arr[1];
+  add      $s1,$s0,#8
+; 	if(*(--p) != 2)
+  sub      $s1,$s1,#8
+  ldo      $t0,[$s1]
+  beqi     $t0,#2,T00032_31
+; 		return 1;
+  ldi      $a0,#1
+  bra      T00032_20
+T00032_31:
+; 	return 0;
+  mov      $a0,$x0
+  bra      T00032_20
+endpublic
+
+	rodata
+	align	16
+;	global	_main

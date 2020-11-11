@@ -3,7 +3,7 @@
 
 enum e_bt {
 	bt_none,
-	bt_byte, bt_ubyte, bt_bit,
+	bt_byte, bt_ubyte, bt_bit, bt_bool,
 	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_posit, bt_pointer,
 	bt_ichar, bt_iuchar, bt_i128,
 	bt_uchar, bt_ushort, bt_ulong,
@@ -44,7 +44,7 @@ enum e_node {
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
 		en_padd, en_psub, en_pmul, en_pdiv, en_ptoi, en_itop, en_peq, en_pne, en_plt, en_ple, en_pcon, en_pgt, en_pge,
-		en_d2t, en_d2q, en_t2q,
+		en_d2t, en_d2q, en_t2q, en_p2d,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
         en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror, en_ext, en_extu,
 		en_cond, en_safe_cond, en_assign, 
