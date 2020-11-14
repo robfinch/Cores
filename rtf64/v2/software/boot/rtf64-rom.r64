@@ -1,0 +1,1309 @@
+.include "../fmtk/const.r64"
+.include "../fmtk/types.r64"
+.include "../fmtk/config.r64"
+.include "../fmtk/device.r64"
+.include "../fmtk/macro.r64"
+.include "../fmtk/globals.r64"
+
+CTRLC				equ		$03
+CTRLT       equ   $14
+BS					equ		$08
+LNFD  			equ		$0A
+CR					equ		$0D
+XON					equ		$11
+XOFF				equ		$13
+EOF         equ   $1A
+DEL					equ		$7F
+VIA					equ		$FFFFFFFFFFDC0600
+VIA_PA			equ		$04
+VIA_DDRA		equ		$0C
+VIA_T1CL		equ		$10
+VIA_T1CH		equ		$14
+VIA_T2CL    equ   $20
+VIA_T2CH    equ   $24
+VIA_ACR			equ		$2C
+VIA_PCR			equ		$30
+VIA_IFR			equ		$34
+VIA_IER			equ		$38
+VIA_PARAW		equ		$3C
+UART				equ		$FFFFFFFFFFDC0A00
+UART_TRB		equ		$00
+UART_STAT		equ		$04
+UART_CMD		equ		$08
+
+CSR_UIE     equ   $004
+ROMBASE		equ		$FFFFFFFFFFFC0000
+IOBASE		equ		$FFFFFFFFFFD00000
+TEXTSCR		equ		$FFFFFFFFFFD00000
+KEYBD		equ		$FFFFFFFFFFDC0000
+LEDS		equ			$FFFFFFFFFFDC0600
+xbLEDS		equ			$FFFFFFFFFBDC0600
+xbBridge1 equ   $FFFFFFFFFFDCF010
+BUTTONS		equ		$FFFFFFFFFFDC0600
+SCRATCHPAD	equ		$FFFFFFFFFF400000
+SCRATCHMEM	equ		$FFFFFFFFFF400000
+_DBGAttr  equ   SCRATCHMEM
+
+	code	18 bits
+;------------------------------------------------------------------------------
+; Exception vector table.
+;------------------------------------------------------------------------------
+{+
+	org		ROMBASE				; user mode exception
+	jmp		IRQRout
+	org 	ROMBASE+$C0				; machine mode exception
+	jmp		IRQRout
+	org		ROMBASE+$FC				; non-maskable interrupt
+	bra		MachineStart    ; cannot use a jump here, takes too much room
+
+;------------------------------------------------------------------------------
+; Reset starting address.
+;------------------------------------------------------------------------------
+	org		ROMBASE+$100
+MachineStart:
+  bra   mstart
+  align 16
+ci_tbl:
+  dh_htbl
+  align 16
+mstart:
+;  ldi   $t1,#$81
+;  sto   $t1,xbBridge1
+  ldi   $t0,#$AA
+  stb   $t0,LEDS
+;  ldi   $t0,#ci_tbl
+;  ldt   $a0,[$t0]     ; get number of entries in table
+;.mv2cit:
+;  ldt   $a1,[$t0+$a0*4]
+;  sub.  $a0,$a0,#1
+;  mvci  $x0,$a0,$a1
+;  bne   .mv2cit
+;+}
+  ldi   $a0,#$AA
+  stb   $a0,LEDS
+	ldi		$sp,#SCRATCHMEM+$CDF8		  ; setup machine mode stack pointer
+	call  _Delay2s
+	ldi		$a1,#$0040FFFF000F0000		; set zorder $40, white text, blue background
+	sto		$a1,_DBGAttr
+  ; clear debug screen
+  ldo   $a0,_DBGAttr
+  ldi   $t0,#TEXTSCR
+  ldi   $t1,#56*29
+.0001:
+  sub.  $t1,$t1,#1
+  sto   $a0,[$t0+$t1*8]
+  bne   .0001
+	ldi		$a1,#$FFFF003F0041
+	sto		$a1,TEXTSCR
+	sto		$a1,TEXTSCR+8
+	sto		$a1,TEXTSCR+16
+	sto		$a1,TEXTSCR+24
+
+;	csrrs $x0,#CSR_TRACECTRL,#1 ; turn on tracing
+  call  _pti_init
+  ldi   $a1,#$80000
+  ldi   $a0,#$200000
+  call  _pti_read_block
+
+	call  MMUInit					; initialize MMU for address space zero.
+	call  _FMTK_Initialize
+	;call  ViaSetup
+	call  _SerialInit
+	call  _InitPIC
+	ldi   $t0,#5          ; set current input and output to serial port
+	stb   $t0,CURIN
+	stb   $t0,CUROUT
+	ldi		$t0,#0
+	csrrw $x0,#CSR_MSEMA,$t0  ; turn off semaphores
+	csrrw	$x0,#$181,$t0		    ; set ASID
+	csrrw $x0,#CSR_TASKID,$t0 ; clear task id
+	ldi		$t0,#$FFFC0000
+	csrrw $x0,#$301,$t0		; set tvec
+	ldi   $t0,#$FFFFFF0D  ; run user mode in register set #0
+	csrrw $x0,#CSR_RSSTACK,$t0
+	ldi		$t0,#UserStart
+	csrrw	$x0,#$341,$t0		; set mepc
+	stt   $t0,MEPC1
+  ldi   $a0,#1          ; start task
+  ldi   $a1,#0
+  ldi   $a2,#0
+  ldi   $a3,#UserStart2
+  ldi   $a4,#$00
+  call  OSOCall
+  csrrw $x0,#CSR_TASKID,$a1
+  csrrs $x0,#CSR_PMSTACK,#8 ; enable interrupts on return
+	csrrc $x0,#CSR_TRACECTRL,#0 ; turn off tracing
+	rte                       ; switch to user mode
+;------------------------------------------------------------------------------
+; User mode code staret here
+; First thing to do is start a task so that the startup code may run on the
+; first task switch.
+;------------------------------------------------------------------------------
+UserStart:
+  call  DumpTraceQueue
+  wai                   ; wait for task switch
+UserStart2:
+  ldi   $a0,#12         ; start app
+  ldi   $a1,#SystemASR
+  brk   #240
+.appBad:
+  tst   $cr0,$a0
+  bne   $cr0,.appBad
+  mov   $s1,$a1
+  ldi   $a0,#14         ; get current tid
+  brk   #240            ; $a1 = task id
+  ldi   $a0,#30         ; set task's app id
+  mov   $a2,$s1         ; $a2 = app id
+  brk   #240
+
+  mov   $s1,$a1         ; s1 = app id
+	ldi		$sp,#$A0080000-4  ; setup user mode stack pointer
+
+  ldi   $a0,#12         ; start app
+  ldi   $a1,#TinyBasicASR
+  brk   #240
+	ldi		$a0,#1          ; Start finalizer task, task #1
+	mov   $a1,$s1
+	ldi		$a2,#0
+	ldi		$a3,#Finalizer
+	ldi   $a4,#$0B        ; user mode, regset 11
+	brk   #240
+	ldi		$a0,#1          ; Start task for monitor, task #2
+	mov   $a1,$s1
+	ldi		$a2,#0
+	ldi		$a3,#MonEntry
+	ldi   $a4,#$0A        ; user mode, regset 10
+	brk   #240
+  ldi   $a0,#25         ; map OS vars
+  brk   #240
+  mov   $gp,$a1
+
+UserStart3:
+	ldi		$sp,#$A0080000-4  ; setup user mode stack pointer
+	ldi		$a0,#24							; RequestIOFocus
+	mov   $a1,$s1
+	brk   #240
+;	ldi		$sp,#$70000		      ; setup temporary user mode stack pointer
+;	mov   $a0,$a1             ; $a0 = tid
+;	call AllocStack
+;	add   $sp,$v1,#1020       ; place stack pointer at top of allocated region
+	ldi		$t0,#$08						; turn on the LED
+	stt		$t0,VIA+VIA_PARAW
+	ldi		$t2,#16							; send an XON just in case
+	ldi		$a3,#XON
+.0004:
+	call  Putch ;SerialPutChar
+	sub.	$t2,$t2,#1
+	bne	  $cr0,.0004
+.0002:
+;  ldi   $a0,#25             ; Map OS vars
+;  brk #240
+;  mov   $gp,$a1
+  ; Request that the idle task announce itself.
+;  ldi   $a0,#9              ; SendMsg
+;  ldwu  $a1,IdleTaskMbx[$gp]
+;  beqz  $a1,.noMbx
+;  ldi   $a2,#MT_ANNOUNCE
+;  ldi   $a3,#0
+;  ldi   $a4,#0
+;  brk #240
+.noMbx:
+	ldi		$a0,#msgStart				; spit out a startup message
+	call  PutString
+;		ldi		a0,#1
+;		ldi		a1,#24000
+;		ldi		a2,#Monitor
+;		brk #240
+	call  DumpReadyQueue
+	jmp		MonEntry
+
+		; Now a loop to recieve and echo back characters
+.0003:
+;	ldi		$a0,#26							; FMTK_IO
+;	ldi   $a1,#5
+;	ldi		$a2,#9							; peekchar function
+;	brk #240
+;	mov   $v0,$v1
+;	bltz	$v1,.0003
+;	ldi		$a0,#26							; FMTK_IO
+;	ldi   $a1,#5
+;	ldi		$a2,#8							; getchar function
+;	brk #240
+;	mov		$a3,$v1
+;	mov   $a0,$a3
+;	call PutHexByte
+;	bra		.0003
+
+;------------------------------------------------------------------------------
+; This task runs only if nothing else can run. It must run at the machine
+; operating mode.
+; Search for ready tasks and add them back into the ready queue.
+;------------------------------------------------------------------------------
+  align 16
+IdleTask:
+  ldi   $a0,#6                ; alloc mailbox
+  ldi   $a1,#0                ; app #0
+  brk   #240
+  stw   $a1,IdleTaskMbx[$gp]  ; save mailbox handle off
+.loop2:
+  ldi   $t0,#$4000
+  ldi   $t1,#1
+.loop:
+  ldi   $a0,#11               ; PeekMsg
+  ldwu  $a1,IdleTaskMbx[$gp]
+  ldi   $a2,#IdleTaskMsgD1
+  ldi   $a3,#IdleTaskMsgD2
+  ldi   $a4,#IdleTaskMsgD3
+  ldi   $a5,#1                ; remove from queue if present
+;  brk #240
+;  bnez  $a0,.noMsg
+;  ldt   $a0,IdleTaskMsgD1
+;  xor   $t1,$a0,#MT_ANNOUNCE
+;  bnez  $t1,.noAnnounce
+;  ldi   $a0,#msgIdleAnnounce
+;  call PutString
+.noAnnounce:
+.noMsg:
+  ldi   $a0,#17               ; run as OS
+  ldi   $a1,#.IdleCode
+  mov   $a2,$t0
+  brk   #240
+  add   $t0,$t0,#PAGESZ
+  sne   $t0,#MEMSZ*PAGESZ
+  bt    .loop
+	jmp		.loop2
+  ; This section of code runs as part of the OS
+  ; Don't callany functions though as there's no stack available
+.IdleCode:
+  ldt   $t0,OBJMagic[$a2]
+  sne   $t0,#TCB_MAGIC
+  bt    .nxtObj
+  ldbu  $t3,TCBStatus[$t2]    ; get status
+  and.  $t3,$t3,#TS_READY
+  beq   $cr0,.nxtObj
+  ; The task was ready, but not found in the ready queue. So add it
+  lsr   $a0,$a2,#LOG_PGSZ
+  mDI
+  mInsertIntoReadyQueue
+  mEI
+.nxtObj:
+  ldi   $a0,#E_Ok
+  jmp   OSExit
+
+msgIdleAnnounce:
+  db  "Idle task running.",CR,0
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+  align 16
+_Delay2s:
+	ldi			$a1,#3000000
+.0001:
+	lsr			$a2,$a1,#16
+	stb			$a2,LEDS
+	sub.		$a1,$a1,#1
+	bne			.0001
+	ret
+
+;------------------------------------------------------------------------------
+; Get a character from input device. Checks for a CTRL-T which indicates to
+; switch the I/O focus.
+;
+; Parameters:
+;		none
+; Returns:
+;		$a0 = character, -1 if none available
+;------------------------------------------------------------------------------
+Getch:
+  align 16
+	gcsub	$sp,$sp,#16
+	sto		$a1,8[$sp]
+	ldi   $a1,#5  ;CURIN
+	call  fgetc
+	ldo		$a1,8[$sp]
+	ret   #16
+
+;------------------------------------------------------------------------------
+; Parameters:
+;   $a0 = character to put
+;------------------------------------------------------------------------------
+Putch:
+  align 16
+	gcsub	$sp,$sp,#24
+	sto		$a3,8[$sp]
+	sto		$a1,16[$sp]
+	mov		$a3,$a0
+	ldi		$a1,#5  ;CUROUT    ; serial port
+	call	  fputc
+	ldo		$a3,8[$sp]
+	ldo		$a1,16[$sp]
+	ret   #24
+
+;------------------------------------------------------------------------------
+; fputc - put a character to an I/O device. If the task doesn't have the I/O
+; focus then it is rescheduled, allowing another task to run.
+;
+; Stack Space:
+;		6 words
+; Register Usage:
+;		a0 = FMTK_IO specify
+;		a2 = device putchar function
+; Parameters:
+;		a1 = I/O channel
+;		a3 = character to put
+; Modifies:
+;		none
+; Returns:
+;   EOF if error occurred, otherwise character to put
+;------------------------------------------------------------------------------
+  align 16
+fputc:
+	gcsub	$sp,$sp,#32
+	sto		$a1,16[$sp]
+	sto		$a2,24[$sp]
+	seq   $a6,#'B'
+	bf    .noBypass
+	call  SerialPutChar
+	jmp   .xit
+.noBypass:
+	; If the device is a UI device there may be multiple owning jobs. It doesn't
+	; do any good to check for ownership. Instead the I/O focus is checked to
+	; see if it's present.
+	call  GetUIFlag
+	tst   $cr0,$a1
+	beq   $cr0,.checkOwner
+  ldo   $a1,16[$sp]
+	call  WaitForIOFocus
+	jmp   .0001
+.checkOwner:
+  call  CheckDevOwner
+  tst   $cr0,$a0
+  bne   $cr0,.notOwner
+.0001:
+  ldo   $a1,16[$sp]
+	ldi		$a0,#26							; FMTK_IO
+	ldi		$a2,#13							; putchar function
+	brk   #240
+	mov   $a0,$a3
+.xit:
+	ldo		$a1,16[$sp]
+	ldo		$a2,24[$sp]
+	ret   #32
+.notOwner:
+  ldi   $a0,#EOF
+  jmp   .xit
+ 
+;------------------------------------------------------------------------------
+; fgetc - get a character from an I/O device. If the task doesn't have the I/O
+; focus then it is rescheduled, allowing another task to run.
+;
+; Stack Space:
+;		4 words
+; Register Usage:
+;		a0 = FMTK_IO specify
+;		a2 = device getchar function
+; Parameters:
+;		a1 = I/O channel
+; Modifies:
+;		none
+; Returns:
+;		a0 character, -1 if none available
+;------------------------------------------------------------------------------
+  align 16
+fgetc:
+	gcsub	$sp,$sp,#32
+	sto		$a1,16[$sp]
+	sto		$a2,24[$sp]
+	call  GetUIFlag
+	tst   $a1
+	beq   .checkOwner
+	ldt		$a1,16[$sp]
+	call  WaitForIOFocus
+	jmp   .0001
+.checkOwner:
+	ldt		$a1,16[$sp]
+  call  CheckDevOwner
+  tst   $a0
+  bne   .notOwner
+.0001:
+	ldi		$a0,#26							; FMTK_IO
+	ldt		$a1,16[$sp]
+	ldi		$a2,#8							; getchar function
+	brk   #240
+	mov   $a0,$a1
+.0002:
+	ldo		$a1,16[$sp]
+	ldo		$a2,24[$sp]
+	ret   #32
+.notOwner:
+  ldi   $a0,#-1
+  jmp   .0002
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+MonEntry:
+;		flw			$f2,fltTen
+;		fsw			$f2,f2Save
+;		flw			$f1,fltTen
+;		fsw			$f1,f1Save
+;		fadd		$f18,$f2,$f1
+;		fsw			$f18,f18Save
+		ldi		$a0,#10
+		ldi		$a2,#6
+;		call	fltToString
+;		ldi		$a0,#STRTMP
+;		call	PutString
+
+Monitor:
+.getFocus:
+;	ldi   $a0,#20       ; has IO focus
+;	brk #240
+;	bnez  $v1,.hasFocus
+;	ldi   $a0,#21       ; switch focus
+;	brk #240
+;	bra   .getFocus
+.hasFocus:
+;		call	DumpReadyList
+;		call	DumpTimeoutList
+	ldi		  $s1,#0					; s1 = input pointer
+	call    PutInlineString
+	db      CR,LNFD,'>',0
+.0001:
+	call	    Getch						; wait until character pressed
+	tst     $a0        ; test return value
+	bmi	    .0001
+	seq     $a0,#LNFD  ; process line feed
+	seq.or  $a0,#CR    ; and carriage return
+	bt	    .procLine
+	seq		  $a0,#BS
+	bt	    .doBackspace
+	seq		  $a0,#DEL
+	bt	    .doDelete
+	stb		  $a0,INBUF[$s1]
+	add		  $s1,$s1,#1
+	call    Putch
+	jmp		  .0001
+.doDelete:
+	mov		  $s2,$s1
+	add		  $s2,$s2,#1
+.0002:
+	ldb		  $t0,INBUF[$s2]
+	stb		  $t0,INBUF-1[$s2]
+	add		  $s2,$s2,#1
+	add		  $t0,$s2,#INBUF
+	slt		  $t0,#INBUF+$7F
+	bt		  .0002
+	stb		  $x0,INBUF[$s2]
+	jmp		  .0001
+.doBackspace:
+  tst     $s1
+	beq		  .0001		        ; can't backspace anymore
+	call    Putch           ; show the backspace
+	sub		  $s1,$s1,#1
+	mov		  $s2,$s1
+.0003:
+	ldb		  $t0,INBUF+1[$s2]
+	stb		  $t0,INBUF[$s2]
+	add		  $s2,$s2,#1
+	add		  $t0,$s2,#INBUF
+	slt		  $t0,#INBUF+$7F
+	bt		  .0003
+	stb		  $x0,INBUF[$s2]
+	jmp		  .0001
+.procLine:
+	stb		  $x0,INBUF[$s1]
+	ldi		  $s1,#0
+.skip:
+	ldb.	  $t0,INBUF[$s1]
+	beq		  .0005
+	seq		  $t0,#'>'
+	bf		  .0004
+.skip2:
+	add		  $s1,$s1,#1
+	jmp		  .skip
+.0004:
+	seq		  $t0,#' '
+	seq.or  $t0,#'\t'
+	bt		  .skip2
+	seq     $t0,#'X'  ; exit from monitor
+	bf      .notX
+	ldi     $a0,#E_Ok
+	jmp     OSExit
+.notX:
+	seq		  $t0,#'M'
+	bt	    doMem
+	seq     $t0,#'V'
+	bt      doVMem
+	seq     $t0,#'P'
+	bt      doPStat
+	seq		  $t0,#'B'
+	bt		  .0006
+	call    GetDecNum
+	tst     $a0
+	bne     .basSize
+	ldi     $a0,#32000
+.basSize:
+	ldi		  $a0,#12					; Start App
+	ldi     $a1,#TBASR
+	brk     #240
+	mov		  $s1,$a1					; save v1
+	ldi		  $a0,#msgCRLF
+	call    PutString
+	mov		  $a0,$s1					; get back v1
+	call    PutHexByte
+	ldi		  $a0,#msgTaskStart
+	call    PutString
+	call    DumpReadyQueue
+	; The monitor is running in machine mode. A return instruction is used to
+	; switch to user mode. The return address must be set to the desired user
+	; code address.
+	mDI                     ; disable interrupts
+	ldi     $t0,#CSTART       ; pick start of Tiny Basic
+	csrrw   $x0,#$341,$t0     ; set as return address
+	ldi     $t0,#$00011111    ; bits to select register set #1
+	csrrw   $x0,#CSR_REGSET,$t0     ; select register set #1 (will decrement to zero then on mret)
+	rte                     ; will begin running Tiny Basic in user mode
+	;ldi		$a0,#5					; Reschedule task
+	;ldi		$a1,#1					; sleep(0)
+	;brk #240
+	jmp		  Monitor
+.0006:
+	seq		  $t0,#'D'
+	bf		  .0007
+	ldb		  $t0,INBUF+1[$s1]
+	seq		  $t0,#'T'
+	bf		  .noT
+	call    DumpTimeoutList
+	jmp		  Monitor
+.noT:
+	call	  DumpReadyQueue
+	;ldi		$a0,#15
+	;brk #240
+	jmp		  Monitor
+.0007:
+	seq		  $t0,#'E'
+	bt		  EditMem
+	seq		  $t0,#'F'
+	bf		  .0009
+	ldb     $t0,INBUF+1[$s1]
+	sne     $t0,#'I'
+	bt      .notFind
+	add     $s1,$s1,#1
+	jmp     Find
+.notFind:
+	jmp		  FillMem
+.0009:
+	sne		  $t0,#'S'
+	bt		  .0010
+	ldi		  $a0,#5					; sleep(0)
+	ldi		  $a1,#1
+	brk     #240
+	jmp		  Monitor
+.0010:
+	sne		  $t0,#'K'
+	bt		  .0011
+	call    GetHexNum
+	mov		  $a1,$a0					; a0 = pid
+	ldi		  $a0,#3					; kill task
+	brk     #240
+	jmp		  Monitor
+.0011:
+	sne		  $t1,#'?'
+	bt		  .0012
+	ldi		  $a0,#msgMonHelp
+	call    PutString
+	jmp		  Monitor
+.0012:
+.0005:
+	jmp		  Monitor
+
+  align 16
+doMem:
+	gcsub	$sp,$sp,#8
+	add		$s1,$s1,#1
+	ldb		$t0,INBUF[$s1]
+	sne   $t0,#'O'
+	bt    .0001
+	add		$s1,$s1,#1
+.0001:
+	sto		$s1,[$sp]
+	ldi		$a0,#CR
+	call  Putch
+	ldi		$a0,#INBUF
+	call  PutString
+	ldo		$s1,[$sp]
+	add		$sp,$sp,#8
+	call  GetHexNum
+	mov		$s3,$a0
+	mov   $s5,$a0
+	add		$s1,$s1,#1
+	call	  GetHexNum
+	add		$s4,$a0,$s3
+.loop2:
+	call	Getch						; check for ctrl-c
+	seq		$a0,#3
+	bt		Monitor
+	ldi		$a0,#CR
+	call	Putch
+	mov		$a0,$s3
+	call	PutHexWord
+	ldi		$a0,#':'
+	call	Putch
+	ldi		$s2,#7
+.loop:
+	ldi		$a0,#' '
+	call	Putch
+	tst   $cr0,$t0
+	bne   $cr0,.userMem
+	ldi   $a0,#33         ; Fetch memory word
+	mov   $a1,$s3
+	brk   #240
+	mov   $a0,$a1
+	jmp   .0002
+.userMem
+	ldb		$a0,[$s3]
+.0002:
+	call	PutHexByte
+	add		$s3,$s3,#1
+	sub.	$s2,$s2,#1
+	bge		.loop
+	sltu  $s3,$s4
+	bt	  .loop2
+	call  PutInlineString
+	db    ' ',' ',0,0
+	mov   $s3,$s5
+.0004:
+	ldbu  $a0,[$s3]
+	slt   $a0,#$20
+	bt    .unprintable
+	call  Putch
+	jmp   .0003
+.unprintable:
+  ldi   $a0,#'.'
+  call  Putch
+.0003:
+  add   $s3,$s3,#1
+  sltu  $s3,$s4
+  bt    .0004
+  ldi   $a0,#CR
+  call  Putch
+	jmp		Monitor		
+
+  align 16
+EditMem:
+	csrrs $x0,#CSR_UIE,#1        ; enable gc interrupt
+	call	  GetHexNum			; get address to edit
+	mov		$s3,$a0
+	add		$s1,$s1,#1
+	call	  GetHexNum			; get value to set
+	stb		$s3,[$a0]			; update mem
+	jmp		Monitor
+
+;------------------------------------------------------------------------------
+; >V 0
+; Displays the virtual memory map for the specified app.
+;------------------------------------------------------------------------------
+
+  align 16
+doVMem:
+  add   $s1,$s1,#1
+  call  GetDecNum
+  ldi   $t1,#0
+  asl   $t0,$a0,#16
+.0001:
+  and.  $a0,$t1,#3
+  bne   .notLF
+  call  PutInlineString
+  db    CR,LNFD,0,0
+.notLF:
+  mov   $a0,$t0
+  call  PutHexWord
+  ldi   $a0,#':'
+  call  Putch
+  mvmap $a0,$x0,$t0
+  call  PutHexHalf
+  ldi   $a0,#' '
+  call  Putch
+  add   $t0,$t0,#1
+  add   $t1,$t1,#1
+  slt   $t1,#256
+  bt    .0001
+  jmp   Monitor
+
+;------------------------------------------------------------------------------
+; >P
+; Display the PAM bits status.
+;------------------------------------------------------------------------------
+
+  align 16
+doPStat:
+  call  PutInlineString
+  db    CR,LNFD,0,0
+  ldi   $t1,#0        ; $a1 = bit number
+.0001:
+  ldi   $a0,#32       ; Get PAM bit pair
+  brk   #240
+  add   $a0,$a1,#'0'
+  call  Putch
+  add   $t1,$t1,#1
+  slt   $t1,#MEMSZ
+  bne   .0001
+  jmp   Monitor
+ 
+;------------------------------------------------------------------------------
+;	>F 1000 800 EE
+; Fills memory beginning at address $1000 for $800 bytes with the value $EE
+;------------------------------------------------------------------------------
+
+  align 16
+FillMem:
+	call	GetHexNum			; get address
+	mov		$s3,$a0
+	add		$s1,$s1,#1
+	call	GetHexNum			; get length
+	mov		$s4,$a0
+	add		$s1,$s1,#1
+	call	GetHexNum			; get byte to use
+.0001:
+	sub.	$s4,$s4,#1
+	stb		$a0,[$s3+$s4]
+	bgt		.0001
+	jmp		Monitor
+
+;------------------------------------------------------------------------------
+; FI Hello
+;------------------------------------------------------------------------------
+
+  align 16
+Find:
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LNFD
+  call  Putch
+  jal   SkipSpaces
+  mov   $s2,$s1
+.fwe:
+  ldbu.   $t0,INBUF[$s2]
+  seq.or  $t0,#' '
+  seq.or  $t0,#CR    ; cmp power!
+  bt      .endOfWord
+  add     $s2,$s2,#1
+  jmp     .fwe
+.endOfWord:
+  stb   $x0,INBUF[$s2]
+  mov   $s2,$s1
+  ldi   $a0,#0
+  ldi   $a1,#0
+.loop:
+	call	Getch						; check for ctrl-c
+	seq   $a0,#3
+	bt	  Monitor
+.0001:
+  ldbu  $t0,[$a0]
+  ldbu. $t1,INBUF[$s2]
+  beq   .found
+  seq   $t0,$t1
+  bf    .next
+  add   $a0,$a0,#1
+  add   $s2,$s2,#1
+  jmp   .loop
+.next:
+  mov   $s2,$s1         ; start over again with $s2
+  add   $a0,$a1,#1      ; start over again with $a0, but increment by one
+  ldi   $t2,#$80000     ; 512k
+  mov   $a1,$a0         ; remember new starting pos.
+  slt   $cr0,$a0,$t2
+  bne   $cr0,.loop
+  jmp   .notFound
+.found:
+  call  PutHexTetra
+  call  PutInlineString
+  db    CR,LNFD,0,0
+  jmp   .next
+.notFound:
+  ldi   $a0,#CR
+  call  Putch
+  ldi   $a0,#LNFD
+  call  Putch
+  jmp   Monitor
+
+;------------------------------------------------------------------------------
+; Skip over spaces and tabs in the input buffer.
+;------------------------------------------------------------------------------
+
+SkipSpaces:
+.skip2:
+	ldb		  $t0,INBUF[$s1]
+	seq		  $t0,#' '   ; space or
+	seq.or  $t0,#'\t'  ; tab - compare power use here
+	bf	    .done
+	add 		$s1,$s1,#1
+	jmp	  	.skip2
+.done
+  rtl
+
+;------------------------------------------------------------------------------
+; Get a hex number from the input buffer.
+;------------------------------------------------------------------------------
+
+  align 16
+GetHexNum:
+	ldi		$a0,#0							; a0 = num
+	jal 	SkipSpaces
+.next:
+	ldb		  $t0,INBUF[$s1]
+	sge     $t0,#'0'
+	sle.and	$t0,#'9'
+	bt		  .isDigit
+	sge		  $t0,#'A'
+	sle.and $t0,#'F'
+	bt		  .isHexUpper
+	sge		  $t0,#'a'
+	sle.and	$t0,#'f'
+	bt		.isHexLower
+.0001:
+	ret
+.isHexUpper:
+	asl		$a0,$a0,#4
+	sub		$t0,$t0,#'A'
+	add		$t0,$t0,#10
+	or		$a0,$a0,$t0
+	add		$s1,$s1,#1
+	jmp		.next
+.isHexLower:
+	asl		$a0,$a0,#4
+	sub		$t0,$t0,#'a'
+	add		$t0,$t0,#10
+	or		$a0,$a0,$t0
+	add		$s1,$s1,#1
+	jmp		.next
+.isDigit:
+	asl		$a0,$a0,#4
+	sub		$t0,$t0,#'0'
+	or		$a0,$a0,$t0
+	add		$s1,$s1,#1
+	jmp		.next
+
+;------------------------------------------------------------------------------
+; Get a decimal number from the input buffer.
+;------------------------------------------------------------------------------
+  align 16
+GetDecNum:
+	ldi		$a0,#0							; a0 = num
+	jal 	SkipSpaces
+.next:
+	ldb		  $t0,INBUF[$s1]
+	sge     $t0,#'0'
+	sle.and $t0,#'9'
+	bt		  .isDigit
+.0001:
+	ret
+.isDigit:
+	asl		$t2,$a0,#1    ; multiply by 10
+	asl   $a0,$a0,#3    ; * 8
+	add   $a0,$a0,$t2   ; + *2
+	sub		$t0,$t0,#'0'
+	add		$a0,$a0,$t0
+	add		$s1,$s1,#1
+	jmp		.next
+
+;------------------------------------------------------------------------------
+; Output an octabyte as a hex string.
+;
+; Parameters:
+;   a0 = contains octabyte value to output
+; Registers Affected:
+;   none
+; Returns:
+;   none
+;------------------------------------------------------------------------------
+  align 16
+PutHexOcta:
+	ror		$a0,$a0,#32
+	call	PutHexTetra
+	rol   $a0,$a0,#32
+
+;------------------------------------------------------------------------------
+; Output a word as a hex string.
+;
+; Parameters:
+;   a0 = contains word to output
+; Registers Affected:
+;   none
+; Returns:
+;   none
+;------------------------------------------------------------------------------
+
+PutHexTetra:
+	ror		$a0,$a0,#16
+	call	PutHexWyde
+	rol		$a0,$a0,#16
+
+;------------------------------------------------------------------------------
+; Output a half-word (16 bits) as a hex string.
+;------------------------------------------------------------------------------
+
+PutHexWyde:
+	ror		$a0,$a0,#8
+	call	PutHexByte
+	rol		$a0,$a0,#8
+
+;------------------------------------------------------------------------------
+; Output a byte as a hex string.
+;------------------------------------------------------------------------------
+
+PutHexByte:
+	ror		$a0,$a0,#4		; put the high order nybble first
+	call	PutHexNybble
+	rol		$a0,$a0,#4		; restore a0
+
+;------------------------------------------------------------------------------
+; Output a nybble as a hex string.
+;
+; Parameters:
+;   a0 = contains nybble to output
+; Registers Affected:
+;   none
+; Returns:
+;   none
+;------------------------------------------------------------------------------
+
+PutHexNybble:
+	gcsub	$sp,$sp,#24
+	sto		$a0,8[$sp]
+	sto   $t0,16[$sp]
+	and		$a0,$a0,#15		; strip off high order bits
+	slt   $a0,#10
+	bt		.lt10
+	sub		$a0,$a0,#10
+	add		$a0,$a0,#'A'
+	call	Putch
+	jmp		.0001
+.lt10:
+	add		$a0,$a0,#'0'
+	call	Putch
+.0001:
+	ldo		$a0,8[$sp]
+	ldo   $t0,16[$sp]
+	ret   #24
+
+;------------------------------------------------------------------------------
+; PutInlineString
+;   Put a string of characters to output device. The string parameter is
+; located as an inline parameter.
+;------------------------------------------------------------------------------
+
+  align 16
+PutInlineString:
+  ldo   $t1,[$sp]         ; pop return address
+  add   $sp,$sp,#8
+	gcsub	$sp,$sp,#8				
+	sto		$a0,[$sp]				  ; save a0
+	add		$t1,$t1,#4  			; t1 = pointer to string
+.0001:
+	ldb.	$a0,[$t1]
+	add		$t1,$t1,#1				; advance pointer to next byte
+	beq 	.done  	          ; branch if done
+	call	Putch							; output character
+	jmp		.0001
+.done:
+  add   $t1,$t1,#3        ; round up address
+  and   $t1,$t1,#$FFFFFFFFFFFFFFFC
+  mov   $cn,$t1
+	ldo		$a0,[$sp]				  ; restore a0
+	add   $sp,$sp,#8
+  jmp   [$cn]
+
+;------------------------------------------------------------------------------
+; PutString
+;    Put a string of characters to the serial transmitter. Calls the 
+; Putch routine, so this routine also blocks if the transmitter is not
+; empty.
+;
+; Parameters:
+;		$a0 = pointer to null terminated string to put
+; Modifies:
+;		$t0 and $t1
+; Stack Space:
+;		2 words
+;------------------------------------------------------------------------------
+  align 16
+PutString:
+	gcsub	$sp,$sp,#8				; save link register
+	sto		$a0,[$sp]				; and argument
+	mov		$t1,$a0						; t1 = pointer to string
+.0001:
+	ldb.	$a0,[$t1]
+	add		$t1,$t1,#1				; advance pointer to next byte
+	beq 	.done  	          ; branch if done
+	call	Putch							; output character
+	jmp		.0001
+.done:
+	ldo		$a0,[$sp]				; and argument
+	ret   #8
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DumpTraceQueue:
+	ldi     $a6,#'X'        ; bypass='B' in fputc routine
+.dmpTrace:
+	ldi     $a0,#CR
+	call    Putch
+	ldi     $a1,#14         ; processor trace queue status
+	peekq.  $a0,$a1
+	bmi     .dmpTraceEmpty  ; emptied out?
+	ldi     $a1,#15         ; processor trace queue data
+	popq.   $a0,$a1
+	call    PutHexOcta
+	jmp     .dmpTrace
+.dmpTraceEmpty:
+	ldi     $a0,#CR
+	call    Putch
+.inf:
+  jmp     .inf
+  ret
+
+;------------------------------------------------------------------------------
+; Exception processing code staret here.
+; As per the RISCV privilege spec, the MSB indicates an external interrupt.
+; The system uses cause codes 32 to 63 for external devices. This cause code
+; range is reserved in the RISCV spec.
+;
+; On incoming the register file has been set to the interrupt register file
+; or the machine mode register file.
+;------------------------------------------------------------------------------
+  align 16
+; Top of stack for different register sets
+StackTbl:
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $0
+  dw    $7F400-4
+  dw    $7F800-4
+  dw    $7FC00-4
+  dw    $80000-4
+
+	code
+	align	16
+IRQRout:
+	csrrw	$t0,#$342,$x0			; get cause code
+	tst   $t0
+	bmi	  .isIRQ		        ; irq or brk #240?
+	seq   $t0,#2            ; illegal instruction?
+	bt    .illegal
+	and   $t2,$t0,#$FFFFFFFC
+	seq   $t2,#8
+	bt    .brk
+	; Some other cause
+.illegal:
+  stt   $t0,$4018
+	csrrc $x0,#CSR_TRACECTRL,#1 ; turn off tracing
+	ldi   $t0,#DumpTraceQueue
+	csrrw $x0,#CSR_MEPC,$t0
+	rte
+.soc:
+  jmp   .soc
+.brk:
+  ; We reset the stack pointer at each callto the OS in case an error causes
+  ; it to be messed up.
+  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
+  and   $t0,$t0,#15       ; extract register set selection (will be 13,14, or 15)
+  asl   $t2,$t0,#2        ; $t2 = table index
+	ldt		$sp,StackTbl[$t2]	; setup machine mode stack pointer
+	jmp		OSECALL					  ; goto operating system calldispatcher
+.isIRQ:
+  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
+  and   $t0,$t0,#15       ; extract register set selection (will be 13,14, or 15)
+  asl   $t2,$t0,#2        ; $t2 = table index
+	ldt		$sp,StackTbl[$t2]	; setup machine mode stack pointer
+	csrrw	$t0,#$342,$x0			; get cause code
+
+  ldt   $t1,IRQFlag     ; update IRQ flag for Tiny Basic
+  add   $t1,$t1,#1
+  stt   $t1,IRQFlag
+  and   $t0,$t0,#$FF
+  stt   $t0,IRQCause    ; update cause code for Tiny Basic
+  sub.  $t1,$t0,#1
+  beq   $cr0,.softwareIrq
+  sub.  $t1,$t1,#1
+  beq   $cr0,.timerIrq
+  sub.  $t1,$t1,#1      ; garbage collect interrupt?
+  beq   $cr0,.gcIrq
+	and		$t4,$t0,#31			; interrupting device # is low order 5 bits of cause code
+	ldi   $t3,#5          ; try 5 times
+.devAgain:
+	mov   $t5,$t4
+	asl		$t5,$t5,#7				; 128 bytes per device func table
+	add		$t5,$t5,#DVF_Base+22*4	; load IRQ routine vector from device func table
+	ldo.	$t5,[$t5]
+	beq	  $cr0,.noIRQ	    ; make sure there's an address to go to
+	mov   $cn,$t5
+	jmp		[$cn]						; jump to the IRQ routine
+.noIRQ:
+  sub.  $t3,$t3,#1
+  bne   $cr0,.InitDev
+.softwareIrq:
+.timerIrq:
+  jmp   ERETx2
+	; The device function tables may have been zeroed out, try initializing them.
+	; The following uses $a0-$a1, $t0-$t2
+.InitDev:
+	seq   $t4,#5
+	bf    .notSerial
+	ldi		$a0,#5							; serial device
+	ldi		$a1,#SerialFuncTbl
+	jal	  CopyDevFuncTbl
+	ldi		$a0,#5							; serial device
+	ldi   $a1,#SerialDCB
+	jal   CopyDevDCB
+	jmp   .devAgain
+.notSerial:
+	ldi		$a0,#15							; VIA device
+	seq   $t4,$a0
+	bf    .notVia
+	ldi		$a1,#ViaFuncTbl
+	jal	  CopyDevFuncTbl
+	ldi		$a0,#15							; VIA device
+	ldi		$a1,#ViaDCB
+	jal	  CopyDevDCB
+	jmp   .devAgain
+.notVia:
+  jmp   ERETx2
+.gcIrq:
+;	ldi		$sp,#$7F800-4		; setup interrupt mode stack pointer
+  call gcIncrement
+ERETx2:
+;  mDI
+;  csrrc $x0,#$7C0,#31   ; select machine regs only
+;  csrrw $t0,#$7C0,$x0   ; get register sets
+;  srl   $t0,$t0,#5      ; extract register set selection
+;  sll   $t0,$t0,#3
+;  ldt   $t1,MEPC0[$t0]  ; get it
+;  csrrw $x0,#$341,$t1   ; set mepc
+  mDI
+  nop
+  nop
+  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
+  and   $t0,$t0,#15       ; extract register set selection (will be 13,14, or 15)
+  asl   $t2,$t0,#2        ; $t2 = table index
+	ldt		$sp,StackTbl[$t2]	; setup machine mode stack pointer
+	rte
+
+	; In case the pipeline runs ahead into the following table which will
+	; result in illegal instructions.
+	nop
+	nop
+  nop
+
+; Application startup record for system
+SystemASR:
+  db    0     ; page size (can't change on this system)
+  db    2     ; priority normal
+  db    12    ; register set for startup task
+  db    0     ; memory map #0
+  dw    0     ; processor affinity
+  dw    0     ; code size (0 = in ROM, don't move)
+  dw    0     ; reserved
+  dw    0     ; data size (preinitialized data)
+  dw    0     ; reserved
+  dw    0     ; uninitialized data size
+  dw    0     ; reserved
+  dw    0     ; Heap size
+  dw    0     ; reserved
+  dw    1024  ; stack size
+  dw    0     ; reserved
+  dw    IdleTask  ; pointer to code
+  dw    0       ; reserved
+  dw    0     ; pointer to data
+  dw    0     ; reserved
+  dw    0     ; ui data
+  dw    0     ; reserved
+
+; Application startup record for Tiny Basic
+TinyBasicASR:
+  db    0     ; page size (can't change on this system)
+  db    2     ; priority normal
+  db    0     ; register set
+  db    1     ; memory map
+  dw    0     ; processor affinity
+  dw    0     ; code size (0 = in ROM, don't move)
+  dw    0     ; reserved
+  dw    0     ; data size (preinitialized data)
+  dw    0     ; reserved
+  dw    32768 ; uninitialized data size
+  dw    0     ; reserved
+  dw    0     ; Heap size
+  dw    0     ; reserved
+  dw    2048  ; stack size
+  dw    0     ; reserved
+  dw    CSTART  ; pointer to code
+  dw    0       ; reserved
+  dw    0     ; pointer to data
+  dw    0     ; reserved
+  dw    0     ; ui data
+  dw    0     ; reserved
+    
+;------------------------------------------------------------------------------
+; Message strings
+;------------------------------------------------------------------------------
+
+msgStart:
+		db		"Femtiki System Starting.",13
+msgMonHelp:
+		db		"Monitor Commands",13
+		db		"B - start tiny basic",13
+		db		"D - dump ready que",13
+		db		"E - edit memory",13
+		db		"F - fill memory",13
+		db    "FI <string>- find string in memory",13
+		db		"K <tid> - kill task", 13
+		db		"M <start> <length>	- dump memory",13
+		db    "P - display PAM",13
+		db		"S - switch task",13
+		db    "V <mid> dump virtual memory map",13
+		db		0
+		align 4
+msgTaskStart:
+		db		" task started."
+msgCRLF:
+		db		13,10,0
+flt50:
+	dw	0x00000000,0x00000000,0x00000000,0x40049000
+flt20:
+	dw	0x00000000,0x00000000,0x00000000,0x40034000
+flt10:
+	dw	0x00000000,0x00000000,0x00000000,0x40024000
+
+.include "fltToString.r64"
+.include "bios-mem.r64"
+.include "bios-pam.r64"
+.include "bios-tlb.r64"
+.include "../fmtk/msg.r64"
+.include "../fmtk/tcb.r64"
+.include "../fmtk/task.r64"
+.include "../fmtk/io.r64"
+.include "../fmtk/iofocus.r64"
+.include "../fmtk/serial.r64"
+.include "../fmtk/source/drivers/pti_driver.r64"
+.include "../fmtk/app.r64"
+.include "../fmtk/Finalizer.r64"
+.include "../fmtk/gcIncremental.r64"
+.include "../fmtk/source/kernel/fmtk.r64"
+.include "../fmtk/source/kernel/pic.r64"
+;.include "../fmtk/source/fmtk.l64"
+.include "../fmtk/finalizer.r64"
+.include "../fmtk/gcIncremental.r64"
+.include "TinyBasic.r64"
+.include "../cc64libc/source/rtf64/io.r64"
+;.include "../cc64libc/source/cc64libc.l64"
+.include "../c_standard_lib-master/c_standard_lib-master/c_standard_lib.l64"

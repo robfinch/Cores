@@ -1,0 +1,82 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;   Allocate a 2MB memory area for the page tables and set all the entries to
+; unassigned.
+;
+  align   16
+_TLBInit:
+  ldi     $a0,#$200000            ; 2MB are needed
+  call    PAMAlloc                ; This should always work at startup
+  csrrw   $x0,#CSR_PTA,$a0        ; set address of page table
+  ldi     $t0,#-1                 ; value to write to table
+  ldi     $t1,#$200000            ; 2MB
+  align   16
+.0001:
+  sub.    $t1,$t1,#8              ; eight bytes at a time
+  sto     $t0,[$a0+$t1]
+  bne     .0001
+  ret
+
+  align   16  
+TLBIRQ:
+  csrrw   $t0,#CSR_BADADDR,$x0    ; get the bad address
+  lsr     $t0,$t0,#LOG_PGSZ       ; convert to page number
+  and     $t0,$t0,#4095           ; max number of virtual pages-1 (safety mask)
+  asl     $t0,$t0,#1              ; convert to index
+  csrrw   $t1,#CSR_ASID,$x0       ; get current ASID
+  asl     $t1,$t1,#13             ; shift into position
+  csrrw   $t2,#CSR_PTA,$x0        ; $t2 = page table address
+  or      $t2,$t2,$t0             ; $t2 = pta + offset from virtual address
+  ldw.    $t2,[$t2+$t1]           ; fetch physical page number
+  bmi     .notAssigned            ; valid page number? (>0)
+  asl     $t1,$t1,#43             ; $t1 = ASID in bits 56 to 63
+  asl     $t0,$t0,#31             ; $t0 = virtual page number in bits 32 to 47
+  or      $t2,$t2,$t1,$t0         ; $t2 = value to enter into TLB
+  lsr     $t0,$t0,#32             ; $t0 = virtual page number in bits 0 to 15
+  and     $t0,$t0,#$3FF           ; make an TLB index
+  csrrw   $t1,#CSR_LFSR,$x0       ; get a random value
+  and     $t1,$t1,#$C00           ; mask to way position
+  or      $t1,$t1,$t0
+  ldi     $t0,#1
+  dep     $t1,$t0,#63,#0          ; set bit 63 for write
+  tlbrw   $x0,$t1,$t2             ; update the TLB (should clear interrupt)
+  rti
+  ; Here the app has requested access to a page that isn't mapped.
+  ; Trigger the app's exception handler.
+
+.notAssigned:
+  csrrw   $t0,#CSR_STATUS,$x0
+  extu.   $t0,$t0,#LEAF_STATUS,#0 ; leaf routine status bit
+  bne     .leafRout
+  csrrs   $x0,#CSR_REGSET,#2      ; access previous register set for Rs1
+  mov     $t1,$sp                 ; get stack pointer
+  mov     $t2,$xa                 ; and exception handler address
+  csrrc   $x0,#CSR_REGSET,#2      ; access current register set for Rs1
+  ldi     $t3,#MPRV_BIT
+  csrrs   $x0,#CSR_STATUS,$t3     ; use previous memory
+  sto     $t2,[$t1]               ; update return address on stack (point to handler)
+  csrrc   $x0,#CSR_STATUS,$t3     ; use current memory
+  rti
+.rts:
+  ret

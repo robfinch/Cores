@@ -153,6 +153,7 @@ parameter MEMORY_WAIT = 6'd52;
 parameter WRITEBACK_WAIT = 6'd53;
 parameter IFETCH_INCR = 6'd54;
 parameter MEMORY0 = 6'd55;
+parameter EXECUTE_CRRES = 5'd56;
 
 reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
 reg [AWID-1:0] pc, ipc, ipc2, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
@@ -206,6 +207,7 @@ reg wrirf,wrcrf,wrcrf32,wrfrf,wrprf;
 reg ewrirf,ewrcrf,ewrcrf32;
 reg mwrirf,mwrcrf,mwrcrf32;
 reg wwrirf,wwrcrf,wwrcrf32;
+reg twrirf,twrcrf,twrcrf32;
 reg rwrirf;
 reg rwrcrf;
 reg rwrcrf32;
@@ -411,6 +413,7 @@ reg [31:0] mimpid = 32'h01108000;
 reg [31:0] mscratch;
 reg [31:0] mbadaddr;
 reg [31:0] usema, msema;
+reg [63:0] sema;
 wire [31:0] mip;
 reg msip, ugip;
 assign mip[31:8] = 24'h0;
@@ -1257,6 +1260,34 @@ wire iaccess_pending = istate==IFETCH3 && !(((ihitw0|ihitw1|ihitw2|ihitw3) && ic
                           ((ihit1a|ihit1b|ihit1c|ihit1d) && ipc[4:0] < 5'h9 && icnt==4'h0));
 
 always @(posedge clk_g)
+if (advance_idr_pipe) begin
+  if (rCs==eCd && eval && ewrcrf)
+    cdb <= crres;
+  else if (rCs==mCd && mval && mwrcrf)
+    cdb <= mcrres;
+  else if (rCs==wCd && wval && wwrcrf)
+    cdb <= wcrres;
+  else
+    cdb <= cd;
+end
+
+always @(posedge clk_g)
+if (advance_idr_pipe) begin
+  if (rRs3[4:0]==5'd0 && rRs3[6:5]!=2'b11)
+    ic <= 64'd0;
+  else if (rRs3==eRd && eval && ewrirf)
+    ic <= res;
+  else if (rRs3==mRd && mval && mwrirf)
+    ic <= mres;
+  else if (rRs3==wRd && wval && wwrirf)
+    ic <= wres;
+  else
+    ic <= irfoRs3;
+end
+else if (advance_emw_pipe)
+  ic <= 64'd0;
+
+always @(posedge clk_g)
 begin
   tReset();
 
@@ -1310,7 +1341,6 @@ begin
 	ldd <= 1'b0;
 	wrpagemap <= 1'b0;
   pagemapa <= 13'd0;
-  ia <= 64'd0;
 	setto <= 1'b0;
 	getto <= 1'b0;
 	decto <= 1'b0;
@@ -2739,57 +2769,52 @@ REGFETCH_WAIT:
   begin
     if (advance_idr_pipe) begin
       imm <= rimm;
+
       if (rRs1[4:0]==5'd0 && rRs1[6:5]!=2'b11)
         ia <= 64'd0;
-      else if (rRs1==eRd && eval)
+      else if (rRs1==eRd && eval && ewrirf)
         ia <= res;
-      else if (rRs1==mRd && mval)
+      else if (rRs1==mRd && mval && mwrirf)
         ia <= mres;
-      else if (rRs1==wRd && wval)
+      else if (rRs1==wRd && wval && wwrirf)
         ia <= wres;
-      else if (rRs1==tRd && tval)
-        ia <= tres;
       else
         ia <= irfoRs1;
 
       if (rRs2[4:0]==5'd0 && rRs2[6:5]!=2'b11)
         ib <= 64'd0;
-      else if (rRs2==eRd && eval)
+      else if (rRs2==eRd && eval && ewrirf)
         ib <= res;
-      else if (rRs2==mRd && mval)
+      else if (rRs2==mRd && mval && mwrirf)
         ib <= mres;
-      else if (rRs2==wRd && wval)
+      else if (rRs2==wRd && wval && wwrirf)
         ib <= wres;
-      else if (rRs2==tRd && tval)
-        ib <= tres;
       else
         ib <= irfoRs2;
-
+/*
       if (rRs3[4:0]==5'd0 && rRs3[6:5]!=2'b11)
         ic <= 64'd0;
-      else if (rRs3==eRd && eval)
+      else if (rRs3==eRd && eval && ewrirf)
         ic <= res;
-      else if (rRs3==mRd && mval)
+      else if (rRs3==mRd && mval && mwrirf)
         ic <= mres;
-      else if (rRs3==wRd && wval)
+      else if (rRs3==wRd && wval && wwrirf)
         ic <= wres;
-      else if (rRs3==tRd && tval)
+      else if (rRs3==tRd && tval && twrirf)
         ic <= tres;
       else
         ic <= irfoRs3;
-
+*/
       if (r_jsr)
         id <= rpc + rilen; // pc is addressing next instruction
       else if (rRd[4:0]==5'd0 && rRd[6:5]!=2'b11)
         id <= 64'd0;
-      else if (rRd==eRd && eval)
+      else if (rRd==eRd && eval && ewrirf)
         id <= res;
-      else if (rRd==mRd && mval)
+      else if (rRd==mRd && mval && mwrirf)
         id <= mres;
-      else if (rRd==wRd && wval)
+      else if (rRd==wRd && wval && wwrirf)
         id <= wres;
-      else if (rRd==tRd && tval)
-        id <= tres;
       else
         casez(rRd)
         7'b110000?: id <= rao;
@@ -2799,18 +2824,18 @@ REGFETCH_WAIT:
         7'b1111101: id <= cds322;
         default:  id <= irfoRd;
         endcase
-
-      if (rCs==eCd && eval)
+/*
+      if (rCs==eCd && eval && ewrcrf)
         cdb <= crres;
-      else if (rCs==mCd && mval)
+      else if (rCs==mCd && mval && mwrcrf)
         cdb <= mcrres;
-      else if (rCs==wCd && wval)
+      else if (rCs==wCd && wval && wwrcrf)
         cdb <= wcrres;
-      else if (rCs==tCd && tval)
+      else if (rCs==tCd && tval && twrcrf)
         cdb <= tcrres;
       else
         cdb <= cd;
-
+*/
       eval <= rval;
       eir <= rir;
       eilen <= rilen;
@@ -2856,15 +2881,12 @@ REGFETCH_WAIT:
       rgoto (REGFETCH1);
     end
     else if (advance_emw_pipe) begin
-      ia <= 64'd0;
-      ib <= 64'd0;
-      ic <= 64'd0;
-      id <= 64'd0;
       eval <= FALSE;
       ebubble_cnt <= ebubble_cnt + 1'b1;
       e_bubble <= TRUE;
       eilen <= eilen;
       expc <= expc;
+      ia <= 64'd0;
       eRs1 <= 7'd0;
       eRs2 <= 7'd0;
       eRd <= 7'd0;
@@ -2932,7 +2954,7 @@ else
 case(estate)
 EXECUTE:
   begin
-    adv_ex();
+    egoto(EXECUTE_CRRES);
     res <= 64'd0;
     emod_pc <= FALSE;
     casez(eopcode)
@@ -3342,7 +3364,7 @@ EXECUTE:
       endcase
     `ADD:   res <= ia + imm;
     `ADD5:  res <= ia + imm;
-    `ADD22: res <= id + imm;
+    `ADD22: res <= ia + imm;
     `ADD2R: res <= ia + ib;
     `SUBF: res <= imm - ia;
     `MUL: begin execute_done <= FALSE; egoto (MUL2); mathCnt <= 8'd07; end
@@ -3531,6 +3553,7 @@ EXECUTE:
         15'b001_????_0010_0001:  res <= {key[5],key[4],key[3]};
         15'b001_????_0010_0010:  res <= {key[8],key[7],key[6]};
         15'b011_????_0000_0001:  res <= hartid_i;
+        15'b011_????_0000_1100:  res <= sema;
         15'b???_????_0000_0110:  res <= cause[ir[28:26]];
         15'b???_????_0000_0111:  res <= badaddr[ir[28:26]];
         15'b???_????_0000_1001:  res <= scratch[ir[28:26]];
@@ -3765,8 +3788,7 @@ EXECUTE:
     endcase
     if (!eval) begin
       emod_pc <= FALSE;
-      execute_done <= TRUE;
-      egoto(EXECUTE_WAIT);
+			egoto(EXECUTE_CRRES);
     end
   end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3804,7 +3826,7 @@ MUL2:
 	begin
 		mathCnt <= mathCnt - 8'd1;
 		if (mathCnt==8'd0) begin
-		  adv_ex();
+			egoto(EXECUTE_CRRES);
 			case(eopcode)
 			`R1:
 			  case(eir[22:18])
@@ -3850,7 +3872,7 @@ PAGEMAPA:
       `TLBRW: begin tlben <= 1'b0; res <= tlbdato; end
       default:  ;
       endcase
-      adv_ex();
+			egoto(EXECUTE_CRRES);
     end
   end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4188,7 +4210,7 @@ FLOAT:
     			      crres[6] <= cdb[6] | ~finf;
     			      crres[7] <= cdb[7] | ~(fcmp_o[1] & ~cmpnan);
 			        end
-			      default:  crres <= cd;
+			      default:  crres <= cdb;
 			      endcase
 						if (cmpsnan)
 							fnv <= 1'b1;
@@ -4295,7 +4317,7 @@ FLOAT:
     			      crres[6] <= cdb[6] | ~pinf_o;
     			      crres[7] <= cdb[7];
 			        end
-			      default:  crres <= cd;
+			      default:  crres <= cdb;
 			      endcase
 			    end
 				`PSLT:
@@ -4356,7 +4378,7 @@ FLOAT:
     			      crres[6] <= cdb[6] | ~pinf_o;
     			      crres[7] <= cdb[7];
 			        end
-			      default:  crres <= cd;
+			      default:  crres <= cdb;
 			      endcase
 			    end
 				`PSLE:
@@ -4424,9 +4446,24 @@ FLOAT:
   		  endcase   // FLT2
 			default:	;
 			endcase     // opcode
-			adv_ex();
+			egoto(EXECUTE_CRRES);
 		end
 	end
+EXECUTE_CRRES:
+  begin
+    if (~e_cmp & ~e_set & ~e_tst & ~e_fltcmp & ~eillegal_insn & ewrcrf) begin
+      crres[0] <= res[64];
+      crres[1] <= res[63:0]==64'd0;
+      crres[2] <= 1'b0;
+      crres[3] <= 1'b0;
+      crres[4] <= ^res[63:0];
+      crres[5] <= res[0];
+      crres[6] <= res[64]^res[63];
+      crres[7] <= res[63];
+    end
+    execute_done <= TRUE;
+    adv_ex();
+  end
 EXECUTE_WAIT:
   if (advance_emw_pipe) begin
     mval <= eval;
@@ -4457,18 +4494,6 @@ EXECUTE_WAIT:
     ea <= eea;
     emod_pc <= FALSE;
     millegal_insn <= eillegal_insn;
-    if (~e_cmp & ~e_set & ~e_tst & ~e_fltcmp & ~eillegal_insn & ewrcrf) begin
-      crres[0] <= res[64];
-      crres[1] <= res[63:0]==64'd0;
-      crres[2] <= 1'b0;
-      crres[3] <= 1'b0;
-      crres[4] <= ^res[63:0];
-      crres[5] <= res[0];
-      crres[6] <= res[64]^res[63];
-      crres[7] <= res[63];
-      writeback_done <= FALSE;
-      wgoto (WRITEBACK2);
-    end
     execute_done <= FALSE;
     egoto(EXECUTE);
   end
@@ -4893,7 +4918,7 @@ MEMORY_WAIT:
     willegal_insn <= millegal_insn;
     w_bubble <= m_bubble;
     memory_done <= FALSE;
-    mgoto(MEMORY1);
+    mgoto(MEMORY0);
   end
 endcase
 end
@@ -5020,6 +5045,9 @@ WRITEBACK_WAIT:
 `endif
     t_bubble <= w_bubble;
     tval <= wval;
+    twrirf <= wwrirf;
+    twrcrf <= wwrcrf;
+    twrcrf32 <= wwrcrf32;
     writeback_done <= FALSE;
     wgoto (WRITEBACK);
   end
@@ -5117,6 +5145,7 @@ begin
     15'b001_????_0010_0000:  begin key[0] <= wia[19:0]; key[1] <= wia[39:20]; key[2] <= wia[59:40]; end
     15'b001_????_0010_0001:  begin key[3] <= wia[19:0]; key[4] <= wia[39:20]; key[5] <= wia[59:40]; end
     15'b001_????_0010_0010:  begin key[6] <= wia[19:0]; key[7] <= wia[39:20]; key[8] <= wia[59:40]; end
+    15'b011_????_0000_1100:  sema <= wia;
     15'b???_????_0000_0110:  cause[wir[28:26]] <= wia;
     15'b???_????_0000_0111:  badaddr[wir[28:26]] <= wia;
     15'b???_????_0000_1001:  scratch[wir[28:26]] <= wia;
@@ -5141,6 +5170,7 @@ begin
     casez({wir[35:33],wir[29:18]})
     15'b???_????_0100_0000:  pmStack <= pmStack | wia;
     15'b???_????_0100_0011:  rsStack <= rsStack | wia;
+    15'b011_????_0000_1100:  sema <= sema | wia;
     15'b101_????_0001_1100:  dbcr <= dbcr | wia;
     15'b101_????_0001_1101:  dbsr <= dbsr | wia;
     default:  ;
@@ -5149,6 +5179,7 @@ begin
     casez({wir[35:33],wir[29:18]})
     15'b???_????_0100_0000:  pmStack <= pmStack & ~wia;
     15'b???_????_0100_0011:  rsStack <= rsStack & ~wia;
+    15'b011_????_0000_1100:  sema <= sema & ~wia;
     15'b101_????_0001_1100:  dbcr <= dbcr & ~wia;
     15'b101_????_0001_1101:  dbsr <= dbsr & ~wia;
     default:  ;
@@ -5228,12 +5259,12 @@ endtask
 task setboolAnd;
 input bool;
 begin
-  crres[0] <= bool & cd[0];
-  crres[1] <= bool & cd[1];
+  crres[0] <= bool & cdb[0];
+  crres[1] <= bool & cdb[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= bool & cd[4];
-  crres[5] <= bool & cd[5];
+  crres[4] <= bool & cdb[4];
+  crres[5] <= bool & cdb[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end
@@ -5242,12 +5273,12 @@ endtask
 task setboolOr;
 input bool;
 begin
-  crres[0] <= bool | cd[0];
-  crres[1] <= bool | cd[1];
+  crres[0] <= bool | cdb[0];
+  crres[1] <= bool | cdb[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= bool | cd[4];
-  crres[5] <= bool | cd[5];
+  crres[4] <= bool | cdb[4];
+  crres[5] <= bool | cdb[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end
@@ -5256,12 +5287,12 @@ endtask
 task setboolAndcm;
 input bool;
 begin
-  crres[0] <= ~bool & cd[0];
-  crres[1] <= ~bool & cd[1];
+  crres[0] <= ~bool & cdb[0];
+  crres[1] <= ~bool & cdb[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= ~bool & cd[4];
-  crres[5] <= ~bool & cd[5];
+  crres[4] <= ~bool & cdb[4];
+  crres[5] <= ~bool & cdb[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end
@@ -5270,12 +5301,12 @@ endtask
 task setboolOrcm;
 input bool;
 begin
-  crres[0] <= ~bool | cd[0];
-  crres[1] <= ~bool | cd[1];
+  crres[0] <= ~bool | cdb[0];
+  crres[1] <= ~bool | cdb[1];
   crres[2] <= 1'b0;
   crres[3] <= 1'b0;
-  crres[4] <= ~bool | cd[4];
-  crres[5] <= ~bool | cd[5];
+  crres[4] <= ~bool | cdb[4];
+  crres[5] <= ~bool | cdb[5];
   crres[6] <= 1'b0;
   crres[7] <= 1'b0;
 end

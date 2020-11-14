@@ -1,0 +1,311 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+; PAM
+; 0 = unallocated
+; 1 = reserved
+; 2 = end of run of pages
+; 3 = allocated
+;------------------------------------------------------------------------------
+
+;------------------------------------------------------------------------------
+; PAMFindRun
+;    Find a run of unallocated pages.
+;
+; Parameters:
+;   $a0 = number of consecutive pages required
+; Returns:
+;   $a0 = page starting run, -1 if not enough memory
+;   $cr0 = N set if not enough memory
+;------------------------------------------------------------------------------
+
+PAMFindRun:
+  gcsub $sp,$sp,#40
+  sto   $s1,8[$sp]
+  sto   $s2,16[$sp]
+  sto   $s3,24[$sp]
+  sto   $s4,32[$sp]
+  mov   $s1,$a0             ; save argument value
+  stt   $a0,$4010
+  ldi   $a0,#OSPAGES
+.nextPage:
+  mov   $s4,$a0
+  jal   PAMGetbitPair
+  tst   $a0
+  bne   .notAvailable
+  mov   $s3,$s4             ; remember start of run
+  mov   $s2,$s1             ; $s2 = run length
+.runInc:
+  sub.  $s2,$s2,#1
+  beq   .foundRun
+  add   $a0,$s4,#1          ; increment run start
+  slt   $a0,#MEMSZ
+  beq   .outOfMem
+  mov   $s4,$a0             ; remember $a0
+  stt   $s4,$4020
+  jal   PAMGetbitPair
+  tst   $a0
+  beq   .runInc
+  add   $a0,$s3,#1          ; increment run start pos
+  bra   .nextPage
+.notAvailable:
+  add   $a0,$s4,#1
+  slt   $a0,#MEMSZ
+  bne   .nextPage
+.outOfMem:
+  ldi.  $a0,#-1
+  bra   .xit
+.foundRun:
+  mov.  $a0,$s3
+.xit
+  ldo   $s1,8[$sp]
+  ldo   $s2,16[$sp]
+  ldo   $s3,24[$sp]
+  ldo   $s4,32[$sp]
+  ret   #40
+
+;------------------------------------------------------------------------------
+; Find a run of pages and mark them all allocated.
+;
+; Parameters:
+;   $a0 = amount of memory to allocate
+; Returns:
+;   $a0 = pointer to memory, -1 if insufficient memory
+;   $cr0 = N flag set if insufficient memory
+;------------------------------------------------------------------------------
+
+_PAMAlloc:
+  gcsub $sp,$sp,#32
+  sto   $s1,8[$sp]
+  sto   $s4,16[$sp]
+  sto   $s5,24[$sp]
+  tst   $a0
+  beq   .outOfMem           ; request sensible?
+  add   $t0,$a0,#PAGESZ-1   ; round allocation up
+  lsr   $a0,$t0,#LOG_PGSZ   ; convert size to pages
+  mov   $s4,$a0             ; $s4 = length of run in pages
+  ldt   $t0,NPAGES          ; check number of pages of memory available
+  sub.  $t0,$t0,$a0
+  bmi   .outOfMem
+  stt   $t0,NPAGES          ; update the number of available pages
+  call  PAMFindRun
+  bmi   .xit
+  mov   $s1,$a0
+  mov   $a3,$a0
+  mov   $s5,$a0             ; $s5 = start of run
+.markNext:
+  mov   $a0,$a3
+  slt   $s4,#2              ; if $s4 <= 1
+  aslx  $a1,$x0,#1          ; $a1 = 0 or 1
+  eor   $a1,$a1,#3          ; $a1 = 3, 2 if end of run
+  jal   PAMSetbitPair
+  add   $a3,$a3,#1          ; increment page number
+  sub.  $s4,$s4,#1          ; decrement length
+  bgt   .markNext
+  mov   $a0,$s5             ; $a0 = start of run
+  asl.  $a0,$a0,#LOG_PGSZ   ; $a0 = physical address of page
+.xit:
+  ldo   $s1,8[$sp]
+  ldo   $s4,16[$sp]
+  ldo   $s5,23[$sp]
+  ret   #32
+.outOfMem:
+  ldi.  $a0,#-1
+  jmp   .xit
+
+;------------------------------------------------------------------------------
+; Free memory previously allocated with PAMAlloc.
+;
+; Parameters:
+;   $a0 = pointer to start of memory
+; Modifies:
+;   $a0,$t0,$t1,$t2,$t3,$t4
+; Returns:
+;   none
+;------------------------------------------------------------------------------
+
+_PAMFree:
+  gcsub   $sp,$sp,#16
+  sto     $s1,8[$sp]
+  mov     $s1,$a0
+  and.    $a0,$a0,#$FC003FFF  ; check page 16kB aligned
+  bne     .xit
+  lsr     $a0,$s1,#LOG_PGSZ   ; convert to page number
+  ldi     $t4,#1
+.nextPage:
+  mov     $s1,$a0
+  jal     PAMGetbitPair
+  tst     $a0
+  beq     .endOfRun
+  slt     $a0,#3
+  bne     .lastPage
+  mov     $a0,$s1
+  ldi     $a1,#0
+  jal     PAMSetbitPair
+  add     $s1,$a0,#1
+  add     $t4,$t4,#1
+  jmp     .nextPage  
+.lastPage:
+  mov     $a0,$s1
+  ldi     $a1,#0
+  jal     PAMSetbitPair
+  add     $t4,$t4,#1
+.endOfRun:
+  ldt     $a1,NPAGES
+  add     $a1,$a1,$t4
+  stt     $a1,NPAGES
+.xit:
+  ldo     $s1,4[$sp]
+  rts     #16
+
+;------------------------------------------------------------------------------
+; Allocate a single page of memory. Available memory is indicated by a bitmmap
+; called the PAM for page allocation map.
+;
+; Modifies:
+;		$t0,$t1,$t2,$t3
+; Returns:
+;		$a0 = page allocated
+;   $cr0 = Z flag if can not allocate
+;------------------------------------------------------------------------------
+;
+_PAMMarkPage:
+	gcsub	$sp,$sp,#16
+	sto   $s1,8[$sp]
+	ldi   $a0,#OSPAGES
+  mov   $s1,$a0
+.0001:
+  mov   $a0,$s1
+	jal   PAMGetbitPair
+	beq   .gotFree
+	add   $s1,$s1,#1
+	slt   $s1,#MEMSZ
+	bt    .0001
+	ldi.  $a0,#0
+	jmp   .xit
+.gotFree:
+  mov.  $a0,$s1
+  ldi   $a1,#2          ; end of run bits
+  jal   PAMSetbitPair
+.xit:
+	ldo   $s1,8[$sp]
+  rts   #16
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a0 = page number to free
+; Modifies:
+;		$a1,$t0,$t1,$t2,$t3
+;------------------------------------------------------------------------------
+
+PAMUnmarkPage:
+	sgeu    $a0,#MEMSZ-1   ; last page is permanently allocated to system stack
+	sltu.or $a0,#OSPAGES
+	bt	    PAMxit			    ; first 64 pages (64kB) allocated permanently to system
+	ldi     $a1,#0
+; Tail recursion here
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a0 = bit number to set
+;   $a1 = value to set 0,1,2 or 3
+; Does not modify:
+;   $a0, $a1
+; Modifies:
+;		$t0,$t1,$t2,$t3
+;------------------------------------------------------------------------------
+
+PAMSetbitPair:
+  lsr   $t2,$a0,#5          ; t2 = word
+  asl   $t2,$t2,#3          ; t2 = word index
+  and   $t3,$a0,#31         ; t3 = bit pair no
+  asl   $t3,$t3,#1          ; t3 = bit pair index
+	ldo		$t1,PAM[$t2]        ; get word
+	ldi   $t2,#1
+	dep   $t1,$a1,$t3,$t2
+	sto		$t1,PAM[$t2]        ; store word
+PAMxit:
+	rtl
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		$a0 = bit number to get
+; Modifies:
+;		$t0,$t2,$t3
+; Returns:
+;   $a0 = value of bit (0, 1, 2, or 3)
+;   $cr0 = Z flag set if bit = 0
+;------------------------------------------------------------------------------
+
+PAMGetbitPair:
+  lsr   $t2,$a0,#5          ; $t2 = word
+  asl   $t2,$t2,#3          ; $t2 = word index
+  and   $t3,$a0,#31         ; $t3 = bit pair no
+  asl   $t3,$t3,#1          ; $t3 = bit pair index
+	ldo		$t0,PAM[$t2]        ; get word
+	ldi   $t2,#1
+	extu. $a0,$t0,$t3,$t2     ; extract bits (0, 1, 2, or 3)
+	rtl
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+_PAMInit:
+  ; First zero out the entire PAM using word stores
+  ldi   $a0,#0
+  align 16
+.0002:
+  sto   $x0,PAM[$a0]
+  add   $a0,$a0,#8
+  slt   $a0,#32768      ; 131072 bit pair = 32,768 bytes
+  bne   .0002
+
+  ; Now set bits for preallocated memory pages
+  ldi   $a0,#OSPAGES-1  ; OS pages
+  ldi   $a1,#3
+.0001:
+  jal   PAMSetbitPair
+  sub.  $a0,$a0,#1
+  bge   $cr0,.0001
+  ldi   $a0,#OSPAGES-1  ; Last OS page
+  ldi   $a1,#2          ; set mark end of run
+  jal   PAMSetbitPair
+  ldi   $a1,#2          ; end of run
+  ldi   $a0,#MEMSZ-1    ; OS stack page
+  jal   PAMSetbitPair
+  ldi   $a0,#MEMSZ-2    ; OS stack page
+  ldi   $a1,#3          ; mid run
+  jal   PAMSetbitPair
+  ldi   $a0,#MEMSZ-3    ; OS stack page
+  jal   PAMSetbitPair
+  ldi   $a0,#MEMSZ-4    ; OS stack page
+  jal   PAMSetbitPair
+  ret
+
+GetPamBit:
+  mov   $a0,$a1
+  jal   PAMGetbitPair
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+  jmp   OSExit
