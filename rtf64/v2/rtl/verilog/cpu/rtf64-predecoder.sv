@@ -114,6 +114,7 @@ casez(i)
 `BRK:     o = 8'h32;
 `NOP:     o = 8'h31;
 `OSR2:    o = 8'h34;
+`DBG:     o = 8'h31;
 `LDBS:    o = 8'h43;
 `LDBUS:   o = 8'h43;
 `LDWS:    o = 8'h43;
