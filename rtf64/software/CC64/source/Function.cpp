@@ -27,6 +27,7 @@
 extern char irfile[256];
 extern int defaultcc;
 extern bool isLeaf;
+extern CSet* ru, * rru;
 
 Function::Function()
 {
@@ -98,7 +99,7 @@ Statement *Function::ParseBody()
 		max_reg_alloc_ptr = 0;
 		max_stack_use = 0;
 		label = nextlabel;
-		Gen();
+		Generate();
 		stkspace += (ArgRegCount - regFirstArg) * sizeOfWord;
 		argbot = -stkspace;
 		stkspace += max_stack_use;// GetTempMemSpace();
@@ -109,7 +110,7 @@ Statement *Function::ParseBody()
 			pl.tail->fwd = nullptr;
 		looplevel = 0;
 		//nextlabel = label;
-		Gen();
+		Generate();
 		dfs.putch('E');
 
 		PeepOpt();
@@ -218,7 +219,7 @@ int Function::Parse()
 	}
 	dfs.printf("C");
 
-	if (sp != osp) {
+	if (sp && sp != osp) {
 		dfs.printf("Function::Parse: sp changed\n");
 		params.CopyTo(&sp->params);
 		proto.CopyTo(&sp->proto);
@@ -231,18 +232,37 @@ int Function::Parse()
 		NextToken();
 		while (lastst == kw_attribute)
 			Declaration::ParseFunctionAttribute(sp);
+		//if (lastst == closepa)
+		//	NextToken();
+		if (lastst == openpa) {
+			int np, na;
+			SYM* sp = (SYM*)allocSYM();
+			Function* fn = compiler.ff.MakeFunction(sym->number, sp, false);
+			fn->BuildParameterList(&np, &na);
+			if (lastst == closepa) {
+				NextToken();
+				while (lastst == kw_attribute)
+					Declaration::ParseFunctionAttribute(fn);
+			}
+		}
 	}
 	dfs.printf("D");
-	if (sp->sym->tp->type == bt_pointer) {
+	if (sp && sp->sym->tp->type == bt_pointer) {
 		if (lastst == assign) {
-			doinit(sp->sym);	// was doinit(sym);
+			ENODE* node;
+			Expression exp;
+
+			exp.nameref2(sp->sym->name->c_str(), &node, en_ref, true, nullptr, nullptr);
+			exp.CondDeref(&node, sp->sym->tp);
+			sp->sym->initexp->p[0] = node;
+			doinit(sp->sym);
 		}
 		sp->Init();
 		return (1);
 	}
 j2:
 	dfs.printf("E");
-	if (lastst == semicolon || lastst == comma) {	// Function prototype
+	if (sp && (lastst == semicolon || lastst == comma)) {	// Function prototype
 		dfs.printf("e");
 		sp->IsPrototype = 1;
 		sp->Init();
@@ -255,7 +275,7 @@ j2:
 		}
 		goto j2;
 	}
-	else if (lastst != begin) {
+	else if (sp && lastst != begin) {
 		dfs.printf("F");
 		//			NextToken();
 		//			ParameterDeclaration::Parse(2);
@@ -281,19 +301,36 @@ j2:
 	//                error(ERR_BLOCK);
 	else {
 		dfs.printf("G");
-		sp->Init();
-		// Parsing declarations sets the storage class to extern when it really
-		// should be global if there is a function body.
-		if (sp->sym->storage_class == sc_external)
-			sp->sym->storage_class = sc_global;
-		sp->sym->stmt = ParseBody();
-		Summary(sp->sym->stmt);
+		if (sp) {
+			sp->Init();
+			// Parsing declarations sets the storage class to extern when it really
+			// should be global if there is a function body.
+			if (sp->sym->storage_class == sc_external)
+				sp->sym->storage_class = sc_global;
+			sp->sym->stmt = ParseBody();
+			Summary(sp->sym->stmt);
+		}
 	}
 j1:
 	dfs.printf("F");
 	dfs.puts("</ParseFunction>\n");
 	return (0);
 }
+
+/*
+void Function::StackGPRs()
+{
+	int nn;
+
+	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(31 * sizeOfWord));
+	for (nn = 1; nn < 31; nn = nn + 1) {
+		GenerateDiadic(op_sto, 0, makereg(nn), MakeIndexed((nn - 1) * sizeOfWord, regSP));
+	}
+	// Get usp
+	GenerateTriadic(op_csrrw, 0, makereg(2), MakeImmediate(0x00), makereg(regZero));
+	GenerateDiadic(op_sto, 0, makereg(2), MakeIndexed(30 * sizeOfWord, regSP));
+}
+*/
 
 // Push temporaries on the stack.
 
@@ -308,7 +345,7 @@ void Function::SaveGPRegisterVars()
 			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
 			rmask->resetPtr();
 			for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
-				GenerateDiadic(op_sth, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				GenerateDiadic(op_sto, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -326,7 +363,7 @@ void Function::SaveFPRegisterVars()
 			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
 			fprmask->resetPtr();
 			for (nn = fprmask->lastMember(); nn >= 0; nn = fprmask->prevMember()) {
-				GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+				GenerateDiadic(op_fsto, 0, makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -474,7 +511,7 @@ int Function::RestoreFPRegisterVars()
 		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfWord;
 		fpsave_mask->resetPtr();
 		for (nn = fpsave_mask->nextMember(); nn >= 1; nn = fpsave_mask->nextMember()) {
-			GenerateDiadic(op_ldf, 'd', makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			GenerateDiadic(op_fldo, 0, makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
@@ -493,7 +530,7 @@ int Function::RestorePositRegisterVars()
 		cnt2 = cnt = (psave_mask->NumMember() - 1) * sizeOfWord;
 		psave_mask->resetPtr();
 		for (nn = psave_mask->nextMember(); nn >= 1; nn = psave_mask->nextMember()) {
-			GenerateDiadic(op_pldo, ' ', compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			GenerateDiadic(op_pldo, 0, compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
@@ -505,7 +542,9 @@ void Function::RestoreRegisterVars()
 {
 	RestorePositRegisterVars();
 	RestoreFPRegisterVars();
+	cg.GenerateHint(begin_restore_regvars);
 	RestoreGPRegisterVars();
+	cg.GenerateHint(end_restore_regvars);
 }
 
 void Function::SaveTemporaries(int *sp, int *fsp, int* psp)
@@ -552,12 +591,7 @@ void Function::UnlinkStack()
 		if (alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord + stkspace, regSP));
 	}
-	if (cpu.SupportsUnlink)
-		GenerateZeradic(op_unlk);
-	else {
-		GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
-		GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
-	}
+	cg.GenerateUnlink();
 	if (!IsLeaf && doesJAL) {
 		if (!alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
@@ -618,7 +652,7 @@ void Function::SetupReturnBlock()
 	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
 	n = 0;
-	if (!IsLeaf && doesJAL) {
+	if (!currentFn->IsLeaf && doesJAL) {
 		n |= 2;
 		if (alstk) {
 			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord + stkspace, regSP));
@@ -648,13 +682,13 @@ void Function::SetupReturnBlock()
 
 // Generate a return statement.
 //
-void Function::GenerateReturn(Statement *stmt)
+void Function::GenerateReturn(Statement* stmt)
 {
-	Operand *ap, *ap2;
+	Operand* ap, * ap2;
 	int nn;
 	int cnt, cnt2;
 	int toAdd;
-	SYM *p;
+	SYM* p;
 	bool isFloat, isPosit;
 	int64_t sz;
 
@@ -784,7 +818,7 @@ void Function::GenerateReturn(Statement *stmt)
 
 	// Unlock any semaphores that may have been set
 	for (nn = lastsph - 1; nn >= 0; nn--)
-		GenerateDiadic(op_stb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn],dataseg));
+		GenerateDiadic(op_stb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn], dataseg));
 
 	// Restore fp registers used as register variables.
 	//if (fpsave_mask->NumMember()) {
@@ -805,14 +839,31 @@ void Function::GenerateReturn(Statement *stmt)
 		return;
 	}
 	UnlinkStack();
-	if (!alstk)
-		toAdd = SizeofReturnBlock() * sizeOfWord;
+	if (!alstk) {
+		// The size of the return block is included in the link instruction, so the
+		// unlink instruction will reverse the allocation.
+		if (cpu.SupportsLink)
+			toAdd = 0;
+		else
+			toAdd = SizeofReturnBlock() * sizeOfWord;
+	}
+	else if (currentFn->IsLeaf)
+		toAdd = 0;
 	else
 		toAdd = sizeOfWord;
 
 	if (epilog) {
 		epilog->Generate();
 		return;
+	}
+
+	// Local variables and the return block must be deallocated before the return instruction.
+	// The return address is between these and the parameters. Parameters can be deallocated
+	// during the return. For leaf routines, the return address is not present, so it is 
+	// safe to combine the de-allocations.
+	if (!currentFn->IsLeaf) {
+		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
+		toAdd = 0;
 	}
 
 	// If Pascal calling convention remove parameters from stack by adding to stack pointer
@@ -868,12 +919,11 @@ void Function::GenerateReturn(Statement *stmt)
 	}
 
 	if (!IsInline) {
-		if (toAdd > 65536)
-			;
-		else if (toAdd == sizeOfWord)
-			GenerateZeradic(currentFn->IsLeaf ? op_rtl : op_ret);
-		else
-			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
+		if (toAdd > 65536) {
+			GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
+			toAdd = 0;
+		}
+		GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
 	}
 	else
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
@@ -882,7 +932,7 @@ void Function::GenerateReturn(Statement *stmt)
 
 // Generate a function body.
 //
-void Function::Gen()
+void Function::Generate()
 {
 	int defcatch;
 	Statement *stmt = this->sym->stmt;
@@ -917,7 +967,7 @@ void Function::Gen()
 			GenerateDiadic(op_lea, 0, makereg(SP), MakeStringAsNameConst(stkname,dataseg));
 			GenerateTriadic(op_ori, 0, makereg(SP), makereg(SP), MakeImmediate(0xFFFFF00000000000LL));
 		}
-		//SaveRegisterSet(sym);
+//		StackGPRs();
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
@@ -981,7 +1031,7 @@ void Function::Gen()
 		}
 	}
 	dfs.puts("</StaticRegs>");
-	currentFn->pl.Dump("===== Peeplist After Gen Pass %d =====\n");
+	currentFn->pl.Dump("===== Peeplist After Generate Pass %d =====\n");
 	retGenerated = o_retgen;
 	throwlab = o_throwlab;
 	retlab = o_retlab;
@@ -998,6 +1048,8 @@ TypeArray *Function::GetParameterTypes()
 	SYM *sp;
 	int nn;
 
+	if (this == nullptr)
+		return (nullptr);
 	//	printf("Enter GetParameterTypes()\r\n");
 	i16 = new TypeArray();
 	i16->Clear();
@@ -1219,7 +1271,7 @@ Function *Function::FindExactMatch(int mm, std::string name, int rettype, TypeAr
 void Function::BuildParameterList(int *num, int *numa)
 {
 	int64_t poffset;
-	int i, preg, fpreg;
+	int i, reg, fpreg, preg;
 	SYM *sp1;
 	int onp;
 	int np;
@@ -1238,8 +1290,9 @@ void Function::BuildParameterList(int *num, int *numa)
 		oldnames[np] = names[np];
 	onp = nparms;
 	nparms = 0;
-	preg = regFirstArg;
-	fpreg = regFirstArg;
+	reg = regFirstArg;
+	fpreg = regFirstArg|0x20;
+	preg = regFirstArg | 0x40;
 	// Parameters will be inserted into the symbol's parameter list when
 	// declarations are processed.
 	//if (strcmp(sym->name->c_str(), "__Skip") == 0)
@@ -1262,7 +1315,7 @@ void Function::BuildParameterList(int *num, int *numa)
 		sp1->value.i = poffset;
 		noParmOffset = false;
 		if (sp1->tp->IsFloatType()) {
-			if (fpreg > regLastArg)
+			if (fpreg > regLastArg|0x20)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? fpreg | 0x8000 : fpreg;
@@ -1275,13 +1328,27 @@ void Function::BuildParameterList(int *num, int *numa)
 			else
 				sp1->IsRegister = false;
 		}
-		else {
-			if (preg > regLastArg)
+		else if (sp1->tp->IsPositType()) {
+			if (preg > regLastArg | 0x40)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
 				preg++;
 				if ((preg & 0x8000) == 0) {
+					noParmOffset = true;
+					sp1->value.i = -1;
+				}
+			}
+			else
+				sp1->IsRegister = false;
+		}
+		else {
+			if (reg > regLastArg)
+				sp1->IsRegister = false;
+			if (sp1->IsRegister && sp1->tp->size < 11) {
+				sp1->reg = sp1->IsAuto ? reg | 0x8000 : reg;
+				reg++;
+				if ((reg & 0x8000) == 0) {
 					noParmOffset = true;
 					sp1->value.i = -1;
 				}
@@ -1318,12 +1385,12 @@ void Function::BuildParameterList(int *num, int *numa)
 					sp1->IsAuto = false;
 					sp1->next = 0;
 					sp1->IsRegister = true;
-					if (preg > regLastArg)
+					if (reg > regLastArg)
 						sp1->IsRegister = false;
 					if (sp1->IsRegister && sp1->tp->size < 11) {
-						sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
+						sp1->reg = sp1->IsAuto ? reg | 0x8000 : reg;
 						preg++;
-						if ((preg & 0x8000) == 0) {
+						if ((reg & 0x8000) == 0) {
 							noParmOffset = true;
 							sp1->value.i = -1;
 						}
@@ -1442,6 +1509,7 @@ void Function::CheckForUndefinedLabels()
 void Function::Summary(Statement *stmt)
 {
 	dfs.printf("<FuncSummary>\n");
+	irfs.printf("\nFunction:%s\n", (char *)this->sym->name->c_str());
 	nl();
 	CheckForUndefinedLabels();
 	lc_auto = 0;
@@ -1449,10 +1517,11 @@ void Function::Summary(Statement *stmt)
 	ListTable(&sym->lsyms, 0);
 	// Should recurse into all the compound statements
 	if (stmt == NULL)
-		dfs.printf("DIAG: null statement in funcbottom.\r\n");
+		dfs.printf("DIAG: null statement in Function::Summary.\r\n");
 	else {
 		if (stmt->stype == st_compound)
-			ListCompound(stmt);
+			stmt->ListCompoundVars();
+		//stmt->storeHex(irfs);
 	}
 	lfs.printf("\n\n\n");
 	//    ReleaseLocalMemory();        // release local symbols

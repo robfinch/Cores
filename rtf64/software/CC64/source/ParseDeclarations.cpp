@@ -196,8 +196,20 @@ void Declaration::ParseLong()
 {
 	NextToken();
 	if (lastst==kw_int) {
-		bit_max = 64;
+		head = (TYP*)TYP::Make(bt_long, sizeOfWord);
+		tail = head;
+		bit_max = head->precision;
 		NextToken();
+	}
+	else if (lastst == kw_long) {
+		//head = (TYP*)TYP::Make(bt_i128, sizeOfWord * 2);
+		//bit_max = 128;
+		head = (TYP*)TYP::Make(bt_long, sizeOfWord);
+		tail = head;
+		bit_max = head->precision;
+		NextToken();
+		if (lastst == kw_int)
+			NextToken();
 	}
 	else if (lastst==kw_float) {
 		head = (TYP *)TYP::Make(bt_double,sizeOfFPD);
@@ -331,7 +343,8 @@ void Declaration::ParseBit()
 
 void Declaration::ParseFloat()
 {
-	head = TYP::Copy(&stddouble);
+//	head = TYP::Copy(&stddouble);
+	head = (TYP*)TYP::Make(bt_double, 8);
 	tail = head;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
@@ -647,7 +660,7 @@ void Declaration::ParseClass()
 	bit_width = cd.bit_width;
 }
 
-int Declaration::ParseStruct(e_bt typ)
+int Declaration::ParseStruct(TABLE* table, e_bt typ, SYM **sp)
 {
 	StructDeclaration sd;
 	int rv;
@@ -657,7 +670,7 @@ int Declaration::ParseStruct(e_bt typ)
 	sd.bit_next = bit_next;
 	sd.bit_offset = bit_offset;
 	sd.bit_width = bit_width;
-	rv = sd.Parse(typ);
+	rv = sd.Parse(table, typ, sp);
 	sd.GetType(&head, &tail);
 	bit_max = sd.bit_max;
 	bit_next = sd.bit_next;
@@ -670,7 +683,7 @@ int Declaration::ParseStruct(e_bt typ)
 // Returns:
 // 0 usually, 1 if only a specifier is present
 //
-int Declaration::ParseSpecifier(TABLE *table)
+int Declaration::ParseSpecifier(TABLE* table, SYM** sym, e_sc sc)
 {
 	SYM *sp;
 	ClassDeclaration cd;
@@ -820,13 +833,19 @@ int Declaration::ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_struct:
-				if (ParseStruct(bt_struct))
+				if (ParseStruct(table, bt_struct, &sp)) {
+					*sym = sp;
 					return (1);
+				}
+				*sym = sp;
 				goto lxit;
 
 			case kw_union:
-				if (ParseStruct(bt_union))
+				if (ParseStruct(table, bt_union, &sp)) {
+					*sym = sp;
 					return (1);
+				}
+				*sym = sp;
 				goto lxit;
 
       case kw_exception:
@@ -1130,6 +1149,118 @@ void Declaration::ParseFunctionAttribute(Function *sym)
 	needpunc(closepa,0);
 }
 
+void Declaration::ParseFunctionJ2(Function* sp)
+{
+	int fd;
+	std::string odecl;
+	TYP* tempHead, * tempTail;
+	int isd;
+	int nump = 0;
+	int numa = 0;
+	Function* cf;
+
+	dfs.printf("r");
+	//cf = currentFn;
+ // currentFn = sp;
+	dfs.printf("s");
+	// Parse the parameter list for a function pointer passed as a
+	// parameter.
+	// Parse parameter list for a function pointer defined within
+	// a structure.
+	if (parsingParameterList || isStructDecl) {
+		dfs.printf("s ");
+		fd = funcdecl;
+		needParseFunction = FALSE;
+		dfs.printf("Set false\n");
+		if (declid)
+			odecl = *declid;
+		else
+			odecl = "";
+		tempHead = head;
+		tempTail = tail;
+		isd = isStructDecl;
+		head = tail = nullptr;
+		//ParseParameterDeclarations(10);	// parse and discard
+		funcdecl = 10;
+		//				SetType(sp);
+		cf = currentFn;
+		currentFn = sp;
+		sp->BuildParameterList(&nump, &numa);
+		currentFn = cf;
+		needParseFunction = 0;
+		dfs.printf("Set false\n");
+		//				sp->parms = sym;
+		sp->NumParms = nump;
+		isStructDecl = isd;
+		head = tempHead;
+		tail = tempTail;
+		if (declid) delete declid;
+		declid = new std::string(odecl);
+		funcdecl = fd;
+		// There may be more parameters in the list.
+		if (lastst == comma) {
+			return;
+		}
+		needpunc(closepa, 23);
+
+		if (lastst == begin) {
+			needParseFunction = 2;
+			dfs.printf("Set true1\n");
+			if (sp->params.GetHead() && sp->proto.GetHead()) {
+				dfs.printf("Matching parameter types to prototype.\n");
+				if (!sp->ParameterTypesMatch(sp))
+					error(ERR_PARMLIST_MISMATCH);
+			}
+			//temp1->type = bt_ifunc;
+		}
+		// Could be a function prototype in a parameter list followed by a comma.
+		else if (lastst == comma && parsingParameterList > 0) {
+			sp->params.CopyTo(&sp->proto);
+			return;
+		}
+		// If the declaration is ending in a semicolon then it was really
+		// a function prototype, so move the parameters to the prototype
+		// area.
+		else if (lastst == semicolon) {
+			sp->params.CopyTo(&sp->proto);
+		}
+		else {
+			if (funcdecl > 0 && lastst == closepa)
+				;
+			else
+				error(ERR_SYNTAX);
+		}
+		dfs.printf("Z\r\n");
+		//				if (isFuncPtr)
+		//					temp1->type = bt_func;
+		//				if (lastst != begin)
+		//					temp1->type = bt_func;
+		//				if (lastst==begin) {
+		//					ParseFunction(sp);
+		//				}
+	}
+	/*
+	else {
+		int ppl = parsingParameterList;
+		parsingParameterList = false;
+		cf = currentFn;
+		currentFn = sp;
+		sp->BuildParameterList(&nump, &numa);
+		parsingParameterList = ppl;
+		currentFn = cf;
+		sp->NumParms = nump;
+		sp->numa = numa;
+		//needpunc(closepa,23);
+		if (lastst == semicolon) {
+			sp->params.CopyTo(&sp->proto);
+			needParseFunction = false;
+		}
+	}
+	*/
+	dfs.printf("Y");
+	sp->PrintParameterTypes();
+	dfs.printf("X");
+}
 
 // Take care of following open parenthesis (). These indicate a function
 // call. There may or may not be following parameters. A following '{' is
@@ -1199,20 +1330,8 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 		}
 	  else {
 		  if (lastst != semicolon) {
-				goto j2;
-				cf = currentFn;
-				currentFn = sp;
-				nump = 0;
-				sp->BuildParameterList(&nump, &numa);
-				currentFn = cf;
-				sp->NumParms = nump;
-				sp->numa = numa;
-				if (lastst==begin) {
-					temp1->type = bt_ifunc;
-					currentFn = sp;
-					needParseFunction = 2;
-					goto j1;
-				}
+				ParseFunctionJ2(sp);
+				return;
 			}
 	    temp1->type = bt_func;
 		  needParseFunction = 0;
@@ -1221,111 +1340,10 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 	  currentFn = sp;
 	  sp->NumParms = 0;
 	  sp->numa = 0;
-j1: ;
   }
-  else {
-j2:
-    dfs.printf("r");
-		//cf = currentFn;
-	 // currentFn = sp;
-    dfs.printf("s");
-    temp1->type = bt_func;
-  	// Parse the parameter list for a function pointer passed as a
-  	// parameter.
-  	// Parse parameter list for a function pointer defined within
-  	// a structure.
-  	if (parsingParameterList || isStructDecl) {
-      dfs.printf("s ");
-  		fd = funcdecl;
-  		needParseFunction = FALSE;
-  	  dfs.printf("Set false\n");
-			if (declid)
-  			odecl = *declid;
-			else
-				odecl = "";
-  		tempHead = head;
-  		tempTail = tail;
-  		isd = isStructDecl;
-			head = tail = nullptr;
-  		//ParseParameterDeclarations(10);	// parse and discard
-  		funcdecl = 10;
-  //				SetType(sp);
-			cf = currentFn;
-			currentFn = sp;
-  		sp->BuildParameterList(&nump, &numa);
-			currentFn = cf;
-  		needParseFunction = 0;
-  	  dfs.printf("Set false\n");
-  //				sp->parms = sym;
-  		sp->NumParms = nump;
-  		isStructDecl = isd;
-  		head = tempHead;
-  		tail = tempTail;
-  		if (declid) delete declid;
-  		declid = new std::string(odecl);
-  		funcdecl = fd;
-			// There may be more parameters in the list.
-			if (lastst==comma) {
-				return;
-			}
-  		needpunc(closepa,23);
-  
-			if (lastst == begin) {
-				needParseFunction = 2;
-				dfs.printf("Set true1\n");
-				if (sp->params.GetHead() && sp->proto.GetHead()) {
-					dfs.printf("Matching parameter types to prototype.\n");
-					if (!sp->ParameterTypesMatch(sp))
-						error(ERR_PARMLIST_MISMATCH);
-				}
-				temp1->type = bt_ifunc;
-			}
-			// Could be a function prototype in a parameter list followed by a comma.
-			else if (lastst == comma && parsingParameterList > 0) {
-				sp->params.CopyTo(&sp->proto);
-				return;
-			}
-  		// If the declaration is ending in a semicolon then it was really
-  		// a function prototype, so move the parameters to the prototype
-  		// area.
-  		else if (lastst==semicolon) {
-  			sp->params.CopyTo(&sp->proto);
-      }
-  	  else {
-				if (funcdecl > 0 && lastst==closepa)
-					;
-				else
-  				error(ERR_SYNTAX);
-  	  }
-      dfs.printf("Z\r\n");
-//				if (isFuncPtr)
-//					temp1->type = bt_func;
-//				if (lastst != begin)
-//					temp1->type = bt_func;
-//				if (lastst==begin) {
-//					ParseFunction(sp);
-//				}
-    }
-		/*
-		else {
-			int ppl = parsingParameterList;
-			parsingParameterList = false;
-			sp->BuildParameterList(&nump, &numa);
-			parsingParameterList = ppl;
-			currentFn = cf;
-			sp->NumParms = nump;
-			sp->numa = numa;
-			//needpunc(closepa,23);
-			if (lastst == semicolon) {
-				sp->params.CopyTo(&sp->proto);
-				needParseFunction = false;
-			}
-		}
-		*/
-    dfs.printf("Y");
-	  sp->PrintParameterTypes();
-    dfs.printf("X");
-  }
+	else {
+		ParseFunctionJ2(sp);
+	}
   dfs.printf("</openpa>\n");
 }
 
@@ -1345,9 +1363,9 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 		switch (lastst) {
 
 		case openbr:
-			ParseSuffixOpenbr();  
+			ParseSuffixOpenbr();
 			break;                // We want to loop back for more brackets
-  
+
 		case openpa:
 			// The declaration doesn't have to have an identifier name; it could
 			// just be a type chain. so sp incoming might be null. We need a place
@@ -1355,20 +1373,24 @@ SYM *Declaration::ParseSuffix(SYM *sp)
 			// the symbol here if it isn't yet defined.
 			if (sp == nullptr) {
 				sp = allocSYM();
-				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
+				sp->fi = MakeFunction(sp->id, sp, defaultcc == 1, isInline);
 			}
 			else if (sp->fi == nullptr) {
-				sp->fi = MakeFunction(sp->id, sp, defaultcc==1, isInline);
+				sp->fi = MakeFunction(sp->id, sp, defaultcc == 1, isInline);
 			}
 			ParseSuffixOpenpa(sp->fi);
 			goto lxit;
-      
-		case assign:
-			NextToken();
-			GetConstExpression(&node);
-			sp->defval = node;
-			goto lxit;
 
+		case assign:
+			if (parsingParameterList) {
+				NextToken();
+				currentSym = sp;
+				SetType(sp);
+				GetConstExpression(&node);
+				sp->defval = node;
+			}
+			goto lxit;
+		
 		default:
 			goto lxit;
 		}
@@ -1405,20 +1427,30 @@ void Declaration::ParseAssign(SYM *sp)
 	exp.head = head;
 	exp.tail = tail;
 
-	tp1 = exp.nameref(&ep1, TRUE);
-	op = en_assign;
-	tp2 = exp.ParseAssignOps(&ep2);
-	if (tp2 == nullptr || !IsLValue(ep1))
-		error(ERR_LVALUE);
-	else {
-		tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
-		ep1 = makenode(op, ep1, ep2);
-		ep1->tp = tp1;
+	if (parsingParameterList) {
+		GetConstExpression(&ep2);
+		sp->defval = ep2;
 	}
-	// Move vars with initialization data over to the data segment.
-	if (ep1->segment == bssseg)
-		ep1->segment = dataseg;
-	sp->initexp = ep1;
+	else {
+		NextToken();
+		ep1 = exp.MakeAutoNameNode(sp);
+		ep1->sym = sp;
+		tp1 = exp.CondDeref(&ep1, sp->tp);
+		//tp1 = exp.nameref(&ep1, TRUE);
+		op = en_assign;
+		tp2 = exp.ParseAssignOps(&ep2);
+		if (tp2 == nullptr || !IsLValue(ep1))
+			error(ERR_LVALUE);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
+			ep1 = makenode(op, ep1, ep2);
+			ep1->tp = tp1;
+		}
+		// Move vars with initialization data over to the data segment.
+		if (ep1->segment == bssseg)
+			ep1->segment = dataseg;
+		sp->initexp = ep1;
+	}
 }
 
 
@@ -1488,7 +1520,8 @@ void Declaration::DoInsert(SYM *sp, TABLE *table)
 		dfs.printf("***Inserting:%s into %p\n", (char *)sp->name->c_str(), (char *)table);
 		// Need to know the type before a name can be generated.
 		if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
-			sp->mangledName = sp->BuildSignature(!sp->fi->IsPrototype);
+			if (sp->fi)
+				sp->mangledName = sp->BuildSignature(!sp->fi->IsPrototype);
 		if (sp->parent && ((sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
 			|| (sp->tp->type == bt_pointer && (sp->tp->GetBtp()->type == bt_func || sp->tp->GetBtp()->type == bt_ifunc))))
 		{
@@ -1582,6 +1615,22 @@ int Declaration::ParseFunction(TABLE* table, SYM* sp, e_sc al)
 		needParseFunction = FALSE;
 		currentFn = sp->fi;
 		fn_doneinit = sp->fi->Parse();
+		if (lastst == closepa) {
+			NextToken();
+			if (lastst == openpa) {
+				int np, na;
+				SYM* sp = (SYM*)allocSYM();
+				NextToken();
+				Function* fn = compiler.ff.MakeFunction(sp->number, sp, false);
+				fn->BuildParameterList(&np, &na);
+				if (lastst == closepa) {
+					NextToken();
+					while (lastst == kw_attribute)
+						Declaration::ParseFunctionAttribute(fn);
+				}
+				needpunc(closepa, 52);
+			}
+		}
 		/*
 		fn = sp->fi->FindExactMatch(TABLE::matchno);
 		if (fn) {
@@ -1643,6 +1692,26 @@ int Declaration::ParseFunction(TABLE* table, SYM* sp, e_sc al)
 	return (0);
 }
 
+void Declaration::FigureStructOffsets(int64_t bgn, SYM* sp)
+{
+	TABLE* pt;
+	SYM* hd;
+	int64_t nn;
+	int64_t ps;
+	int64_t bt;
+
+	ps = bgn;
+	for (hd = SYM::GetPtr(sp->tp->lst.head); hd; hd = hd->GetNextPtr()) {
+		hd->value.i = ps;
+		hd->tp->struct_offset = ps;
+		if (hd->tp->IsStructType())
+			FigureStructOffsets(ps, hd);
+		if (hd->tp->bit_offset > 0)
+			continue;
+		if (sp->tp->type != bt_union)
+			ps = ps + hd->tp->size;
+	}
+}
 
 /*
  *      process declarations of the form:
@@ -1673,6 +1742,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 	static int decl_level = 0;
 	int itdef;
 	int insState = 0;
+	SYM* fp;
 
 	itdef = isTypedef;
 	decl_level++;
@@ -1681,13 +1751,16 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 	insState = 0;
 	dfs.printf("A");
 	classname = new std::string("");
+	sp = nullptr;
 	sp1 = nullptr;
-	if (ParseSpecifier(table))
+	if (ParseSpecifier(table, &sp, al)) {
 		goto xit1;
+	}
+	ofs.write(" ");
 	dfs.printf("B");
 	dhead = head;
 	for(;;) {
-	    if (declid) delete declid;
+	  if (declid) delete declid;
 		declid = nullptr;
 		dfs.printf("b");
 		bit_width = -1;
@@ -1715,10 +1788,25 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 		if (declid->length() > 0 || classname->length() != 0) {      // otherwise just struct tag...
 			if (sp == nullptr) {
 				sp = allocSYM();
+				sp->name = declid;
 				//if (funcdecl > 0)
 				//	sp->fi = MakeFunction(sp->id, sp, isPascal, isInline);
 			}
 			SetType(sp);
+			fp = FindSymbol(sp, table);
+			// If storage has already been allocated, go back and blank it out.
+			if (fp && fp->storage_pos != 0) {
+				int cnt = 0;
+				std::streampos cpos = ofs.tellp();
+				std::streampos pos = fp->storage_pos;
+				ofs.seekp(fp->storage_pos);
+				while (pos < fp->storage_endpos && fp->storage_endpos > fp->storage_pos && cnt < 65536) {
+					cnt++;
+					ofs.write(" ");
+				}
+				ofs.seekp(cpos);
+			}
+			sp->storage_pos = ofs.tellp();
 			if (funcdecl <= 0)
 				sp->IsInline = isInline;
 			sp->IsRegister = isRegister;
@@ -1748,7 +1836,7 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 				}
 				isTypedef = FALSE;
 			}
-			if (sp->storage_class != sc_typedef)
+			if (!sp->IsTypedef())
 				nbytes = GenerateStorage(nbytes, al, ilc);
 			dfs.printf("G");
 			if ((sp->tp->type == bt_func) && sp->storage_class == sc_global)
@@ -1767,10 +1855,15 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
 			name = *sp->name;
 			//if (strcmp(name.c_str(), "__Skip") == 0)
 			//	printf("hl");
-			if (sp->name->length() > 0) {
-				if (ParseFunction(table, sp, al))
+//			if (sp->name->length() > 0) {
+			if (sp->storage_class == sc_member)
+				table->insert(sp);
+			else
+				if (ParseFunction(table, sp, al)) {
+					sp->storage_endpos = ofs.tellp();
 					return (nbytes);
-			}
+				}
+//			}
 		}
 		if (funcdecl>0) {
 			if (lastst == closepa) {
@@ -1814,6 +1907,16 @@ int Declaration::declare(SYM *parent,TABLE *table,e_sc al,int ilc,int ztype)
   }
   NextToken();
 xit1:
+	if (sp)
+		sp->storage_endpos = ofs.tellp();
+	if (decl_level == 1) {
+		if (sp && sp->tp->IsStructType()) {
+			TYP* tp;
+			tp = sp->tp->Copy(sp->tp);
+			sp->tp = tp;
+			FigureStructOffsets(0,sp);
+		}
+	}
 	dfs.printf("</declare>\n");
 	isTypedef = itdef;
 	decl_level--;
@@ -1953,6 +2056,10 @@ j1:
 					NextToken();
 					defaultcc = 1;
 				}
+				else if (strcmp(lastid, "_gp") == 0) {
+					NextToken();
+					use_gp = notVal;
+				}
       }
 	  else if (lastst==kw_short) {
 		  NextToken();
@@ -1979,9 +2086,10 @@ xit:
 	;
 }
 
-void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
+ENODE *AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 {
 	SYM *sp;
+	ENODE* ep1;
 
 //	printf("Enter ParseAutoDecls\r\n");
     for(;;) {
@@ -2052,6 +2160,14 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 	}
 xit:
 	;
+	ep1 = nullptr;
+	for (sp = SYM::GetPtr(ssyms->GetHead()); sp; sp = sp->GetNextPtr()) {
+		if (sp->initexp) {
+			ep1 = makenode(en_list, ep1, nullptr);
+			ep1->p[3] = sp->initexp;
+		}
+	}
+	return (ep1);
 //	printf("Leave ParseAutoDecls\r\n");
 }
 
@@ -2152,7 +2268,9 @@ dfs.printf("D");
     default:
 			goto xit;
 		}
-dfs.printf("E");
+		dfs.printf("E");
+		if (lastst == comma)
+			NextToken();
 	}
 xit:
 	parsingParameterList--;

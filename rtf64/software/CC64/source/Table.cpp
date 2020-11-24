@@ -58,6 +58,8 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 			newsym = SYM::Copy(sp);
   	  dfs.printf("C");
 			dst->insert(newsym);
+			if (newsym->tp->IsStructType())
+				CopySymbolTable(&newsym->tp->lst, &sp->tp->lst);
   	  dfs.printf("D");
 			sp = sp->GetNextPtr();
 		}
@@ -70,7 +72,9 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 void TABLE::insert(SYM *sp)
 {
 	int nn;
-	TypeArray *ta = sp->fi->GetProtoTypes();
+	TypeArray *ta = nullptr;
+	if (sp->fi)
+		ta = sp->fi->GetProtoTypes();
 	TABLE *tab = this;
 	int s1,s2,s3;
 	std::string nm;
@@ -102,7 +106,10 @@ void TABLE::insert(SYM *sp)
   // The symbol may not have a type if it's just a label. Find doens't
   // look at the return type parameter anyway, so we just set it to bt_long
   // if tp isn't set.
-  nn = tab->Find(nm,sp->tp ? sp->tp->typeno : bt_long,ta,true); 
+	if (nm.length() > 0)
+		nn = tab->Find(nm, sp->tp ? sp->tp->typeno : bt_long, ta, true);
+	else
+		nn = 0;
 	if(nn == 0) {
     if( tab->head == 0) {
       tab->SetHead(sp->GetIndex());
@@ -120,9 +127,13 @@ void TABLE::insert(SYM *sp)
 	else {
 		for (nn = 0; nn < TABLE::matchno; nn++) {
 			sp1 = TABLE::match[0];
-			if (sp1->fi->ParameterTypesMatch(sp->fi->GetParameterTypes()))
-				goto j1;
-			if (sp1->fi->ParameterTypesMatch(sp->fi->GetProtoTypes()))
+			if (sp->fi) {
+				if (sp1->fi->ParameterTypesMatch(sp->fi->GetParameterTypes()))
+					goto j1;
+				if (sp1->fi->ParameterTypesMatch(sp->fi->GetProtoTypes()))
+					goto j1;
+			}
+			else
 				goto j1;
 		}
 		error(ERR_DUPSYM);

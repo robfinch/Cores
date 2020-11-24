@@ -55,8 +55,13 @@ void RTF64CodeGenerator::SignExtendBitfield(Operand* ap3, uint64_t mask)
 Operand* RTF64CodeGenerator::MakeBoolean(Operand* ap)
 {
 	Operand* ap1;
+	OCODE* ip;
 
-	GenerateDiadic(op_tst, 0, ap1 = makecreg(0), ap);
+	ap1 = makecreg(0);
+	ip = currentFn->pl.tail;
+	if (ip->opcode & 0x8000)
+		return (ap1);
+	GenerateDiadic(op_tst, 0, ap1, ap);
 	return (ap1);
 }
 
@@ -616,10 +621,10 @@ Operand *RTF64CodeGenerator::GenExpr(ENODE *node)
 		//ReleaseTempReg(ap2);
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(1));
+		GenerateDiadic(op_ldi|op_dot,0,ap1,MakeImmediate(1));
 		GenerateMonadic(op_bra,0,MakeDataLabel(lab1,regZero));
 		GenerateLabel(lab0);
-		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(0));
+		GenerateDiadic(op_ldi|op_dot,0,ap1,MakeImmediate(0));
 		GenerateLabel(lab1);
 		ap1->isBool = true;
 		return (ap1);
@@ -1014,7 +1019,7 @@ void SaveFPRegisterVars(CSet *rmask)
 		cnt = 0;
 		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
-			GenerateDiadic(op_stf, 'd', makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
+			GenerateDiadic(op_fsto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 	}
@@ -1064,7 +1069,7 @@ static void RestoreFPRegisterVars()
 		cnt = 0;
 		fpsave_mask->resetPtr();
 		for (nn = fpsave_mask->nextMember(); nn >= 0; nn = fpsave_mask->nextMember()) {
-			GenerateDiadic(op_ldf, 'd', makefpreg(nn), cg.MakeIndexed(cnt, regSP));
+			GenerateDiadic(op_fldo, 0, makefpreg(nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
 		}
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
@@ -1094,24 +1099,24 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	}
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
-			ap = cg.GenerateExpression(ep,am_reg,sizeOfFP);
+			ap = cg.GenerateExpression(ep,am_fpreg,sizeOfFP);
 		else if (ep->tp->IsPositType())
-			ap = cg.GenerateExpression(ep, am_preg|am_imm, sizeOfPosit);
+			ap = cg.GenerateExpression(ep, am_preg, sizeOfPosit);
 		else
-			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
+			ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
 	}
 	else if (ep->etype==bt_quad)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_double)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_triple)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype==bt_float)
-		ap = cg.GenerateExpression(ep,am_reg,sz);
+		ap = cg.GenerateExpression(ep,am_fpreg,sz);
 	else if (ep->etype == bt_posit)
-		ap = cg.GenerateExpression(ep, am_reg, sz);
+		ap = cg.GenerateExpression(ep, am_preg, sz);
 	else
-		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
+		ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
@@ -1191,8 +1196,8 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 						if (ap->offset->i!=0) {
 							ap3 = GetTempRegister();
 							regs[ap3->preg].IsArg = true;
-							GenLoadConst(ap, ap3);
-	         				GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
+							GenerateLoadConst(ap, ap3);
+	         		GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
 						else {
@@ -1203,8 +1208,12 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					else {
 						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
 							*isFloat = true;
-							GenerateDiadic(op_stf,'d',ap,MakeIndexed(stkoffs,regSP));
+							GenerateDiadic(op_fsto,0,ap,MakeIndexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
+						}
+						else if (ap->type == stdposit.GetIndex() || ap->mode == am_preg) {
+							GenerateDiadic(op_psto, 0, ap, MakeIndexed(stkoffs, regSP));
+							nn = 1;
 						}
 						else {
 							regs[ap->preg].IsArg = true;
@@ -1250,17 +1259,22 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	maxnn = nn;
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
   {
-		if (pl[nn]->etype == bt_pointer)
+		if (pl[nn]->etype == bt_pointer) {
+			if (pl[nn]->tp->GetBtp() == nullptr)
+				continue;
 			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
 				continue;
+		}
 				//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
 		if (pl[nn]->etype == bt_none) {	// was there an empty parameter?
 			if (sy==nullptr && sym)
 				sy = sym->params.GetParameters();
-			if (sy)
-				sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			if (sy) {
+				if (sy[nn])
+					sum += PushArgument(sy[nn]->defval, ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * sizeOfWord, &isFloat);
+			}
 		}
 		else
 			sum += PushArgument(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*sizeOfWord, &isFloat);
@@ -1271,9 +1285,10 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		ip->fwd->MarkRemove();
 	else
 		ip->fwd->oper3 = MakeImmediate(sum*sizeOfWord);
+	/*
 	if (!sumFloat) {
 		o_supportsPush = cpu.SupportsPush;
-		cpu.SupportsPush = true;
+		cpu.SupportsPush = false;
 		currentFn->pl.tail = ip;
 		currentFn->pl.tail->fwd = nullptr;
 		i = maxnn-1;
@@ -1292,9 +1307,10 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 		}
 		cpu.SupportsPush = o_supportsPush;
 	}
+	*/
 	if (ta)
 		delete ta;
-    return (sum);
+  return (sum);
 }
 
 // Pop parameters off the stack
@@ -1386,7 +1402,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			// inline function must be appended onto the peeplist of the current
 			// function.
 			sym->pl.head = sym->pl.tail = nullptr;
-			sym->Gen();
+			sym->Generate();
 			pass = ps;
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
@@ -1452,7 +1468,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			currentFn = sym;
 			ps = pass;
 			sym->pl.head = sym->pl.tail = nullptr;
-			sym->Gen();
+			sym->Generate();
 			pass = ps;
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
@@ -1567,4 +1583,17 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	}
     return result;
 	*/
+}
+
+void RTF64CodeGenerator::GenerateUnlink()
+{
+	/*
+	if (cpu.SupportsUnlink)
+		GenerateZeradic(op_unlk);
+	else
+	*/
+	{
+		GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
+		GenerateDiadic(op_ldo, 0, makereg(regFP), MakeIndirect(regSP));
+	}
 }

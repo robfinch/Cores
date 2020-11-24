@@ -52,6 +52,8 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 		return (ENODE::IsEqual(ap1->offset, ap2->offset));
 	case am_fpreg:
 	case am_reg:
+	case am_creg:
+	case am_preg:
 		return (ap1->preg == ap2->preg);
 	case am_ind:
 	case am_indx:
@@ -273,7 +275,7 @@ void Operand::MakeLegal(int flags, int size)
 			cg.GenerateLoad(ap2, this, size, size);
 			break;
 		case am_imm:
-			cg.GenLoadConst(this, ap2);
+			cg.GenerateLoadConst(this, ap2);
 			//GenerateDiadic(op_ldi, 0, ap2, this);
 			break;
 		case am_reg:
@@ -370,7 +372,7 @@ void Operand::MakeLegal(int flags, int size)
 			if (regs[preg].ContainsPositConst())
 				GenerateDiadic(op_mov, 0, ap2, this);
 			else
-				GenerateDiadic(op_itop, ap2->fpsize(), ap2, this);
+				GenerateDiadic(op_itop, 0, ap2, this);
 			break;
 		default:
 			cg.GenerateLoad(ap2, this, size, size);
@@ -433,7 +435,7 @@ void Operand::MakeLegal(int flags, int size)
 		cg.GenerateLoad(ap2, this, size, size);
 		break;
 	case am_imm:
-		cg.GenLoadConst(this, ap2);
+		cg.GenerateLoadConst(this, ap2);
 		//GenerateDiadic(op_ldi, 0, ap2, this);
 		break;
 	case am_reg:
@@ -607,14 +609,10 @@ void Operand::store(txtoStream& ofs)
 	case am_vmreg:
 		ofs.printf("vm%d", (int)preg);
 		break;
-	case am_fpreg:
-		ofs.printf("$f%d", (int)preg);
-		break;
-	case am_preg:
-		ofs.printf("$p%d", (int)preg);
-		break;
 	case am_creg:
-		ofs.printf("$cr%d", (int)preg);
+	case am_preg:
+	case am_fpreg:
+		ofs.printf("%s", RegMoniker(preg));
 		break;
 	case am_ind:
 		if (preg == 0)

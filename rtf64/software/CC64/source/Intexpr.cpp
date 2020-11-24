@@ -56,6 +56,17 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		}
 	}
 	if (node->nodetype != en_icon && node->nodetype != en_cnacon && node->nodetype != en_labcon) {
+		// A type case is represented by a tempref node associated with a value.
+		// There may be an integer typecast to another value that can be used.
+		if (node->nodetype == en_void) {
+			if (node->p[0]->nodetype == en_tempref) {
+				if (node->p[1]->nodetype == en_icon) {
+					if (pnode)
+						*pnode = node;
+					return (node->p[1]->i);
+				}
+			}
+		}
     printf("\r\nnode:%d \r\n", node->nodetype);
 		error(ERR_INT_CONST);
 		return (0);

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,15 +36,15 @@ void Declaration::ParseEnum(TABLE *table)
 	int amt = 1;
 
   if(lastst == id) {
-    if((sp = search(lastid,&tagtable)) == NULL) {
+    if((sp = search(std::string(lastid),&tagtable)) == NULL) {
       sp = allocSYM();
       sp->tp = TYP::Make(bt_enum,1);
       sp->storage_class = sc_type;
       sp->SetName(*(new std::string(lastid)));
       sp->tp->sname = new std::string(*sp->name);
       NextToken();
-      if(lastst != begin)
-        error(ERR_INCOMPLETE);
+      if (lastst != begin)
+        ;// error(ERR_INCOMPLETE);
       else {
 				tagtable.insert(sp);
 				NextToken();

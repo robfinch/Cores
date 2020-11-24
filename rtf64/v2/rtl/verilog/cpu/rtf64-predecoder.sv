@@ -87,6 +87,7 @@ casez(i)
 `JSR:     o = 8'h15;
 `RTS:     o = 8'h12;
 `RTL:     o = 8'h13;
+`RTE:     o = 8'h13;
 `BEQ:     o = 8'h13;
 `BNE:     o = 8'h13;
 `BLT:     o = 8'h13;
@@ -114,7 +115,6 @@ casez(i)
 `BRK:     o = 8'h32;
 `NOP:     o = 8'h31;
 `OSR2:    o = 8'h34;
-`DBG:     o = 8'h31;
 `LDBS:    o = 8'h43;
 `LDBUS:   o = 8'h43;
 `LDWS:    o = 8'h43;

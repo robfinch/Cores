@@ -35,10 +35,6 @@ extern char *errtext(int errnum);
 extern std::string *classname;
 extern void doInitCleanup();
 
-Compiler::Compiler()
-{
-}
-
 int Compiler::GetReturnBlockSize()
 {
 	return (4 * sizeOfWord);
@@ -89,6 +85,8 @@ void Compiler::compile()
 	classname = nullptr;
 	//pCSETable = new CSETable;
 	//pCSETable->Clear();
+	ru = CSet::MakeNew();
+	rru = CSet::MakeNew();
 	ZeroMemory(&gsyms[0],sizeof(gsyms));
 	ZeroMemory(&defsyms,sizeof(defsyms));
 	ZeroMemory(&tagtable,sizeof(tagtable));
@@ -161,6 +159,11 @@ void Compiler::AddStandardTypes()
 	TYP *p, *pchar, *pint, *pbyte;
 	TYP *pichar;
 
+	p = TYP::Make(bt_bit, sizeOfWord);
+	stdbit = *p;
+	pint = p;
+	p->precision = sizeOfWord * 8;
+
 	p = TYP::Make(bt_long,sizeOfWord);
 	stdint = *p;
 	pint = p;
@@ -194,7 +197,7 @@ void Compiler::AddStandardTypes()
 	p->precision = 16;
 	pchar = p;
   
-	p = TYP::Make(bt_char,2);
+	p = TYP::Make(bt_uchar,2);
 	p->isUnsigned = true;
 	p->precision = 16;
 	stduchar = *p;
@@ -225,7 +228,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pchar->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdstring = *p;
@@ -236,7 +239,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pichar->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdistring = *p;
@@ -247,7 +250,7 @@ void Compiler::AddStandardTypes()
 	p->val_flag = 1;
 	p->size = sizeOfPtr;
 	p->btp = pbyte->GetIndex();
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = sizeOfPtr * 8;
 	p->isUnsigned = true;
 	stdastring = *p;
@@ -256,7 +259,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_double;
 	p->typeno = bt_double;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stddbl = *p;
 	stddouble = *p;
@@ -265,7 +268,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_triple;
 	p->typeno = bt_triple;
 	p->size = 12;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 96;
 	stdtriple = *p;
   
@@ -273,7 +276,7 @@ void Compiler::AddStandardTypes()
 	p->type = bt_quad;
 	p->typeno = bt_quad;
 	p->size = 16;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 128;
 	stdquad = *p;
   
@@ -281,10 +284,34 @@ void Compiler::AddStandardTypes()
 	p->type = bt_float;
 	p->typeno = bt_float;
 	p->size = 4;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 32;
 	stdflt = *p;
   
+	p = allocTYP();
+	p->type = bt_posit;
+	p->typeno = bt_posit;
+	p->size = 8;
+	p->bit_width = nullptr;
+	p->precision = 64;
+	stdposit = *p;
+
+	p = allocTYP();
+	p->type = bt_posit;
+	p->typeno = bt_posit;
+	p->size = 4;
+	p->bit_width = nullptr;
+	p->precision = 32;
+	stdposit32 = *p;
+
+	p = allocTYP();
+	p->type = bt_posit;
+	p->typeno = bt_posit;
+	p->size = 2;
+	p->bit_width = nullptr;
+	p->precision = 16;
+	stdposit16 = *p;
+
 	p = TYP::Make(bt_func,0);
 	p->btp = pint->GetIndex();
 	stdfunc = *p;
@@ -295,7 +322,7 @@ void Compiler::AddStandardTypes()
 	p->size = 2;
 	p->isUnsigned = true;
 	p->precision = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	stdexception = *p;
 
 	p = allocTYP();
@@ -303,7 +330,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_long;
 	p->val_flag = 1;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdconst = *p;
 
@@ -312,7 +339,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_vector;
 	p->val_flag = 1;
 	p->size = 512;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdvector = *p;
 
@@ -321,7 +348,7 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_vector_mask;
 	p->val_flag = 1;
 	p->size = 32;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 32;
 	stdvectormask = p;
 
@@ -330,10 +357,12 @@ void Compiler::AddStandardTypes()
 	p->typeno = bt_void;
 	p->val_flag = 1;
 	p->size = 8;
-	p->bit_width = -1;
+	p->bit_width = nullptr;
 	p->precision = 64;
 	stdvoid = *p;
 }
+
+// Actually compiler support routines
 
 void Compiler::AddBuiltinFunctions()
 {
@@ -342,10 +371,8 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__new");
-	sp->fi = allocFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
-	tanew.Add(bt_long, 0);
+	sp->fi = sp->MakeFunction(sp->id, true);
+	tanew.Add(bt_long, regFirstArg);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
 	sp->fi->AddProto(&tanew);
@@ -354,10 +381,8 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__autonew");
-	sp->fi = allocFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
-	tanew.Add(bt_long, 0);
+	sp->fi = sp->MakeFunction(sp->id, true);
+	//tanew.Add(bt_long, 0);
 	//tanew.Add(bt_pointer,19);
 	//tanew.Add(bt_long, 20);
 	sp->fi->AddProto(&tanew);
@@ -366,10 +391,8 @@ void Compiler::AddBuiltinFunctions()
 
 	sp = allocSYM();
 	sp->SetName("__delete");
-	sp->fi = allocFunction(sp->id);
-	sp->fi->sym = sp;
-	sp->fi->IsPascal = true;
-	tadelete.Add(bt_pointer, 0);
+	sp->fi = sp->MakeFunction(sp->id, true);
+	tadelete.Add(bt_pointer, regFirstArg);
 	sp->fi->AddProto(&tadelete);
 	sp->tp = &stdvoid;
 	gsyms->insert(sp);

@@ -28,7 +28,7 @@
 //
 //      construct a reference node for an internal label number.
 //
-Operand *OperandFactory::MakeDataLabel(int lab)
+Operand *OperandFactory::MakeDataLabel(int lab, int ndxreg)
 {
 	ENODE *lnode;
 	Operand *ap;
@@ -38,7 +38,12 @@ Operand *OperandFactory::MakeDataLabel(int lab)
 	lnode->i = lab;
 	DataLabels[lab] = true;
 	ap = allocOperand();
-	ap->mode = am_direct;
+	if (ndxreg != regZero) {
+		ap->mode = am_indx;
+		ap->preg = ndxreg;
+	}
+	else
+		ap->mode = am_direct;
 	ap->offset = lnode;
 	ap->isUnsigned = TRUE;
 	return (ap);
@@ -62,7 +67,7 @@ Operand *OperandFactory::MakeCodeLabel(int lab)
 	return (ap);
 }
 
-Operand *OperandFactory::MakeStringAsNameConst(char *s)
+Operand *OperandFactory::MakeStringAsNameConst(char *s, e_sg seg)
 {
 	ENODE *lnode;
 	Operand *ap;
@@ -70,6 +75,7 @@ Operand *OperandFactory::MakeStringAsNameConst(char *s)
 	lnode = allocEnode();
 	lnode->nodetype = en_nacon;
 	lnode->sp = new std::string(s);
+	lnode->segment = seg;
 	ap = allocOperand();
 	ap->mode = am_direct;
 	ap->offset = lnode;
@@ -141,6 +147,20 @@ Operand *OperandFactory::MakeIndexed(ENODE *node, int regno)
 	ap = allocOperand();
 	ap->mode = am_indx;
 	ap->offset = node;
+	ap->preg = regno;
+	return (ap);
+}
+
+Operand* OperandFactory::MakeMemoryIndirect(int disp, int regno)
+{
+	Operand* ap;
+	ENODE* ep;
+	ep = allocEnode();
+	ep->nodetype = en_icon;
+	ep->i = disp;
+	ap = allocOperand();
+	ap->mode = am_mem_indirect;
+	ap->offset = ep;
 	ap->preg = regno;
 	return (ap);
 }
@@ -229,8 +249,18 @@ Operand *OperandFactory::makefpreg(int r)
 	Operand *ap;
 	ap = allocOperand();
 	ap->mode = am_fpreg;
-	ap->preg = r;
+	ap->preg = r|0x20;
 	ap->type = stddouble.GetIndex();
+	return (ap);
+}
+
+Operand* OperandFactory::makepreg(int r)
+{
+	Operand* ap;
+	ap = allocOperand();
+	ap->mode = am_preg;
+	ap->preg = r|0x40;
+	ap->type = stdposit.GetIndex();
 	return (ap);
 }
 
@@ -239,7 +269,8 @@ Operand *OperandFactory::makecreg(int r)
 	Operand *ap;
 	ap = allocOperand();
 	ap->mode = am_creg;
-	ap->preg = r;
+	ap->preg = r|=0x70;
+	ap->isBool = true;
 	return (ap);
 }
 
@@ -276,12 +307,13 @@ Operand *OperandFactory::MakeMask(int mask)
 //
 // Generate a direct reference to a string label.
 //
-Operand *OperandFactory::MakeStrlab(std::string s)
+Operand *OperandFactory::MakeStrlab(std::string s, e_sg seg)
 {
 	Operand *ap;
 	ap = allocOperand();
 	ap->mode = am_direct;
 	ap->offset = makesnode(en_nacon, new std::string(s), new std::string(s), -1);
+	ap->offset->segment = seg;
 	return (ap);
 }
 
@@ -303,6 +335,11 @@ Operand *makevmreg(int r)
 Operand *makefpreg(int r)
 {
 	return(compiler.of.makefpreg(r));
+}
+
+Operand* makepreg(int r)
+{
+	return(compiler.of.makepreg(r));
 }
 
 Operand *makecreg(int r)
@@ -339,9 +376,9 @@ Operand *make_mask(int mask)
 //
 // Generate a direct reference to a string label.
 //
-Operand *make_strlab(std::string s)
+Operand *make_strlab(std::string s, e_sg seg)
 {
-	return (compiler.of.MakeStrlab(s));
+	return (compiler.of.MakeStrlab(s, seg));
 }
 
 

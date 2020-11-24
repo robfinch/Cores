@@ -21,6 +21,7 @@ extern int16_t token2;
 extern int32_t reg;
 extern int tbndx;
 extern int lpndx;
-
+extern int fEmitCode;
+extern int ifLevel;
 
 

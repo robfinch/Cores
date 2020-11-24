@@ -54,7 +54,7 @@ bool PeepList::HasCall(OCODE *ip)
 	int cnt;
 
 	for (cnt = 0; ip; ip = ip->fwd) {
-		if (ip->opcode == op_call || ip->opcode == op_jal) {
+		if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode==op_jsr) {
 			return (true);
 		}
 		if (ip == tail)
@@ -67,8 +67,8 @@ bool PeepList::FindTarget(OCODE *ip, int reg)
 {
 	for (; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->opcode == op_call || ip->opcode == op_jal) {
-				if (reg == 1 || reg == 2)
+			if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode==op_jsr) {
+				if (reg == regFirstArg || reg == regFirstArg+1)
 					return (true);
 			}
 			if (ip->oper1->preg == reg)
@@ -292,14 +292,17 @@ int PeepList::CountSPReferences()
 		}
 		if (!inFuncBody)
 			continue;
-		if (ip->opcode == op_call || ip->opcode == op_jal) {
+		if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode == op_jsr) {
 			refSP++;
 			continue;
 		}
 		if (ip->opcode != op_label && ip->opcode != op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->insn) {
-				if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
+				if (ip->insn->opcode == op_push || ip->insn->opcode == op_pop) {
+					refSP++;
+				}
+				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_gcsub && ip->insn->opcode != op_mov) {
 					if (ip->oper1) {
 						if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
 							refSP++;
@@ -369,6 +372,68 @@ int PeepList::CountBPReferences()
 		}
 	}
 	return (refBP);
+}
+
+// Check for references to the global pointer. If nothing refers to the
+// global pointer then the global pointer load instructions can be removed.
+
+int PeepList::CountGPReferences()
+{
+	int refGP = 0;
+	OCODE* ip;
+	bool inFuncBody = false;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_hint && ip->oper1->offset->i == start_funcbody) {
+			inFuncBody = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_stack_unlink) {
+			inFuncBody = false;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_stack_unlink) {
+			inFuncBody = true;
+			continue;
+		}
+		if (!inFuncBody)
+			continue;
+		if (ip->opcode != op_label && ip->opcode != op_nop
+			&& ip->opcode != op_link && ip->opcode != op_unlk) {
+			if (ip->oper1) {
+				if (ip->oper1->preg == regGP || ip->oper1->sreg == regGP)
+					refGP++;
+			}
+			if (ip->oper2) {
+				if (ip->oper2->preg == regGP || ip->oper2->sreg == regGP)
+					refGP++;
+			}
+			if (ip->oper3) {
+				if (ip->oper3->preg == regGP || ip->oper3->sreg == regGP)
+					refGP++;
+			}
+			if (ip->oper4) {
+				if (ip->oper4->preg == regGP || ip->oper4->sreg == regGP)
+					refGP++;
+			}
+		}
+	}
+	return (refGP);
+}
+
+void PeepList::RemoveGPLoad()
+{
+	OCODE* ip;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_lea) {
+			if (ip->oper1->preg == regGP) {
+				ip->MarkRemove();
+			}
+		}
+	}
 }
 
 // Remove stack linkage code for when there are no references to the base 
@@ -487,6 +552,26 @@ void PeepList::OptConstReg()
 }
 
 
+void PeepList::RemoveRegsave()
+{
+	OCODE* ip;
+	bool rmv = false;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_hint) {
+			if (ip->oper1->offset->i == begin_save_regvars || ip->oper1->offset->i==begin_restore_regvars || ip->oper1->offset->i==begin_regvar_init)
+				rmv = true;
+			if (rmv)
+				ip->MarkRemove();
+			if (ip->oper1->offset->i == end_save_regvars || ip->oper1->offset->i == end_restore_regvars || ip->oper1->offset->i == end_regvar_init)
+				rmv = false;
+		}
+	}
+}
+
+
+
 void PeepList::RemoveCompilerHints()
 {
 	OCODE *ip;
@@ -570,7 +655,7 @@ void PeepList::OptInstructions()
 	for (ip = head; ip != NULL; ip = ip->fwd)
 	{
 		if (!ip->remove) {
-			switch (ip->opcode)
+			switch (ip->opcode & 0x7fff)
 			{
 			case op_remark:
 				if (ip->fwd) {
@@ -584,6 +669,7 @@ void PeepList::OptInstructions()
 			case op_mov:	ip->OptMove();	break;
 			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
+			case op_gcsub:	ip->OptSubtract(); break;
 			case op_ldb:		ip->OptLoadByte(); break;
 			case op_ldw:		ip->OptLoadChar(); break;
 			case op_ldp:		ip->OptLoadHalf(); break;
@@ -597,6 +683,7 @@ void PeepList::OptInstructions()
 			case op_brk:
 			case op_jmp:
 			case op_ret:
+			case op_rtl:
 			case op_rts:
 			case op_rte:
 			case op_rtd:	ip->OptUctran(); break;
@@ -610,6 +697,8 @@ void PeepList::OptInstructions()
 			case op_mulu:	ip->OptMulu(); break;
 			case op_div:	ip->OptDiv(); break;
 			case op_push:	ip->OptPush(); break;
+			case op_seq:	ip->OptScc(); break;
+			case op_sne:	ip->OptScc(); break;
 			}
 		}
 	}
@@ -775,7 +864,7 @@ void PeepList::RemoveReturnBlock()
 		if (ip->oper2 && ip->oper2->mode == am_indx && ip->oper2->preg == regFP) {
 			ip->oper2->preg = regSP;
 		}
-		if (ip->opcode == op_ret)
+		if (ip->opcode == op_ret || ip->opcode == op_rts || ip->opcode == op_rtl)
 			if (ip->oper1)
 				ip->oper1->offset->i = 0;
 	}
@@ -811,7 +900,7 @@ void PeepList::RemoveStackCode()
 					ip->MarkRemove();
 			}
 		}
-		if (ip->opcode == op_ret)
+		if (ip->opcode == op_ret || ip->opcode == op_rts)
 			if (ip->oper1)
 				ip->oper1->offset->i = 0;
 	}
@@ -823,7 +912,8 @@ void PeepList::RemoveStackAlloc()
 
 	for (ip = head; ip; ip = ip->fwd) {
 		if (ip->insn) {
-			if ((ip->opcode == op_add || ip->opcode == op_sub) && ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
+			if ((ip->opcode == op_add || ip->opcode == op_sub || ip->opcode == op_gcsub) &&
+				ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
 				ip->MarkRemove();
 			}
 		}

@@ -29,7 +29,6 @@ extern char irfile[256];
 void PrintPeepList();
 static void Remove();
 static void PeepoptSub(OCODE *ip);
-void opt_peep();
 void put_ocode(OCODE *p);
 void CreateControlFlowGraph();
 extern void ComputeLiveVars();
@@ -47,7 +46,6 @@ bool Coalesce();
 void ComputeSpillCosts();
 extern void CalcDominatorTree();
 Var *FindVar(int num);
-void ExpandReturnBlocks();
 bool RemoveEnabled = true;
 unsigned int ArgRegCount;
 int count;
@@ -267,16 +265,20 @@ void Function::PeepOpt()
 		//currentFn->pl.Dump();
 		// Remove the link and unlink instructions if no references
 		// to BP.
-		hasSPReferences = (pl.CountSPReferences() != 0);
+		if (ru->isEmpty())
+			pl.RemoveRegsave();
+			hasSPReferences = (pl.CountSPReferences() != 0);
 		hasBPReferences = (pl.CountBPReferences() != 0);
+		hasGPReferences = (pl.CountGPReferences() != 0);
 
 		if (!hasBPReferences)
 			pl.RemoveLinkUnlink();
 		if (IsLeaf && !hasSPReferences && !hasBPReferences)
 			pl.RemoveStackCode();
-		if ((IsLeaf && !hasSPReferences)
-			|| (!hasSPReferences && !hasBPReferences))
+		if (!hasSPReferences && !hasBPReferences)
 			pl.RemoveReturnBlock();
+		if (!hasGPReferences)
+			pl.RemoveGPLoad();
 		pl.Remove();
 	}
 
@@ -381,7 +383,7 @@ void RemoveCode()
 					for (p = basicBlocks[nn]->lcode; p && !eol; p = p->back) {
 						if (p->opcode == op_label)
 							continue;
-						if (p->opcode == op_ret)
+						if (p->opcode == op_ret || p->opcode == op_rts)
 							continue;
 						p->GetTargetReg(&rg1, &rg2);
 						if (rg1 == v->num && rg2 == 0) {

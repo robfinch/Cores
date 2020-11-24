@@ -62,8 +62,88 @@ extern int      total_errors;
 int uctran_off;
 extern int lstackptr;
 
+int64_t rand64()
+{
+	int64_t r;
+
+	r = 0x0000000000000000LL;
+	r |= (int64_t)rand() << 48LL;
+	r |= (int64_t)rand() << 32LL;
+	r |= (int64_t)rand() << 16LL;
+	r |= (int64_t)rand();
+	return (r);
+}
+
+
 int main(int argc, char **argv)
 {
+	Posit64 pst;
+	Posit64 a, b, c, d, e;
+	int cnt;
+	txtoStream ofs;
+	Int128 aa, bb, cc, qq, rr;
+	aa = Int128::Convert(0x769bdd5fLL);
+	bb = Int128::Convert(0xbcc6f09eLL);
+	Int128::Mul(&cc, &aa, &bb);
+	/*
+	aa.low = 0;
+	aa.high = 100;
+	bb.low = 20;
+	bb.high = 0;
+	cc.Div(&qq, &rr, &aa, &bb);
+	
+	pst = pst.IntToPosit(100);
+	a = a.IntToPosit(50);
+	b = b.IntToPosit(50);
+	c = a.Add(a, b);
+	a = a.IntToPosit(100);
+	b = b.IntToPosit(10);
+	c = c.Divide(a, b);
+	ofs.open("d:/cores2020/rtf64/v2/software/examples/positTest.txt", std::ios::out | std::ios::trunc);
+	for (cnt = 0; cnt < 30000; cnt++) {
+		switch (cnt) {
+		case 0:
+			a = a.IntToPosit(10);
+			b = b.IntToPosit(10);
+			break;
+		case 1:
+			a = a.IntToPosit(10);
+			b = b.IntToPosit(1);
+			break;
+		case 2:
+			a = a.IntToPosit(1);
+			b = b.IntToPosit(10);
+			break;
+		case 3:
+			a = a.IntToPosit(100);
+			b = b.IntToPosit(10);
+			break;
+		case 4:
+			a = a.IntToPosit(2);
+			b = b.IntToPosit(2);
+			break;
+		case 5:
+			a = a.IntToPosit(-10);
+			b = b.IntToPosit(-10);
+			break;
+		default:
+			a.val = rand64();
+			b.val = rand64();
+		}
+		ofs.printf("%08I64X ", a.val);
+		ofs.printf("%08I64X ", b.val);
+		c = c.Add(a, b);
+		ofs.printf("%08I64X ", c.val);
+		d = d.Multiply(a, b);
+		ofs.printf("%08I64X ", d.val);
+		e = e.Divide(a, b);
+		ofs.printf("%08I64X ", e.val);
+		ofs.printf("\n");
+	}
+	ofs.flush();
+	ofs.close();
+	exit(0);
+	*/
 	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;
@@ -112,6 +192,7 @@ int	options(char *s)
 			case 'p':     ::opt_nopeep = TRUE; break;
             case 'x':     opt_noexpr = TRUE; break;
 			case 'c':	  opt_nocgo = TRUE; break;
+			case 's':		opt_size = TRUE; break;
             }
         }
         if (nn==2) {
@@ -225,8 +306,11 @@ int openfiles(char *s)
         //        }
 		ofs.open(outfile,std::ios::out|std::ios::trunc);
 		dfs.open(dbgfile.c_str(),std::ios::out|std::ios::trunc);
+//		irfs.open(irfile, std::ios::out | std::ios::trunc);
+		irfs.level = 1;
+		irfs.puts("CC64 Hex Intermediate File\n");
 		dfs.level = 1;
-		dfs.puts("<title>C64D Compiler debug file</title>\n");
+		dfs.puts("<title>CC64 Compiler debug file</title>\n");
 		dfs.level = 1;
 		lfs.level = 1;
 		ofs.level = 1;
@@ -292,6 +376,8 @@ void closefiles()
 	dfs.printf("<closefiles>\n");
 	ifs->close();
 	delete ifs;
+//	irfs.flush();
+//	irfs.close();
 	dfs.printf("A");
 	lfs.close();
 	dfs.printf("B");

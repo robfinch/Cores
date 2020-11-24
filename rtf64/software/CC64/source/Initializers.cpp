@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -58,8 +58,11 @@ void doinit(SYM *sp)
   enum e_sg oseg;
   char buf[500];
   std::streampos endpoint;
+	std::streampos lblpoint;
 	TYP *tp;
+	int n;
 
+	sp->storage_pos = ofs.tellp();
   hasPointer = false;
   if (first) {
 	  firstPrim = true;
@@ -131,18 +134,35 @@ void doinit(SYM *sp)
 			ofs.printf(buf);
 		}
 		strcpy_s(glbl2, sizeof(glbl2), sp->name->c_str());
+		lblpoint = ofs.tellp();
 		gen_strlab(lbl);
 	}
 	if (lastst == kw_firstcall) {
         GenerateByte(1);
-        return;
+        goto xit;
     }
 	else if( lastst != assign) {
 		hasPointer = sp->tp->FindPointer();
 		genstorage(sp->tp->size);
 	}
 	else {
+		ENODE* node;
+		Expression exp;
+
 		NextToken();
+		if (lastst == bitandd) {
+			char buf[400];
+			char buf2[40];
+			if (sp->storage_class == sc_global)
+				strcpy(buf2, "endpublic\n");
+			else
+				strcpy(buf2, "");
+			sprintf(buf, "%s:\ndco %s_dat\n%s%s_dat:\n", lbl, sp->name->c_str(), buf2, lbl);
+			ofs.seekp(lblpoint);
+			ofs.write(buf);
+			while (lastst != begin && lastst != semicolon && lastst != my_eof)
+				NextToken();
+		}
 		hasPointer = sp->tp->FindPointer();
 		typ_sp = 0;
 		tp = sp->tp;
@@ -151,7 +171,7 @@ void doinit(SYM *sp)
 			push_typ(tp);
 		}
 		brace_level = 0;
-		sp->tp->Initialize(nullptr);
+		sp->tp->Initialize(nullptr, nullptr, 1);
 		if (sp->tp->numele == 0) {
 			if (sp->tp->GetBtp()) {
 				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar
@@ -182,6 +202,8 @@ void doinit(SYM *sp)
     endinit();
 	if (sp->storage_class == sc_global)
 		ofs.printf("\nendpublic\n");
+xit:
+	sp->storage_endpos = ofs.tellp();
 }
 
 
@@ -204,45 +226,51 @@ void doInitCleanup()
 	}
 }
 
-int64_t initbyte()
+int64_t initbyte(int opt)
 {   
-	GenerateByte((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateByte(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (1LL);
 }
 
-int64_t initchar()
+int64_t initchar(int opt)
 {   
-	GenerateChar((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateChar(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (2LL);
 }
 
-int64_t initshort()
+int64_t initshort(int opt)
 {
-	GenerateHalf((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateHalf(opt ? (int)GetIntegerExpression((ENODE **)NULL) : 0);
     return (4LL);
 }
 
-int64_t initlong()
+int64_t initlong(int opt)
 {
-	GenerateLong(GetIntegerExpression((ENODE **)NULL));
+	GenerateLong(opt ? GetIntegerExpression((ENODE **)NULL) : 0);
     return (8LL);
 }
 
-int64_t initquad()
+int64_t initquad(int opt)
 {
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
+	GenerateQuad(opt ? GetFloatExpression((ENODE **)NULL) : Float128::Zero());
 	return (16LL);
 }
 
-int64_t initfloat()
+int64_t initfloat(int opt)
 {
-	GenerateFloat(GetFloatExpression((ENODE **)NULL));
+	GenerateFloat(opt ? GetFloatExpression((ENODE **)NULL): Float128::Zero());
 	return (8LL);
 }
 
-int64_t inittriple()
+int64_t initPosit(int opt)
 {
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
+	GeneratePosit(opt ? GetPositExpression((ENODE**)NULL) : 0);
+	return (8LL);
+}
+
+int64_t inittriple(int opt)
+{
+	GenerateQuad(opt ? GetFloatExpression((ENODE **)NULL) : Float128::Zero());
 	return (12LL);
 }
 
@@ -253,6 +281,7 @@ int64_t InitializePointer(TYP *tp2)
 	int64_t lng;
 	TYP *tp;
 	bool need_end = false;
+	Expression exp;
 
 	sp = nullptr;
 	if (lastst == begin) {
@@ -260,7 +289,7 @@ int64_t InitializePointer(TYP *tp2)
 		NextToken();
 		if (lastst == begin) {
 			NextToken();
-			lng = tp2->Initialize(nullptr);
+			lng = tp2->Initialize(nullptr, nullptr,1);
 			needpunc(end, 13);
 			needpunc(end, 14);
 			return (lng);
@@ -268,7 +297,8 @@ int64_t InitializePointer(TYP *tp2)
 	}
     if(lastst == bitandd) {     /* address of a variable */
         NextToken();
-				tp = expression(&n);
+				//tp = expression(&n);
+				tp = exp.ParseNonCommaExpression(&n);
 				opt_const(&n);
 				if (n->nodetype != en_icon) {
 					if (n->nodetype == en_ref) {
@@ -327,9 +357,13 @@ int64_t InitializePointer(TYP *tp2)
 			free(str);
     }
 		else if (lastst == rconst) {
-        GenerateLabelReference(quadlit(&rval128),0);
-        NextToken();
-	}
+			GenerateLabelReference(quadlit(&rval128), 0);
+			NextToken();
+		}
+		else if (lastst == pconst) {
+			GeneratePosit(pval64);
+			NextToken();
+		}
 	//else if (lastst == id) {
 	//	sp = gsearch(lastid);
 	//	if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
@@ -359,8 +393,9 @@ int64_t InitializePointer(TYP *tp2)
 				GenerateLabelReference(n->p[1]->i, n->p[0]->i);
 		}
 		else {
-			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
-        }
+//			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
+			GenerateLong(lng);
+		}
 	}
 	if (need_end)
 		needpunc(end, 8);

@@ -24,9 +24,14 @@
 // ============================================================================
 //
 #include "stdafx.h"
+extern CSet* ru, * rru;
 
 CSETable::CSETable()
 {
+	ZeroMemory(table, sizeof(table));
+	csendx = 0;
+	cseiter = 0;
+	searchpos = 0;
 }
 
 CSETable::~CSETable()
@@ -84,8 +89,8 @@ CSE *CSETable::InsertNode(ENODE *node, int duse, bool *first)
 		csp->AccUses(1);
 		csp->AccDuses(duse != 0);
 		csp->exp = node->Clone();
-		csp->isfp = csp->exp->IsFloatType() && !csp->exp->constflag;
-		csp->isPosit = csp->exp->IsPositType() && !csp->exp->constflag;
+		csp->isfp = csp->exp->IsFloatType();// && !csp->exp->constflag;
+		csp->isPosit = csp->exp->IsPositType();// && !csp->exp->constflag;
 		return (csp);
 	}
 	*first = false;
@@ -221,8 +226,10 @@ int CSETable::AllocateFPRegisters()
 						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg <= regLastRegvar; break;
 							//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						}
-						if (alloc)
+						if (alloc) {
 							csp->reg = reg++;
+							csp->reg |= 0x20;
+						}
 						else
 							csp->reg = -1;
 					}
@@ -254,8 +261,10 @@ int CSETable::AllocatePositRegisters()
 						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg <= regLastRegvar; break;
 							//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						}
-						if (alloc)
+						if (alloc) {
 							csp->reg = reg++;
+							csp->reg |= 0x40;
+						}
 						else
 							csp->reg = -1;
 					}
@@ -304,6 +313,7 @@ void CSETable::InitializeTempRegs()
 	ENODE *exptr;
 	int size;
 
+	cg.GenerateHint(begin_regvar_init);
 	for (csp = First(); csp; csp = Next()) {
 		if (csp->reg != -1)
 		{               // see if preload needed
@@ -340,7 +350,7 @@ void CSETable::InitializeTempRegs()
 							ReleaseTempReg(ap3);
 						}
 						else {
-							cg.GenLoadConst(ap, ap2);
+							cg.GenerateLoadConst(ap, ap2);
 						}
 					}
 					else if (ap->mode == am_reg | ap->mode == am_fpreg || ap->mode == am_preg) {
@@ -356,7 +366,7 @@ void CSETable::InitializeTempRegs()
 			}
 		}
 	}
-
+	cg.GenerateHint(end_regvar_init);
 }
 
 void CSETable::GenerateRegMask(CSE *csp, CSet *msk, CSet *rmsk)
@@ -422,9 +432,9 @@ int CSETable::AllocateRegisterVars()
 	// Generate bit masks of allocated registers
 	for (csp = First(); csp; csp = Next()) {
 		if (csp->exp) {
-			if (csp->exp->IsFloatType() && !csp->exp->constflag)
+			if (csp->exp->IsFloatType())// && !csp->exp->constflag)
 				GenerateRegMask(csp, fpmask, fprmask);
-			else if (csp->exp->IsPositType() && !csp->exp->constflag)
+			else if (csp->exp->IsPositType())// && !csp->exp->constflag)
 				GenerateRegMask(csp, pmask, prmask);
 			else if (csp->exp->etype == bt_vector)
 				GenerateRegMask(csp, vrmask, vmask);
@@ -438,7 +448,9 @@ int CSETable::AllocateRegisterVars()
 	Dump();
 
 	// Push temporaries on the stack.
+	cg.GenerateHint(begin_save_regvars);
 	SaveRegisterVars(rmask);
+	cg.GenerateHint(end_save_regvars);
 	SaveFPRegisterVars(fprmask);
 	SavePositRegisterVars(prmask);
 
@@ -485,7 +497,7 @@ int CSETable::Optimize(Statement *block)
 		nn = AllocateRegisterVars();
 		if (pass == 2) {
 			block->repcse();          /* replace allocated expressions */
-			block->update();					// available for debugging
+			//block->update();					// available for debugging
 			dfs.printf("===== After Update =====");
 			block->Dump();
 		}

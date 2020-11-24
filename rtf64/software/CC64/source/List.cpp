@@ -107,6 +107,9 @@ void put_ty(TYP *tp)
                 case bt_double:
                         lfs.printf("Double");
                         break;
+                case bt_posit:
+                  lfs.printf("Posit");
+                  break;
                 case bt_pointer:
                         if( tp->val_flag == 0)
                                 lfs.printf("Pointer to ");
@@ -148,16 +151,19 @@ void list_var(SYM *sp, int i)
 		if (sp->name == nullptr) {
 			lfs.printf("%-10s =%06x", "<noname>", (unsigned int)sp->value.u);
 			if (sp->tp)
-				if (sp->tp->bit_width != -1)
-					lfs.printf("  %d %d", sp->tp->bit_offset, sp->tp->bit_width);
+        if (sp->tp->bit_width != nullptr) {
+          if (sp->tp->bit_offset->nodetype == en_icon && sp->tp->bit_width->nodetype == en_icon)
+            lfs.printf("  %d %d", sp->tp->bit_offset->i, sp->tp->bit_width->i);
+        }
 		}
 		else if (sp->name->length()== 0)
 			lfs.printf("%-10s =%06x ","<unnamed>",(unsigned int)sp->value.u);
 		else {
 			lfs.printf("%-10s =%06x",(char *)sp->name->c_str(),(unsigned int)sp->value.u);
 			if (sp->tp)
-				if (sp->tp->bit_width != -1)
-					lfs.printf("  %d %d",sp->tp->bit_offset,sp->tp->bit_width);
+				if (sp->tp->bit_width != nullptr)
+          if (sp->tp->bit_offset->nodetype == en_icon && sp->tp->bit_width->nodetype == en_icon)
+            lfs.printf("  %d %d", sp->tp->bit_offset->i, sp->tp->bit_width->i);
 		}
 //			if (sp->IsPascal) ofs.printf("\tpascal ");
         if( sp->storage_class == sc_external)
@@ -173,15 +179,17 @@ void list_var(SYM *sp, int i)
     if (sp->tp) {
   		if (sp->tp->type==bt_ifunc || sp->tp->type==bt_func) {
 			fn = sp->fi;
-  			lfs.printf("\t\tParameters:\n\t\t\t");
-  			ta = fn->GetProtoTypes();
-  			ta->Print(&lfs);
-  			if (ta)
-  				delete ta;
-			lfs.printf("Stack Space:\n\t\t");
-			lfs.printf("Argbot: %d\n\t\t", fn->argbot);
-			lfs.printf("Tmpbot: %d\n\t\t", fn->tempbot);
-			lfs.printf("Stkspc: %d\n\t\t", fn->stkspace);
+      if (fn) {
+        lfs.printf("\t\tParameters:\n\t\t\t");
+        ta = fn->GetProtoTypes();
+        ta->Print(&lfs);
+        if (ta)
+          delete ta;
+        lfs.printf("Stack Space:\n\t\t");
+        lfs.printf("Argbot: %d\n\t\t", fn->argbot);
+        lfs.printf("Tmpbot: %d\n\t\t", fn->tempbot);
+        lfs.printf("Stkspc: %d\n\t\t", fn->stkspace);
+      }
   		}
 	  }
 	  if (sp->tp) {

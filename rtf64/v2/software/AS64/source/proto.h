@@ -5,6 +5,8 @@ void process_macro();
 void doif();
 void doifdef();
 void doifndef();
+void doelse();
+void doendif();
 bool IsNBit128(Int128&, Int128&);
 void process_dcp();
 void process_dcd();
@@ -32,3 +34,5 @@ int isPseudoOp();
 void SymbolInitForPass();
 void rtf64_processMaster();
 int rtf64_NextToken();
+
+int64_t expr_def(int64_t* def);

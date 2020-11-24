@@ -243,6 +243,7 @@ public:
 	void Remove2();
 	void RemoveLinkUnlink();
 	void RemoveGPLoad();
+	void RemoveRegsave();
 	void flush();
 	void SetLabelReference();
 	void EliminateUnreferencedLabels();
@@ -394,13 +395,15 @@ public:
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
 	void GenerateReturn(Statement *stmt);
-	void Gen();
+	void Generate();
 
 	void CreateVars();
 	void ComputeLiveVars();
 	void DumpLiveVars();
 
 	void storeHex(txtoStream& ofs);
+private:
+	void StackGPRs();
 };
 
 class SYM {
@@ -449,8 +452,11 @@ public:
 	Float128 f128;
 	TYP *tp;
   Statement *stmt;
+	std::streampos storage_pos;
+	std::streampos storage_endpos;
 
 	Function* MakeFunction(int symnum, bool isPascal);
+	bool IsTypedef();
 	static SYM *Copy(SYM *src);
 	SYM *Find(std::string name);
 	int FindNextExactMatch(int startpos, TypeArray *);
@@ -542,7 +548,7 @@ public:
 	int64_t InitializeStruct();
 	int64_t InitializeUnion();
 	int64_t Initialize(int64_t val);
-	int64_t Initialize(TYP *);
+	int64_t Initialize(ENODE* node, TYP *, int opt);
 
 	// Serialization
 	void storeHex(txtoStream& ofs);
@@ -670,7 +676,7 @@ public:
 	void GenerateLoad(Operand *ap3, Operand *ap1, int ssize, int size);
 	void GenStore(Operand *ap1, Operand *ap3, int size);
 	static void GenRedor(Operand *ap1, Operand *ap2);
-	Operand *GenIndex();
+	Operand *GenIndex(bool neg);
 	Operand *GenHook(int flags, int size);
 	Operand *GenSafeHook(int flags, int size);
 	Operand *GenerateShift(int flags, int size, int op);
@@ -690,8 +696,10 @@ public:
 	Operand* GenerateBitfieldAssignAdd(int flags, int size, int op);
 	Operand* GenerateBitfieldAssignLogic(int flags, int size, int op);
 
+	// Serialization
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);
+	int load(char* bufptr);
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);
 
@@ -709,6 +717,26 @@ public:
 	void Dump();
 };
 
+
+// Under construction
+class INODE : public CompilerType
+{
+public:
+	INODE* next;
+	INODE* prev;
+	INODE* inner;
+	INODE* outer;
+	int type;
+	int64_t size;
+	// value
+	void* arry;
+	int64_t i;
+	double f;
+	Float128 f128;
+	Posit64 posit;
+	std::string* str;
+};
+
 class ExpressionFactory : public Factory
 {
 public:
@@ -717,6 +745,7 @@ public:
 	ENODE* Makenode(int nt, ENODE* v1, ENODE* v2);
 	ENODE* Makefnode(int nt, double v1);
 	ENODE* Makepnode(int nt, Posit64 v1);
+	ENODE* Makenode();
 	ENODE* MakePositNode(int nt, Posit64 v1);
 };
 
@@ -739,7 +768,7 @@ private:
 	void SetRefType(ENODE** node);
 	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
 	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
-	ENODE* ParseCharConst(ENODE** node);
+	ENODE* ParseCharConst(ENODE** node, int sz);
 	ENODE* ParseStringConst(ENODE** node);
 	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
 	ENODE* ParseInlineStringConst(ENODE** node);
@@ -772,10 +801,8 @@ private:
 	void ApplyVMask(ENODE* node, ENODE* mask);
 
 	TYP* deref(ENODE** node, TYP* tp);
-	TYP* CondDeref(ENODE** node, TYP* tp);
 
 	TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
-	TYP *ParseUnaryExpression(ENODE **node, int got_pa);
 	TYP *ParsePostfixExpression(ENODE **node, int got_pa);
 	TYP *ParseCastExpression(ENODE **node);
 	TYP *ParseMultOps(ENODE **node);
@@ -799,7 +826,6 @@ private:
 	ENODE* MakeExternNameNode(SYM* sp);
 	ENODE* MakeConstNameNode(SYM* sp);
 	ENODE* MakeMemberNameNode(SYM* sp);
-	ENODE* MakeAutoNameNode(SYM* sp);
 	ENODE* MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args);
 	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
 	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
@@ -811,6 +837,9 @@ private:
 	ENODE* FindLastMulu(ENODE*, ENODE*);
 public:
 	Expression();
+	TYP* ParseUnaryExpression(ENODE** node, int got_pa);
+	TYP* CondDeref(ENODE** node, TYP* tp);
+	ENODE* MakeAutoNameNode(SYM* sp);
 	TYP* nameref(ENODE** node, int nt);
 	TYP* nameref2(std::string name, ENODE** node, int nt, bool alloc, TypeArray* typearray, TABLE* tbl);
 	// The following is called from declaration processing, so is made public
@@ -819,6 +848,8 @@ public:
 	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
 	TYP *ParseExpression(ENODE **node);
 	Function* MakeFunction(int symnum, SYM* sp, bool isPascal);
+	SYM* FindMember(TYP* tp1, char* name);
+	SYM* FindMember(TABLE* tbl, char* name);
 };
 
 class Operand : public CompilerType
@@ -946,6 +977,7 @@ public:
 	void OptPush();
 	void OptBne();
 	void OptBeq();
+	void OptScc();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
@@ -1015,6 +1047,7 @@ public:
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width);
 	virtual void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	virtual Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	Operand* GenerateAsaddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su, bool neg);
 	Operand* GenerateAddDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateAutoconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
 	Operand* GenerateClassconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su);
@@ -1046,7 +1079,7 @@ public:
 	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
-	void GenLoadConst(Operand *ap1, Operand *ap2);
+	void GenerateLoadConst(Operand *ap1, Operand *ap2);
 	void SaveTemporaries(Function *sym, int *sp, int *fsp, int* psp);
 	void RestoreTemporaries(Function *sym, int sp, int fsp, int psp);
 	int GenerateInlineArgumentList(Function *func, ENODE *plist);
@@ -1054,8 +1087,9 @@ public:
 	virtual int PushArguments(Function *func, ENODE *plist) { return (0); };
 	virtual void PopArguments(Function *func, int howMany) {};
 	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
-	void GenerateFunction(Function *fn) { fn->Gen(); };
+	void GenerateFunction(Function *fn) { fn->Generate(); };
 	Operand* GenerateTrinary(ENODE* node, int flags, int size, int op);
+	virtual void GenerateUnlink();
 };
 
 class RTF64CodeGenerator : public CodeGenerator
@@ -1096,6 +1130,7 @@ public:
 	void GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENODE* offset, ENODE* width);
 	Operand* GenerateBitfieldExtract(Operand* src, Operand* offset, Operand* width);
 	Operand* GenerateBitfieldExtract(Operand* ap1, ENODE* offset, ENODE* width);
+	void GenerateUnlink();
 };
 
 // Control Flow Graph
@@ -1495,7 +1530,8 @@ public:
 
 class Statement {
 public:
-	__int8 stype;
+	int number;
+	e_stmt stype;
 	Statement *outer;
 	Statement *next;
 	Statement *prolog;
@@ -1505,6 +1541,7 @@ public:
 	ENODE *exp;         // condition or expression
 	ENODE *initExpr;    // initialization expression - for loops
 	ENODE *incrExpr;    // increment expression - for loops
+	ENODE* iexp;
 	Statement *s1, *s2; // internal statements
 	int num;			// resulting expression type (hash code for throw)
 	int64_t *label;     // label number for goto
@@ -1515,10 +1552,13 @@ public:
 	char *lptr2;			// pointer to source code
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
+	e_sym kw;				// statement's keyword
 	
 	Statement* MakeStatement(int typ, int gt);
 
 	// Parsing
+	int64_t* GetCasevals();
+	Statement* ParseDefault();
 	Statement* ParseCheckStatement();
 	Statement *ParseStop();
 	Statement *ParseCompound();
@@ -1581,6 +1621,7 @@ public:
 	void GenerateDoOnce();
 	void GenerateCompound();
 	void GenerateCase();
+	void GenerateDefault();
 	void GenerateTry();
 	void GenerateThrow();
 	void GenerateCheck();
@@ -1594,6 +1635,21 @@ public:
 	// Debugging
 	void Dump();
 	void DumpCompound();
+	void ListCompoundVars();
+	// Serialization
+	void store(txtoStream& fs);
+	void storeIf(txtoStream& ofs);
+	void storeWhile(txtoStream& fs);
+	void storeCompound(txtoStream& ofs);
+
+	void storeHex(txtoStream& ofs);
+	void storeHexIf(txtoStream& ofs);
+	void storeHexDo(txtoStream& ofs, e_stmt st);
+	void storeHexWhile(txtoStream& fs, e_stmt st);
+	void storeHexFor(txtoStream& fs);
+	void storeHexForever(txtoStream& fs);
+	void storeHexSwitch(txtoStream& fs);
+	void storeHexCompound(txtoStream& ofs);
 };
 
 class StatementFactory : public Factory
@@ -1645,13 +1701,13 @@ public:
 	void ParseFloat128();
 	void ParsePosit();
 	void ParseClass();
-	int ParseStruct(e_bt typ);
+	int ParseStruct(TABLE* table, e_bt typ, SYM** sym);
 	void ParseVector();
 	void ParseVectorMask();
 	SYM *ParseId();
 	void ParseDoubleColon(SYM *sp);
 	void ParseBitfieldSpec(bool isUnion);
-	int ParseSpecifier(TABLE *table);
+	int ParseSpecifier(TABLE* table, SYM** sym, e_sc sc);
 	SYM *ParsePrefixId();
 	SYM *ParsePrefixOpenpa(bool isUnion);
 	SYM *ParsePrefix(bool isUnion);
@@ -1660,6 +1716,7 @@ public:
 	SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
 	int ParseFunction(TABLE* table, SYM* sp, e_sc al);
+	void ParseFunctionJ2(Function* fn);
 	void ParseAssign(SYM *sp);
 	void DoDeclarationEnd(SYM *sp, SYM *sp1);
 	void DoInsert(SYM *sp, TABLE *table);
@@ -1668,6 +1725,7 @@ public:
 	int GenerateStorage(int nbytes, int al, int ilc);
 	static Function* MakeFunction(int symnum, SYM* sym, bool isPascal, bool isInline);
 	static void MakeFunction(SYM* sp, SYM* sp1);
+	void FigureStructOffsets(int64_t bgn, SYM* sp);
 };
 
 class StructDeclaration : public Declaration
@@ -1676,8 +1734,9 @@ public:
 	void GetType(TYP** hd, TYP** tl) {
 		*hd = head; *tl = tail;
 	};
-	void ParseMembers(SYM * sym, TYP *tp, int ztype);
-	int Parse(int ztype);
+	void ParseAttribute(SYM* sym);
+	void ParseMembers(SYM* sym, int ztype);
+	int Parse(TABLE* table, int ztype, SYM** sym);
 };
 
 class ClassDeclaration : public Declaration
@@ -1693,7 +1752,7 @@ public:
 class AutoDeclaration : public Declaration
 {
 public:
-	void Parse(SYM *parent, TABLE *ssyms);
+	ENODE* Parse(SYM *parent, TABLE *ssyms);
 };
 
 class ParameterDeclaration : public Declaration

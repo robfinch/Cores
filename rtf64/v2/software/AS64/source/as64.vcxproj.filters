@@ -1,0 +1,118 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\dsd6.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\dsd7.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\DSD7ASM.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\dsd9.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Elf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\expr.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\expr128.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\FISA64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\friscv.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\FT64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\FT64v8.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\FT64x36.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\FT8088.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Gambit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Gambit_v5.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\GambitToken.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\globals.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\HT.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\HTSYMHSH.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Int128.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Macro.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\main_bak.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\nvio3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\rtf64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\rtf64-token.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\rtfItanium.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\symbol.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Table888.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Table888mmu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\Thor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\token.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\cores2020\rtf64\v2\software\AS64\source\token_rtf64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\cores2020\rtf64\v2\software\AS64\source\CMakelists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="D:\cores2020\rtf64\v2\software\AS64\source\SEARCHEN.Cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{5EFDBA09-2473-3578-8D54-4C5814753DED}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -28,6 +28,12 @@
 char *prefix;
 extern int nparms;
 extern bool isRegister;
+SYM* currentSym = nullptr;
+
+Function* SYM::MakeFunction(int symnum, bool isPascal) {
+	Function* fn = compiler.ff.MakeFunction(symnum, this, isPascal);
+	return (fn);
+};
 
 SYM *SYM::GetPtr(int n)
 { 
@@ -63,6 +69,20 @@ int SYM::GetIndex()
   return this - &compiler.symbolTable[0];
 };
 
+bool SYM::IsTypedef()
+{
+	SYM* p, * q;
+
+	q = nullptr;
+	for (p = GetParentPtr(); p; p = GetParentPtr())
+		q = p;
+	if (q)
+		if (q->storage_class == sc_typedef)
+			return (true);
+	return (storage_class == sc_typedef);
+}
+
+
 uint8_t hashadd(char *nm)
 {
 	uint8_t hsh;
@@ -77,7 +97,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 	SYM *thead;
 	TypeArray *ta;
 
-	if (na=="" || tbl==nullptr)
+	if (&na == nullptr || tbl==nullptr || na == "")
 		return nullptr;
 //	printf("Enter search2\r\n");
 	if (tbl==&gsyms[0])
@@ -85,7 +105,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 	else
 		thead = &compiler.symbolTable[tbl->GetHead()];
 	while( thead != NULL) {
-		if (thead->name->length() != 0) {
+		if (thead->name && thead->name->length() != 0) {
 		  /*
 			if (prefix)
 				strncpy(namebuf,prefix,sizeof(namebuf)-1);
@@ -264,7 +284,7 @@ SYM *SYM::Copy(SYM *src)
 //		dst->shortname = src->shortname;
 		dst->SetNext(0);
 		if (src->fi) {
-			dst->fi = allocFunction(src->id);
+			dst->fi = dst->MakeFunction(src->id, false);
 			memcpy(dst->fi, src->fi, sizeof(Function));
 			dst->fi->sym = dst;
 			dst->fi->params.SetOwner(src->id);
@@ -448,18 +468,18 @@ std::string *SYM::BuildSignature(int opt)
 		dfs.printf("D");
 		if (name > (std::string *)0x15)
 			str->append(*name);
-		if (opt) {
-			dfs.printf("E");
-			str->append(*fi->GetParameterTypes()->BuildSignature());
-		}
-		else {
-			dfs.printf("F");
-			str->append(*fi->GetProtoTypes()->BuildSignature());
-		}
 	}
 	else {
 		str = new std::string("");
 		str->append(*name);
+	}
+	if (opt) {
+		dfs.printf("E");
+		str->append(*fi->GetParameterTypes()->BuildSignature());
+	}
+	else {
+		dfs.printf("F");
+		str->append(*fi->GetProtoTypes()->BuildSignature());
 	}
 	dfs.printf(":%s</BuildSignature>", (char *)str->c_str());
 	return str;

@@ -104,12 +104,14 @@ casez(inst[`OPCODE])
 	    ma <= a + {{AMSB{inst[29]}},inst[29:18]};
 	  else
 	    ma <= a + cx + {{AMSB{inst[29]}},inst[29],inst[22:18]};
+
 	`PUSHC:
 		ma <= a - 8'd8;
 	`PUSH:
 		ma <= a - 8'd8;
   `LINK:
     ma <= a - 8'd8;
+
 	default:	;
 	endcase
 `OSR2:

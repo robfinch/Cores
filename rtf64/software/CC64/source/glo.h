@@ -53,11 +53,13 @@ extern int maxPn;
 extern int hook_predreg;
 extern int gCpu;
 extern int regGP;
+extern int regGP1;
 extern int regTP;
 extern int regSP;
 extern int regFP;
 extern int regLR;
 extern int regXLR;
+extern int regXHSP;
 extern int regPC;
 extern int regCLP;
 extern int regPP;
@@ -97,17 +99,22 @@ extern txtoStream ofs;
 extern txtoStream lfs;
 extern txtoStream dfs;
 extern int mangledNames;
-extern int sizeOfWord;
+extern int64_t sizeOfWord;
 extern int sizeOfPtr;
 extern int sizeOfFP;
 extern int sizeOfFPS;
 extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
+extern int sizeOfPosit;
 extern int maxVL;
-extern MachineReg regs[1024];
+extern MachineReg regs[3072];
 extern int nregs;
 extern int max_reg_in_use;
+
+extern int64_t rodata_base_address;
+extern int64_t bss_base_address;
+extern int64_t data_base_address;
 
 /*
 extern FILE             *input,
@@ -127,6 +134,7 @@ extern int laststrlen;
 extern int64_t	ival;
 extern double           rval;
 extern Float128			rval128;
+extern Posit64 pval64;
 extern char float_precision;
 extern int parseEsc;
 //extern FloatTriple      FAC1,FAC2;
@@ -146,6 +154,7 @@ extern int              global_flag;
 extern TABLE            defsyms;
 extern CSet *save_mask;      /* register save mask */
 extern CSet *fpsave_mask;
+extern CSet* psave_mask;
 extern int				bsave_mask;
 extern int uctran_off;
 extern int isKernel;
@@ -165,6 +174,7 @@ extern int opt_size;
 extern int exceptions;
 extern int mixedSource;
 extern Function *currentFn;
+extern SYM* currentSym;
 extern int iflevel;
 extern int foreverlevel;
 extern int looplevel;
@@ -177,6 +187,7 @@ extern Statement *currentStmt;
 extern bool dogen;
 
 extern TYP stdvoid;
+extern TYP stdbit;
 extern TYP stdint;
 extern TYP stduint;
 extern TYP stdlong;
@@ -196,6 +207,9 @@ extern TYP stddbl;
 extern TYP stdtriple;
 extern TYP stdflt;
 extern TYP stddouble;
+extern TYP stdposit;
+extern TYP stdposit32;
+extern TYP stdposit16;
 extern TYP stdfunc;
 extern TYP stdexception;
 extern TYP stdconst;
@@ -378,21 +392,6 @@ extern char nmspace[20][100];
 extern void MakeLegalOperand(Operand *ap,int flags, int size);
 // List.c
 extern void ListTable(TABLE *t, int i);
-// Register.c
-extern Operand *GetTempReg(int);
-extern Operand *GetTempRegister();
-extern Operand *GetTempTgtRegister();
-extern Operand *GetTempBrRegister();
-extern Operand *GetTempFPRegister();
-extern Operand *GetTempVectorRegister();
-extern Operand *GetTempVectorMaskRegister();
-extern void ReleaseTempRegister(Operand *ap);
-extern void ReleaseTempReg(Operand *ap);
-extern int TempInvalidate(int *);
-extern void TempRevalidate(int sp, int fsp);
-extern int GetTempMemSpace();
-extern bool IsArgumentReg(int);
-extern Operand *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
@@ -415,10 +414,14 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[254];
+extern Instruction opl[284];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
-
+extern char inpline[100000];
 extern bool ExpressionHasReference;
+extern Object *_GarbageList;
+
+extern txtoStream irfs;
+extern CSet* ru, * rru;
 
 #endif

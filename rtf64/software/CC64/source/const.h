@@ -3,12 +3,12 @@
 
 enum e_bt {
 	bt_none,
-	bt_byte, bt_ubyte,
-	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
-	bt_ichar, bt_iuchar,
+	bt_byte, bt_ubyte, bt_bit, bt_bool,
+	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_posit, bt_pointer,
+	bt_ichar, bt_iuchar, bt_i128,
 	bt_uchar, bt_ushort, bt_ulong,
   bt_unsigned, bt_vector, bt_vector_mask,
-  bt_struct, bt_union, bt_class, bt_enum, bt_void,
+  bt_array, bt_struct, bt_union, bt_class, bt_enum, bt_void,
   bt_func, bt_ifunc, bt_label,
 	bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
 	bt_exception, bt_ellipsis,
@@ -17,34 +17,39 @@ enum e_bt {
 enum e_node {
 		en_unknown,
         en_void,        /* used for parameter lists */
+				en_nop,
 		en_list, en_aggregate,
 		en_cbu, en_ccu, en_chu,
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
 		en_cubw, en_cucw, en_cuhw,
-		en_cucwp, en_ccwp,
+		en_cucwp, en_ccwp, en_cuc,
 
     en_cbc, en_cbh, en_cbuc, en_cubc,
 		en_cch,
 		en_cwl, en_cld, en_cfd,
 		en_sxb, en_sxc, en_sxh,
 		en_zxb, en_zxc, en_zxh,
-        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_scon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+		en_i2p, en_p2i,
+        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_scon, en_labcon, en_nacon,
+				en_autocon, en_autofcon, en_autopcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		
 		     en_fcall, en_ifcall,
-         en_tempref, en_regvar, en_fpregvar, en_tempfpref,
+         en_tempref, en_regvar, en_fpregvar, en_pregvar, en_tempfpref, en_temppref,
 		en_add, en_sub, en_mul, en_mod,
 		en_ftadd, en_ftsub, en_ftmul, en_ftdiv,
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
-		en_d2t, en_d2q, en_t2q,
+		en_padd, en_psub, en_pmul, en_pdiv, en_ptoi, en_itop, en_peq, en_pne, en_plt, en_ple, en_pcon, en_pgt, en_pge,
+		en_d2t, en_d2q, en_t2q, en_p2d,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
-        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror,
+        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror, en_ext, en_extu,
 		en_cond, en_safe_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
+				en_asfmul,
 		en_asrsh, en_asrshu, en_asmulu, //81
         en_aslsh, en_asand, en_asor, en_asxor, en_uminus, en_not, en_compl,
         en_eq, en_ne, en_lt, en_le, en_gt, en_ge,
@@ -54,8 +59,8 @@ enum e_node {
         en_xor, en_mulu, en_udiv, en_umod, en_ugt,
         en_uge, en_ule, en_ult,
 		en_ref, en_fieldref, en_ursh,
-		en_bchk, en_chk,
-		en_abs, en_max, en_min, en_addrof, en_ptrdif,
+		en_bchk, en_chk, en_bytendx, en_bitoffset,
+		en_abs, en_max, en_min, en_addrof, en_ptrdif, en_wydendx,
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
@@ -71,13 +76,13 @@ enum e_stmt {
 		st_dountil, st_doloop, st_dowhile, st_doonce,
 		st_try, st_catch, st_throw, st_critical, st_spinlock, st_spinunlock,
 		st_for,
-		st_do, st_if, st_switch, st_default,
+		st_do, st_if, st_else, st_elsif, st_switch, st_default,
         st_case, st_goto, st_break, st_continue, st_label,
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
 enum e_sym {
 	tk_nop,
-	id, cconst, iconst, lconst, sconst, isconst, asconst, rconst, plus, minus,
+	id, cconst, iconst, lconst, sconst, isconst, asconst, rconst, pconst, plus, minus,
 	star, divide, lshift, rshift, lrot, rrot,
 	modop, eq, neq, lt, leq, gt,
 	geq, assign, asplus, asminus, astimes, asdivide, asmodop,
@@ -87,11 +92,11 @@ enum e_sym {
 	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd, lor_safe, land_safe,
 	ellipsis,
 	// functions
-	kw_abs, kw_max, kw_min,
+	kw_abs, kw_max, kw_min, kw_wydendx, kw_bit,
 
 	kw_vector, kw_vector_mask,
 	kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
-	kw_float128,
+	kw_float128, kw_posit, 
 	kw_icache, kw_dcache, kw_thread,
 	kw_void, kw_char, kw_float, kw_double, kw_triple,
 	kw_struct, kw_union, kw_class,
@@ -109,21 +114,30 @@ enum e_sym {
 	kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leaf, kw_leafs,
 	kw_unique, kw_virtual, kw_this,
 	kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
-	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf, kw_is_nullptr,
+	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf, kw_bytendx, kw_is_nullptr,
+	kw_compound, kw_expr, kw_label,
 	kw_nullptr,
 	my_eof
 };
 
 enum e_sc {
+	sc_none,
 	sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
 	sc_member, sc_label, sc_ulabel, sc_typedef, sc_register
+};
+
+enum e_rc {
+	rc_none, rc_int, rc_float, rc_posit, rc_cmp
 };
 
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 
 enum e_op {
 	op_none,
-	op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
+	op_aslx,
+	op_move, op_add, op_addu, op_addi, op_asfmul,
+	op_bf, op_bt, op_gcsub,
+	op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
 	op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui,
 	op_div, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
 	op_bit,
@@ -131,11 +145,11 @@ enum e_op {
 	op_nand, op_nor, op_xnor,
 	op_asr, op_asri, op_stpl, op_stpr, op_stpru, op_ror, op_rol,
 	op_stpli, op_stpri, op_stprui, op_stplu, op_stplui, op_rori, op_roli,
-	op_bfclr, op_bfext, op_bfextu, op_bfins, op_bfset,
-	op_jlr, op_jmp, op_jsr, op_mului, op_mod, op_modu,
+	op_bfclr, op_bfext, op_bfextu, op_bfins, op_bfset, op_dep,
+	op_jmp, op_jsr, op_mului, op_mod, op_modu,
 	op_bmi, op_subu, op_lddr, op_stdc, op_loop, op_iret,
 	op_sext32, op_sext16, op_sext8, op_sxb, op_sxc, op_sxh, op_sxw, op_sxt, op_sxp, op_sxo,
-	op_zxb, op_zxc, op_zxh,
+	op_zxb, op_zxc, op_zxh, op_extr,
 	op_dw, op_cache,
 	op_subui, op_addui, op_sei,
 	op_std, op_sth, op_sto, op_stp, op_stt, op_stw, op_stb, op_outb, op_inb, op_inbu,
@@ -145,7 +159,7 @@ enum e_op {
 	op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge, op_band, op_bor, op_bnand, op_bnor,
 	op_bltu, op_bleu, op_bgtu, op_bgeu,
 	op_bltui, op_bleui, op_blti, op_blei, op_bgti, op_bgtui, op_bgei, op_bgeui,
-	op_bbs, op_bbc,
+	op_bbs, op_bbc, op_beqz, op_bnez,
 
 	op_brz, op_brnz, op_br,
 	op_ldft, op_stft,
@@ -157,10 +171,11 @@ enum e_op {
 	op_rts, op_rtd,
 	op_push, op_pop, op_movs,
 	op_seq, op_sne, op_slt, op_sle, op_sgt, op_sge, op_sltu, op_sleu, op_sgtu, op_sgeu,
-	op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
+	op_sand, op_sor, op_andcm, op_orcm,
+	op_bra, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
 	op_feq, op_fne, op_flt, op_fle, op_fgt, op_fge,
 	op_gtu, op_geu, op_ltu, op_leu, op_nr,
-	op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_stdap,
+	op_bhi, op_bhs, op_blo, op_bls, op_ext, op_extu, op_lea, op_stdap,
 	op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label,
 	op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname,
 	// FISA64
@@ -177,6 +192,10 @@ enum e_op {
 	op_fs2d, op_i2d, op_i2t, op_ftoi, op_itof, op_qtoi,
 	op_fmov,
 	op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
+	op_fldo, op_fsto,
+	op_padd, op_psub, op_pmul, op_pdiv, op_ptoi, op_itop,
+	op_pldw, op_pldt, op_pldo, op_pstw, op_pstt, op_psto,
+	op_peq, op_plt, op_ple,
 	// Vector
 	op_lv, op_sv,
 	op_vadd, op_vsub, op_vmul, op_vdiv,
@@ -204,12 +223,15 @@ enum e_op {
 	op_stdp,
 	op_string,
 	op_rem,
+	op_rtl, op_rtx,
 	op_ptrdif, op_isnullptr,
 	// Built in functions
-	op_abs, op_mulf,
+	op_abs, op_mulf, op_bytendx, op_zxw, op_zxt,
+	op_wydendx,
 	op_phi,
     op_empty,
-		op_last
+		op_last,
+		op_dot = 32768
 };
 
 enum e_am {
@@ -240,6 +262,8 @@ enum e_am {
 	am_imm0 = 1 << 22,
 	am_novalue = 1 << 23,
 	am_creg = 1 << 24,
+	am_preg = 1 << 25,
+	am_mem_indirect = 1 << 26,
 	am_all = 0x1FF,
 };
 
@@ -287,7 +311,13 @@ enum e_hint {
 	begin_return_block,
 	end_return_block,
 	begin_stack_unlink,
-	end_stack_unlink
+	end_stack_unlink,
+	begin_save_regvars,
+	end_save_regvars,
+	begin_restore_regvars,
+	end_restore_regvars,
+	begin_regvar_init,
+	end_regvar_init
 };
 
 #define LR		1
@@ -381,14 +411,15 @@ enum e_hint {
 
 #define AL_BYTE			1
 #define AL_CHAR         2
-#define AL_SHORT        5
-#define AL_LONG         10
-#define AL_POINTER      10
-#define AL_FLOAT        10
-#define AL_DOUBLE       10
-#define AL_QUAD			20
+#define AL_SHORT        4
+#define AL_LONG         8
+#define AL_POINTER      8
+#define AL_FLOAT        8
+#define AL_DOUBLE       8
+#define AL_POSIT				8
+#define AL_QUAD			16
 #define AL_STRUCT       2
-#define AL_TRIPLE       15
+#define AL_TRIPLE       12
 
 #define TRUE	1
 #define FALSE	0

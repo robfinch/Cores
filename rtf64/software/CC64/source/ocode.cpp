@@ -35,7 +35,7 @@ void OCODE::Remove()
 bool OCODE::HasTargetReg() const
 {
 	if (insn) {
-		if (insn->opcode == op_call || insn->opcode == op_jal)
+		if (insn->opcode == op_call || insn->opcode == op_jal || insn->opcode==op_jsr)
 			return (oper1->type != bt_void);
 		return (insn->HasTarget());
 	}
@@ -59,11 +59,16 @@ bool OCODE::HasSourceReg(int regno) const
 	if (insn == nullptr)
 		return (false);
 	// Push has an implied target, so oper1 is actually a source.
-	if (oper1 && !insn->HasTarget() || opcode==op_push) {
-		if (oper1->preg==regno)
-			return (true);
-		if (oper1->sreg==regno)
-			return (true);
+	// For deposit, the target is also a source
+	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep) {
+		if (oper1) {
+			if (oper1->preg == regno)
+				return (true);
+			if (oper1->sreg == regno)
+				return (true);
+		}
+		else
+			return (false);
 	}
 	if (oper2 && oper2->preg==regno)
 		return (true);
@@ -77,8 +82,13 @@ bool OCODE::HasSourceReg(int regno) const
 		return (true);
 	if (oper4 && oper4->sreg==regno)
 		return (true);
+	// For pop the source operand is implied.
+	if (opcode == op_pop)
+		return (regno == regSP);
+	if (opcode == op_unlk)
+		return (regno == regFP);
 	// The call instruction implicitly has register arguments as source registers.
-	if (opcode==op_call) {
+	if (opcode==op_call || opcode==op_jsr) {
 		if (IsArgumentReg(regno))
 			return(true);
 	}
@@ -96,9 +106,12 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 	if (insn->HasTarget()) {
 		// Handle implicit targets
 		switch(insn->opcode) {
-		case op_pop:
-		case op_unlk:
 		case op_link:
+		case op_unlk:
+			*rg1 = regSP;
+			*rg2 = regFP;
+			return(0);
+		case op_pop:
 			*rg1 = regSP;
 			*rg2 = oper1->preg;
 			return(0);
@@ -114,6 +127,8 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 		case op_pea:
 		case op_push:
 		case op_ret:
+		case op_rts:
+		case op_jsr:
 		case op_call:
 			*rg1 = regSP;
 			*rg2 = 0;
@@ -201,7 +216,7 @@ void OCODE::OptRedor()
 
 bool OCODE::IsSubiSP()
 {
-	if (opcode == op_sub) {
+	if (opcode == op_sub || opcode == op_gcsub) {
 		if (oper3->mode == am_imm) {
 			if (oper1->preg == regSP && oper2->preg == regSP) {
 				return (true);
@@ -231,6 +246,7 @@ void OCODE::OptAdd()
 void OCODE::OptSubtract()
 {
 	OCODE *ip2;
+	OCODE* fsbi;
 
 	ip2 = fwd;
 	// Subtract zero from self.
@@ -265,15 +281,50 @@ void OCODE::OptSubtract()
 	//		}
 	//	}
 	//}
+	// Find the first subtract
+	fsbi = nullptr;
+	for (ip2 = fwd; ip2; ip2 = ip2->fwd) {
+		if (ip2->IsSubiSP()) {
+			fsbi = ip2;
+			break;
+		}
+	}
+	if (fsbi == nullptr)
+		return;
+	ip2 = ip2->fwd;
+	// Find subsequent subtracts
 	while (ip2->opcode == op_hint)
 		ip2 = ip2->fwd;
+	for (; ip2; ip2 = ip2->fwd) {
+		if (ip2->opcode == op_label)
+			return;
+		if (ip2->insn->IsFlowControl())
+			return;
+		if (!ip2->IsSubiSP()) {
+			if (ip2->oper1 && ip2->oper1->preg == regSP)
+				return;
+			if (ip2->oper2 && ip2->oper2->preg == regSP)
+				return;
+			if (ip2->oper3 && ip2->oper3->preg == regSP)
+				return;
+			if (ip2->oper4 && ip2->oper4->preg == regSP)
+				return;
+		}
+		else {
+			fsbi->oper3->offset->i += ip2->oper3->offset->i;
+			ip2->MarkRemove();
+		}
+	}
+	/*
 	if (IsSubiSP() && ip2->fwd)
 		if (ip2->IsSubiSP()) {
 			oper3->offset->i += ip2->oper3->offset->i;
 			ip2->MarkRemove();
 		}
-	if (IsSubiSP() && oper3->offset->i == 0)
-		MarkRemove();
+	*/
+	for (ip2 = fwd; ip2; ip2 = ip2->fwd)
+		if (ip2->IsSubiSP() && ip2->oper3->offset->i == 0)
+			MarkRemove();
 	return;
 	if (opcode == op_subui) {
 		if (oper3) {
@@ -360,7 +411,25 @@ void OCODE::OptLoad()
 	if (oper2->mode != am_imm)
 		return;
 	// This optimization is also caught by the code generator.
-	if (oper2->offset->i == 0) {
+	if (oper2->tp && oper2->tp->IsPositType()) {
+		if (oper2->offset->posit.val == 0) {
+			opcode = op_mov;
+			oper2->mode = am_preg;
+			oper2->preg = 0;
+			optimized++;
+			return;
+		}
+	}
+	else if (oper2->tp && oper2->tp->IsFloatType()) {
+		if (oper2->offset->f128.IsZero()) {
+			opcode = op_mov;
+			oper2->mode = am_fpreg;
+			oper2->preg = 0;
+			optimized++;
+			return;
+		}
+	}
+	else if (oper2->offset->i == 0) {
 		opcode = op_mov;
 		oper2->mode = am_reg;
 		oper2->preg = 0;
@@ -427,7 +496,7 @@ void OCODE::OptLoadByte()
 void OCODE::OptLoadHalf()
 {
 	if (fwd) {
-		if (fwd->opcode == op_sext32 || fwd->opcode == op_sxh ||
+		if (fwd->opcode == op_sext32 || fwd->opcode == op_sxt ||
 			(fwd->opcode == op_bfext && fwd->oper3->offset->i == 0 && fwd->oper4->offset->i == 31)) {
 			if (fwd->oper1->preg == oper1->preg) {
 				fwd->MarkRemove();
@@ -444,18 +513,20 @@ void OCODE::OptLoadHalf()
 void OCODE::OptLoadWord()
 {
 	OCODE *ip;
+	int rg1, rg2;
 
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->opcode == op_label)
 			break;
-		if (ip->opcode == op_jsr || ip->opcode == op_jlr)
+		if (ip->opcode == op_call || ip->opcode == op_jsr || ip->opcode == op_jal)
 			break;
 		if (ip->opcode == op_hint || ip->opcode == op_remark)
 			continue;
 		if (ip->HasSourceReg(oper1->preg))
 			break;
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
+			ip->GetTargetReg(&rg1, &rg2);
+			if (rg1 == oper1->preg || rg2==oper1->preg) {
 				MarkRemove();
 				optimized++;
 				break;
@@ -506,7 +577,7 @@ void OCODE::OptStore()
 {
 	OCODE *ip;
 
-	if (opcode == op_stp)
+	if (opcode == op_stt)
 		OptStoreHalf();
 	for (ip = fwd; ip; ip = ip->fwd)
 		if (ip->opcode != op_remark && ip->opcode != op_hint)
@@ -517,9 +588,9 @@ void OCODE::OptStore()
 		return;
 	if (!OCODE::IsEqualOperand(oper2, ip->oper2))
 		return;
-	if (opcode == op_stp && ip->opcode != op_ldp)
+	if (opcode == op_stt && ip->opcode != op_ldt)
 		return;
-	if (opcode == op_sth && ip->opcode != op_ldh)
+	if (opcode == op_sto && ip->opcode != op_ldo)
 		return;
 	if (ip->isVolatile)
 		return;
@@ -531,10 +602,8 @@ void OCODE::OptStore()
 
 void OCODE::OptBeq()
 {
-	OCODE* p;
-
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
-		if (back->back && back->back->opcode == op_ldi) {
+		if (back->back && back->back->opcode & 0x7fff == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
 				if (back->back->oper2->offset->i != 0) {
 					back->MarkRemove();
@@ -548,16 +617,14 @@ void OCODE::OptBeq()
 
 void OCODE::OptBne()
 {
-	OCODE* p;
-	
 	if (back && back->opcode == op_cmp && back->oper3->preg == regZero) {
-		if (back->back && back->back->opcode == op_ldi) {
+		if (back->back && back->back->opcode & 0x7fff == op_ldi) {
 			if (back->back->oper1->preg == back->oper2->preg) {
 				if (back->back->oper2->offset->i != 0) {
 					back->MarkRemove();
 					back->back->MarkRemove();
-					opcode = op_jmp;
-					insn = Instruction::Get(op_jmp);
+					opcode = op_bra;
+					insn = Instruction::Get(op_bra);
 					oper1 = oper2;
 					oper2 = nullptr;
 				}
@@ -599,8 +666,11 @@ void OCODE::OptUctran()
 	}
 }
 
+// JAL is used only to call routines so the Uctran opt is not valid.
+// The JAL is encoded as a JMP for unconditional transfers.
 void OCODE::OptJAL()
 {
+	return;
 	if (oper1->preg != 0)
 		return;
 	OptUctran();
@@ -752,6 +822,29 @@ void PeepoptMuldiv(OCODE *ip, int op)
 	optimized++;
 }
 
+// Search backwards for the same set operation.
+
+void OCODE::OptScc()
+{
+	OCODE* ip;
+
+	for (ip = back; ip; ip = ip->back) {
+		if (ip->opcode == op_label)
+			return;
+		if (ip->insn->IsFlowControl())
+			return;
+		if (ip->insn->IsSetInsn()) {
+			if (ip->opcode != opcode)
+				return;
+			if (IsEqualOperand(ip->oper1, oper1) && IsEqualOperand(ip->oper2, oper2) && IsEqualOperand(ip->oper3, oper3)) {
+				MarkRemove();
+				optimized++;
+				return;
+			}
+		}
+	}
+}
+
 void OCODE::OptDoubleTargetRemoval()
 {
 	OCODE *ip2;
@@ -779,6 +872,9 @@ void OCODE::OptDoubleTargetRemoval()
 		return;
 	//if (rg3 == regSP)
 	//	return;
+	// Set type instructions can merge results into previous target cr.
+	if (ip2->insn->IsSetInsn() && ip2->insn2 != nullptr)
+		return;
 	MarkRemove();
 	optimized++;
 }
@@ -826,11 +922,13 @@ void OCODE::OptIndexScale()
 		// abort optimization.
 		else if (frwd->oper1) {
 			if (frwd->HasTargetReg()) {
-				if (frwd->oper1->preg == back->oper1->preg) {
+				int rg1, rg2;
+				frwd->GetTargetReg(&rg1, &rg2);
+				if (rg1 == back->oper1->preg || rg2 == back->oper1->preg) {
 					frwd = nullptr;
 					break;
 				}
-				if (frwd->oper1->preg == back->oper2->preg) {
+				if (rg1 == back->oper2->preg || rg2 == back->oper2->preg) {
 					frwd = nullptr;
 					break;
 				}
@@ -966,16 +1064,17 @@ void OCODE::OptHint()
 		// It optimized it to:
 		// ldi  $t1,#0
 		// It didn't set the back->oper1 properly.
-		return;
 		if (fwd == nullptr || back == nullptr)
 			break;
+//		if (back->opcode != op_mov || fwd->opcode != op_mov) {
 		if (fwd->opcode != op_mov) {
-			MarkRemove();
 			break;
 		}
 		if (IsEqualOperand(fwd->oper2, back->oper1)) {
 			if (back->HasTargetReg()) {
-				if (!(fwd->oper1->mode == am_fpreg && back->opcode == op_ldi)) {
+				int rg1, rg2;
+				back->GetTargetReg(&rg1, &rg2);
+				if (!(fwd->oper1->mode == am_fpreg && back->opcode & 0x7fff == op_ldi)) {
 					// Search forward to see if the target register is used anywhere.
 					for (frwd = fwd->fwd; frwd; frwd = frwd->fwd) {
 						// If the register has been targeted again, it is okay to opt.
@@ -996,10 +1095,6 @@ void OCODE::OptHint()
 					optimized++;
 				}
 			}
-		}
-		else {
-			MarkRemove();
-			optimized++;
 		}
 		break;
 
@@ -1088,13 +1183,13 @@ void OCODE::OptLdi()
 
 	if (fwd) {
 		if (oper2->offset->constflag) {
-			if (fwd->opcode == op_sxh) {
-				if (oper2->offset->i >= -2147483648L && oper2->offset->i <= 2147483647L) {
+			if (fwd->opcode == op_sxt) {
+				if (oper2->offset->i >= -(int64_t)2147483648L && oper2->offset->i <= 2147483647L) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_sxc) {
+			if (fwd->opcode == op_sxw) {
 				if (oper2->offset->i >= -32768 && oper2->offset->i <= 32767) {
 					fwd->MarkRemove();
 					optimized++;
@@ -1106,13 +1201,13 @@ void OCODE::OptLdi()
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_zxh) {
+			if (fwd->opcode == op_zxt) {
 				if (oper2->offset->i >= 0 && oper2->offset->i <= 4294967295L) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_zxc) {
+			if (fwd->opcode == op_zxw) {
 				if (oper2->offset->i >= 0 && oper2->offset->i <= 65535) {
 					fwd->MarkRemove();
 					optimized++;
@@ -1128,8 +1223,10 @@ void OCODE::OptLdi()
 	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
+			int rg1, rg2;
+			ip->GetTargetReg(&rg1, &rg2);
+			if (ip->opcode & 0x7fff == op_ldi) {
+				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();
 						optimized++;
@@ -1178,8 +1275,10 @@ void OCODE::OptLea()
 	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
-			if (ip->oper1->preg == oper1->preg) {
-				if (ip->opcode == op_ldi) {
+			int rg1, rg2;
+			ip->GetTargetReg(&rg1, &rg2);
+			if (ip->opcode & 0x7fff == op_ldi) {
+				if (rg1 == oper1->preg || rg2 == oper1->preg) {
 					if (ip->oper2->offset->i == oper2->offset->i) {
 						ip->MarkRemove();
 						optimized++;
@@ -1194,10 +1293,12 @@ void OCODE::OptLea()
 	}
 }
 
+// Converts two separate register pushes into one operation.
 void OCODE::OptPush()
 {
 	OCODE *ip;
 
+	return;
 	ip = back;
 	if (ip && !ip->remove) {
 		if (ip->opcode == op_push) {
@@ -1281,7 +1382,8 @@ OCODE *OCODE::loadHex(txtiStream& ifs)
 void OCODE::store(txtoStream& ofs)
 {
 	static BasicBlock *b = nullptr;
-	int op = opcode;
+	int op = opcode & 0x7fff;
+	int dot = opcode & 0x8000;
 	Operand *ap1, *ap2, *ap3, *ap4;
 	ENODE *ep;
 	int predreg = pregreg;
@@ -1323,7 +1425,7 @@ void OCODE::store(txtoStream& ofs)
 			//ofs.printf("%6.6s\t", "");
 			ofs.printf("  ");	// 2 spaces
 			if (insn) {
-				if (opcode == op_string) {
+				if (op == op_string) {
 					ofs.printf("dc");
 				}
 				else
@@ -1338,16 +1440,20 @@ void OCODE::store(txtoStream& ofs)
 				if (length <= 16) {
 					switch (length) {
 					case 1:	sprintf_s(buf, sizeof(buf), ".b"); nn += 2; break;
-					case 2:	sprintf_s(buf, sizeof(buf), ".c"); nn += 2; break;
-					case 4:	sprintf_s(buf, sizeof(buf), ".h"); nn += 2; break;
+					case 2:	sprintf_s(buf, sizeof(buf), ".w"); nn += 2; break;
+					case 4:	sprintf_s(buf, sizeof(buf), ".t"); nn += 2; break;
 					}
 				}
 				else {
-					if (length != 'w' && length != 'W') {
+					if (length != 'w' && length != 'W' && length != ' ') {
 						sprintf_s(buf, sizeof(buf), ".%c", length);
 						nn += 2;
 					}
 				}
+			}
+			if (dot) {
+				ofs.printf(".");
+				nn = nn + 1;
 			}
 			ofs.write(buf);
 			// The longest mnemonic is 7 chars

@@ -58,7 +58,7 @@ import posit::*;
 module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, div_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
-parameter RSTPC = 64'hFFFFFFFFFFFC0100;
+parameter RSTPC = 64'hFFFFFFFFFFFC0200;
 parameter pL1CacheLines = 64;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
 input [7:0] hartid_i;
@@ -98,7 +98,7 @@ parameter LOW = 1'b0;
 parameter HIGH = 1'b1;
 
 integer n;
-reg [1:0] dcyc;
+reg [2:0] dcyc;
 reg [5:0] istate, dstate, rstate, estate, mstate, wstate;
 parameter IFETCH1 = 6'd1;
 parameter IFETCH2 = 6'd2;
@@ -168,6 +168,7 @@ reg ibrpred, dbrpred, rbrpred, ebrpred, mbrpred, wbrpred, tbrpred, ubrpred, vbrp
 reg e_bubble, m_bubble, w_bubble, t_bubble, u_bubble, v_bubble;
 reg exception = FALSE;
 reg [2:0] loop_mode;
+wire is_loop_mode = |loop_mode;
 wire [7:0] opcode = ir[7:0];
 wire [7:0] ropcode = rir[7:0];
 wire [7:0] eopcode = eir[7:0];
@@ -199,6 +200,7 @@ wire [WID-1:0] irfoRs1, irfoRs2, irfoRs3, irfoRd;
 wire [WID-1:0] frfoa, frfob, frfoc;
 wire [WID-1:0] prfoa, prfob, prfoc;
 reg [WID-1:0] ia,ib,ic,id,imm,dimm;
+reg [18:0] limm;
 reg [WID-1:0] ria,rib,ric,rid,rimm;
 reg [WID-1:0] mia, wia, mid, mib, wib;
 reg [WID:0] res;
@@ -406,12 +408,12 @@ reg [AWID-1:0] m_badaddr, w_badaddr;
 reg [AWID-1:0] badaddr [0:7];
 reg [31:0] status [0:7];
 wire mprv = status[5][17];
-wire uie = status[5][0];
-wire sie = status[5][1];
-wire hie = status[5][2];
-wire mie = status[5][3];
-wire iie = status[5][4];
-wire die = status[5][5];
+reg uie;
+reg sie;
+reg hie;
+reg mie;
+reg iie;
+reg die;
 reg [31:0] gcie;
 reg [WID-1:0] scratch [0:7];
 reg [39:0] instret;
@@ -419,7 +421,7 @@ reg [39:0] instfetch;
 reg [AWID-1:0] epc [0:31];
 reg [AWID-1:0] next_epc;
 reg [31:0] pmStack;
-reg [31:0] rsStack;
+reg [39:0] rsStack;
 reg [4:0] rprv;
 reg [4:0] ASID;
 reg [23:0] TaskId;
@@ -462,7 +464,7 @@ reg [AWID-1:0] dbad [0:3];
 reg [63:0] dbcr;
 reg [3:0] dbsr;
 
-reg d_lea, d_cache, d_jsr, d_rts, d_push_reg, d_pushc;
+reg d_lea, d_cache, d_jsr, d_rts, d_push_reg, d_push, d_pushc, d_pop, d_link, d_unlink;
 reg d_cmp,d_set,d_tst,d_chk,d_mov,d_stot,d_stptr,d_setkey,d_gcclr;
 reg d_shiftr, d_st, d_ld, d_cbranch, d_bra, d_wha;
 reg d_pushq, d_popq, d_peekq, d_statq;
@@ -1353,7 +1355,7 @@ begin
 	ld_time <= 1'b0;
 	wc_times <= 1'b0;
 	wc_time_irq_clr <= 6'h3F;
-	pmStack <= 12'b001001001110;
+	pmStack <= 16'b0001_0001_1010;
 	nmif <= 1'b0;
 	ldd <= 1'b0;
 	wrpagemap <= 1'b0;
@@ -1381,7 +1383,7 @@ begin
 	Rs1x1 <= 5'd31;
 	Rs2x1 <= 5'd31;
 	Rs3x1 <= 5'd31;
-	rsStack <= 32'hFFFFFFFF;
+	rsStack <= 40'hFFFFFFFC1F;
 	set_wfi <= 1'b0;
 	next_epc <= 32'hFFFFFFFF;
 	instret <= 40'd0;
@@ -1395,6 +1397,12 @@ begin
 	rd_ci <= FALSE;
 	loop_mode <= 3'd0;
 	exception <= FALSE;
+	uie <= 1'b0;
+	sie <= 1'b0;
+	hie <= 1'b0;
+	mie <= 1'b0;
+	iie <= 1'b0;
+	die <= 1'b0;
   end
 end
 endtask
@@ -1483,8 +1491,8 @@ if (rst_i) begin
 	dRs1x <= 5'd31;
 	dRs2x <= 5'd31;
 	dRs3x <= 5'd31;
-	i_cause <= 8'h00;
-	d_cause <= 8'h00;
+	i_cause <= 32'h00;
+	d_cause <= 32'h00;
 end
 else begin
 `ifdef SIM
@@ -1624,7 +1632,7 @@ IFETCH3:
   		igoto (IFETCH3a);
 `ifdef RTF64_TLB  		
   		if (tlbmiss) begin
-			  iException(32'h80000004,ipc2);
+  			i_cause <= 32'h80000004;
 			  badaddr[3'd5] <= ipc2;
 			  vpa_o <= FALSE;
 			end
@@ -1796,22 +1804,16 @@ IFETCH_WAIT:
     dRs1x <= Rs1x;
     dRs2x <= Rs2x;
     dRs3x <= Rs3x;
-		if (nmif) begin
-			nmif <= 1'b0;
-			iException(32'h800000FE,pc);
-			pc <= tvec[3'd5] + 8'hFC;
-		end
- 		else if (irq_i & die) begin
-			iException({24'h800000,cause_i},pc);
-		end
-		else if (mip[7] & miex[7] & die) begin
-			iException(32'h800000F2,pc);  // timer IRQ
-		end
-		else if (mip[3] & miex[3] & die) begin
-			iException(32'h800000F0, pc); // software IRQ (SYS)
-		end
+		if (nmif)
+			i_cause <= 32'h800000FE;
+ 		else if (irq_i & die)
+ 		  i_cause <= {24'h800000,cause_i};
+		else if (mip[7] & miex[7] & die)
+		  i_cause <= 32'h800000F2;
+		else if (mip[3] & miex[3] & die)
+		  i_cause <= 32'h800000F0;
 		else if (uip[0] & gcie[ASID] & die) begin
-			iException(32'h800000F3, pc); // garbage collect IRQ
+		  i_cause <= 32'hC00000F3;
 			uip[0] <= 1'b0;
 		end
 		instfetch <= instfetch + 2'd1;
@@ -1831,14 +1833,14 @@ IFETCH_WAIT:
     case(loop_mode)
     3'd0: begin ir <= iir; dpc <= ipc2; dilen <= ilen; dbrpred <= ibrpred; end // loop mode not active
     3'd1: ;//begin ir <= rir; dpc <= rpc; dilen <= rilen; dbrpred <= rbrpred; end
-    3'd2: begin ir <= eir; dpc <= expc; dilen <= eilen; dbrpred <= ebrpred; end
-    3'd3: begin ir <= mir; dpc <= mpc; dilen <= milen; dbrpred <= mbrpred; end
-    3'd4: begin ir <= wir; dpc <= wpc; dilen <= wilen; dbrpred <= wbrpred; end
-    3'd5: begin ir <= tir; dpc <= tpc; dilen <= tilen; dbrpred <= tbrpred; end
-    3'd6: begin ir <= uir; dpc <= upc; dilen <= uilen; dbrpred <= ubrpred; end
-    3'd7: begin ir <= vir; dpc <= vpc; dilen <= vilen; dbrpred <= vbrpred; end
+    3'd2: begin ir <= eir; dpc <= expc; dilen <= eilen; dbrpred <= TRUE; end
+    3'd3: begin ir <= mir; dpc <= mpc; dilen <= milen; dbrpred <= TRUE; end
+    3'd4: begin ir <= wir; dpc <= wpc; dilen <= wilen; dbrpred <= TRUE; end
+    3'd5: begin ir <= tir; dpc <= tpc; dilen <= tilen; dbrpred <= TRUE; end
+    3'd6: begin ir <= uir; dpc <= upc; dilen <= uilen; dbrpred <= TRUE; end
+    3'd7: begin ir <= vir; dpc <= vpc; dilen <= vilen; dbrpred <= TRUE; end
     endcase
-    if (|loop_mode) begin
+    if (is_loop_mode) begin
       ifetch_done <= TRUE;
       igoto(IFETCH_WAIT);
     end
@@ -1863,7 +1865,7 @@ endtask
 task tDecode;
 begin
 if (rst_i) begin
-  dcyc <= 2'd0;
+  dcyc <= 3'd0;
   dpc <= RSTPC;
   illegal_insn <= FALSE;
   rRs1 <= 7'd0;
@@ -1927,6 +1929,13 @@ DECODE:
     wrra <= 1'b0;
     dwrsrf <= FALSE;
     dmod_pc <= FALSE;
+    if (dcyc==3'd0) begin
+      d_link <= FALSE;
+      d_unlink <= FALSE;
+      d_push <= FALSE;
+      d_pushc <= FALSE;
+      d_pop <= FALSE;
+    end
     d_cmp <= 1'b0;
     d_set <= 1'b0;
     d_tst <= 1'b0;
@@ -2253,7 +2262,7 @@ DECODE:
     `SOR:  begin d_set <= 1'b1; Rd <= {9'b1_00000_100,ir[9:8]}; Cd <= ir[9:8]; dimm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= 1'b1; illegal_insn <= 1'b0; end
 
     `ADD: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `ADD5:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{59{ir[22]}},ir[22:18]}; wrcrf <= ir[23]; illegal_insn <= 1'b0; end
+    `ADD5:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{59{ir[22]}},ir[22:18]}; wrcrf <= ir[23]; illegal_insn <= 1'b0; dcyc <= 3'd0; end
     `ADD22:begin Rd <= {1'b0,dRdx,ir[12:8]}; Rs1 <= {1'b0,dRs1x,ir[12:8]}; wrirf <= 1'b1; dimm <= {{41{ir[22]}},ir[22:13],13'd0}; wrcrf <= ir[23]; illegal_insn <= 1'b0; end
     `ADD2R:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; wrcrf <= ir[23]; illegal_insn <= 1'b0; end
     `SUBF:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
@@ -2264,8 +2273,8 @@ DECODE:
     `OR5: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= ir[22:18]; wrcrf <= ir[23]; illegal_insn <= 1'b0; end
     `OR2R:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; wrcrf <= ir[23]; illegal_insn <= 1'b0; end
     `EOR: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{1'b0}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `GCSUB: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{1'b0}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `GCSUB10: begin Rd <= {1'b0,dRdx,5'd31}; Rs1 <= {1'b0,dRs1x,5'd31}; wrirf <= 1'b1; dimm <= {{54{1'b0}},ir[14:8],3'd0}; wrcrf <= ir[15]; illegal_insn <= 1'b0; end
+    `GCSUB: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{1'b0}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; dcyc <= 3'd0; end
+    `GCSUB10: begin Rd <= {1'b0,dRdx,5'd31}; Rs1 <= {1'b0,dRs1x,5'd31}; wrirf <= 1'b1; dimm <= {{54{1'b0}},ir[14:8],3'd0}; wrcrf <= ir[15]; illegal_insn <= 1'b0; dcyc <= 3'd0; end
     `BIT: begin Cd <= ir[ 9:8]; wrcrf <= 1'b1; dimm <= {{51{ir[30]}},ir[30:18]}; illegal_insn <= 1'b0; end
     `BYTNDX: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{51{ir[30]}},ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
     `WYDNDX: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= {{48{ir[34]}},ir[34:32],ir[30:18]}; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
@@ -2273,10 +2282,10 @@ DECODE:
     `CHK: begin Rd <= {1'b0,dRdx,ir[12:8]}; dimm <= {{51{1'b1}},ir[30:18]}; wrcrf <= ir[31]; d_chk <= TRUE; illegal_insn <= 1'b0; end
 
     `PERM:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; wrcrf <= ir[31]; illegal_insn <= 1'b0; end
-    `DEP: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depi <= ~ir[30]; d_flipi <= ir[30]; end
-    `DEPI: begin Rd <={1'b0,dRdx, ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depii <= TRUE; end
-    `EXT: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_exti <= ~ir[30]; d_extui <= ir[30]; end
-    `FFO: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_ffoi <= ~ir[30]; d_ffor <= ir[30]; end
+    `DEP: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depi <= ~ir[30]; d_flipi <= ir[30]; wrcrf <= ir[31]; end
+    `DEPI:begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_depii <= TRUE; wrcrf <= ir[31]; end
+    `EXT: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_exti <= ~ir[30]; d_extui <= ir[30]; wrcrf <= ir[31]; end
+    `FFO: begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_ffoi <= ~ir[30]; d_ffor <= ir[30]; wrcrf <= ir[31]; end
     `ADDUI,`ORUI,`AUIIP: begin Rd <= {1'b0,dRdx,ir[12:8]}; Rs1 <= {1'b0,dRs1x,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],13'd0}; illegal_insn <= 1'b0; end
     `ANDUI: begin Rd <= {1'b0,dRdx,ir[12:8]}; Rs1 <= {1'b0,dRs1x,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],{13{1'd1}}}; illegal_insn <= 1'b0; end
     `CSR: if (omode >= ir[35:33]) begin Rd <= {1'b0,dRdx,ir[12:8]}; wrirf <= 1'b1; dimm <= ir[17:13]; illegal_insn <= 1'b0; end
@@ -2371,7 +2380,7 @@ DECODE:
       // Must be at a higher operating mode in order to return to a lower one.
       if (rsStack[4:0] > rsStack[9:5] && rsStack[4:0] > 5'd25) begin
         dmod_pc <= dval;
-			  rsStack <= {5'd31,rsStack[29:5]};
+			  rsStack <= {5'd31,rsStack[39:5]};
 			  rprv <= 5'h0;
 			  if (dval) begin
 			    Rdx <= rsStack[9:5];
@@ -2389,7 +2398,7 @@ DECODE:
         Rd <= {1'b0,dRdx,ir[12:8]};
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
-        if (dbrpred & ~|loop_mode) begin
+        if (dbrpred & ~is_loop_mode) begin
           dmod_pc <= dval;
           dnext_pc <= dpc + {{52{ir[31]}},ir[31:21]};
           //tLoop(dpc + {{52{ir[31]}},ir[31:21]});
@@ -2399,7 +2408,7 @@ DECODE:
       begin
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
-        if (dbrpred & ~|loop_mode) begin
+        if (dbrpred & ~is_loop_mode) begin
           dmod_pc <= dval;
           dnext_pc <= dpc + {{58{ir[15]}},ir[15:10]};
           //tLoop(dpc + {{58{ir[15]}},ir[15:10]});
@@ -2407,11 +2416,11 @@ DECODE:
       end
     `BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BCS,`BCC,`BLE,`BGT,`BLEU,`BGTU,`BOD,`BPS:
       begin
-        if (dbrpred & ~|loop_mode) begin
+        if (dbrpred & ~is_loop_mode) begin
           dmod_pc <= dval;
-          dnext_pc <= dpc + {{51{ir[23]}},ir[22:11]};
+          dnext_pc <= dpc + {{51{ir[23]}},ir[23:11]};
           if (ir[10])
-            tLoop(dpc + {{51{ir[23]}},ir[22:11]});
+            tLoop(dpc + {{51{ir[23]}},ir[23:11]});
         end
         d_cbranch <= TRUE;
         illegal_insn <= 1'b0;
@@ -2419,7 +2428,7 @@ DECODE:
     `BRA:
       begin
         d_bra <= TRUE;
-        if (~|loop_mode) begin
+        if (~is_loop_mode) begin
           dmod_pc <= dval;
           dnext_pc <= dpc + {{51{ir[23]}},ir[23:11]};
           if (ir[10])
@@ -2429,7 +2438,7 @@ DECODE:
       end
     `BEQZ,`BNEZ:
       begin
-        if (dbrpred & ~|loop_mode) begin
+        if (dbrpred & ~is_loop_mode) begin
           dmod_pc <= dval;
           dnext_pc <= dpc + {{51{ir[23]}},ir[23:11]};
           if (ir[10])
@@ -2445,13 +2454,19 @@ DECODE:
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     `LDBS,`LDBUS,`LDWS,`LDWUS,`LDTS,`LDTUS,`LDOS,`LDORS:
       begin
-        Rd <= {1'b0,dRdx,ir[12:8]};
-        Rs1 <= {1'b0,dRs1x,5'd30|ir[13]};
-        wrirf <= 1'b1;
-        dimm <= {{52{ir[22]}},ir[22:14],3'd0};
-        wrcrf <= ir[23];
-        illegal_insn <= 1'b0;
-        d_ld <= TRUE;
+        case(dcyc)
+        3'd0,3'd2:
+          begin
+            Rd <= {1'b0,dRdx,ir[12:8]};
+            Rs1 <= {1'b0,dRs1x,5'd30|ir[13]};
+            wrirf <= 1'b1;
+            dimm <= {{52{ir[22]}},ir[22:14],3'd0};
+            wrcrf <= ir[23];
+            illegal_insn <= 1'b0;
+            d_ld <= TRUE;
+          end
+        default:  ;
+        endcase
       end
     `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDO,`LDOR:
       begin
@@ -2518,6 +2533,61 @@ DECODE:
         illegal_insn <= 1'b0;
         d_ld <= TRUE;
         d_lea <= TRUE;
+      end
+    `POP:
+      begin
+        d_pop <= TRUE;
+        case(ir[14:13])
+        2'b11:
+          casez(ir[12:8])
+          5'b0000?: begin rad <= ir[8]; wrra <= 1'b1; end
+          5'b0001?: begin rad <= ir[8]; wrca <= 1'b1; end
+          5'b100??: begin Cd <= ir[9:8]; wrcrf <= 1'b1; end
+          5'b11101: begin wrcrf32 <= 1'b1; end
+          endcase
+        2'b00:
+          begin
+            wrirf <= 1'b1;
+            wrcrf <= ir[15];
+            Rd <= {1'b0,dRdx,ir[12:8]};
+            Rs1 <= {1'b0,dRs1x,5'd31};
+          end
+        2'b01:
+          begin
+            wrirf <= 1'b1;
+            wrcrf <= ir[15];
+            Rd <= {1'b0,fltreg,ir[12:8]};
+            Rs1 <= {1'b0,dRs1x,5'd31};
+          end
+        2'b10:
+          begin
+            wrirf <= 1'b1;
+            wrcrf <= ir[15];
+            Rd <= {1'b0,pstreg,ir[12:8]};
+            Rs1 <= {1'b0,dRs1x,5'd31};
+          end
+        default:
+          begin
+            wrirf <= 1'b1;
+            wrcrf <= ir[15];
+            Rd <= {1'b0,dRdx,ir[12:8]};
+            Rs1 <= {1'b0,dRs1x,5'd31};
+          end
+        endcase
+        dimm <= 64'd0;
+        d_ld <= TRUE;
+        illegal_insn <= 1'b0;
+      end
+    `LINK:
+      begin
+        d_link <= TRUE;
+        limm <= {ir[23:8],3'd0};
+        Rd <= {1'b0,dRdx,5'd31}; Rs1 <= {1'b0,dRs1x,5'd31}; dimm <= 64'd8; wrirf <= TRUE; dcyc <= 3'd1;
+      end
+    `UNLINK:
+      begin
+        d_unlink <= TRUE;
+        Rd <= {1'b0,dRdx,5'd31}; Rs1 <= {1'b0,dRs1x,5'd30}; wrirf <= TRUE; dcyc <= 3'd1;  // MOV SP,FP
       end
     `STBS,`STWS,`STTS,`STOS,`STOCS:  
       begin
@@ -2586,50 +2656,21 @@ DECODE:
         d_st <= TRUE;
       end
     `PUSH:
-      case(dcyc)
-      2'd0:
-        begin
-          Rd <= {1'b0,dRdx,5'd31};
-          Rs1 <= {1'b0,dRs1x,5'd31};
-          dimm <= 8'h8;
-          dcyc <= 2'd1;
-          illegal_insn <= 1'b0;
-        end
-      2'd1:
-        begin
-          ir <= {10'd0,1'd1,rir[12:8],`STOS};
-          Rd <= {1'b0,dRdx,rir[12:8]};
-          Rs1 <= {1'b0,dRs1x,5'd31};
-          dimm <= 64'd0;
-          illegal_insn <= 1'b0;
-          d_st <= TRUE;
-          dcyc <= 2'd0;
-        end
-      default:  ;
-      endcase
+      begin
+        Rd <= {1'b0,dRdx,5'd31};
+        Rs1 <= {1'b0,dRs1x,5'd31};
+        dimm <= 8'h8;
+        dcyc <= 3'd1;
+        illegal_insn <= 1'b0;
+      end
     `PUSHC:
-      case(dcyc)
-      2'd0:
-        begin
-          Rd <= {1'b0,dRdx,5'd31};
-          Rs1 <= {1'b0,dRs1x,5'd31};
-          dimm <= 8'h8;
-          dcyc <= 2'd1;
-          illegal_insn <= 1'b0;
-        end
-      2'd1:
-        begin
-          ir <= {10'd0,1'd1,5'd0,`STOS};
-          Rd <= 11'd0;
-          Rs1 <= {1'b0,dRs1x,5'd31};
-          dimm <= 64'd0;
-          illegal_insn <= 1'b0;
-          d_st <= TRUE;
-          dcyc <= 2'd0;
-          d_pushc <= TRUE;
-        end
-      default:  ;
-      endcase
+      begin
+        Rd <= {1'b0,dRdx,5'd31};
+        Rs1 <= {1'b0,dRs1x,5'd31};
+        dimm <= 8'h8;
+        dcyc <= 3'd1;
+        illegal_insn <= 1'b0;
+      end
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     // Floating point ops
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -2723,6 +2764,56 @@ DECODE_WAIT:  ;
 default: ;
 endcase
   if (advance_idr_pipe) begin
+    if (d_push) begin
+      case(dcyc)
+      3'd0: ;
+      3'd1: begin ir <= {10'd0,1'd1,rir[12:8],`STOS}; dcyc <= 3'd2; end
+      3'd2: begin ir <= `NOP; dcyc <= 3'd0; end
+      default:  ;
+      endcase
+    end
+    else if (d_pushc) begin
+      case(dcyc)
+      3'd0: ;
+      3'd1: begin ir <= {10'd0,1'd1,5'd0,`STOS}; dcyc <= 3'd2; end
+      3'd2: begin ir <= `NOP; dcyc <= 3'd0; end
+      default:  ;
+      endcase
+    end
+    else if (d_pop) begin
+      case(dcyc)
+      3'd0: ;
+      3'd1: begin ir <= {5'd8,5'd31,5'd31,`ADD5}; dcyc <= 3'd2; end
+      3'd2: begin ir <= `NOP; dcyc <= 3'd0; end
+      endcase
+    end
+    else if (d_link) begin
+      case(dcyc)
+      3'd0: ; // SUB SP,SP,#8
+      3'd1: begin ir <= {10'd0,1'd1,5'd30,`STOS}; dcyc <= 3'd2; end // STO FP,[$SP]
+      3'd2: begin ir <= {5'd0,5'd31,5'd30,`OR2R}; dcyc <= 3'd3; end // MOV FP,SP
+      3'd3:
+        begin
+          if (limm <= 19'h000FF)
+            ir <= {limm,`GCSUB10};
+          else if ({limm,3'b0} <= 19'h00FFF)
+            ir <= {limm[10:0],3'b0,5'd31,5'd31,`GCSUB};
+          else
+            illegal_insn <= 1'b1;
+          dcyc <= 3'd4;
+        end
+      3'd4: begin ir <= `NOP; dcyc <= 3'd0; end
+      endcase
+    end
+    else if (d_unlink) begin
+      case(dcyc)
+      3'd0: ; // MOV SP,FP (above)
+      3'd1: begin ir <= {10'd0,1'd1,5'd30,`LDOS}; dcyc <= 3'd2; end // LDO FP,[$SP]
+      3'd2: begin ir <= {5'd8,5'd31,5'd31,`ADD5}; dcyc <= 3'd3; end // ADD SP,SP,#8
+      3'd3: begin ir <= `NOP; dcyc <= 3'd0; end
+      default:  dcyc <= 3'd0;
+      endcase
+    end
     rval <= dval;
     rimm <= dimm;
     rRs1 <= Rs1;
@@ -4540,6 +4631,15 @@ if (estate==EXECUTE)
       casez({eir[35:33],eir[29:18]})
       15'b???_????_0000_0010:  res <= tick;
       15'b001_????_0000_0011:  res <= pta;
+      15'b???_????_0000_0100:
+        case(eir[35:33])
+        3'd0: res <= {63'd0,uie};
+        3'd1: res <= {62'd0,sie,uie};
+        3'd2: res <= {61'd0,hie,sie,uie};
+        3'd3: res <= {60'd0,mie,hie,sie,uie};
+        3'd4: res <= {59'd0,iie,mie,hie,sie,uie};
+        3'd5: res <= {58'd0,die,iie,mie,hie,sie,uie};
+        endcase
       15'b001_????_0001_0000:  res <= TaskId;
       15'b001_????_0001_1111:  res <= ASID;
       15'b001_????_0010_0000:  res <= {key[2],key[1],key[0]};
@@ -4584,8 +4684,8 @@ if (estate==EXECUTE)
     begin
       if (takb & !ebrpred) begin
         emod_pc <= TRUE;
-        enext_pc <= expc + {{50{eir[23]}},eir[23:10]};
-        if (eir[23:10]==14'd0) begin
+        enext_pc <= expc + {{51{eir[23]}},eir[23:11]};
+        if (eir[23:11]==13'd0) begin
           $display("FLT_BT");
           e_cause <= `FLT_BT;
         end
@@ -4633,6 +4733,8 @@ if (estate==EXECUTE)
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   `PUSH:  res <= ia - imm;
   `PUSHC: res <= ia - imm;
+  `LINK:  res <= ia - imm;
+  `UNLINK:  res <= ia;
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4765,7 +4867,7 @@ MEMORY1:
     else begin
       // Must have a memory op to continue.
       if (mopcode[7:4]==4'h8 || mopcode[7:4]==4'h9 || mopcode[7:4]==4'hA || mopcode[7:4]==4'hB ||
-        mopcode==`JSR || mopcode==`JSR18 || mopcode==`RTS || mopcode==`RTX) begin
+        mopcode==`POP || mopcode==`JSR || mopcode==`JSR18 || mopcode==`RTS || mopcode==`RTX) begin
         if (iaccess_pending)
           mstate <= mstate;
         else begin
@@ -5065,6 +5167,7 @@ DATA_ALIGN:
     `LDOT:  begin mcrres <= datis[31:0]; mrares <= datis[AWID-1:0]; adv_mem(1'b0); end
     `LDOR,`LDORS: mres <= datis[63:0];
     `FLDO,`PLDO:  mres <= datis[63:0];
+    `POP: mres <= datis[63:0];
     `RTS:    
       begin
         mmod_pc <= TRUE;
@@ -5159,8 +5262,11 @@ WRITEBACK:
   		if (willegal_insn)
   		  wException(32'd37, wpc);
   		else if (|w_cause) begin
+  		  case(w_cause[7:0])
+  		  8'hFE:  nmif <= 1'b0;
+  		  default:  ;
+  		  endcase
   		  wException(w_cause, wpc);
-  		  badaddr[3'd5] <= w_badaddr;
   	  end
       else if (wval) begin
         if (wRd[10]==1'b1) begin
@@ -5201,7 +5307,7 @@ WRITEBACK:
         `RTE:
           begin
     				pmStack <= {4'b1010,pmStack[31:4]};
-    				rsStack <= {5'd31,rsStack[29:5]};
+    				rsStack <= {5'd31,rsStack[39:5]};
     				Rdx <= rsStack[9:5];
     				Rs1x <= rsStack[9:5];
     				Rs2x <= rsStack[9:5];
@@ -5429,6 +5535,16 @@ begin
   3'd1,3'd5:
     casez({wir[35:33],wir[29:18]})
     15'b001_????_0000_0011:  pta <= wia;
+    15'b???_????_0000_0100:
+      case(wir[35:33])
+      3'd0: uie <= wia[0];
+      3'd1: begin uie <= wia[0]; sie <= wia[1]; end
+      3'd2: begin uie <= wia[0]; sie <= wia[1]; hie <= wia[2]; end
+      3'd3: begin uie <= wia[0]; sie <= wia[1]; hie <= wia[2]; mie <= wia[3]; end
+      3'd4: begin uie <= wia[0]; sie <= wia[1]; hie <= wia[2]; mie <= wia[3]; iie <= wia[4]; end
+      3'd5: begin uie <= wia[0]; sie <= wia[1]; hie <= wia[2]; mie <= wia[3]; iie <= wia[4]; die <= wia[5]; end
+      default:  ;
+      endcase
     15'b001_????_0001_0000:  TaskId <= wia;
     15'b001_????_0001_1111:  ASID <= wia;
     15'b001_????_0010_0000:  begin key[0] <= wia[19:0]; key[1] <= wia[39:20]; key[2] <= wia[59:40]; end
@@ -5457,6 +5573,16 @@ begin
     endcase
   3'd2,3'd6:
     casez({wir[35:33],wir[29:18]})
+    15'b???_????_0000_0100:
+      case(wir[35:33])
+      3'd0: uie <= uie | wia[0];
+      3'd1: begin uie <= uie | wia[0]; sie <= sie | wia[1]; end
+      3'd2: begin uie <= uie | wia[0]; sie <= sie | wia[1]; hie <= hie | wia[2]; end
+      3'd3: begin uie <= uie | wia[0]; sie <= sie | wia[1]; hie <= hie | wia[2]; mie <= mie | wia[3]; end
+      3'd4: begin uie <= uie | wia[0]; sie <= sie | wia[1]; hie <= hie | wia[2]; mie <= mie | wia[3]; iie <= iie | wia[4]; end
+      3'd5: begin uie <= uie | wia[0]; sie <= sie | wia[1]; hie <= hie | wia[2]; mie <= mie | wia[3]; iie <= iie | wia[4]; die <= die | wia[5]; end
+      default:  ;
+      endcase
     15'b???_????_0100_0000:  pmStack <= pmStack | wia;
     15'b???_????_0100_0011:  rsStack <= rsStack | wia;
     15'b011_????_0000_1100:  sema <= sema | wia;
@@ -5466,6 +5592,16 @@ begin
     endcase
   3'd3,3'd7:
     casez({wir[35:33],wir[29:18]})
+    15'b???_????_0000_0100:
+      case(wir[35:33])
+      3'd0: uie <= uie & ~wia[0];
+      3'd1: begin uie <= uie & ~wia[0]; sie <= sie & ~wia[1]; end
+      3'd2: begin uie <= uie & ~wia[0]; sie <= sie & ~wia[1]; hie <= hie & ~wia[2]; end
+      3'd3: begin uie <= uie & ~wia[0]; sie <= sie & ~wia[1]; hie <= hie & ~wia[2]; mie <= mie & ~wia[3]; end
+      3'd4: begin uie <= uie & ~wia[0]; sie <= sie & ~wia[1]; hie <= hie & ~wia[2]; mie <= mie & ~wia[3]; iie <= iie & ~wia[4]; end
+      3'd5: begin uie <= uie & ~wia[0]; sie <= sie & ~wia[1]; hie <= hie & ~wia[2]; mie <= mie & ~wia[3]; iie <= iie & ~wia[4]; die <= die & ~wia[5]; end
+      default:  ;
+      endcase
     15'b???_????_0100_0000:  pmStack <= pmStack & ~wia;
     15'b???_????_0100_0011:  rsStack <= rsStack & ~wia;
     15'b011_????_0000_1100:  sema <= sema & ~wia;
@@ -5494,7 +5630,7 @@ endtask
 task tPC;
 begin
   if (UserMode & !pc_acr[0])
-    iException(32'h80000002,pc);
+  	i_cause <= 32'h80000002;
 	if (!UserMode || pc[AWID-1:24]=={AWID-24{1'b1}})
 		ladr <= pc;
 	else
@@ -5522,7 +5658,7 @@ begin
   for (n = 0; n < 8; n = n + 1)
     if (adr_o[31:4] >= PMA_LB[n] && adr_o[31:4] <= PMA_UB[n]) begin
       if (!PMA_AT[n][0]) begin
-        iException(32'h8000003D,ipc);
+      	i_cause <= 32'h8000003D;
         cyc_o <= LOW;
     		stb_o <= LOW;
     		vpa_o <= LOW;
@@ -5635,38 +5771,38 @@ begin
   else begin
     if (((wmod_pc & advance_emw_pipe)| |w_cause) & wval) begin
       ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
-      mir <= `NOP_INSN;
-      wir <= `NOP_INSN;
       dval <= FALSE;
+      rir <= `NOP_INSN;
       rval <= FALSE;
+      eir <= `NOP_INSN;
       eval <= FALSE;
+      mir <= `NOP_INSN;
       mval <= FALSE;
+      wir <= `NOP_INSN;
       wval <= FALSE;
     end
   	else if (((mmod_pc & advance_emw_pipe) | |m_cause) & mval) begin
       ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
-      mir <= `NOP_INSN;
       dval <= FALSE;
+      rir <= `NOP_INSN;
       rval <= FALSE;
+      eir <= `NOP_INSN;
       eval <= FALSE;
+      mir <= `NOP_INSN;
       mval <= FALSE;
   	end
     else if (((emod_pc & advance_emw_pipe) | |e_cause) & eval) begin
       ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
-      eir <= `NOP_INSN;
       dval <= FALSE;
+      rir <= `NOP_INSN;
       rval <= FALSE;
+      eir <= `NOP_INSN;
       eval <= FALSE;
     end
     else if (((rmod_pc & advance_idr_pipe) | |r_cause) & rval) begin
       ir <= `NOP_INSN;
-      rir <= `NOP_INSN;
       dval <= FALSE;
+      rir <= `NOP_INSN;
       rval <= FALSE;
     end
     else if (((dmod_pc & advance_idr_pipe) | |d_cause) & dval) begin
@@ -5692,37 +5828,6 @@ begin
 end
 endtask
 
-// Exception at instruction fetch stage
-task iException;
-input [31:0] cse;
-input [AWID-1:0] tpc;
-begin
- 	pc <= tvec[3'd5] + {omode,6'h00};
-	//epc[5'd31] <= tpc;
-	//pmStack <= {pmStack[27:0],3'b101,1'b0};
-	d_cause <= cse;
-	dval <= FALSE;
-	instret <= instret + 2'd1;
-  rprv <= 5'h0;
-  Rdx <= 5'd31;
-  Rs1x <= 5'd31;
-  Rs2x <= 5'd31;
-  Rs3x <= 5'd31;
-  dRdx <= 5'd31;
-  dRs1x <= 5'd31;
-  dRs2x <= 5'd31;
-  dRs3x <= 5'd31;
-  //rsStack <= {rsStack[24:0],5'd31};
-`ifdef SIM  
-  $display("**********************");
-  $display("** Exception: %d    **", cse);
-  $display("**********************");
-`endif  
-	//exception <= TRUE;
-  igoto (IFETCH1);
-end
-endtask
-
 // Exception at writeback stage
 task wException;
 input [31:0] cse;
@@ -5731,6 +5836,7 @@ begin
 	epc[5'd31] <= tpc;
   pmStack <= {pmStack[27:0],3'b101,1'b0};
 	cause[3'd5] <= cse;
+  badaddr[3'd5] <= w_badaddr;
 	willegal_insn <= 1'b0;
 	instret <= instret + 2'd1;
   rprv <= 5'h0;
@@ -5738,14 +5844,14 @@ begin
   Rs1x <= 5'd31;
   Rs2x <= 5'd31;
   Rs3x <= 5'd31;
-  rsStack <= {rsStack[24:0],5'd31};
+  rsStack <= {rsStack[34:0],5'd31};
 `ifdef SIM  
   $display("**********************");
   $display("** Exception: %d    **", cse);
   $display("**********************");
 `endif  
   wmod_pc <= TRUE;
-  wnext_pc <= tvec[3'd5] + {omode,6'h00};
+  wnext_pc <= tvec[3'd5] + {omode,3'h0};
   writeback_done <= TRUE;
 	exception <= TRUE;
   dgoto (WRITEBACK_WAIT);

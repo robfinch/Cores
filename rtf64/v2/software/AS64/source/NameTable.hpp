@@ -54,8 +54,10 @@ public:
         for (nn = 1; nn < length; nn++) {
             if (nametext[nn] == nm[0]) {
                 for(mm = 1; nm[mm] == nametext[nn+mm] && nm[mm]; mm++);
-                if (nm[mm]=='\0')
+                if (nm[mm]=='\0' && nametext[nn+mm]=='\0')
                    return nn;
+                while (nametext[nn] != 0 && nn < length) nn++;
+                nn++;
             }
             else {
                 while(nametext[nn]!=0 && nn < length) nn++;
@@ -73,6 +75,8 @@ public:
            return ret;
         olen = length;
         strcpy_s(&nametext[length], sizeof(nametext)-length, nm);
+        if ((sizeof(nametext) - length) <= 0)
+          exit(0);
         length += strlen(nm) + 1;
         return olen;
     };

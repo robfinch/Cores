@@ -2294,16 +2294,14 @@ int rtf64_NextToken()
 								tbndx++;
 								return (token = tk_mul);
             }
-						if (gCpu == 'F') {
-							if ((inptr[1] == 'u' || inptr[1] == 'U') &&
-								(inptr[2] == 'l' || inptr[2] == 'L') &&
-								(inptr[3] == 'f' || inptr[3] == 'F') &&
-								isspaceOrDot(inptr[4])) {
-								inptr += 4;
-								tokenBuffer[tbndx] = tk_mulf;
-								tbndx++;
-								return (token = tk_mulf);
-							}
+						if ((inptr[1] == 'u' || inptr[1] == 'U') &&
+							(inptr[2] == 'l' || inptr[2] == 'L') &&
+							(inptr[3] == 'f' || inptr[3] == 'F') &&
+							isspaceOrDot(inptr[4])) {
+							inptr += 4;
+							tokenBuffer[tbndx] = tk_mulf;
+							tbndx++;
+							return (token = tk_mulf);
 						}
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='l' || inptr[2]=='L') &&

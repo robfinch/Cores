@@ -34,9 +34,11 @@ int gCpu = 7;
 int regPC = 254;
 int regSP = 31;
 int regFP = 30;
-int regLR = 112;
+int regLR = 96;
 int regXLR = 28;
+int regXHSP = 27;
 int regGP = 29;
+int regGP1 = 28;
 int regTP = 28;
 int regCLP = 25;                // class pointer
 int regPP = 56;					// program pointer
@@ -67,23 +69,26 @@ int pregLastArg = 22;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
-int use_gp = 0;
+int use_gp = 1;
 int address_bits = 32;
 int maxVL = 64;
-int nregs = 64;
+int nregs = 128;
 
-int sizeOfWord = 8;
+int64_t sizeOfWord = 8;
 int sizeOfFP = 8;
 int sizeOfFPS = 4;
 int sizeOfFPD = 8;
 int sizeOfFPT = 12;
 int sizeOfFPQ = 16;
 int sizeOfPtr = 8;
+int sizeOfPosit = 8;
 
 std::ifstream *ifs;
 txtoStream ofs;
 txtoStream lfs;
 txtoStream dfs;
+txtoStream irfs;
+
 /*
 FILE            *input = 0,
                 *list = 0,
@@ -100,6 +105,7 @@ char            laststr[MAX_STRLEN + 1] = "";
 int64_t			ival = 0;
 double          rval = 0.0;
 Float128		rval128;
+Posit64 pval64;
 char float_precision = 'd';
 //FloatTriple     FAC1,FAC2;
 //FLOAT           rval = {0,0,0,0,0,0};
@@ -120,6 +126,7 @@ int             global_flag = 1;
 TABLE           defsyms;
 CSet *save_mask = nullptr;          /* register save mask */
 CSet *fpsave_mask = nullptr;
+CSet* psave_mask = nullptr;
 TYP             tp_int, tp_econst;
 bool dogen = true;
 int isKernel = FALSE;

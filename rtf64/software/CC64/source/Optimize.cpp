@@ -26,7 +26,7 @@
 #include "stdafx.h"
 
 static void fold_const(ENODE **node);
-
+extern int NumericLiteral(ENODE*);
 /*
  *      dooper will execute a constant operation in a node and
  *      modify the node to be the result of the operation.
@@ -42,17 +42,29 @@ void dooper(ENODE *node)
     ep->i = (ep->p[0]->i >= 0) ? ep->p[0]->i : -ep->p[0]->i;
 		break;
   case en_add:
-    ep->nodetype = en_icon;
-    ep->i = ep->p[0]->i + ep->p[1]->i;
+		if (ep->p[0]->nodetype == en_icon) {
+			ep->nodetype = en_icon;
+			ep->i = ep->p[0]->i + ep->p[1]->i;
+		}
+		if (ep->p[0]->nodetype == en_pcon) {
+			ep->nodetype = en_pcon;
+			ep->posit.Add(ep->p[0]->posit, ep->p[1]->posit);
+		}
     break;
 	case en_ptrdif:
 		ep->nodetype = en_icon;
 		ep->i = (ep->p[0]->i - ep->p[1]->i) >> ep->p[4]->i;
 		break;
 	case en_sub:
-    ep->nodetype = en_icon;
-    ep->i = ep->p[0]->i - ep->p[1]->i;
-    break;
+		if (ep->p[0]->nodetype == en_icon) {
+			ep->nodetype = en_icon;
+			ep->i = ep->p[0]->i - ep->p[1]->i;
+		}
+		if (ep->p[0]->nodetype == en_pcon) {
+			ep->nodetype = en_pcon;
+			ep->posit.Sub(ep->p[0]->posit, ep->p[1]->posit);
+		}
+		break;
 	case en_mul:
 	case en_mulu:
 		ep->nodetype = en_icon;
@@ -73,35 +85,74 @@ void dooper(ENODE *node)
 		ep->f = (double)ep->p[0]->i;
 		ep->tp = &stddouble;// ep->p[0]->tp;
 		Float128::IntToFloat(&ep->f128, ep->p[0]->i);
-		ep->i = quadlit(&ep->f128);
+		//ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		ep->SetType(ep->tp);
 		break;
+	case en_i2p:
+		ep->nodetype = en_pcon;
+		ep->f = (double)ep->p[0]->i;
+		ep->tp = &stdposit;// ep->p[0]->tp;
+		ep->posit.IntToPosit(ep->p[0]->i);
+		ep->SetType(ep->tp);
+		break;
+
 	case en_fadd:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f + ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		//ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		ep->SetType(ep->tp);
 		break;
 	case en_fsub:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f - ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+		//ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
 		break;
 	case en_fmul:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f * ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+//		ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
 		break;
 	case en_fdiv:
 		ep->nodetype = en_fcon;
 		ep->f = ep->p[0]->f / ep->p[1]->f;
 		ep->tp = ep->p[0]->tp;
 		Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-		ep->i = quadlit(&ep->f128);
+		ep->i = NumericLiteral(ep);
+//		ep->i = quadlit(&ep->f128);
+		ep->SetType(ep->tp);
+		break;
+
+	case en_padd:
+		ep->nodetype = en_pcon;
+		ep->tp = ep->p[0]->tp;
+		ep->posit.Add(ep->p[0]->posit, ep->p[1]->posit);
+		break;
+	case en_psub:
+		ep->nodetype = en_pcon;
+		ep->tp = ep->p[0]->tp;
+		ep->posit.Sub(ep->p[0]->posit, ep->p[1]->posit);
+		break;
+	case en_pmul:
+		ep->nodetype = en_pcon;
+		ep->tp = ep->p[0]->tp;
+		ep->posit.Multiply(ep->p[0]->posit, ep->p[1]->posit);
+		break;
+	case en_pdiv:
+		ep->nodetype = en_pcon;
+		ep->tp = ep->p[0]->tp;
+		ep->posit.Divide(ep->p[0]->posit, ep->p[1]->posit);
 		break;
 
 	case en_asl:
@@ -383,7 +434,15 @@ static void opt0(ENODE **node)
 								Float128::Assign(&ep->f128,&ep->p[0]->f128);
               }
               return;
-			case en_vadd:
+						case en_temppref:
+							opt0(&(ep->p[0]));
+							if (ep->p[0] && ep->p[0]->nodetype == en_pcon)
+							{
+								ep->nodetype = en_pcon;
+								ep->posit = ep->p[0]->posit;
+							}
+							return;
+						case en_vadd:
 			case en_vsub:
             case en_add:
             case en_sub:
@@ -404,6 +463,12 @@ static void opt0(ENODE **node)
 										*node = ep->p[1];
 								return;
               }
+								if (ep->p[0]->nodetype == en_pcon) {
+									if (ep->p[1]->nodetype == en_pcon) {
+										dooper(*node);
+										return;
+									}
+								}
 						// Place the constant node second in the add to allow
 						// use of immediate mode instructions.
 						if (ep->nodetype==en_add)
@@ -428,6 +493,7 @@ static void opt0(ENODE **node)
 								}
 							}
 							break;
+						case en_i2p:
 						case en_i2d:
 				opt0(&(ep->p[0]));
 				if (ep->p[0]->nodetype == en_icon) {
@@ -491,10 +557,48 @@ static void opt0(ENODE **node)
 					//}
 				}
 				break;
+
+			case en_padd:
+			case en_psub:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
+				if (ep->p[0]->nodetype == en_pcon) {
+					if (ep->p[1]->nodetype == en_pcon) {
+						dooper(*node);
+						return;
+					}
+				}
+				break;
+			case en_pmul:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
+				if (ep->p[0]->nodetype == en_pcon) {
+					if (ep->p[1]->nodetype == en_pcon) {
+						dooper(*node);
+						return;
+					}
+				}
+				break;
+			case en_pdiv:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
+				if (ep->p[0]->nodetype == en_pcon) {
+					if (ep->p[1]->nodetype == en_pcon) {
+						dooper(*node);
+						return;
+					}
+				}
+				break;
+
 			case en_isnullptr:
 				opt0(&(ep->p[0]));
 				if (ep->p[0]->nodetype == en_icon)
 					dooper(*node);
+				return;
+			case en_wydendx:
+			case en_bytendx:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
 				return;
 			case en_mulf:
 				opt0(&(ep->p[0]));
@@ -606,6 +710,18 @@ static void opt0(ENODE **node)
                                     }
                             }
                     break;
+	case en_fieldref:
+		opt0(&(ep->p[0]));
+		opt0(&(ep->bit_offset));
+		opt0(&(ep->bit_width));
+		break;
+	case en_bitoffset:
+	case en_ext:
+	case en_extu:
+		opt0(&(ep->p[0]));
+		opt0(&(ep->p[1]));
+		opt0(&(ep->p[2]));
+		break;
 
 	case en_and: 
   case en_or:
@@ -741,6 +857,24 @@ static int64_t xfold(ENODE *node)
                         i = node->i;
                         node->i = 0;
                         return i;
+								case en_pcon:
+									i = node->posit.val;
+									node->posit.val = 0;
+									return i;
+								case en_pregvar:
+									if (node->rg == regZero) {
+										i = 0;
+										node->posit = 0;
+										return (i);
+									}
+									return (0);
+								case en_regvar:
+									if (node->rg == regZero) {
+										i = 0;
+										node->i = 0;
+										return (i);
+									}
+									return (0);
 				case en_sxb: case en_sxc: case en_sxh:
 				case en_zxb: case en_zxc: case en_zxh:
 				case en_abs:
@@ -748,9 +882,9 @@ static int64_t xfold(ENODE *node)
 					return (0);
 						return xfold(node->p[0]);
                 case en_add:
-                        return xfold(node->p[0]) + xfold(node->p[1]);
+                  return xfold(node->p[0]) + xfold(node->p[1]);
                 case en_sub:
-                        return xfold(node->p[0]) - xfold(node->p[1]);
+									return xfold(node->p[0]) - xfold(node->p[1]);
 								case en_mulf:
                 case en_mul:
 				case en_mulu:
@@ -769,8 +903,13 @@ static int64_t xfold(ENODE *node)
                         else return 0;
                 case en_uminus:
                         return - xfold(node->p[0]);
+								case en_ext: case en_extu:
+									fold_const(&node->p[0]);
+									fold_const(&node->p[1]);
+									fold_const(&node->p[2]);
+									return 0;
 				case en_shr:    case en_div:	case en_udiv:	case en_shru: case en_asr:
-                case en_mod:    case en_asadd:
+				case en_mod:    case en_asadd:	case en_bytendx:	case en_wydendx:
                 case en_assub:  case en_asmul:
                 case en_asdiv:  case en_asmod:
 								case en_and:    case en_land:	case en_land_safe:
@@ -823,7 +962,7 @@ static void fold_const(ENODE **node)
                         }
                 else if( ep->p[1]->nodetype == en_icon )
                         {
-                        ep->p[1]->i -= xfold(ep->p[0]);	// ??? other order ??? xfold - p[1]
+                        ep->p[1]->i = xfold(ep->p[0]) - ep->p[1]->i;	// ??? other order ??? xfold - p[1]
                         return;
                         }
                 }
@@ -844,7 +983,8 @@ void opt_const_unchecked(ENODE **node)
 {
 	dfs.printf("<OptConst2>");
 	opt0(node);
-	fold_const(node);
+//	fold_const(node);
+	opt0(node);
 	opt0(node);
 	dfs.printf("</OptConst2>");
 }
@@ -857,9 +997,10 @@ void opt_const(ENODE **node)
 	dfs.printf("<OptConst>");
     if (opt_noexpr==FALSE) {
     	opt0(node);
-    	fold_const(node);
+//    	fold_const(node);
     	opt0(node);
-    }
+			opt0(node);
+		}
 	dfs.printf("</OptConst>");
 }
 

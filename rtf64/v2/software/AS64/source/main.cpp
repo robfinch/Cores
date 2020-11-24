@@ -67,6 +67,9 @@ int64_t start_address;
 int64_t rodata_base_address;
 int64_t bss_base_address;
 int64_t data_base_address;
+int fEmitCode = 1;
+int ifLevel = 0;
+int emitCodeStack[100];
 
 FILE *ofp, *vfp;
 std::ofstream mofs;
@@ -203,6 +206,67 @@ void DumphTable()
   for (nn = 0; nn < htblmax && nn < 1024; nn++) {
       fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
   }
+}
+
+int popcnt(int64_t m)
+{
+  int n;
+  int cnt;
+
+  cnt = 0;
+  for (n = 0; n < 64; n = n + 1)
+    if (m & (1LL << n)) cnt = cnt + 1;
+  return (cnt);
+}
+
+void DumpPopcntTable()
+{
+  int nn;
+  char buf[40];
+
+  for (nn = 0; nn < 4096; nn++) {
+    sprintf(buf, "x\x22%03X\x22", nn);
+    fprintf(ofp, "when %s => return %d;\n", buf, popcnt(nn));
+  }
+}
+
+void DumpDivTable()
+{
+  int top = 4096;
+  int top1 = 131072;
+  int nn, mm;
+  typedef union _tagFlt {
+    int64_t i;
+    double f;
+  } Flt;
+  Flt ff;
+  int64_t exp, man;
+
+  for (nn = top/2; nn < top; nn++) {
+    ff.f = ((double)top / (double)nn);
+    exp = (ff.i >> 52LL) & 0x7ffLL;
+    man = (ff.i & 0xfffffffffffffLL) | 0x10000000000000LL;
+    while (exp < 0x3ffLL) {
+      exp++;
+      man >>= 1;
+    }
+    fprintf(ofp, "11'h%03X: o <= 16'h%04X;\n", nn-top/2, (int)((man >> 37LL) & 0x7fffLL) | ((top/2) << 4));
+  }
+  fprintf(ofp, "{\n");
+  for (nn = top1 / 2; nn < top1; nn+=8) {
+    for (mm = 0; mm < 8; mm++) {
+      ff.f = ((double)top1 / (double)(nn+mm));
+      exp = (ff.i >> 52LL) & 0x7ffLL;
+      man = (ff.i & 0xfffffffffffffLL) | 0x10000000000000LL;
+      while (exp < 0x3ffLL) {
+        exp++;
+        man >>= 1;
+      }
+      fprintf(ofp, "0x%04X,", (int)((man >> 36LL) & 0x1ffffLL));
+    }
+    fprintf(ofp, "\n");
+  }
+  fprintf(ofp, "};\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -428,6 +492,51 @@ int processOptions(int argc, char **argv)
         else break;
     } while (1);
     return nn;
+}
+
+void searchenv(char* filename, char* envname, char** pathname)
+{
+  static char pbuf[5000];
+  static char pname[5000];
+  char* p;
+  //   char *strpbrk(), *strtok(), *getenv();
+
+  if (pathname == (char**)NULL)
+    return;
+  strncpy(pname, filename, sizeof(pname) / sizeof(char) - 1);
+  pname[4999] = '\0';
+  if (access(pname, 0) != -1) {
+    *pathname = strdup(pname);
+    return;
+  }
+
+  /* ----------------------------------------------------------------------
+        The file doesn't exist in the current directory. If a specific
+     path was requested (ie. file contains \ or /) or if the environment
+     isn't set, return a NULL, else search for the file on the path.
+  ---------------------------------------------------------------------- */
+
+  if (!(p = getenv(envname)))
+  {
+    *pathname = strdup("");
+    return;
+  }
+
+  strcpy(pbuf, "");
+  strcat(pbuf, p);
+  if (p = strtok(pbuf, ";"))
+  {
+    do
+    {
+      sprintf(pname, "%0.4999s\\%s", p, filename);
+
+      if (access(pname, 0) >= 0) {
+        *pathname = strdup(pname);
+        return;
+      }
+    } while (p = strtok(NULL, ";"));
+  }
+  *pathname = strdup("");
 }
 
 // ---------------------------------------------------------------------------
@@ -679,7 +788,7 @@ void process_public()
   // Strip out unreferenced publics
   else if (pass == 5) {
     if (sym) {
-      if (!sym->referenced && !keepUnreferenced) {
+      if (sym->referenced==0 && !keepUnreferenced) {
         char* p2, * p3;
         p3 = p1;
         do {
@@ -1186,7 +1295,7 @@ void process_dh_htbl()
 	else if (gCpu==7)
 		emitByte(mm = htblmax > 1024 ? 1024 : htblmax);
   else if (gCpu==RTF64)
-    emitTetra(mm = htblmax > 256 ? 256 : htblmax);
+    emitTetra(mm = htblmax > 512 ? 512 : htblmax);
   else
 		emitHalf(mm = htblmax > 1024 ? 1024 : htblmax);
 	for (nn = 0; nn < mm; nn++) {
@@ -2131,7 +2240,7 @@ void skipif(int64_t val)
 			}
 		}
 		else if (token==tk_else) {
-			if (iflevel==0) {
+			if (iflevel==1) {
 				// cut out code between if and else
 				// and keep going until endif
 				if (val==0) {
@@ -2160,9 +2269,15 @@ void doif()
 
 	NextToken();
 	val = expr();
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
 	pif2 = inptr;
 	ScanToEOL();
-	skipif(val);
+//	skipif(val);
 }
 
 void doifdef()
@@ -2173,9 +2288,15 @@ void doifdef()
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
   val = (find_symbol(lastid)!=nullptr);
-	pif2 = inptr;
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
+  pif2 = inptr;
 	ScanToEOL();
-	skipif(val);
+//	skipif(val);
 }
 
 void doifndef()
@@ -2185,9 +2306,30 @@ void doifndef()
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
   val = (find_symbol(lastid)==nullptr);
-	ScanToEOL();
-	pif2 = inptr;
-	skipif(val);
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
+  pif2 = inptr;
+  ScanToEOL();
+//	skipif(val);
+}
+
+void doelse()
+{
+  fEmitCode = fEmitCode==0;
+}
+
+void doendif()
+{
+  if (ifLevel == 0)
+    printf("Extra endif\n");
+  else
+    ifLevel--;
+  fEmitCode = emitCodeStack[ifLevel];
+  ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -2266,7 +2408,7 @@ void processFile(char *fname, int searchincl)
   FILE *fp;
 	std::ifstream ifs;
   char *pathname;
-	char buf[700];
+	char buf[100000];
 	char *ep;
 
 	fns.Push(mname, lineno);
@@ -2830,6 +2972,8 @@ int main(int argc, char *argv[])
     DumpSymbols();
     DumphTable();
 		DumpInsnStats();
+//    DumpPopcntTable();
+//    DumpDivTable();
 
 /*
     chksum = 0;
@@ -2845,6 +2989,7 @@ int main(int argc, char *argv[])
 */
     if (listing)
         fclose(ofp);
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Output binary file.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
