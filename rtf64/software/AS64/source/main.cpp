@@ -60,9 +60,17 @@ int segprefix = -1;
 int segmodel = 0;
 int64_t program_address;
 int64_t code_address;
+int64_t rodata_address;
 int64_t data_address;
 int64_t bss_address;
 int64_t start_address;
+int64_t rodata_base_address;
+int64_t bss_base_address;
+int64_t data_base_address;
+int fEmitCode = 1;
+int ifLevel = 0;
+int emitCodeStack[100];
+
 FILE *ofp, *vfp;
 std::ofstream mofs;
 
@@ -106,6 +114,7 @@ int expandedBlock;
 int expand_flag;
 int compress_flag;
 int vebits = 128;
+bool keepUnreferenced = false;
 void emitCode(int cd);
 void emitAlignedCode(int cd);
 void process_shifti(int oc,int fn);
@@ -173,21 +182,91 @@ void DumphTable()
    // Sort the table (already sorted)
 //   qsort(pt, htblmax, sizeof(HTBLE), hcmp);
 
+   if (gCpu == RTF64) {
+     fprintf(ofp, "%d compressable instructions\n", htblmax);
+     fprintf(ofp, "The top 512 are:\n", htblmax);
+     fprintf(ofp, "Comp  Opcode  Count\n");
+     for (nn = 0; nn < htblmax && nn < 512; nn++) {
+       fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+     }
+     return;
+   }
    if (gCpu=='F') {
     fprintf(ofp, "%d compressable instructions\n", htblmax);
     fprintf(ofp, "The top 256 are:\n", htblmax);
     fprintf(ofp, "Comp  Opcode  Count\n"); 
     for (nn = 0; nn < htblmax && nn < 256; nn++) {
-        fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+      fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
     }
-	return;
-   }
-    fprintf(ofp, "%d compressable instructions\n", htblmax);
-    fprintf(ofp, "The top 1024 are:\n", htblmax);
-    fprintf(ofp, "Comp  Opcode  Count\n"); 
-    for (nn = 0; nn < htblmax && nn < 1024; nn++) {
-        fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+    return;
+  }
+  fprintf(ofp, "%d compressable instructions\n", htblmax);
+  fprintf(ofp, "The top 1024 are:\n", htblmax);
+  fprintf(ofp, "Comp  Opcode  Count\n"); 
+  for (nn = 0; nn < htblmax && nn < 1024; nn++) {
+      fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+  }
+}
+
+int popcnt(int64_t m)
+{
+  int n;
+  int cnt;
+
+  cnt = 0;
+  for (n = 0; n < 64; n = n + 1)
+    if (m & (1LL << n)) cnt = cnt + 1;
+  return (cnt);
+}
+
+void DumpPopcntTable()
+{
+  int nn;
+  char buf[40];
+
+  for (nn = 0; nn < 4096; nn++) {
+    sprintf(buf, "x\x22%03X\x22", nn);
+    fprintf(ofp, "when %s => return %d;\n", buf, popcnt(nn));
+  }
+}
+
+void DumpDivTable()
+{
+  int top = 4096;
+  int top1 = 131072;
+  int nn, mm;
+  typedef union _tagFlt {
+    int64_t i;
+    double f;
+  } Flt;
+  Flt ff;
+  int64_t exp, man;
+
+  for (nn = top/2; nn < top; nn++) {
+    ff.f = ((double)top / (double)nn);
+    exp = (ff.i >> 52LL) & 0x7ffLL;
+    man = (ff.i & 0xfffffffffffffLL) | 0x10000000000000LL;
+    while (exp < 0x3ffLL) {
+      exp++;
+      man >>= 1;
     }
+    fprintf(ofp, "11'h%03X: o <= 16'h%04X;\n", nn-top/2, (int)((man >> 37LL) & 0x7fffLL) | ((top/2) << 4));
+  }
+  fprintf(ofp, "{\n");
+  for (nn = top1 / 2; nn < top1; nn+=8) {
+    for (mm = 0; mm < 8; mm++) {
+      ff.f = ((double)top1 / (double)(nn+mm));
+      exp = (ff.i >> 52LL) & 0x7ffLL;
+      man = (ff.i & 0xfffffffffffffLL) | 0x10000000000000LL;
+      while (exp < 0x3ffLL) {
+        exp++;
+        man >>= 1;
+      }
+      fprintf(ofp, "0x%04X,", (int)((man >> 36LL) & 0x1ffffLL));
+    }
+    fprintf(ofp, "\n");
+  }
+  fprintf(ofp, "};\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -207,14 +286,16 @@ void DumpInsnStats()
 	fprintf(ofp, "Pushes:   %6d (%3.6f%%)\n", insnStats.pushes, ((double)insnStats.pushes / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Compares: %6d (%3.6f%%)\n", insnStats.compares, ((double)insnStats.compares / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Branches: %6d (%3.6f%%)\n", insnStats.branches, ((double)insnStats.branches / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "  BEQI:		%6d (%3.6f%%)\n", insnStats.beqi, ((double)insnStats.beqi / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "BEQZ/NEZ:	%6d (%3.6f%%)\n", insnStats.beqz, ((double)insnStats.beqz / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "  BEQI:		%6d (%3.6f%%)\n", insnStats.beqi, ((double)insnStats.beqi / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  BNEI:		%6d (%3.6f%%)\n", insnStats.bnei, ((double)insnStats.bnei / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  BBc:		%6d (%3.6f%%)\n", insnStats.bbc, ((double)insnStats.bbc / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "  BLcc:		%6d (%3.6f%%)\n", insnStats.logbr, ((double)insnStats.logbr / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Calls:		%6d (%3.6f%%)\n", insnStats.calls, ((double)insnStats.calls / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Returns:	%6d (%3.6f%%)\n", insnStats.rets, ((double)insnStats.rets / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Adds:	    %6d (%3.6f%%)\n", insnStats.adds, ((double)insnStats.adds / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Ands:	    %6d (%3.6f%%)\n", insnStats.ands, ((double)insnStats.ands / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "Subs:	    %6d (%3.6f%%)\n", insnStats.subs, ((double)insnStats.subs / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "Ands:	    %6d (%3.6f%%)\n", insnStats.ands, ((double)insnStats.ands / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Ors:	    %6d (%3.6f%%)\n", insnStats.ors, ((double)insnStats.ors / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Xors:	    %6d (%3.6f%%)\n", insnStats.xors, ((double)insnStats.xors / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Bits:	    %6d (%3.6f%%)\n", insnStats.bits, ((double)insnStats.bits / (double)insnStats.total) * 100.0f);
@@ -225,8 +306,10 @@ void DumpInsnStats()
 	fprintf(ofp, "Moves:	  %6d (%3.6f%%)\n", insnStats.moves, ((double)insnStats.moves / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "CMoves:	  %6d (%3.6f%%)\n", insnStats.cmoves, ((double)insnStats.cmoves / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Sets:	    %6d (%3.6f%%)\n", insnStats.sets, ((double)insnStats.sets / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Ptrdif:   %6d (%3.6f%%)\n", insnStats.ptrdif, ((double)insnStats.ptrdif / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Csr:		  %6d (%3.6f%%)\n", insnStats.csrs, ((double)insnStats.csrs / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "  Mops:   %6d (%3.6f%%)\n", insnStats.mops, ((double)insnStats.mops / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "Ptrdif:   %6d (%3.6f%%)\n", insnStats.ptrdif, ((double)insnStats.ptrdif / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "Bitfield: %6d (%3.6f%%)\n", insnStats.bitfields, ((double)insnStats.bitfields / (double)insnStats.total) * 100.0f);
+  fprintf(ofp, "Csr:		  %6d (%3.6f%%)\n", insnStats.csrs, ((double)insnStats.csrs / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Floatops: %6d (%3.6f%%)\n", insnStats.floatops, ((double)insnStats.floatops / (double)insnStats.total) * 100.0f);
 	tot = insnStats.loads
 		+ insnStats.stores
@@ -235,9 +318,11 @@ void DumpInsnStats()
 		+ insnStats.calls
 		+ insnStats.rets
 		+ insnStats.adds
+    + insnStats.subs
 		+ insnStats.ands
 		+ insnStats.ors
 		+ insnStats.xors
+    + insnStats.tsts
 		+ insnStats.shls
 		+ insnStats.shifts
 		+ insnStats.luis
@@ -387,16 +472,71 @@ int processOptions(int argc, char **argv)
 							if (argv[nn][2] == 'R') {
 								gCpu = 'R';	// RTF64
 								vebits = 128;
-								if (argv[nn][3] == 'n')
-									vebits = 256;
-								gCanCompress = 0;
-							}
+                mm = 3;
+                if (argv[nn][mm] == 'n') {
+                  vebits = 256;
+                  mm++;
+                }
+                gCanCompress = 0;
+                if (argv[nn][mm] == 'k') {
+                  keepUnreferenced = true;
+                  mm++;
+                }
+                if (argv[nn][mm] == 'c') {
+                  gCanCompress = 1;
+                }
+              }
 					 }
            nn++;
         }
         else break;
     } while (1);
     return nn;
+}
+
+void searchenv(char* filename, char* envname, char** pathname)
+{
+  static char pbuf[5000];
+  static char pname[5000];
+  char* p;
+  //   char *strpbrk(), *strtok(), *getenv();
+
+  if (pathname == (char**)NULL)
+    return;
+  strncpy(pname, filename, sizeof(pname) / sizeof(char) - 1);
+  pname[4999] = '\0';
+  if (access(pname, 0) != -1) {
+    *pathname = strdup(pname);
+    return;
+  }
+
+  /* ----------------------------------------------------------------------
+        The file doesn't exist in the current directory. If a specific
+     path was requested (ie. file contains \ or /) or if the environment
+     isn't set, return a NULL, else search for the file on the path.
+  ---------------------------------------------------------------------- */
+
+  if (!(p = getenv(envname)))
+  {
+    *pathname = strdup("");
+    return;
+  }
+
+  strcpy(pbuf, "");
+  strcat(pbuf, p);
+  if (p = strtok(pbuf, ";"))
+  {
+    do
+    {
+      sprintf(pname, "%0.4999s\\%s", p, filename);
+
+      if (access(pname, 0) >= 0) {
+        *pathname = strdup(pname);
+        return;
+      }
+    } while (p = strtok(NULL, ";"));
+  }
+  *pathname = strdup("");
 }
 
 // ---------------------------------------------------------------------------
@@ -432,13 +572,20 @@ void emitByte(int64_t cd)
 				binndx++;
 			}
     }
-    if (segment==bssseg) {
-       bss_address++;
+    switch (segment) {
+    case bssseg:
+      bss_address++;
+      break;
+    case dataseg:
+      data_address++;
+      break;
+    case rodataseg:
+      rodata_address++;
+      break;
+    case codeseg:
+      code_address++;
+      break;
     }
-    else if (segment==dataseg)
-         data_address++;
-    else
-        code_address++;
 }
 
 // ---------------------------------------------------------------------------
@@ -641,7 +788,7 @@ void process_public()
   // Strip out unreferenced publics
   else if (pass == 5) {
     if (sym) {
-      if (!sym->referenced) {
+      if (sym->referenced==0 && !keepUnreferenced) {
         char* p2, * p3;
         p3 = p1;
         do {
@@ -674,7 +821,7 @@ void process_public()
 			goto xit1;
 		}
     if (sym) {
-      if (!sym->referenced) {
+      if (!sym->referenced && !keepUnreferenced) {
         do {
           NextToken();
         } while (token != tk_endpublic);
@@ -824,7 +971,7 @@ void process_align()
 		if (gCpu == RTF64) {
 			if (segment == codeseg) {
 				while (sections[segment].address % v)
-					emitByte(0xEA);	// NOP instruction
+					emitByte(0x79);	// NOP instruction
 			}
 			else {
 				while (sections[segment].address % v)
@@ -1136,6 +1283,7 @@ void process_dh()
 void process_dh_htbl()
 {
 	int nn;
+  int mm;
 
 	if (gCpu=='F') {
 		emitWord(htblmax > 1024 ? 1024 : htblmax);
@@ -1145,11 +1293,16 @@ void process_dh_htbl()
 		return;
 	}
 	else if (gCpu==7)
-		emitByte(htblmax > 1024 ? 1024 : htblmax);
-	else
-		emitHalf(htblmax > 1024 ? 1024 : htblmax);
-	for (nn = 0; nn < htblmax && nn < 1024; nn++) {
-		emitWord(hTable[nn].opcode);
+		emitByte(mm = htblmax > 1024 ? 1024 : htblmax);
+  else if (gCpu==RTF64)
+    emitTetra(mm = htblmax > 512 ? 512 : htblmax);
+  else
+		emitHalf(mm = htblmax > 1024 ? 1024 : htblmax);
+	for (nn = 0; nn < mm; nn++) {
+    if (gCpu == RTF64)
+      emitTetra(hTable[nn].opcode);
+    else
+		  emitWord(hTable[nn].opcode);
 	}
 }
 
@@ -1254,6 +1407,60 @@ void process_dct()
         if (lastsym->segment < 5)
           sections[segment + 7].AddRel(sections[segment].index, ((int64_t)(lastsym->ord + 1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
       emitTetra(val);
+      prevToken();
+    }
+    SkipSpaces();
+    if (*inptr != ',')
+      break;
+    inptr++;
+  }
+  ScanToEOL();
+}
+
+void process_dco()
+{
+  int64_t val;
+
+  SkipSpaces();
+  while (token != tk_eol) {
+    SkipSpaces();
+    if (*inptr == '"') {
+      inptr++;
+      while (*inptr != '"') {
+        if (*inptr == '\\') {
+          inptr++;
+          switch (*inptr) {
+          case '\\': emitOcta('\\'); inptr++; break;
+          case 'r': emitOcta(0x0D); inptr++; break;
+          case 'n': emitOcta(0x0A); inptr++; break;
+          case 'b': emitOcta('\b'); inptr++; break;
+          case '"': emitOcta('"'); inptr++; break;
+          default: inptr++; break;
+          }
+        }
+        else {
+          emitOcta(*inptr);
+          inptr++;
+        }
+      }
+      inptr++;
+    }
+    else if (*inptr == '\'') {
+      inptr++;
+      emitOcta(*inptr);
+      inptr++;
+      if (*inptr != '\'') {
+        printf("Missing ' in character constant.\r\n");
+      }
+    }
+    else {
+      NextToken();
+      val = expr();
+      // A pointer to an object might be emitted as a data word.
+      if (bGen && lastsym)
+        if (lastsym->segment < 5)
+          sections[segment + 7].AddRel(sections[segment].index, ((int64_t)(lastsym->ord + 1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
+      emitOcta(val);
       prevToken();
     }
     SkipSpaces();
@@ -1405,12 +1612,19 @@ void process_fill()
     SkipSpaces();
     NextToken();
     count = expr();
-    prevToken();
     need(',');
     NextToken();
     val = expr();
     prevToken();
     for (nn = 0; nn < count; nn++)
+      if (gCpu==RTF64)
+        switch (sz) {
+        case 'b': emitByte(val); break;
+        case 'w': emitWyde(val); break;
+        case 't': emitTetra(val); break;
+        case 'o': emitOcta(val); break;
+        }
+      else
         switch(sz) {
         case 'b': emitByte(val); break;
         case 'c': emitChar(val); break;
@@ -1834,7 +2048,9 @@ j1:
 //  strcat_s(masterFile, masterFileLength, tlsbuf);
 	for (n = 0; n < codendx; n++)
 		masterFile[n] = codebuf[n];
-	for (m = 0; m < rodatandx; m++, n++)
+  sprintf_s(&masterFile[n], sizeof(masterFile) - n - 1, "\r\n\trodata\r\n\talign 8\r\n__rodata_start:\r\n");
+  n += strlen(&masterFile[n]);
+  for (m = 0; m < rodatandx; m++, n++)
 		masterFile[n] = rodatabuf[m];
 	sprintf_s(&masterFile[n], sizeof(masterFile)-n-1, "\r\n\trodata\r\n\talign 8\r\nbegin_init_data:\r\n_begin_init_data:\r\n");
 	n += strlen(&masterFile[n]);
@@ -2024,7 +2240,7 @@ void skipif(int64_t val)
 			}
 		}
 		else if (token==tk_else) {
-			if (iflevel==0) {
+			if (iflevel==1) {
 				// cut out code between if and else
 				// and keep going until endif
 				if (val==0) {
@@ -2053,9 +2269,15 @@ void doif()
 
 	NextToken();
 	val = expr();
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
 	pif2 = inptr;
 	ScanToEOL();
-	skipif(val);
+//	skipif(val);
 }
 
 void doifdef()
@@ -2066,9 +2288,15 @@ void doifdef()
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
   val = (find_symbol(lastid)!=nullptr);
-	pif2 = inptr;
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
+  pif2 = inptr;
 	ScanToEOL();
-	skipif(val);
+//	skipif(val);
 }
 
 void doifndef()
@@ -2078,9 +2306,30 @@ void doifndef()
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
   val = (find_symbol(lastid)==nullptr);
-	ScanToEOL();
-	pif2 = inptr;
-	skipif(val);
+  emitCodeStack[ifLevel] = fEmitCode;
+  fEmitCode = val != 0;
+  if (ifLevel > 98)
+    printf("Too many nested ifs\n");
+  else
+    ifLevel++;
+  pif2 = inptr;
+  ScanToEOL();
+//	skipif(val);
+}
+
+void doelse()
+{
+  fEmitCode = fEmitCode==0;
+}
+
+void doendif()
+{
+  if (ifLevel == 0)
+    printf("Extra endif\n");
+  else
+    ifLevel--;
+  fEmitCode = emitCodeStack[ifLevel];
+  ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -2159,7 +2408,7 @@ void processFile(char *fname, int searchincl)
   FILE *fp;
 	std::ifstream ifs;
   char *pathname;
-	char buf[700];
+	char buf[100000];
 	char *ep;
 
 	fns.Push(mname, lineno);
@@ -2609,8 +2858,8 @@ int main(int argc, char *argv[])
   ofp = stdout;
   nn = processOptions(argc, argv);
   if (nn > argc-1) {
-      displayHelp();
-      return 0;
+    displayHelp();
+    return 0;
   }
   SymbolInit();
   strcpy_s(fname, sizeof(fname), argv[nn]);
@@ -2619,6 +2868,7 @@ int main(int argc, char *argv[])
   code_address = 0;
   bss_address = 0;
   data_address = 0;
+  rodata_address = 0;
   isInitializationData = 0;
   for (qq = 0; qq < 12; qq++)
     sections[qq].Clear();
@@ -2660,22 +2910,22 @@ int main(int argc, char *argv[])
   printf("Qsorting\r\n");
   qsort((HTBLE*)hTable, htblmax, sizeof(HTBLE), hcmp);
    
-    pass = 4;
-    if (verbose) printf("Pass 4 - get all symbols, set initial values.\r\n");
-    first_org = 1;
-    processMaster();
-    if (verbose) printf("Pass 5 - strip unused code.\r\n");
-    pass = 5;
-    first_org = 1;
-    phasing_errors = 0;
-    processMaster();
-    if (verbose) printf("Pass 6 - assemble code.\r\n");
-    pass = 6;
-    phasing_errors = 0;
-    first_org = 1;
-    processMaster();
-    if (verbose) printf("Pass 7: phase errors: %d\r\n", phasing_errors);
-    pass = 7;
+  pass = 4;
+  if (verbose) printf("Pass 4 - get all symbols, set initial values.\r\n");
+  first_org = 1;
+  processMaster();
+  if (verbose) printf("Pass 5 - strip unused code.\r\n");
+  pass = 5;
+  first_org = 1;
+  phasing_errors = 0;
+  processMaster();
+  if (verbose) printf("Pass 6 - assemble code.\r\n");
+  pass = 6;
+  phasing_errors = 0;
+  first_org = 1;
+  processMaster();
+  if (verbose) printf("Pass 7: phase errors: %d\r\n", phasing_errors);
+  pass = 7;
 	pe3 = pe2 = pe1 = 0;
     while (phasing_errors && pass < 40) {
         phasing_errors = 0;
@@ -2722,6 +2972,8 @@ int main(int argc, char *argv[])
     DumpSymbols();
     DumphTable();
 		DumpInsnStats();
+//    DumpPopcntTable();
+//    DumpDivTable();
 
 /*
     chksum = 0;
@@ -2737,6 +2989,7 @@ int main(int argc, char *argv[])
 */
     if (listing)
         fclose(ofp);
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Output binary file.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2880,8 +3133,8 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
-					fprintf(vfp, "\trommem[14334] = 128'h00000000000000000000000000000000;\n");
-					fprintf(vfp, "\trommem[14335] = 128'h%08X%08X0000000000000000;\n", binlen, checksum);
+					fprintf(vfp, "\trommem[10238] = 128'h00000000000000000000000000000000;\n");
+					fprintf(vfp, "\trommem[10239] = 128'h%08X%08X0000000000000000;\n", binlen, checksum);
 				}
 				else if (vebits==64) {
 					for (kk = 0; kk < binndx; kk+=8) {

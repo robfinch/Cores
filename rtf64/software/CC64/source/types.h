@@ -1790,7 +1790,7 @@ public:
 	void CloseFiles();
 	void AddStandardTypes();
 	void AddBuiltinFunctions();
-	static int GetReturnBlockSize();
+	static int64_t GetReturnBlockSize();
 	int main2(int c, char **argv);
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);

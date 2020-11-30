@@ -383,7 +383,7 @@ char *RegMoniker(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno==regLR)
 		sprintf_s(&buf[n][0], 20, "$ra");
-	else if (regno==114)
+	else if (regno==98)
 		sprintf_s(&buf[n][0], 20, "$cn");
 	else if (regno==1)
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);
@@ -428,7 +428,7 @@ char *RegMoniker2(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno == regLR)
 		sprintf_s(&buf[n][0], 20, "$ra");
-	else if (regno == 114)
+	else if (regno == 98)
 		sprintf_s(&buf[n][0], 20, "$cn");
 	else if (regno == 1)
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);

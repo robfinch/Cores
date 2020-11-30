@@ -32,13 +32,14 @@ int nsym;
 // const
 // (expr)
 // >expr
-int64_t primary()
+int64_t primary(int64_t* def)
 {
   int64_t val;
   SYM *sym;
   static char buf[500];
 
 	ZeroMemory(buf,sizeof(buf));
+  *def = 1;
   switch(token) {
   case tk_id:
     if (lastid[0]=='.')  // local label
@@ -56,6 +57,7 @@ int64_t primary()
       nsym++;
     lastsym = sym;
     sym->referenced++;
+    *def = sym->defined;
     NextToken();
     if (token==tk_eol)
       prevToken();
@@ -113,33 +115,40 @@ int64_t primary()
 // ~unary
 //  primary
        
-int64_t unary()
+int64_t unary(int64_t* def)
 {
     int64_t val;
     
     switch(token) {
-    case '!': NextToken(); return !unary();
-    case '-': NextToken(); return -unary();
-    case '+': NextToken(); return +unary();
-    case '~': NextToken(); return ~unary();
+    case '!': NextToken(); return !unary(def);
+    case '-': NextToken(); return -unary(def);
+    case '+': NextToken(); return +unary(def);
+    case '~': NextToken(); return ~unary(def);
     default:
-        return primary();
+        return primary(def);
     }
 }
 
 // unary
 // unary [*/%] unary
 
-int64_t mult_expr()
+int64_t mult_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = unary();
+    int64_t def1, def2;
+
+    val = unary(&def1);
     while(1) {
         switch(token) {
-        case '*': NextToken(); val = val * unary(); break;
-        case '/': NextToken(); val = val / unary(); break;
-        case '%': NextToken(); val = val % unary(); break;
+        case '*': NextToken(); val = val * unary(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case '/': NextToken(); val = val / unary(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case '%': NextToken(); val = val % unary(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -150,15 +159,20 @@ j1:
 // mult_expr
 // mult_expr [+-] add_expr_list
 //
-int64_t add_expr()
+int64_t add_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = mult_expr();
+    int64_t def1, def2;
+
+    val = mult_expr(&def1);
     while (1) {
         switch(token) {
-        case '+': NextToken(); val = val + mult_expr(); break;
-        case '-': NextToken(); val = val - mult_expr(); break;
+        case '+': NextToken(); val = val + mult_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case '-': NextToken(); val = val - mult_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -166,15 +180,20 @@ j1:
     return val;
 }
 
-int64_t shift_expr()
+int64_t shift_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = add_expr();
+    int64_t def1, def2;
+
+    val = add_expr(&def1);
     while(1) {
         switch(token) {
-        case tk_lshift: NextToken(); val = val << add_expr(); break;
-        case tk_rshift: NextToken(); val = val >> add_expr(); break;
+        case tk_lshift: NextToken(); val = val << add_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case tk_rshift: NextToken(); val = val >> add_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -182,17 +201,26 @@ j1:
     return val;
 }
 
-int64_t relational_expr()
+int64_t relational_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = shift_expr();
+    int64_t def1, def2;
+
+    val = shift_expr(&def1);
     while (1) {
         switch(token) {
-        case tk_lt: NextToken(); val = val <shift_expr(); break;
-        case tk_le: NextToken(); val = val<=shift_expr(); break;
-        case tk_gt: NextToken(); val = val >shift_expr(); break;
-        case tk_ge: NextToken(); val = val>=shift_expr(); break;
+        case tk_lt: NextToken(); val = val <shift_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case tk_le: NextToken(); val = val<=shift_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case tk_gt: NextToken(); val = val >shift_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case tk_ge: NextToken(); val = val>=shift_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -203,15 +231,20 @@ j1:
 // relational_expr
 // relational_expr & equals_expr_list
 //
-int64_t equals_expr()
+int64_t equals_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = relational_expr();
+    int64_t def1, def2;
+
+    val = relational_expr(&def1);
     while (1) {
         switch(token) {
-        case tk_eq: NextToken(); val = val == relational_expr(); break;
-        case tk_ne: NextToken(); val = val != relational_expr(); break;
+        case tk_eq: NextToken(); val = val == relational_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case tk_ne: NextToken(); val = val != relational_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -222,16 +255,23 @@ j1:
 // equals_expr
 // equals_expr & bitwise_expr_list
 //
-int64_t bitwise_expr()
+int64_t bitwise_expr(int64_t* def)
 {
     int64_t val;
-    
-    val = equals_expr();
+    int64_t def1, def2;
+
+    val = equals_expr(&def1);
     while (1) {
         switch(token) {
-        case '&': NextToken(); val = val & equals_expr(); break;
-        case '^': NextToken(); val = val ^ equals_expr(); break;
-        case '|': NextToken(); val = val | equals_expr(); break;
+        case '&': NextToken(); val = val & equals_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case '^': NextToken(); val = val ^ equals_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
+        case '|': NextToken(); val = val | equals_expr(&def2);
+          *def = *def && (def1 && def2);
+          break;
         default: goto j1;
         }
     }
@@ -242,29 +282,33 @@ j1:
 // bitwise_expr
 // bitwise_expr && and_expr_list
 //        
-int64_t and_expr()
+int64_t and_expr(int64_t* def)
 {
     int64_t val;
+    int64_t def1, def2;
     
-    val = bitwise_expr();
+    val = bitwise_expr(&def1);
     while(token==tk_land) {
         NextToken(); 
-        val = val && bitwise_expr();
-    }        
+        val = val && bitwise_expr(&def2);
+        *def = *def && (def1 && def2);
+    }
     return val;
 }
 
 // and_expr
 // and_expr || or_expr_list
 //
-int64_t or_expr()
+int64_t or_expr(int64_t* def)
 {
     int64_t val;
+    int64_t def1, def2;
     
-    val = and_expr();
+    val = and_expr(&def1);
     while(token==tk_lor) {
         NextToken(); 
-        val = val || and_expr();
+        val = val || and_expr(&def2);
+        *def = *def && (def1 && def2);
     }
     return val;
 }
@@ -272,15 +316,33 @@ int64_t or_expr()
 int64_t expr()
 {
     int64_t val;
+    int64_t def;
 
     nsym = 0;
     lastsym = (SYM*)NULL;    
     if (token=='#')
        NextToken();
-    val = or_expr();
+    val = or_expr(&def);
     // We only care about the symbol if relocatable output is being generated.
     // Setting the symbol to NULL will result in no rel records being output.
     if (nsym > 1 || !rel_out)
         lastsym = (SYM *)NULL;
     return val;
 }
+
+int64_t expr_def(int64_t *def)
+{
+  int64_t val;
+
+  nsym = 0;
+  lastsym = (SYM*)NULL;
+  if (token == '#')
+    NextToken();
+  val = or_expr(def);
+  // We only care about the symbol if relocatable output is being generated.
+  // Setting the symbol to NULL will result in no rel records being output.
+  if (nsym > 1 || !rel_out)
+    lastsym = (SYM*)NULL;
+  return val;
+}
+

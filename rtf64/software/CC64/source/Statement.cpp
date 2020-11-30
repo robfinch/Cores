@@ -1910,8 +1910,10 @@ void Statement::GenerateSwitch()
 				GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 			GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 			GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-			GenerateDiadic(op_mov, 0, makereg(114), ap);
-			GenerateMonadic(op_jmp, 0, MakeIndirect(114));
+			GenerateDiadic(op_mov, 0, makereg(98), ap);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
+			GenerateMonadic(op_jmp, 0, MakeIndirect(98));
 			//GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
 			ReleaseTempRegister(ap);
 			s1->GenerateCase();
@@ -1923,8 +1925,10 @@ void Statement::GenerateSwitch()
 			GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 		GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 		GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-		GenerateDiadic(op_mov, 0, makereg(114), ap);
-		GenerateMonadic(op_jmp, 0, MakeIndirect(114));
+		GenerateDiadic(op_mov, 0, makereg(98), ap);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateMonadic(op_jmp, 0, MakeIndirect(98));
 		for (st = s1; st != (Statement*)NULL; st = st->next)
 			st->GenerateCase();
 		GenerateLabel(breaklab);

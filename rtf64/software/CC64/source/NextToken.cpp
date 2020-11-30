@@ -293,7 +293,11 @@ void getbase(int64_t b)
         i = 0;
         i0 = 0;
         i1 = 0;
-        while(isalnum(lastch)) {
+        while (isalnum(lastch) || lastch=='_') {
+          if (lastch == '_') {
+            getch();
+            continue;
+          }
                 if((j = radix36(lastch)) < b) {
                         i = i * b + j;
                         i2 = i0;
@@ -457,6 +461,10 @@ void getnum()
                         getch();
                         getbase(16);
                         }
+                else if (lastch == 'b' || lastch == 'B') {
+                  getch();
+                  getbase(2);
+                }
                 else getbase(8);
                 // Ignore 'U' unsigned suffix
                 if (lastch == 'U' || lastch == 'u') {

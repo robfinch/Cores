@@ -1479,13 +1479,15 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			psave_mask = pmask;
 		}
 		else {
-			GenerateDiadic(op_mov, 0, makereg(114), ap);
+			GenerateDiadic(op_mov, 0, makereg(98), ap);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			if (sym && sym->IsLeaf) {
-				GenerateMonadic(op_jal, 0, MakeIndirect(114));
+				GenerateMonadic(op_jal, 0, MakeIndirect(98));
 				currentFn->doesJAL = true;
 			}
 			else
-				GenerateMonadic(op_call, 0, MakeIndirect(114));
+				GenerateMonadic(op_call, 0, MakeIndirect(98));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}

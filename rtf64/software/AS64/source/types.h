@@ -92,6 +92,7 @@ typedef struct _tagInsnStats {
 	int calls;
 	int rets;
 	int adds;
+	int subs;
 	int ands;
 	int ors;
 	int xors;
@@ -103,9 +104,12 @@ typedef struct _tagInsnStats {
 	int moves;
 	int cmoves;
 	int sets;
+	int mops;
 	int floatops;
 	int ptrdif;
 	int csrs;
+	int bitfields;
+	int beqz;
 	int total;
 } InsnStats;
 

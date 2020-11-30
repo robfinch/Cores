@@ -75,7 +75,7 @@ Statement *Function::ParseBody()
 	if (!IsInline)
 		GenerateMonadic(op_fnname, 0, MakeStringAsNameConst(p, codeseg));
 	currentFn = this;
-	IsLeaf = TRUE;
+	IsLeaf = false;// TRUE;
 	DoesThrow = false;
 	doesJAL = false;
 	UsesPredicate = FALSE;
@@ -128,7 +128,7 @@ Statement *Function::ParseBody()
 
 void Function::Init()
 {
-	IsLeaf = isLeaf;
+	IsLeaf = false;// isLeaf;
 	IsNocall = isNocall;
 	IsPascal = isPascal;
 	sym->IsKernel = isKernel;
@@ -626,7 +626,8 @@ bool Function::GenDefaultCatch()
 
 int64_t Function::SizeofReturnBlock()
 {
-	return ((int64_t)(IsLeaf ? 1 : doesJAL ? 2 : 1));
+	return (compiler.GetReturnBlockSize());
+	return ((int64_t)(IsLeaf ? 4 : 3));
 }
 
 // For a leaf routine don't bother to store the link register.
@@ -639,15 +640,15 @@ void Function::SetupReturnBlock()
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
 	if (cpu.SupportsLink) {
 		if (stkspace < 65536 * 8) {
-			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord + stkspace));
+			GenerateMonadic(op_link, 0, MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord + stkspace));	// -1 for return address already stacked.
 			//spAdjust = pl.tail;
 			alstk = true;
 		}
 		else
-			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+			GenerateMonadic(op_link, 0, MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 	}
 	else {
-		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 		GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
 	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
@@ -845,7 +846,7 @@ void Function::GenerateReturn(Statement* stmt)
 		if (cpu.SupportsLink)
 			toAdd = 0;
 		else
-			toAdd = SizeofReturnBlock() * sizeOfWord;
+			toAdd = (SizeofReturnBlock()-1LL) * sizeOfWord;	// -1 for return address which will be unstacked by ret
 	}
 	else if (currentFn->IsLeaf)
 		toAdd = 0;
