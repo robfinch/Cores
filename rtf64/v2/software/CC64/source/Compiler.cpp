@@ -35,9 +35,9 @@ extern char *errtext(int errnum);
 extern std::string *classname;
 extern void doInitCleanup();
 
-int Compiler::GetReturnBlockSize()
+int64_t Compiler::GetReturnBlockSize()
 {
-	return (4 * sizeOfWord);
+	return (3LL);	 // 3 words
 }
 
 int Compiler::main2(int argc, char **argv)

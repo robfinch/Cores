@@ -81,9 +81,24 @@ char *my_strdup(char *s)
 	char *p;
 	int n = strlen(s);
 	int m = sizeof(char);
-	p = (char *)allocx(sizeof(char)*(n+1));
-	memcpy(p,s,sizeof(char)*(n));
-	p[n] = '\0';
+	int j;
+	p = (char *)allocx(m*(n+1));
+	for (j = 0; j < n; j++)
+		p[j] = s[j];
+	p[j] = 0;
+	return ((char *)p);
+}
+
+int32_t* strlit_dup(char* s)
+{
+	int32_t* p;
+	int n = strlen(s);
+	int m = 4;
+	int j;
+	p = (int32_t*)allocx(m * (n + 1));
+	for (j = 0; j < n; j++)
+		p[j] = s[j];
+	p[j] = 0;
 	return (p);
 }
 
@@ -793,12 +808,12 @@ int Declaration::ParseSpecifier(TABLE* table, SYM** sym, e_sc sc)
 				break;
 
 			case ellipsis:
-				head = (TYP *)TYP::Make(bt_ellipsis,4);
+				head = (TYP *)TYP::Make(bt_ellipsis,8);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
 				NextToken();
-				bit_max = 32;
+				bit_max = 64;
 				goto lxit;
 
 			case id:	sp = ParseId();	goto lxit;
@@ -2002,6 +2017,10 @@ void GlobalDeclaration::Parse()
     case kw_extern:
 j1:
         NextToken();
+				if (lastst == kw_cdecl) {
+					isPascal = FALSE;
+					goto j1;
+				}
 				if (lastst==kw_pascal) {
 					isPascal = TRUE;
 					goto j1;
@@ -2055,6 +2074,10 @@ j1:
 				else if (strcmp(lastid, "_pascal") == 0) {
 					NextToken();
 					defaultcc = 1;
+				}
+				else if (strcmp(lastid, "_gp") == 0) {
+					NextToken();
+					use_gp = notVal;
 				}
       }
 	  else if (lastst==kw_short) {

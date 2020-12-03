@@ -72,6 +72,8 @@ extern int GetTempMemSpace();
 extern bool IsArgumentReg(int);
 extern Operand* GenerateFunctionCall(ENODE* node, int flags);
 
+extern int  stringlit(char* s, bool utf21);
+
 // Utility
 extern int64_t round8(int64_t);
 extern int countLeadingBits(int64_t val);

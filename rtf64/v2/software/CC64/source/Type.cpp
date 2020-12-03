@@ -735,25 +735,47 @@ j2:
 int64_t TYP::InitializeArray(int64_t maxsz)
 {
 	int64_t nbytes;
+	int64_t size;
 	char *p;
 	char *str;
 	int64_t pos = 0;
 	int64_t n;
 	ENODE* cnode;
 	int64_t fill = 0;
+	/*
+	typedef struct _tagSP {
+		std::streampos poses;
+	} Strmpos;
 
+	Strmpos* poses;
+	*/
+	// First create array full of empty elements.
+	/*
+	size = GetBtp()->size;
+	poses = new Strmpos[(numele+1) * sizeof(Strmpos)];
+	for (n = 0; n < numele; n++) {
+		poses[n].poses = ofs.tellp();
+		GetBtp()->Initialize(nullptr, GetBtp(), 0);
+	}
+	poses[numele].poses = ofs.tellp();
+	*/
+	// Fill in the elements as encountered.
 	nbytes = 0;
 //	if (lastst == begin)
 	{
 //		NextToken();               /* skip past the brace */
-		while (lastst != end) {
+		for (n = 0; lastst != end; n++) {
+/*
+			ofs.seekp(poses[n].poses);
 			if (lastst == openbr) {
 				NextToken();
 				n = GetConstExpression(&cnode);
-				fill = min(1000000, n - pos + 1);
+				ofs.seekp(poses[n].poses);
+				//fill = min(1000000, n - pos + 1);
 				needpunc(closebr,50);
 				needpunc(assign,50);
 			}
+*/
 			// Allow char array initialization like { "something", "somethingelse" }
 			if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar
 				|| GetBtp()->type == bt_ichar || GetBtp()->type == bt_iuchar)) {
@@ -804,8 +826,9 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 			// Allow an extra comma at the end of the list of values
 			if (lastst == comma) {
 				NextToken();
-				if (lastst == end)
+				if (lastst == end) {
 					break;
+				}
 			}
 			else if (lastst == end) {
 				//brace_level--;
@@ -835,6 +858,12 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 	}
 	else if (maxsz != 0 && nbytes > maxsz)
 		;// error(ERR_INITSIZE);    /* too many initializers */
+xit:
+	/*
+	ofs.seekp(poses[numele].poses);
+	delete[] poses;
+	return (numele * size);
+	*/
 	return (nbytes);
 }
 

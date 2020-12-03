@@ -79,13 +79,14 @@ public:
 };
 
 struct slit {
-    struct slit *next;
-		struct slit *tail;
-    int             label;
-    char            *str;
-		bool		isString;
-		int8_t pass;
-	char			*nmspace;
+  struct slit *next;
+	struct slit *tail;
+  int label;
+  int32_t* str;
+	bool isString;
+	bool utf21;
+	int8_t pass;
+	char *nmspace;
 };
 
 struct nlit {
@@ -395,13 +396,15 @@ public:
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
 	void GenerateReturn(Statement *stmt);
-	void Gen();
+	void Generate();
 
 	void CreateVars();
 	void ComputeLiveVars();
 	void DumpLiveVars();
 
 	void storeHex(txtoStream& ofs);
+private:
+	void StackGPRs();
 };
 
 class SYM {
@@ -715,6 +718,26 @@ public:
 	void Dump();
 };
 
+
+// Under construction
+class INODE : public CompilerType
+{
+public:
+	INODE* next;
+	INODE* prev;
+	INODE* inner;
+	INODE* outer;
+	int type;
+	int64_t size;
+	// value
+	void* arry;
+	int64_t i;
+	double f;
+	Float128 f128;
+	Posit64 posit;
+	std::string* str;
+};
+
 class ExpressionFactory : public Factory
 {
 public:
@@ -805,6 +828,7 @@ private:
 	ENODE* MakeConstNameNode(SYM* sp);
 	ENODE* MakeMemberNameNode(SYM* sp);
 	ENODE* MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArray* typearray, ENODE* args);
+	ENODE* MakeUnknownVarNameNode(std::string nm, TYP** tp);
 	void DerefBit(ENODE** node, TYP* tp, SYM* sp);
 	void DerefByte(ENODE** node, TYP* tp, SYM* sp);
 	void DerefUnsignedByte(ENODE** node, TYP* tp, SYM* sp);
@@ -955,6 +979,7 @@ public:
 	void OptPush();
 	void OptBne();
 	void OptBeq();
+	void OptBxx();
 	void OptScc();
 
 	static OCODE *loadHex(txtiStream& ifs);
@@ -1065,7 +1090,7 @@ public:
 	virtual int PushArguments(Function *func, ENODE *plist) { return (0); };
 	virtual void PopArguments(Function *func, int howMany) {};
 	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
-	void GenerateFunction(Function *fn) { fn->Gen(); };
+	void GenerateFunction(Function *fn) { fn->Generate(); };
 	Operand* GenerateTrinary(ENODE* node, int flags, int size, int op);
 	virtual void GenerateUnlink();
 };
@@ -1498,7 +1523,7 @@ public:
 	int AllocatePositRegisters();
 	int AllocateVectorRegisters();
 	int AllocateRegisterVars();
-	void InitializeTempRegs();
+	void InitializeTempRegs(int opt);
 
 	int Optimize(Statement *);
 
@@ -1768,7 +1793,7 @@ public:
 	void CloseFiles();
 	void AddStandardTypes();
 	void AddBuiltinFunctions();
-	static int GetReturnBlockSize();
+	static int64_t GetReturnBlockSize();
 	int main2(int c, char **argv);
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);

@@ -349,7 +349,6 @@ extern int popcnt(int64_t m);
 // Outcode.c
 extern void gen_strlab(char *s);
 extern void dumplits();
-extern int  stringlit(char *s);
 extern int quadlit(Float128 *f128);
 extern void nl();
 extern void seg(int sg, int algn);

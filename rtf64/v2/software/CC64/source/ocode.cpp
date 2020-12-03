@@ -598,6 +598,41 @@ void OCODE::OptStore()
 	optimized++;
 }
 
+void OCODE::OptBxx()
+{
+	OCODE* ip;
+	int nn;
+
+	ip = back;
+	for (nn = 0; nn < 7; nn++, ip = ip->back) {
+		if (ip->insn && ip->insn->IsFlowControl())
+			return;
+		if (ip->opcode == op_label) {
+			if (oper3) {
+				if ((int)ip->oper1 == oper3->offset->i) {
+					opcode |= op_dot;
+					optimized++;
+					return;
+				}
+			}
+			else if (oper2) {
+				if ((int)ip->oper1 == oper2->offset->i) {
+					opcode |= op_dot;
+					optimized++;
+					return;
+				}
+			}
+			else if (oper1) {
+				if ((int)ip->oper1 == oper1->offset->i) {
+					opcode |= op_dot;
+					optimized++;
+					return;
+				}
+			}
+		}
+	}
+}
+
 // Remove branch on constants
 
 void OCODE::OptBeq()

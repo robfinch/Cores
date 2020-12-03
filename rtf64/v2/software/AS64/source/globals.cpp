@@ -14,5 +14,5 @@ int16_t token2;
 int32_t reg;
 int tbndx;
 int lpndx = 0;
-int64_t pagesize = 16384;
+int64_t pagesize = 4096;
 bool rom_code = true;

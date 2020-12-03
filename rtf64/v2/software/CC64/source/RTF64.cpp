@@ -1259,9 +1259,12 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	maxnn = nn;
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
   {
-		if (pl[nn]->etype == bt_pointer)
+		if (pl[nn]->etype == bt_pointer) {
+			if (pl[nn]->tp->GetBtp() == nullptr)
+				continue;
 			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
 				continue;
+		}
 				//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
@@ -1399,7 +1402,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			// inline function must be appended onto the peeplist of the current
 			// function.
 			sym->pl.head = sym->pl.tail = nullptr;
-			sym->Gen();
+			sym->Generate();
 			pass = ps;
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
@@ -1410,7 +1413,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			psave_mask = pmask;
 		}
 		else {
-			if (sym && sym->IsLeaf) {
+			if (sym && sym->IsLeaf && false) {
 				GenerateMonadic(op_jal, 0, MakeDirect(node->p[0]));
 				currentFn->doesJAL = true;
 			}
@@ -1465,7 +1468,7 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			currentFn = sym;
 			ps = pass;
 			sym->pl.head = sym->pl.tail = nullptr;
-			sym->Gen();
+			sym->Generate();
 			pass = ps;
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
@@ -1476,13 +1479,15 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			psave_mask = pmask;
 		}
 		else {
-			GenerateDiadic(op_mov, 0, makereg(114), ap);
-			if (sym && sym->IsLeaf) {
-				GenerateMonadic(op_jal, 0, MakeIndirect(114));
+			GenerateDiadic(op_mov, 0, makereg(98), ap);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
+			if (sym && sym->IsLeaf && false) {
+				GenerateMonadic(op_jal, 0, MakeIndirect(98));
 				currentFn->doesJAL = true;
 			}
 			else
-				GenerateMonadic(op_call, 0, MakeIndirect(114));
+				GenerateMonadic(op_call, 0, MakeIndirect(98));
 			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab,regZero));
 			LinkAutonew(node);
 		}

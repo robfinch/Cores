@@ -41,6 +41,7 @@ casez(i)
 `EOR:     o = 8'h04;
 `SHIFT:   o = 8'h04;
 `SET:     o = 8'h04;
+`MULU:    o = 8'h04;
 `CSR:     o = 8'h05;
 `DIV:     o = 8'h04;
 `DIVU:    o = 8'h04;
@@ -115,6 +116,8 @@ casez(i)
 `BRK:     o = 8'h32;
 `NOP:     o = 8'h31;
 `OSR2:    o = 8'h34;
+`ATNI:    o = 8'h32;
+`EXEC:    o = 8'h32;
 `LDBS:    o = 8'h43;
 `LDBUS:   o = 8'h43;
 `LDWS:    o = 8'h43;
@@ -123,7 +126,7 @@ casez(i)
 `LDTUS:   o = 8'h43;
 `LDOS:    o = 8'h43;
 `LDORS:   o = 8'h43;
-`LDOT:    o = 8'h43;
+`LDOT:    o = 8'h44;
 `LEAS:    o = 8'h43;
 `UNLINK:  o = 8'h41;
 `POP:     o = 8'h42;

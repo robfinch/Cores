@@ -353,7 +353,7 @@ int64_t InitializePointer(TYP *tp2)
 			char *str;
 
 			str = GetStrConst();
-      GenerateLabelReference(stringlit(str),0);
+      GenerateLabelReference(stringlit(str,str[0]=='U'),0);
 			free(str);
     }
 		else if (lastst == rconst) {

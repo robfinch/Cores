@@ -28,6 +28,8 @@
 void put_mask(int mask);
 void align(int n);
 void roseg();
+int32_t* strlit_dup(char*);
+
 bool renamed = false; 
 int64_t genst_cumulative;
 
@@ -383,7 +385,7 @@ char *RegMoniker(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno==regLR)
 		sprintf_s(&buf[n][0], 20, "$ra");
-	else if (regno==114)
+	else if (regno==98)
 		sprintf_s(&buf[n][0], 20, "$cn");
 	else if (regno==1)
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);
@@ -428,7 +430,7 @@ char *RegMoniker2(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno == regLR)
 		sprintf_s(&buf[n][0], 20, "$ra");
-	else if (regno == 114)
+	else if (regno == 98)
 		sprintf_s(&buf[n][0], 20, "$cn");
 	else if (regno == 1)
 		sprintf_s(&buf[n][0], 20, "$x%d", regno);
@@ -755,17 +757,18 @@ void GenerateLabelReference(int n, int64_t offset)
     }
 }
 
-/*
- *      make s a string literal and return it's label number.
- */
-int stringlit(char *s)
+//
+// make s a string literal and return it's label number.
+//
+int stringlit(char *s, bool utf21)
 {      
 	struct slit *lp;
 
 	lp = (struct slit *)allocx(sizeof(struct slit));
 	lp->label = nextlabel++;
-	lp->str = my_strdup(s);
+	lp->str = strlit_dup(s);
 	lp->nmspace = my_strdup(GetNamespace());
+	lp->utf21 = utf21;
 	if (strtab == nullptr) {
 		strtab = lp;
 		strtab->tail = lp;
@@ -798,7 +801,7 @@ int litlist(ENODE *node)
 	}
 	lp = (struct slit *)allocx(sizeof(struct slit));
 	lp->label = nextlabel++;
-	lp->str = (char *)node;
+	lp->str = (int32_t* )node;
 	lp->nmspace = my_strdup(GetNamespace());
 	if (strtab == nullptr) {
 		strtab = lp;
@@ -930,7 +933,7 @@ int64_t GetStrtabLen()
 {
 	struct slit *p;
 	int64_t len;
-	char *cp;
+	int32_t *cp;
 
 	len = 0;
 	for (p = strtab; p; p = p->next) {
@@ -964,8 +967,10 @@ int64_t GetQuadtabLen()
 
 void dumplits()
 {
-	char *cp;
-	int64_t nn;
+	int32_t* cp;
+	int64_t nn, kk;
+	int jj;
+	int64_t cb[4];
 	slit *lit;
 	union _tagFlt {
 		double f;
@@ -1083,12 +1088,13 @@ void dumplits()
 		nl();
 		if (!lit->isString) {
 			if (DataLabels[lit->label])
-				put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D');
+				put_label(lit->label, strip_crlf((char *)&lit->str[1]), lit->nmspace, 'D');
 		}
 		else
-			put_label(lit->label,strip_crlf(&lit->str[1]),lit->nmspace,'D');
+			put_label(lit->label,strip_crlf((char *)&lit->str[1]),lit->nmspace,'D');
 		if (lit->isString) {
 			cp = lit->str;
+			jj = 0;
 			switch (*cp) {
 			case 'B':
 				cp++;
@@ -1113,6 +1119,22 @@ void dumplits()
 				while (*cp)
 					GenerateWord(*cp++);
 				GenerateWord(0);
+				break;
+			case 'U':
+				cp++;
+				while (*cp) {
+					cb[jj++] = *cp;
+					if (jj > 2) {
+						kk = cb[0] | (cb[1] << 21LL) | (cb[2] << 42LL);
+						GenerateWord(kk);
+						jj = 0;
+						cb[3] = cb[2] = cb[1] = cb[0] = 0;
+					}
+					cp++;
+				}
+				kk = 0;
+				kk = cb[0] | (cb[1] << 21LL) | (cb[2] << 42LL);
+				GenerateWord(kk);
 				break;
 			}
 		}
@@ -1147,7 +1169,7 @@ void cseg()
 		if (curseg != codeseg || true) {
 			nl();
 			ofs.printf("\tcode\n");
-			ofs.printf("\talign\t16\n");
+			ofs.printf("\talign\t4\n");
 			curseg = codeseg;
 		}
 	}

@@ -321,7 +321,12 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 	case en_autopcon:
 	case en_autofcon:
 	{
-		return (node1->i == node2->i);
+		if (node1->i != node2->i)
+			return (false);
+		if (node1->tp->IsSameType(node1->tp, node2->tp, false))
+			return (true);
+		return (false);
+//		return (node1->i == node2->i);
 	}
 	case en_nacon: {
 		return (node1->sp->compare(*node2->sp) == 0);

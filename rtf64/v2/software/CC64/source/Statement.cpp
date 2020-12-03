@@ -513,9 +513,9 @@ int Statement::CheckForDuplicateCases()
 	def = nullptr;
 	for (top = head; top != (Statement *)NULL; top = top->next)
 	{
-		if (top->s2 && def)
+		if (top->stype == st_default && top->s2 && def)
 			return (TRUE);
-		if (top->s2)
+		if (top->stype == st_default && top->s2)
 			def = top->s2;
 	}
 	return (FALSE);
@@ -550,12 +550,12 @@ Statement *Statement::ParseSwitch()
 	head = 0;
 	while (lastst != end) {
 		if (head == (Statement *)NULL) {
-			head = tail = Parse();
+			head = tail = ParseCase();
 			if (head)
 				head->outer = snp;
 		}
 		else {
-			tail->next = Parse();
+			tail->next = ParseCase();
 			if (tail->next != (Statement *)NULL) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -686,7 +686,8 @@ j1:
 	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
-	snp->label = (int64_t *)my_strdup(buf);
+	snp->label = (int64_t*)allocx(4000);
+	strncpy((char*)snp->label, buf, 4000);
 	return (snp);
 }
 
@@ -895,6 +896,8 @@ j1:
 		snp = ParseCompound();
 		stmtdepth--;
 		return snp;
+	case end:
+		return (snp);
 	case kw_check:
 		snp = ParseCheckStatement();
 		break;
@@ -1907,8 +1910,10 @@ void Statement::GenerateSwitch()
 				GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 			GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 			GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-			GenerateDiadic(op_mov, 0, makereg(114), ap);
-			GenerateMonadic(op_jmp, 0, MakeIndirect(114));
+			GenerateDiadic(op_mov, 0, makereg(98), ap);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
+			GenerateMonadic(op_jmp, 0, MakeIndirect(98));
 			//GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
 			ReleaseTempRegister(ap);
 			s1->GenerateCase();
@@ -1920,15 +1925,19 @@ void Statement::GenerateSwitch()
 			GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
 		GenerateTriadic(op_asl, 0, ap, ap, MakeImmediate(3));
 		GenerateDiadic(op_ldo, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
-		GenerateDiadic(op_mov, 0, makereg(114), ap);
-		GenerateMonadic(op_jmp, 0, MakeIndirect(114));
-		s1->GenerateCase();
+		GenerateDiadic(op_mov, 0, makereg(98), ap);
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateMonadic(op_jmp, 0, MakeIndirect(98));
+		for (st = s1; st != (Statement*)NULL; st = st->next)
+			st->GenerateCase();
 		GenerateLabel(breaklab);
 		ReleaseTempRegister(ap);
 		return;
 	}
 	GenerateLinearSwitch();
-	s1->GenerateCase();
+	for (st = s1; st != (Statement*)NULL; st = st->next)
+		st->GenerateCase();
 	GenerateLabel(breaklab);
 	breaklab = oldbreak;
 }
@@ -2098,6 +2107,9 @@ void Statement::GenerateCompound()
 		}
 		sp = sp->GetNextPtr();
 	}
+//	if (outer == nullptr)
+//		if (currentFn->csetbl)
+//			currentFn->csetbl->InitializeTempRegs(-1);
 	// Generate statement will process the entire list of statements in
 	// the block.
 	s1->Generate();
@@ -2117,6 +2129,9 @@ void Statement::GenerateFuncBody()
 		}
 		sp = sp->GetNextPtr();
 	}
+//	if (outer == nullptr)
+//		if (currentFn->csetbl)
+//			currentFn->csetbl->InitializeTempRegs(-1);
 	// Generate statement will process the entire list of statements in
 	// the block.
 	s1->Generate();
@@ -2257,30 +2272,40 @@ void Statement::GenerateAsm()
 {
 	char buf2[50];
 	SYM* thead, * firsts;
-	int64_t tn, lo, bn, ll;
+	int64_t tn, lo, bn, ll, i, j;
 	char* p;
 	char* buf = (char*)label;
 
 	ll = strlen(buf);
 	thead = firsts = SYM::GetPtr(currentFn->params.head);
 	while (thead) {
-		if (p = strstr(buf, &thead->name->c_str()[1])) {
-			bn = p - buf;
-			if (!isidch(p[tn = thead->name->length()])) {
-				tn--;
-				if (thead->IsParameter) {
-					if (thead->IsRegister)
-						sprintf_s(buf2, sizeof(buf2), "x%lld", thead->reg);
-					else
-						sprintf_s(buf2, sizeof(buf2), "%lld[$fp]", thead->value.i + currentFn->SizeofReturnBlock() * sizeOfWord);
-					lo = strlen(buf2);
-					if (lo >= tn) {
-						memmove(&p[lo], &p[tn], ll - bn);
-						memcpy(p, buf2, lo);
-					}
-					else {
-						memmove(&p[tn], &p[lo], ll - bn);
-						memcpy(p, buf2, lo);
+		p = &buf[-1];
+		while (p = strstr(p+1, &thead->name->c_str()[1])) {
+			if (!isidch(p[-1])) {
+				bn = p - buf;
+				if (!isidch(p[tn = thead->name->length()])) {
+					tn--;
+					if (thead->IsParameter) {
+						if (thead->IsRegister)
+							sprintf_s(buf2, sizeof(buf2), "x%I64d", thead->reg);
+						else
+							sprintf_s(buf2, sizeof(buf2), "%I64d[$fp]", thead->value.i + currentFn->SizeofReturnBlock() * sizeOfWord);
+						lo = strlen(buf2);
+						
+						if (lo==tn)
+							memcpy(p, buf2, lo);
+						else if (lo > tn) {
+							for (i = strlen(&p[tn])+1; i >= 0; i--)
+								p[lo + i] = p[tn + i];
+							memcpy(p, buf2, lo);
+						}
+						else {
+							for (i = 0; p[lo + i]; i++)
+								p[tn + i] = p[lo + i];
+							p[tn + i] = p[lo + i];
+							memcpy(p, buf2, lo);
+						}
+						
 					}
 				}
 			}
@@ -2292,7 +2317,7 @@ void Statement::GenerateAsm()
 		}
 	}
 
-	GenerateMonadic(op_asm, 0, MakeStringAsNameConst((char *)label,codeseg));
+	GenerateMonadic(op_asm, 0, MakeStringAsNameConst((char *)buf,codeseg));
 }
 
 void Statement::GenerateFirstcall()

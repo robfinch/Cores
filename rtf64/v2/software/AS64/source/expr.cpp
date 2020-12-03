@@ -325,7 +325,8 @@ int64_t expr()
     val = or_expr(&def);
     // We only care about the symbol if relocatable output is being generated.
     // Setting the symbol to NULL will result in no rel records being output.
-    if (nsym > 1 || !rel_out)
+    // We do care for global pointer relative addressing.
+    if (nsym > 1)// || !rel_out)
         lastsym = (SYM *)NULL;
     return val;
 }
@@ -341,7 +342,7 @@ int64_t expr_def(int64_t *def)
   val = or_expr(def);
   // We only care about the symbol if relocatable output is being generated.
   // Setting the symbol to NULL will result in no rel records being output.
-  if (nsym > 1 || !rel_out)
+  if (nsym > 1)// || !rel_out)
     lastsym = (SYM*)NULL;
   return val;
 }

@@ -777,9 +777,13 @@ TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeA
 			nt = false;
 		}
 		else {
-			dfs.printf("Undefined symbol2 in nameref\r\n");
-			tp = (TYP *)NULL;
-			*node = makeinode(en_labcon,9999);
+			// Since the variable isn't known it is defined as an int so the
+			// compiler does not croak.
+			dfs.printf("Undefined symbol2 %s in nameref\r\n", (char *)name.c_str());
+			//tp = (TYP *)NULL;
+			tp = &stdint;
+			//*node = makeinode(en_labcon,9999);
+			*node = MakeUnknownVarNameNode(name, &tp);
 			error(ERR_UNDEFINED);
 		}
 	}
@@ -1982,8 +1986,9 @@ TYP *Expression::ParseAddOps(ENODE **node)
     oper = (lastst == plus);
     NextToken();
     tp2 = ParseMultOps(&ep2);
-		if (tp2==nullptr)
-			throw new C64PException(ERR_NULLPOINTER,1);
+		if (tp2 == nullptr) {
+			throw new C64PException(ERR_NULLPOINTER, 1);
+		}
 		isScalar = !tp2->IsVectorType();
     if( tp2 == 0 ) {
       error(ERR_IDEXPECT);

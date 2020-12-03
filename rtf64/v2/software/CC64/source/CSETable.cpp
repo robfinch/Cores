@@ -110,10 +110,12 @@ CSE *CSETable::Search(ENODE *node)
 	int cnt;
 
 	for (cnt = 0; cnt < csendx; cnt++) {
-		if (ENODE::IsEqual(node, table[cnt].exp)) {
-			searchpos = cnt;
-			return (&table[cnt]);
-		}
+//		if (IsLValue(table[cnt].exp)) {
+			if (ENODE::IsEqual(node, table[cnt].exp)) {
+				searchpos = cnt;
+				return (&table[cnt]);
+			}
+//		}
 	}
 	return ((CSE *)nullptr);
 }
@@ -179,8 +181,10 @@ int CSETable::AllocateGPRegisters()
 	bool alloc;
 	int pass;
 	int reg;
+	int regt;
 
 	reg = regFirstRegvar;
+	regt = regFirstTemp;
 	for (pass = 0; pass < 4; pass++) {
 		for (csp = First(); csp; csp = Next()) {
 			if (csp->OptimizationDesireability() > 0) {
@@ -193,8 +197,12 @@ int CSETable::AllocateGPRegisters()
 						case 2:	alloc = (csp->OptimizationDesireability() >= 3) && reg <= regLastRegvar; break;
 						case 3: alloc = (csp->OptimizationDesireability() >= 3) && reg <= regLastRegvar; break;
 						}
-						if (alloc)
-							csp->reg = reg++;
+						if (alloc) {
+							if (currentFn->IsLeaf && regt < regLastTemp)
+								csp->reg = regt++;
+							else
+								csp->reg = reg++;
+						}
 						else
 							csp->reg = -1;
 					}
@@ -306,7 +314,7 @@ int CSETable::AllocateVectorRegisters()
 	return (vreg);
 }
 
-void CSETable::InitializeTempRegs()
+void CSETable::InitializeTempRegs(int opt)
 {
 	Operand *ap, *ap2, *ap3;
 	CSE *csp;
@@ -438,8 +446,10 @@ int CSETable::AllocateRegisterVars()
 				GenerateRegMask(csp, pmask, prmask);
 			else if (csp->exp->etype == bt_vector)
 				GenerateRegMask(csp, vrmask, vmask);
-			else
-				GenerateRegMask(csp, mask, rmask);
+			else {
+				if (!(csp->reg >= regFirstTemp && csp->reg <= regLastTemp))
+					GenerateRegMask(csp, mask, rmask);
+			}
 		}
 		else
 			GenerateRegMask(csp, mask, rmask);
@@ -458,7 +468,7 @@ int CSETable::AllocateRegisterVars()
 	fpsave_mask = fpmask;
 	psave_mask = pmask;
 
-	InitializeTempRegs();
+	InitializeTempRegs(1);
 	return (mask->NumMember());
 }
 
@@ -496,7 +506,7 @@ int CSETable::Optimize(Statement *block)
 		}
 		nn = AllocateRegisterVars();
 		if (pass == 2) {
-			block->repcse();          /* replace allocated expressions */
+			block->repcse();          // replace allocated expressions
 			//block->update();					// available for debugging
 			dfs.printf("===== After Update =====");
 			block->Dump();
@@ -506,8 +516,8 @@ int CSETable::Optimize(Statement *block)
 		;// currentFn->csetbl->Assign(pCSETable);
 	else if (pass == 2) {
 		if (currentFn->csetbl && !currentFn->IsInline) {
-			delete currentFn->csetbl;
-			currentFn->csetbl = nullptr;
+//			delete currentFn->csetbl;
+//			currentFn->csetbl = nullptr;
 		}
 	}
 	dfs.printf("</CSETable__Optimize>\n");

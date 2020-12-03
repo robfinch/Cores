@@ -132,7 +132,7 @@ int save_rap[20];
 
 int NumTempRegs()
 {
-	if (currentFn->IsLeaf)
+	if (currentFn->IsLeaf && false)
 		return (regLastTemp - 1 + 1);
 	else
 		return (regLastTemp - regFirstTemp + 1);
@@ -525,7 +525,7 @@ void checkstack()
     for (i=1; i<= regLastTemp; i++)
         if (reg_in_use[i] != -1)
             fatal("checkstack()/1");
-	if (next_reg != sym->IsLeaf ? 1 : regFirstTemp) {
+	if (next_reg != (sym->IsLeaf && false) ? 1 : regFirstTemp) {
 		//printf("Nextreg: %d\r\n", next_reg);
         fatal("checkstack()/3");
 	}

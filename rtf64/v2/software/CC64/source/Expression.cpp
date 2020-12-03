@@ -179,7 +179,7 @@ ENODE* Expression::ParseStringConst(ENODE** node)
 	}
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
 	if (sizeof_flag == 0)
-		pnode->i = stringlit(str);
+		pnode->i = stringlit(str, false);
 	free(str);
 	pnode->etype = bt_pointer;
 	pnode->esize = 2;
@@ -208,7 +208,7 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 	}
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
 	if (sizeof_flag == 0)
-		pnode->i = stringlit(str);
+		pnode->i = stringlit(str, false);
 	free(str);
 	pnode->etype = bt_pointer;
 	pnode->esize = 2;
@@ -241,6 +241,9 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 		case 'O':
 			tptr->btp = TYP::Make(bt_long, 8)->GetIndex();
 			break;
+		case 'U':
+			tptr->btp = TYP::Make(bt_utf21, 8)->GetIndex();
+			break;
 		}
 		tptr->val_flag = 1;
 		tptr->isUnsigned = TRUE;
@@ -250,12 +253,13 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 	}
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
 	if (sizeof_flag == 0)
-		pnode->i = stringlit(str);
+		pnode->i = stringlit(str, str[0]=='U');
 	switch (str[0]) {
 	case 'B': pnode->esize = 1; break;
 	case 'W': pnode->esize = 2; break;
 	case 'T': pnode->esize = 4; break;
 	case 'O': pnode->esize = 8; break;
+	case 'U': pnode->esize = 8; break;
 	}
 	free(str);
 	pnode->etype = bt_pointer;
@@ -1596,5 +1600,29 @@ ENODE* Expression::MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArr
 		node->isUnsigned = TRUE;
 	node->esize = 8;
 	node->isPascal = sp->fi->IsPascal;
+	return (node);
+}
+
+ENODE* Expression::MakeUnknownVarNameNode(std::string nm, TYP** tp)
+{
+	ENODE* node, * namenode;
+	SYM* sp;
+
+	sp = allocSYM();
+	sp->fi = nullptr;
+	sp->tp = &stdint;
+	sp->tp->btp = bt_long;
+	sp->SetName(*(new std::string(nm)));
+	sp->storage_class = sc_external;
+	sp->IsUndefined = TRUE;
+	dfs.printf("Insert at nameref\r\n");
+	gsyms[0].insert(sp);
+	*tp = &stdint;
+	node = makesnode(en_cnacon, sp->name, sp->name, sp->value.i);
+	node->sym = sp;
+	if (sp->tp->isUnsigned)
+		node->isUnsigned = TRUE;
+	node->esize = 8;
+	node->isPascal = false;
 	return (node);
 }

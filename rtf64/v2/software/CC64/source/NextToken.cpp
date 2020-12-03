@@ -293,7 +293,11 @@ void getbase(int64_t b)
         i = 0;
         i0 = 0;
         i1 = 0;
-        while(isalnum(lastch)) {
+        while (isalnum(lastch) || lastch=='_') {
+          if (lastch == '_') {
+            getch();
+            continue;
+          }
                 if((j = radix36(lastch)) < b) {
                         i = i * b + j;
                         i2 = i0;
@@ -457,6 +461,10 @@ void getnum()
                         getch();
                         getbase(16);
                         }
+                else if (lastch == 'b' || lastch == 'B') {
+                  getch();
+                  getbase(2);
+                }
                 else getbase(8);
                 // Ignore 'U' unsigned suffix
                 if (lastch == 'U' || lastch == 'u') {
@@ -579,8 +587,8 @@ restart:        /* we come back here after comments */
   }
   else if(isidch(lastch)) {
 		getid();
-		if (lastch == '"' && lastid[0] == '_' && (lastid[1]=='B' || lastid[1]=='W' || lastid[1]=='T' || lastid[1]=='O'
-			|| lastid[1] == 'b' || lastid[1] == 'w' || lastid[1] == 't' || lastid[1] == 'o')) {
+		if (lastch == '"' && lastid[0] == '_' && (lastid[1]=='B' || lastid[1]=='W' || lastid[1]=='T' || lastid[1]=='O' || lastid[1]=='U'
+			|| lastid[1] == 'b' || lastid[1] == 'w' || lastid[1] == 't' || lastid[1] == 'o' || lastid[1]=='u')) {
 			getch();
 			laststr[0] = toupper(lastid[1]);
 			for (i = 1; i < MAX_STRLEN; ++i) {

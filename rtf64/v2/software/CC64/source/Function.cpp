@@ -75,7 +75,7 @@ Statement *Function::ParseBody()
 	if (!IsInline)
 		GenerateMonadic(op_fnname, 0, MakeStringAsNameConst(p, codeseg));
 	currentFn = this;
-	IsLeaf = TRUE;
+	IsLeaf = TRUE;// false;// TRUE;
 	DoesThrow = false;
 	doesJAL = false;
 	UsesPredicate = FALSE;
@@ -99,7 +99,7 @@ Statement *Function::ParseBody()
 		max_reg_alloc_ptr = 0;
 		max_stack_use = 0;
 		label = nextlabel;
-		Gen();
+		Generate();
 		stkspace += (ArgRegCount - regFirstArg) * sizeOfWord;
 		argbot = -stkspace;
 		stkspace += max_stack_use;// GetTempMemSpace();
@@ -110,7 +110,7 @@ Statement *Function::ParseBody()
 			pl.tail->fwd = nullptr;
 		looplevel = 0;
 		//nextlabel = label;
-		Gen();
+		Generate();
 		dfs.putch('E');
 
 		PeepOpt();
@@ -316,6 +316,21 @@ j1:
 	dfs.puts("</ParseFunction>\n");
 	return (0);
 }
+
+/*
+void Function::StackGPRs()
+{
+	int nn;
+
+	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(31 * sizeOfWord));
+	for (nn = 1; nn < 31; nn = nn + 1) {
+		GenerateDiadic(op_sto, 0, makereg(nn), MakeIndexed((nn - 1) * sizeOfWord, regSP));
+	}
+	// Get usp
+	GenerateTriadic(op_csrrw, 0, makereg(2), MakeImmediate(0x00), makereg(regZero));
+	GenerateDiadic(op_sto, 0, makereg(2), MakeIndexed(30 * sizeOfWord, regSP));
+}
+*/
 
 // Push temporaries on the stack.
 
@@ -572,12 +587,12 @@ void Function::UnlinkStack()
 	}
 	*/
 	GenerateMonadic(op_hint, 0, MakeImmediate(begin_stack_unlink));
-	if (!IsLeaf && doesJAL) {
+	if (/*!IsLeaf &&*/ doesJAL) {
 		if (alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord + stkspace, regSP));
 	}
 	cg.GenerateUnlink();
-	if (!IsLeaf && doesJAL) {
+	if (/*!IsLeaf &&*/ doesJAL) {
 		if (!alstk)
 			GenerateDiadic(op_ldo, 0, makereg(regLR), MakeIndexed(sizeOfWord, regSP));
 	}
@@ -611,7 +626,8 @@ bool Function::GenDefaultCatch()
 
 int64_t Function::SizeofReturnBlock()
 {
-	return ((int64_t)(IsLeaf ? 1 : doesJAL ? 2 : 1));
+	return (compiler.GetReturnBlockSize());
+	return ((int64_t)(IsLeaf ? 4 : 3));
 }
 
 // For a leaf routine don't bother to store the link register.
@@ -624,20 +640,20 @@ void Function::SetupReturnBlock()
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
 	if (cpu.SupportsLink) {
 		if (stkspace < 65536 * 8) {
-			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord + stkspace));
+			GenerateMonadic(op_link, 0, MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord + stkspace));	// -1 for return address already stacked.
 			//spAdjust = pl.tail;
 			alstk = true;
 		}
 		else
-			GenerateMonadic(op_link, 0, MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+			GenerateMonadic(op_link, 0, MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 	}
 	else {
-		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(SizeofReturnBlock() * sizeOfWord));
+		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 		GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
 	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
 	n = 0;
-	if (!currentFn->IsLeaf && doesJAL) {
+	if (/*!currentFn->IsLeaf &&*/ doesJAL) {
 		n |= 2;
 		if (alstk) {
 			GenerateDiadic(op_sto, 0, makereg(regLR), MakeIndexed(1 * sizeOfWord + stkspace, regSP));
@@ -667,13 +683,13 @@ void Function::SetupReturnBlock()
 
 // Generate a return statement.
 //
-void Function::GenerateReturn(Statement *stmt)
+void Function::GenerateReturn(Statement* stmt)
 {
-	Operand *ap, *ap2;
+	Operand* ap, * ap2;
 	int nn;
 	int cnt, cnt2;
 	int toAdd;
-	SYM *p;
+	SYM* p;
 	bool isFloat, isPosit;
 	int64_t sz;
 
@@ -803,7 +819,7 @@ void Function::GenerateReturn(Statement *stmt)
 
 	// Unlock any semaphores that may have been set
 	for (nn = lastsph - 1; nn >= 0; nn--)
-		GenerateDiadic(op_stb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn],dataseg));
+		GenerateDiadic(op_stb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn], dataseg));
 
 	// Restore fp registers used as register variables.
 	//if (fpsave_mask->NumMember()) {
@@ -830,9 +846,9 @@ void Function::GenerateReturn(Statement *stmt)
 		if (cpu.SupportsLink)
 			toAdd = 0;
 		else
-			toAdd = SizeofReturnBlock() * sizeOfWord;
+			toAdd = (SizeofReturnBlock()-1LL) * sizeOfWord;	// -1 for return address which will be unstacked by ret
 	}
-	else if (currentFn->IsLeaf)
+	else if (currentFn->IsLeaf && false)
 		toAdd = 0;
 	else
 		toAdd = sizeOfWord;
@@ -840,6 +856,15 @@ void Function::GenerateReturn(Statement *stmt)
 	if (epilog) {
 		epilog->Generate();
 		return;
+	}
+
+	// Local variables and the return block must be deallocated before the return instruction.
+	// The return address is between these and the parameters. Parameters can be deallocated
+	// during the return. For leaf routines, the return address is not present, so it is 
+	// safe to combine the de-allocations.
+	if (!currentFn->IsLeaf || true) {
+		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
+		toAdd = 0;
 	}
 
 	// If Pascal calling convention remove parameters from stack by adding to stack pointer
@@ -895,10 +920,11 @@ void Function::GenerateReturn(Statement *stmt)
 	}
 
 	if (!IsInline) {
-		if (toAdd > 65536)
-			;
-		else
-			GenerateMonadic(currentFn->IsLeaf ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
+		if (toAdd > 65536) {
+			GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
+			toAdd = 0;
+		}
+		GenerateMonadic((currentFn->IsLeaf && false) ? op_rtl : op_ret, 0, MakeImmediate(toAdd));
 	}
 	else
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(toAdd));
@@ -907,7 +933,7 @@ void Function::GenerateReturn(Statement *stmt)
 
 // Generate a function body.
 //
-void Function::Gen()
+void Function::Generate()
 {
 	int defcatch;
 	Statement *stmt = this->sym->stmt;
@@ -942,7 +968,7 @@ void Function::Gen()
 			GenerateDiadic(op_lea, 0, makereg(SP), MakeStringAsNameConst(stkname,dataseg));
 			GenerateTriadic(op_ori, 0, makereg(SP), makereg(SP), MakeImmediate(0xFFFFF00000000000LL));
 		}
-		//SaveRegisterSet(sym);
+//		StackGPRs();
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
@@ -1006,7 +1032,7 @@ void Function::Gen()
 		}
 	}
 	dfs.puts("</StaticRegs>");
-	currentFn->pl.Dump("===== Peeplist After Gen Pass %d =====\n");
+	currentFn->pl.Dump("===== Peeplist After Generate Pass %d =====\n");
 	retGenerated = o_retgen;
 	throwlab = o_throwlab;
 	retlab = o_retlab;
@@ -1496,7 +1522,7 @@ void Function::Summary(Statement *stmt)
 	else {
 		if (stmt->stype == st_compound)
 			stmt->ListCompoundVars();
-		stmt->storeHex(irfs);
+		//stmt->storeHex(irfs);
 	}
 	lfs.printf("\n\n\n");
 	//    ReleaseLocalMemory();        // release local symbols

@@ -5,7 +5,7 @@ enum e_bt {
 	bt_none,
 	bt_byte, bt_ubyte, bt_bit, bt_bool,
 	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_posit, bt_pointer,
-	bt_ichar, bt_iuchar, bt_i128,
+	bt_ichar, bt_iuchar, bt_utf21, bt_i128,
 	bt_uchar, bt_ushort, bt_ulong,
   bt_unsigned, bt_vector, bt_vector_mask,
   bt_array, bt_struct, bt_union, bt_class, bt_enum, bt_void,

@@ -749,8 +749,11 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 					}
 					else
 						ap1->mode = am_ind;
-					if (node->p[0]->constflag == TRUE)
+					if (node->p[0]->constflag == TRUE) {
 						ap1->offset = node->p[0];
+						ap1->bit_offset = node->bit_offset;
+						ap1->bit_width = node->bit_width;
+					}
 					else
 						ap1->offset = nullptr;	// ****
 					ap1->isUnsigned = !su | ap1->isPtr;
@@ -2499,10 +2502,12 @@ int CodeGenerator::GenerateInlineArgumentList(Function *sym, ENODE *plist)
 	for (--nn, i = 0; nn >= 0; --nn, i++)
 	{
 		if (pl[nn]->etype == bt_pointer) {
+			if (pl[nn]->tp->GetBtp() == nullptr)
+				continue;
 			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar) {
 				for (st = strtab; st; st = st->next) {
 					if (st->label == pl[nn]->i) {
-						cp = st->str;
+						cp = (char *)st->str;
 						break;
 					}
 				}
