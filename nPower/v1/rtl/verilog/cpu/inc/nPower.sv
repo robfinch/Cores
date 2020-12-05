@@ -18,6 +18,7 @@ parameter SUBFO = 10'd552;
 parameter DIVW  = 10'd491;
 parameter DIVWO = 10'd971;
 parameter MULLW = 10'd235;
+parameter MULLWO= 10'd747;
 parameter NEG   = 10'd104;
 
 parameter EXTSB = 10'd954;
@@ -32,7 +33,9 @@ parameter CMPLI = 6'd10;
 
 // Logic
 parameter AND   = 10'd28;
+parameter ANDC  = 10'd60;
 parameter OR    = 10'd444;
+parameter ORC   = 10'd412;
 parameter XOR   = 10'd316;
 parameter NAND  = 10'd476;
 parameter NOR   = 10'd124;
@@ -50,6 +53,9 @@ parameter SLW   = 10'd24;
 parameter SRW   = 10'd536;
 parameter SRAW  = 10'd792;
 parameter SRAWI = 10'd824;
+parameter RLWIMI  = 6'd20;
+parameter RLWINM  = 6'd21;
+parameter RLWNM   = 6'd23;
 
 // Branch
 parameter B     = 6'd18;
