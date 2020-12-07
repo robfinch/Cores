@@ -51,10 +51,10 @@ wire [AWID-1:0] rstip = RSTIP;
 reg [63:0] tadri0, tadri1, tadri2, tadri3;
 reg wr0,wr1,wr2,wr3, wed;
 reg hit0,hit1,hit2,hit3;
-wire wrtlb1 = tlbadr_i[11:10]==2'd0 && wrtlb_i;
-wire wrtlb2 = tlbadr_i[11:10]==2'd1 && wrtlb_i;
-wire wrtlb3 = tlbadr_i[11:10]==2'd2 && wrtlb_i;
-wire wrtlb4 = tlbadr_i[11:10]==2'd3 && wrtlb_i;
+wire tlbwr1 = tlbadr_i[11:10]==2'd0 && wrtlb_i;
+wire tlbwr2 = tlbadr_i[11:10]==2'd1 && wrtlb_i;
+wire tlbwr3 = tlbadr_i[11:10]==2'd2 && wrtlb_i;
+wire tlbwr4 = tlbadr_i[11:10]==2'd3 && wrtlb_i;
 wire [63:0] tlbdato1,tlbdato2,tlbdato3,tlbdato4;
 wire [63:0] tadr0, tadr1, tadr2, tadr3;
 wire clk_g = clk_i;
@@ -117,7 +117,7 @@ TLBRam u1 (
   .enb(xlaten_i),      // input wire enb
   .web(wr0),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
-  .dinb(tadr0i),    // input wire [63 : 0] dinb
+  .dinb(tadri0),    // input wire [63 : 0] dinb
   .doutb(tadr0)  // output wire [63 : 0] doutb
 );
 
@@ -132,7 +132,7 @@ TLBRam u2 (
   .enb(xlaten_i),      // input wire enb
   .web(wr1),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
-  .dinb(tadr1i),    // input wire [63 : 0] dinb
+  .dinb(tadri1),    // input wire [63 : 0] dinb
   .doutb(tadr1)  // output wire [63 : 0] doutb
 );
 
@@ -147,7 +147,7 @@ TLBRam u3 (
   .enb(xlaten_i),      // input wire enb
   .web(wr2),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
-  .dinb(tadr2i),    // input wire [63 : 0] dinb
+  .dinb(tadri2),    // input wire [63 : 0] dinb
   .doutb(tadr2)  // output wire [63 : 0] doutb
 );
 
@@ -162,7 +162,7 @@ TLBRam u4 (
   .enb(xlaten_i),      // input wire enb
   .web(wr3),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
-  .dinb(tadr3i),    // input wire [63 : 0] dinb
+  .dinb(tadri3),    // input wire [63 : 0] dinb
   .doutb(tadr3)  // output wire [63 : 0] doutb
 );
 

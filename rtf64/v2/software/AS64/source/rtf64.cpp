@@ -1435,10 +1435,10 @@ int getMergeOp()
 	inptr++;
 	NextToken();
 	switch (token) {
-	case tk_and:	return (1);
-	case tk_or:	return (2);
-	case tk_andcm:	return (3);
-	case tk_orcm: return (4);
+	case tk_or:	return (1);
+	case tk_and:	return (2);
+	case tk_orcm: return (3);
+	case tk_andcm:	return (4);
 	default:
 		inptr = p;
 		return (0);
@@ -2438,12 +2438,12 @@ static void process_setiop(int64_t opcode6, int64_t func6, int64_t bit23)
 	val = expr();
 	if (!IsNBit(val, 13)) {
 		LoadConstant(val, 2);
-		emit_insn((func6 << 28LL)|FMT(sz)|RS2(2)|RS1(Ra)|RD((mop<<3)|Rt)|I_SET,true);
+		emit_insn((func6 << 28LL)|FMT(sz)|RS2(2)|RS1(Ra)|RD((mop<<2)|Rt)|I_SET,true);
 		return;
 	}
 	emit_insn(
 		IMM(val) |
-		RD((mop << 3)|Rt) |
+		RD((mop << 2)|Rt) |
 		RA(Ra) |
 		opcode6, true
 	);
@@ -2493,7 +2493,7 @@ static void process_setop(int64_t funct6, int64_t opcode6, int64_t bit23)
 			FUNC5(-funct6) |
 			FMT(sz) |
 			RS2(Ra) |
-			RD((mop<<3)|Rt) |
+			RD((mop<<2)|Rt) |
 			RS1(Rb) |
 			I_SET, true
 		);
@@ -2502,7 +2502,7 @@ static void process_setop(int64_t funct6, int64_t opcode6, int64_t bit23)
 			FUNC5(funct6) |
 			FMT(sz) |
 			RS2(Rb) |
-			RD((mop << 3)|Rt) |
+			RD((mop << 2)|Rt) |
 			RS1(Ra) |
 			I_SET, true
 		);
