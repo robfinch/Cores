@@ -1125,6 +1125,14 @@ int rtf64_NextToken()
 										 tbndx++;
 										 return token = tk_csrrw;
                    }
+							 if ((inptr[1] == 's' || inptr[1] == 'S') &&
+								 (inptr[2] == 'r' || inptr[2] == 'R') &&
+								 isspaceOrDot(inptr[3])) {
+								 inptr += 3;
+								 tokenBuffer[tbndx] = tk_csr;
+								 tbndx++;
+								 return token = tk_csr;
+							 }
 							 if ((inptr[1] == 'm' || inptr[1] == 'M') &&
 								 (inptr[2] == 'o' || inptr[2] == 'O') &&
 								 (inptr[3] == 'v' || inptr[3] == 'V') &&
@@ -2807,6 +2815,15 @@ int rtf64_NextToken()
 				tbndx++;
 				return token = tk_stw;
 			}  
+			if ((inptr[1] == 't' || inptr[1] == 'T') &&
+				(inptr[2] == 'o' || inptr[2] == 'O') &&
+				(inptr[3] == 'i' || inptr[3] == 'I') &&
+				isspaceOrDot(inptr[4])) {
+				inptr += 4;
+				tokenBuffer[tbndx] = tk_stoi;
+				tbndx++;
+				return (token = tk_stoi);
+			}
 			if ((inptr[1] == 't' || inptr[1] == 'T') &&
 				(inptr[2] == 'o' || inptr[2] == 'O') &&
 				isspaceOrDot(inptr[3])) {

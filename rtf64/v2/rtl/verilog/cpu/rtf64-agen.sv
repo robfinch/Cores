@@ -21,8 +21,8 @@
 //                                                                          
 // ============================================================================
 //
-`include "../inc/rtf64-defines.sv"
-`include "../inc/rtf64-config.sv"
+import rtf64pkg::*;
+import rtf64configpkg::*;
 
 // Contains logic to increment address for unaligned memory accesses.
 
@@ -97,9 +97,9 @@ casez(inst[`OPCODE])
 `STORE:	// stores
 	casez(inst[`OPCODE])
 	// Short form stores - sp, fp relative
-	`STBS,`STWS,`STTS,`STOS,`STOCS:
+	`STBS,`STWS,`STTS,`STOS,`STOCS,`STOIS,`FSTOS,`PSTOS:
 	  ma <= a + {{AMSB{inst[22]}},inst[22:14],3'd0};
-	`STB,`STW,`STT,`STO,`STOC,`STOT:
+	`STB,`STW,`STT,`STO,`STOC,`STOT,`FSTO,`PSTO:
 	  if (inst[`AMODE])
 	    ma <= a + {{AMSB{inst[29]}},inst[29:18]};
 	  else

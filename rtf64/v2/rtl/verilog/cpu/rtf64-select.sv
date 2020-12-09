@@ -21,7 +21,7 @@
 //                                                                          
 // ============================================================================
 //
-`include "../inc/rtf64-defines.sv"
+import rtf64pkg::*;
 
 module modSelect(opcode, sel);
 input [7:0] opcode;
@@ -35,11 +35,11 @@ case(opcode)
   sel = 8'h03;
 `LDT,`LDTU,`LDTS,`LDTUS,`STT,`STTS:
   sel = 8'h0F;
-`LDO,`LDOS,`LDOR,`LDORS,`STO,`STOS,`STOC,`STOCS,`STPTR,`STPTRS:
+`LDO,`LDOS,`LDOR,`LDORS,`STO,`STOS,`STOC,`STOCS,`STPTR,`STPTRS,`STOIS:
   sel = 8'hFF;
-`FLDO,`PLDO:  
+`FLDO,`PLDO,`FLDOS,`PLDOS:  
   sel = 8'hFF;
-`FSTO,`PSTO:  
+`FSTO,`PSTO,`FSTOS,`PSTOS:  
   sel = 8'hFF;
 `JSR,`JSR18,`RTS:
   sel = 8'hFF;

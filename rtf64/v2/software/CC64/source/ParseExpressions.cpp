@@ -767,10 +767,12 @@ TYP *Expression::nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeA
 		while( my_isspace(lastch) )
 			getch();
 		if (lastch == '(') {
+			TypeArray* ta;
 			ENODE* args;
 			std::string nm(lastid);//???
 			NextToken();
 			NextToken();
+			ta = new TypeArray;
 			args = ParseArgumentList(nullptr, typearray);
 			*node = MakeUnknownFunctionNameNode(name, &tp, typearray, args);
 			sp = (*node)->sym;
@@ -862,6 +864,8 @@ TYP *Expression::nameref(ENODE **node,int nt)
 	gsearch2(str.c_str(), (__int16)bt_long, nullptr, false);
 	if (TABLE::matchno == 0) {
 		gsearch2(lastid, (__int16)bt_long, nullptr, false);
+		if (TABLE::matchno == 0) {
+		}
 		tp = nameref2(lastid, node, nt, true, nullptr, nullptr);
 	}
 	else {
@@ -895,7 +899,8 @@ ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 
 	dfs.printf("<ArgumentList>");
 	nn = 0;
-	ep1 = 0;
+	ep1 = nullptr;
+	ep2 = nullptr;
 	if (hidden) {
 		ep1 = makenode(en_void,hidden,ep1);
 	}
@@ -934,7 +939,7 @@ ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 	if (lastst==closepa)
 		NextToken();
 	dfs.printf("</ArgumentList>\n");
-	return ep1;
+	return (ep1);
 }
 
 /*

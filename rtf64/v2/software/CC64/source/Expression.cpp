@@ -1583,6 +1583,7 @@ ENODE* Expression::MakeUnknownFunctionNameNode(std::string nm, TYP** tp, TypeArr
 
 	sp = allocSYM();
 	sp->fi = compiler.ff.MakeFunction(sp->id, sp, defaultcc == 1);
+	sp->fi->AddProto(typearray);
 	sp->tp = &stdfunc;
 	sp->tp->btp = bt_long;
 	sp->SetName(*(new std::string(nm)));

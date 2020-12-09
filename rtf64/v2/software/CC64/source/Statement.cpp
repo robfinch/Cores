@@ -1961,7 +1961,7 @@ void Statement::GenerateTry()
 //	GenerateDiadic(op_ldi, 0, makereg(regAsm), MakeCodeLabel(throwlab));
 //	GenerateTriadic(op_gcsub, 0, makereg(regXHSP), makereg(regXHSP), MakeImmediate(sizeOfWord));
 //	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeIndexed((int64_t)0, regXHSP));
-	GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord*(int64_t)2));
+	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord*(int64_t)2));
 	GenerateDiadic(op_ldo, 0, makereg(regAsm), MakeStringAsNameConst("__xhandler_head", dataseg));
 	GenerateDiadic(op_sto, 0, makereg(regAsm), MakeIndexed(sizeOfWord, regSP));
 	sprintf_s(buf, sizeof(buf), "#%s_%lld", GetNamespace(), (int64_t)throwlab);

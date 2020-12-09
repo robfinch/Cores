@@ -747,8 +747,11 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 						ap1->mode = am_indx;
 						ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
 					}
-					else
+					else {
+						ap1->preg = 0;
 						ap1->mode = am_ind;
+					}
+					ap1->segment = node->segment;
 					if (node->p[0]->constflag == TRUE) {
 						ap1->offset = node->p[0];
 						ap1->bit_offset = node->bit_offset;
@@ -795,7 +798,9 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
   }
   else {
 //    ap1->mode = am_direct;
+		ap1->mode = am_ind;	// ***Check
 	  ap1->isUnsigned = !su | ap1->isPtr;
+		ap1->segment = dataseg;
   }
 	if (ap1->isPtr) {
 //		ap3 = GetTempRegister();
@@ -1617,8 +1622,11 @@ Operand* CodeGenerator::GenFloatcon(ENODE* node, int flags, int64_t size)
 		ap1->mode = am_indx;
 		ap1->preg = node->segment==rodataseg ? regGP1 : regGP;
 	}
-	else
+	else {
 		ap1->mode = am_direct;
+		ap1->preg = 0;
+	}
+	ap1->segment = node->segment;
 	ap1->offset = node;
 	if (node)
 		DataLabels[node->i] = true;
@@ -1640,8 +1648,11 @@ Operand* CodeGenerator::GenPositcon(ENODE* node, int flags, int64_t size)
 		ap1->mode = am_indx;
 		ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
 	}
-	else
+	else {
 		ap1->mode = am_direct;
+		ap1->preg = 0;
+	}
+	ap1->segment = node->segment;
 	ap1->offset = node;
 	if (node)
 		DataLabels[node->i] = true;
@@ -1669,16 +1680,19 @@ Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
 		}
 		ap2->offset = node;     // use as constant node
 		GenerateDiadic(op_lea, 0, ap1, ap2);
+		ap1->segment = node->segment;
 		ap1->MakeLegal(flags, size);
 		return (ap1);
 	}
 	ap1 = allocOperand();
+	ap1->segment = node->segment;
 	ap1->isPtr = node->IsPtr();
 	ap1->mode = am_imm;
 	ap1->offset = node;
 	ap1->isUnsigned = node->isUnsigned;
 	ap1->tp = node->tp;
 	ap1->MakeLegal(flags, size);
+	return (ap1);
 }
 
 //
@@ -1763,6 +1777,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 			if (node)
 				DataLabels[node->i] = true;
       GenerateDiadic(op_lea,0,ap1,ap2);
+			ap1->segment = node->segment;
 			ap1->MakeLegal(flags,size);
 			Leave("GenExpression",6); 
 			goto retpt;
@@ -1770,6 +1785,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
     // fallthru
 	case en_cnacon:
       ap1 = allocOperand();
+			ap1->segment = node->segment;
 			ap1->isPtr = node->IsPtr();
 			ap1->mode = am_imm;
       ap1->offset = node;
@@ -2269,6 +2285,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size)
 		}
 		else
 			GenerateDiadic(op_lea, 0, ap1, MakeDataLabel(node->i, regZero));
+		ap1->segment = node->segment;
 		ap1->isPtr = true;
 		goto retpt;
 	case en_object_list:

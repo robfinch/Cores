@@ -67,6 +67,11 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 	dfs.puts("</CopySymbolTable>\n");
 }
 
+bool TABLE::IsGlobalTable()
+{
+	return (this == &gsyms[0]);
+}
+
 //Generic table insert routine, used for all inserts.
 
 void TABLE::insert(SYM *sp)
@@ -93,7 +98,7 @@ void TABLE::insert(SYM *sp)
     dfs.printf("Insert %s into %p", (char *)sp->name->c_str(), (char *)this);
     dfs.printf("(%s)\n",owner ? (char *)SYM::GetPtr(owner)->name->c_str(): (char *)"");
 //  sig = sp->BuildSignature();
-	if (tab==&gsyms[0]) {
+	if (tab->IsGlobalTable()) {
 	  dfs.printf("Insert into global table\n");
 		s1 = hashadd((char *)sp->name->c_str());
 		s2 = hashadd((char *)sp->name2->c_str());
@@ -171,7 +176,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
   }
 
 	matchno = 0;
-	if (this==&gsyms[0])
+	if (this->IsGlobalTable())
 		thead = SYM::GetPtr(gsyms[hashadd((char *)na.c_str())].GetHead());
 	else
 		thead = SYM::GetPtr(head);

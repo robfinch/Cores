@@ -1183,6 +1183,7 @@ Operand *ENODE::GenIndex(bool neg)
 //
 Operand *ENODE::GenSafeHook(int flags, int size)
 {
+	return (GenHook(flags, size));
 	Operand *ap1, *ap2, *ap3, *ap4;
 	int false_label, end_label;
 	OCODE *ip1;
@@ -1222,6 +1223,7 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	}
 	*/
 	currentFn->pl.tail = ip1;
+	goto j2;
 	// cmovenz integer only
 	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
@@ -1232,6 +1234,8 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 			goto j1;
 		if (ap2->mode == am_preg || ap3->mode == am_preg)
 			goto j1;
+		// This disables cmovenz for now.
+		goto j1;
 		n1 = currentFn->pl.Count(ip1);
 		if (n1 < 20 && !currentFn->pl.HasCall(ip1)) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
@@ -1249,6 +1253,7 @@ j1:
 		currentFn->pl.tail = ip1;
 		currentFn->pl.tail->fwd = nullptr;
 	}
+j2:
 	ap2 = cg.GenerateExpression(p[1]->p[1], flags, size);
 	n1 = currentFn->pl.Count(ip1);
 	if (opt_nocgo)

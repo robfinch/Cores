@@ -648,7 +648,7 @@ void Function::SetupReturnBlock()
 			GenerateMonadic(op_link, 0, MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 	}
 	else {
-		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate((SizeofReturnBlock()-1LL) * sizeOfWord));
 		GenerateDiadic(op_sto, 0, makereg(regFP), MakeIndirect(regSP));
 	}
 	//	GenerateTriadic(op_stdp, 0, makereg(regFP), makereg(regZero), MakeIndirect(regSP));
@@ -675,7 +675,7 @@ void Function::SetupReturnBlock()
 	if (!cpu.SupportsLink)
 		GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
 	if (!alstk) {
-		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), MakeImmediate(stkspace));
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), MakeImmediate(stkspace));
 		//spAdjust = pl.tail;
 	}
 	GenerateMonadic(op_hint, 0, MakeImmediate(end_return_block));
@@ -973,6 +973,10 @@ void Function::Generate()
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
 	// optimizations.
+	if (optimize) {
+		if (currentFn->csetbl == nullptr)
+			currentFn->csetbl = new CSETable;
+	}
 	if (prolog) {
 		prolog->scan();
 		prolog->Generate();
@@ -989,8 +993,6 @@ void Function::Generate()
 		GenerateMonadic(op_hint, 0, MakeImmediate(start_funcbody));
 
 	if (optimize) {
-		if (currentFn->csetbl == nullptr)
-			currentFn->csetbl = new CSETable;
 		currentFn->csetbl->Optimize(stmt);
 	}
 	fpsave_mask = ::fpsave_mask;// CSet::MakeNew();
@@ -1443,6 +1445,8 @@ void Function::AddProto(TypeArray *ta)
 	int nn;
 	char buf[20];
 
+	if (ta == nullptr)
+		return;
 	for (nn = 0; nn < ta->length; nn++) {
 		sym = allocSYM();
 		sprintf_s(buf, sizeof(buf), "_p%d", nn);

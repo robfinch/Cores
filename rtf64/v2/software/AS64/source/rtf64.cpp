@@ -80,7 +80,7 @@
 #define I_ADD22	0x32
 #define I_ADDR2	0x33
 #define I_ORR2	0x34
-#define I_GCSUB7	0x36
+#define I_ADDISP10	0x36
 #define I_GCSUBI	0x37
 #define I_ADDUI	0x38
 #define I_ANDUI	0x3A
@@ -165,6 +165,7 @@
 #define I_STOCS	0xA4
 #define I_STPTRS	0xA5
 #define I_STOTS	0xA6
+#define I_STOIS	0xA7
 #define I_STOT	0xA8
 #define I_FSTOS	0xAB
 #define I_STX		0xAF
@@ -1691,7 +1692,7 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 				break;
 			}
 			break;
-		case I_GCSUB7:
+		case I_ADDISP10:
 			insnStats.subs++;
 			length = 2;
 			break;
@@ -1749,6 +1750,10 @@ static void emit_insn(int64_t oc, bool can_compress = false)
 //			break;
 		case I_STM:
 			length = 6;
+			insnStats.stores++;
+			break;
+		case I_STOIS:
+			length = 4;
 			insnStats.stores++;
 			break;
 		case I_STBS:
@@ -2273,20 +2278,20 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
 		val = -val;
 		opcode6 = I_ADDI;	// change to addi
 	}
-	if (opcode6 == I_ADDI && IsNBit(val, 5)) {
-		emit_insn(
-			(recflag << 23) |
-			IMM(val) |
-			RT(Rt) |
-			RA(Ra) |
-			I_ADD5, true);
-		goto xit;
-	}
-	if (opcode6 == I_GCSUBI && IsNBit(val, 9) && Rt == 31 && Ra == 31) {
+	if (opcode6 == I_ADDI && IsNBit(val, 9) && Rt == 31 && Ra == 31 && ((val) & 7)==0) {
 		emit_insn(
 			(recflag << 23) |
 			(((val >> 3LL) & 0x7f) << 8LL) |
-			I_GCSUB7, true);
+			I_ADDISP10, true);
+		goto xit;
+	}
+	if (opcode6 == I_ADDI && IsNBit(val, 5)) {
+		emit_insn(
+			(recflag << 23) |
+			IMM(val & 0x1fLL) |
+			RT(Rt) |
+			RA(Ra) |
+			I_ADD5, true);
 		goto xit;
 	}
 	if (opcode6 == I_WYDNDX) {
@@ -4255,31 +4260,48 @@ static void process_store()
 	int Sc;
 	int seg;
   int64_t disp,val;
+	int64_t imm;
 	int64_t aq = 0, rl = 0;
 	int ar;
 	int64_t opcode6 = parm1[token];
 	int64_t funct6 = parm2[token];
 	int64_t sz = parm3[token];
 	bool li = false;
+	char* p;
 
 	GetFPSize();
 	GetArBits(&aq, &rl);
 	ar = (int)((aq << 1LL) | rl);
+	p = inptr;
 	Rs = getRegisterX();
 	if (Rs < 0) {
-    printf("Expecting a source register (%d).\r\n", lineno);
-    printf("Line:%.60s\r\n",inptr);
-    ScanToEOL();
-    return;
+		inptr = p;
+		NextToken();
+		imm = expr();
+		// NextToken();
+		need(',');
+    //printf("Expecting a source register (%d).\r\n", lineno);
+    //printf("Line:%.60s\r\n",inptr);
+    //ScanToEOL();
+    //return;
   }
 	// Trap for special register stores
 	if (opcode6 == I_STO && Rs >= 96) {
 		opcode6 = I_STOT;
 		Rs &= 31;
 	}
-	expect(',');
+	if (Rs >= 0)
+		expect(',');
+	else {
+		NextToken();
+		p = inptr;
+	}
   mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
+		if (Rs < 0) {
+			error("Cannot store immediate indexed");
+			return;
+		}
 		if (!IsNBit(disp, 6)) {
 			LoadConstant(disp, 2);
 			emit_insn(
@@ -4309,7 +4331,6 @@ static void process_store()
 		ScanToEOL();
 		return;
 	}
-
   if (Ra < 0) Ra = 0;
   val = disp;
 	if (Ra == 55)
@@ -4331,6 +4352,45 @@ static void process_store()
 			else
 				val -= data_base_address;
 		}
+	}
+	if (Rs < 0) {
+		if (!(Ra == regSP || Ra == regFP) || (val & 7) != 0) {
+			error("Store immediate illegal address mode");
+			ScanToEOL();
+			return;
+		}
+		if (!IsNBit(imm, 14LL)) {
+			LoadConstant(imm, 1);
+			if (!IsNBit(val, 12)) {
+				LoadConstant(val, 2);
+				emit_insn(
+					RS3(2) |
+					RS1(Ra) |
+					RD(1) |
+					I_STO, true
+				);
+				ScanToEOL();
+				return;
+			}
+			emit_insn(
+				(1 << 30) |	// set address mode bit (non-indexed)
+				((val & 0xFFFLL) << 18LL) |
+				RD(1) |
+				RS1(Ra) |
+				I_STO,true
+			);
+			ScanToEOL();
+			return;
+		}
+		emit_insn(
+			((imm >> 5LL) << 23LL) |
+			(((val >> 3LL) & 0x1ffLL) << 14LL) |
+			((Ra & 1LL) << 13LL) |
+			RD(imm & 0x1fLL) |
+			I_STOIS,true
+		);
+		ScanToEOL();
+		return;
 	}
 	if (!IsNBit(val, 12)) {
 		LoadConstant(val, 2);
@@ -5051,7 +5111,7 @@ static void process_ltcb(int oc)
 }
 
 // ----------------------------------------------------------------------------
-// mov r1,r2 -> translated to or Rt,Ra,#0
+// mov r1,r2 -> translated to or Rt,Ra,Ra
 // ----------------------------------------------------------------------------
 
 static void process_mov(int64_t oc, int64_t fn)
@@ -5119,6 +5179,7 @@ static void process_mov(int64_t oc, int64_t fn)
 			(recflag << 23) |
 			RD(Rt) |
 			RS1(Ra) |
+			RS2(Ra) |
 			I_ORR2, true
 		);
 	else
@@ -5938,6 +5999,7 @@ static void process_default()
 	//case tk_cmpui:  process_riop(0x07); break;
 	case tk_code: process_code(); break;
 	case tk_com: process_com(3); break;
+	case tk_csr: process_csrrw(0x1); break;
 	case tk_csrrc: process_csrrw(0x3); break;
 	case tk_csrrs: process_csrrw(0x2); break;
 	case tk_csrrw: process_csrrw(0x1); break;
@@ -6002,7 +6064,6 @@ static void process_default()
 	case tk_fsle:	process_fsetop(I_FSLE); break;
 	case tk_fslt:	process_fsetop(I_FSLT); break;
 //	case tk_fsne:	process_fsetop(I_FSNE); break;
-	case tk_gcsub: process_riop(I_GCSUBI, I_GCSUB, 0x00); break;
 	case tk_getto: process_rop(I_GETTO); break;
 	case tk_getzl: process_getzl(I_GETZL); break;
 	case tk_hint:	process_hint(); break;
@@ -6361,6 +6422,10 @@ void rtf64_processMaster()
 		parm1[tk_sto] = I_STO;
 		parm2[tk_sto] = I_STO;
 		parm3[tk_sto] = 0x03;
+		jumptbl[tk_stoi] = &process_store;
+		parm1[tk_stoi] = I_STOIS;
+		parm2[tk_stoi] = I_STOIS;
+		parm3[tk_stoi] = 0x00;
 		jumptbl[tk_sto] = &process_store;
 		parm1[tk_fsto] = I_FSTO;
 		parm2[tk_fsto] = I_FSTO;

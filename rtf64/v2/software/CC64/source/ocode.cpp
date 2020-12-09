@@ -216,7 +216,7 @@ void OCODE::OptRedor()
 
 bool OCODE::IsSubiSP()
 {
-	if (opcode == op_sub || opcode == op_gcsub) {
+	if (opcode == op_sub) {
 		if (oper3->mode == am_imm) {
 			if (oper1->preg == regSP && oper2->preg == regSP) {
 				return (true);
@@ -1437,6 +1437,8 @@ void OCODE::store(txtoStream& ofs)
 			ofs.printf("; Basic Block %d\n", bb->num);
 			ofs.printf(";====================================================\n");
 		}
+		else
+			ofs.printf("; bb %d\n", bb->num);
 		b = bb;
 	}
 	if (comment) {

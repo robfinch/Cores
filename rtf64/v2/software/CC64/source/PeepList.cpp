@@ -63,15 +63,15 @@ bool PeepList::HasCall(OCODE *ip)
 	return (false);
 }
 
-bool PeepList::FindTarget(OCODE *ip, int reg)
+bool PeepList::FindTarget(OCODE *ip, int reg, OCODE* stpip)
 {
 	for (; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
 			if (ip->opcode == op_call || ip->opcode == op_jal || ip->opcode==op_jsr) {
-				if (reg == regFirstArg || reg == regFirstArg+1)
+				if ((reg == regFirstArg || reg == regFirstArg + 1) && ip != stpip)
 					return (true);
 			}
-			if (ip->oper1->preg == reg)
+			if (ip->oper1->preg == reg && ip != stpip)
 				return (true);
 		}
 	}
@@ -302,7 +302,7 @@ int PeepList::CountSPReferences()
 				if (ip->insn->opcode == op_push || ip->insn->opcode == op_pop) {
 					refSP++;
 				}
-				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_gcsub && ip->insn->opcode != op_mov) {
+				else if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
 					if (ip->oper1) {
 						if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
 							refSP++;
@@ -669,7 +669,6 @@ void PeepList::OptInstructions()
 			case op_mov:	ip->OptMove();	break;
 			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
-			case op_gcsub:	ip->OptSubtract(); break;
 			case op_ldb:		ip->OptLoadByte(); break;
 			case op_ldw:		ip->OptLoadChar(); break;
 			case op_ldp:		ip->OptLoadHalf(); break;
@@ -707,7 +706,7 @@ void PeepList::OptInstructions()
 }
 
 // Hoist expressions that remain constant to the outside of the loop.
-// But don't hoist expressions containing r1 as that is the return
+// But don't hoist expressions containing $a0 as that is the return
 // value from a function call.
 // This needs more work:
 // An incrementing expression incorrectly hoisted the load word
@@ -742,16 +741,55 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 			if (ip2->oper1) {
 				switch (ip2->oper1->mode) {
 				case am_imm:
+					break;
 				case am_direct:
+					canHoist = false;
 					break;
 				case am_indx2:
-					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg))
+					canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg, nullptr))
 						canHoist = false;
-					if (currentFn->pl.FindTarget(ip4, ip2->oper1->sreg))
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->sreg, nullptr))
+						canHoist = false;
+					break;
+				case am_reg:
+				case am_fpreg:
+				case am_preg:
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg, nullptr))
 						canHoist = false;
 					break;
 				default:
-					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg))
+					canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg, nullptr))
+						canHoist = false;
+					break;
+				}
+			}
+		}
+		else {
+			if (ip2->oper1) {
+				switch (ip2->oper1->mode) {
+				case am_imm:
+					break;
+				case am_direct:
+					canHoist = false;
+					break;
+				case am_indx2:
+					canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg,ip2))
+						canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->sreg,ip2))
+						canHoist = false;
+					break;
+				case am_reg:
+				case am_fpreg:
+				case am_preg:
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg,ip2))
+						canHoist = false;
+					break;
+				default:
+					canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg,ip2))
 						canHoist = false;
 					break;
 				}
@@ -760,16 +798,26 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 		if (ip2->oper2) {
 			switch (ip2->oper2->mode) {
 			case am_imm:
+				break;
 			case am_direct:
+				canHoist = false;
 				break;
 			case am_indx2:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg, nullptr))
 					canHoist = false;
-				if (currentFn->pl.FindTarget(ip4, ip2->oper2->sreg))
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->sreg, nullptr))
+					canHoist = false;
+				break;
+			case am_reg:
+			case am_fpreg:
+			case am_preg:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg, nullptr))
 					canHoist = false;
 				break;
 			default:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg, nullptr))
 					canHoist = false;
 				break;
 			}
@@ -777,16 +825,26 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 		if (ip2->oper3) {
 			switch (ip2->oper3->mode) {
 			case am_imm:
+				break;
 			case am_direct:
+				canHoist = false;
 				break;
 			case am_indx2:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg, nullptr))
 					canHoist = false;
-				if (currentFn->pl.FindTarget(ip4, ip2->oper3->sreg))
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->sreg, nullptr))
+					canHoist = false;
+				break;
+			case am_reg:
+			case am_fpreg:
+			case am_preg:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg, nullptr))
 					canHoist = false;
 				break;
 			default:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg, nullptr))
 					canHoist = false;
 				break;
 			}
@@ -794,16 +852,26 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 		if (ip2->oper4) {
 			switch (ip2->oper4->mode) {
 			case am_imm:
+				break;
 			case am_direct:
+				canHoist = false;
 				break;
 			case am_indx2:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg, nullptr))
 					canHoist = false;
-				if (currentFn->pl.FindTarget(ip4, ip2->oper4->sreg))
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->sreg, nullptr))
+					canHoist = false;
+				break;
+			case am_reg:
+			case am_fpreg:
+			case am_preg:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg,nullptr))
 					canHoist = false;
 				break;
 			default:
-				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg))
+				canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg,nullptr))
 					canHoist = false;
 				break;
 			}
@@ -914,7 +982,7 @@ void PeepList::RemoveStackAlloc()
 
 	for (ip = head; ip; ip = ip->fwd) {
 		if (ip->insn) {
-			if ((ip->opcode == op_add || ip->opcode == op_sub || ip->opcode == op_gcsub) &&
+			if ((ip->opcode == op_add || ip->opcode == op_sub) &&
 				ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
 				ip->MarkRemove();
 			}

@@ -221,6 +221,7 @@ public:
 		Clear();
 	};
 	void SetBase(int b) { base = b; };
+	bool IsGlobalTable();
 };
 
 class PeepList
@@ -248,7 +249,7 @@ public:
 	void flush();
 	void SetLabelReference();
 	void EliminateUnreferencedLabels();
-	bool FindTarget(OCODE *ip, int reg);
+	bool FindTarget(OCODE *ip, int reg, OCODE* stpip);
 
 	void Dump(char *msg);
 	BasicBlock *Blockize();

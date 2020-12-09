@@ -152,7 +152,7 @@ enum e_op {
 	op_zxb, op_zxc, op_zxh, op_extr,
 	op_dw, op_cache,
 	op_subui, op_addui, op_sei,
-	op_std, op_sth, op_sto, op_stp, op_stt, op_stw, op_stb, op_outb, op_inb, op_inbu,
+	op_std, op_sth, op_sto, op_stp, op_stt, op_stw, op_stb, op_stoi, op_outb, op_inb, op_inbu,
 	op_stfd, op_ldfd,
 	op_call, op_jal, op_beqi, op_bnei, op_tst,
 

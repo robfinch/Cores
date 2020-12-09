@@ -78,7 +78,7 @@ casez(i)
 `ADD2R:   o = 8'h03;
 `OR2R:    o = 8'h03;
 `ADC2R:   o = 8'h03;
-`GCSUB10: o = 8'h02;
+`ADDISP10: o = 8'h02;
 `ADDUI:   o = 8'h08;
 `ANDUI:   o = 8'h08;
 `ORUI:    o = 8'h08;
@@ -151,6 +151,7 @@ casez(i)
 `STOCS:   o = 8'h43;
 `STPTRS:  o = 8'h43;
 `STOTS:   o = 8'h43;
+`STOIS:		o = 8'h44;
 `PUSHC:   o = 8'h44;
 `PUSH:    o = 8'h42;
 `LINK:    o = 8'h43;

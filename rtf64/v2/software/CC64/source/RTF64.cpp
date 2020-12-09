@@ -958,7 +958,7 @@ static void SaveRegisterSet(SYM *sym)
 
 	if (!cpu.SupportsPush || true) {
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
-		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(-mm*sizeOfWord));
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
 			GenerateDiadic(op_sto,0,makereg(nn),cg.MakeIndexed(mm,regSP));
@@ -998,7 +998,7 @@ void SaveRegisterVars(CSet *rmask)
 
 	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		rmask->resetPtr();
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 			// nn = nregs - 1 - regno
@@ -1017,7 +1017,7 @@ void SaveFPRegisterVars(CSet *rmask)
 
 	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 			GenerateDiadic(op_fsto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
@@ -1032,7 +1032,7 @@ void SavePositRegisterVars(CSet* rmask)
 
 	if (rmask->NumMember()) {
 		cnt = 0;
-		GenerateTriadic(op_gcsub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
 		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 			GenerateDiadic(op_psto, 0, makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
 			cnt += sizeOfWord;
@@ -1103,7 +1103,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 		else if (ep->tp->IsPositType())
 			ap = cg.GenerateExpression(ep, am_preg, sizeOfPosit);
 		else
-			ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
+			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	}
 	else if (ep->etype==bt_quad)
 		ap = cg.GenerateExpression(ep,am_fpreg,sz);
@@ -1116,7 +1116,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	else if (ep->etype == bt_posit)
 		ap = cg.GenerateExpression(ep, am_preg, sz);
 	else
-		ap = cg.GenerateExpression(ep,am_reg,ep->GetNaturalSize());
+		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize());
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;
@@ -1145,7 +1145,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 				if (ap->mode==am_imm) {
 					GenerateDiadic(op_ldi,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -1153,7 +1153,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					*isFloat = true;
 					GenerateDiadic(op_mov,0,makefpreg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sz));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sz));
 						nn = sz/sizeOfWord;
 					}
 				}
@@ -1161,7 +1161,7 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					//ap->preg = regno & 0x7fff;
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -1194,11 +1194,16 @@ int RTF64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 					if (ap->mode==am_imm) {	// must have been a zero
 						ap3 = nullptr;
 						if (ap->offset->i!=0) {
-							ap3 = GetTempRegister();
-							regs[ap3->preg].IsArg = true;
-							GenerateLoadConst(ap, ap3);
-	         		GenerateDiadic(op_sto,0,ap3,MakeIndexed(stkoffs,regSP));
-							ReleaseTempReg(ap3);
+							if (ap->offset->i >= -8192 && ap->offset->i < 8191) {
+								GenerateDiadic(op_stoi, 0, ap, MakeIndexed(stkoffs, regSP));
+							}
+							else {
+								ap3 = GetTempRegister();
+								regs[ap3->preg].IsArg = true;
+								GenerateLoadConst(ap, ap3);
+								GenerateDiadic(op_sto, 0, ap3, MakeIndexed(stkoffs, regSP));
+								ReleaseTempReg(ap3);
+							}
 						}
 						else {
 							GenerateDiadic(op_sto, 0, makereg(0), MakeIndexed(stkoffs, regSP));
@@ -1251,7 +1256,7 @@ int RTF64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 
 	sumFloat = false;
 	ip = currentFn->pl.tail;
-	GenerateTriadic(op_gcsub,0,makereg(regSP),makereg(regSP),MakeImmediate(0));
+	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(0));
 	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
 		pl[nn] = p->p[0];
@@ -1370,6 +1375,8 @@ Operand *RTF64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon || node->p[0]->nodetype == en_cnacon ) {
 		s = gsearch(*node->p[0]->sp);
+		if (s == nullptr)
+			return (nullptr);
  		sym = s->fi;
         i = 0;
   /*

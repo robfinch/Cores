@@ -1532,7 +1532,10 @@ void Declaration::DoInsert(SYM *sp, TABLE *table)
 			// still needs to be inserted into the table.
 	else {
 		dfs.printf("insert type: %d\n", sp->tp->type);
-		dfs.printf("***Inserting:%s into %p\n", (char *)sp->name->c_str(), (char *)table);
+		if (table==&gsyms[0])
+			dfs.printf("***Inserting:%s into %p (global table)\n", (char*)sp->name->c_str(), (char*)table);
+		else
+			dfs.printf("***Inserting:%s into %p\n", (char *)sp->name->c_str(), (char *)table);
 		// Need to know the type before a name can be generated.
 		if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
 			if (sp->fi)
@@ -2180,12 +2183,14 @@ ENODE *AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 xit:
 	;
 	ep1 = nullptr;
+	
 	for (sp = SYM::GetPtr(ssyms->GetHead()); sp; sp = sp->GetNextPtr()) {
 		if (sp->initexp) {
 			ep1 = makenode(en_list, ep1, nullptr);
 			ep1->p[3] = sp->initexp;
 		}
 	}
+	
 	return (ep1);
 //	printf("Leave ParseAutoDecls\r\n");
 }
