@@ -8,6 +8,15 @@ parameter LOW   = 1'b0;
 parameter AWID  = 32;
 
 parameter CR2   = 6'd19;
+parameter CRAND = 10'd257;
+parameter CROR  = 10'd449;
+parameter CRXOR = 10'd193;
+parameter CRNAND= 10'd225;
+parameter CRNOR = 10'd33;
+parameter CREQV = 10'd289;
+parameter CRANDC= 10'd129;
+parameter CRORC = 10'd417;
+
 parameter R2    = 6'd31;
 parameter CMP   = 10'd0;
 parameter CMPL  = 10'd32;
@@ -95,13 +104,16 @@ parameter STHUX = 10'd439;
 parameter STWX  = 10'd151;
 parameter STWUX = 10'd183;
 
+parameter MCRXR = 10'd512;
 parameter MFSPR = 10'd339;
 parameter MTSPR = 10'd467;
 parameter SPR_LR  = 10'd256;
 parameter SPR_XER = 10'd32;
 
+parameter MFCR  = 10'd19;
 parameter MFSR  = 10'd595;
 parameter MTSR  = 10'd210;
+parameter MTCRF = 10'd144;
 parameter MFSRI = 10'd659;
 parameter MTSRIN  = 10'd242;
 
@@ -122,6 +134,7 @@ parameter IACCESS = 3'd3;
 parameter IACCESS_CYC = 3'd4;
 parameter IACCESS_ACK = 3'd5;
 parameter IC_UPDATE = 3'd6;
+parameter ICU1 = 3'd7;
 
 // Decode
 parameter DECODE = 2'd0;
@@ -152,7 +165,8 @@ parameter WWAIT = 3'd4;
 
 parameter pL1CacheLines = 64;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
-parameter RSTPC = 32'hFFFFFFFC;
+parameter RSTPC = 32'hFFFC0000;
+parameter RIBO = 1;
 
 endpackage
 

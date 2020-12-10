@@ -35,9 +35,9 @@
 //                                                                          
 // ============================================================================
 
-import nPower::*;
+import nPowerPkg::*;
 
-module nPower_tb();
+module nPower_nop_tb();
 
 reg rst;
 reg clk;
