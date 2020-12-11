@@ -55,6 +55,7 @@ wire clk_g = clk_i;
 reg [AWID-1:0] pc [0:1];
 reg [31:0] ctr = 32'd0;
 reg [AWID-1:0] lr = 32'd0;
+reg smt = 1'b0;
 
 // Instruction fetch stage vars
 reg [2:0] istate;
@@ -72,8 +73,8 @@ reg iaccess;
 // Decode stage vars
 reg [1:0] dstate [0:1];
 wire advance_d;
-reg decode_done;
-reg dval;
+reg [1:0] decode_done;
+reg [1:0] dval;
 reg [31:0] ir [0:1];
 reg [1:0] wrrf, wrcrf;
 reg [1:0] wrlr, wrctr;
@@ -97,9 +98,9 @@ reg [1:0] lsu;
 // Regfetch stage vars
 reg [1:0] rstate;
 wire advance_r;
-wire stall_r;
-reg regfetch_done;
-reg rval;
+wire [1:0] stall_r;
+reg [1:0] regfetch_done;
+reg [1:0] rval;
 reg [31:0] rir [0:1];
 reg [1:0] rwrrf, rwrcrf;
 reg [1:0] rwrlr, rwrctr;
@@ -258,8 +259,19 @@ always @(posedge clk_g)
     ctr <= wwres;
 
 assign stall_i = 1'b0;
-assign stall_r = ((e_ld||e_st) && ((rRd==eRd) || (rRa==eRd) || (rRb==eRd) || (rRc==eRd)) && eval && rval)
-                ;
+assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0]) || (rRa[0]==eRd[0]) || (rRb[0]==eRd[0]) || (rRc[0]==eRd[0])) && eval[0] && rval[0]) ||
+								 	  ((e_ld[1]||e_st[1]) && ((rRd[0]==eRd[1]) || (rRa[0]==eRd[1]) || (rRb[0]==eRd[1]) || (rRc[0]==eRd[1])) && eval[1] && rval[1]) ||
+                		((e_st[0] & e_lsu[0]) && ((rRd[0]==eRa[0]) || (rRa[0]==eRa[0]) || (rRb[0]==eRa[0]) || (rRc[0]==eRa[0])) && eval[0] && rval[0]) ||
+								 	  ((e_st[1] & e_lsu[1]) && ((rRd[0]==eRa[1]) || (rRa[0]==eRa[1]) || (rRb[0]==eRa[1]) || (rRc[0]==eRa[1])) && eval[1] && rval[1])
+                		;
+assign stall_r[1] = stall_r[0] ||
+										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0]) ||
+								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[0]) ||
+								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
+								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[0]) ||
+								 	 	((e_st[1] & e_lsu[1]) && ((rRd[1]==eRa[1]) || (rRa[1]==eRa[1]) || (rRb[1]==eRa[1]) || (rRc[1]==eRa[1])) && eval[1] && rval[1])
+                	  ;
+
                 /*
                 || (e_crop && r_crop && (rBa==eBt) || (rBb==eBt) && eval && rval)
                 || (r_bc && e_crop && (rBi==eBt) && eval && rval)
@@ -267,11 +279,11 @@ assign stall_r = ((e_ld||e_st) && ((rRd==eRd) || (rRa==eRd) || (rRb==eRd) || (rR
                 */
 
 // Pipeline advance
-assign advance_w = ifetch_done & decode_done & regfetch_done & &execute_done & &memory_done & &writeback_done;
+assign advance_w = ifetch_done & &decode_done & &regfetch_done & &execute_done & &memory_done & &writeback_done;
 assign advance_m = advance_w;
 assign advance_e = advance_m;
-assign advance_r = advance_e & ~stall_r;
-assign advance_d = advance_r;
+assign advance_r = advance_e & ~stall_r[0];
+assign advance_d = advance_r & ~|stall_r;
 assign advance_i = advance_d & ~stall_i;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -388,10 +400,18 @@ initial begin
   icvalid2 = {pL1CacheLines{1'd0}};
   icvalid3 = {pL1CacheLines{1'd0}};
   for (n = 0; n < pL1CacheLines; n = n + 1) begin
-  	icache0[n] <= {8{NOP_INSN}};
-  	icache1[n] <= {8{NOP_INSN}};
-  	icache2[n] <= {8{NOP_INSN}};
-  	icache3[n] <= {8{NOP_INSN}};
+  	if (RIBO) begin
+	  	icache0[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
+	  	icache1[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
+	  	icache2[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
+	  	icache3[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
+  	end
+  	else begin
+	  	icache0[n] <= {8{NOP_INSN}};
+	  	icache1[n] <= {8{NOP_INSN}};
+	  	icache2[n] <= {8{NOP_INSN}};
+	  	icache3[n] <= {8{NOP_INSN}};
+  	end
     ictag0[n] = 32'd1;
     ictag1[n] = 32'd1;
     ictag2[n] = 32'd1;
@@ -422,7 +442,7 @@ if (rst_i) begin
   we_o <= LOW;
   sel_o <= 8'h00;
   pc[0] <= RSTPC;
-  pc[1] <= RSTPC+4;
+  pc[1] <= RSTPC+3'd4;
   adr_o <= RSTPC;
   iadr <= RSTPC;
   iri1 <= {8{NOP_INSN}};
@@ -470,7 +490,7 @@ IALIGN:
   end
 IWAIT:
   if (advance_i) begin
-  	dval <= 1'b1;
+  	dval <= 2'b11;
   	if (RIBO) begin
 	    ir[0] <= {iir[0][7:0],iir[0][15:8],iir[0][23:16],iir[0][31:24]};
 	    ir[1] <= {iir[1][7:0],iir[1][15:8],iir[1][23:16],iir[1][31:24]};
@@ -479,34 +499,56 @@ IWAIT:
 	  	ir[0] <= iir[0];
 	  	ir[1] <= iir[1];
 	  end
-    if (wmod_pc[0]) begin
-      pc[0] <= wnext_pc[0];
-      pc[1] <= wnext_pc[0] + 3'd4;
-    end
-    else if (wmod_pc[1]) begin
-      pc[0] <= wnext_pc[1];
-      pc[1] <= wnext_pc[1] + 3'd4;
-    end
-    else if (emod_pc[0]) begin
-      pc[0] <= enext_pc[0];
-      pc[1] <= enext_pc[0] + 3'd4;
-    end
-    else if (emod_pc[1]) begin
-      pc[0] <= enext_pc[1];
-      pc[1] <= enext_pc[1] + 3'd4;
-    end
-    else if (dmod_pc[0]) begin
-      pc[0] <= dnext_pc[0];
-      pc[1] <= dnext_pc[0] + 3'd4;
-    end
-    else if (dmod_pc[1]) begin
-      pc[0] <= dnext_pc[1];
-      pc[1] <= dnext_pc[1] + 3'd4;
-    end
-    else begin
-      pc[0] <= pc[0] + 4'd8;
-      pc[1] <= pc[0] + 4'd12;
-    end
+	  if (smt) begin
+			// PC[0]
+	    if (wmod_pc[0])
+	      pc[0] <= wnext_pc[0];
+	    else if (emod_pc[0])
+	      pc[0] <= enext_pc[0];
+	    else if (dmod_pc[0])
+	      pc[0] <= dnext_pc[0];
+	    else
+	      pc[0] <= pc[0] + 4'd4;
+			// PC[1]
+	    if (wmod_pc[1])
+	      pc[1] <= wnext_pc[1];
+	    else if (emod_pc[1])
+	      pc[1] <= enext_pc[1];
+	    else if (dmod_pc[1])
+	      pc[1] <= dnext_pc[1];
+	    else
+	      pc[1] <= pc[1] + 4'd4;
+		end
+		else begin
+	    if (wmod_pc[0]) begin
+	      pc[0] <= wnext_pc[0];
+	      pc[1] <= wnext_pc[0] + 3'd4;
+	    end
+	    else if (wmod_pc[1]) begin
+	      pc[0] <= wnext_pc[1];
+	      pc[1] <= wnext_pc[1] + 3'd4;
+	    end
+	    else if (emod_pc[0]) begin
+	      pc[0] <= enext_pc[0];
+	      pc[1] <= enext_pc[0] + 3'd4;
+	    end
+	    else if (emod_pc[1]) begin
+	      pc[0] <= enext_pc[1];
+	      pc[1] <= enext_pc[1] + 3'd4;
+	    end
+	    else if (dmod_pc[0]) begin
+	      pc[0] <= dnext_pc[0];
+	      pc[1] <= dnext_pc[0] + 3'd4;
+	    end
+	    else if (dmod_pc[1]) begin
+	      pc[0] <= dnext_pc[1];
+	      pc[1] <= dnext_pc[1] + 3'd4;
+	    end
+	    else begin
+	      pc[0] <= pc[0] + 4'd8;
+	      pc[1] <= pc[0] + 4'd12;
+	    end
+  	end
     ifetch1_done <= FALSE;
     ifetch2_done <= FALSE;
     ifetch_done <= FALSE;
@@ -527,7 +569,7 @@ IACCESS:
         iadr <= {pc[1][AWID-1:5],5'h0};
     end
     else
-      iadr <= {iadr[AWID-1:3],3'h0} + 4'h8;
+      iadr <= {iadr[AWID-1:4],4'h0} + 5'h16;
   end
 IACCESS_CYC:
   begin
@@ -651,8 +693,8 @@ begin
     wrxer[which] <= FALSE;
     lsu[which] <= FALSE;
     rpc[which] <= RSTPC;
-    dval <= FALSE;
-    decode_done <= TRUE;
+    dval <= 2'b00;
+    decode_done[which] <= TRUE;
     dstate[which] <= DWAIT;
     illegal_insn[which] <= FALSE;
     dnext_pc[which] <= RSTPC;
@@ -661,8 +703,7 @@ begin
     case(dstate[which])
     DECODE:
       begin
-        if (which==1'b0)
-          decode_done <= TRUE;
+        decode_done[which] <= TRUE;
        	dstate[which] <= DWAIT;
         illegal_insn[which] <= TRUE;
         Rd[which] <= ir[which][25:21];
@@ -750,7 +791,7 @@ begin
 
         B:     begin
                   illegal_insn[which] <= FALSE;
-                  dmod_pc[which] <= dval;
+                  dmod_pc[which] <= dval[which];
                   if (ir[which][1])
                     dnext_pc[which] <= {dpc[which],ir[which][25:2],2'b00};
                   else
@@ -810,13 +851,12 @@ begin
         rwrrf[which] <= wrrf[which];
         rwrcrf[which] <= wrcrf[which];
         rwrxer[which] <= wrxer[which];
-        if (which==1'b0)
-          decode_done <= FALSE;
+        decode_done[which] <= FALSE;
         dstate[which] <= DECODE;
       end
     default:
       begin
-        decode_done <= TRUE;
+        decode_done[which] <= TRUE;
         dstate[which] <= DWAIT;
       end
     endcase
@@ -871,16 +911,19 @@ if (rst_i) begin
   ewrctr <= 2'b00;
   ewrrf <= 2'b00;
   ewrxer <= 2'b00;
-  rval <= FALSE;
-  regfetch_done <= TRUE;
+  rval <= 2'b00;
+  regfetch_done[0] <= TRUE;
+  regfetch_done[1] <= TRUE;
   rgoto(RWAIT);
 end
 else begin
 case(rstate)
 RFETCH:
   begin
-    regfetch_done <= TRUE;
-    rgoto(RWAIT);
+    regfetch_done[0] <= &execute_done & &memory_done & writeback_done;
+    regfetch_done[1] <= &execute_done & &memory_done & writeback_done;
+    if (&execute_done & &memory_done & writeback_done)
+    	rgoto(RWAIT);
 
     tin(0,rRd[0],rfod[0],rid[0]);
     tin(1,rRd[1],rfod[1],rid[1]);
@@ -890,80 +933,232 @@ RFETCH:
     tin(1,rRb[1],rfob[1],rib[1]);
     tin(0,rRc[0],rfoc[0],ric[0]);
     tin(1,rRc[1],rfoc[1],ric[1]);
+/*
+	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ria[0] <= 32'd0;
+	  else if (rRa[0]==eRd[1] && eval[1] && ewrrf[1])
+	    ria[0] <= eres[1];
+	  else if (rRa[0]==eRa[1] && eval[1] && e_lsu[1])
+	    ria[0] <= eea[1];
+	  else if (rRa[0]==eRd[0] && eval[0] && ewrrf[0])
+	    ria[0] <= eres[0];
+	  else if (rRa[0]==eRa[0] && eval[0] && e_lsu[0])
+	    ria[0] <= eea[0];
+	  else if (rRa[0]==mRd[1] && mval[1] && mwrrf[1])
+	    ria[0] <= mres[1];
+	  else if (rRa[0]==mRd[0] && mval[0] && mwrrf[0])
+	    ria[0] <= mres[0];
+	  else if (rRa[0]==wRd[1] && wval[1] && wwrrf[1])
+	    ria[0] <= wres[1];
+	  else if (rRa[0]==wRd[0] && wval[0] && wwrrf[0])
+	    ria[0] <= wres[0];
+	  else
+	    ria[0] <= rfoa[0];
 
-    if (ewrcrf[1] & eval[1])
-      rcr <= ecr[1];
-    else if (ewrcrf[0] & eval[0])
-      rcr <= ecr[0];
-    else if (mwrcrf[1] & mval[1])
-      rcr <= mcr[1];
-    else if (mwrcrf[0] & mval[0])
-      rcr <= mcr[0];
-    else if (wwrcrf[1] & wval[1])
-      rcr <= wcr[1];
-    else if (wwrcrf[0] & wval[0])
-      rcr <= wcr[0];
-    else
-      rcr <= cro;
+	  if (rRa[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	    ria[1] <= 32'd0;
+	  else if (rRa[1]==eRd[1] && eval[1] && ewrrf[1])
+	    ria[1] <= eres[1];
+	  else if (rRa[1]==eRd[0] && eval[0] && ewrrf[0])
+	    ria[1] <= eres[0];
+	  else if (rRa[1]==mRd[1] && mval[1] && mwrrf[1])
+	    ria[1] <= mres[1];
+	  else if (rRa[1]==mRd[0] && mval[0] && mwrrf[0])
+	    ria[1] <= mres[0];
+	  else if (rRa[1]==wRd[1] && wval[1] && wwrrf[1])
+	    ria[1] <= wres[1];
+	  else if (rRa[1]==wRd[0] && wval[0] && wwrrf[0])
+	    ria[1] <= wres[0];
+	  else
+	    ria[1] <= rfoa[1];
 
-    if (ewrxer[1] & eval[1])
-      rxer <= exer[1];
-    else if (ewrcrf[0] & eval[0])
-      rxer <= exer[0];
-    else if (mwrcrf[1] & mval[1])
-      rxer <= mxer[1];
-    else if (mwrcrf[0] & mval[0])
-      rxer <= mxer[0];
-    else if (wwrcrf[1] & wval[1])
-      rxer <= wxer[1];
-    else if (wwrcrf[0] & wval[0])
-      rxer <= wxer[0];
-    else
-      rxer <= xer;
+	  if (rRb[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    rib[0] <= 32'd0;
+	  else if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
+	    rib[0] <= eres[1];
+	  else if (rRb[0]==eRd[0] && eval[0] && ewrrf[0])
+	    rib[0] <= eres[0];
+	  else if (rRb[0]==mRd[1] && mval[1] && mwrrf[1])
+	    rib[0] <= mres[1];
+	  else if (rRb[0]==mRd[0] && mval[0] && mwrrf[0])
+	    rib[0] <= mres[0];
+	  else if (rRb[0]==wRd[1] && wval[1] && wwrrf[1])
+	    rib[0] <= wres[1];
+	  else if (rRb[0]==wRd[0] && wval[0] && wwrrf[0])
+	    rib[0] <= wres[0];
+	  else
+	    rib[0] <= rfob[0];
 
-    if (ewrlr[1] & eval[1])
-      rlr <= eres[1];
-    else if (ewrlr[0] & eval[0])
-      rlr <= eres[0];
-    else if (mwrlr[1] & mval[1])
-      rlr <= mres[1];
-    else if (mwrlr[0] & mval[0])
-      rlr <= mres[0];
-    else if (wwrlr[1] & wval[1])
-      rlr <= wres[1];
-    else if (wwrlr[0] & wval[0])
-      rlr <= wres[0];
-    else
-      rlr <= lr;
+	  if (rRb[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	    rib[1] <= 32'd0;
+	  else if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
+	    rib[1] <= eres[1];
+	  else if (rRb[1]==eRd[0] && eval[0] && ewrrf[0])
+	    rib[1] <= eres[0];
+	  else if (rRb[1]==mRd[1] && mval[1] && mwrrf[1])
+	    rib[1] <= mres[1];
+	  else if (rRb[1]==mRd[0] && mval[0] && mwrrf[0])
+	    rib[1] <= mres[0];
+	  else if (rRb[1]==wRd[1] && wval[1] && wwrrf[1])
+	    rib[1] <= wres[1];
+	  else if (rRb[1]==wRd[0] && wval[0] && wwrrf[0])
+	    rib[1] <= wres[0];
+	  else
+	    rib[1] <= rfob[1];
 
-    if (ewrctr[1] & eval[1])
-      rctr <= eres[1];
-    else if (ewrctr[0] & eval[0])
-      rctr <= eres[0];
-    else if (mwrctr[1] & mval[1])
-      rctr <= mres[1];
-    else if (mwrctr[0] & mval[0])
-      rctr <= mres[0];
-    else if (wwrctr[1] & wval[1])
-      rctr <= wres[1];
-    else if (wwrctr[0] & wval[0])
-      rctr <= wres[0];
-    else
-      rctr <= ctr;
+	  if (rRc[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ric[0] <= 32'd0;
+	  else if (rRc[0]==eRd[1] && eval[1] && ewrrf[1])
+	    ric[0] <= eres[1];
+	  else if (rRc[0]==eRd[0] && eval[0] && ewrrf[0])
+	    ric[0] <= eres[0];
+	  else if (rRc[0]==mRd[1] && mval[1] && mwrrf[1])
+	    ric[0] <= mres[1];
+	  else if (rRc[0]==mRd[0] && mval[0] && mwrrf[0])
+	    ric[0] <= mres[0];
+	  else if (rRc[0]==wRd[1] && wval[1] && wwrrf[1])
+	    ric[0] <= wres[1];
+	  else if (rRc[0]==wRd[0] && wval[0] && wwrrf[0])
+	    ric[0] <= wres[0];
+	  else
+	    ric[0] <= rfoc[0];
+
+	  if (rRc[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	    ric[1] <= 32'd0;
+	  else if (rRc[1]==eRd[1] && eval[1] && ewrrf[1])
+	    ric[1] <= eres[1];
+	  else if (rRc[1]==eRd[0] && eval[0] && ewrrf[0])
+	    ric[1] <= eres[0];
+	  else if (rRc[1]==mRd[1] && mval[1] && mwrrf[1])
+	    ric[1] <= mres[1];
+	  else if (rRc[1]==mRd[0] && mval[0] && mwrrf[0])
+	    ric[1] <= mres[0];
+	  else if (rRc[1]==wRd[1] && wval[1] && wwrrf[1])
+	    ric[1] <= wres[1];
+	  else if (rRc[1]==wRd[0] && wval[0] && wwrrf[0])
+	    ric[1] <= wres[0];
+	  else
+	    ric[1] <= rfoc[1];
+
+	  if (rRd[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    rid[0] <= 32'd0;
+	  else if (rRd[0]==eRd[1] && eval[1] && ewrrf[1])
+	    rid[0] <= eres[1];
+	  else if (rRd[0]==eRd[0] && eval[0] && ewrrf[0])
+	    rid[0] <= eres[0];
+	  else if (rRd[0]==mRd[1] && mval[1] && mwrrf[1])
+	    rid[0] <= mres[1];
+	  else if (rRd[0]==mRd[0] && mval[0] && mwrrf[0])
+	    rid[0] <= mres[0];
+	  else if (rRd[0]==wRd[1] && wval[1] && wwrrf[1])
+	    rid[0] <= wres[1];
+	  else if (rRd[0]==wRd[0] && wval[0] && wwrrf[0])
+	    rid[0] <= wres[0];
+	  else
+	    rid[0] <= rfod[0];
+
+	  if (rRd[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	    rid[1] <= 32'd0;
+	  else if (rRd[1]==eRd[1] && eval[1] && ewrrf[1])
+	    rid[1] <= eres[1];
+	  else if (rRd[1]==eRd[0] && eval[0] && ewrrf[0])
+	    rid[1] <= eres[0];
+	  else if (rRd[1]==mRd[1] && mval[1] && mwrrf[1])
+	    rid[1] <= mres[1];
+	  else if (rRd[1]==mRd[0] && mval[0] && mwrrf[0])
+	    rid[1] <= mres[0];
+	  else if (rRd[1]==wRd[1] && wval[1] && wwrrf[1])
+	    rid[1] <= wres[1];
+	  else if (rRd[1]==wRd[0] && wval[0] && wwrrf[0])
+	    rid[1] <= wres[0];
+	  else
+	    rid[1] <= rfod[1];
+*/
+		if (smt) begin
+		end
+		else begin
+	    if (ewrcrf[1] & eval[1])
+	      rcr <= ecr[1];
+	    else if (ewrcrf[0] & eval[0])
+	      rcr <= ecr[0];
+	    else if (mwrcrf[1] & mval[1])
+	      rcr <= mcr[1];
+	    else if (mwrcrf[0] & mval[0])
+	      rcr <= mcr[0];
+	    else if (wwrcrf[1] & wval[1])
+	      rcr <= wcr[1];
+	    else if (wwrcrf[0] & wval[0])
+	      rcr <= wcr[0];
+	    else
+	      rcr <= cro;
+
+	    if (ewrxer[1] & eval[1])
+	      rxer <= exer[1];
+	    else if (ewrcrf[0] & eval[0])
+	      rxer <= exer[0];
+	    else if (mwrcrf[1] & mval[1])
+	      rxer <= mxer[1];
+	    else if (mwrcrf[0] & mval[0])
+	      rxer <= mxer[0];
+	    else if (wwrcrf[1] & wval[1])
+	      rxer <= wxer[1];
+	    else if (wwrcrf[0] & wval[0])
+	      rxer <= wxer[0];
+	    else
+	      rxer <= xer;
+
+	    if (ewrlr[1] & eval[1])
+	      rlr <= eres[1];
+	    else if (ewrlr[0] & eval[0])
+	      rlr <= eres[0];
+	    else if (mwrlr[1] & mval[1])
+	      rlr <= mres[1];
+	    else if (mwrlr[0] & mval[0])
+	      rlr <= mres[0];
+	    else if (wwrlr[1] & wval[1])
+	      rlr <= wres[1];
+	    else if (wwrlr[0] & wval[0])
+	      rlr <= wres[0];
+	    else
+	      rlr <= lr;
+
+	    if (ewrctr[1] & eval[1])
+	      rctr <= eres[1];
+	    else if (ewrctr[0] & eval[0])
+	      rctr <= eres[0];
+	    else if (mwrctr[1] & mval[1])
+	      rctr <= mres[1];
+	    else if (mwrctr[0] & mval[0])
+	      rctr <= mres[0];
+	    else if (wwrctr[1] & wval[1])
+	      rctr <= wres[1];
+	    else if (wwrctr[0] & wval[0])
+	      rctr <= wres[0];
+	    else
+	      rctr <= ctr;
+		end
 
   end
 RWAIT:
   if (advance_r) begin
-    eval[0] <= rval;
-    eval[1] <= rval;
+  	if (stall_r[1]) begin
+	    eval[1] <= FALSE;
+	    eir[1] <= NOP_INSN;
+	    rval[0] <= FALSE;
+	    rir[0] <= NOP_INSN;
+  	end
+  	else begin
+    	eval[1] <= rval[1];
+	    eir[1] <= rir[1];
+  	end
+    eir[0] <= rir[0];
+  	eval[0] <= rval[0];
     imm[0] <= rimm[0];
     imm[1] <= rimm[1];
     eRd[0] <= rRd[0];
     eRd[1] <= rRd[1];
     eRa[0] <= rRa[0];
     eRa[1] <= rRa[1];
-    eir[0] <= rir[0];
-    eir[1] <= rir[1];
     ecr[0] <= rcr;
     ecr[1] <= rcr;
     epc[0] <= rpc[0];
@@ -1000,7 +1195,7 @@ RWAIT:
     ectr[1] <= rctr;
     exer[0] <= rxer;
     exer[1] <= rxer;
-    regfetch_done <= FALSE;
+    regfetch_done <= 2'b00;
     rgoto (RFETCH);
   end
   else if (advance_e) begin
@@ -1011,7 +1206,7 @@ RWAIT:
   end
 default:
   begin
-    regfetch_done <= TRUE;
+    regfetch_done <= 2'b11;
     rgoto(RWAIT);
   end
 endcase
@@ -1024,22 +1219,48 @@ input [5:0] Rn;
 input [31:0] rfo;
 output [31:0] in;
 begin
-  if (Rn==7'd0 && (r_ld[which]|r_st[which]) && rval)
-    in <= 32'd0;
-  else if (Rn==eRd[1] && eval[1])
-    in <= eres[1];
-  else if (Rn==eRd[0] && eval[0])
-    in <= eres[0];
-  else if (Rn==mRd[1] && mval[1])
-    in <= mres[1];
-  else if (Rn==mRd[0] && mval[0])
-    in <= mres[0];
-  else if (Rn==wRd[1] && wval[1])
-    in <= wres[1];
-  else if (Rn==wRd[0] && wval[0])
-    in <= wres[0];
-  else
-    in <= rfo;
+	if (smt) begin
+	  if (Rn==6'd0 && (r_ld[which]|r_st[which]) && rval[which])
+	    in = 32'd0;
+	  else if (Rn==eRd[which] && eval[which] && ewrrf[which])
+	    in = eres[which];
+	  else if (Rn==mRd[which] && mval[which] && mwrrf[which])
+	    in = mres[which];
+	  else if (Rn==wRd[which] && wval[which] && wwrrf[which])
+	    in = wres[which];
+	  else
+	    in = rfo;
+	end
+	else begin
+	  if (Rn==6'd0 && (r_ld[which]|r_st[which]) && rval[which])
+	    in = 32'd0;
+	  else if (Rn==eRd[1] && eval[1] && ewrrf[1])
+	    in = eres[1];
+	  else if (Rn==eRa[1] && eval[1] && e_lsu[1])
+	    in = eea[1];
+	  else if (Rn==eRd[0] && eval[0] && ewrrf[0])
+	    in = eres[0];
+	  else if (Rn==eRa[0] && eval[0] && e_lsu[0])
+	    in = eea[0];
+	  else if (Rn==mRd[1] && mval[1] && mwrrf[1])
+	    in = mres[1];
+	  else if (Rn==mRa[1] && mval[1] && m_lsu[1])
+	    in = ea[1];
+	  else if (Rn==mRd[0] && mval[0] && mwrrf[0])
+	    in = mres[0];
+	  else if (Rn==mRa[0] && mval[0] && m_lsu[0])
+	    in = ea[0];
+	  else if (Rn==wRd[1] && wval[1] && wwrrf[1])
+	    in = wres[1];
+	  else if (Rn==wRa[1] && wval[1] && w_lsu[1])
+	    in = wea[1];
+	  else if (Rn==wRd[0] && wval[0] && wwrrf[0])
+	    in = wres[0];
+	  else if (Rn==wRa[0] && wval[0] && w_lsu[0])
+	    in = wea[0];
+	  else
+	    in = rfo;
+  end
 end
 endtask
 
@@ -1718,15 +1939,14 @@ begin
         case(mir[which][31:26])
         R2:
           case(mir[which][10:1])
-          LBZX,LBZUX,STBX,STBUX: begin cyc_o <= LOW; we_o <= LOW; sel_o <= 8'h00; memory_done[which] <= TRUE; mstate[which] <= MWAIT; end
+          LBZX,LBZUX,STBX,STBUX: begin cyc_o <= LOW; we_o <= LOW; sel_o <= 8'h00; mstate[which] <= MALIGN; end
           LHZX,LHZUX,STHX,STHUX:
             begin
               if (ea[which][3:0]!=4'b1111) begin
                 cyc_o <= LOW;
                 we_o <= LOW;
                 sel_o <= 16'h0000;
-                memory_done[which] <= TRUE;
-                mstate[which] <= MWAIT;
+                mstate[which] <= MALIGN;
               end
               else
                 mstate[which] <= MEMORY4;
@@ -1737,23 +1957,21 @@ begin
                 cyc_o <= LOW;
                 we_o <= LOW;
                 sel_o <= 16'h0000;
-                memory_done[which] <= TRUE;
-                mstate[which] <= MWAIT;
+                mstate[which] <= MALIGN;
               end
               else
                 mstate[which] <= MEMORY4;
             end
           default:  ;
           endcase
-        LBZ,LBZU:  begin cyc_o <= LOW; sel_o <= 8'h00; memory_done[which] <= TRUE; mstate[which] <= MWAIT; end
+        LBZ,LBZU:  begin cyc_o <= LOW; sel_o <= 8'h00; mstate[which] <= MALIGN; end
         LHZ,LHZU,STH,STHU:
           begin
             if (ea[which][3:0]!=4'b1111) begin
               cyc_o <= LOW;
               we_o <= LOW;
               sel_o <= 16'h0000;
-              memory_done[which] <= TRUE;
-              mstate[which] <= MWAIT;
+              mstate[which] <= MALIGN;
             end
             else
               mstate[which] <= MEMORY4;
@@ -1764,13 +1982,12 @@ begin
               cyc_o <= LOW;
               we_o <= LOW;
               sel_o <= 16'h0000;
-              memory_done[which] <= TRUE;
-              mstate[which] <= MWAIT;
+              mstate[which] <= MALIGN;
             end
             else
               mstate[which] <= MEMORY4;
           end
-        STB,STBU:  begin cyc_o <= LOW; we_o <= LOW; sel_o <= 16'h0000; memory_done[which] <= TRUE; mstate[which] <= MWAIT; end
+        STB,STBU:  begin cyc_o <= LOW; we_o <= LOW; sel_o <= 16'h0000; mstate[which] <= MALIGN; end
         default:  ;
         endcase
       end
@@ -1789,12 +2006,7 @@ begin
         we_o <= LOW;
         sel_o <= 8'h00;
         dati[255:128] <= dat_i;
-        if (m_st[which]) begin
-          memory_done[which] <= TRUE;
-          mstate[which] <= MWAIT;
-        end
-        else
-          mstate[which] <= MALIGN;
+        mstate[which] <= MALIGN;
       end
     MALIGN:
       begin
@@ -1813,6 +2025,13 @@ begin
         LWZ,LWZU: mres[which] <= (dati >> {ea[which][3:0],3'b0}) & 32'hFFFFFFFF;
         default:  ;
         endcase
+        /*
+        if (m_st[which] & m_lsu[which]) begin
+        	mwrrf[which] <= TRUE;
+        	mRd[which] <= mRa[which];
+        	mres[which] <= ea[which];
+        end
+        */
       end
     MWAIT:
       if (advance_m) begin
@@ -1820,7 +2039,7 @@ begin
       	wRa[which] <= mRa[which];
         wval[which] <= mval[which];
         wwval <= 1'b0;
-        wres[which] <= mres[which];
+       	wres[which] <= mres[which];
         wea[which] <= ea[which];
         w_lsu[which] <= m_lsu[which];
         wwrrf[which] <= mwrrf[which];
@@ -1871,11 +2090,15 @@ begin
   	$display("1: iir: %h ir:%h  rir:%h  eir:%h  mir:%h  wir:%h", iir[1], ir[1], rir[1], eir[1], mir[1], wir[1]);
   	$display("0: dimm:%h  rimm:%h", dimm[0], rimm[0]);
   	$display("1: dimm:%h  rimm:%h", dimm[1], rimm[1]);
+  	$display("0: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[0], rRb[0], rRc[0], rRd[0]);
+  	$display("1: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[1], rRb[1], rRc[1], rRd[1]);
+  	$display("0: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[0], ria[0], rib[0], ric[0], rimm[0]);
+  	$display("1: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[1], ria[1], rib[1], ric[1], rimm[1]);
   	$display("0: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[0], ia[0], ib[0], ic[0], imm[0]);
   	$display("1: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[1], ia[1], ib[1], ic[1], imm[1]);
   	$display("dval:%b rval:%b eval:%b mval:%b wval:%b", dval, rval, eval, mval, wval);
-  	$display("0: eRd:%d eres:%h%c%c", eRd[0], eres[0], eval[0] ? "v" : " ", ewrrf[0] ? "w" : " ");
-  	$display("1: eRd:%d eres:%h%c%c", eRd[1], eres[1], eval[1] ? "v" : " ", ewrrf[1] ? "w" : " ");
+  	$display("0: eRd:%d eres:%h%c%c eea:%h", eRd[0], eres[0], eval[0] ? "v" : " ", ewrrf[0] ? "w" : " ", eea[0]);
+  	$display("1: eRd:%d eres:%h%c%c eea:%h", eRd[1], eres[1], eval[1] ? "v" : " ", ewrrf[1] ? "w" : " ", eea[1]);
   	$display("0: mRd:%d mres:%h%c%c", mRd[0], mres[0], mval[0] ? "v" : " ", mwrrf[0] ? "w" : " ");
   	$display("1: mRd:%d mres:%h%c%c", mRd[1], mres[1], mval[1] ? "v" : " ", mwrrf[1] ? "w" : " ");
   	$display("0: wRd:%d wres:%h%c%c", wRd[0], wres[0], wval[0] ? "v" : " ", wwrrf[0] ? "w" : " ");
@@ -1894,7 +2117,7 @@ begin
         wwcr <= wcr[0];
         wwxer <= wxer[0];
         if (w_lsu[0] & wval[0])
-          wgoto(WRITEBACK1);
+        	wgoto(WRITEBACK1);
         else if (wval[1])
           wgoto(WRITEBACK2);
         else begin
@@ -1907,6 +2130,7 @@ begin
         wwRd <= wRa[0];
         wwres <= wea[0];
         wwval <= 1'b1;
+        wwwrrf <= 1'b1;
         if (wval[1])
           wgoto(WRITEBACK2);
         else begin
@@ -1927,17 +2151,18 @@ begin
         wwcr <= wcr[1];
         wwxer <= wxer[1];
         if (w_lsu[1] & wval[1])
-          wgoto(WRITEBACK3);
+        	wgoto(WRITEBACK3);
         else begin
-          writeback_done <= TRUE;
-          wgoto(WWAIT);
-        end
+        	writeback_done <= TRUE;
+        	wgoto(WWAIT);
+      	end
       end
     WRITEBACK3:
       begin
         wwRd <= wRa[1];
         wwres <= wea[1];
         wwval <= 1'b1;
+        wwwrrf <= 1'b1;
         writeback_done <= TRUE;
         wgoto(WWAIT);
       end
@@ -1980,8 +2205,14 @@ endtask
 task tValid;
 begin
 	if (rst_i) begin
-		iir[0] <= NOP_INSN;
-    iir[1] <= NOP_INSN;
+		if (RIBO) begin
+			iir[0] <= {NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]};
+			iir[1] <= {NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]};
+		end
+		else begin
+			iir[0] <= NOP_INSN;
+    	iir[1] <= NOP_INSN;
+  	end
 		ir[0] <= NOP_INSN;
     ir[1] <= NOP_INSN;
     dval <= 2'b00;
@@ -1998,40 +2229,128 @@ begin
     wir[1] <= NOP_INSN;
     wval <= 2'b00;
 	end
-  else if (emod_pc[0] & eval[0] & advance_e) begin
-    ir[0] <= NOP_INSN;
-    ir[1] <= NOP_INSN;
-    dval <= 2'b00;
-    rir[0] <= NOP_INSN;
-    rir[1] <= NOP_INSN;
-    rval <= 1'b0;
-    eir[0] <= NOP_INSN;
-    eir[1] <= NOP_INSN;
-    eval <= 2'b00;
-    mval[1] <= 1'b0;
-  end
-  else if (emod_pc[1] & eval[1] & advance_e) begin
-    ir[0] <= NOP_INSN;
-    ir[1] <= NOP_INSN;
-    dval <= 2'b00;
-    rir[0] <= NOP_INSN;
-    rir[1] <= NOP_INSN;
-    rval <= 1'b0;
-    eir[0] <= NOP_INSN;
-    eir[1] <= NOP_INSN;
-    eval <= 2'b00;
-  end
-  else if (dmod_pc[0] & dval & advance_d) begin
-    ir[0] <= NOP_INSN;
-    ir[1] <= NOP_INSN;
-    dval <= 2'b00;
-    eval[1] <= 1'b0;
-  end
-  else if (dmod_pc[1] & dval & advance_d) begin
-    ir[0] <= NOP_INSN;
-    ir[1] <= NOP_INSN;
-    dval <= 2'b00;
-  end
+	else if (smt) begin
+	  if (wmod_pc[0] & wval[0] & advance_w) begin
+	    ir[0] <= NOP_INSN;
+	    dval[0] <= 1'b0;
+	    rir[0] <= NOP_INSN;
+	    rval[0] <= 1'b0;
+	    eir[0] <= NOP_INSN;
+	    eval[0] <= 1'b0;
+	    mir[0] <= NOP_INSN;
+	    mval[0] <= 1'b0;
+	    wir[0] <= NOP_INSN;
+	    wval[0] <= 1'b0;
+	  end
+	  if (emod_pc[0] & eval[0] & advance_e) begin
+	    ir[0] <= NOP_INSN;
+	    dval[0] <= 1'b0;
+	    rir[0] <= NOP_INSN;
+	    rval[0] <= 1'b0;
+	    eir[0] <= NOP_INSN;
+	    eval[0] <= 1'b0;
+	  end
+	  else if (dmod_pc[0] & dval[0] & advance_d) begin
+	    ir[0] <= NOP_INSN;
+	    dval[0] <= 1'b0;
+	  end
+	  if (wmod_pc[1] & wval[1] & advance_w) begin
+	    ir[1] <= NOP_INSN;
+	    dval[1] <= 1'b0;
+	    rir[1] <= NOP_INSN;
+	    rval[1] <= 1'b0;
+	    eir[1] <= NOP_INSN;
+	    eval[1] <= 1'b0;
+	    mir[1] <= NOP_INSN;
+	    mval[1] <= 1'b0;
+	    wir[1] <= NOP_INSN;
+	    wval[1] <= 1'b0;
+	  end
+	  if (emod_pc[1] & eval[1] & advance_e) begin
+	    ir[1] <= NOP_INSN;
+	    dval[1] <= 1'b0;
+	    rir[1] <= NOP_INSN;
+	    rval[1] <= 1'b0;
+	    eir[1] <= NOP_INSN;
+	    eval[1] <= 1'b0;
+	  end
+	  else if (dmod_pc[1] & dval[1] & advance_d) begin
+	    ir[1] <= NOP_INSN;
+	    dval[1] <= 1'b0;
+	  end
+	end
+	else begin
+	  if (wmod_pc[0] & wval[0] & advance_w) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	    rir[0] <= NOP_INSN;
+	    rir[1] <= NOP_INSN;
+	    rval <= 2'b00;
+	    eir[0] <= NOP_INSN;
+	    eir[1] <= NOP_INSN;
+	    eval <= 2'b00;
+	    mir[0] <= NOP_INSN;
+	    mir[1] <= NOP_INSN;
+	    mval <= 2'b00;
+	    wir[0] <= NOP_INSN;
+	    wir[1] <= NOP_INSN;
+	    wval <= 2'b00;
+	  end
+	  else if (wmod_pc[1] & wval[1] & advance_w) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	    rir[0] <= NOP_INSN;
+	    rir[1] <= NOP_INSN;
+	    rval <= 2'b00;
+	    eir[0] <= NOP_INSN;
+	    eir[1] <= NOP_INSN;
+	    eval <= 2'b00;
+	    mir[0] <= NOP_INSN;
+	    mir[1] <= NOP_INSN;
+	    mval <= 2'b00;
+	    wir[0] <= NOP_INSN;
+	    wir[1] <= NOP_INSN;
+	    wval <= 2'b00;
+	  end
+	  else if (emod_pc[0] & eval[0] & advance_e) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	    rir[0] <= NOP_INSN;
+	    rir[1] <= NOP_INSN;
+	    rval <= 2'b00;
+	    eir[0] <= NOP_INSN;
+	    eir[1] <= NOP_INSN;
+	    eval <= 2'b00;
+	    mir[1] <= NOP_INSN;
+	    mval[1] <= 1'b0;
+	  end
+	  else if (emod_pc[1] & eval[1] & advance_e) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	    rir[0] <= NOP_INSN;
+	    rir[1] <= NOP_INSN;
+	    rval <= 1'b0;
+	    eir[0] <= NOP_INSN;
+	    eir[1] <= NOP_INSN;
+	    eval <= 2'b00;
+	  end
+	  else if (dmod_pc[0] & dval & advance_d) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	    rir[1] <= NOP_INSN;
+	    rval[1] <= 1'b0;
+	  end
+	  else if (dmod_pc[1] & dval & advance_d) begin
+	    ir[0] <= NOP_INSN;
+	    ir[1] <= NOP_INSN;
+	    dval <= 2'b00;
+	  end
+	end
 end
 endtask
 
