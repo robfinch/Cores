@@ -22,7 +22,7 @@
 //                                                                          
 // ============================================================================
 
-`include "../inc/rtf64-config.sv"
+import rtf64configpkg::*;
 
 module rtf64_TLB(rst_i, clk_i, asid_i, umode_i,xlaten_i,we_i,ladr_i,iacc_i,iadr_i,padr_o,acr_o,tlben_i,wrtlb_i,tlbadr_i,tlbdat_i,tlbdat_o,tlbmiss_o);
 parameter AWID=32;
@@ -66,6 +66,9 @@ case(tlbadr_i[11:10])
 2'd3: tlbdat_o <= tlbdato4;
 endcase
 
+wire xlatd;
+delay #(.WID(1), .DEP(2)) udl1 (.clk(clk_g), .ce(1'b1), .i(xlaten_i), .o(xlatd));
+/*
 wire pe_xlat, ne_xlat;
 edge_det u5 (
   .rst(rst_i),
@@ -76,6 +79,7 @@ edge_det u5 (
   .ne(ne_xlat),
   .ee()
 );
+*/
 
 // Dirty / Accessed bit write logic
 always @(posedge clk_g)
@@ -86,7 +90,7 @@ begin
   wr1 <= 1'b0;
   wr2 <= 1'b0;
   wr3 <= 1'b0;
-  if (ne_xlat) begin
+  if (xlatd) begin
     if (hit0) begin
       tadri0 <= {tadr0[63:55],wed,1'b1,tadr0[52:0]};
       wr0 <= 1'b1;
@@ -114,7 +118,7 @@ TLBRam u1 (
   .dina(tlbdat_i),    // input wire [63 : 0] dina
   .douta(tlbdato1),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
-  .enb(xlaten_i),      // input wire enb
+  .enb(xlaten_i|wr0),      // input wire enb
   .web(wr0),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
   .dinb(tadri0),    // input wire [63 : 0] dinb
@@ -129,7 +133,7 @@ TLBRam u2 (
   .dina(tlbdat_i),    // input wire [63 : 0] dina
   .douta(tlbdato2),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
-  .enb(xlaten_i),      // input wire enb
+  .enb(xlaten_i|wr1),      // input wire enb
   .web(wr1),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
   .dinb(tadri1),    // input wire [63 : 0] dinb
@@ -144,7 +148,7 @@ TLBRam u3 (
   .dina(tlbdat_i),    // input wire [63 : 0] dina
   .douta(tlbdato3),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
-  .enb(xlaten_i),      // input wire enb
+  .enb(xlaten_i|wr2),      // input wire enb
   .web(wr2),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
   .dinb(tadri2),    // input wire [63 : 0] dinb
@@ -159,7 +163,7 @@ TLBRam u4 (
   .dina(tlbdat_i),    // input wire [63 : 0] dina
   .douta(tlbdato4),  // output wire [63 : 0] douta
   .clkb(clk_g),    // input wire clkb
-  .enb(xlaten_i),      // input wire enb
+  .enb(xlaten_i|wr3),      // input wire enb
   .web(wr3),      // input wire [0 : 0] web
   .addrb(ladr_i[23:14]),  // input wire [9 : 0] addrb
   .dinb(tadri3),    // input wire [63 : 0] dinb
@@ -177,7 +181,7 @@ if (rst_i) begin
   padr_o[AWID-1:14] <= rstip[AWID-1:14];
 end
 else begin
-  if (pe_xlat) begin
+  if (xlaten_i) begin
     hit0 <= 1'b0;
     hit1 <= 1'b0;
     hit2 <= 1'b0;

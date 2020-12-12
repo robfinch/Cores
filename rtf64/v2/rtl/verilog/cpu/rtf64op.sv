@@ -54,7 +54,8 @@ import rtf64configpkg::*;
 import fp::*;
 import posit::*;
 
-module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, div_clk_i, nmi_i, irq_i, cause_i, vpa_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
+module rtf64op(hartid_i, rst_i, clk_i, wc_clk_i, div_clk_i, nmi_i, irq_i, cause_i,
+	vpa_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter WID = 64;
 parameter AWID = 32;
 parameter RSTPC = 64'hFFFFFFFFFFFC0200;
@@ -72,6 +73,7 @@ output reg vpa_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
+input err_i;
 output reg we_o;
 output reg [15:0] sel_o;
 output reg [AWID-1:0] adr_o;
@@ -97,65 +99,15 @@ parameter LOW = 1'b0;
 parameter HIGH = 1'b1;
 
 integer n;
+genvar g;
 reg [2:0] dcyc;
-reg [5:0] istate, dstate, rstate, estate, mstate, wstate;
+reg [3:0] istate;
+reg [1:0] dstate;
+reg [2:0] rstate;
+reg [3:0] estate;
+reg [5:0] mstate;
+reg [1:0] wstate;
 reg atni_done, exec_done;
-parameter IFETCH1 = 6'd1;
-parameter IFETCH2 = 6'd2;
-parameter IFETCH3 = 6'd3;
-parameter IFETCH4 = 6'd4;
-parameter DECODE = 6'd5;
-parameter REGFETCH1 = 6'd6;
-parameter REGFETCH2 = 6'd7;
-parameter EXECUTE = 6'd8;
-parameter WRITEBACK = 6'd9;
-parameter MEMORY1 = 6'd11;
-parameter MEMORY2 = 6'd12;
-parameter MEMORY3 = 6'd13;
-parameter MEMORY4 = 6'd14;
-parameter MEMORY5 = 6'd15;
-parameter MEMORY6 = 6'd16;
-parameter MEMORY7 = 6'd17;
-parameter MEMORY8 = 6'd18;
-parameter MEMORY9 = 6'd19;
-parameter MEMORY10 = 6'd20;
-parameter MEMORY11 = 6'd21;
-parameter MEMORY12 = 6'd22;
-parameter MEMORY13 = 6'd23;
-parameter MEMORY14 = 6'd24;
-parameter MEMORY15 = 6'd25;
-parameter MUL1 = 6'd26;
-parameter MUL2 = 6'd27;
-parameter PAM	 = 6'd28;
-parameter TMO = 6'd29;
-parameter PAGEMAPA = 6'd30;
-parameter CSR1 = 6'd31;
-parameter CSR2 = 6'd32;
-parameter DATA_ALIGN = 6'd33;
-parameter MEMORY_KEYCHK1 = 6'd34;
-parameter MEMORY_KEYCHK2 = 6'd35;
-parameter MEMORY_KEYCHK3 = 6'd36;
-parameter FLOAT = 6'd37;
-parameter INSTRUCTION_ALIGN = 6'd38;
-parameter IFETCH5 = 6'd39;
-parameter MEMORY1a = 6'd40;
-parameter MEMORY6a = 6'd41;
-parameter MEMORY11a = 6'd42;
-parameter IFETCH2a = 6'd43;
-parameter REGFETCH3 = 6'd44;
-parameter EXPAND_CI = 6'd45;
-parameter IFETCH3a = 6'd46;
-parameter WRITEBACK2 = 6'd47;
-parameter IFETCH_WAIT = 6'd48;
-parameter DECODE_WAIT = 6'd49;
-parameter REGFETCH_WAIT = 6'd50;
-parameter EXECUTE_WAIT = 6'd51;
-parameter MEMORY_WAIT = 6'd52;
-parameter WRITEBACK_WAIT = 6'd53;
-parameter IFETCH_INCR = 6'd54;
-parameter MEMORY0 = 6'd55;
-parameter EXECUTE_CRRES = 6'd56;
-parameter MEMORY_CRRES = 6'd57;
 
 reg dmod_pc, rmod_pc, emod_pc, mmod_pc, wmod_pc;
 reg [AWID-1:0] pc, ipc, ipc2, ret_pc, dnext_pc, rnext_pc, enext_pc, mnext_pc, wnext_pc;
@@ -285,9 +237,6 @@ always @(posedge clk_g)
 reg [WID-1:0] sp;
 reg [WID-1:0] sp_regfile [0:7];
 always @(posedge clk_g)
-  if (wr_rf && wRd==7'd31)
-    sp_regfile[w_omode] <= wres[WID-1:0];
-always @(posedge clk_g)
   sp <= sp_regfile[r_omode];
 reg [AWID-1:0] ra [0:1]; // ra0 = 0-31, ra1 = 32 to 63
 reg [AWID-1:0] ca [0:1];
@@ -344,14 +293,7 @@ always @(posedge clk_g)
   if (rRd==7'd31)
     irfoRd <= sp;
   else if (rRd[6:5]==2'b11)
-    casez(rRd[4:0])
-    5'b0000?: irfoRd <= ra[rRd[0]];
-    5'b0001?: irfoRd <= ca[0];
-    5'b00111: irfoRd <= epc;
-    5'b100??: irfoRd <= cds;
-    5'b11101: irfoRd <= cds32;
-    default:  irfoRd <= 64'd0;
-    endcase
+    irfoRd <= 64'd0;
   else
     irfoRd <= rf_Rd;
 always @(posedge clk_g)
@@ -854,10 +796,10 @@ reg [255:0] icache2 [0:pL1CacheLines-1];
 reg [255:0] icache3 [0:pL1CacheLines-1];
 initial begin
   for (n = 0; n < pL1CacheLines; n = n + 1) begin
-    icache0[n] = `NOP_INSN;
-    icache1[n] = `NOP_INSN;
-    icache2[n] = `NOP_INSN;
-    icache3[n] = `NOP_INSN;
+    icache0[n] = {32{`NOP_INSN}};
+    icache1[n] = {32{`NOP_INSN}};
+    icache2[n] = {32{`NOP_INSN}};
+    icache3[n] = {32{`NOP_INSN}};
   end
 end
 (* ram_style="distributed" *)
@@ -927,6 +869,58 @@ wire [31:0] ci_tblo2 = ci_tbl[ia[8:0]];
 wire [31:0] ci_tblo = ci_tbl[{ir[0],ir[15:8]}]; // Decode stage read
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Data cache
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+reg [AWID-1:0] first_adr_o;
+reg use_dc = 1'b0;
+reg [3:0] dcnt = 4'd0;
+reg dld = 1'b0, dload = 1'b0;
+reg [311:0] dcache_in = 312'd0;
+reg [311:0] dcache_ram [0:127];
+reg [AWID-1:5] dcache_tag [0:127];
+reg [127:0] dcache_valid;
+initial begin
+	dcache_valid <= 128'd0;
+	for (n = 0; n < 128; n = n + 1)
+		dcache_tag[n] <= {{AWID-4{1'b0}},1'b1};	
+	for (n = 0; n < 128; n = n + 1)
+		dcache_ram[n] <= {312{1'b0}};
+end
+wire [AWID-1:5] tago = dcache_tag[adr_o[11:5]];
+wire dhit = tago==adr_o[AWID-1:5] && dcache_valid[adr_o[11:5]];
+wire [311:0] dcache_dato1 = dcache_ram[adr_o[11:5]];
+wire [WID-1:0] dcache_dato = dcache_dato1 >> {adr_o[4:0],3'b0};
+reg [38:0] dc_sel;
+reg [311:0] dc_dat;
+
+generate begin : gDcacheUpdate
+	for (g = 0; g < 39; g = g + 1)
+		always @(posedge clk_g)
+			if (dhit & we_o)
+				dcache_in[g*8+7:g*8] <= dc_sel[g] ? dc_dat[g*8+7:g*8] : dcache_dato1[g*8+7:g*8];
+			else if (dload)
+				dcache_in[g*8+7:g*8] <= dc_dat[g*8+7:g*8];
+end
+endgenerate				
+
+always @(posedge clk_g)
+	dld <= (dhit & we_o) | dload;
+always @(posedge clk_g)
+	if (dld)
+		dcache_tag[first_adr_o[11:5]] <= first_adr_o[AWID-1:5];
+always @(posedge clk_g)
+	if (dld)
+		dcache_ram[first_adr_o[11:5]] <= dcache_in;
+always @(posedge clk_g)
+if (rst_i)
+	dcache_valid <= 128'd0;
+else begin
+	if (dld)
+		dcache_valid[first_adr_o[11:5]] <= 1'b1;
+end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 wire acki = ack_i;
 
@@ -948,24 +942,24 @@ modSelect usel1
   .sel(selx)
 );
 
-reg [AWID-1:0] ea;
+reg [AWID-1:0] ea, ea_tmp;
 reg [7:0] ealow;
 wire [3:0] segsel = ea[AWID-1:AWID-4];
 
 `ifdef CPU_B128
 reg [31:0] sel;
 reg [255:0] dat, dati;
-wire [63:0] datis = dati >> {ealow[3:0],3'b0};
+wire [63:0] datis = use_dc ? dcache_dato : dati >> {ealow[3:0],3'b0};
 `endif
 `ifdef CPU_B64
 reg [15:0] sel;
 reg [127:0] dat, dati;
-wire [63:0] datis = dati >> {ealow[2:0],3'b0};
+wire [63:0] datis = use_dc ? dcache_dato : dati >> {ealow[2:0],3'b0};
 `endif
 `ifdef CPU_B32
 reg [7:0] sel;
 reg [63:0] dat, dati;
-wire [63:0] datis = dati >> {ealow[1:0],3'b0};
+wire [63:0] datis = use_dc ? dcache_dato : dati >> {ealow[1:0],3'b0};
 `endif
 
 wire ld = st_execute;
@@ -1306,6 +1300,9 @@ begin
   // Signals that reset or calc every clock cycle.
   tOne();
 
+  if (wr_rf && wRd==7'd31)
+    sp_regfile[w_omode] <= wres[WID-1:0];
+
   // The six stage pipeline
   tIFetch();
   tDecode();
@@ -1435,6 +1432,7 @@ for (n = 0; n < 9; n = n + 1)
   if (keyo==key[n] || keyo==20'h0)
     keyViolation <= FALSE;
 
+xlaten <= FALSE;
 if (inc_ma)
 `ifdef CPU_B128
   ea <= {ea[31:4]+2'd1,4'b00};
@@ -1556,7 +1554,6 @@ IFETCH2a:
   end
 IFETCH3:
   begin
- 		xlaten <= FALSE;
 		if (ihitw0 && icnt==4'h0) begin
 		  iri1 <= icache0[pc[pL1msb:5]];
 		  iri2 <= icache0[pc[pL1msb:5]+2'd1];
@@ -2295,7 +2292,7 @@ DECODE:
     `FFO: begin Rd <= {2'b0,ir[12:8]}; wrirf <= 1'b1; illegal_insn <= 1'b0; d_ffoi <= ~ir[30]; d_ffor <= ir[30]; wrcrf <= ir[31]; end
     `ADDUI,`ORUI,`AUIIP: begin Rd <= {2'b0,ir[12:8]}; Rs1 <= {2'b0,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],13'd0}; illegal_insn <= 1'b0; end
     `ANDUI: begin Rd <= {2'b0,ir[12:8]}; Rs1 <= {2'b0,ir[12:8]}; wrirf <= 1'b1; dimm <= {ir[63:32],ir[30:13],ir[0],{13{1'd1}}}; illegal_insn <= 1'b0; end
-    `CSR: if (d_mode >= ir[35:33]) begin Rd <= {2'b0,ir[12:8]}; wrirf <= 1'b1; dimm <= ir[17:13]; illegal_insn <= 1'b0; end
+    `CSR: if (d_omode >= ir[35:33]) begin Rd <= {2'b0,ir[12:8]}; wrirf <= 1'b1; dimm <= ir[17:13]; illegal_insn <= 1'b0; end
     `ATNI: begin d_atni <= TRUE; illegal_insn <= FALSE; end
     `EXEC: begin d_exec <= TRUE; illegal_insn <= FALSE; end
     // Flow Control
@@ -2331,8 +2328,6 @@ DECODE:
       end
     `JSR:
       begin
-        // Assume instruction will not crap out and write ra0,ra1 here rather
-        // than at WRITEBACK.
         d_jsr <= TRUE;
         dmod_pc <= ir[9:8] != 2'b10 && dval;
         rad <= 1'b0;
@@ -2342,7 +2337,7 @@ DECODE:
         2'b10:  ;
         2'b11:  dnext_pc <= dpc + {{34{ir[39]}},ir[39:10]};
         endcase
-        Rd <= {3'b0,5'd31};
+        Rd <= {2'b0,5'd31};
         Rs1 <= {2'b0,5'd31};
         wrirf <= 1'b1;
         d_wha <= TRUE;
@@ -2356,7 +2351,7 @@ DECODE:
         d_jsr <= dval;
         dmod_pc <= dval;
         dnext_pc <= dpc + {{48{ir[23]}},ir[23:8]};
-        Rd <= {3'b0,5'd31};
+        Rd <= {2'b0,5'd31};
         Rs1 <= {2'b0,5'd31};
         wrirf <= 1'b1;
         d_wha <= TRUE;
@@ -2365,7 +2360,7 @@ DECODE:
       end
     `RTL:
       begin
-        Rd <= {3'b0,5'd31};
+        Rd <= {2'b0,5'd31};
         Rs1 <= {2'b0,5'd31};
         wrirf <= 1'b1;
         dimm <= {{50{ir[23]}},ir[23:13],3'b00};
@@ -2493,6 +2488,7 @@ DECODE:
         illegal_insn <= 1'b0;
         d_ld <= TRUE;
       end
+    /*
     `LDOT:
       begin
         Rd[6:5] <= 2'b11;
@@ -2505,6 +2501,7 @@ DECODE:
         d_ld <= TRUE; 
         illegal_insn <= 1'b0;
       end
+    */
     `FLDO:
       begin
         Rd <= {3'b01,ir[12:8]};
@@ -2515,7 +2512,7 @@ DECODE:
       end
     `FLDOS:
       begin
-        Rd <= {3'b01,ir[12:8]};
+        Rd <= {2'b01,ir[12:8]};
         Rs1 <= {2'b0,5'd30|ir[13]};
         wrirf <= 1'b1;
         wrcrf <= ir[23];
@@ -2527,6 +2524,15 @@ DECODE:
         Rd <= {3'b10,ir[12:8]};
         wrirf <= 1'b1;
         wrcrf <= ir[31];
+        illegal_insn <= 1'b0;
+        d_ld <= TRUE;
+      end
+    `PLDOS:
+      begin
+        Rd <= {2'b10,ir[12:8]};
+        Rs1 <= {2'b0,5'd30|ir[13]};
+        wrirf <= 1'b1;
+        wrcrf <= ir[23];
         illegal_insn <= 1'b0;
         d_ld <= TRUE;
       end
@@ -2618,6 +2624,7 @@ DECODE:
         d_st <= TRUE;
         d_stptr <= TRUE;
       end
+    /*
     `STOT:
       begin
         Rd <= {2'b11,ir[12:8]};
@@ -2626,6 +2633,7 @@ DECODE:
         d_stot <= TRUE;
         Cs <= ir[19:18];
       end
+    */
     `FSTO:  
       begin
         Rd <= {2'b01,ir[12:8]};
@@ -3046,10 +3054,13 @@ endcase
     else
       ic <= irfoRs3;
 
+		/*
     if (r_pushc)
       id <= dimm2;
-    else if (r_jsr)
-      id <= rpc + rilen; // pc is addressing next instruction
+    else 
+    */
+    if (r_jsr)
+      id <= rpc + rilen;
     else if (rRd[4:0]==5'd0 && rRd[6:5]!=2'b11)
       id <= {WID{1'b0}};
     else if (rRd==eRd && eval && ewrirf)
@@ -3059,6 +3070,8 @@ endcase
     else if (rRd==wRd && wval && wwrirf)
       id <= wres;
     else
+    	id <= irfoRd;
+    /*
       casez(rRd)
       7'b11_0000?: id <= rao;
       7'b11_0001?: id <= cao;
@@ -3067,7 +3080,7 @@ endcase
       7'b11_11101: id <= cds322;
       default:  id <= irfoRd;
       endcase
-
+		*/
     if (rCs==eCd && eval && ewrcrf)
       cdb <= crres;
     else if (rCs==mCd && mval && mwrcrf)
@@ -4406,9 +4419,9 @@ if (estate==EXECUTE)
       endcase
       // For now, bits 8 to 11 of CSR# are not checked
       casez({eir[35:33],eir[29:18]})
-      15'b???_????_0000_0010:  res <= tick;
-      15'b001_????_0000_0011:  res <= pta;
-      15'b???_????_0000_0100:
+      15'b???_0000_0000_0010:  res <= tick;
+      15'b001_0000_0000_0011:  res <= pta;
+      15'b???_0000_0000_0100:
         case(eir[35:33])
         3'd0: res <= {63'd0,uie};
         3'd1: res <= {62'd0,sie,uie};
@@ -4416,13 +4429,14 @@ if (estate==EXECUTE)
         3'd3: res <= {60'd0,mie,hie,sie,uie};
         3'd4: res <= {59'd0,iie,mie,hie,sie,uie};
         3'd5: res <= {58'd0,die,iie,mie,hie,sie,uie};
+        default:	res <= 64'd0;
         endcase
       15'b001_????_0001_0000:  res <= TaskId;
       15'b001_????_0001_1111:  res <= ASID;
       15'b001_????_0010_0000:  res <= {key[2],key[1],key[0]};
       15'b001_????_0010_0001:  res <= {key[5],key[4],key[3]};
       15'b001_????_0010_0010:  res <= {key[8],key[7],key[6]};
-      15'b011_????_0000_0001:  res <= hartid_i;
+      15'b011_0000_0000_0001:  res <= hartid_i;
       15'b011_????_0000_1100:  res <= sema;
       15'b???_????_0000_0110:  res <= cause[eir[28:26]];
       15'b???_????_0000_0111:  res <= badaddr[eir[28:26]];
@@ -4433,7 +4447,7 @@ if (estate==EXECUTE)
       15'b101_????_0001_10??:  res <= dbad[eir[19:18]];
       15'b101_????_0001_1100:  res <= dbcr;
       15'b101_????_0001_1101:  res <= dbsr;
-	    15'b???_0001_0000_0???:	 res <= sp_regfile[eir[20:18]]];
+	    15'b???_0001_0000_0???:	 res <= sp_regfile[eir[20:18]];
       default:  ;
       endcase
     end
@@ -4622,6 +4636,8 @@ if (rst_i) begin
   wilen <= 4'd1;
   wwrsrf <= FALSE;
   dati <= 128'h0;
+  dload <= FALSE;
+  use_dc <= FALSE;
 end
 else
 case(mstate)
@@ -4644,6 +4660,7 @@ MEMORY1:
       adv_mem(1'b0);
     end
     else begin
+    	dcnt <= 4'd0;
       // Must have a memory op to continue.
       if (mopcode[7:4]==4'h8 || mopcode[7:4]==4'h9 || mopcode[7:4]==4'hA || mopcode[7:4]==4'hB ||
         mopcode==`JSR || mopcode==`JSR18 || mopcode==`RTS || mopcode==`RTX) begin // POP incl.
@@ -4653,6 +4670,11 @@ MEMORY1:
           maccess <= mval;
           tEA();
           xlaten <= mval;
+          dc_sel <= {32'h0,selx} << ea[4:0];
+          if (mopcode==`STOIS)
+          	dc_dat <= {256'd0,{WID-14{mir[31]}},mir[31:23],mir[12:8]} << {ea[4:0],3'b0};
+          else
+          	dc_dat <= {256'd0,mid} << {ea[4:0],3'b0};
 `ifdef CPU_B128
           sel <= {8'h00,selx} << ea[3:0];
           if (mopcode==`STOIS)
@@ -4701,9 +4723,7 @@ MEMORY_KEYCHK1:
   end
 MEMORY3:
   begin
-    xlaten <= FALSE;
-    if (!icaccess)
-      mgoto (MEMORY4);
+    mgoto (MEMORY4);
 `ifdef RTF64_TLB
 		if (tlbmiss) begin
 		  m_cause <= 32'h80000004;
@@ -4712,7 +4732,7 @@ MEMORY3:
   	end
     else
 `endif    
-    if (~d_cache & ~icaccess) begin
+    if (~d_cache) begin
       cyc_o <= HIGH;
       stb_o <= HIGH;
 `ifdef CPU_B128
@@ -4729,8 +4749,8 @@ MEMORY3:
 `endif
       case(mopcode)
       `JSR,`JSR18,
-      `STB,`STW,`STT,`STO,`STOT,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOTS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
+      `STB,`STW,`STT,`STO,/*`STOT,*/`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,/*`STOTS,*/`STPTRS,`FSTOS,`PSTOS,`STOIS:
         we_o <= HIGH;
       `STOC,`STOCS:
         begin
@@ -4743,6 +4763,133 @@ MEMORY3:
       endcase
     end
   end
+MEMORY3a:
+	begin
+    xlaten <= TRUE;
+		tEA();
+		mgoto(MEMORY3b);
+	end
+MEMORY3b:
+	mgoto(MEMORY3c);
+MEMORY3c:
+	mgoto(MEMORY_KEYCHK4);
+MEMORY_KEYCHK4:
+	begin
+		mgoto(MEMORY3d);
+	end
+MEMORY3d:
+	begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+`ifdef CPU_B128		
+		sel_o <= 16'hFFFF;
+`endif
+`ifdef CPU_B64
+		sel_o <= 8'hFF;
+`endif
+`ifdef CPU_B32
+		sel_o <= 4'hF;
+`endif
+		mgoto(MEMORY3e);
+	end
+MEMORY3e:
+	if (acki|err_i) begin
+		stb_o <= LOW;
+		// Capture the first address so we know which cache row to update.
+		if (dcnt==4'd0)
+			first_adr_o <= adr_o;
+`ifdef CPU_B128
+		case(dcnt)
+		4'd0:	dc_dat[127:0] <= dat_i;
+		4'd1:	dc_dat[255:128] <= dat_i;
+		4'd2: dc_dat[311:256] <= dat_i[55:0];
+		default:	;
+		endcase
+		if (dcnt==4'd2) begin
+			cyc_o <= LOW;
+			sel_o <= 16'h0000;
+			dload <= TRUE;
+			mgoto(MEMORY3g);
+		end
+`endif
+`ifdef CPU_B64
+		case(dcnt)
+		4'd0:	dc_dat[63:0] <= dat_i;
+		4'd1:	dc_dat[127:64] <= dat_i;
+		4'd2: dc_dat[191:128] <= dat_i;
+		4'd3:	dc_dat[255:192] <= dat_i;
+		4'd4:	dc_dat[311:256] <= dat_i[55:0];
+		default:	;
+		endcase
+		if (dcnt==4'd4) begin
+			cyc_o <= LOW;
+			sel_o <= 8'h00;
+			dload <= TRUE;
+			mgoto(MEMORY3g);
+		end
+`endif
+`ifdef CPU_B32
+		case(dcnt)
+		4'd0:	dc_dat[31:0] <= dat_i;
+		4'd1:	dc_dat[63:32] <= dat_i;
+		4'd2:	dc_dat[95:64] <= dat_i;
+		4'd3:	dc_dat[127:96] <= dat_i;
+		4'd4: dc_dat[159:128] <= dat_i;
+		4'd5:	dc_dat[191:160] <= dat_i;
+		4'd6:	dc_dat[223:192] <= dat_i;
+		4'd7:	dc_dat[255:224] <= dat_i;
+		4'd8:	dc_dat[287:256] <= dat_i;
+		4'd9:	dc_dat[311:288] <= dat_i[23:0];
+		default:	;
+		endcase
+		if (dcnt==4'd9) begin
+			cyc_o <= LOW;
+			sel_o <= 4'h0;
+			dload <= TRUE;
+			mgoto(MEMORY3g);
+		end
+`endif
+		else
+			mgoto(MEMORY3f);
+	end
+MEMORY3f:
+	if (!acki) begin
+		dcnt <= dcnt + 1'd1;
+`ifdef CPU_B128		
+		ea[AWID-1:4] <= ea[AWID-1:4] + 1'd1;
+		ea[3:0] <= 4'h0;
+`endif
+`ifdef CPU_B64
+		ea[AWID-1:3] <= ea[AWID-1:3] + 1'd1;
+		ea[2:0] <= 3'h0;
+`endif
+`ifdef CPU_B32
+		ea[AWID-1:2] <= ea[AWID-1:2] + 1'd1;
+		ea[1:0] <= 2'h0;
+`endif
+		mgoto(MEMORY3a);
+	end
+MEMORY3g:
+	begin
+		ea <= ea_tmp;
+		dload <= FALSE;
+		mgoto(MEMORY3h);
+	end
+// There must be time allowed for the address to travel through the TLB, the
+// Keycheck and then the data cache. This takes about five clocks.
+MEMORY3h:
+	begin
+		tEA();
+		mgoto(MEMORY3i);
+	end
+MEMORY3i:
+	mgoto(MEMORY3j);
+MEMORY3j:
+	mgoto(MEMORY3k);
+MEMORY3k:
+	mgoto(MEMORY3l);
+MEMORY3l:
+	mgoto(MEMORY4);
 MEMORY4:
   begin
     if (d_cache) begin
@@ -4752,18 +4899,39 @@ MEMORY4:
       icvalid3[adr_o[pL1msb:5]] <= 1'b0;
       adv_mem(1'b0);
     end
-    else if (acki & ~icaccess) begin
-      mgoto (MEMORY5);
-      stb_o <= LOW;
-      dati <= dat_i;
-      if (sel[`SELH]==1'h0) begin
-        cyc_o <= LOW;
-        we_o <= LOW;
-        sel_o <= 1'h0;
-        maccess <= FALSE;
-        set_rbi();
-        tPC();
-      end
+    else begin
+    	// Under construction
+    	if (mopcode[7:5]==3'd4 && adr_o[AWID-1:20]!={{AWID-5{1'b1}},4'hD}) begin
+				if (dhit)	begin
+	    		cyc_o <= LOW;
+	    		stb_o <= LOW;
+	    		sel_o <= 1'b0;
+	    		use_dc <= TRUE;
+	    		maccess <= FALSE;
+	    		tPC();
+					mgoto(DATA_ALIGN);
+				end
+				else begin
+					dcnt <= 4'd0;
+					stb_o <= LOW;
+					ea_tmp <= ea;			// save off original address
+					ea[4:0] <= 5'h0;	// align to a cache line
+					mgoto(MEMORY3a);
+				end
+			end
+    	else if (acki|err_i) begin
+	      mgoto (MEMORY5);
+	      stb_o <= LOW;
+	      dati <= dat_i;
+	      if (sel[`SELH]==1'h0) begin
+	        cyc_o <= LOW;
+	        we_o <= LOW;
+	        sel_o <= 1'h0;
+	        maccess <= FALSE;
+	        set_rbi();
+	        tPC();
+	      end
+	    end
     end
   end
 MEMORY5:
@@ -4772,8 +4940,8 @@ MEMORY5:
       mgoto (MEMORY6);
     else begin
       case(mopcode)
-      `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
+      `STB,`STW,`STT,`STO,/*`STOT,*/`STOC,`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,/*`STOTS,*/`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
         adv_mem(1'b0);
       `JSR,`JSR18:
         adv_mem(1'b0);
@@ -4803,7 +4971,6 @@ MEMORY_KEYCHK2:
   end
 MEMORY8:
   begin
-    xlaten <= FALSE;
     mgoto (MEMORY9);
 `ifdef RTF64_TLB    
 		if (tlbmiss) begin
@@ -4824,7 +4991,7 @@ MEMORY8:
     end
   end
 MEMORY9:
-  if (acki & ~icaccess) begin
+  if (acki|err_i) begin
     mgoto (MEMORY10);
     stb_o <= LOW;
     dati[`DATH] <= dat_i;
@@ -4863,8 +5030,8 @@ MEMORY10:
 `endif
     begin
       case(mopcode)
-      `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
-      `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
+      `STB,`STW,`STT,`STO,/*`STOT,*/`STOC,`STPTR,`FSTO,`PSTO,
+      `STBS,`STWS,`STTS,`STOS,/*`STOTS,*/`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
         adv_mem(1'b0);
       `JSR,`JSR18:
         adv_mem(1'b0);
@@ -4894,7 +5061,6 @@ MEMORY_KEYCHK3:
   end
 MEMORY13:
   begin
-    xlaten <= FALSE;
     mgoto (MEMORY14);
 `ifdef RTF64_TLB    
 		if (tlbmiss) begin
@@ -4915,7 +5081,7 @@ MEMORY13:
     end
   end
 MEMORY14:
-  if (acki & ~icaccess) begin
+  if (acki|err_i) begin
     mgoto (MEMORY15);
     cyc_o <= LOW;
     stb_o <= LOW;
@@ -4929,8 +5095,8 @@ MEMORY14:
 MEMORY15:
   if (~acki) begin
     case(mopcode)
-    `STB,`STW,`STT,`STO,`STOT,`STOC,`STPTR,`FSTO,`PSTO,
-    `STBS,`STWS,`STTS,`STOS,`STOTS,`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
+    `STB,`STW,`STT,`STO,/*`STOT,*/`STOC,`STPTR,`FSTO,`PSTO,
+    `STBS,`STWS,`STTS,`STOS,/*`STOTS,*/`STOCS,`STPTRS,`FSTOS,`PSTOS,`STOIS:
       adv_mem(1'b0);
     `JSR,`JSR18:
       adv_mem(1'b0);
@@ -4952,7 +5118,7 @@ DATA_ALIGN:
     `LDT,`LDTS:   mres <= {{32{datis[31]}},datis[31:0]};
     `LDTU,`LDTUS:  mres <= {{32{1'b0}},datis[31:0]};
     `LDO,`LDOS:   mres <= datis[63:0];
-    `LDOT:  begin mcrres <= datis[31:0]; mrares <= datis[AWID-1:0]; adv_mem(1'b0); end
+//    `LDOT:  begin mcrres <= datis[31:0]; mrares <= datis[AWID-1:0]; adv_mem(1'b0); end
     `LDOR,`LDORS: mres <= datis[63:0];
     `FLDO,`FLDOS,`PLDO:  mres <= datis[63:0];
     `POP: mres <= datis[63:0];
@@ -4988,6 +5154,7 @@ MEMORY_CRRES:
 MEMORY_WAIT:  ;
 endcase
   if (advance_m) begin
+  	use_dc <= FALSE;
     maccess <= FALSE;
     wval <= mval;
     wia <= mia;
@@ -5338,7 +5505,7 @@ begin
     15'b101_????_0001_10??:  dbad[wir[19:18]] <= wia;
     15'b101_????_0001_1100:  dbcr <= wia;
     15'b101_????_0001_1101:  dbsr <= wia;
-    15'b???_0001_0000_0???:	sp_regfile[wir[20:18]]] <= wia;
+    15'b???_0001_0000_0???:	sp_regfile[wir[20:18]] <= wia;
     default:  ;
     endcase
   3'd2,3'd6:
