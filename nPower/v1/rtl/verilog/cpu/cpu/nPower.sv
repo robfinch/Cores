@@ -76,9 +76,9 @@ wire advance_d;
 reg [1:0] decode_done;
 reg [1:0] dval;
 reg [31:0] ir [0:1];
-reg [1:0] wrrf, wrcrf;
-reg [1:0] wrlr, wrctr;
-reg [1:0] wrxer;
+reg [1:0] wrrf, wrcrf, rdcrf;
+reg [1:0] wrlr, wrctr, rdlr, rdctr;
+reg [1:0] wrxer, rdxer;
 reg [AWID-1:0] dpc [0:1];
 reg [5:0] Rd [0:1];
 reg [5:0] Ra [0:1];
@@ -103,9 +103,9 @@ reg rdone;
 reg [1:0] regfetch_done;
 reg [1:0] rval;
 reg [31:0] rir [0:1];
-reg [1:0] rwrrf, rwrcrf;
-reg [1:0] rwrlr, rwrctr;
-reg [1:0] rwrxer;
+reg [1:0] rwrrf, rwrcrf, rrdcrf;
+reg [1:0] rwrlr, rwrctr, rrdlr, rrdctr;
+reg [1:0] rwrxer, rrdxer;
 reg [AWID-1:0] rpc [0:1];
 reg [5:0] rRd [0:1];
 reg [5:0] rRa [0:1];
@@ -268,16 +268,20 @@ assign stall_i = 1'b0;
 assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0]) || (rRa[0]==eRd[0]) || (rRb[0]==eRd[0]) || (rRc[0]==eRd[0])) && eval[0] && rval[0]) ||
 								 	  ((e_ld[1]||e_st[1]) && ((rRd[0]==eRd[1]) || (rRa[0]==eRd[1]) || (rRb[0]==eRd[1]) || (rRc[0]==eRd[1])) && eval[1] && rval[1]) ||
                 		((e_st[0] & e_lsu[0]) && ((rRd[0]==eRa[0]) || (rRa[0]==eRa[0]) || (rRb[0]==eRa[0]) || (rRc[0]==eRa[0])) && eval[0] && rval[0]) ||
-								 	  ((e_st[1] & e_lsu[1]) && ((rRd[0]==eRa[1]) || (rRa[0]==eRa[1]) || (rRb[0]==eRa[1]) || (rRc[0]==eRa[1])) && eval[1] && rval[1])
+								 	  ((e_st[1] & e_lsu[1]) && ((rRd[0]==eRa[1]) || (rRa[0]==eRa[1]) || (rRb[0]==eRa[1]) || (rRc[0]==eRa[1])) && eval[1] && rval[1]) ||
+								 	  (rrdlr[0] & ewrlr[0]) || (rrdctr[0] & ewrctr[0]) || (rrdxer[0] & ewrxer[0]) || (rrdcrf[0] & ewrcrf[0]) ||
+								 	  (rrdlr[0] & ewrlr[1]) || (rrdctr[0] & ewrctr[1]) || (rrdxer[0] & ewrxer[1]) || (rrdcrf[0] & ewrcrf[1])
                 		;
 assign stall_r[1] = stall_r[0] ||
 										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0] && rval[1]) ||
 								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[1]) ||
 								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
 								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[1]) ||
-								 	 	((e_st[1] & e_lsu[1]) && ((rRd[1]==eRa[1]) || (rRa[1]==eRa[1]) || (rRb[1]==eRa[1]) || (rRc[1]==eRa[1])) && eval[1] && rval[1])
+								 	 	((e_st[1] & e_lsu[1]) && ((rRd[1]==eRa[1]) || (rRa[1]==eRa[1]) || (rRb[1]==eRa[1]) || (rRc[1]==eRa[1])) && eval[1] && rval[1]) ||
+								 	  (rrdlr[1] & ewrlr[0]) || (rrdctr[1] & ewrctr[0]) || (rrdxer[1] & ewrxer[0]) || (rrdcrf[1] & ewrcrf[0]) ||
+								 	  (rrdlr[1] & ewrlr[1]) || (rrdctr[1] & ewrctr[1]) || (rrdxer[1] & ewrxer[1]) || (rrdcrf[1] & ewrcrf[1]) ||
+								 	  (rrdlr[1] & rwrlr[0]) || (rrdctr[1] & rwrctr[0]) || (rrdxer[1] & rwrxer[0]) || (rrdcrf[1] & rwrcrf[0])
                 	  ;
-
                 /*
                 || (e_crop && r_crop && (rBa==eBt) || (rBb==eBt) && eval && rval)
                 || (r_bc && e_crop && (rBi==eBt) && eval && rval)
@@ -714,6 +718,10 @@ begin
     wrctr[which] <= FALSE;
     wrlr[which] <= FALSE;
     wwcr[which] <= FALSE;
+    rrdxer[which] <= FALSE;
+    rrdcrf[which] <= FALSE;
+    rrdctr[which] <= FALSE;
+    rrdlr[which] <= FALSE;
     wwea[which] <= FALSE;
     wwrctr[which] <= FALSE;
     wrrf[which] <= FALSE;
@@ -785,9 +793,18 @@ begin
           STHUX:  begin illegal_insn[which] <= FALSE; d_st[which] <= TRUE; lsu[which] <= TRUE; end
           STWUX:  begin illegal_insn[which] <= FALSE; d_st[which] <= TRUE; lsu[which] <= TRUE; end
           MCRXR:  begin wrcrf[which] <= TRUE; wrxer[which] <= TRUE; illegal_insn <= FALSE; end
-          MFCR:   begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          MFCR:   begin wrrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
           MTCRF:  begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          MFSPR:  begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          MFSPR:
+          	begin
+              case(eir[which][20:11])
+              10'd32:	rdxer[which] <= TRUE;
+              10'd256:	rdlr[which] <= TRUE;
+              10'd288:	rdctr[which] <= TRUE;
+            	endcase
+          		wrrf[which] <= TRUE;
+          		illegal_insn[which] <= FALSE;
+          	end
           MTSPR:
             begin
               case(eir[which][20:11])
@@ -826,20 +843,21 @@ begin
         BC:
         	begin
         		wrlr[which] <= ir[which][0];
+        		rdcrf[which] <= TRUE;
         		illegal_insn[which] <= FALSE;
         	end
         CR2:
           case(ir[which][10:1])
-          BCCTR: begin wrlr[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          BCLR:  begin wrlr[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          CRAND: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CROR:  begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CRXOR: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CRNAND:begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CRNOR: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CREQV: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CRANDC:begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          CRORC: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          BCCTR: begin wrlr[which] <= ir[which][0]; rdctr[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          BCLR:  begin wrlr[which] <= ir[which][0]; rdlr[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRAND: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CROR:  begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRXOR: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRNAND:begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRNOR: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CREQV: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRANDC:begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          CRORC: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
           default:  ;
           endcase
 
@@ -869,6 +887,10 @@ begin
         rRc[which] <= Rc[which];
         rBa[which] <= Ba[which];
         rBb[which] <= Bb[which];
+        rrdlr[which] <= rdlr[which];
+        rrdctr[which] <= rdctr[which];
+        rrdxer[which] <= rdxer[which];
+        rrdcrf[which] <= rdcrf[which];
         rimm[which] <= dimm[which];
         r_lsu[which] <= lsu[which];
         r_ld[which] <= d_ld[which];
@@ -962,248 +984,6 @@ RFETCH:
 //    tin(1,rRc[1],rfoc[1],ric[1]);
 
 /*
-	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ria[0] <= 32'd0;
-	  else if (rRa[0]==eRd[1] && eval[1] && ewrrf[1])
-	    ria[0] <= eres[1];
-	  else if (rRa[0]==eRa[1] && eval[1] && e_lsu[1])
-	    ria[0] <= eea[1];
-	  else if (rRa[0]==eRd[0] && eval[0] && ewrrf[0])
-	    ria[0] <= eres[0];
-	  else if (rRa[0]==eRa[0] && eval[0] && e_lsu[0])
-	    ria[0] <= eea[0];
-	  else if (rRa[0]==mRd[1] && mval[1] && mwrrf[1])
-	    ria[0] <= mres[1];
-	  else if (rRa[0]==mRa[1] && mval[1] && m_lsu[1])
-	    ria[0] <= ea[1];
-	  else if (rRa[0]==mRd[0] && mval[0] && mwrrf[0])
-	    ria[0] <= mres[0];
-	  else if (rRa[0]==mRa[0] && mval[0] && m_lsu[0])
-	    ria[0] <= ea[0];
-	  else if (rRa[0]==wRd[1] && wval[1] && wwrrf[1])
-	    ria[0] <= wres[1];
-	  else if (rRa[0]==wRa[1] && wval[1] && w_lsu[1])
-	    ria[0] <= wea[1];
-	  else if (rRa[0]==wRd[0] && wval[0] && wwrrf[0])
-	    ria[0] <= wres[0];
-	  else if (rRa[0]==wRa[0] && wval[0] && w_lsu[0])
-	    ria[0] <= wea[0];
-	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
-	    ria[0] <= tres[0];
-	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
-	    ria[0] <= tres[1];
-	  else
-	    ria[0] <= rfoa[0];
-*/
-/*
-	  if (rRa[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ria[1] <= 32'd0;
-	  else if (rRa[1]==eRd[1] && eval[1] && ewrrf[1])
-	    ria[1] <= eres[1];
-	  else if (rRa[1]==eRa[1] && eval[1] && e_lsu[1])
-	    ria[1] <= eea[1];
-	  else if (rRa[1]==eRd[0] && eval[0] && ewrrf[0])
-	    ria[1] <= eres[0];
-	  else if (rRa[1]==eRa[0] && eval[0] && e_lsu[0])
-	    ria[1] <= eea[0];
-	  else if (rRa[1]==mRd[1] && mval[1] && mwrrf[1])
-	    ria[1] <= mres[1];
-	  else if (rRa[1]==mRa[1] && mval[1] && m_lsu[1])
-	    ria[1] <= ea[1];
-	  else if (rRa[1]==mRd[0] && mval[0] && mwrrf[0])
-	    ria[1] <= mres[0];
-	  else if (rRa[1]==mRa[0] && mval[0] && m_lsu[0])
-	    ria[1] <= ea[0];
-	  else if (rRa[1]==wRd[1] && wval[1] && wwrrf[1])
-	    ria[1] <= wres[1];
-	  else if (rRa[1]==wRa[1] && wval[1] && w_lsu[1])
-	    ria[1] <= wea[1];
-	  else if (rRa[1]==wRd[0] && wval[0] && wwrrf[0])
-	    ria[1] <= wres[0];
-	  else if (rRa[1]==wRa[0] && wval[0] && w_lsu[0])
-	    ria[1] <= wea[0];
-	  else if (rRa[1]==tRd[0] && tval[0] && twrrf[0])
-	    ria[1] <= tres[0];
-	  else if (rRa[1]==tRd[1] && tval[1] && twrrf[1])
-	    ria[1] <= tres[1];
-	  else
-	    ria[1] <= rfoa[1];
-*/
-/*
-	  if (rRb[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    rib[0] <= 32'd0;
-	  else if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
-	    rib[0] <= eres[1];
-	  else if (rRb[0]==eRa[1] && eval[1] && e_lsu[1])
-	    rib[0] <= eea[1];
-	  else if (rRb[0]==eRd[0] && eval[0] && ewrrf[0])
-	    rib[0] <= eres[0];
-	  else if (rRb[0]==eRa[0] && eval[0] && e_lsu[0])
-	    rib[0] <= eea[0];
-	  else if (rRb[0]==mRd[1] && mval[1] && mwrrf[1])
-	    rib[0] <= mres[1];
-	  else if (rRb[0]==mRa[1] && mval[1] && m_lsu[1])
-	    rib[0] <= ea[1];
-	  else if (rRb[0]==mRd[0] && mval[0] && mwrrf[0])
-	    rib[0] <= mres[0];
-	  else if (rRb[0]==mRa[0] && mval[0] && m_lsu[0])
-	    rib[0] <= ea[0];
-	  else if (rRb[0]==wRd[1] && wval[1] && wwrrf[1])
-	    rib[0] <= wres[1];
-	  else if (rRb[0]==wRa[1] && wval[1] && w_lsu[1])
-	    rib[0] <= wea[1];
-	  else if (rRb[0]==wRd[0] && wval[0] && wwrrf[0])
-	    rib[0] <= wres[0];
-	  else if (rRb[0]==wRa[0] && wval[0] && w_lsu[0])
-	    rib[0] <= wea[0];
-	  else
-	    rib[0] <= rfob[0];
-
-	  if (rRb[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    rib[1] <= 32'd0;
-	  else if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
-	    rib[1] <= eres[1];
-	  else if (rRb[1]==eRa[1] && eval[1] && e_lsu[1])
-	    rib[1] <= eea[1];
-	  else if (rRb[1]==eRd[0] && eval[0] && ewrrf[0])
-	    rib[1] <= eres[0];
-	  else if (rRb[1]==eRa[0] && eval[0] && e_lsu[0])
-	    rib[1] <= eea[0];
-	  else if (rRb[1]==mRd[1] && mval[1] && mwrrf[1])
-	    rib[1] <= mres[1];
-	  else if (rRb[1]==mRa[1] && mval[1] && m_lsu[1])
-	    rib[1] <= ea[1];
-	  else if (rRb[1]==mRd[0] && mval[0] && mwrrf[0])
-	    rib[1] <= mres[0];
-	  else if (rRb[1]==mRa[0] && mval[0] && m_lsu[0])
-	    rib[1] <= ea[0];
-	  else if (rRb[1]==wRd[1] && wval[1] && wwrrf[1])
-	    rib[1] <= wres[1];
-	  else if (rRb[1]==wRa[1] && wval[1] && w_lsu[1])
-	    rib[1] <= wea[1];
-	  else if (rRb[1]==wRd[0] && wval[0] && wwrrf[0])
-	    rib[1] <= wres[0];
-	  else if (rRb[1]==wRa[0] && wval[0] && w_lsu[0])
-	    rib[1] <= wea[0];
-	  else
-	    rib[1] <= rfob[1];
-
-	  if (rRc[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ric[0] <= 32'd0;
-	  else if (rRc[0]==eRd[1] && eval[1] && ewrrf[1])
-	    ric[0] <= eres[1];
-	  else if (rRc[0]==eRa[1] && eval[1] && e_lsu[1])
-	    ric[0] <= eea[1];
-	  else if (rRc[0]==eRd[0] && eval[0] && ewrrf[0])
-	    ric[0] <= eres[0];
-	  else if (rRc[0]==eRa[0] && eval[0] && e_lsu[0])
-	    ric[0] <= eea[0];
-	  else if (rRc[0]==mRd[1] && mval[1] && mwrrf[1])
-	    ric[0] <= mres[1];
-	  else if (rRc[0]==mRa[1] && mval[1] && m_lsu[1])
-	    ric[0] <= ea[1];
-	  else if (rRc[0]==mRd[0] && mval[0] && mwrrf[0])
-	    ric[0] <= mres[0];
-	  else if (rRc[0]==mRa[0] && mval[0] && m_lsu[0])
-	    ric[0] <= ea[0];
-	  else if (rRc[0]==wRd[1] && wval[1] && wwrrf[1])
-	    ric[0] <= wres[1];
-	  else if (rRc[0]==wRa[1] && wval[1] && w_lsu[1])
-	    ric[0] <= wea[1];
-	  else if (rRc[0]==wRd[0] && wval[0] && wwrrf[0])
-	    ric[0] <= wres[0];
-	  else if (rRc[0]==wRa[0] && wval[0] && w_lsu[0])
-	    ric[0] <= wea[0];
-	  else
-	    ric[0] <= rfoc[0];
-
-	  if (rRc[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ric[1] <= 32'd0;
-	  else if (rRc[1]==eRd[1] && eval[1] && ewrrf[1])
-	    ric[1] <= eres[1];
-	  else if (rRc[1]==eRa[1] && eval[1] && e_lsu[1])
-	    ric[1] <= eea[1];
-	  else if (rRc[1]==eRd[0] && eval[0] && ewrrf[0])
-	    ric[1] <= eres[0];
-	  else if (rRc[1]==eRa[0] && eval[0] && e_lsu[0])
-	    ric[1] <= eea[0];
-	  else if (rRc[1]==mRd[1] && mval[1] && mwrrf[1])
-	    ric[1] <= mres[1];
-	  else if (rRc[1]==mRa[1] && mval[1] && m_lsu[1])
-	    ric[1] <= ea[1];
-	  else if (rRc[1]==mRd[0] && mval[0] && mwrrf[0])
-	    ric[1] <= mres[0];
-	  else if (rRc[1]==mRa[0] && mval[0] && m_lsu[0])
-	    ric[1] <= ea[0];
-	  else if (rRc[1]==wRd[1] && wval[1] && wwrrf[1])
-	    ric[1] <= wres[1];
-	  else if (rRc[1]==wRa[1] && wval[1] && w_lsu[1])
-	    ric[1] <= wea[1];
-	  else if (rRc[1]==wRd[0] && wval[0] && wwrrf[0])
-	    ric[1] <= wres[0];
-	  else if (rRc[1]==wRa[0] && wval[0] && w_lsu[0])
-	    ric[1] <= wea[0];
-	  else
-	    ric[1] <= rfoc[1];
-
-	  if (rRd[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    rid[0] <= 32'd0;
-	  else if (rRd[0]==eRd[1] && eval[1] && ewrrf[1])
-	    rid[0] <= eres[1];
-	  else if (rRd[0]==eRa[1] && eval[1] && e_lsu[1])
-	    rid[0] <= eea[1];
-	  else if (rRd[0]==eRd[0] && eval[0] && ewrrf[0])
-	    rid[0] <= eres[0];
-	  else if (rRd[0]==eRa[0] && eval[0] && e_lsu[0])
-	    rid[0] <= eea[0];
-	  else if (rRd[0]==mRd[1] && mval[1] && mwrrf[1])
-	    rid[0] <= mres[1];
-	  else if (rRd[0]==mRa[1] && mval[1] && m_lsu[1])
-	    rid[0] <= ea[1];
-	  else if (rRd[0]==mRd[0] && mval[0] && mwrrf[0])
-	    rid[0] <= mres[0];
-	  else if (rRd[0]==mRa[0] && mval[0] && m_lsu[0])
-	    rid[0] <= ea[0];
-	  else if (rRd[0]==wRd[1] && wval[1] && wwrrf[1])
-	    rid[0] <= wres[1];
-	  else if (rRd[0]==wRa[1] && wval[1] && w_lsu[1])
-	    rid[0] <= wea[1];
-	  else if (rRd[0]==wRd[0] && wval[0] && wwrrf[0])
-	    rid[0] <= wres[0];
-	  else if (rRd[0]==wRa[0] && wval[0] && w_lsu[0])
-	    rid[0] <= wea[0];
-	  else
-	    rid[0] <= rfod[0];
-
-	  if (rRd[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    rid[1] <= 32'd0;
-	  else if (rRd[1]==eRd[1] && eval[1] && ewrrf[1])
-	    rid[1] <= eres[1];
-	  else if (rRd[1]==eRa[1] && eval[1] && e_lsu[1])
-	    rid[1] <= eea[1];
-	  else if (rRd[1]==eRd[0] && eval[0] && ewrrf[0])
-	    rid[1] <= eres[0];
-	  else if (rRd[1]==eRa[0] && eval[0] && e_lsu[0])
-	    rid[1] <= eea[0];
-	  else if (rRd[1]==mRd[1] && mval[1] && mwrrf[1])
-	    rid[1] <= mres[1];
-	  else if (rRd[1]==mRa[1] && mval[1] && m_lsu[1])
-	    rid[1] <= ea[1];
-	  else if (rRd[1]==mRd[0] && mval[0] && mwrrf[0])
-	    rid[1] <= mres[0];
-	  else if (rRd[1]==mRa[0] && mval[0] && m_lsu[0])
-	    rid[1] <= ea[0];
-	  else if (rRd[1]==wRd[1] && wval[1] && wwrrf[1])
-	    rid[1] <= wres[1];
-	  else if (rRd[1]==wRa[1] && wval[1] && w_lsu[1])
-	    rid[1] <= wea[1];
-	  else if (rRd[1]==wRd[0] && wval[0] && wwrrf[0])
-	    rid[1] <= wres[0];
-	  else if (rRd[1]==wRa[0] && wval[0] && w_lsu[0])
-	    rid[1] <= wea[0];
-	  else
-	    rid[1] <= rfod[1];
-*/
 		if (smt) begin
 		end
 		else begin
@@ -1267,9 +1047,19 @@ RFETCH:
 	    else
 	      rctr <= ctr;
 		end
-
+*/
   end
 RWAIT:
+	if (advance_r) begin
+    regfetch_done <= 2'b00;
+    rgoto (RFETCH);
+  end
+default:
+  begin
+    regfetch_done <= 2'b11;
+    rgoto(RWAIT);
+  end
+endcase
   if (advance_r) begin
 	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    ia[0] <= 32'd0;
@@ -1297,10 +1087,12 @@ RWAIT:
 	    ia[0] <= wres[0];
 	  else if (rRa[0]==wRa[0] && wval[0] && w_lsu[0])
 	    ia[0] <= wea[0];
+/*	    
 	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
 	    ia[0] <= tres[0];
 	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
 	    ia[0] <= tres[1];
+*/
 	  else
 	    ia[0] <= rfoa[0];
 
@@ -1330,10 +1122,12 @@ RWAIT:
 	    ia[1] <= wres[0];
 	  else if (rRa[1]==wRa[0] && wval[0] && w_lsu[0])
 	    ia[1] <= wea[0];
+/*	    
 	  else if (rRa[1]==tRd[0] && tval[0] && twrrf[0])
 	    ia[1] <= tres[0];
 	  else if (rRa[1]==tRd[1] && tval[1] && twrrf[1])
 	    ia[1] <= tres[1];
+*/	    
 	  else
 	    ia[1] <= rfoa[1];
 
@@ -1503,6 +1297,131 @@ RWAIT:
 	  else
 	    id[1] <= rfod[1];
 
+		if (smt) begin
+		end
+		else begin
+	    if (ewrcrf[1] & eval[1])
+	      ecr[0] <= ecr[1];
+	    else if (ewrcrf[0] & eval[0])
+	      ecr[0] <= ecr[0];
+	    else if (mwrcrf[1] & mval[1])
+	      ecr[0] <= mcr[1];
+	    else if (mwrcrf[0] & mval[0])
+	      ecr[0] <= mcr[0];
+	    else if (wwrcrf[1] & wval[1])
+	      ecr[0] <= wcr[1];
+	    else if (wwrcrf[0] & wval[0])
+	      ecr[0] <= wcr[0];
+	    else
+	      ecr[0] <= cro;
+
+	    if (ewrcrf[1] & eval[1])
+	      ecr[1] <= ecr[1];
+	    else if (ewrcrf[0] & eval[0])
+	      ecr[1] <= ecr[0];
+	    else if (mwrcrf[1] & mval[1])
+	      ecr[1] <= mcr[1];
+	    else if (mwrcrf[0] & mval[0])
+	      ecr[1] <= mcr[0];
+	    else if (wwrcrf[1] & wval[1])
+	      ecr[1] <= wcr[1];
+	    else if (wwrcrf[0] & wval[0])
+	      ecr[1] <= wcr[0];
+	    else
+	      ecr[1] <= cro;
+
+	    if (ewrxer[1] & eval[1])
+	      exer[0] <= exer[1];
+	    else if (ewrcrf[0] & eval[0])
+	      exer[0] <= exer[0];
+	    else if (mwrcrf[1] & mval[1])
+	      exer[0] <= mxer[1];
+	    else if (mwrcrf[0] & mval[0])
+	      exer[0] <= mxer[0];
+	    else if (wwrcrf[1] & wval[1])
+	      exer[0] <= wxer[1];
+	    else if (wwrcrf[0] & wval[0])
+	      exer[0] <= wxer[0];
+	    else
+	      exer[0] <= xer;
+
+	    if (ewrxer[1] & eval[1])
+	      exer[1] <= exer[1];
+	    else if (ewrcrf[0] & eval[0])
+	      exer[1] <= exer[0];
+	    else if (mwrcrf[1] & mval[1])
+	      exer[1] <= mxer[1];
+	    else if (mwrcrf[0] & mval[0])
+	      exer[1] <= mxer[0];
+	    else if (wwrcrf[1] & wval[1])
+	      exer[1] <= wxer[1];
+	    else if (wwrcrf[0] & wval[0])
+	      exer[1] <= wxer[0];
+	    else
+	      exer[1] <= xer;
+
+	    if (ewrlr[1] & eval[1])
+	      elr[0] <= eres[1];
+	    else if (ewrlr[0] & eval[0])
+	      elr[0] <= eres[0];
+	    else if (mwrlr[1] & mval[1])
+	      elr[0] <= mres[1];
+	    else if (mwrlr[0] & mval[0])
+	      elr[0] <= mres[0];
+	    else if (wwrlr[1] & wval[1])
+	      elr[0] <= wres[1];
+	    else if (wwrlr[0] & wval[0])
+	      elr[0] <= wres[0];
+	    else
+	      elr[0] <= lr;
+
+	    if (ewrlr[1] & eval[1])
+	      elr[1] <= eres[1];
+	    else if (ewrlr[0] & eval[0])
+	      elr[1] <= eres[0];
+	    else if (mwrlr[1] & mval[1])
+	      elr[1] <= mres[1];
+	    else if (mwrlr[0] & mval[0])
+	      elr[1] <= mres[0];
+	    else if (wwrlr[1] & wval[1])
+	      elr[1] <= wres[1];
+	    else if (wwrlr[0] & wval[0])
+	      elr[1] <= wres[0];
+	    else
+	      elr[1] <= lr;
+
+	    if (ewrctr[1] & eval[1])
+	      ectr[0] <= eres[1];
+	    else if (ewrctr[0] & eval[0])
+	      ectr[0] <= eres[0];
+	    else if (mwrctr[1] & mval[1])
+	      ectr[0] <= mres[1];
+	    else if (mwrctr[0] & mval[0])
+	      ectr[0] <= mres[0];
+	    else if (wwrctr[1] & wval[1])
+	      ectr[0] <= wres[1];
+	    else if (wwrctr[0] & wval[0])
+	      ectr[0] <= wres[0];
+	    else
+	      ectr[0] <= ctr;
+
+	    if (ewrctr[1] & eval[1])
+	      ectr[1] <= eres[1];
+	    else if (ewrctr[0] & eval[0])
+	      ectr[1] <= eres[0];
+	    else if (mwrctr[1] & mval[1])
+	      ectr[1] <= mres[1];
+	    else if (mwrctr[0] & mval[0])
+	      ectr[1] <= mres[0];
+	    else if (wwrctr[1] & wval[1])
+	      ectr[1] <= wres[1];
+	    else if (wwrctr[0] & wval[0])
+	      ectr[1] <= wres[0];
+	    else
+	      ectr[1] <= ctr;
+
+		end
+
   	if (stall_r[1]) begin
 	    eval[1] <= FALSE;
 	    eir[1] <= NOP_INSN;
@@ -1560,8 +1479,6 @@ RWAIT:
     ectr[1] <= rctr;
     exer[0] <= rxer;
     exer[1] <= rxer;
-    regfetch_done <= 2'b00;
-    rgoto (RFETCH);
   end
   else if (advance_e) begin
     eval[0] <= FALSE;
@@ -1569,12 +1486,6 @@ RWAIT:
     eir[0] <= NOP_INSN;
     eir[1] <= NOP_INSN;
   end
-default:
-  begin
-    regfetch_done <= 2'b11;
-    rgoto(RWAIT);
-  end
-endcase
 end
 endtask
 
