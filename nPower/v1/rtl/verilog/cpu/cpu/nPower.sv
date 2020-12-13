@@ -58,7 +58,7 @@ reg [AWID-1:0] lr = 32'd0;
 reg smt = 1'b0;
 
 // Instruction fetch stage vars
-reg [2:0] istate;
+reg [3:0] istate;
 reg ival;
 wire advance_i;
 wire stall_i;
@@ -99,6 +99,7 @@ reg [1:0] lsu;
 reg [1:0] rstate;
 wire advance_r;
 wire [1:0] stall_r;
+reg rdone;
 reg [1:0] regfetch_done;
 reg [1:0] rval;
 reg [31:0] rir [0:1];
@@ -214,6 +215,11 @@ reg [31:0] wctr [0:1];
 reg [31:0] wxer [0:1];
 reg [31:0] wwxer;
 
+reg [1:0] tval;
+reg [1:0] twrrf;
+reg [5:0] tRd [0:1];
+reg [31:0] tres [0:1];
+
 reg [31:0] xer = 32'd0;
 reg [31:0] regfile [0:63];
 initial begin
@@ -265,10 +271,10 @@ assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0]) || (rRa[0]==eRd[0])
 								 	  ((e_st[1] & e_lsu[1]) && ((rRd[0]==eRa[1]) || (rRa[0]==eRa[1]) || (rRb[0]==eRa[1]) || (rRc[0]==eRa[1])) && eval[1] && rval[1])
                 		;
 assign stall_r[1] = stall_r[0] ||
-										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0]) ||
-								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[0]) ||
+										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0] && rval[1]) ||
+								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[1]) ||
 								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
-								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[0]) ||
+								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[1]) ||
 								 	 	((e_st[1] & e_lsu[1]) && ((rRd[1]==eRa[1]) || (rRa[1]==eRa[1]) || (rRb[1]==eRa[1]) || (rRc[1]==eRa[1])) && eval[1] && rval[1])
                 	  ;
 
@@ -362,10 +368,10 @@ reg [255:0] icache1 [0:pL1CacheLines-1];
 reg [255:0] icache2 [0:pL1CacheLines-1];
 reg [255:0] icache3 [0:pL1CacheLines-1];
 (* ram_style="distributed" *)
-reg [AWID-1:0] ictag0 [0:pL1CacheLines-1];
-reg [AWID-1:0] ictag1 [0:pL1CacheLines-1];
-reg [AWID-1:0] ictag2 [0:pL1CacheLines-1];
-reg [AWID-1:0] ictag3 [0:pL1CacheLines-1];
+reg [AWID-1:5] ictag0 [0:pL1CacheLines-1];
+reg [AWID-1:5] ictag1 [0:pL1CacheLines-1];
+reg [AWID-1:5] ictag2 [0:pL1CacheLines-1];
+reg [AWID-1:5] ictag3 [0:pL1CacheLines-1];
 (* ram_style="distributed" *)
 reg [pL1CacheLines-1:0] icvalid0;
 reg [pL1CacheLines-1:0] icvalid1;
@@ -376,22 +382,22 @@ reg ihit1a, ihit2a;
 reg ihit1b, ihit2b;
 reg ihit1c, ihit2c;
 reg ihit1d, ihit2d;
-always @(posedge clk_g)
-  ihit1a <= ictag0[pc[0][pL1msb:5]][AWID-1:5]==pc[0][AWID-1:5] && icvalid0[pc[0][pL1msb:5]];
-always @(posedge clk_g)
-  ihit1b <= ictag1[pc[0][pL1msb:5]][AWID-1:5]==pc[0][AWID-1:5] && icvalid1[pc[0][pL1msb:5]];
-always @(posedge clk_g)
-  ihit1c <= ictag2[pc[0][pL1msb:5]][AWID-1:5]==pc[0][AWID-1:5] && icvalid2[pc[0][pL1msb:5]];
-always @(posedge clk_g)
-  ihit1d <= ictag3[pc[0][pL1msb:5]][AWID-1:5]==pc[0][AWID-1:5] && icvalid3[pc[0][pL1msb:5]];
-always @(posedge clk_g)
-  ihit2a <= ictag0[pc[1][pL1msb:5]][AWID-1:5]==pc[1][AWID-1:5] && icvalid0[pc[1][pL1msb:5]];
-always @(posedge clk_g)
-  ihit2b <= ictag1[pc[1][pL1msb:5]][AWID-1:5]==pc[1][AWID-1:5] && icvalid1[pc[1][pL1msb:5]];
-always @(posedge clk_g)
-  ihit2c <= ictag2[pc[1][pL1msb:5]][AWID-1:5]==pc[1][AWID-1:5] && icvalid2[pc[1][pL1msb:5]];
-always @(posedge clk_g)
-  ihit2d <= ictag3[pc[1][pL1msb:5]][AWID-1:5]==pc[1][AWID-1:5] && icvalid3[pc[1][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit1a <= ictag0[pc[0][pL1msb:5]]==pc[0][AWID-1:5] && icvalid0[pc[0][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit1b <= ictag1[pc[0][pL1msb:5]]==pc[0][AWID-1:5] && icvalid1[pc[0][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit1c <= ictag2[pc[0][pL1msb:5]]==pc[0][AWID-1:5] && icvalid2[pc[0][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit1d <= ictag3[pc[0][pL1msb:5]]==pc[0][AWID-1:5] && icvalid3[pc[0][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit2a <= ictag0[pc[1][pL1msb:5]]==pc[1][AWID-1:5] && icvalid0[pc[1][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit2b <= ictag1[pc[1][pL1msb:5]]==pc[1][AWID-1:5] && icvalid1[pc[1][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit2c <= ictag2[pc[1][pL1msb:5]]==pc[1][AWID-1:5] && icvalid2[pc[1][pL1msb:5]];
+always @*	//(posedge clk_g)
+  ihit2d <= ictag3[pc[1][pL1msb:5]]==pc[1][AWID-1:5] && icvalid3[pc[1][pL1msb:5]];
 wire ihit1 = ihit1a|ihit1b|ihit1c|ihit1d;
 wire ihit2 = ihit2a|ihit2b|ihit2c|ihit2d;
 initial begin
@@ -455,6 +461,20 @@ if (rst_i) begin
 end
 else begin
 case(istate)
+
+IFETCH0:
+	igoto (IFETCH1);
+/*
+IFETCH0a:
+  if (!(ihit1 && ihit2)) begin
+    icnt <= 2'd0;
+    igoto (IACCESS);
+  end
+  else
+		igoto (IFETCH0b);
+IFETCH0b:
+	igoto (IFETCH1);
+*/
 IFETCH1:
   begin
     if (!ifetch1_done)
@@ -485,8 +505,14 @@ IALIGN:
     waycnt <= waycnt + 1'd1;
     iir[0] <= iri1 >> {pc[0][4:2],5'b0};
     iir[1] <= iri2 >> {pc[1][4:2],5'b0};
-    ifetch_done <= TRUE;
-    igoto (IWAIT);
+    if (!(ihit1 && ihit2)) begin
+      icnt <= 2'd0;
+      igoto (IACCESS);
+    end
+    else begin
+	    ifetch_done <= TRUE;
+  	  igoto (IWAIT);
+    end
   end
 IWAIT:
   if (advance_i) begin
@@ -554,11 +580,11 @@ IWAIT:
     ifetch_done <= FALSE;
     dpc[0] <= pc[0];
     dpc[1] <= pc[1];
-    igoto(IFETCH1);
+    igoto(IFETCH0);
   end
 IACCESS:
   begin
-    if (!maccess_pending|vpa_o) begin
+    if (maccess_pending==2'b00||vpa_o) begin
       iaccess <= TRUE;
       igoto (IACCESS_CYC);
     end
@@ -569,7 +595,7 @@ IACCESS:
         iadr <= {pc[1][AWID-1:5],5'h0};
     end
     else
-      iadr <= {iadr[AWID-1:4],4'h0} + 5'h16;
+      iadr <= {iadr[AWID-1:4],4'h0} + 5'h10;
   end
 IACCESS_CYC:
   begin
@@ -605,10 +631,10 @@ IACCESS_ACK:
 IC_UPDATE:
   begin
     case (waycnt)
-    2'd0: ictag0[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
-    2'd1: ictag1[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
-    2'd2: ictag2[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
-    2'd3: ictag3[iadr[pL1msb:5]] <= iadr[AWID-1:0] & ~64'h10;
+    2'd0: ictag0[iadr[pL1msb:5]] <= iadr[AWID-1:5];
+    2'd1: ictag1[iadr[pL1msb:5]] <= iadr[AWID-1:5];
+    2'd2: ictag2[iadr[pL1msb:5]] <= iadr[AWID-1:5];
+    2'd3: ictag3[iadr[pL1msb:5]] <= iadr[AWID-1:5];
     endcase
     case(waycnt)
     2'd0:
@@ -635,7 +661,9 @@ IC_UPDATE:
     igoto (ICU1);
   end
 ICU1:
-  igoto(IFETCH1);
+  igoto(ICU2);
+ICU2:
+  igoto(IFETCH0);
 default:
   begin
     ifetch_done <= TRUE;
@@ -733,17 +761,14 @@ begin
           CMPL:begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_cmp[which] <= TRUE; end
           MULLW: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           MULLWO: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; wrxer[which] <= TRUE; illegal_insn[which] <= FALSE; end
-          AND: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          ANDC:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          OR:  begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          ORC: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          XOR: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          NAND:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          NOR: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          EQV: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          SLW: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          SRW: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
-          SRAW:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
+          AND,ANDC,OR,ORC,XOR,NAND,NOR,EQV,SLW,SRW,SRAW:
+          	begin
+          		Ra[which] <= ir[which][25:21];
+          		Rd[which] <= ir[which][20:16];
+          		wrrf[which] <= TRUE;
+          		wrcrf[which] <= ir[which][0];
+          		illegal_insn[which] <= FALSE;
+          	end
           SRAWI:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           EXTSB:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           EXTSH:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
@@ -779,15 +804,15 @@ begin
         CMPI:  begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; wrcrf <= TRUE; d_cmp[which] <= TRUE; end
         CMPLI: begin dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; wrcrf <= TRUE; d_cmp[which] <= TRUE; end
         MULLI: begin wrrf[which] <= TRUE; dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; end
-        ANDI:  begin wrrf[which] <= TRUE; dimm[which] <= {16'hFFFF,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
-        ANDIS: begin wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'hFFFF}; illegal_insn[which] <= FALSE; end
-        ORI:   begin wrrf[which] <= TRUE; dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
-        ORIS:  begin wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'h0000}; illegal_insn[which] <= FALSE; end
-        XORI:  begin wrrf[which] <= TRUE; dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
-        XORIS: begin wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'h0000}; illegal_insn[which] <= FALSE; end
-        RLWIMI:begin wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
-        RLWINM:begin wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
-        RLWNM: begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+        ANDI:  begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {16'hFFFF,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
+        ANDIS: begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'hFFFF}; illegal_insn[which] <= FALSE; end
+        ORI:   begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
+        ORIS:  begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'h0000}; illegal_insn[which] <= FALSE; end
+        XORI:  begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; end
+        XORIS: begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'h0000}; illegal_insn[which] <= FALSE; end
+        RLWIMI:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
+        RLWINM:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
+        RLWNM: begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
 
         B:     begin
                   illegal_insn[which] <= FALSE;
@@ -920,19 +945,22 @@ else begin
 case(rstate)
 RFETCH:
   begin
-    regfetch_done[0] <= &execute_done & &memory_done & writeback_done;
-    regfetch_done[1] <= &execute_done & &memory_done & writeback_done;
+  	// Register fetch bypassing needs the output of the execute, memory and
+  	// writeback stages. The output is available only when they are done.
+  	regfetch_done[0] <= &execute_done & &memory_done & writeback_done;
+  	regfetch_done[1] <= &execute_done & &memory_done & writeback_done;
     if (&execute_done & &memory_done & writeback_done)
     	rgoto(RWAIT);
 
-    tin(0,rRd[0],rfod[0],rid[0]);
-    tin(1,rRd[1],rfod[1],rid[1]);
-    tin(0,rRa[0],rfoa[0],ria[0]);
-    tin(1,rRa[1],rfoa[1],ria[1]);
-    tin(0,rRb[0],rfob[0],rib[0]);
-    tin(1,rRb[1],rfob[1],rib[1]);
-    tin(0,rRc[0],rfoc[0],ric[0]);
-    tin(1,rRc[1],rfoc[1],ric[1]);
+//    tin(0,rRd[0],rfod[0],rid[0]);
+//    tin(1,rRd[1],rfod[1],rid[1]);
+//    tin(0,rRa[0],rfoa[0],ria[0]);
+//    tin(1,rRa[1],rfoa[1],ria[1]);
+//    tin(0,rRb[0],rfob[0],rib[0]);
+//    tin(1,rRb[1],rfob[1],rib[1]);
+//    tin(0,rRc[0],rfoc[0],ric[0]);
+//    tin(1,rRc[1],rfoc[1],ric[1]);
+
 /*
 	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    ria[0] <= 32'd0;
@@ -946,63 +974,117 @@ RFETCH:
 	    ria[0] <= eea[0];
 	  else if (rRa[0]==mRd[1] && mval[1] && mwrrf[1])
 	    ria[0] <= mres[1];
+	  else if (rRa[0]==mRa[1] && mval[1] && m_lsu[1])
+	    ria[0] <= ea[1];
 	  else if (rRa[0]==mRd[0] && mval[0] && mwrrf[0])
 	    ria[0] <= mres[0];
+	  else if (rRa[0]==mRa[0] && mval[0] && m_lsu[0])
+	    ria[0] <= ea[0];
 	  else if (rRa[0]==wRd[1] && wval[1] && wwrrf[1])
 	    ria[0] <= wres[1];
+	  else if (rRa[0]==wRa[1] && wval[1] && w_lsu[1])
+	    ria[0] <= wea[1];
 	  else if (rRa[0]==wRd[0] && wval[0] && wwrrf[0])
 	    ria[0] <= wres[0];
+	  else if (rRa[0]==wRa[0] && wval[0] && w_lsu[0])
+	    ria[0] <= wea[0];
+	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
+	    ria[0] <= tres[0];
+	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
+	    ria[0] <= tres[1];
 	  else
 	    ria[0] <= rfoa[0];
-
-	  if (rRa[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+*/
+/*
+	  if (rRa[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    ria[1] <= 32'd0;
 	  else if (rRa[1]==eRd[1] && eval[1] && ewrrf[1])
 	    ria[1] <= eres[1];
+	  else if (rRa[1]==eRa[1] && eval[1] && e_lsu[1])
+	    ria[1] <= eea[1];
 	  else if (rRa[1]==eRd[0] && eval[0] && ewrrf[0])
 	    ria[1] <= eres[0];
+	  else if (rRa[1]==eRa[0] && eval[0] && e_lsu[0])
+	    ria[1] <= eea[0];
 	  else if (rRa[1]==mRd[1] && mval[1] && mwrrf[1])
 	    ria[1] <= mres[1];
+	  else if (rRa[1]==mRa[1] && mval[1] && m_lsu[1])
+	    ria[1] <= ea[1];
 	  else if (rRa[1]==mRd[0] && mval[0] && mwrrf[0])
 	    ria[1] <= mres[0];
+	  else if (rRa[1]==mRa[0] && mval[0] && m_lsu[0])
+	    ria[1] <= ea[0];
 	  else if (rRa[1]==wRd[1] && wval[1] && wwrrf[1])
 	    ria[1] <= wres[1];
+	  else if (rRa[1]==wRa[1] && wval[1] && w_lsu[1])
+	    ria[1] <= wea[1];
 	  else if (rRa[1]==wRd[0] && wval[0] && wwrrf[0])
 	    ria[1] <= wres[0];
+	  else if (rRa[1]==wRa[0] && wval[0] && w_lsu[0])
+	    ria[1] <= wea[0];
+	  else if (rRa[1]==tRd[0] && tval[0] && twrrf[0])
+	    ria[1] <= tres[0];
+	  else if (rRa[1]==tRd[1] && tval[1] && twrrf[1])
+	    ria[1] <= tres[1];
 	  else
 	    ria[1] <= rfoa[1];
-
+*/
+/*
 	  if (rRb[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    rib[0] <= 32'd0;
 	  else if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
 	    rib[0] <= eres[1];
+	  else if (rRb[0]==eRa[1] && eval[1] && e_lsu[1])
+	    rib[0] <= eea[1];
 	  else if (rRb[0]==eRd[0] && eval[0] && ewrrf[0])
 	    rib[0] <= eres[0];
+	  else if (rRb[0]==eRa[0] && eval[0] && e_lsu[0])
+	    rib[0] <= eea[0];
 	  else if (rRb[0]==mRd[1] && mval[1] && mwrrf[1])
 	    rib[0] <= mres[1];
+	  else if (rRb[0]==mRa[1] && mval[1] && m_lsu[1])
+	    rib[0] <= ea[1];
 	  else if (rRb[0]==mRd[0] && mval[0] && mwrrf[0])
 	    rib[0] <= mres[0];
+	  else if (rRb[0]==mRa[0] && mval[0] && m_lsu[0])
+	    rib[0] <= ea[0];
 	  else if (rRb[0]==wRd[1] && wval[1] && wwrrf[1])
 	    rib[0] <= wres[1];
+	  else if (rRb[0]==wRa[1] && wval[1] && w_lsu[1])
+	    rib[0] <= wea[1];
 	  else if (rRb[0]==wRd[0] && wval[0] && wwrrf[0])
 	    rib[0] <= wres[0];
+	  else if (rRb[0]==wRa[0] && wval[0] && w_lsu[0])
+	    rib[0] <= wea[0];
 	  else
 	    rib[0] <= rfob[0];
 
-	  if (rRb[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	  if (rRb[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    rib[1] <= 32'd0;
 	  else if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
 	    rib[1] <= eres[1];
+	  else if (rRb[1]==eRa[1] && eval[1] && e_lsu[1])
+	    rib[1] <= eea[1];
 	  else if (rRb[1]==eRd[0] && eval[0] && ewrrf[0])
 	    rib[1] <= eres[0];
+	  else if (rRb[1]==eRa[0] && eval[0] && e_lsu[0])
+	    rib[1] <= eea[0];
 	  else if (rRb[1]==mRd[1] && mval[1] && mwrrf[1])
 	    rib[1] <= mres[1];
+	  else if (rRb[1]==mRa[1] && mval[1] && m_lsu[1])
+	    rib[1] <= ea[1];
 	  else if (rRb[1]==mRd[0] && mval[0] && mwrrf[0])
 	    rib[1] <= mres[0];
+	  else if (rRb[1]==mRa[0] && mval[0] && m_lsu[0])
+	    rib[1] <= ea[0];
 	  else if (rRb[1]==wRd[1] && wval[1] && wwrrf[1])
 	    rib[1] <= wres[1];
+	  else if (rRb[1]==wRa[1] && wval[1] && w_lsu[1])
+	    rib[1] <= wea[1];
 	  else if (rRb[1]==wRd[0] && wval[0] && wwrrf[0])
 	    rib[1] <= wres[0];
+	  else if (rRb[1]==wRa[0] && wval[0] && w_lsu[0])
+	    rib[1] <= wea[0];
 	  else
 	    rib[1] <= rfob[1];
 
@@ -1010,33 +1092,57 @@ RFETCH:
 	    ric[0] <= 32'd0;
 	  else if (rRc[0]==eRd[1] && eval[1] && ewrrf[1])
 	    ric[0] <= eres[1];
+	  else if (rRc[0]==eRa[1] && eval[1] && e_lsu[1])
+	    ric[0] <= eea[1];
 	  else if (rRc[0]==eRd[0] && eval[0] && ewrrf[0])
 	    ric[0] <= eres[0];
+	  else if (rRc[0]==eRa[0] && eval[0] && e_lsu[0])
+	    ric[0] <= eea[0];
 	  else if (rRc[0]==mRd[1] && mval[1] && mwrrf[1])
 	    ric[0] <= mres[1];
+	  else if (rRc[0]==mRa[1] && mval[1] && m_lsu[1])
+	    ric[0] <= ea[1];
 	  else if (rRc[0]==mRd[0] && mval[0] && mwrrf[0])
 	    ric[0] <= mres[0];
+	  else if (rRc[0]==mRa[0] && mval[0] && m_lsu[0])
+	    ric[0] <= ea[0];
 	  else if (rRc[0]==wRd[1] && wval[1] && wwrrf[1])
 	    ric[0] <= wres[1];
+	  else if (rRc[0]==wRa[1] && wval[1] && w_lsu[1])
+	    ric[0] <= wea[1];
 	  else if (rRc[0]==wRd[0] && wval[0] && wwrrf[0])
 	    ric[0] <= wres[0];
+	  else if (rRc[0]==wRa[0] && wval[0] && w_lsu[0])
+	    ric[0] <= wea[0];
 	  else
 	    ric[0] <= rfoc[0];
 
-	  if (rRc[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	  if (rRc[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    ric[1] <= 32'd0;
 	  else if (rRc[1]==eRd[1] && eval[1] && ewrrf[1])
 	    ric[1] <= eres[1];
+	  else if (rRc[1]==eRa[1] && eval[1] && e_lsu[1])
+	    ric[1] <= eea[1];
 	  else if (rRc[1]==eRd[0] && eval[0] && ewrrf[0])
 	    ric[1] <= eres[0];
+	  else if (rRc[1]==eRa[0] && eval[0] && e_lsu[0])
+	    ric[1] <= eea[0];
 	  else if (rRc[1]==mRd[1] && mval[1] && mwrrf[1])
 	    ric[1] <= mres[1];
+	  else if (rRc[1]==mRa[1] && mval[1] && m_lsu[1])
+	    ric[1] <= ea[1];
 	  else if (rRc[1]==mRd[0] && mval[0] && mwrrf[0])
 	    ric[1] <= mres[0];
+	  else if (rRc[1]==mRa[0] && mval[0] && m_lsu[0])
+	    ric[1] <= ea[0];
 	  else if (rRc[1]==wRd[1] && wval[1] && wwrrf[1])
 	    ric[1] <= wres[1];
+	  else if (rRc[1]==wRa[1] && wval[1] && w_lsu[1])
+	    ric[1] <= wea[1];
 	  else if (rRc[1]==wRd[0] && wval[0] && wwrrf[0])
 	    ric[1] <= wres[0];
+	  else if (rRc[1]==wRa[0] && wval[0] && w_lsu[0])
+	    ric[1] <= wea[0];
 	  else
 	    ric[1] <= rfoc[1];
 
@@ -1044,33 +1150,57 @@ RFETCH:
 	    rid[0] <= 32'd0;
 	  else if (rRd[0]==eRd[1] && eval[1] && ewrrf[1])
 	    rid[0] <= eres[1];
+	  else if (rRd[0]==eRa[1] && eval[1] && e_lsu[1])
+	    rid[0] <= eea[1];
 	  else if (rRd[0]==eRd[0] && eval[0] && ewrrf[0])
 	    rid[0] <= eres[0];
+	  else if (rRd[0]==eRa[0] && eval[0] && e_lsu[0])
+	    rid[0] <= eea[0];
 	  else if (rRd[0]==mRd[1] && mval[1] && mwrrf[1])
 	    rid[0] <= mres[1];
+	  else if (rRd[0]==mRa[1] && mval[1] && m_lsu[1])
+	    rid[0] <= ea[1];
 	  else if (rRd[0]==mRd[0] && mval[0] && mwrrf[0])
 	    rid[0] <= mres[0];
+	  else if (rRd[0]==mRa[0] && mval[0] && m_lsu[0])
+	    rid[0] <= ea[0];
 	  else if (rRd[0]==wRd[1] && wval[1] && wwrrf[1])
 	    rid[0] <= wres[1];
+	  else if (rRd[0]==wRa[1] && wval[1] && w_lsu[1])
+	    rid[0] <= wea[1];
 	  else if (rRd[0]==wRd[0] && wval[0] && wwrrf[0])
 	    rid[0] <= wres[0];
+	  else if (rRd[0]==wRa[0] && wval[0] && w_lsu[0])
+	    rid[0] <= wea[0];
 	  else
 	    rid[0] <= rfod[0];
 
-	  if (rRd[1]==6'd0 && (r_ld[1]|r_st[1]) && rval[1])
+	  if (rRd[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    rid[1] <= 32'd0;
 	  else if (rRd[1]==eRd[1] && eval[1] && ewrrf[1])
 	    rid[1] <= eres[1];
+	  else if (rRd[1]==eRa[1] && eval[1] && e_lsu[1])
+	    rid[1] <= eea[1];
 	  else if (rRd[1]==eRd[0] && eval[0] && ewrrf[0])
 	    rid[1] <= eres[0];
+	  else if (rRd[1]==eRa[0] && eval[0] && e_lsu[0])
+	    rid[1] <= eea[0];
 	  else if (rRd[1]==mRd[1] && mval[1] && mwrrf[1])
 	    rid[1] <= mres[1];
+	  else if (rRd[1]==mRa[1] && mval[1] && m_lsu[1])
+	    rid[1] <= ea[1];
 	  else if (rRd[1]==mRd[0] && mval[0] && mwrrf[0])
 	    rid[1] <= mres[0];
+	  else if (rRd[1]==mRa[0] && mval[0] && m_lsu[0])
+	    rid[1] <= ea[0];
 	  else if (rRd[1]==wRd[1] && wval[1] && wwrrf[1])
 	    rid[1] <= wres[1];
+	  else if (rRd[1]==wRa[1] && wval[1] && w_lsu[1])
+	    rid[1] <= wea[1];
 	  else if (rRd[1]==wRd[0] && wval[0] && wwrrf[0])
 	    rid[1] <= wres[0];
+	  else if (rRd[1]==wRa[0] && wval[0] && w_lsu[0])
+	    rid[1] <= wea[0];
 	  else
 	    rid[1] <= rfod[1];
 */
@@ -1141,36 +1271,271 @@ RFETCH:
   end
 RWAIT:
   if (advance_r) begin
+	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ia[0] <= 32'd0;
+	  else if (rRa[0]==eRd[1] && eval[1] && ewrrf[1])
+	    ia[0] <= eres[1];
+	  else if (rRa[0]==eRa[1] && eval[1] && e_lsu[1])
+	    ia[0] <= eea[1];
+	  else if (rRa[0]==eRd[0] && eval[0] && ewrrf[0])
+	    ia[0] <= eres[0];
+	  else if (rRa[0]==eRa[0] && eval[0] && e_lsu[0])
+	    ia[0] <= eea[0];
+	  else if (rRa[0]==mRd[1] && mval[1] && mwrrf[1])
+	    ia[0] <= mres[1];
+	  else if (rRa[0]==mRa[1] && mval[1] && m_lsu[1])
+	    ia[0] <= ea[1];
+	  else if (rRa[0]==mRd[0] && mval[0] && mwrrf[0])
+	    ia[0] <= mres[0];
+	  else if (rRa[0]==mRa[0] && mval[0] && m_lsu[0])
+	    ia[0] <= ea[0];
+	  else if (rRa[0]==wRd[1] && wval[1] && wwrrf[1])
+	    ia[0] <= wres[1];
+	  else if (rRa[0]==wRa[1] && wval[1] && w_lsu[1])
+	    ia[0] <= wea[1];
+	  else if (rRa[0]==wRd[0] && wval[0] && wwrrf[0])
+	    ia[0] <= wres[0];
+	  else if (rRa[0]==wRa[0] && wval[0] && w_lsu[0])
+	    ia[0] <= wea[0];
+	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
+	    ia[0] <= tres[0];
+	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
+	    ia[0] <= tres[1];
+	  else
+	    ia[0] <= rfoa[0];
+
+	  if (rRa[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ia[1] <= 32'd0;
+	  else if (rRa[1]==eRd[1] && eval[1] && ewrrf[1])
+	    ia[1] <= eres[1];
+	  else if (rRa[1]==eRa[1] && eval[1] && e_lsu[1])
+	    ia[1] <= eea[1];
+	  else if (rRa[1]==eRd[0] && eval[0] && ewrrf[0])
+	    ia[1] <= eres[0];
+	  else if (rRa[1]==eRa[0] && eval[0] && e_lsu[0])
+	    ia[1] <= eea[0];
+	  else if (rRa[1]==mRd[1] && mval[1] && mwrrf[1])
+	    ia[1] <= mres[1];
+	  else if (rRa[1]==mRa[1] && mval[1] && m_lsu[1])
+	    ia[1] <= ea[1];
+	  else if (rRa[1]==mRd[0] && mval[0] && mwrrf[0])
+	    ia[1] <= mres[0];
+	  else if (rRa[1]==mRa[0] && mval[0] && m_lsu[0])
+	    ia[1] <= ea[0];
+	  else if (rRa[1]==wRd[1] && wval[1] && wwrrf[1])
+	    ia[1] <= wres[1];
+	  else if (rRa[1]==wRa[1] && wval[1] && w_lsu[1])
+	    ia[1] <= wea[1];
+	  else if (rRa[1]==wRd[0] && wval[0] && wwrrf[0])
+	    ia[1] <= wres[0];
+	  else if (rRa[1]==wRa[0] && wval[0] && w_lsu[0])
+	    ia[1] <= wea[0];
+	  else if (rRa[1]==tRd[0] && tval[0] && twrrf[0])
+	    ia[1] <= tres[0];
+	  else if (rRa[1]==tRd[1] && tval[1] && twrrf[1])
+	    ia[1] <= tres[1];
+	  else
+	    ia[1] <= rfoa[1];
+
+	  if (rRb[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ib[0] <= 32'd0;
+	  else if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
+	    ib[0] <= eres[1];
+	  else if (rRb[0]==eRa[1] && eval[1] && e_lsu[1])
+	    ib[0] <= eea[1];
+	  else if (rRb[0]==eRd[0] && eval[0] && ewrrf[0])
+	    ib[0] <= eres[0];
+	  else if (rRb[0]==eRa[0] && eval[0] && e_lsu[0])
+	    ib[0] <= eea[0];
+	  else if (rRb[0]==mRd[1] && mval[1] && mwrrf[1])
+	    ib[0] <= mres[1];
+	  else if (rRb[0]==mRa[1] && mval[1] && m_lsu[1])
+	    ib[0] <= ea[1];
+	  else if (rRb[0]==mRd[0] && mval[0] && mwrrf[0])
+	    ib[0] <= mres[0];
+	  else if (rRb[0]==mRa[0] && mval[0] && m_lsu[0])
+	    ib[0] <= ea[0];
+	  else if (rRb[0]==wRd[1] && wval[1] && wwrrf[1])
+	    ib[0] <= wres[1];
+	  else if (rRb[0]==wRa[1] && wval[1] && w_lsu[1])
+	    ib[0] <= wea[1];
+	  else if (rRb[0]==wRd[0] && wval[0] && wwrrf[0])
+	    ib[0] <= wres[0];
+	  else if (rRb[0]==wRa[0] && wval[0] && w_lsu[0])
+	    ib[0] <= wea[0];
+	  else
+	    ib[0] <= rfob[0];
+
+	  if (rRb[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	    ib[1] <= 32'd0;
+	  else if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
+	    ib[1] <= eres[1];
+	  else if (rRb[1]==eRa[1] && eval[1] && e_lsu[1])
+	    ib[1] <= eea[1];
+	  else if (rRb[1]==eRd[0] && eval[0] && ewrrf[0])
+	    ib[1] <= eres[0];
+	  else if (rRb[1]==eRa[0] && eval[0] && e_lsu[0])
+	    ib[1] <= eea[0];
+	  else if (rRb[1]==mRd[1] && mval[1] && mwrrf[1])
+	    ib[1] <= mres[1];
+	  else if (rRb[1]==mRa[1] && mval[1] && m_lsu[1])
+	    ib[1] <= ea[1];
+	  else if (rRb[1]==mRd[0] && mval[0] && mwrrf[0])
+	    ib[1] <= mres[0];
+	  else if (rRb[1]==mRa[0] && mval[0] && m_lsu[0])
+	    ib[1] <= ea[0];
+	  else if (rRb[1]==wRd[1] && wval[1] && wwrrf[1])
+	    ib[1] <= wres[1];
+	  else if (rRb[1]==wRa[1] && wval[1] && w_lsu[1])
+	    ib[1] <= wea[1];
+	  else if (rRb[1]==wRd[0] && wval[0] && wwrrf[0])
+	    ib[1] <= wres[0];
+	  else if (rRb[1]==wRa[0] && wval[0] && w_lsu[0])
+	    ib[1] <= wea[0];
+	  else
+	    ib[1] <= rfob[1];
+
+	  if (rRc[0]==eRd[1] && eval[1] && ewrrf[1])
+	    ic[0] <= eres[1];
+	  else if (rRc[0]==eRa[1] && eval[1] && e_lsu[1])
+	    ic[0] <= eea[1];
+	  else if (rRc[0]==eRd[0] && eval[0] && ewrrf[0])
+	    ic[0] <= eres[0];
+	  else if (rRc[0]==eRa[0] && eval[0] && e_lsu[0])
+	    ic[0] <= eea[0];
+	  else if (rRc[0]==mRd[1] && mval[1] && mwrrf[1])
+	    ic[0] <= mres[1];
+	  else if (rRc[0]==mRa[1] && mval[1] && m_lsu[1])
+	    ic[0] <= ea[1];
+	  else if (rRc[0]==mRd[0] && mval[0] && mwrrf[0])
+	    ic[0] <= mres[0];
+	  else if (rRc[0]==mRa[0] && mval[0] && m_lsu[0])
+	    ic[0] <= ea[0];
+	  else if (rRc[0]==wRd[1] && wval[1] && wwrrf[1])
+	    ic[0] <= wres[1];
+	  else if (rRc[0]==wRa[1] && wval[1] && w_lsu[1])
+	    ic[0] <= wea[1];
+	  else if (rRc[0]==wRd[0] && wval[0] && wwrrf[0])
+	    ic[0] <= wres[0];
+	  else if (rRc[0]==wRa[0] && wval[0] && w_lsu[0])
+	    ic[0] <= wea[0];
+	  else
+	    ic[0] <= rfoc[0];
+
+	  if (rRc[1]==eRd[1] && eval[1] && ewrrf[1])
+	    ic[1] <= eres[1];
+	  else if (rRc[1]==eRa[1] && eval[1] && e_lsu[1])
+	    ic[1] <= eea[1];
+	  else if (rRc[1]==eRd[0] && eval[0] && ewrrf[0])
+	    ic[1] <= eres[0];
+	  else if (rRc[1]==eRa[0] && eval[0] && e_lsu[0])
+	    ic[1] <= eea[0];
+	  else if (rRc[1]==mRd[1] && mval[1] && mwrrf[1])
+	    ic[1] <= mres[1];
+	  else if (rRc[1]==mRa[1] && mval[1] && m_lsu[1])
+	    ic[1] <= ea[1];
+	  else if (rRc[1]==mRd[0] && mval[0] && mwrrf[0])
+	    ic[1] <= mres[0];
+	  else if (rRc[1]==mRa[0] && mval[0] && m_lsu[0])
+	    ic[1] <= ea[0];
+	  else if (rRc[1]==wRd[1] && wval[1] && wwrrf[1])
+	    ic[1] <= wres[1];
+	  else if (rRc[1]==wRa[1] && wval[1] && w_lsu[1])
+	    ic[1] <= wea[1];
+	  else if (rRc[1]==wRd[0] && wval[0] && wwrrf[0])
+	    ic[1] <= wres[0];
+	  else if (rRc[1]==wRa[0] && wval[0] && w_lsu[0])
+	    ic[1] <= wea[0];
+	  else
+	    ic[1] <= rfoc[1];
+
+	  if (rRd[0]==eRd[1] && eval[1] && ewrrf[1])
+	    id[0] <= eres[1];
+	  else if (rRd[0]==eRa[1] && eval[1] && e_lsu[1])
+	    id[0] <= eea[1];
+	  else if (rRd[0]==eRd[0] && eval[0] && ewrrf[0])
+	    id[0] <= eres[0];
+	  else if (rRd[0]==eRa[0] && eval[0] && e_lsu[0])
+	    id[0] <= eea[0];
+	  else if (rRd[0]==mRd[1] && mval[1] && mwrrf[1])
+	    id[0] <= mres[1];
+	  else if (rRd[0]==mRa[1] && mval[1] && m_lsu[1])
+	    id[0] <= ea[1];
+	  else if (rRd[0]==mRd[0] && mval[0] && mwrrf[0])
+	    id[0] <= mres[0];
+	  else if (rRd[0]==mRa[0] && mval[0] && m_lsu[0])
+	    id[0] <= ea[0];
+	  else if (rRd[0]==wRd[1] && wval[1] && wwrrf[1])
+	    id[0] <= wres[1];
+	  else if (rRd[0]==wRa[1] && wval[1] && w_lsu[1])
+	    id[0] <= wea[1];
+	  else if (rRd[0]==wRd[0] && wval[0] && wwrrf[0])
+	    id[0] <= wres[0];
+	  else if (rRd[0]==wRa[0] && wval[0] && w_lsu[0])
+	    id[0] <= wea[0];
+	  else
+	    id[0] <= rfod[0];
+
+	  if (rRd[1]==eRd[1] && eval[1] && ewrrf[1])
+	    id[1] <= eres[1];
+	  else if (rRd[1]==eRa[1] && eval[1] && e_lsu[1])
+	    id[1] <= eea[1];
+	  else if (rRd[1]==eRd[0] && eval[0] && ewrrf[0])
+	    id[1] <= eres[0];
+	  else if (rRd[1]==eRa[0] && eval[0] && e_lsu[0])
+	    id[1] <= eea[0];
+	  else if (rRd[1]==mRd[1] && mval[1] && mwrrf[1])
+	    id[1] <= mres[1];
+	  else if (rRd[1]==mRa[1] && mval[1] && m_lsu[1])
+	    id[1] <= ea[1];
+	  else if (rRd[1]==mRd[0] && mval[0] && mwrrf[0])
+	    id[1] <= mres[0];
+	  else if (rRd[1]==mRa[0] && mval[0] && m_lsu[0])
+	    id[1] <= ea[0];
+	  else if (rRd[1]==wRd[1] && wval[1] && wwrrf[1])
+	    id[1] <= wres[1];
+	  else if (rRd[1]==wRa[1] && wval[1] && w_lsu[1])
+	    id[1] <= wea[1];
+	  else if (rRd[1]==wRd[0] && wval[0] && wwrrf[0])
+	    id[1] <= wres[0];
+	  else if (rRd[1]==wRa[0] && wval[0] && w_lsu[0])
+	    id[1] <= wea[0];
+	  else
+	    id[1] <= rfod[1];
+
   	if (stall_r[1]) begin
 	    eval[1] <= FALSE;
 	    eir[1] <= NOP_INSN;
+	    eRd[1] <= 6'd0;
 	    rval[0] <= FALSE;
 	    rir[0] <= NOP_INSN;
   	end
   	else begin
     	eval[1] <= rval[1];
 	    eir[1] <= rir[1];
+	    eRd[1] <= rRd[1];
   	end
     eir[0] <= rir[0];
   	eval[0] <= rval[0];
     imm[0] <= rimm[0];
     imm[1] <= rimm[1];
     eRd[0] <= rRd[0];
-    eRd[1] <= rRd[1];
     eRa[0] <= rRa[0];
     eRa[1] <= rRa[1];
     ecr[0] <= rcr;
     ecr[1] <= rcr;
     epc[0] <= rpc[0];
     epc[1] <= rpc[1];
-    id[0] <= rid[0];
-    id[1] <= rid[1];
-    ia[0] <= ria[0];
-    ia[1] <= ria[1];
-    ib[0] <= rib[0];
-    ib[1] <= rib[1];
-    ic[0] <= ric[0];
-    ic[1] <= ric[1];
+    
+//    id[0] <= rid[0];
+//    id[1] <= rid[1];
+//    ia[0] <= ria[0];
+//    ia[1] <= ria[1];
+//    ib[0] <= rib[0];
+//    ib[1] <= rib[1];
+//    ic[0] <= ric[0];
+//    ic[1] <= ric[1];
+    
     e_lsu[0] <= r_lsu[0];
     e_cmp[0] <= r_cmp[0];
     ewrrf[0] <= rwrrf[0];
@@ -2077,32 +2442,6 @@ begin
   end
   else begin
   	wmod_pc <= FALSE;
-  	$display("=================================================================");
-  	$display("Time: %d", $time);
-  	$display("Regfile");
-  	for (n = 0; n < 32; n = n + 4)
-  		$display("r%d: %h  r%d:%h  r%d:%h  r%d:%h",
-  			n[4:0]+0, regfile[n],
-  			n[4:0]+1, regfile[n+1],
-  			n[4:0]+2, regfile[n+2],
-  			n[4:0]+3, regfile[n+3]);
-  	$display("0: iir: %h ir:%h  rir:%h  eir:%h  mir:%h  wir:%h", iir[0], ir[0], rir[0], eir[0], mir[0], wir[0]);
-  	$display("1: iir: %h ir:%h  rir:%h  eir:%h  mir:%h  wir:%h", iir[1], ir[1], rir[1], eir[1], mir[1], wir[1]);
-  	$display("0: dimm:%h  rimm:%h", dimm[0], rimm[0]);
-  	$display("1: dimm:%h  rimm:%h", dimm[1], rimm[1]);
-  	$display("0: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[0], rRb[0], rRc[0], rRd[0]);
-  	$display("1: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[1], rRb[1], rRc[1], rRd[1]);
-  	$display("0: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[0], ria[0], rib[0], ric[0], rimm[0]);
-  	$display("1: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[1], ria[1], rib[1], ric[1], rimm[1]);
-  	$display("0: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[0], ia[0], ib[0], ic[0], imm[0]);
-  	$display("1: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[1], ia[1], ib[1], ic[1], imm[1]);
-  	$display("dval:%b rval:%b eval:%b mval:%b wval:%b", dval, rval, eval, mval, wval);
-  	$display("0: eRd:%d eres:%h%c%c eea:%h", eRd[0], eres[0], eval[0] ? "v" : " ", ewrrf[0] ? "w" : " ", eea[0]);
-  	$display("1: eRd:%d eres:%h%c%c eea:%h", eRd[1], eres[1], eval[1] ? "v" : " ", ewrrf[1] ? "w" : " ", eea[1]);
-  	$display("0: mRd:%d mres:%h%c%c", mRd[0], mres[0], mval[0] ? "v" : " ", mwrrf[0] ? "w" : " ");
-  	$display("1: mRd:%d mres:%h%c%c", mRd[1], mres[1], mval[1] ? "v" : " ", mwrrf[1] ? "w" : " ");
-  	$display("0: wRd:%d wres:%h%c%c", wRd[0], wres[0], wval[0] ? "v" : " ", wwrrf[0] ? "w" : " ");
-  	$display("1: wRd:%d wres:%h%c%c", wRd[1], wres[1], wval[1] ? "v" : " ", wwrrf[1] ? "w" : " ");
     case(wstate)
     WRITEBACK0:
       begin
@@ -2120,10 +2459,8 @@ begin
         	wgoto(WRITEBACK1);
         else if (wval[1])
           wgoto(WRITEBACK2);
-        else begin
-          writeback_done <= TRUE;
-          wgoto(WWAIT);
-        end
+        else
+	        wgoto(WRITEBACK4);
       end
     WRITEBACK1:
       begin
@@ -2133,10 +2470,8 @@ begin
         wwwrrf <= 1'b1;
         if (wval[1])
           wgoto(WRITEBACK2);
-        else begin
-          writeback_done <= TRUE;
-          wgoto(WWAIT);
-        end
+        else
+	        wgoto(WRITEBACK4);
       end
     WRITEBACK2:
       begin
@@ -2152,10 +2487,8 @@ begin
         wwxer <= wxer[1];
         if (w_lsu[1] & wval[1])
         	wgoto(WRITEBACK3);
-        else begin
-        	writeback_done <= TRUE;
-        	wgoto(WWAIT);
-      	end
+        else
+	        wgoto(WRITEBACK4);
       end
     WRITEBACK3:
       begin
@@ -2163,14 +2496,55 @@ begin
         wwres <= wea[1];
         wwval <= 1'b1;
         wwwrrf <= 1'b1;
+        wgoto(WRITEBACK4);
+      end
+    WRITEBACK4:
+    	begin
         writeback_done <= TRUE;
         wgoto(WWAIT);
-      end
+    	end
     WWAIT:
-      if (advance_w) begin
-        writeback_done <= FALSE;
-        wgoto(WRITEBACK0);
-      end
+    	begin
+		  	$display("=================================================================");
+		  	$display("Time: %d", $time);
+		  	$display("pc0: %h pc1:%h", pc[0], pc[1]);
+		  	$display("Regfile");
+		  	for (n = 0; n < 32; n = n + 4)
+		  		$display("r%d: %h  r%d:%h  r%d:%h  r%d:%h",
+		  			n[4:0]+0, regfile[n],
+		  			n[4:0]+1, regfile[n+1],
+		  			n[4:0]+2, regfile[n+2],
+		  			n[4:0]+3, regfile[n+3]);
+		  	$display("0: iir: %h ir:%h  rir:%h  eir:%h  mir:%h  wir:%h", iir[0], ir[0], rir[0], eir[0], mir[0], wir[0]);
+		  	$display("1: iir: %h ir:%h  rir:%h  eir:%h  mir:%h  wir:%h", iir[1], ir[1], rir[1], eir[1], mir[1], wir[1]);
+		  	$display("0: dimm:%h  rimm:%h", dimm[0], rimm[0]);
+		  	$display("1: dimm:%h  rimm:%h", dimm[1], rimm[1]);
+		  	$display("0: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[0], rRb[0], rRc[0], rRd[0]);
+		  	$display("1: rRa:%d rRb:%d rRc:%d,rRd:%d", rRa[1], rRb[1], rRc[1], rRd[1]);
+		  	$display("0: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[0], ria[0], rib[0], ric[0], rimm[0]);
+		  	$display("1: rid:%h  ria:%h  rib:%h  ric:%h  rimm:%h", rid[1], ria[1], rib[1], ric[1], rimm[1]);
+		  	$display("0: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[0], ia[0], ib[0], ic[0], imm[0]);
+		  	$display("1: id:%h  ia:%h  ib:%h  ic:%h  imm:%h", id[1], ia[1], ib[1], ic[1], imm[1]);
+		  	$display("dval:%b rval:%b eval:%b mval:%b wval:%b", dval, rval, eval, mval, wval);
+		  	$display("0: eRd:%d eres:%h%c%c eea:%h", eRd[0], eres[0], eval[0] ? "v" : " ", ewrrf[0] ? "w" : " ", eea[0]);
+		  	$display("1: eRd:%d eres:%h%c%c eea:%h", eRd[1], eres[1], eval[1] ? "v" : " ", ewrrf[1] ? "w" : " ", eea[1]);
+		  	$display("0: mRd:%d mres:%h%c%c", mRd[0], mres[0], mval[0] ? "v" : " ", mwrrf[0] ? "w" : " ");
+		  	$display("1: mRd:%d mres:%h%c%c", mRd[1], mres[1], mval[1] ? "v" : " ", mwrrf[1] ? "w" : " ");
+		  	$display("0: wRd:%d wres:%h%c%c", wRd[0], wres[0], wval[0] ? "v" : " ", wwrrf[0] ? "w" : " ");
+		  	$display("1: wRd:%d wres:%h%c%c", wRd[1], wres[1], wval[1] ? "v" : " ", wwrrf[1] ? "w" : " ");
+	      if (advance_w) begin
+	        writeback_done <= FALSE;
+	        tval[0] <= wval[0];
+	        tval[1] <= wval[1];
+	        twrrf[0] <= wwrrf[0];
+	        twrrf[1] <= wwrrf[1];
+	        tRd[0] <= wRd[0];
+	        tRd[1] <= wRd[1];
+	        tres[0] <= wres[0];
+	        tres[1] <= wres[1];
+	        wgoto(WRITEBACK0);
+	      end
+    	end
     default:
       begin
         writeback_done <= TRUE;
