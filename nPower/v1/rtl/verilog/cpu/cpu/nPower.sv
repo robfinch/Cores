@@ -34,7 +34,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
-//`define SIM   1'b1
+`define SIM   1'b1
 import nPowerPkg::*;
 
 module nPower(rst_i, clk_i, vpa_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
@@ -221,6 +221,7 @@ reg [31:0] wwxer;
 reg [31:0] tick;
 reg [31:0] inst_ctr;
 reg [31:0] inst_ctr2;
+reg [31:0] stall_ctr;
 
 reg [1:0] tval;
 reg [1:0] twrrf;
@@ -272,8 +273,8 @@ always @(posedge clk_g)
     ctr <= wwres;
 
 assign stall_i = 1'b0;
-assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0]) || (rRa[0]==eRd[0]) || (rRb[0]==eRd[0]) || (rRc[0]==eRd[0])) && eval[0] && rval[0]) ||
-								 	  ((e_ld[1]||e_st[1]) && ((rRd[0]==eRd[1]) || (rRa[0]==eRd[1]) || (rRb[0]==eRd[1]) || (rRc[0]==eRd[1])) && eval[1] && rval[1]) ||
+assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0] && r_st[0]) || (rRa[0]==eRd[0]) || (rRb[0]==eRd[0]) || (rRc[0]==eRd[0])) && eval[0] && rval[0]) ||
+								 	  ((e_ld[1]||e_st[1]) && ((rRd[0]==eRd[1] && r_st[0]) || (rRa[0]==eRd[1]) || (rRb[0]==eRd[1]) || (rRc[0]==eRd[1])) && eval[1] && rval[1]) ||
                 		((e_st[0] & e_lsu[0]) && ((rRd[0]==eRa[0]) || (rRa[0]==eRa[0]) || (rRb[0]==eRa[0]) || (rRc[0]==eRa[0])) && eval[0] && rval[0]) ||
 								 	  ((e_st[1] & e_lsu[1]) && ((rRd[0]==eRa[1]) || (rRa[0]==eRa[1]) || (rRb[0]==eRa[1]) || (rRc[0]==eRa[1])) && eval[1] && rval[1]) ||
 								 	  ((rrdlr[0] & ewrlr[0]) || (rrdctr[0] & ewrctr[0]) || (rrdxer[0] & ewrxer[0]) || (rrdcrf[0] & ewrcrf[0]) && rval[0] && eval[0]) ||
@@ -281,8 +282,8 @@ assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0]) || (rRa[0]==eRd[0])
                 		;
 assign stall_r[1] = stall_r[0] ||
 										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0] && rval[1]) ||
-								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[1]) ||
-								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
+								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0] && r_st[1]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[1]) ||
+								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1] && r_st[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
 								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[1]) ||
 								 	 	((e_st[1] & e_lsu[1]) && ((rRd[1]==eRa[1]) || (rRa[1]==eRa[1]) || (rRb[1]==eRa[1]) || (rRc[1]==eRa[1])) && eval[1] && rval[1]) ||
 								 	  ((rrdlr[1] & ewrlr[0]) || (rrdctr[1] & ewrctr[0]) || (rrdxer[1] & ewrxer[0]) || (rrdcrf[1] & ewrcrf[0]) && rval[1] && eval[0]) ||
@@ -636,7 +637,7 @@ IWAIT:
     dpc[0] <= pc[0];
     dpc[1] <= pc[1];
     dbrpred <= ibrpred;
-    igoto(IFETCH0);
+    igoto(IFETCH1);
   end
 IACCESS:
   begin
@@ -681,7 +682,8 @@ IACCESS_ACK:
     end
     else begin
       stb_o <= LOW;
-      igoto (IACCESS);
+      iadr <= {iadr[AWID-1:4],4'h0} + 5'h10;
+      igoto (IACCESS_CYC);
     end
   end
 IC_UPDATE:
@@ -717,7 +719,7 @@ IC_UPDATE:
     igoto (ICU1);
   end
 ICU1:
-  igoto(ICU2);
+  igoto(IFETCH1);
 ICU2:
   igoto(IFETCH0);
 default:
@@ -1051,6 +1053,7 @@ if (rst_i) begin
   ebrpred <= 2'b00;
   regfetch_done[0] <= TRUE;
   regfetch_done[1] <= TRUE;
+  stall_ctr <= 32'd0;
   rgoto(RWAIT);
 end
 else begin
@@ -1059,10 +1062,14 @@ RFETCH:
   begin
   	// Register fetch bypassing needs the output of the execute, memory and
   	// writeback stages. The output is available only when they are done.
+/*  	
   	regfetch_done[0] <= &execute_done & &memory_done & writeback_done;
   	regfetch_done[1] <= &execute_done & &memory_done & writeback_done;
     if (&execute_done & &memory_done & writeback_done)
     	rgoto(RWAIT);
+*/
+  	regfetch_done <= 2'b11;
+   	rgoto(RWAIT);
 
 //    tin(0,rRd[0],rfod[0],rid[0]);
 //    tin(1,rRd[1],rfod[1],rid[1]);
@@ -1151,6 +1158,11 @@ default:
   end
 endcase
   if (advance_r) begin
+  	if (stall_r[0]&stall_r[1])
+  		stall_ctr <= stall_ctr + 2'd2;
+  	else if (stall_r[0]|stall_r[1])
+  		stall_ctr <= stall_ctr + 1'd1;
+
 	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
 	    ia[0] <= 32'd0;
 	  else if (rRa[0]==eRd[1] && eval[1] && ewrrf[1])
@@ -2224,28 +2236,28 @@ begin
           case(eir[which][10:1])
           ADDO:
           	begin
-          		exer[which][31] <= exer[which][31] | (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
-          		exer[which][30] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
-          		exer[which][20] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
+          		exer[which][31] <= exer[which][31] | (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
+          		exer[which][30] <= (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
+          		exer[which][20] <= (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
           	end
          	ADDC:
          		begin
-         			exer[which][29] <= (ia[31]&ib[31])|(ia[31]&~eres[31])|(ib[31]&~eres[31]);
-         			exer[which][19] <= (ia[31]&ib[31])|(ia[31]&~eres[31])|(ib[31]&~eres[31]);
+         			exer[which][29] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
+         			exer[which][19] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
          		end
          	ADDCO,ADDEO,ADDMEO,ADDZEO:
          		begin
-          		exer[which][31] <= exer[which][31] | (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
-          		exer[which][30] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
-          		exer[which][20] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
-         			exer[which][29] <= (ia[31]&ib[31])|(ia[31]&~eres[31])|(ib[31]&~eres[31]);
-         			exer[which][19] <= (ia[31]&ib[31])|(ia[31]&~eres[31])|(ib[31]&~eres[31]);
+          		exer[which][31] <= exer[which][31] | (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
+          		exer[which][30] <= (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
+          		exer[which][20] <= (eres[which][31] ^ ib[which][31]) & (1'b1 ^ ia[which][31] ^ ib[which][31]);
+         			exer[which][29] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
+         			exer[which][19] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
          		end
           SUBFO:
           	begin
-          		exer[which][31] <= exer[which][31] | (1'b1^ eres[31] ^ ia[31]) & (ia[31] ^ ib[31]);
-          		exer[which][30] <= (1'b1^ eres[31] ^ ia[31]) & (ia[31] ^ ib[31]);
-          		exer[which][20] <= (1'b1^ eres[31] ^ ia[31]) & (ia[31] ^ ib[31]);
+          		exer[which][31] <= exer[which][31] | (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
+          		exer[which][30] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
+          		exer[which][20] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
           	end
           MULLWO:
           	begin
@@ -2681,6 +2693,7 @@ begin
 		  	$display("=================================================================");
 		  	$display("Time: %d  Tick:%d  Inst. Count Valid: %d  IPC:%f", $time, tick, inst_ctr, $itor(inst_ctr)/$itor(tick));
 		  	$display("Inst. Count Total: %d  IPC:%f", inst_ctr2, $itor(inst_ctr2)/$itor(tick));
+		  	$display("Stalls: %d  SPC:%f", stall_ctr, $itor(stall_ctr)/$itor(tick));
 		  	$display("pc0: %h pc1:%h", pc[0], pc[1]);
 		  	$display("Regfile");
 		  	for (n = 0; n < 32; n = n + 4)
