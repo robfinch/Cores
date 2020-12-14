@@ -20,10 +20,28 @@ parameter CRORC = 10'd417;
 parameter R2    = 6'd31;
 parameter CMP   = 10'd0;
 parameter CMPL  = 10'd32;
+
 parameter ADD   = 10'd266;
 parameter ADDO  = 10'd778;
+parameter ADDC	= 10'd10;
+parameter ADDCO	= 10'd522;
+parameter ADDE	= 10'd138;
+parameter ADDEO = 10'd650;
+parameter ADDME = 10'd234;
+parameter ADDMEO= 10'd746;
+parameter ADDZE	= 10'd202;
+parameter ADDZEO= 10'd714;
 parameter SUBF  = 10'd40;
 parameter SUBFO = 10'd552;
+parameter SUBFC = 10'd8;
+parameter SUBFCO= 10'd520;
+parameter SUBFE = 10'd136;
+parameter SUBFEO= 10'd648;
+parameter SUBFME= 10'd232;
+parameter SUBFMEO=10'd744;
+parameter SUBFZE= 10'd200;
+parameter SUBFZEO=10'd712;
+
 parameter DIVW  = 10'd491;
 parameter DIVWO = 10'd971;
 parameter MULLW = 10'd235;
@@ -127,14 +145,18 @@ parameter TWI   = 6'd3;
 parameter NOP_INSN  = {R2,5'd0,5'd0,5'd0,AND,1'b0};
 
 // Instruction fetch
-parameter IFETCH1 = 3'd0;
-parameter IALIGN = 3'd1;
-parameter IWAIT = 3'd2;
-parameter IACCESS = 3'd3;
-parameter IACCESS_CYC = 3'd4;
-parameter IACCESS_ACK = 3'd5;
-parameter IC_UPDATE = 3'd6;
-parameter ICU1 = 3'd7;
+parameter IFETCH1 = 4'd0;
+parameter IALIGN = 4'd1;
+parameter IWAIT = 4'd2;
+parameter IACCESS = 4'd3;
+parameter IACCESS_CYC = 4'd4;
+parameter IACCESS_ACK = 4'd5;
+parameter IC_UPDATE = 4'd6;
+parameter ICU1 = 4'd7;
+parameter ICU2 = 4'd8;
+parameter IFETCH0 = 4'd9;
+parameter IFETCH0a = 4'd10;
+parameter IFETCH0b = 4'd11;
 
 // Decode
 parameter DECODE = 2'd0;
@@ -161,7 +183,8 @@ parameter WRITEBACK0 = 3'd0;
 parameter WRITEBACK1 = 3'd1;
 parameter WRITEBACK2 = 3'd2;
 parameter WRITEBACK3 = 3'd3;
-parameter WWAIT = 3'd4;
+parameter WRITEBACK4 = 3'd4;
+parameter WWAIT = 3'd5;
 
 parameter pL1CacheLines = 64;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;

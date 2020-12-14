@@ -1,0 +1,299 @@
+F00:0001       	.file	"SieveOfE.c"
+F00:0002       	.text
+F00:0003       	.align	2
+F00:0004       	.sdreg	r13
+F00:0005       	.align	4
+F00:0006       	.global	_SieveOfEratosthenes
+F00:0007       _SieveOfEratosthenes:
+F00:0008       	stwu	r1,-32(r1)
+               S01:00000000:  94 21 FF E0
+F00:0009       	lis	r11,-192
+               S01:00000004:  3D 60 FF 40
+F00:0010       	stw	r11,24(r1)
+               S01:00000008:  91 61 00 18
+F00:0011       	li	r11,0
+               S01:0000000C:  39 60 00 00
+F00:0012       	stw	r11,8(r1)
+               S01:00000010:  91 61 00 08
+F00:0013       	b	SieveOfE_3
+               S01:00000014:  48 00 00 24
+F00:0014       SieveOfE_2:
+F00:0015       	lwz	r11,24(r1)
+               S01:00000018:  81 61 00 18
+F00:0016       	lwz	r12,8(r1)
+               S01:0000001C:  81 81 00 08
+F00:0017       	add	r10,r11,r12
+               S01:00000020:  7D 4B 62 14
+F00:0018       	li	r11,1
+               S01:00000024:  39 60 00 01
+F00:0019       	stb	r11,0(r10)
+               S01:00000028:  99 6A 00 00
+F00:0020       SieveOfE_5:
+F00:0021       	lwz	r11,8(r1)
+               S01:0000002C:  81 61 00 08
+F00:0022       	addi	r0,r11,1
+               S01:00000030:  38 0B 00 01
+F00:0023       	stw	r0,8(r1)
+               S01:00000034:  90 01 00 08
+F00:0024       SieveOfE_3:
+F00:0025       	lwz	r11,8(r1)
+               S01:00000038:  81 61 00 08
+F00:0026       	cmpwi	cr0,r11,1024
+               S01:0000003C:  2C 0B 04 00
+F00:0027       	blt	cr0,SieveOfE_2
+               S01:00000040:  41 80 FF D8
+F00:0028       SieveOfE_4:
+F00:0029       	li	r11,2
+               S01:00000044:  39 60 00 02
+F00:0030       	stw	r11,12(r1)
+               S01:00000048:  91 61 00 0C
+F00:0031       	b	SieveOfE_7
+               S01:0000004C:  48 00 00 88
+F00:0032       SieveOfE_6:
+F00:0033       	lwz	r11,24(r1)
+               S01:00000050:  81 61 00 18
+F00:0034       	lwz	r12,12(r1)
+               S01:00000054:  81 81 00 0C
+F00:0035       	add	r10,r11,r12
+               S01:00000058:  7D 4B 62 14
+F00:0036       	lbz	r11,0(r10)
+               S01:0000005C:  89 6A 00 00
+F00:0037       	extsb.	cr0,r11
+               S01:00000060:  7D 60 07 75
+F00:0038       	beq	cr0,SieveOfE_11
+               S01:00000064:  41 82 00 64
+F00:0039       	li	r11,0
+               S01:00000068:  39 60 00 00
+F00:0040       	stw	r11,16(r1)
+               S01:0000006C:  91 61 00 10
+F00:0041       	li	r11,0
+               S01:00000070:  39 60 00 00
+F00:0042       	stw	r11,20(r1)
+               S01:00000074:  91 61 00 14
+F00:0043       	b	SieveOfE_13
+               S01:00000078:  48 00 00 44
+F00:0044       SieveOfE_12:
+F00:0045       	lwz	r11,12(r1)
+               S01:0000007C:  81 61 00 0C
+F00:0046       	lwz	r12,12(r1)
+               S01:00000080:  81 81 00 0C
+F00:0047       	mullw	r10,r11,r12
+               S01:00000084:  7D 4B 61 D6
+F00:0048       	lwz	r11,20(r1)
+               S01:00000088:  81 61 00 14
+F00:0049       	lwz	r12,12(r1)
+               S01:0000008C:  81 81 00 0C
+F00:0050       	mullw	r9,r11,r12
+               S01:00000090:  7D 2B 61 D6
+F00:0051       	add	r10,r10,r9
+               S01:00000094:  7D 4A 4A 14
+F00:0052       	stw	r10,16(r1)
+               S01:00000098:  91 41 00 10
+F00:0053       	lwz	r11,24(r1)
+               S01:0000009C:  81 61 00 18
+F00:0054       	lwz	r12,16(r1)
+               S01:000000A0:  81 81 00 10
+F00:0055       	add	r10,r11,r12
+               S01:000000A4:  7D 4B 62 14
+F00:0056       	li	r11,0
+               S01:000000A8:  39 60 00 00
+F00:0057       	stb	r11,0(r10)
+               S01:000000AC:  99 6A 00 00
+F00:0058       SieveOfE_15:
+F00:0059       	lwz	r11,20(r1)
+               S01:000000B0:  81 61 00 14
+F00:0060       	addi	r0,r11,1
+               S01:000000B4:  38 0B 00 01
+F00:0061       	stw	r0,20(r1)
+               S01:000000B8:  90 01 00 14
+F00:0062       SieveOfE_13:
+F00:0063       	lwz	r11,16(r1)
+               S01:000000BC:  81 61 00 10
+F00:0064       	cmpwi	cr0,r11,1024
+               S01:000000C0:  2C 0B 04 00
+F00:0065       	blt	cr0,SieveOfE_12
+               S01:000000C4:  41 80 FF B8
+F00:0066       SieveOfE_14:
+F00:0067       SieveOfE_11:
+F00:0068       SieveOfE_9:
+F00:0069       	lwz	r11,12(r1)
+               S01:000000C8:  81 61 00 0C
+F00:0070       	addi	r0,r11,1
+               S01:000000CC:  38 0B 00 01
+F00:0071       	stw	r0,12(r1)
+               S01:000000D0:  90 01 00 0C
+F00:0072       SieveOfE_7:
+F00:0073       	lwz	r11,12(r1)
+               S01:000000D4:  81 61 00 0C
+F00:0074       	cmpwi	cr0,r11,32
+               S01:000000D8:  2C 0B 00 20
+F00:0075       	blt	cr0,SieveOfE_6
+               S01:000000DC:  41 80 FF 74
+F00:0076       SieveOfE_8:
+F00:0077       SieveOfE_16:
+F00:0078       SieveOfE_19:
+F00:0079       	b	SieveOfE_16
+               S01:000000E0:  48 00 00 00
+F00:0080       SieveOfE_18:
+F00:0081       SieveOfE_1:
+F00:0082       	addi	r1,r1,32
+               S01:000000E4:  38 21 00 20
+F00:0083       	blr
+               S01:000000E8:  4E 80 00 20
+F00:0084       	.type	_SieveOfEratosthenes,@function
+F00:0085       	.size	_SieveOfEratosthenes,$-_SieveOfEratosthenes
+F00:0086       # stacksize=32
+F00:0087       	.set	___stack_SieveOfEratosthenes,32
+F00:0088       
+
+
+Sections:
+S01  .text
+
+
+Sources:
+F00  SieveOfE.asm
+
+
+Symbols:
+___stack_SieveOfEratosthenes EXPR(32=0x20) UNUSED 
+ *tmp000000000* LAB (0xec) UNUSED sec=.text 
+SieveOfE_1 LAB (0xe4) UNUSED sec=.text 
+SieveOfE_18 LAB (0xe4) UNUSED sec=.text 
+SieveOfE_19 LAB (0xe0) UNUSED sec=.text 
+SieveOfE_16 LAB (0xe0) sec=.text 
+SieveOfE_8 LAB (0xe0) UNUSED sec=.text 
+SieveOfE_9 LAB (0xc8) UNUSED sec=.text 
+SieveOfE_14 LAB (0xc8) UNUSED sec=.text 
+SieveOfE_15 LAB (0xb0) UNUSED sec=.text 
+SieveOfE_12 LAB (0x7c) sec=.text 
+SieveOfE_13 LAB (0xbc) sec=.text 
+SieveOfE_11 LAB (0xc8) sec=.text 
+SieveOfE_6 LAB (0x50) sec=.text 
+SieveOfE_7 LAB (0xd4) sec=.text 
+SieveOfE_4 LAB (0x44) UNUSED sec=.text 
+SieveOfE_5 LAB (0x2c) UNUSED sec=.text 
+SieveOfE_2 LAB (0x18) sec=.text 
+SieveOfE_3 LAB (0x38) sec=.text 
+_SieveOfEratosthenes LAB (0x0) EXPORT type=func size=complex expression sec=.text 
+ctr EXPR(9=0x9) INTERNAL 
+lr EXPR(8=0x8) INTERNAL 
+xer EXPR(1=0x1) INTERNAL 
+fpscr EXPR(0=0x0) INTERNAL 
+fp EXPR(31=0x1f) INTERNAL 
+rtoc EXPR(2=0x2) INTERNAL 
+sp EXPR(1=0x1) INTERNAL 
+un EXPR(3=0x3) INTERNAL 
+so EXPR(3=0x3) INTERNAL 
+eq EXPR(2=0x2) INTERNAL 
+gt EXPR(1=0x1) INTERNAL 
+lt EXPR(0=0x0) INTERNAL 
+vrsave EXPR(256=0x100) INTERNAL 
+cr7 EXPR(7=0x7) INTERNAL 
+cr6 EXPR(6=0x6) INTERNAL 
+cr5 EXPR(5=0x5) INTERNAL 
+cr4 EXPR(4=0x4) INTERNAL 
+cr3 EXPR(3=0x3) INTERNAL 
+cr2 EXPR(2=0x2) INTERNAL 
+cr1 EXPR(1=0x1) INTERNAL 
+cr0 EXPR(0=0x0) INTERNAL 
+v31 EXPR(31=0x1f) INTERNAL 
+f31 EXPR(31=0x1f) INTERNAL 
+r31 EXPR(31=0x1f) INTERNAL 
+v30 EXPR(30=0x1e) INTERNAL 
+f30 EXPR(30=0x1e) INTERNAL 
+r30 EXPR(30=0x1e) INTERNAL 
+v29 EXPR(29=0x1d) INTERNAL 
+f29 EXPR(29=0x1d) INTERNAL 
+r29 EXPR(29=0x1d) INTERNAL 
+v28 EXPR(28=0x1c) INTERNAL 
+f28 EXPR(28=0x1c) INTERNAL 
+r28 EXPR(28=0x1c) INTERNAL 
+v27 EXPR(27=0x1b) INTERNAL 
+f27 EXPR(27=0x1b) INTERNAL 
+r27 EXPR(27=0x1b) INTERNAL 
+v26 EXPR(26=0x1a) INTERNAL 
+f26 EXPR(26=0x1a) INTERNAL 
+r26 EXPR(26=0x1a) INTERNAL 
+v25 EXPR(25=0x19) INTERNAL 
+f25 EXPR(25=0x19) INTERNAL 
+r25 EXPR(25=0x19) INTERNAL 
+v24 EXPR(24=0x18) INTERNAL 
+f24 EXPR(24=0x18) INTERNAL 
+r24 EXPR(24=0x18) INTERNAL 
+v23 EXPR(23=0x17) INTERNAL 
+f23 EXPR(23=0x17) INTERNAL 
+r23 EXPR(23=0x17) INTERNAL 
+v22 EXPR(22=0x16) INTERNAL 
+f22 EXPR(22=0x16) INTERNAL 
+r22 EXPR(22=0x16) INTERNAL 
+v21 EXPR(21=0x15) INTERNAL 
+f21 EXPR(21=0x15) INTERNAL 
+r21 EXPR(21=0x15) INTERNAL 
+v20 EXPR(20=0x14) INTERNAL 
+f20 EXPR(20=0x14) INTERNAL 
+r20 EXPR(20=0x14) INTERNAL 
+v19 EXPR(19=0x13) INTERNAL 
+f19 EXPR(19=0x13) INTERNAL 
+r19 EXPR(19=0x13) INTERNAL 
+v18 EXPR(18=0x12) INTERNAL 
+f18 EXPR(18=0x12) INTERNAL 
+r18 EXPR(18=0x12) INTERNAL 
+v17 EXPR(17=0x11) INTERNAL 
+f17 EXPR(17=0x11) INTERNAL 
+r17 EXPR(17=0x11) INTERNAL 
+v16 EXPR(16=0x10) INTERNAL 
+f16 EXPR(16=0x10) INTERNAL 
+r16 EXPR(16=0x10) INTERNAL 
+v15 EXPR(15=0xf) INTERNAL 
+f15 EXPR(15=0xf) INTERNAL 
+r15 EXPR(15=0xf) INTERNAL 
+v14 EXPR(14=0xe) INTERNAL 
+f14 EXPR(14=0xe) INTERNAL 
+r14 EXPR(14=0xe) INTERNAL 
+v13 EXPR(13=0xd) INTERNAL 
+f13 EXPR(13=0xd) INTERNAL 
+r13 EXPR(13=0xd) INTERNAL 
+v12 EXPR(12=0xc) INTERNAL 
+f12 EXPR(12=0xc) INTERNAL 
+r12 EXPR(12=0xc) INTERNAL 
+v11 EXPR(11=0xb) INTERNAL 
+f11 EXPR(11=0xb) INTERNAL 
+r11 EXPR(11=0xb) INTERNAL 
+v10 EXPR(10=0xa) INTERNAL 
+f10 EXPR(10=0xa) INTERNAL 
+r10 EXPR(10=0xa) INTERNAL 
+v9 EXPR(9=0x9) INTERNAL 
+f9 EXPR(9=0x9) INTERNAL 
+r9 EXPR(9=0x9) INTERNAL 
+v8 EXPR(8=0x8) INTERNAL 
+f8 EXPR(8=0x8) INTERNAL 
+r8 EXPR(8=0x8) INTERNAL 
+v7 EXPR(7=0x7) INTERNAL 
+f7 EXPR(7=0x7) INTERNAL 
+r7 EXPR(7=0x7) INTERNAL 
+v6 EXPR(6=0x6) INTERNAL 
+f6 EXPR(6=0x6) INTERNAL 
+r6 EXPR(6=0x6) INTERNAL 
+v5 EXPR(5=0x5) INTERNAL 
+f5 EXPR(5=0x5) INTERNAL 
+r5 EXPR(5=0x5) INTERNAL 
+v4 EXPR(4=0x4) INTERNAL 
+f4 EXPR(4=0x4) INTERNAL 
+r4 EXPR(4=0x4) INTERNAL 
+v3 EXPR(3=0x3) INTERNAL 
+f3 EXPR(3=0x3) INTERNAL 
+r3 EXPR(3=0x3) INTERNAL 
+v2 EXPR(2=0x2) INTERNAL 
+f2 EXPR(2=0x2) INTERNAL 
+r2 EXPR(2=0x2) INTERNAL 
+v1 EXPR(1=0x1) INTERNAL 
+f1 EXPR(1=0x1) INTERNAL 
+r1 EXPR(1=0x1) INTERNAL 
+v0 EXPR(0=0x0) INTERNAL 
+f0 EXPR(0=0x0) INTERNAL 
+r0 EXPR(0=0x0) INTERNAL 
+__VASM EXPR(0=0x0) INTERNAL 
+__MSDOSFS EXPR(0=0x0) INTERNAL 
+
+There have been no errors.
