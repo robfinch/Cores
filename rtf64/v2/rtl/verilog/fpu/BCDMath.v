@@ -36,6 +36,30 @@
 //                                                                          
 // ============================================================================
 //
+// Could use the following approach for add/sub but it ends up being larger
+// than using an adjustment lookup table.
+
+module BCDAddNyb(ci,a,b,o,c);
+input ci;		// carry input
+input [3:0] a;
+input [3:0] b;
+output [3:0] o;
+output c;
+
+wire c0;
+
+reg [4:0] hsN0;
+always  @*
+begin
+	hsN0 = a[3:0] + b[3:0] + ci;
+	if (hsN0 > 5'd9)
+		hsN0 = hsN0 + 3'd6;
+end		
+assign o = hsN0[3:0];
+assign c = hsN0[4];
+
+endmodule
+
 module BCDAdd(ci,a,b,o,c);
 input ci;		// carry input
 input [7:0] a;
@@ -366,6 +390,78 @@ BCDMul1 u4 (a[7:4],b[7:4],p4);
 
 BCDAdd4 u5 (1'b0,{p4,p1},{4'h0,p2,4'h0},s1);
 BCDAdd4 u6 (1'b0,s1,{4'h0,p3,4'h0},o);
+
+endmodule
+
+module BCDMul4(a,b,o);
+input [15:0] a;
+input [15:0] b;
+output [31:0] o;
+
+wire [15:0] p1,p2,p3,p4;
+wire [31:0] s1;
+
+BCDMul2 u1 (a[7:0],b[7:0],p1);
+BCDMul2 u2 (a[15:8],b[7:0],p2);
+BCDMul2 u3 (a[7:0],b[15:8],p3);
+BCDMul2 u4 (a[15:8],b[15:8],p4);
+
+BCDAddN #(.N(8)) u5 (1'b0,{p4,p1},{8'h0,p2,8'h0},s1);
+BCDAddN #(.N(8)) u6 (1'b0,s1,{8'h0,p3,8'h0},o);
+
+endmodule
+
+module BCDMul8(a,b,o);
+input [31:0] a;
+input [31:0] b;
+output [63:0] o;
+
+wire [31:0] p1,p2,p3,p4;
+wire [63:0] s1;
+
+BCDMul4 u1 (a[15:0],b[15:0],p1);
+BCDMul4 u2 (a[31:16],b[15:0],p2);
+BCDMul4 u3 (a[15:0],b[31:16],p3);
+BCDMul4 u4 (a[31:16],b[31:16],p4);
+
+BCDAddN #(.N(16)) u5 (1'b0,{p4,p1},{16'h0,p2,16'h0},s1);
+BCDAddN #(.N(16)) u6 (1'b0,s1,{16'h0,p3,16'h0},o);
+
+endmodule
+
+module BCDMul16(a,b,o);
+input [63:0] a;
+input [63:0] b;
+output [127:0] o;
+
+wire [63:0] p1,p2,p3,p4;
+wire [127:0] s1;
+
+BCDMul8 u1 (a[31:0],b[31:0],p1);
+BCDMul8 u2 (a[63:32],b[31:0],p2);
+BCDMul8 u3 (a[31:0],b[63:32],p3);
+BCDMul8 u4 (a[63:32],b[63:32],p4);
+
+BCDAddN #(.N(32)) u5 (1'b0,{p4,p1},{32'h0,p2,32'h0},s1);
+BCDAddN #(.N(32)) u6 (1'b0,s1,{32'h0,p3,32'h0},o);
+
+endmodule
+
+module BCDMul32(a,b,o);
+input [127:0] a;
+input [127:0] b;
+output [255:0] o;
+
+wire [127:0] p1,p2,p3,p4;
+wire [255:0] s1;
+
+BCDMul16 u1 (a[63:0],b[63:0],p1);
+BCDMul16 u2 (a[127:64],b[63:0],p2);
+BCDMul16 u3 (a[63:0],b[127:64],p3);
+BCDMul16 u4 (a[127:64],b[127:64],p4);
+
+BCDAddN #(.N(64)) u5 (1'b0,{p4,p1},{64'h0,p2,64'h0},s1);
+BCDAddN #(.N(64)) u6 (1'b0,s1,{64'h0,p3,64'h0},o);
 
 endmodule
 

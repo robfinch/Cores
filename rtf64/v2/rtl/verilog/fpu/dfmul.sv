@@ -1,11 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	DFPDecompose.sv
+//	dfmul.v
+//    Decimal Float multiplier primitive
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -35,52 +36,107 @@
 //                                                                          
 // ============================================================================
 
-module DFPDecompose(i, sgn, sx, exp, sig, xz, vz, inf, nan);
-input [127:0] i;
-output sgn;
-output sx;
-output [15:0] exp;
-output [107:0] sig;
-output xz;
-output vz;
-output inf;
-output nan;
+module dfmul(clk, ld, a, b, p, done);
+parameter FPWID = 108;
+parameter RADIX = 10;
+localparam FPWID1 = FPWID;//((FPWID+2)/3)*3;    // make FPWIDth a multiple of three
+localparam DMSB = FPWID1-1;
+input clk;
+input ld;
+input [FPWID-1:0] a;
+input [FPWID-1:0] b;
+output reg [FPWID*2-1:0] p;
+output reg done;
 
-assign nan = i[127];
-assign sgn = i[126];
-assign inf = i[125];
-assign sx = i[124];
-assign exp = i[123:108];
-assign sig = i[107:0];
-assign xz = ~|exp;
-assign vz = ~|{exp,sig};
+
+reg [1:0] st;
+parameter PREP = 2'd0;
+parameter ADDN = 2'd1;
+parameter DONE = 2'd2;
+
+reg [3:0] cnt;				// iteration count
+reg [5:0] dcnt;				// digit count
+reg [9:0] clkcnt;
+reg [FPWID*2-1:0] pi = 0;
+reg [FPWID-1:0] ai = 0;
+reg [FPWID*2-1:0] bi = 0;
+wire [FPWID*2-1:0] sum; 
+
+BCDAddN #(.N((FPWID*2)/4)) u1
+(
+	.ci(1'b0),
+	.a(pi),
+	.b(bi),
+	.o(sum),
+	.co()
+);
+
+always @(posedge clk)
+begin
+case(st)
+ADDN:
+	begin
+		clkcnt <= clkcnt + 1'd1;
+		if (ai[FPWID-1:FPWID-4]!=4'h0) begin
+			pi <= sum;
+			ai[FPWID-1:FPWID-4] <= ai[FPWID-1:FPWID-4] - 1'd1;
+			cnt <= cnt + 1'd1;
+		end
+		else begin
+			ai <= {ai,4'h0};
+			bi <= {4'h0,bi[FPWID*2-1:4]};
+			pi <= pi;
+			dcnt <= dcnt - 1'd1;
+			if (dcnt==6'd0)
+				st <= DONE;
+		end
+	end
+DONE:
+	begin
+		p <= pi;
+		done <= 1'b1;
+	end
+default:
+	st <= ADDN;
+endcase
+if (ld) begin
+	clkcnt <= 10'd0;
+	cnt <= 4'd0;
+	dcnt <= (FPWID*2)/4;
+	pi <= {FPWID*2{1'b0}};
+	ai <= a;
+	bi <= {4'h0,b,{FPWID-4{1'b0}}};
+	st <= ADDN;
+	done <= 1'b0;
+end
+end
 
 endmodule
 
+module dfmul_tb();
 
-module DFPDecomposeReg(clk, ce, i, sgn, sx, exp, sig, xz, vz, inf, nan);
-input clk;
-input ce;
-input [127:0] i;
-output reg sgn;
-output reg sx;
-output reg [15:0] exp;
-output reg [107:0] sig;
-output reg xz;
-output reg vz;
-output reg inf;
-output reg nan;
+reg clk;
+reg ld;
+reg [107:0] a, b;
+wire [215:0] p;
 
-always @(posedge clk)
-	if (ce) begin
-		nan <= i[127];
-		sgn <= i[126];
-		inf <= i[125];
-		sx <= i[124];
-		exp <= i[123:108];
-		sig <= i[107:0];
-		xz <= ~|exp;
-		vz <= ~|{exp,sig};
-	end
+initial begin
+	clk = 1'b0;
+	ld = 1'b0;
+	a = 108'h099_00000000_00000000_00000000;
+	b = 108'h560_00000000_00000000_00000000;
+	#20 ld = 1'b1;
+	#40 ld = 1'b0;
+end
 
+always #5 clk = ~clk;
+
+dfmul #(108) u1 (
+	.clk(clk),
+	.ld(ld), 
+	.a(a),
+	.b(b),
+	.p(p),
+	.done(done)
+);
 endmodule

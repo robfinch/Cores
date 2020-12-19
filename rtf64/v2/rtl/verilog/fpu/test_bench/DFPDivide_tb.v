@@ -6,8 +6,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	DFPAddsub_tb.v
-//		- decimal floating point addsub test bench
+//	DFPDivider_tb.v
+//		- decimal floating point divider test bench
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -34,21 +34,35 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
 //                                                                          
+//	Floating Point Multiplier / Divider
+//
+//	This multiplier/divider handles denormalized numbers.
+//	The output format is of an internal expanded representation
+//	in preparation to be fed into a normalization unit, then
+//	rounding. Basically, it's the same as the regular format
+//	except the mantissa is doubled in size, the leading two
+//	bits of which are assumed to be whole bits.
+//
+//
 // ============================================================================
 
-module DFPAddsub_tb();
+module DFPDivide_tb();
 reg rst;
 reg clk;
 reg [15:0] adr;
 reg [127:0] a,b;
 wire [127:0] o;
 reg [127:0] ad,bd;
-reg [127:0] od;
+wire [127:0] od;
 reg [3:0] rm;
+wire done;
 
 integer n;
 reg [127:0] a1, b1;
+reg [39:0] sum_cc;
+
 wire [63:0] doubleA = {a[31], a[30], {3{~a[30]}}, a[29:23], a[22:0], {29{1'b0}}};
 wire [63:0] doubleB = {b[31], b[30], {3{~b[30]}}, b[29:23], b[22:0], {29{1'b0}}};
 
@@ -62,7 +76,7 @@ initial begin
 	b = 1;
 	#20 rst = 1;
 	#50 rst = 0;
-	#10000000  $fclose(outfile);
+	#5000000  $fclose(outfile);
 	#10 $finish;
 end
 
@@ -80,33 +94,39 @@ generate begin : gRand
 end
 endgenerate
 
-reg [7:0] count;
+reg [9:0] count;
 always @(posedge clk)
 if (rst) begin
 	adr <= 0;
 	count <= 0;
+	sum_cc = 0;
 end
 else
 begin
   if (adr==0) begin
-    outfile = $fopen("d:/cores2020/rtf64/v2/rtl/verilog/cpu/fpu/test_bench/DFPAddsub_tvo.txt", "wb");
-    $fwrite(outfile, " rm ------- A ------  ------- B ------  ------ sum -----  -- SIM Sum --\n");
+    outfile = $fopen("d:/cores2020/rtf64/v2/rtl/verilog/cpu/fpu/test_bench/DFPDivide_tvo.txt", "wb");
+    $fwrite(outfile, "rm ------ A ------  ------- B ------  - DUT Quotient - - SIM Quotient -\n");
+    sum_cc = 0;
   end
 	count <= count + 1;
-	if (count > 32)
+	if (count > 700)
 		count <= 1'd1;
-	if (count==2) begin
+	if (count==2) begin	
 		a[127:0] <= a1;
 		b[127:0] <= b1;
 		a[127:124] <= 4'h5;
 		b[127:124] <= 4'h5;
-		rm <= adr[14:12];
+		rm <= adr[15:13];
 		//ad <= memd[adr][63: 0];
 		//bd <= memd[adr][127:64];
 	end
 	if (adr==1 && count==2) begin
 		a <= 127'h50000700000000000000000000000000;
 		b <= 127'h50000200000000000000000000000000;
+	end
+	if (adr==1 && count==2) begin
+		a <= 127'h50000100000000000000000000000000;
+		b <= 127'h50000300000000000000000000000000;
 	end
 	if (adr==2 && count==2) begin
 		a <= 127'h50000900000000000000000000000000;
@@ -116,26 +136,37 @@ begin
 		a <= 127'h50000000000000000000000000000000;
 		b <= 127'h50000000000000000000000000000000;
 	end
-	if (count==31) begin
-		if (adr[11]) begin
-	  	$fwrite(outfile, "%c%h\t%h\t%h\t%h\n", "-",rm, a, b, o);
-	  end
-	  else begin
-	  	$fwrite(outfile, "%c%h\t%h\t%h\t%h\n", "+",rm, a, b, o);
-	  end
+	if (adr==4 && count==2) begin
+		a <= 127'h50001100000000000000000000000000;
+		b <= 127'h50001100000000000000000000000000;
+	end
+	if (adr==4 && count==2) begin
+		a <= 127'h50000100000000000000000000000000;
+		b <= 127'h50000300000000000000000000000000;
+	end
+	if (count > 700) begin
+		sum_cc = sum_cc + u6.u1.u2.clkcnt;
+	  $fwrite(outfile, "%h\t%h\t%h\t%h\t%d\t%f\n", rm, a, b, o, u6.u1.u2.clkcnt, $itor(sum_cc) / $itor(adr));
 		adr <= adr + 1;
 	end
 end
 
 //fpMulnr #(64) u1 (clk, 1'b1, a, b, o, rm);//, sign_exe, inf, overflow, underflow);
-DFPAddsubnr u6 (
+DFPDividenr u6 (
+  .rst(rst),
   .clk(clk),
   .ce(1'b1),
-  .op(adr[11]),
+  .ld(count==3),
+  .op(1'b0),
   .a(a),
   .b(b),
   .o(o),
-  .rm(rm)
+  .rm(rm),
+  .done(done),
+  .sign_exe(),
+  .inf(),
+  .overflow(),
+  .underflow()
   );
 
 endmodule

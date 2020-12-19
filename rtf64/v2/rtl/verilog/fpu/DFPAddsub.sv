@@ -42,7 +42,7 @@ input [2:0] rm;
 input op;
 input [127:0] a;
 input [127:0] b;
-output [219:0] o;
+output [243:0] o;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -54,7 +54,7 @@ wire xainf, xbinf;
 wire ainf, binf;
 wire aNan, bNan;
 wire [15:0] xa, xb;
-wire [95:0] siga, sigb;
+wire [107:0] siga, sigb;
 
 wire [15:0] xabdif4;
 BCDSub4 ubcds1(
@@ -66,10 +66,10 @@ BCDSub4 ubcds1(
 	.c8()
 );
 
-wire [99:0] oss10;
+wire [111:0] oss10;
 wire oss10c;
 
-BCDAddN #(.N(25)) ubcdan1
+BCDAddN #(.N(28)) ubcdan1
 (
 	.ci(1'b0),
 	.a(oaa10),
@@ -78,10 +78,10 @@ BCDAddN #(.N(25)) ubcdan1
 	.co(oss10c)
 );
 
-wire [99:0] odd10;
+wire [111:0] odd10;
 wire odd10c;
 
-BCDSubN #(.N(25)) ubcdsn1
+BCDSubN #(.N(28)) ubcdsn1
 (
 	.ci(1'b0),
 	.a(oaa10),
@@ -122,7 +122,7 @@ reg op2;
 reg [15:0] xa2, xb2;
 reg az2, bz2;
 reg xa_gt_xb2;
-reg [95:0] siga2, sigb2;
+reg [107:0] siga2, sigb2;
 reg sigeq, siga_gt_sigb;
 reg xa_gt_xb2;
 reg expeq;
@@ -178,7 +178,7 @@ reg a_gt_b3;
 reg op3;
 wire sa3, sb3;
 wire [2:0] rm3;
-reg [95:0] mfs3;
+reg [107:0] mfs3;
 
 always @(posedge clk)
   if (ce) resZero3 <= (realOp2 & expeq & sigeq) ||	// subtract, same magnitude
@@ -266,10 +266,10 @@ always @(posedge clk)
 // less) then all of the bits will be shifted out to zero. There is no need to
 // keep track of a difference more than 24.
 reg [11:0] xdif6;
-wire [95:0] mfs6;
+wire [107:0] mfs6;
 always @(posedge clk)
   if (ce) xdif6 <= xdiff5 > 16'h0024 ? 8'h24 : xdiff5[7:0];
-delay #(.WID(96), .DEP(3)) udly6a (.clk(clk), .ce(ce), .i(mfs3), .o(mfs6));
+delay #(.WID(108), .DEP(3)) udly6a (.clk(clk), .ce(ce), .i(mfs3), .o(mfs6));
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock #7
@@ -281,7 +281,7 @@ delay #(.WID(96), .DEP(3)) udly6a (.clk(clk), .ce(ce), .i(mfs3), .o(mfs6));
 reg sticky6;
 wire sticky7;
 wire [7:0] xdif7;
-wire [95:0] mfs7;
+wire [107:0] mfs7;
 wire [7:0] xdif6a = {xdif6[7:4] * 10 + xdif6[3:0],2'b00};	// Convert base then *4
 integer n;
 always @* begin
@@ -294,13 +294,13 @@ end
 // register inputs to shifter and shift
 delay1 #(1)  d16(.clk(clk), .ce(ce), .i(sticky6), .o(sticky7) );
 delay1 #(8)  d15(.clk(clk), .ce(ce), .i(xdif6a),   .o(xdif7) );
-delay1 #(96) d14(.clk(clk), .ce(ce), .i(mfs6),    .o(mfs7) );
+delay1 #(108) d14(.clk(clk), .ce(ce), .i(mfs6),    .o(mfs7) );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock #8
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [99:0] md8;
-wire [95:0] siga8, sigb8;
+reg [111:0] md8;
+wire [107:0] siga8, sigb8;
 wire xa_gt_xb8;
 wire a_gt_b8;
 always @(posedge clk)
@@ -309,8 +309,8 @@ always @(posedge clk)
 // sync control signals
 delay #(.WID(1), .DEP(4)) udly8a (.clk(clk), .ce(ce), .i(xa_gt_xb4), .o(xa_gt_xb8));
 delay #(.WID(1), .DEP(5)) udly8b (.clk(clk), .ce(ce), .i(a_gt_b3), .o(a_gt_b8));
-delay #(.WID(96), .DEP(6)) udly8d (.clk(clk), .ce(ce), .i(siga2), .o(siga8));
-delay #(.WID(96), .DEP(6)) udly8e (.clk(clk), .ce(ce), .i(sigb2), .o(sigb8));
+delay #(.WID(108), .DEP(6)) udly8d (.clk(clk), .ce(ce), .i(siga2), .o(siga8));
+delay #(.WID(108), .DEP(6)) udly8e (.clk(clk), .ce(ce), .i(sigb2), .o(sigb8));
 delay #(.WID(1), .DEP(5)) udly8j (.clk(clk), .ce(ce), .i(op3), .o(op8));
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -318,7 +318,7 @@ delay #(.WID(1), .DEP(5)) udly8j (.clk(clk), .ce(ce), .i(op3), .o(op8));
 // Sort operands and perform add/subtract
 // addition can generate an extra bit, subtract can't go negative
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [99:0] oa9, ob9;
+reg [111:0] oa9, ob9;
 reg a_gt_b9;
 always @(posedge clk)
   if (ce) oa9 <= xa_gt_xb8 ? {siga8,4'b0} : md8;
@@ -330,8 +330,8 @@ always @(posedge clk)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock #10
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [99:0] oaa10;
-reg [99:0] obb10;
+reg [111:0] oaa10;
+reg [111:0] obb10;
 wire realOp10;
 reg [15:0] xo10;
 
@@ -345,9 +345,9 @@ delay #(.WID(16), .DEP(6)) udly10b (.clk(clk), .ce(ce), .i(xo4), .o(xo10));
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock #11
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [99:0] mab11;
+reg [111:0] mab11;
 reg mab11c;
-wire [95:0] siga11, sigb11;
+wire [107:0] siga11, sigb11;
 wire abInf11;
 wire aNan11, bNan11;
 reg xoinf11;
@@ -362,8 +362,8 @@ delay #(.WID(1), .DEP(8)) udly11a (.clk(clk), .ce(ce), .i(aInf3&bInf3), .o(abInf
 delay #(.WID(1), .DEP(10)) udly11c (.clk(clk), .ce(ce), .i(aNan), .o(aNan11));
 delay #(.WID(1), .DEP(10)) udly11d (.clk(clk), .ce(ce), .i(bNan), .o(bNan11));
 delay #(.WID(1), .DEP(3)) udly11e (.clk(clk), .ce(ce), .i(op8), .o(op11));
-delay #(.WID(96), .DEP(3)) udly11f (.clk(clk), .ce(ce), .i(siga8), .o(siga11));
-delay #(.WID(96), .DEP(3)) udly11g (.clk(clk), .ce(ce), .i(sigb8), .o(sigb11));
+delay #(.WID(108), .DEP(3)) udly11f (.clk(clk), .ce(ce), .i(siga8), .o(siga11));
+delay #(.WID(108), .DEP(3)) udly11g (.clk(clk), .ce(ce), .i(sigb8), .o(sigb11));
 
 always @(posedge clk)
   if (ce) xoinf11 <= xo10==16'h9999;
@@ -371,7 +371,7 @@ always @(posedge clk)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock #12
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [199:0] mo12;	// mantissa output
+reg [223:0] mo12;	// mantissa output
 reg [3:0] st12;
 wire sxo11;
 wire so11;
@@ -391,13 +391,13 @@ if (ce)
 	casez({abInf11,aNan11,bNan11,xoinf11})
 	4'b1???:	// inf +/- inf - generate QNaN on subtract, inf on add
 		if (op11)
-			mo12 <= {4'h9,196'd0};
+			mo12 <= {4'h9,220'd0};
 		else
-			mo12 <= {50{4'h9}};
-	4'b01??:	mo12 <= {4'b0,siga11[95:0],100'd0};
-	4'b001?: 	mo12 <= {4'b0,sigb11[95:0],100'd0};
-	4'b0001:	mo12 <= 200'd0;
-	default:	mo12 <= {3'b0,mab11c,mab11,96'd0};	// mab has an extra lead bit and four trailing bits
+			mo12 <= {56{4'h9}};
+	4'b01??:	mo12 <= {4'b0,siga11[107:0],112'd0};
+	4'b001?: 	mo12 <= {4'b0,sigb11[107:0],112'd0};
+	4'b0001:	mo12 <= 224'd0;
+	default:	mo12 <= {3'b0,mab11c,mab11,108'd0};	// mab has an extra lead bit and four trailing bits
 	endcase
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -406,12 +406,12 @@ if (ce)
 wire so;			// sign output
 wire [3:0] st;
 wire [15:0] xo;	// de normalized exponent output
-wire [199:0] mo;	// mantissa output
+wire [223:0] mo;	// mantissa output
 
 delay #(.WID(4), .DEP(1)) u13c (.clk(clk), .ce(ce), .i(st12), .o(st[3:0]) );
 delay #(.WID(1), .DEP(9)) udly13a (.clk(clk), .ce(ce), .i(so4), .o(so));
 delay #(.WID(16), .DEP(3)) udly13b (.clk(clk), .ce(ce), .i(xo10), .o(xo));
-delay #(.WID(200), .DEP(1)) u13d (.clk(clk), .ce(ce), .i(mo12), .o(mo) );
+delay #(.WID(224), .DEP(1)) u13d (.clk(clk), .ce(ce), .i(mo12), .o(mo) );
 
 assign o = {st,xo,mo};
 
@@ -427,8 +427,8 @@ input [127:0] a;	// operand a
 input [127:0] b;	// operand b
 output [127:0] o;	// output
 
-wire [219:0] o1;
-wire [119:0] fpn0;
+wire [243:0] o1;
+wire [131:0] fpn0;
 
 DFPAddsub    u1 (clk, ce, rm, op, a, b, o1);
 DFPNormalize u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
