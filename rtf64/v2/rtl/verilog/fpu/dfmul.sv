@@ -37,7 +37,8 @@
 // ============================================================================
 
 module dfmul(clk, ld, a, b, p, done);
-parameter FPWID = 108;
+parameter N=33;
+localparam FPWID = N*4;
 parameter RADIX = 10;
 localparam FPWID1 = FPWID;//((FPWID+2)/3)*3;    // make FPWIDth a multiple of three
 localparam DMSB = FPWID1-1;
@@ -55,7 +56,7 @@ parameter ADDN = 2'd1;
 parameter DONE = 2'd2;
 
 reg [3:0] cnt;				// iteration count
-reg [5:0] dcnt;				// digit count
+reg [7:0] dcnt;				// digit count
 reg [9:0] clkcnt;
 reg [FPWID*2-1:0] pi = 0;
 reg [FPWID-1:0] ai = 0;
@@ -131,7 +132,7 @@ end
 
 always #5 clk = ~clk;
 
-dfmul #(108) u1 (
+dfmul #(27) u1 (
 	.clk(clk),
 	.ld(ld), 
 	.a(a),

@@ -61,11 +61,12 @@ import fp::*;
 //`define DFPMUL_PARALLEL	1'b1
 
 module DFPMultiply(clk, ce, ld, a, b, o, sign_exe, inf, overflow, underflow, done);
+parameter N=33;
 input clk;
 input ce;
 input ld;
-input  [127:0] a, b;
-output [243:0] o;
+input  [N*4+16+4-1:0] a, b;
+output [(N+1)*4*2+16+4-1:0] o;
 output sign_exe;
 output inf;
 output overflow;
@@ -80,24 +81,24 @@ parameter DELAY =
   FPWID == 16 ? 2 : 2);
 
 reg [15:0] xo1;		// extra bit for sign
-reg [215:0] mo1;
+reg [N*4*2-1:0] mo1;
 
 // constants
 wire [15:0] infXp = 16'h9999;	// infinite / NaN - all ones
 // The following is the value for an exponent of zero, with the offset
 // eg. 8'h7f for eight bit exponent, 11'h7ff for eleven bit exponent, etc.
 // The following is a template for a quiet nan. (MSB=1)
-wire [107:0] qNaN  = {4'h1,{104{1'b0}}};
+wire [N*4-1:0] qNaN  = {4'h1,{104{1'b0}}};
 
 // variables
-reg [215:0] sig1;
+reg [N*4*2-1:0] sig1;
 wire [15:0] ex2;
 
 // Decompose the operands
 wire sa, sb;			// sign bit
 wire [15:0] xa, xb;	// exponent bits
 wire sxa, sxb;
-wire [107:0] siga, sigb;
+wire [N*4-1:0] siga, sigb;
 wire a_dn, b_dn;			// a/b is denormalized
 wire aNan, bNan, aNan1, bNan1;
 wire az, bz;
@@ -152,11 +153,11 @@ always @*
 	else
 		sum_ex <= sum_ex1;
 
-wire [255:0] sigoo;
+wire [N*4*2-1:0] sigoo;
 `ifdef DFPMUL_PARALLEL
 BCDMul32 u1f (.a({20'h0,siga}),.b({20'h0,sigb}),.o(sigoo));
 `else
-dfmul u1g
+dfmul #(.N(N)) u1g 
 (
 	.clk(clk),
 	.ld(ld),
@@ -168,7 +169,7 @@ dfmul u1g
 `endif
 
 always @(posedge clk)
-  if (ce) sig1 <= sigoo[215:0];
+  if (ce) sig1 <= sigoo[N*4*2-1:0];
 
 // Status
 wire under1, over1;
@@ -181,12 +182,12 @@ delay #(.WID(1),.DEP(DELAY)) u7  (.clk(clk), .ce(ce), .i(over), .o(over1) );
 
 // determine when a NaN is output
 wire qNaNOut;
-wire [127:0] a1,b1;
+wire [N*4+16+4-1:0] a1,b1;
 delay #(.WID(1),.DEP(DELAY)) u5 (.clk(clk), .ce(ce), .i((aInf&bz)|(bInf&az)), .o(qNaNOut) );
 delay #(.WID(1),.DEP(DELAY)) u14 (.clk(clk), .ce(ce), .i(aNan), .o(aNan1) );
 delay #(.WID(1),.DEP(DELAY)) u15 (.clk(clk), .ce(ce), .i(bNan), .o(bNan1) );
-delay #(.WID(128),.DEP(DELAY))  u16 (.clk(clk), .ce(ce), .i(a), .o(a1) );
-delay #(.WID(128),.DEP(DELAY))  u17 (.clk(clk), .ce(ce), .i(b), .o(b1) );
+delay #(.WID(N*4+16+4),.DEP(DELAY))  u16 (.clk(clk), .ce(ce), .i(a), .o(a1) );
+delay #(.WID(N*4+16+4),.DEP(DELAY))  u17 (.clk(clk), .ce(ce), .i(b), .o(b1) );
 
 // -----------------------------------------------------------
 // Second clock
@@ -215,9 +216,9 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce)
 		casez({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1|under1})
-		6'b1?????:  mo1 = {4'h1,a1[103:0],108'b0};
-    6'b01????:  mo1 = {4'h1,b1[103:0],108'b0};
-		6'b001???:	mo1 = {4'h1,qNaN|3'd4,108'b0};	// multiply inf * zero
+		6'b1?????:  mo1 = {4'h1,a1[N*4-4-1:0],{N*4{1'b0}}};
+    6'b01????:  mo1 = {4'h1,b1[N*4-4-1:0],{N*4{1'b0}}};
+		6'b001???:	mo1 = {4'h1,qNaN|3'd4,{N*4{1'b0}}};	// multiply inf * zero
 		6'b0001??:	mo1 = 0;	// mul inf's
 		6'b00001?:	mo1 = 0;	// mul inf's
 		6'b000001:	mo1 = 0;	// mul overflow
@@ -247,11 +248,12 @@ endmodule
 // Multiplier with normalization and rounding.
 
 module DFPMultiplynr(clk, ce, ld, a, b, o, rm, sign_exe, inf, overflow, underflow, done);
+parameter N=33;
 input clk;
 input ce;
 input ld;
-input  [127:0] a, b;
-output [127:0] o;
+input  [N*4+16+4-1:0] a, b;
+output [N*4+16+4-1:0] o;
 input [2:0] rm;
 output sign_exe;
 output inf;
@@ -260,9 +262,9 @@ output underflow;
 output done;
 
 wire done1, done1a;
-wire [243:0] o1;
+wire [(N+1)*4*2+16+4-1:0] o1;
 wire sign_exe1, inf1, overflow1, underflow1;
-wire [131:0] fpn0;
+wire [N*4+16+4-1+4:0] fpn0;
 
 DFPMultiply  u1 (clk, ce, ld, a, b, o1, sign_exe1, inf1, overflow1, underflow1, done1);
 DFPNormalize u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );

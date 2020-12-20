@@ -47,14 +47,15 @@
 import fp::*;
 
 module DFPDivide(rst, clk, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
+parameter N=33;
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
 input rst;
 input clk;
 input ce;
 input ld;
 input op;
-input [127:0] a, b;
-output [243:0] o;
+input  [N*4+16+4-1:0] a, b;
+output [(N+1)*4*2+16+4-1:0] o;
 output reg done;
 output sign_exe;
 output overflow;
@@ -69,7 +70,7 @@ reg	underflow=0;
 reg so, sxo;
 reg [3:0] st;
 reg [15:0] xo;
-reg [223:0] mo;
+reg [(N+1)*4*2-1:0] mo;
 assign o = {st,xo,mo};
 
 // constants
@@ -77,16 +78,16 @@ wire [15:0] infXp = 16'h9999;	// infinite / NaN - all ones
 // The following is the value for an exponent of zero, with the offset
 // eg. 8'h7f for eight bit exponent, 11'h7ff for eleven bit exponent, etc.
 // The following is a template for a quiet nan. (MSB=1)
-wire [107:0] qNaN  = {4'h1,{104{1'b0}}};
+wire [N*4-1:0] qNaN  = {4'h1,{(N-1)*4{1'b0}}};
 
 // variables
-wire [231:0] divo;
+wire [(N+2)*4*2-1:0] divo;
 
 // Operands
 wire sa, sb;			// sign bit
 wire sxa, sxb;
 wire [15:0] xa, xb;	// exponent bits
-wire [107:0] siga, sigb;
+wire [N*4-1:0] siga, sigb;
 wire a_dn, b_dn;			// a/b is denormalized
 wire az, bz;
 wire aInf, bInf;
@@ -111,9 +112,9 @@ delay #(.WID(1), .DEP(1)) udly1 (.clk(clk), .ce(ce), .i(ld), .o(ld1));
 // -----------------------------------------------------------
 wire done3a,done3;
 // Perform divide
-dfdiv #(108+8) u2 (.clk(clk), .ld(ld1), .a({siga,8'b0}), .b({sigb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
+dfdiv #(N+2) u2 (.clk(clk), .ld(ld1), .a({siga,8'b0}), .b({sigb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
 wire [7:0] lzcnt_bin = lzcnt[3:0] + (lzcnt[7:4] * 10);
-wire [231:0] divo1 = divo[231:0] << ({lzcnt_bin,2'b0}+(FPWID+44));
+wire [(N+2)*4*2-1:0] divo1 = divo[(N+2)*4*2-1:0] << ({lzcnt_bin,2'b0}+(N*4));//WAS FPWID=128?+44
 delay #(.WID(1), .DEP(3)) u3 (.clk(clk), .ce(ce), .i(done1), .o(done3a));
 assign done3 = done1&done3a;
 
@@ -208,15 +209,15 @@ else if (ce) begin
 		endcase
 
 		casez({aNan,bNan,qNaNOut,bInf,bz,over,aInf&bInf,az&bz})
-		8'b1???????:  begin mo <= {4'h1,a[107:0],{111{1'b0}}}; st[3] <= 1'b1; end
-		8'b01??????:  begin mo <= {4'h1,b[107:0],{111{1'b0}}}; st[3] <= 1'b1; end
-		8'b001?????:	begin mo <= {4'h1,qNaN[107:0]|{aInf,1'b0}|{az,bz},{1111{1'b0}}}; st[3] <= 1'b1; end
-		8'b0001????:	begin mo <= 224'd0;	st[3] <= 1'b0; end 	// div by inf
-		8'b00001???:	begin mo <= 224'd0;	st[3] <= 1'b0; end	// div by zero
-		8'b000001??:	begin mo <= 224'd0;	st[3] <= 1'b0; end 	// Inf exponent
-		8'b0000001?:	begin mo <= {4'h1,qNaN|`QINFDIV,{111{1'b0}}};	st[3] <= 1'b1; end 	// infinity / infinity
-		8'b00000001:	begin mo <= {4'h1,qNaN|`QZEROZERO,{111{1'b0}}};	st[3] <= 1'b1; end	// zero / zero
-		default:		begin mo <= divo1[231:8];	st[3] <= 1'b0; end	// plain div
+		8'b1???????:  begin mo <= {4'h1,a[N*4-1:0],{(N+1)*4-1{1'b0}}}; st[3] <= 1'b1; end
+		8'b01??????:  begin mo <= {4'h1,b[N*4-1:0],{(N+1)*4-1{1'b0}}}; st[3] <= 1'b1; end
+		8'b001?????:	begin mo <= {4'h1,qNaN[N*4-1:0]|{aInf,1'b0}|{az,bz},{(N+1)*4-1{1'b0}}}; st[3] <= 1'b1; end
+		8'b0001????:	begin mo <= {(N+1)*4*2-1{1'd0}};	st[3] <= 1'b0; end 	// div by inf
+		8'b00001???:	begin mo <= {(N+1)*4*2-1{1'd0}};	st[3] <= 1'b0; end	// div by zero
+		8'b000001??:	begin mo <= {(N+1)*4*2-1{1'd0}};	st[3] <= 1'b0; end 	// Inf exponent
+		8'b0000001?:	begin mo <= {4'h1,qNaN|`QINFDIV,{(N+1)*4-1{1'b0}}};	st[3] <= 1'b1; end 	// infinity / infinity
+		8'b00000001:	begin mo <= {4'h1,qNaN|`QZEROZERO,{(N+1)*4-1{1'b0}}};	st[3] <= 1'b1; end	// zero / zero
+		default:		begin mo <= divo1[(N+2)*4*2-1:8];	st[3] <= 1'b0; end	// plain div
 		endcase
 
 		st[0] <= sxo;
@@ -232,13 +233,14 @@ end
 endmodule
 
 module DFPDividenr(rst, clk, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
+parameter N=33;
 input rst;
 input clk;
 input ce;
 input ld;
 input op;
-input  [127:0] a, b;
-output [127:0] o;
+input  [N*4+16+4-1:0] a, b;
+output [N*4+16+4-1:0] o;
 input [2:0] rm;
 output sign_exe;
 output done;
@@ -246,14 +248,14 @@ output inf;
 output overflow;
 output underflow;
 
-wire [243:0] o1;
+wire [(N+1)*4*2+16+4-1:0] o1;
 wire sign_exe1, inf1, overflow1, underflow1;
-wire [131:0] fpn0;
+wire [N*4+16+4-1+4:0] fpn0;
 wire done1, done1a;
 
-DFPDivide    #(FPWID) u1 (rst, clk, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
-DFPNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
-DFPRound     #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+DFPDivide    #(.N(N)) u1 (rst, clk, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
+DFPNormalize #(.N(N)) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
+DFPRound     #(.N(N)) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));

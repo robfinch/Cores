@@ -36,22 +36,23 @@
 // ============================================================================
 
 module DFPDecompose(i, sgn, sx, exp, sig, xz, vz, inf, nan);
-input [127:0] i;
+parameter N=33;
+input [(N*4)+16+4-1:0] i;
 output sgn;
 output sx;
 output [15:0] exp;
-output [107:0] sig;
+output [N*4-1:0] sig;
 output xz;
 output vz;
 output inf;
 output nan;
 
-assign nan = i[127];
-assign sgn = i[126];
-assign inf = i[125];
-assign sx = i[124];
-assign exp = i[123:108];
-assign sig = i[107:0];
+assign nan = i[N*4+19];
+assign sgn = i[N*4+18];
+assign inf = i[N*4+17];
+assign sx = i[N*4+16];
+assign exp = i[N*4+15:N*4];
+assign sig = i[N*4-1:0];
 assign xz = ~|exp;
 assign vz = ~|{exp,sig};
 
@@ -59,13 +60,14 @@ endmodule
 
 
 module DFPDecomposeReg(clk, ce, i, sgn, sx, exp, sig, xz, vz, inf, nan);
+parameter N=33;
 input clk;
 input ce;
-input [127:0] i;
+input [N*4+16+4-1:0] i;
 output reg sgn;
 output reg sx;
 output reg [15:0] exp;
-output reg [107:0] sig;
+output reg [N*4-1:0] sig;
 output reg xz;
 output reg vz;
 output reg inf;
@@ -73,12 +75,12 @@ output reg nan;
 
 always @(posedge clk)
 	if (ce) begin
-		nan <= i[127];
-		sgn <= i[126];
-		inf <= i[125];
-		sx <= i[124];
-		exp <= i[123:108];
-		sig <= i[107:0];
+		nan <= i[N*4+19];
+		sgn <= i[N*4+18];
+		inf <= i[N*4+17];
+		sx <= i[N*4+16];
+		exp <= i[N*4+15:N*4];
+		sig <= i[N*4-1:0];
 		xz <= ~|exp;
 		vz <= ~|{exp,sig};
 	end

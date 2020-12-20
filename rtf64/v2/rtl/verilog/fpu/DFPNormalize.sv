@@ -41,10 +41,11 @@
 import fp::*;
 
 module DFPNormalize(clk, ce, i, o, under_i, under_o, inexact_o);
+parameter N=33;
 input clk;
 input ce;
-input [243:0] i;		// expanded format input
-output [131:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
+input [(N+1)*4*2+16+4-1:0] i;		// expanded format input
+output [N*4+16+4-1+4:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
 input under_i;
 output under_o;
 output inexact_o;
@@ -60,23 +61,23 @@ reg nan0;
 reg inf0;
 
 always @*
-	xo0 <= i[239:224];
+	xo0 <= i[(N+1)*4*2+15:(N+1)*4*2];
 always @*
-	so0 <= i[242];		// sign doesn't change
+	so0 <= i[(N+1)*4*2+16+4-2];		// sign doesn't change
 always @*
-	sx0 <= i[240];
+	sx0 <= i[(N+1)*4*2+16+4-4];
 always @*
-	nan0 <= i[243];
+	nan0 <= i[(N+1)*4*2+16+4-1];
 always @*
-	inf0 <= i[241] || xo0==16'h9999 && i[220];
+	inf0 <= i[(N+1)*4*2+16+4-3] || xo0==16'h9999 && i[(N+1)*4*2-4];
 
 // ----------------------------------------------------------------------------
 // Clock #1
 // - Capture exponent information
 // ----------------------------------------------------------------------------
 reg xInf1a, xInf1b, xInf1c;
-wire [243:0] i1;
-delay #(.WID(244),.DEP(1)) u11 (.clk(clk), .ce(ce), .i(i), .o(i1));
+wire [(N+1)*4*2+16+4-1:0] i1;
+delay #(.WID((N+2)*4*2+16+4),.DEP(1)) u11 (.clk(clk), .ce(ce), .i(i), .o(i1));
 
 always @(posedge clk)
 	if (ce) xInf1a <= xo0==16'h9999 & !under_i;
@@ -101,7 +102,7 @@ delay #(.WID(16),.DEP(2)) u23 (.clk(clk), .ce(ce), .i(xo0), .o(xo2));
 delay #(.WID(1),.DEP(2)) u24 (.clk(clk), .ce(ce), .i(under_i), .o(under2));
 
 always @(posedge clk)
-	if (ce) incExpByOne2 <= !xInf1a & i1[220];
+	if (ce) incExpByOne2 <= !xInf1a & i1[(N+1)*4*2-4];
 
 // ----------------------------------------------------------------------------
 // Clock #3
@@ -110,11 +111,11 @@ always @(posedge clk)
 // ----------------------------------------------------------------------------
 
 wire incExpByOne3;
-wire [243:0] i3;
+wire [(N+1)*4*2+16+4-1:0] i3;
 reg [15:0] xo3;
 reg zeroMan3;
 delay #(.WID(1),.DEP(1)) u32 (.clk(clk), .ce(ce), .i(incExpByOne2), .o(incExpByOne3));
-delay #(.WID(244),.DEP(3)) u33 (.clk(clk), .ce(ce), .i(i[243:0]), .o(i3));
+delay #(.WID((N+1)*4*2+16+4),.DEP(3)) u33 (.clk(clk), .ce(ce), .i(i[(N+3)*4*2+16+4-1:0]), .o(i3));
 
 wire [15:0] xo2a;
 BCDAddN #(.N(4)) ubcdan1
@@ -140,23 +141,23 @@ always @(posedge clk)
 // - create sticky bit
 // ----------------------------------------------------------------------------
 
-reg [115:0] mo4;
+reg [(N+2)*4-1:0] mo4;
 reg inexact4;
 
 always @(posedge clk)
 if(ce)
 casez({zeroMan3,incExpByOne3})
 2'b1?:	mo4 <= 1'd0;
-2'b01:	mo4 <= {i3[223:112],3'b0,|i3[111:0]};
-default:	mo4 <= {i3[219:108],3'b0,|i3[107:0]};
+2'b01:	mo4 <= {i3[(N+1)*4*2-1:(N+1)*4],3'b0,|i3[(N+1)*4-1:0]};
+default:	mo4 <= {i3[(N+1)*4*2-1-4:N*4],3'b0,|i3[N*4-1:0]};
 endcase
 
 always @(posedge clk)
 if(ce)
 casez({zeroMan3,incExpByOne3})
 2'b1?:	inexact4 <= 1'd0;
-2'b01:	inexact4 <= |i3[111:0];
-default:	inexact4 <= |i3[107:0];
+2'b01:	inexact4 <= |i3[(N+1)*4-1:0];
+default:	inexact4 <= |i3[N*4-1:0];
 endcase
 
 // ----------------------------------------------------------------------------
@@ -211,7 +212,7 @@ always @*
 begin
   got_one = 1'b0;
   lzc = 8'h00;
-  for (n = 115; n >= 0; n = n - 4) begin
+  for (n = (N+2)*4-1; n >= 0; n = n - 4) begin
     if (!got_one) begin
       if (mo4[n]|mo4[n-1]|mo4[n-2]|mo4[n-3])
         got_one = 1'b1;
@@ -225,7 +226,7 @@ always @(posedge clk)
 `else
 always @(posedge clk)
 if (ce)
-casez(mo4[111:103])
+casez(mo4[(N+1)*4-1:(N-1)*4-1])
 8'h00000000:	leadingZeros5 <= 8'd2;
 8'h0000????:	leadingZeros5 <= 8'd1;
 default:			leadingZeros5 <= 8'd0;
@@ -249,11 +250,11 @@ reg [7:0] rshiftAmt6;
 wire rightOrLeft6;	// 0=left,1=right
 wire xInf6;
 wire [15:0] xo6;
-wire [115:0] mo6;
+wire [(N+2)*4-1:0] mo6;
 wire zeroMan6;
 vtdl #(1) u61 (.clk(clk), .ce(ce), .a(4'd5), .d(under_i), .q(rightOrLeft6) );
 delay #(.WID(16),.DEP(1)) u62 (.clk(clk), .ce(ce), .i(xo5), .o(xo6));
-delay #(.WID(116),.DEP(2)) u63 (.clk(clk), .ce(ce), .i(mo4), .o(mo6) );
+delay #(.WID((N+2)*4),.DEP(2)) u63 (.clk(clk), .ce(ce), .i(mo4), .o(mo6) );
 delay #(.WID(1),.DEP(1)) u64 (.clk(clk), .ce(ce), .i(xInf5), .o(xInf6) );
 delay #(.WID(1),.DEP(3)) u65 (.clk(clk), .ce(ce),  .i(zeroMan3), .o(zeroMan6));
 delay #(.WID(1),.DEP(5)) u66 (.clk(clk), .ce(ce), .i(sx0), .o(sx5) );
@@ -264,7 +265,7 @@ always @(posedge clk)
 	if (ce) lshiftAmt6 <= {leadingZeros5 > xo5d ? xo5d : leadingZeros5,2'b0};
 
 always @(posedge clk)
-	if (ce) rshiftAmt6 <= xInf5 ? 1'd0 : sx5 ? 1'd0 : xo5d > 14'd24 ? 8'd96 : {xo5d[5:0],2'b00};	// xo2 is negative !
+	if (ce) rshiftAmt6 <= xInf5 ? 1'd0 : sx5 ? 1'd0 : xo5d > N ? N*4 : {xo5d[5:0],2'b00};	// xo2 is negative !
 
 // ----------------------------------------------------------------------------
 // Clock edge #7
@@ -275,7 +276,7 @@ always @(posedge clk)
 
 reg [15:0] xo7;
 wire rightOrLeft7;
-reg [115:0] mo7l, mo7r;
+reg [(N+2)*4-1:0] mo7l, mo7r;
 reg St6,St7;
 delay #(.WID(1),.DEP(1)) u71 (.clk(clk), .ce(ce), .i(rightOrLeft6), .o(rightOrLeft7));
 
@@ -308,7 +309,7 @@ always @(posedge clk)
 always @*
 begin
   St6 = 1'b0;
-  for (n = 0; n < 116; n = n + 1)
+  for (n = 0; n < (N+2)*4; n = n + 1)
     if (n <= rshiftAmt6 + 1) St6 = St6|mo6[n];
 end
 always @(posedge clk)
@@ -321,7 +322,7 @@ always @(posedge clk)
 
 wire so,sxo,nano,info;
 wire [15:0] xo;
-reg [115:0] mo;
+reg [(N+2)*4-1:0] mo;
 vtdl #(1) u81 (.clk(clk), .ce(ce), .a(4'd7), .d(so0), .q(so) );
 delay #(.WID(16),.DEP(1)) u82 (.clk(clk), .ce(ce), .i(xo7), .o(xo));
 vtdl #(.WID(1)) u83 (.clk(clk), .ce(ce), .a(4'd3), .d(inexact4), .q(inexact_o));
@@ -333,7 +334,7 @@ vtdl #(1) u87 (.clk(clk), .ce(ce), .a(4'd7), .d(inf0), .q(info) );
 always @(posedge clk)
 	if (ce) mo <= rightOrLeft7 ? mo7r|{St7,4'b0} : mo7l;
 
-assign o = {nano,so,info,sxo,xo,mo[115:4]};
+assign o = {nano,so,info,sxo,xo,mo[(N+2)*4-1:4]};
 
 endmodule
 	

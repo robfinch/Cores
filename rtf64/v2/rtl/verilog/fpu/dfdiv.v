@@ -37,7 +37,8 @@
 // ============================================================================
 
 module dfdiv(clk, ld, a, b, q, r, done, lzcnt);
-parameter FPWID = 108;
+parameter N=33;
+localparam FPWID = N*4;
 parameter RADIX = 10;
 localparam FPWID1 = FPWID;//((FPWID+2)/3)*3;    // make FPWIDth a multiple of three
 localparam DMSB = FPWID1-1;
@@ -57,7 +58,7 @@ parameter SUBN = 2'd1;
 parameter DONE = 2'd2;
 
 reg [3:0] cnt;				// iteration count
-reg [5:0] dcnt;				// digit count
+reg [7:0] dcnt;				// digit count
 reg [9:0] clkcnt;
 reg [FPWID*2-1:0] qi = 0;
 reg [FPWID+4-1:0] ri = 0;
@@ -168,7 +169,7 @@ end
 
 always #5 clk = ~clk;
 
-dfdiv #(108) u1 (
+dfdiv #(.N(27)) u1 (
 	.clk(clk),
 	.ld(ld), 
 	.a(a),

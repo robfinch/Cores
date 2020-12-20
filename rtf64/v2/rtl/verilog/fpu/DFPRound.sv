@@ -48,11 +48,12 @@ import fp::*;
 `endif
 
 module DFPRound(clk, ce, rm, i, o);
+parameter N=33;
 input clk;
 input ce;
 input [2:0] rm;			// rounding mode
-input [131:0] i;		// intermediate format input
-output [127:0] o;		// rounded output
+input [N*4+16+4+4-1:0] i;		// intermediate format input
+output [N*4+16+4-1:0] o;		// rounded output
 
 parameter ROUND_CEILING = 3'd0;
 parameter ROUND_FLOOR = 3'd1;
@@ -64,11 +65,11 @@ parameter ROUND_DOWN = 3'd4;
 // variables
 wire [3:0] so;
 wire [15:0] xo;
-reg  [107:0] mo;
+reg  [N*4-1:0] mo;
 reg [15:0] xo1;
-reg [107:0] mo1;
-wire xInf = i[127:112]==16'h9999;
-wire so0 = i[130];
+reg [N*4-1:0] mo1;
+wire xInf = i[N*4+16+4-1:(N+1)*4]==16'h9999;
+wire so0 = i[N*4+16+4-2];
 assign o = {so,xo,mo};
 
 wire [3:0] l = i[7:4];
@@ -82,9 +83,9 @@ reg rnd;
 //------------------------------------------------------------
 
 always @`PIPE_ADV
-if (ce) xo1 <= i[127:112];
+if (ce) xo1 <= i[N*4+16+4-1:(N+1)*4];
 always @`PIPE_ADV
-if (ce) mo1 <= i[111:4];
+if (ce) mo1 <= i[(N+1)*4-1:4];
 
 // Compute the round bit
 // Infinities and NaNs are not rounded!
@@ -109,20 +110,20 @@ if (ce)
 // note: exponent increments if there is a carry (can only increment to infinity)
 //------------------------------------------------------------
 
-wire [123:0] rounded1;
+wire [N*4+16+4-1-4:0] rounded1;
 wire co1;
 
-BCDAddN #(.N(31)) ubcdan1
+BCDAddN #(.N(N+4)) ubcdan1
 (
 	.ci(1'b0),
 	.a({xo1,mo1}),
-	.b({123'd0,rnd}),
+	.b({{N*4+16+4-1-4{1'd0}},rnd}),
 	.o(rounded1),
 	.co(co1)
 );
 
 
-reg [123:0] rounded2;
+reg [N*4+16+4-1-4:0] rounded2;
 reg carry2;
 reg rnd2;
 reg dn2;
@@ -135,30 +136,30 @@ always @`PIPE_ADV
 	if (ce) rnd2 <= rnd;
 always @`PIPE_ADV
 	if (ce) dn2 <= !(|xo1);
-assign xo2 = rounded2[123:108];
+assign xo2 = rounded2[N*4+16+4-1-4:N*4];
 
 //------------------------------------------------------------
 // Clock #3
 // - shift mantissa if required.
 //------------------------------------------------------------
 `ifdef MIN_LATENCY
-assign so = i[131:128];
+assign so = i[N*4+16+4+3:N*4+16+4];
 assign xo = xo2;
 `else
-delay3 #(4) u21 (.clk(clk), .ce(ce), .i(i[131:128]), .o(so));
+delay3 #(4) u21 (.clk(clk), .ce(ce), .i(i[N*4+16+4+3:N*4+16+4]), .o(so));
 delay1 #(16) u22 (.clk(clk), .ce(ce), .i(xo2), .o(xo));
 `endif
 
 always @`PIPE_ADV
 if (ce)
 	casez({rnd2,xo2==16'h9999,carry2,dn2})
-	4'b0??0:	mo <= mo1[107:0];							// not rounding, not denormalized
-	4'b0??1:	mo <= mo1[107:0];							// not rounding, denormalized
-	4'b1000:	mo <= rounded2[107: 0];				// exponent didn't change, number was normalized
-	4'b1001:	mo <= rounded2[107: 0];				// exponent didn't change, but number was denormalized
-	4'b1010:	mo <= {4'h1,rounded2[107: 4]};	// exponent incremented (new MSD generated), number was normalized
-	4'b1011:	mo <= rounded2[107:0];					// exponent incremented (new MSB generated), number was denormalized, number became normalized
-	4'b11??:	mo <= 108'd0;									// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
+	4'b0??0:	mo <= mo1[N*4-1:0];							// not rounding, not denormalized
+	4'b0??1:	mo <= mo1[N*4-1:0];							// not rounding, denormalized
+	4'b1000:	mo <= rounded2[N*4-1: 0];				// exponent didn't change, number was normalized
+	4'b1001:	mo <= rounded2[N*4-1: 0];				// exponent didn't change, but number was denormalized
+	4'b1010:	mo <= {4'h1,rounded2[N*4-1: 4]};	// exponent incremented (new MSD generated), number was normalized
+	4'b1011:	mo <= rounded2[N*4-1:0];					// exponent incremented (new MSB generated), number was denormalized, number became normalized
+	4'b11??:	mo <= {N*4{1'd0}};									// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
 	endcase
 
 endmodule
