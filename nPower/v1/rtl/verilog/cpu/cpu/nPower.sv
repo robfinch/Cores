@@ -34,7 +34,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
-`define SIM   1'b1
+//`define SIM   1'b1
 import nPowerPkg::*;
 
 module nPower(rst_i, clk_i, vpa_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
@@ -91,6 +91,7 @@ reg [31:0] dimm [0:1];
 reg [1:0] dmod_pc;
 reg [AWID-1:0] dnext_pc [0:1];
 reg [1:0] illegal_insn;
+reg [1:0] d_addi;
 reg [1:0] d_ld, d_st;
 reg [1:0] d_cmp;
 reg [1:0] d_bc;
@@ -120,6 +121,7 @@ reg [31:0] ria [0:1];
 reg [31:0] rib [0:1];
 reg [31:0] ric [0:1];
 reg [1:0] r_lsu;
+reg [1:0] r_ra0;
 reg [1:0] r_ld, r_st;
 reg [1:0] r_cmp;
 reg [1:0] r_bc;
@@ -129,7 +131,7 @@ reg [31:0] rctr;
 reg [31:0] rxer;
 
 // Execute stage vars
-reg [5:0] estate [0:1];
+reg [2:0] estate [0:1];
 wire advance_e;
 reg [1:0] execute_done;
 reg [1:0] eval;
@@ -150,6 +152,7 @@ reg [AWID-1:0] eea [0:1];
 reg [1:0] eillegal_insn;
 reg [1:0] emod_pc;
 reg [AWID-1:0] enext_pc [0:1];
+reg [1:0] e_ra0;
 reg [1:0] e_ld, e_st;
 reg [1:0] e_lsu;
 reg [1:0] e_cmp;
@@ -158,6 +161,8 @@ reg [AWID-1:0] elr [0:1];
 reg [31:0] ectr [0:1];
 reg [31:0] ecr [0:1];
 reg [31:0] exer [0:1];
+reg [1:0] etrap;
+reg [7:0] ecause [0:1];
 
 // Memory stage vars
 reg [2:0] mstate [0:1];
@@ -173,6 +178,7 @@ reg [1:0] mwrlr, mwrctr;
 reg [1:0] mwrxer;
 reg [AWID-1:0] ea [0:1];
 reg [31:0] mid [0:1];
+reg [31:0] mia [0:1];
 reg [31:0] mres [0:1];
 reg [1:0] millegal_insn;
 reg [1:0] m_lsu;
@@ -185,11 +191,13 @@ reg [31:0] sel;
 reg [255:0] dat = 256'd0, dati = 256'd0;
 reg maccess;
 reg [AWID-1:0] iadr;
+reg [7:0] mcause [0:1];
 
 // Writeback stage vars
 reg [2:0] wstate;
 wire advance_w;
 reg writeback_done;
+reg [31:0] wia [0:1];
 reg [31:0] wwres;
 reg [31:0] wres[0:1];
 reg [AWID-1:0] wea [0:1];
@@ -217,6 +225,7 @@ reg [AWID-1:0] wlr [0:1];
 reg [31:0] wctr [0:1];
 reg [31:0] wxer [0:1];
 reg [31:0] wwxer;
+reg [7:0] wcause [0:1];
 
 reg [31:0] tick;
 reg [31:0] inst_ctr;
@@ -228,6 +237,9 @@ reg [1:0] twrrf;
 reg [5:0] tRd [0:1];
 reg [31:0] tres [0:1];
 
+reg [31:0] msr;
+wire ribo = msr[0];
+reg [31:0] srr0, srr1;
 reg [31:0] xer = 32'd0;
 reg [31:0] regfile [0:63];
 initial begin
@@ -281,7 +293,7 @@ assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0] && r_st[0]) || (rRa[
 								 	  ((rrdlr[0] & ewrlr[1]) || (rrdctr[0] & ewrctr[1]) || (rrdxer[0] & ewrxer[1]) || (rrdcrf[0] & ewrcrf[1]) && rval[0] && eval[1])
                 		;
 assign stall_r[1] = stall_r[0] ||
-										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0] && rval[1]) ||
+										((rRd[1]==rRd[0] || rRa[1]==rRd[0] || rRb[1]==rRd[0] || rRc[1]==rRd[0]) && rval[0] && rval[1] && rwrrf[0]) ||
 								 		((e_ld[0]||e_st[0]) && ((rRd[1]==eRd[0] && r_st[1]) || (rRa[1]==eRd[0]) || (rRb[1]==eRd[0]) || (rRc[1]==eRd[0])) && eval[0] && rval[1]) ||
 								 	 	((e_ld[1]||e_st[1]) && ((rRd[1]==eRd[1] && r_st[1]) || (rRa[1]==eRd[1]) || (rRb[1]==eRd[1]) || (rRc[1]==eRd[1])) && eval[1] && rval[1]) ||
 								 		((e_st[0] & e_lsu[0]) && ((rRd[1]==eRa[0]) || (rRa[1]==eRa[0]) || (rRb[1]==eRa[0]) || (rRc[1]==eRa[0])) && eval[0] && rval[1]) ||
@@ -367,8 +379,95 @@ begin
 end
 
 wire [63:0] prodr [0:1];
+wire [63:0] prodi [0:1];
 assign prodr[0] = $signed(ia[0]) * $signed(ib[0]);
 assign prodr[1] = $signed(ia[1]) * $signed(ib[1]);
+assign prodi[0] = $signed(ia[0]) * $signed(imm[0]);
+assign prodi[1] = $signed(ia[1]) * $signed(imm[1]);
+
+wire [31:0] cntlzo [1:0];
+
+cntlz32 uclz1 (
+	.i(ia[0]),
+	.o(cntlzo[0])
+);
+
+cntlz32 uclz2 (
+	.i(ia[1]),
+	.o(cntlzo[1])
+);
+
+reg [1:0] alu_ld;
+reg [1:0] div_sign;
+wire [1:0] div_done;
+wire [127:0] divo1 [0:1];
+wire [31:0] divo [0:1];
+
+divr2 #(.FPWID(32)) udv1
+(
+	.clk4x(clk_g),
+	.ld(alu_ld[0]),
+	.a(ia[0]),
+	.b(ib[0]),
+	.q(divo[0]),
+	.r(),
+	.done(div_done[0]),
+	.lzcnt()
+);
+
+divr2 #(.FPWID(32)) udv2
+(
+	.clk4x(clk_g),
+	.ld(alu_ld[1]),
+	.a(ia[1]),
+	.b(ib[1]),
+	.q(divo[1]),
+	.r(),
+	.done(div_done[1]),
+	.lzcnt()
+);
+
+/* Include this with a huge FPGA for better performance
+assign divo[0] = divo1[0][95:64]; 
+assign divo[1] = divo1[1][95:64]; 
+DivGoldschmidt  #(.FPWID(64),.WHOLE(32),.POINTS(32)) udgs1
+(
+	.rst(rst_i),
+	.clk(clk_g),
+	.ld(alu_ld[0]),
+	.a({ia[0],32'd0}),
+	.b({ib[0],32'd0}),
+	.q(divo1[0]),
+	.done(div_done[0]),
+	.lzcnt()
+);
+
+DivGoldschmidt  #(.FPWID(64),.WHOLE(32),.POINTS(32)) udgs2
+(
+	.rst(rst_i),
+	.clk(clk_g),
+	.ld(alu_ld[1]),
+	.a({ia[1],32'd0}),
+	.b({ib[1],32'd0}),
+	.q(divo1[1]),
+	.done(div_done[1]),
+	.lzcnt()
+);
+*/
+
+wire [4:0] trp [0:1];
+
+assign trp[0][0] = $signed(ia[0]) < $signed(imm[0]);
+assign trp[0][1] = $signed(ia[0]) > $signed(imm[0]);
+assign trp[0][2] = ia[0] == imm[0];
+assign trp[0][3] = ia[0] < imm[0];
+assign trp[0][4] = ia[0] > imm[0];
+
+assign trp[1][0] = $signed(ia[1]) < $signed(imm[1]);
+assign trp[1][1] = $signed(ia[1]) > $signed(imm[1]);
+assign trp[1][2] = ia[1] == imm[1];
+assign trp[1][3] = ia[1] < imm[1];
+assign trp[1][4] = ia[1] > imm[1];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Instruction cache
@@ -511,6 +610,7 @@ if (rst_i) begin
   iaccess <= FALSE;
   inst_ctr <= 32'd0;
   inst_ctr2 <= 32'd0;
+  msr <= 32'd1;		// little endian mode
   igoto (IFETCH1);
 end
 else begin
@@ -755,12 +855,14 @@ begin
     dimm[which] <= 32'd0;
     d_ld[which] <= FALSE;
     d_st[which] <= FALSE;
+    d_addi[which] <= FALSE;
     d_cmp[which] <= FALSE;
     d_bc[which] <= FALSE;
     dbrpred[which] <= FALSE;
     rbrpred[which] <= FALSE;
     r_ld[which] <= FALSE;
     r_st[which] <= FALSE;
+    r_ra0[which] <= FALSE;
     r_lsu[which] <= FALSE;
     r_cmp[which] <= FALSE;
     r_bc[which] <= FALSE;
@@ -824,6 +926,7 @@ begin
         d_cmp[which] <= FALSE;
         d_ld[which] <= FALSE;
         d_st[which] <= FALSE;
+        d_addi[which] <= FALSE;
         dimm[which] <= 32'd0;
 		    dnext_pc[which] <= RSTPC;
         case(ir[which][31:26])
@@ -831,12 +934,18 @@ begin
           case(ir[which][10:1])
           ADD,ADDO,ADDC,ADDCO,ADDE,ADDEO,ADDME,ADDMEO,ADDZE,ADDZEO:
           	begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
+          SUBFME,SUBFMEO,SUBFZE,SUBFZEO,SUBFC,SUBFCO,SUBFE,SUBFEO:
+          	begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           SUBF,SUBFO:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           NEG: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           CMP: begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_cmp[which] <= TRUE; end
           CMPL:begin wrcrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_cmp[which] <= TRUE; end
           MULLW: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           MULLWO: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; wrxer[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          DIVW:		begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
+          DIVWO:	begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; wrxer[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          DIVWU:	begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
+          DIVWUO: begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; wrxer[which] <= TRUE; illegal_insn[which] <= FALSE; end
           AND,ANDC,OR,ORC,XOR,NAND,NOR,EQV,SLW,SRW,SRAW:
           	begin
           		Ra[which] <= ir[which][25:21];
@@ -848,6 +957,7 @@ begin
           SRAWI:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           EXTSB:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           EXTSH:begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
+          CNTLZW:	begin wrrf[which] <= TRUE; wrcrf[which] <= ir[which][0]; illegal_insn[which] <= FALSE; end
           LBZX:   begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
           LHZX:   begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
           LWZX:   begin wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
@@ -884,8 +994,39 @@ begin
             end
           default:  ;
           endcase
-        ADDI:  begin wrrf[which] <= TRUE; dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; end
-        ADDIS: begin wrrf[which] <= TRUE; dimm[which] <= {ir[which][15:0],16'h0000}; illegal_insn[which] <= FALSE; end
+        ADDI:
+        	begin
+        		d_addi[which] <= TRUE;
+        		wrrf[which] <= TRUE;
+        		dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]};
+        		illegal_insn[which] <= FALSE;
+        	end
+        ADDIC:
+        	begin
+        		wrrf[which] <= TRUE;
+        		dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]};
+        		illegal_insn[which] <= FALSE;
+        	end
+        ADDICD:
+        	begin
+        		wrrf[which] <= TRUE;
+        		wrcrf[which] <= TRUE;
+        		dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]};
+        		illegal_insn[which] <= FALSE;
+        	end
+        ADDIS:
+        	begin
+        		d_addi[which] <= TRUE;
+        		wrrf[which] <= TRUE;
+        		dimm[which] <= {ir[which][15:0],16'h0000};
+        		illegal_insn[which] <= FALSE;
+        	end
+        SUBFIC:
+        	begin
+        		wrrf[which] <= TRUE;
+        		dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]};
+        		illegal_insn[which] <= FALSE;
+        	end
         CMPI:  begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; wrcrf[which] <= TRUE; d_cmp[which] <= TRUE; end
         CMPLI: begin dimm[which] <= {16'h0000,ir[which][15:0]}; illegal_insn[which] <= FALSE; wrcrf[which] <= TRUE; d_cmp[which] <= TRUE; end
         MULLI: begin wrrf[which] <= TRUE; dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; end
@@ -946,15 +1087,20 @@ begin
           CREQV: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
           CRANDC:begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
           CRORC: begin wrcrf[which] <= TRUE; rdcrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+          RFI:
+          	begin
+          		if (dval[which]) begin
+          			dmod_pc[which] <= TRUE;
+          			dnext_pc[which] <= srr1;
+          		end
+          	end
           default:  ;
           endcase
 
-        LBZ:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
-        LHZ:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
-        LWZ:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
-        LBZU:  begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; lsu[which] <= TRUE; end
-        LHZU:  begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; lsu[which] <= TRUE; end
-        LWZU:  begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; lsu[which] <= TRUE; end
+        LBZ,LHZ,LWZ:  
+        	begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; end
+        LBZU,LHZU,LWZU:
+        	begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; d_ld[which] <= TRUE; lsu[which] <= TRUE;	end
         STB:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; d_st[which] <= TRUE; end
         STH:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; d_st[which] <= TRUE; end
         STW:   begin dimm[which] <= {{16{ir[which][15]}},ir[which][15:0]}; illegal_insn[which] <= FALSE; d_st[which] <= TRUE; end
@@ -983,6 +1129,8 @@ begin
         r_lsu[which] <= lsu[which];
         r_ld[which] <= d_ld[which];
         r_st[which] <= d_st[which];
+        if (d_ld|d_st|d_addi)
+        	r_ra0[which] <= ir[which][20:16]==5'd0;
         r_bc[which] <= d_bc[which];
         rwrrf[which] <= wrrf[which];
         rwrcrf[which] <= wrcrf[which];
@@ -1004,10 +1152,14 @@ endtask
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Register Fetch Stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+wire fwd  = rRa[0]==eRd[1] && eval[1] && ewrrf[1];
+wire fwd3 = rRa[0]==eRd[0] && eval[0] && ewrrf[0];
+
 task tRegFetch;
 if (rst_i) begin
   e_ld <= 2'b00;
-  e_st <= 2'b0;
+  e_st <= 2'b00;
+  e_ra0 <= 2'b00;
   e_lsu <= 2'b00;
   e_bc <= 2'b00;
   eRd[0] <= 6'd0;
@@ -1163,7 +1315,7 @@ endcase
   	else if (stall_r[0]|stall_r[1])
   		stall_ctr <= stall_ctr + 1'd1;
 
-	  if (rRa[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	  if (rRa[0]==6'd0 && r_ra0[0] && rval[0])
 	    ia[0] <= 32'd0;
 	  else if (rRa[0]==eRd[1] && eval[1] && ewrrf[1])
 	    ia[0] <= eres[1];
@@ -1198,7 +1350,7 @@ endcase
 	  else
 	    ia[0] <= rfoa[0];
 
-	  if (rRa[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
+	  if (rRa[1]==6'd0 && r_ra0[1] && rval[1])
 	    ia[1] <= 32'd0;
 	  else if (rRa[1]==eRd[1] && eval[1] && ewrrf[1])
 	    ia[1] <= eres[1];
@@ -1233,9 +1385,7 @@ endcase
 	  else
 	    ia[1] <= rfoa[1];
 
-	  if (rRb[0]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ib[0] <= 32'd0;
-	  else if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
+	  if (rRb[0]==eRd[1] && eval[1] && ewrrf[1])
 	    ib[0] <= eres[1];
 	  else if (rRb[0]==eRa[1] && eval[1] && e_lsu[1])
 	    ib[0] <= eea[1];
@@ -1262,9 +1412,7 @@ endcase
 	  else
 	    ib[0] <= rfob[0];
 
-	  if (rRb[1]==6'd0 && (r_ld[0]|r_st[0]) && rval[0])
-	    ib[1] <= 32'd0;
-	  else if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
+	  if (rRb[1]==eRd[1] && eval[1] && ewrrf[1])
 	    ib[1] <= eres[1];
 	  else if (rRb[1]==eRa[1] && eval[1] && e_lsu[1])
 	    ib[1] <= eea[1];
@@ -1668,16 +1816,23 @@ begin
     mwrctr[which] <= FALSE;
     mwrrf[which] <= FALSE;
     mwrxer[which] <= FALSE;
+    mia[which] <= 32'd0;
+    ecause[which] <= 8'h00;
+    mcause[which] <= 8'h00;
+		etrap[which] <= FALSE;
     takb[which] <= FALSE;
     millegal_insn[which] <= FALSE;
   end
   else begin
+  	alu_ld[which] <= FALSE;
     case(estate[which])
     EXECUTE:
       begin
         estate[which] <= EFLAGS;
         emod_pc[which] <= FALSE;
 		    takb[which] <= FALSE;
+				etrap[which] <= FALSE;
+		   	ecause[which] <= 8'h00;
         case(eir[which][31:26])
         R2:
           case(eir[which][10:1])
@@ -1690,8 +1845,21 @@ begin
           ADDE,ADDEO:	eres[which] <= ia[which] + ib[which] + exer[which][30];
           SUBF: eres[which] <= ib[which] - ia[which];
           SUBFO: eres[which] <= ib[which] - ia[which];
+          SUBFME,SUBFMEO:
+          	eres[which] <= -32'd1 - ia[which] - ~exer[which][30];
+          SUBFZE,SUBFZEO:
+          	eres[which] <= -ia[which] - ~exer[which][30];
+          SUBFC,SUBFCO:
+          	eres[which] <= ib[which] - ia[which];
+          SUBFE,SUBFEO:
+          	eres[which] <= ib[which] - ia[which] - ~exer[which][30];
+          	
           MULLW:  eres[which] <= prodr[which][31:0];
           MULLWO: eres[which] <= prodr[which][31:0];
+          DIVW:		estate[which] <= EDIV1;
+          DIVWU:	begin alu_ld[which] <= TRUE; estate[which] <= EDIV2; div_sign[which] <= 1'b0; end
+          DIVWO:	estate[which] <= EDIV1;
+          DIVWUO:	begin alu_ld[which] <= TRUE; estate[which] <= EDIV2; div_sign[which] <= 1'b0; end
           NEG:  eres[which] <= -ia[which];
           CMP:  
             begin
@@ -1829,6 +1997,7 @@ begin
           SRW:  eres[which] <= ia[which] >> ib[which];
           SRAW: eres[which] <= ia[which][31] ? {32'hFFFFFFFF,ia[which]} >> ib[which] : ia[which] >> ib[which];
           SRAWI:eres[which] <= ia[which][31] ? {32'hFFFFFFFF,ia[which]} >> eir[which][15:11] : ia[which] >> eir[which][15:11];
+          CNTLZW:	eres[which] <= cntlzo[which];
           LBZX,LBZUX:  begin eea[which] <= ia[which] + ib[which]; end
           LHZX,LHZUX:  begin eea[which] <= ia[which] + ib[which]; end
           LWZX,LWZUX:  begin eea[which] <= ia[which] + ib[which]; end
@@ -1858,9 +2027,12 @@ begin
               if (eir[which][18]) ecr[which][27:24] <= ia[which][27:24];
               if (eir[which][19]) ecr[which][31:28] <= ia[which][31:28];
             end
+          MFMSR:	eres[which] <= msr;
           MFSPR:
             case(eir[which][20:11])
             10'd32:   eres[which] <= exer[which];
+            10'd26:		eres[which] <= srr0;
+            10'd27:		eres[which] <= srr1;
             10'd256:  eres[which] <= elr[which];
             10'd288:  eres[which] <= ectr[which];
             default:  ;
@@ -1874,9 +2046,11 @@ begin
             endcase
           default:  ;
           endcase
-        ADDI:  eres[which] <= ia[which] + imm[which];
+        ADDI,ADDIC,ADDICD:
+        	eres[which] <= ia[which] + imm[which];
         ADDIS: eres[which] <= ia[which] + imm[which];
-        MULLI: eres[which] <= $signed(ia[which]) * $signed(imm[which]);
+        SUBFIC:	eres[which] <= imm[which] - ia[which];
+        MULLI: eres[which] <= prodi[which][31:0];
         CMPI:
           begin
             case(eir[which][25:23])
@@ -2006,6 +2180,22 @@ begin
         RLWINM:     eres[which] <= rlwinm_o[which];
         RLWNM:      eres[which] <= rlwnm_o[which];
 
+				TWI:
+					begin
+						case(eir[which][25:21])
+						5'd1:	etrap[which] <=  trp[which][4];							// gtu
+						5'd2: etrap[which] <=  trp[which][3];							// ltu
+						5'd4: etrap[which] <=  trp[which][2];							// eq
+						5'd5:	etrap[which] <=  trp[which][4]|trp[which][2];	// geu
+						5'd6: etrap[which] <=  trp[which][3]|trp[which][2];	// leu
+						5'd8:	etrap[which] <=  trp[which][1];							// gt
+						5'd12:etrap[which] <= ~trp[which][0];							// nlt / ge
+						5'd16:etrap[which] <=  trp[which][0];							// lt
+						5'd20:etrap[which] <= ~trp[which][1];							// ngt
+						5'd24:etrap[which] <= ~trp[which][2];							// ne
+						5'd31:etrap[which] <=  TRUE;
+						endcase
+					end
         B:  eres[which] <= epc[which] + 3'd4;
         BC: 
         	begin
@@ -2242,6 +2432,7 @@ begin
           	end
          	ADDC:
          		begin
+         			// (a&b)|(a&~s)|(b&~s)
          			exer[which][29] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
          			exer[which][19] <= (ia[which][31]&ib[which][31])|(ia[which][31]&~eres[which][31])|(ib[which][31]&~eres[which][31]);
          		end
@@ -2259,6 +2450,19 @@ begin
           		exer[which][30] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
           		exer[which][20] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
           	end
+          SUBFC:
+          	begin
+	       			exer[which][29] <= (~ib[which][31]&ia[which][31])|(eres[which][31]&~ib[which][31])|(eres[which][31]&ia[which][31]);
+  	     			exer[which][19] <= (~ib[which][31]&ia[which][31])|(eres[which][31]&~ib[which][31])|(eres[which][31]&ia[which][31]);
+          	end
+          SUBFCO,SUBFEO,SUBFMEO,SUBFZEO:
+          	begin
+          		exer[which][31] <= exer[which][31] | (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
+          		exer[which][30] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
+          		exer[which][20] <= (1'b1^ eres[which][31] ^ ia[which][31]) & (ia[which][31] ^ ib[which][31]);
+	       			exer[which][29] <= (~ib[which][31]&ia[which][31])|(eres[which][31]&~ib[which][31])|(eres[which][31]&ia[which][31]);
+  	     			exer[which][19] <= (~ib[which][31]&ia[which][31])|(eres[which][31]&~ib[which][31])|(eres[which][31]&ia[which][31]);
+          	end
           MULLWO:
           	begin
               exer[which][31] <= exer[which][31] | (prodr[which][63:32] != {32{prodr[which][31]}}); // summary overflow
@@ -2267,6 +2471,17 @@ begin
           	end
           default:	;
           endcase
+        ADDIC,ADDICD:
+       		begin
+       			exer[which][29] <= (ia[which][31]&imm[which][31])|(ia[which][31]&~eres[which][31])|(imm[which][31]&~eres[which][31]);
+       			exer[which][19] <= (ia[which][31]&imm[which][31])|(ia[which][31]&~eres[which][31])|(imm[which][31]&~eres[which][31]);
+       		end
+       	SUBFIC:
+       		begin
+       			// (~a&b)|(s&~a)|(s&b)
+       			exer[which][29] <= (~imm[which][31]&ia[which][31])|(eres[which][31]&~imm[which][31])|(eres[which][31]&ia[which][31]);
+       			exer[which][19] <= (~imm[which][31]&ia[which][31])|(eres[which][31]&~imm[which][31])|(eres[which][31]&ia[which][31]);
+       		end
         default:	;
 				endcase      	
         if (ewrcrf[which] & ~e_cmp) begin
@@ -2296,6 +2511,29 @@ begin
         execute_done[which] <= TRUE;
         estate[which] <= EWAIT;
       end        
+    EDIV1:
+    	begin
+    		alu_ld[which] <= TRUE;
+    		div_sign[which] <= ia[which][31] ^ ib[which][31];
+    		if (ia[which][31]) ia[which] <= -ia[which];
+    		if (ib[which][31]) ib[which] <= -ib[which];
+    		estate[which] <= EDIV2;
+    	end
+    EDIV2:
+    	begin
+    		if (div_done[which]) begin
+    			if (div_sign[which])
+    				eres[which] <= -divo[which];
+    			else
+    				eres[which] <= divo[which];
+    			if (ewrcrf[which])
+    				estate[which] <= EFLAGS;
+    			else begin
+    				execute_done[which] <= TRUE;
+    				estate[which] <= EWAIT;
+    			end
+    		end
+   	 	end
     EWAIT:
       if (advance_e) begin
         execute_done[which] <= FALSE;
@@ -2307,7 +2545,8 @@ begin
         mir[which] <= eir[which];
         m_lsu[which] <= e_lsu[which];
         m_st[which] <= e_st[which];
-        mval[which] <= eval[which];
+	      mval[which] <= eval[which];
+	      mia[which] <= ia[which];
         mres[which] <= eres[which];
         mcr[which] <= ecr[which];
         mwrrf[which] <= ewrrf[which];
@@ -2318,6 +2557,10 @@ begin
         mctr[which] <= ectr[which];
         mlr[which] <= elr[which];
         mxer[which] <= exer[which];
+        if (etrap[which])
+        	mcause[which] <= 8'h07;
+        else
+        	mcause[which] <= 8'h00;
       end
     default:
       begin
@@ -2348,6 +2591,7 @@ begin
     wRd[which] <= 6'd0;
     wRa[which] <= 6'd0;
     w_lsu[which] <= FALSE;
+    wia[which] <= 32'd0;
     wres[which] <= 32'd0;
     wcr[which] <= 32'd0;
     wctr[which] <= 32'd0;
@@ -2363,6 +2607,7 @@ begin
     wwwrxer <= FALSE;
     wwwrrf <= FALSE;
     wwxer <= 32'd0;
+    wcause[which] <= 8'h00;
     willegal_insn <= FALSE;
   end
   else begin
@@ -2577,6 +2822,7 @@ begin
       	wRa[which] <= mRa[which];
         wval[which] <= mval[which];
         wwval <= 1'b0;
+        wia[which] <= mia[which];
        	wres[which] <= mres[which];
         wea[which] <= ea[which];
         w_lsu[which] <= m_lsu[which];
@@ -2591,6 +2837,7 @@ begin
         wxer[which] <= mxer[which];
         memory_done[which] <= FALSE;
         mstate[which] <= MEMORY1;
+        wcause[which] <= mcause[which];
       end
     default:
       begin
@@ -2618,6 +2865,26 @@ begin
     case(wstate)
     WRITEBACK0:
       begin
+      	if (wval[0])
+      		case(wir[0][31:26])
+      		R2:
+      			case(wir[0][10:1])
+      			MTMSR:	msr <= wia[0];
+	    			default:	;
+						endcase      		
+      		CR2:
+      			case(wir[0][10:1])
+      			RFI:	msr <= srr0;
+		    		default:	;
+      			endcase
+          MTSPR:
+            case(wir[0][20:11])
+            10'd26:		srr0 <= wia[0];
+            10'd27:	  srr1 <= wia[0];
+            default:  ;
+            endcase
+	    		default:	;
+      		endcase
       	if (wval[0] & wval[1])
       		inst_ctr <= inst_ctr + 2'd2;
       	else if (wval[0]|wval[1])
@@ -2661,6 +2928,25 @@ begin
       end
     WRITEBACK2:
       begin
+    		case(wir[1][31:26])
+    		R2:
+    			case(wir[1][10:1])
+    			MTMSR:	msr <= wia[1];
+    			default:	;
+					endcase      		
+    		CR2:
+    			case(wir[1][10:1])
+    			RFI:	msr <= srr0;
+    			default:	;
+    			endcase
+        MTSPR:
+          case(wir[1][20:11])
+          10'd26:		srr0 <= wia[1];
+          10'd27:	  srr1 <= wia[1];
+          default:  ;
+          endcase
+    		default:	;
+    		endcase
         wwRd <= wRd[1];
         wwres <= wres[1];
         wwval <= wval[1] & wwrrf[1];

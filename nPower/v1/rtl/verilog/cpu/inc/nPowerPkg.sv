@@ -8,6 +8,7 @@ parameter LOW   = 1'b0;
 parameter AWID  = 32;
 
 parameter CR2   = 6'd19;
+parameter RFI		= 10'd50;
 parameter CRAND = 10'd257;
 parameter CROR  = 10'd449;
 parameter CRXOR = 10'd193;
@@ -43,7 +44,9 @@ parameter SUBFZE= 10'd200;
 parameter SUBFZEO=10'd712;
 
 parameter DIVW  = 10'd491;
-parameter DIVWO = 10'd971;
+parameter DIVWO = 10'd1003;
+parameter DIVWU = 10'd459;
+parameter DIVWUO= 10'd971;
 parameter MULLW = 10'd235;
 parameter MULLWO= 10'd747;
 parameter NEG   = 10'd104;
@@ -53,6 +56,9 @@ parameter EXTSH = 10'd922;
 parameter EXTSW = 10'd986;
 
 parameter MULLI = 6'd7;
+parameter SUBFIC= 6'd8;
+parameter ADDIC = 6'd12;
+parameter ADDICD= 6'd13;
 parameter ADDI  = 6'd14;
 parameter ADDIS = 6'd15;
 parameter CMPI  = 6'd11;
@@ -83,6 +89,8 @@ parameter SRAWI = 10'd824;
 parameter RLWIMI  = 6'd20;
 parameter RLWINM  = 6'd21;
 parameter RLWNM   = 6'd23;
+
+parameter CNTLZW	= 10'd26;
 
 // Branch
 parameter B     = 6'd18;
@@ -135,8 +143,10 @@ parameter MTCRF = 10'd144;
 parameter MFSRI = 10'd659;
 parameter MTSRIN  = 10'd242;
 
+parameter MFMSR	= 10'd83;
+parameter MTMSR = 10'd146;
+
 parameter CRx   = 6'd19;
-parameter RFI   = 10'd50;
 
 parameter SC    = 6'd17;
 parameter TW    = 10'd4;
@@ -166,10 +176,14 @@ parameter DWAIT = 2'd1;
 parameter RFETCH = 2'd0;
 parameter RWAIT = 2'd1;
 
-parameter EXECUTE = 2'd0;
-parameter EFLAGS = 2'd1;
-parameter EWAIT = 2'd2;
+// Execute
+parameter EXECUTE = 3'd0;
+parameter EFLAGS = 3'd1;
+parameter EWAIT = 3'd2;
+parameter EDIV1 = 3'd3;
+parameter EDIV2 = 3'd4;
 
+// Memory
 parameter MEMORY1 = 3'd0;
 parameter MEMORY2 = 3'd1;
 parameter MEMORY3 = 3'd2;
