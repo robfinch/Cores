@@ -503,3 +503,36 @@ end
 endgenerate
 
 endmodule
+
+// Perform a logical shift to the right.
+module BCDSRL(ci, i, o, co);
+parameter N=4;
+input ci;
+input [N*4-1:0] i;
+output reg [N*4-1:0] o;
+output co;
+
+reg [N:0] c;
+
+genvar g;
+generate begin
+always @*
+	c[N] = ci;
+for (g = N - 1; g >= 0; g = g - 1)
+always @*
+	c[g] = i[g*4];
+for (g = N - 1; g >= 0; g = g - 1)
+always @*
+begin
+	o[g*4+3:g*4] = {1'b0,i[g*4+3:g*4+1]};
+	// Because there is a divide by two, the value will range between 0 and 4.
+	// Adding 5 keeps it within deicmal boundaries of 0 to 9. No carry can be
+	// generated
+	if (c[N+1])
+		o[g*4+3:g*4] = o[g*4+3:g*4] + 4'd5;
+end
+	assign co = c[0];
+end
+endgenerate
+
+endmodule

@@ -54,7 +54,7 @@ reg rst;
 reg clk;
 reg [15:0] adr;
 reg [N*4+16+4-1:0] a,b;
-wire [N*4+16+4-1:0] o;
+wire [N*4+16+4-1:0] o, sqrto;
 reg [N*4+16+4-1:0] ad,bd;
 wire [N*4+16+4-1:0] od;
 reg [3:0] rm;
@@ -106,11 +106,11 @@ else
 begin
   if (adr==0) begin
     outfile = $fopen("d:/cores2020/rtf64/v2/rtl/verilog/cpu/fpu/test_bench/DFPDivide_tvo.txt", "wb");
-    $fwrite(outfile, "rm ------ A ------  ------- B ------  - DUT Quotient - - SIM Quotient -\n");
+    $fwrite(outfile, "rm ------ A ------  ------- B ------  - DUT Quotient - - Square root -\n");
     sum_cc = 0;
   end
 	count <= count + 1;
-	if (count > 750)
+	if (count > 1000)
 		count <= 1'd1;
 	if (count==2) begin	
 		a[N*4+16+4-1:0] <= a1;
@@ -145,9 +145,17 @@ begin
 		a <= 152'h50000100000000000000000000000000000000;
 		b <= 152'h50000300000000000000000000000000000000;
 	end
-	if (count > 750) begin
+	if (adr==5 && count==2) begin
+		a <= 152'h50002100000000000000000000000000000000;
+		b <= 152'h50000300000000000000000000000000000000;
+	end
+	if (adr==6 && count==2) begin
+		a <= 152'h50002987654321000000000000000000000000;
+		b <= 152'h50000300000000000000000000000000000000;
+	end
+	if (count > 1000) begin
 		sum_cc = sum_cc + u6.u1.u2.clkcnt;
-	  $fwrite(outfile, "%h\t%h\t%h\t%h\t%d\t%f\n", rm, a, b, o, u6.u1.u2.clkcnt, $itor(sum_cc) / $itor(adr));
+	  $fwrite(outfile, "%h\t%h\t%h\t%h\t%h\t%d\t%f\n", rm, a, b, o, sqrto, u6.u1.u2.clkcnt, $itor(sum_cc) / $itor(adr));
 		adr <= adr + 1;
 	end
 end
@@ -169,5 +177,7 @@ DFPDividenr #(.N(N)) u6 (
   .overflow(),
   .underflow()
   );
+
+DFPSqrtnr #(.N(N)) u1 (rst, clk, 1'b1, count==3, a, sqrto, rm);//, sign_exe, inf, overflow, underflow);
 
 endmodule
