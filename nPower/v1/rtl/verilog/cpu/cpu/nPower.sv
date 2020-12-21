@@ -34,7 +34,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
-//`define SIM   1'b1
+`define SIM   1'b1
 import nPowerPkg::*;
 
 module nPower(rst_i, clk_i, vpa_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
@@ -838,16 +838,11 @@ task tDecode;
 input which;
 begin
   if (rst_i) begin
-    rRd[0] <= 6'd0;
-    rRd[1] <= 6'd0;
-    rRa[0] <= 6'd0;
-    rRa[1] <= 6'd0;
-    rRb[0] <= 6'd0;
-    rRb[1] <= 6'd0;
-    rRc[0] <= 6'd0;
-    rRc[1] <= 6'd0;
-    rimm[0] <= 32'd0;
-    rimm[1] <= 32'd0;
+    rRd[which] <= 6'd0;
+    rRa[which] <= 6'd0;
+    rRb[which] <= 6'd0;
+    rRc[which] <= 6'd0;
+    rimm[which] <= 32'd0;
     Rd[which] <= 6'd0;
     Ra[which] <= 6'd0;
     Rb[which] <= 6'd0;
@@ -893,7 +888,7 @@ begin
     wrxer[which] <= FALSE;
     lsu[which] <= FALSE;
     rpc[which] <= RSTPC;
-    dval <= 2'b00;
+    dval[which] <= 1'b0;
     decode_done[which] <= TRUE;
     dstate[which] <= DWAIT;
     illegal_insn[which] <= FALSE;
@@ -1055,7 +1050,7 @@ begin
         		wrlr[which] <= ir[which][0];
         		rdcrf[which] <= TRUE;
         		if (dbrpred[which]) begin
-        			dmod_pc <= dval[which];
+        			dmod_pc[which] <= dval[which];
     					if (eir[which][1])
     						dnext_pc[which] <= {{16{ir[which][15]}},ir[which][15:2],2'b00};
     					else
@@ -1129,7 +1124,7 @@ begin
         r_lsu[which] <= lsu[which];
         r_ld[which] <= d_ld[which];
         r_st[which] <= d_st[which];
-        if (d_ld|d_st|d_addi)
+        if (d_ld[which]|d_st[which]|d_addi[which])
         	r_ra0[which] <= ir[which][20:16]==5'd0;
         r_bc[which] <= d_bc[which];
         rwrrf[which] <= wrrf[which];
@@ -3186,14 +3181,14 @@ begin
 	    eir[1] <= NOP_INSN;
 	    eval <= 2'b00;
 	  end
-	  else if (dmod_pc[0] & dval & advance_d) begin
+	  else if (dmod_pc[0] & dval[0] & advance_d) begin
 	    ir[0] <= NOP_INSN;
 	    ir[1] <= NOP_INSN;
 	    dval <= 2'b00;
 	    rir[1] <= NOP_INSN;
 	    rval[1] <= 1'b0;
 	  end
-	  else if (dmod_pc[1] & dval & advance_d) begin
+	  else if (dmod_pc[1] & dval[1] & advance_d) begin
 	    ir[0] <= NOP_INSN;
 	    ir[1] <= NOP_INSN;
 	    dval <= 2'b00;
