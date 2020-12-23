@@ -25,14 +25,15 @@ MFCR  MFCTR MFLR  MFSPR MFXER
 MTCRF MTCTR MTLR  MTSPR MTXER
 MULLI MULLW
 NAND  NEG   NOR           
+RFI   RLWIMI RLWINM RLWNM
+SC
+SLW   SRW   SRAW  SRAWI 
 STB   STBU  STBX  STBUX
 STH   STHU  STHX  STHUX
 STW   STWU  STWX  STWUX
 SUBF  SUBFIC  SUBFME  SUBFZE  SUBFC
-RFI   RLWIMI RLWINM RLWNM
-SLW   SRW
-SRAW  SRAWI SYNC
-TWI
+SYNC
+TW    TWI
 XOR   XORI  XORIS   
 
 ## Features
@@ -43,6 +44,19 @@ XOR   XORI  XORIS
 
 ## Reset
 On reset the core vectors to $FFFC0000 which is where the system ROM is located, rather than to address $00000100.
+
+## Memory
+
+### Alignment
+All access for instructions and data is little-endian. There are no alignment restrictions on data, the core will
+run two bus cycles if necessary for unaligned data.
+
+### Interface
+The external data bus is 128-bit to facilitate cache loads. The core has a single bus to fetch and store instructions and data.
+
+### Caches
+The core has a 8kB 4-way associative instruction cache which can supply two instructions for every machine cycle.
+There is currently no data cache.
 
 ## Status
 Work began on this core about December 5th, 2020. It is still in its early stages and has many issues to fix.

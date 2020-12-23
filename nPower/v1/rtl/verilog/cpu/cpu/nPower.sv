@@ -471,6 +471,7 @@ DivGoldschmidt  #(.FPWID(64),.WHOLE(32),.POINTS(32)) udgs2
 */
 
 wire [4:0] trp [0:1];
+wire [4:0] trpr [0:1];
 
 assign trp[0][0] = $signed(ia[0]) < $signed(imm[0]);
 assign trp[0][1] = $signed(ia[0]) > $signed(imm[0]);
@@ -483,6 +484,18 @@ assign trp[1][1] = $signed(ia[1]) > $signed(imm[1]);
 assign trp[1][2] = ia[1] == imm[1];
 assign trp[1][3] = ia[1] < imm[1];
 assign trp[1][4] = ia[1] > imm[1];
+
+assign trpr[0][0] = $signed(ia[0]) < $signed(ib[0]);
+assign trpr[0][1] = $signed(ia[0]) > $signed(ib[0]);
+assign trpr[0][2] = ia[0] == ib[0];
+assign trpr[0][3] = ia[0] < ib[0];
+assign trpr[0][4] = ia[0] > ib[0];
+
+assign trpr[1][0] = $signed(ia[1]) < $signed(ib[1]);
+assign trpr[1][1] = $signed(ia[1]) > $signed(ib[1]);
+assign trpr[1][2] = ia[1] == ib[1];
+assign trpr[1][3] = ia[1] < ib[1];
+assign trpr[1][4] = ia[1] > ib[1];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Instruction cache
@@ -1022,6 +1035,7 @@ begin
           		d_sync[which] <= TRUE;
           		illegal_insn[which] <= FALSE;
           	end
+	        TW:	 begin illegal_insn[which] <= FALSE; end
           default:  ;
           endcase
         ADDI:
@@ -1069,8 +1083,8 @@ begin
         RLWIMI:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
         RLWINM:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
         RLWNM: begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
-        TWI:	 begin Ra[which] <= ir[which][20:16]; illegal_insn[which] <= FALSE; end
-
+        TWI:	 begin illegal_insn[which] <= FALSE; end
+				SC:		 begin illegal_insn[which] <= ~ir[which][1]; end
         B:     begin
                   illegal_insn[which] <= FALSE;
                   dmod_pc[which] <= dval[which];
@@ -2090,6 +2104,20 @@ begin
             10'd288:  ectr[which] <= ia[which];
             default:  ;
             endcase
+					TW:
+						case(eir[which][25:21])
+						5'd1:	etrap[which] <=  trpr[which][4];							// gtu
+						5'd2: etrap[which] <=  trpr[which][3];							// ltu
+						5'd4: etrap[which] <=  trpr[which][2];							// eq
+						5'd5:	etrap[which] <=  trpr[which][4]|trpr[which][2];	// geu
+						5'd6: etrap[which] <=  trpr[which][3]|trpr[which][2];	// leu
+						5'd8:	etrap[which] <=  trpr[which][1];							// gt
+						5'd12:etrap[which] <= ~trpr[which][0];							// nlt / ge
+						5'd16:etrap[which] <=  trpr[which][0];							// lt
+						5'd20:etrap[which] <= ~trpr[which][1];							// ngt
+						5'd24:etrap[which] <= ~trpr[which][2];							// ne
+						5'd31:etrap[which] <=  TRUE;
+						endcase
           default:  ;
           endcase
         ADDI,ADDIC,ADDICD:
@@ -2920,6 +2948,8 @@ begin
   else begin
   	wmod_pc <= FALSE;
   	if (wcause[0]) begin
+			srr0 <= wpc[0];
+			srr1 <= msr;
   		wmod_pc[0] <= TRUE;
   		if (wcause[0][7])
   			wnext_pc[0] <= {FLT_EXTERNAL,8'h00};
@@ -2931,6 +2961,13 @@ begin
       begin
       	if (wval[0])
       		case(wir[0][31:26])
+      		SC:
+      			begin
+      				srr0 <= wpc[0] + 3'd4;
+      				srr1 <= msr;
+      				wmod_pc[0] <= TRUE;
+      				wnext_pc[0] <= {FLT_SYSTEM_CALL,8'h00};
+      			end
       		R2:
       			case(wir[0][10:1])
       			MTMSR:	msr <= wia[0];
@@ -2995,6 +3032,8 @@ begin
     WRITEBACK2:
       begin
 		  	if (wcause[1]) begin
+  				srr0 <= wpc[1];
+  				srr1 <= msr;
 		  		wmod_pc[1] <= TRUE;
 		  		if (wcause[1][7])
 		  			wnext_pc[1] <= {FLT_EXTERNAL,8'h00};
@@ -3002,6 +3041,13 @@ begin
 		  			wnext_pc[1] <= {wcause[1],8'h00};
 		  	end
     		case(wir[1][31:26])
+    		SC:
+    			begin
+    				srr0 <= wpc[1] + 3'd4;
+    				srr1 <= msr;
+    				wmod_pc[1] <= TRUE;
+    				wnext_pc[1] <= {FLT_SYSTEM_CALL,8'h00};
+    			end
     		R2:
     			case(wir[1][10:1])
     			MTMSR:	msr <= wia[1];
