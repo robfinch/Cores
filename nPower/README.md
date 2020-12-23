@@ -16,27 +16,33 @@ CRNAND CRNOR CREQV
 CRANDC  CRORC                          
 DIVW  DIVWU
 EQV   EXTB  EXTH
-OR    ORC   ORI   ORIS    
+OR    ORC   ORI   ORIS 
+LBZ   LBZU  LBZX  LBZUX
+LHZ   LHZU  LHZX  LHZUX
+LWZ   LWZU  LWZX  LWZUX   
+MCRXR
+MFCR  MFCTR MFLR  MFSPR MFXER
+MTCRF MTCTR MTLR  MTSPR MTXER
 MULLI MULLW
 NAND  NEG   NOR           
+STB   STBU  STBX  STBUX
+STH   STHU  STHX  STHUX
+STW   STWU  STWX  STWUX
 SUBF  SUBFIC  SUBFME  SUBFZE  SUBFC
 RFI   RLWIMI RLWINM RLWNM
-SLW   SRW  
-SRAW  SRAWI
+SLW   SRW
+SRAW  SRAWI SYNC
+TWI
 XOR   XORI  XORIS   
-
-LBZ   LBZU  LBZX  LBZUX   MFCR    MTCRF
-LHZ   LHZU  LHZX  LHZUX   MFSPR   MTSPR
-LWZ   LWZU  LWZX  LWZUX   MFLR    MTLR 
-STB   STBU  STBX  STBUX   MFCTR   MTCTR
-STH   STHU  STHX  STHUX   MFXER   MTXER
-STW   STWU  STWX  STWUX   MCRXR        
 
 ## Features
 * Dual pipelines
 * 8kB 4-way associative instruction cache
 * perceptron branch prediction
 * single channel to memory
+
+## Reset
+On reset the core vectors to $FFFC0000 which is where the system ROM is located, rather than to address $00000100.
 
 ## Status
 Work began on this core about December 5th, 2020. It is still in its early stages and has many issues to fix.
