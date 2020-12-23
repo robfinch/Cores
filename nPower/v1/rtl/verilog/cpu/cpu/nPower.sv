@@ -37,9 +37,12 @@
 `define SIM   1'b1
 import nPowerPkg::*;
 
-module nPower(rst_i, clk_i, vpa_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module nPower(rst_i, clk_i, nmi_i, irq_i, icause_i, vpa_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
 input rst_i;
 input clk_i;
+input nmi_i;
+input irq_i;
+input [7:0] icause_i;
 output reg vpa_o;
 output reg cyc_o;
 output reg stb_o;
@@ -59,6 +62,7 @@ reg smt = 1'b0;
 
 // Instruction fetch stage vars
 reg [3:0] istate;
+reg [7:0] icause [0:1];
 reg ival;
 wire advance_i;
 wire stall_i;
@@ -72,6 +76,7 @@ reg iaccess;
 
 // Decode stage vars
 reg [1:0] dstate [0:1];
+reg [7:0] dcause [0:1];
 wire advance_d;
 reg [1:0] decode_done;
 reg [1:0] dval;
@@ -95,10 +100,12 @@ reg [1:0] d_addi;
 reg [1:0] d_ld, d_st;
 reg [1:0] d_cmp;
 reg [1:0] d_bc;
+reg [1:0] d_sync;
 reg [1:0] lsu;
 
 // Regfetch stage vars
 reg [1:0] rstate;
+reg [7:0] rcause [0:1];
 wire advance_r;
 wire [1:0] stall_r;
 reg rdone;
@@ -125,6 +132,7 @@ reg [1:0] r_ra0;
 reg [1:0] r_ld, r_st;
 reg [1:0] r_cmp;
 reg [1:0] r_bc;
+reg [1:0] r_sync;
 reg [31:0] rcr;
 reg [AWID-1:0] rlr;
 reg [31:0] rctr;
@@ -157,6 +165,7 @@ reg [1:0] e_ld, e_st;
 reg [1:0] e_lsu;
 reg [1:0] e_cmp;
 reg [1:0] e_bc;
+reg [1:0] e_sync;
 reg [AWID-1:0] elr [0:1];
 reg [31:0] ectr [0:1];
 reg [31:0] ecr [0:1];
@@ -183,6 +192,7 @@ reg [31:0] mres [0:1];
 reg [1:0] millegal_insn;
 reg [1:0] m_lsu;
 reg [1:0] m_st;
+reg [1:0] m_sync;
 reg [31:0] mcr [0:1];
 reg [31:0] mctr [0:1];
 reg [31:0] mxer [0:1];
@@ -219,6 +229,7 @@ reg [1:0] willegal_insn;
 reg [1:0] wmod_pc;
 reg [AWID-1:0] wnext_pc [0:1];
 reg [1:0] w_lsu;
+reg [1:0] w_sync;
 reg [31:0] wcr [0:1];
 reg [31:0] wwcr;
 reg [AWID-1:0] wlr [0:1];
@@ -239,6 +250,7 @@ reg [31:0] tres [0:1];
 
 reg [31:0] msr;
 wire ribo = msr[0];
+wire ee = msr[3];
 reg [31:0] srr0, srr1;
 reg [31:0] xer = 32'd0;
 reg [31:0] regfile [0:63];
@@ -283,8 +295,11 @@ always @(posedge clk_g)
 always @(posedge clk_g)
   if (wwwrctr)
     ctr <= wwres;
+    
+reg [31:0] sprg [0:3];
 
-assign stall_i = 1'b0;
+// If there is a sync in the pipeline stall the following stages until the sync clears.
+assign stall_i = |d_sync | |r_sync | |e_sync | |m_sync | |w_sync;
 assign stall_r[0] = ((e_ld[0]||e_st[0]) && ((rRd[0]==eRd[0] && r_st[0]) || (rRa[0]==eRd[0]) || (rRb[0]==eRd[0]) || (rRc[0]==eRd[0])) && eval[0] && rval[0]) ||
 								 	  ((e_ld[1]||e_st[1]) && ((rRd[0]==eRd[1] && r_st[0]) || (rRa[0]==eRd[1]) || (rRb[0]==eRd[1]) || (rRc[0]==eRd[1])) && eval[1] && rval[1]) ||
                 		((e_st[0] & e_lsu[0]) && ((rRd[0]==eRa[0]) || (rRa[0]==eRa[0]) || (rRb[0]==eRa[0]) || (rRc[0]==eRa[0])) && eval[0] && rval[0]) ||
@@ -310,10 +325,10 @@ assign stall_r[1] = stall_r[0] ||
 
 // Pipeline advance
 assign advance_w = ifetch_done & &decode_done & &regfetch_done & &execute_done & &memory_done & &writeback_done;
-assign advance_m = advance_w;
-assign advance_e = advance_m;
-assign advance_r = advance_e & ~stall_r[0];
-assign advance_d = advance_r & ~|stall_r;
+assign advance_m = advance_w & ~(|w_sync);
+assign advance_e = advance_m & ~(|m_sync | |w_sync);
+assign advance_r = advance_e & ~stall_r[0] & ~(|e_sync | |m_sync | |w_sync);
+assign advance_d = advance_r & ~|stall_r & ~(|r_sync | |e_sync | |m_sync | |w_sync);
 assign advance_i = advance_d & ~stall_i;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -737,8 +752,18 @@ IWAIT:
     dpc[0] <= pc[0];
     dpc[1] <= pc[1];
     dbrpred <= ibrpred;
+    if (irq_i & ee) begin
+    	dcause[0] <= icause_i|8'h80;
+    	dcause[1] <= icause_i|8'h80;
+  	end
+  	else begin
+    	dcause[0] <= FLT_NONE;
+    	dcause[1] <= FLT_NONE;
+  	end  
     igoto(IFETCH1);
   end
+  else if (advance_d)
+  	d_sync[which] <= FALSE;
 IACCESS:
   begin
     if (maccess_pending==2'b00||vpa_o) begin
@@ -860,6 +885,7 @@ begin
     r_ra0[which] <= FALSE;
     r_lsu[which] <= FALSE;
     r_cmp[which] <= FALSE;
+    r_sync[which] <= FALSE;
     r_bc[which] <= FALSE;
     rcr[which] <= 32'd0;
     rctr[which] <= 32'd0;
@@ -893,6 +919,7 @@ begin
     dstate[which] <= DWAIT;
     illegal_insn[which] <= FALSE;
     dnext_pc[which] <= RSTPC;
+    rcause[which] <= FLT_NONE;
   end
   else begin
     case(dstate[which])
@@ -987,6 +1014,14 @@ begin
               default:  ;
               endcase
             end
+          SYNC:
+          	begin
+          		// force a flush of the incoming instruction.
+          		dmod_pc[which] <= TRUE;
+          		dnext_pc[which] <= dpc[which] + 3'd4;
+          		d_sync[which] <= TRUE;
+          		illegal_insn[which] <= FALSE;
+          	end
           default:  ;
           endcase
         ADDI:
@@ -1034,6 +1069,7 @@ begin
         RLWIMI:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
         RLWINM:begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; dimm[which] <= ir[which][15:11]; illegal_insn[which] <= FALSE; end
         RLWNM: begin Ra[which] <= ir[which][25:21]; Rd[which] <= ir[which][20:16]; wrrf[which] <= TRUE; illegal_insn[which] <= FALSE; end
+        TWI:	 begin Ra[which] <= ir[which][20:16]; illegal_insn[which] <= FALSE; end
 
         B:     begin
                   illegal_insn[which] <= FALSE;
@@ -1126,14 +1162,18 @@ begin
         r_st[which] <= d_st[which];
         if (d_ld[which]|d_st[which]|d_addi[which])
         	r_ra0[which] <= ir[which][20:16]==5'd0;
+        r_sync[which] <= d_sync[which];
         r_bc[which] <= d_bc[which];
         rwrrf[which] <= wrrf[which];
         rwrcrf[which] <= wrcrf[which];
         rwrxer[which] <= wrxer[which];
         rbrpred[which] <= dbrpred[which];
+        rcause[which] <= dcause[which];
         decode_done[which] <= FALSE;
         dstate[which] <= DECODE;
       end
+      else if (advance_r)
+      	r_sync[which] <= FALSE;
     default:
       begin
         decode_done[which] <= TRUE;
@@ -1157,6 +1197,7 @@ if (rst_i) begin
   e_ra0 <= 2'b00;
   e_lsu <= 2'b00;
   e_bc <= 2'b00;
+  e_sync <= 2'b00;
   eRd[0] <= 6'd0;
   eRd[1] <= 6'd0;
   eRa[0] <= 6'd0;
@@ -1198,6 +1239,8 @@ if (rst_i) begin
   ewrxer <= 2'b00;
   rval <= 2'b00;
   ebrpred <= 2'b00;
+  ecause[0] <= FLT_NONE;
+  ecause[1] <= FLT_NONE;
   regfetch_done[0] <= TRUE;
   regfetch_done[1] <= TRUE;
   stall_ctr <= 32'd0;
@@ -1719,7 +1762,10 @@ endcase
 		e_st[0] <= r_st[0];
 		e_ld[1] <= r_ld[1];
 		e_st[1] <= r_st[1];
+		e_sync <= r_sync;
 		ebrpred <= rbrpred;
+		ecause[0] <= rcause[0];
+		ecause[1] <= rcause[1];
 //		elr[0] <= rlr;
 //    ectr[0] <= rctr;
 //		elr[1] <= rlr;
@@ -1732,6 +1778,7 @@ endcase
     eval[1] <= FALSE;
     eir[0] <= NOP_INSN;
     eir[1] <= NOP_INSN;
+    e_sync <= 2'b00;
   end
 end
 endtask
@@ -1802,6 +1849,7 @@ begin
     mRa[which] <= 6'd0;
     mres[which] <= 32'd0;
     m_lsu[which] <= FALSE;
+    m_sync[which] <= FALSE;
     mcr[which] <= 32'd0;
     mctr[which] <= 32'd0;
     mlr[which] <= 32'd0;
@@ -2029,6 +2077,9 @@ begin
             10'd26:		eres[which] <= srr0;
             10'd27:		eres[which] <= srr1;
             10'd256:  eres[which] <= elr[which];
+            10'd272,10'd273,10'd274,10'd275:
+            					eres[which] <= sprg[eir[which][12:11]];	
+            10'd287:	eres[which] <= 32'h04408000;	// processor / version
             10'd288:  eres[which] <= ectr[which];
             default:  ;
             endcase
@@ -2540,6 +2591,7 @@ begin
         mir[which] <= eir[which];
         m_lsu[which] <= e_lsu[which];
         m_st[which] <= e_st[which];
+        m_sync[which] <= e_sync[which];
 	      mval[which] <= eval[which];
 	      mia[which] <= ia[which];
         mres[which] <= eres[which];
@@ -2552,11 +2604,16 @@ begin
         mctr[which] <= ectr[which];
         mlr[which] <= elr[which];
         mxer[which] <= exer[which];
-        if (etrap[which])
-        	mcause[which] <= 8'h07;
+        // Hardware interrupt takes priority.
+        if (ecause[which] & 8'h80)
+        	mcause[which] <= ecause[which];
+        else if (etrap[which])
+        	mcause[which] <= FLT_PROGRAM;
         else
-        	mcause[which] <= 8'h00;
+        	mcause[which] <= ecause[which];
       end
+      else if (advance_m)
+      	m_sync[which] <= FALSE;
     default:
       begin
         execute_done[which] <= TRUE;
@@ -2586,6 +2643,7 @@ begin
     wRd[which] <= 6'd0;
     wRa[which] <= 6'd0;
     w_lsu[which] <= FALSE;
+    w_sync[which] <= FALSE;
     wia[which] <= 32'd0;
     wres[which] <= 32'd0;
     wcr[which] <= 32'd0;
@@ -2821,6 +2879,7 @@ begin
        	wres[which] <= mres[which];
         wea[which] <= ea[which];
         w_lsu[which] <= m_lsu[which];
+        w_sync[which] <= m_sync[which];
         wwrrf[which] <= mwrrf[which];
         wwrcrf[which] <= wwrcrf[which];
         wcr[which] <= mcr[which];
@@ -2834,6 +2893,9 @@ begin
         mstate[which] <= MEMORY1;
         wcause[which] <= mcause[which];
       end
+      else if (advance_w) begin
+      	w_sync[which] <= FALSE;
+    	end
     default:
       begin
         memory_done[which] <= TRUE;
@@ -2857,6 +2919,13 @@ begin
   end
   else begin
   	wmod_pc <= FALSE;
+  	if (wcause[0]) begin
+  		wmod_pc[0] <= TRUE;
+  		if (wcause[0][7])
+  			wnext_pc[0] <= {FLT_EXTERNAL,8'h00};
+  		else
+  			wnext_pc[0] <= {wcause[0],8'h00};
+  	end
     case(wstate)
     WRITEBACK0:
       begin
@@ -2876,6 +2945,8 @@ begin
             case(wir[0][20:11])
             10'd26:		srr0 <= wia[0];
             10'd27:	  srr1 <= wia[0];
+            10'd272,10'd273,10'd274,10'd275:
+            					sprg[wir[0][12:11]] <= wia[0];
             default:  ;
             endcase
 	    		default:	;
@@ -2923,6 +2994,13 @@ begin
       end
     WRITEBACK2:
       begin
+		  	if (wcause[1]) begin
+		  		wmod_pc[1] <= TRUE;
+		  		if (wcause[1][7])
+		  			wnext_pc[1] <= {FLT_EXTERNAL,8'h00};
+		  		else
+		  			wnext_pc[1] <= {wcause[1],8'h00};
+		  	end
     		case(wir[1][31:26])
     		R2:
     			case(wir[1][10:1])
@@ -2938,6 +3016,8 @@ begin
           case(wir[1][20:11])
           10'd26:		srr0 <= wia[1];
           10'd27:	  srr1 <= wia[1];
+          10'd272,10'd273,10'd274,10'd275:
+          					sprg[wir[1]][12:11]] <= wia[1];
           default:  ;
           endcase
     		default:	;
