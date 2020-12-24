@@ -3,6 +3,74 @@
 	.align	2
 	.sdreg	r13
 	.align	4
+	.global	_syscall
+_syscall:
+	stwu	r1,-64(r1)
+	stw	r0,8(r1)
+	stw	r3,12(r1)
+	stw	r4,16(r1)
+	stw	r5,20(r1)
+	stw	r6,24(r1)
+	stw	r7,28(r1)
+	stw	r8,32(r1)
+	stw	r9,36(r1)
+	stw	r10,40(r1)
+	stw	r11,44(r1)
+	stw	r12,48(r1)
+rom_bios_1:
+	lwz	r0,8(r1)
+	lwz	r3,12(r1)
+	lwz	r4,16(r1)
+	lwz	r5,20(r1)
+	lwz	r6,24(r1)
+	lwz	r7,28(r1)
+	lwz	r8,32(r1)
+	lwz	r9,36(r1)
+	lwz	r10,40(r1)
+	lwz	r11,44(r1)
+	lwz	r12,48(r1)
+	addi	r1,r1,64
+	rfi
+	.type	_syscall,@function
+	.size	_syscall,$-_syscall
+# stacksize=64
+	.set	___stack_syscall,64
+	.sdreg	r13
+	.align	4
+	.global	_ext_irq
+_ext_irq:
+	stwu	r1,-64(r1)
+	stw	r0,8(r1)
+	stw	r3,12(r1)
+	stw	r4,16(r1)
+	stw	r5,20(r1)
+	stw	r6,24(r1)
+	stw	r7,28(r1)
+	stw	r8,32(r1)
+	stw	r9,36(r1)
+	stw	r10,40(r1)
+	stw	r11,44(r1)
+	stw	r12,48(r1)
+rom_bios_2:
+	lwz	r0,8(r1)
+	lwz	r3,12(r1)
+	lwz	r4,16(r1)
+	lwz	r5,20(r1)
+	lwz	r6,24(r1)
+	lwz	r7,28(r1)
+	lwz	r8,32(r1)
+	lwz	r9,36(r1)
+	lwz	r10,40(r1)
+	lwz	r11,44(r1)
+	lwz	r12,48(r1)
+	addi	r1,r1,64
+	rfi
+	.type	_ext_irq,@function
+	.size	_ext_irq,$-_ext_irq
+# stacksize=64
+	.set	___stack_ext_irq,64
+	.sdreg	r13
+	.align	4
 	.global	_main
 _main:
 	mflr	r11
@@ -13,10 +81,26 @@ _main:
 	stw	r11,12(r1)
 	lis	r11,-48
 	stw	r11,16(r1)
-	bl	_SieveOfEratosthenes
+	lis	r11,-192
+	stw	r11,20(r1)
 	li	r11,170
 	lwz	r12,12(r1)
 	stw	r11,0(r12)
+	lis	r11,_ext_irq@ha
+	addi	r11,r11,_ext_irq@l
+	lis	r12,18432
+	addi	r12,r12,2
+	or	r10,r11,r12
+	lwz	r9,20(r1)
+	stw	r10,20(r9)
+	lis	r11,_syscall@ha
+	addi	r11,r11,_syscall@l
+	lis	r12,18432
+	addi	r12,r12,2
+	or	r10,r11,r12
+	lwz	r9,20(r1)
+	stw	r10,48(r9)
+	bl	_SieveOfEratosthenes
 	lis	r11,20465
 	addi	r11,r11,-4096
 	stw	r11,8(r1)
@@ -36,7 +120,7 @@ _main:
 	ori	r10,r11,65
 	lwz	r9,16(r1)
 	stw	r10,12(r9)
-rom_bios_1:
+rom_bios_3:
 	lwz	r11,36(r1)
 	addi	r1,r1,32
 	mtlr	r11

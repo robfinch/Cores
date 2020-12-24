@@ -1,0 +1,17 @@
+-no-multiple-ccs
+-gas
+-elf
+-no-regnames
+-madd
+-cc=vbccppc -quiet -I$VBCC/targets/ppc-linux/include %s -o= %s %s -O=%ld
+-ccv=vbccppc -I$VBCC/targets/ppc-linux/include %s -o= %s %s -O=%ld
+-as=vasmppc_std -Felf -no-regnames -quiet %s -o %s
+-asv=vasmppc_std -Felf -no-regnames %s -o %s
+-rm=rm %s
+-rmv=rm %s
+-isc=vscppc -quiet %s %s
+-iscv=vscppc %s %s
+-ld=vlink -Cvbccelf -belf32ppcbe -T$VBCC/targets/ppc-linux/vlink.cmd -L$VBCC/targets/ppc-linux/lib $VBCC/targets/ppc-linux/lib/startup.o %s %s -lvc -o %s -e __main
+-ldv=vlink -v -Cvbccelf -belf32ppcbe -T$VBCC/targets/ppc-linux/vlink.cmd -L$VBCC/targets/ppc-linux/lib $VBCC/targets/ppc-linux/lib/startup.o %s %s -lvc -o %s -e __main
+-l2=vlink -belf32ppcbe -T$VBCC/targets/ppc-linux/vlink.cmd -L$VBCC/targets/ppc-linux/lib %s %s -o %s -e __main
+-l2v=vlink -v -belf32ppcbe -T$VBCC/targets/ppc-linux/vlink.cmd -L$VBCC/targets/ppc-linux/lib %s %s -o %s -e __main
