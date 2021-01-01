@@ -17,7 +17,6 @@ _syscall:
 	stw	r10,40(r1)
 	stw	r11,44(r1)
 	stw	r12,48(r1)
-rom_bios_1:
 	lwz	r0,8(r1)
 	lwz	r3,12(r1)
 	lwz	r4,16(r1)
@@ -51,7 +50,6 @@ _ext_irq:
 	stw	r10,40(r1)
 	stw	r11,44(r1)
 	stw	r12,48(r1)
-rom_bios_2:
 	lwz	r0,8(r1)
 	lwz	r3,12(r1)
 	lwz	r4,16(r1)
@@ -74,58 +72,69 @@ rom_bios_2:
 	.global	_main
 _main:
 	mflr	r11
-	stwu	r1,-32(r1)
-	stw	r11,36(r1)
-	lis	r11,-36
-	addi	r11,r11,1536
-	stw	r11,12(r1)
-	lis	r11,-48
-	stw	r11,16(r1)
-	lis	r11,-192
-	stw	r11,20(r1)
+	stwu	r1,-144(r1)
+	stw	r27,124(r1)
+	stw	r28,128(r1)
+	stw	r29,132(r1)
+	stw	r30,136(r1)
+	stw	r31,140(r1)
+	stw	r11,148(r1)
+	lis	r29,20465
+	addi	r29,r29,-4031
+	lis	r27,-48
+	lis	r10,-36
+	addi	r10,r10,1536
+	mr	r28,r27
 	li	r11,170
-	lwz	r12,12(r1)
-	stw	r11,0(r12)
+	stw	r11,0(r10)
 	lis	r11,_ext_irq@ha
 	addi	r11,r11,_ext_irq@l
+	mr	r9,r11
 	lis	r12,18432
 	addi	r12,r12,2
-	or	r10,r11,r12
-	lwz	r9,20(r1)
-	stw	r10,20(r9)
+	or	r9,r9,r12
+	lis	r10,-4
+	stw	r9,20(r10)
 	lis	r11,_syscall@ha
 	addi	r11,r11,_syscall@l
+	mr	r9,r11
 	lis	r12,18432
 	addi	r12,r12,2
-	or	r10,r11,r12
-	lwz	r9,20(r1)
-	stw	r10,48(r9)
-	bl	_SieveOfEratosthenes
-	lis	r11,20465
-	addi	r11,r11,-4096
-	stw	r11,8(r1)
-	lwz	r11,8(r1)
-	ori	r0,r11,65
-	lwz	r11,16(r1)
-	stw	r0,0(r11)
-	lwz	r11,8(r1)
-	ori	r10,r11,65
-	lwz	r9,16(r1)
-	stw	r10,4(r9)
-	lwz	r11,8(r1)
-	ori	r10,r11,65
-	lwz	r9,16(r1)
-	stw	r10,8(r9)
-	lwz	r11,8(r1)
-	ori	r10,r11,65
-	lwz	r9,16(r1)
-	stw	r10,12(r9)
-rom_bios_3:
-	lwz	r11,36(r1)
-	addi	r1,r1,32
+	or	r9,r9,r12
+	lis	r10,-4
+	stw	r9,48(r10)
+	stw	r29,0(r28)
+	stw	r29,4(r27)
+	stw	r29,8(r27)
+	stw	r29,12(r27)
+	li	r30,0
+rom_bios_11:
+	bl	_rand
+	mr	r31,r3
+	bl	_rand
+	bl	_abs
+	mr	r10,r3
+	li	r12,2112
+	divw	r11,r10,r12
+	mullw	r11,r11,r12
+	subf	r10,r11,r10
+	slwi	r10,r10,2&31
+	stwx	r31,r10,r28
+	addi	r30,r30,1
+	cmpwi	cr0,r30,10000
+	blt	cr0,rom_bios_11
+	li	r3,0
+	lwz	r11,148(r1)
+	lwz	r27,124(r1)
+	lwz	r28,128(r1)
+	lwz	r29,132(r1)
+	lwz	r30,136(r1)
+	lwz	r31,140(r1)
+	addi	r1,r1,144
 	mtlr	r11
 	blr
 	.type	_main,@function
 	.size	_main,$-_main
-# stacksize=32+??
-	.global	_SieveOfEratosthenes
+# stacksize=144+??
+	.global	_rand
+	.global	_abs

@@ -103,6 +103,8 @@ parameter LBZ   = 6'd34;
 parameter LBZU  = 6'd35;
 parameter LHZ   = 6'd40;
 parameter LHZU  = 6'd41;
+parameter LHA		= 6'd42;
+parameter LHAU	= 6'd43;
 parameter LWZ   = 6'd32;
 parameter LWZU  = 6'd33;
 parameter L58   = 6'd58;
@@ -112,6 +114,8 @@ parameter LBZX  = 10'd87;
 parameter LBZUX = 10'd119;
 parameter LHZX  = 10'd279;
 parameter LHZUX = 10'd311;
+parameter LHAX	= 10'd343;
+parameter LHAUX = 10'd345;
 parameter LWZX  = 10'd23;
 parameter LWZUX = 10'd55;
 
@@ -151,8 +155,27 @@ parameter CRx   = 6'd19;
 parameter SC    = 6'd17;
 parameter TW    = 10'd4;
 parameter TWI   = 6'd3;
+parameter SYNC	= 10'd598;
 
 parameter NOP_INSN  = {R2,5'd0,5'd0,5'd0,AND,1'b0};
+
+// Cause
+parameter FLT_NONE 		= 8'h00;
+parameter FLT_RESET		= 8'h01;
+parameter FLT_MACHINE_CHECK	= 8'h02;
+parameter FLT_DATA_STORAGE	= 8'h03;
+parameter FLT_INSTRUCTION_STORAGE = 8'h04;
+parameter FLT_EXTERNAL = 8'h05;
+parameter FLT_ALIGNMENT = 8'h06;
+parameter FLT_PROGRAM = 8'h07;
+parameter FLT_FPU_UNAVAILABLE = 8'h08;
+parameter FLT_DECREMENTER = 8'h09;
+parameter FLT_RESERVED_A = 8'h0A;
+parameter FLT_RESERVED_B = 8'h0B;
+parameter FLT_SYSTEM_CALL = 8'h0C;
+parameter FLT_TRACE = 8'h0D;
+parameter FLT_FP_ASSIST = 8'h0E;
+parameter FLT_RESERVED = 8'h2F;
 
 // Instruction fetch
 parameter IFETCH1 = 4'd0;
@@ -182,6 +205,7 @@ parameter EFLAGS = 3'd1;
 parameter EWAIT = 3'd2;
 parameter EDIV1 = 3'd3;
 parameter EDIV2 = 3'd4;
+parameter EDIV3 = 3'd5;
 
 // Memory
 parameter MEMORY1 = 3'd0;
@@ -191,6 +215,7 @@ parameter MEMORY4 = 3'd3;
 parameter MEMORY5 = 3'd4;
 parameter MALIGN = 3'd5;
 parameter MWAIT = 3'd6;
+parameter MSX = 3'd7;
 
 // Writeback stage
 parameter WRITEBACK0 = 3'd0;
@@ -202,7 +227,7 @@ parameter WWAIT = 3'd5;
 
 parameter pL1CacheLines = 64;
 localparam pL1msb = $clog2(pL1CacheLines-1)-1+5;
-parameter RSTPC = 32'hFFFC0000;
+parameter RSTPC = 32'hFFFD0000;
 parameter RIBO = 1;
 
 endpackage
