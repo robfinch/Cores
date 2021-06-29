@@ -1,0 +1,784 @@
+comment ~
+================================================================================
+   
+ (C) FinchWare
+
+ Module : 
+
+ Description :
+
+ Parameters :
+
+ Registers Affected :
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+        .286
+        .model  small
+;IFDEF   LPROG
+;   DIST    equ     FAR
+;ELSE
+;   DIST    equ     NEAR
+;ENDIF
+
+MGET    equ     8000h
+
+; Raster operation parameter
+;
+ARGrop          equ   word ptr [bp+6]
+
+; Plotting modes
+
+MCOPY   equ     0
+MAND    equ     8h
+MOR     equ     10h
+MXOR    equ     18h
+
+SEQ_ADDR        equ     3c4h
+
+; Local parameters / variables for line drawing routines
+
+ARGx1           equ     word ptr [bp+4]
+ARGy1           equ     word ptr [bp+6]
+ARGx2           equ     word ptr [bp+8]
+ARGy2           equ     word ptr [bp+10]
+ARGn            equ     byte ptr [bp+12]
+VARincr1        equ     word ptr [bp-2]
+VARincr2        equ     word ptr [bp-4]
+VARroutine      equ     word ptr [bp-6]
+VARleafincr     equ     word ptr [bp-8]
+VARvertincr     equ     word ptr [bp-8]
+
+; Local paramters / variables for ellipse drawing routine
+
+ARGxc           equ     word ptr [bp+4]
+ARGyc           equ     word ptr [bp+6]
+ARGa            equ     word ptr [bp+8]
+ARGb            equ     word ptr [bp+10]
+;ARGn            equ     byte ptr [bp+12] defined above
+ULAddr          equ     word ptr [bp-2]
+URAddr          equ     word ptr [bp-4]
+LLAddr          equ     word ptr [bp-6]
+LRAddr          equ     word ptr [bp-8]
+LMask           equ     byte ptr [bp-10]
+RMask           equ     byte ptr [bp-12]
+VARd            equ     word ptr [bp-16]
+VARdx           equ     word ptr [bp-20]
+VARdy           equ     word ptr [bp-24]
+Asquared        equ     word ptr [bp-28]
+Bsquared        equ     word ptr [bp-32]
+TwoAsquared     equ     word ptr [bp-36]
+TwoBsquared     equ     word ptr [bp-40]
+
+; parameters for scan right routine
+
+ARGx            equ     word ptr [bp+4]
+ARGy            equ     word ptr [bp+6]
+
+; parameters for putblk
+
+ARGbuf          equ     word ptr [bp+8]
+ARGmask         equ     word ptr [bp+10]
+
+;    Registers appearing at 3c5h when sequencer address register is set to one
+; of these values
+
+RESET           equ     0       ; Bit 0 = 0 asynchronous reset - data loss possible - sequencer outputs high impedance
+                                ; Bit 1 = 0 synchronous reset - synchronously halts and clears sequencer register
+                                ;    This bit should be used to reset the sequencer if changing the clocking mode
+                                ;  register.
+                                ; Bit 2 - 7 Not used
+CLOCK_MODE      equ     1       ; 76543210 
+                                ; ||||||||- 1=8/0=9 dot clocks for characters 
+                                ; |||||||-- (EGA only) 1=2 of 5 cycles are for CRTC, 0=4 of 5 cycles are for CRTC
+                                ; ||||||--- Shift Load 0=Eight bits from each plane are serialized (4 streams), 1=16 bits (two streams)
+                                ; |||||---- Dot Clock 0 = normal, 1=divide(frequency) by two
+                                ; ||||----- (VGA only) similar to bit 2. 1=serialize 32 bits (4 planes) into 1 stream
+                                ; |||------ 1 = turn screen off (disable display)
+                                ; ||------- not used
+                                ; |-------- not used
+
+MAP_MASK        equ     2       ; 76543210
+                                ; ||||||||- bit plane 0 enable
+                                ; |||||||-- bit plane 1 enable
+                                ; ||||||--- bit plane 2 enable
+                                ; |||||---- bit plane 3 enable
+                                ; ||||----- not used
+                                ; |||------ not used
+                                ; ||------- not used
+                                ; |-------- not used
+
+CHAR_MAP_SEL    equ     3       ; bit plane 2 (text mode) is used for character generator
+                                ; 76543210
+                                ; ||||||||- character map select A (selects 8k section for primary character set)
+                                ; |||||||-- "
+                                ; ||||||--- Character map select B
+                                ; |||||---- "
+                                ; ||||----- (VGA only) character map select B bit 2
+                                ; |||------ (VGA only) character map select A bit 2
+                                ; ||------- not used
+                                ; |-------- not used
+
+MEMORY_MODE     equ     4       ; 76543210
+                                ; ||||||||- (EGA only) 0 = graphics, 1 = alpha mode
+                                ; |||||||-- 1 = enable address bit 14 and 15 when more than 64k is available
+                                ; ||||||--- 0 = odd/even mode
+                                ; |||||---- (VGA only) chain 4, 1 = 4 bit planes appear as consecutive bytes in memory (256 color mode)
+                                ; ||||----- not used
+                                ; |||------ not used
+                                ; ||------- not used
+                                ; |-------- not used
+
+GRAPHICS12      equ     3ceh
+; 0 Set/Reset
+; 1 Enable Set/Reset
+; 2 Color compare
+; 3 data rotate
+; 4 read map select
+; 5 mode register
+; 6 miscellaneous
+; 7 color don't care
+; 8 bit mask
+
+DATA_ROT_FUNC  equ      3        ; 76543210
+                                 ;    ³³ÀÄÁ rotate count ?
+                                 ;    ÀÁÄÄÄ alu function
+                                 ;           00 = pass through
+                                 ;           01 = AND
+                                 ;           10 = OR
+                                 ;           11 = XOR
+
+READ_MAP_SEL    equ     4       ; 76543210
+                                ; ³    ³ÀÁÄ bit plane number lsb (0, 1, 2, 3)
+                                ; ÀÄÄÄÄÁÄÄÄ not used
+
+MODE            equ     5       ; 76543210
+                                ; ³³³³³³ÀÁÄ write mode
+                                ; ³³³³³ÀÄÄÄ (EGA only) Test condition should always be 0 unless doing diagnostics
+                                ; ³³³³ÀÄÄÄÄ read mode 0 = read bit plane bits, 1 = each set bit means read bits matches color in color compare register
+                                ; ³³³ÀÄÄÄÄÄ odd/even
+                                ; ³³ÀÄÄÄÄÄÄ shift register
+                                ; ³ÀÄÄÄÄÄÄÄ (VGA only) 256 color mode	
+                                ; ÀÄÄÄÄÄÄÄÄ not used
+
+MISC            equ     6       ; 76543210
+                                ; ³  ³³³³ÀÄ 1=graphics, 0=alpha
+                                ; ³  ³³³ÀÄÄ chain odd maps to even maps
+                                ; ³  ³ÀÁÄÄÄ memory map 00 = 0a000h/128k
+                                ; ³  ³                 01 = 0a000h/64k
+                                ; ³  ³                 10 = 0b000h/32k
+                                ; ³  ³                 11 = 0b800h/32k
+                                ; ÀÄÄÁÄÄÄÄÄ not used
+
+COLOR_DONT_CARE equ     7       ; 76543210  allows CPU to ignore specified bit planes when
+                                ; ³  ³ÀÄÄÁÄ bit plane
+                                ; ÀÄÄÁÄÄÄÄÄ not used
+
+BIT_MASK        equ     8       ; 76543210
+                                ; ÀÄÄÄÄÄÄÁÄ a one allows the corresponding pixel to be changed by the CPU
+
+ATTRIB_ADDR     equ     3c0h    ; Attribute address register
+; 0-f Palette registers
+; 10 - mode control             ; attribute registers should only be set during vertical retrace
+; 11 - overscan color           ; 0-4 attribute register to address
+; 12 - color plane enable       ; 5 1= palette address 1=EGA internal registers can access
+; 13 - Horizontal pel panning   ; 6-7 not used
+; 14 - (VGA only) color select
+; VGA 3c1h = attributes may be read from
+
+DAC_STATE       equ     3c7h    ; read  register to determine if dac is in read or write mode
+                                ; bits 0-1 = 11b means dac is in write mode
+                                ;          = 00b means dac is in read mode
+                                ; bits 2-7 reserved
+;-------------------------------
+;   fgs structure variable
+;-------------------------------
+fgs     struc
+fgsOldState    dw    ?  ; pointer to video state save area
+fgsMaxX        dw    ?
+fgsMaxY        dw    ?
+fgsModeTbl     dw    ?  ; pointer to mode table
+
+fgsPatType     db    ?  ; pattern type
+fgsPatWidth    dw    ?  ; width of pattern
+fgsPatHeight   dw    ?  ; height of pattern
+fgsPatDepth    dw    ?  ; depth of pattern
+fgsColor       dw    ?  ; color (or pointer)
+fgsBorderColor dw    ?
+
+fgsCursorx     dw    ?
+fgsCursory     dw    ?
+fgsXRef        dw    ?
+fgsYRef        dw    ?
+
+fgsROP         db    ?
+fgsROPTbl      dw    ?
+
+fgsALUreg      db    ?  ; ALU register setting for drawing mode
+fgsColorPtr    dw    ?  ; pointer to color get routine
+fgsPointPtr    dw    ?  ; pointer to draw mode dependant portion
+fgsLinePtr     dw    ?  ;
+fgsVScreen     dw    ?
+fgsRscreen     dw    ?
+
+fgsClip        db    ?
+fgsclipleft    dw    ?
+fgscliptop     dw    ?
+fgsclipright   dw    ?
+fgsclipbottom  dw    ?
+
+fgsVGAType     dw    ?  ; manufacturer
+fgsPrevBank    dw    ?  ; previous 64k bank VGA was in
+fgsBankSwitch  dw    ?  ; address of bank switch routine
+fgsVGA512k     db    ?  ; VGA has >= 512k
+fgsGranularity db    ?  ; VESA granularity
+
+fgs ends
+
+;---------------------------------
+;   mode table structure variable
+;---------------------------------
+fgsMode struc
+fgsModeNo       dw ?  ; mode number
+fgsModeClrScrFn dd ?  ; clear screen function
+fgsModeGtPntFn  dw ?  ; get point
+fgsModePointFn  dw ?
+fgsModeColorTbl dw ?  ; pointer to color fn fetch table
+fgsModeAHLineFn dw ?
+fgsModeSHLineFn dw ?
+fgsModeLHLineFn dw ?
+fgsModeMaxX     dw ?
+fgsModeMaxY     dw ?
+fgsModeColors   dw ?
+fgsModeSeg      dw ?
+fgsModeROPTbl   dw ?
+fgsMode ends
+
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : mPointAddr4
+
+ Description :
+    Calculates the address of a point in the video buffer in mode4
+
+ Parameters :
+    bx - x coordinate
+    ax - y coordinate
+
+ Registers Affected :
+
+ Returns :
+    es:[bx]     - byte address
+    ah          - 3
+    cl          - bit address
+
+================================================================================
+~
+mPointAddr4  macro
+        local   mPointAddr42
+        mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to virtual screen
+        mov     cl,bl
+        and     cl,3      ; pixel address calculation
+        xor     cl,3
+        shl     cl,1      ; 2 * cl
+        shr     bx,2      ; calculate byte in row by dividing pixel column by 4
+        shr     ax,1      ; odd scan lines offset by 2000h
+        jnb     mPointAddr42
+        add     bh,20h   ; add 2000h to bx
+mPointAddr42:
+        shl     ax,4  ; * 16   ; multiply by 80 by adding 16 * ax + 64 * ax
+        add     bx,ax          ; to base (bx)
+        shl     ax,2  ; * 64
+        add     bx,ax
+endm
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : PointAddr6
+
+ Description :
+    Calculates the address of a point in the video buffer in mode6
+ 
+ Parameters :
+    bx - x coordinate
+    ax - y coordinate
+
+ Registers Affected :
+
+ Returns :
+    es:[bx]     - byte address
+    ah          - 1
+    cl          - bit address
+
+================================================================================
+~
+PointAddr6  macro
+        local   PointAddr62
+        mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to virtual screen
+        mov     cl,bl
+        and     cl,7      ; pixel address calculation
+        xor     cl,7
+        shr     bx,3      ; calculate byte in row by dividing pixel number by 8
+        shr     ax,1      ; odd scan lines offset by 2000h
+        jnb     PointAddr62
+        add     bh,20h   ; add 2000h to bx
+PointAddr62:
+        shl     ax,4  ; * 16   ; multiply by 80 by adding 16 * ax + 64 * ax
+        add     bx,ax          ; to base (bx)
+        shl     ax,2  ; * 64
+        add     bx,ax
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) FinchWare
+
+ Module : 
+
+ Description :
+    Calculates the address of a point in the video buffer in mode10
+
+ Parameters :
+    bx - x coordinate
+    ax - y coordinate
+
+ Registers Affected :
+
+================================================================================
+~
+PointAddr10 macro
+        mov es,word ptr _fgsv.fgsVScreen   ; Set es to point to virtual screen
+        mov cl,byte ptr _fgsv.fgsMaxX+1    ; Get high order byte of max X
+        add cl,2   ; 4 if 640, 3 if 320
+        shl ax,cl  ;  * 8 or 16
+        mov cx,ax
+        shl ax,2   ; * 32 or 64)
+        add ax,cx  ; *(32+8) or (64 + 16)
+        mov cl,bl ; pixel address calculation
+        and cl,7
+        xor cl,7
+        shr bx,3  ;   Calculate byte in row by dividing pixel number
+        add bx,ax ; by eight and adding in start of row.
+        mov ah,1  ; Set up pixel mask
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : mPointAddr13
+
+ Description :
+    Calculates the address of a point in mode 13h. This is coded as a macro
+ since it is very short and will save considerable time over calling a
+ separate routine.
+
+ Parameters :
+    BX = x coordinate
+    AX = y coordinate
+
+ Registers Affected :
+    AX,BX,DX,ES
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+mPointAddr13  macro
+      mov   es,word ptr _fgsv.fgsVScreen  ; Set es to point to virtual screen
+      add   bh,al ;; bx + 256 * y
+      shl   ax,6
+      add   bx,ax ;; bx + 64 * y
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : mPointAddr256
+
+ Description :
+    Calculates the address of a point in modes 10xh. This will also switch
+ the VGA bank if necessary. This is coded as a macro since it is very short
+ and will save considerable time over calling a separate routine.
+
+ Parameters :
+    BX = x coordinate
+    AX = y coordinate
+
+ Registers Affected :
+    AX,BX,DX,ES
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+mPointAddr256   macro
+      local PointAddr2561
+      mov   es,word ptr _fgsv.fgsVScreen   ; Set es to point to virtual screen
+      mul   word ptr _fgsv.fgsMaxX      ;; y * screen width
+      add   bx,ax                          ;; bx = offset into 64k bank
+      adc   dx,0                           ;; dx = bank number
+      cmp   dx,word ptr _fgsv.fgsPrevBank  ;; same bank as last time ?
+      je    short PointAddr2561
+      push  bx                             ;; save 64k index
+      mov   bx,dx                          ;; need bank number in bx
+      mov   word ptr _fgsv.fgsPrevBank,dx
+      call  word ptr _fgsv.fgsBankSwitch   ;; switch VGA to correct bank
+      pop   bx                             ;; get back index
+PointAddr2561:
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : mPointAddr256
+
+ Description :
+    Calculates the address of a point in modes 10xh. This will also switch
+ the VGA bank if necessary. This is coded as a macro since it is very short
+ and will save considerable time over calling a separate routine.
+
+ Parameters :
+    BX = x coordinate
+    AX = y coordinate
+
+ Registers Affected :
+    AX,BX,DX,ES
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+mPointAddr32k   macro
+      local PointAddr32k1
+      mov   es,word ptr _fgsv.fgsVScreen   ; Set es to point to virtual screen
+      mul   word ptr _fgsv.fgsMaxX         ;; y * screen width
+      add   bx,ax                          ;; bx = offset into 64k bank
+      adc   dx,0                           ;; dx = bank number
+      add   bx,bx                          ;; adjust memory index to account
+      adc   dx,dx                          ;; for word access rather than byte
+      cmp   dx,word ptr _fgsv.fgsPrevBank  ;; same bank as last time ?
+      je    short PointAddr32k1
+      push  bx                             ;; save 64k index
+      mov   bx,dx                          ;; need bank number in bx
+      mov   word ptr _fgsv.fgsPrevBank,dx
+      call  word ptr _fgsv.fgsBankSwitch   ;; switch VGA to correct bank
+      pop   bx                             ;; get back index
+PointAddr32k1:
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) FinchWare
+
+ Module : 
+
+ Description :
+
+ Parameters :
+
+ Registers Affected :
+
+ Returns :
+
+================================================================================
+~
+HLine macro PointAddr,cldec,clstart,ahmask
+        local HLine1, HLine2,HLine3,HLine4,HLineROP
+        enter   0,0
+        push    di
+        mov     ax,ARGy1
+        mov     bx,ARGx1
+        mov     dx,ARGx2
+        sub     dx,bx
+        jns     HLine1
+        neg     dx
+        mov     bx,ARGx2
+HLine1:
+        PointAddr       ;; calculate address of first point
+;;        sub     ch,ch
+        inc     dx
+HLine2:
+        mov     ax,ARGy1;; ax = y
+        call    word ptr _fgsv.fgsColorPtr
+        mov     ah,ahmask
+;;        or      ah,1
+        and     al,ah
+        not     ah
+;;        jcxz    HLine4
+        rol     ah,cl   ;; shift mask (ah) to pixel
+        rol     al,cl   ;; shift color bits (al)
+HLine4:
+HLineROP:
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+;        call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+        sub     cl,cldec;; update shift position
+        jns     HLine3  
+        mov     cl,clstart
+        inc     bx       ;; if shifted around, increment buffer address
+HLine3:
+        dec     dx
+        jnz     HLine2
+        pop     di
+        leave
+        ret
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) FinchWare
+
+ Module : 
+
+ Description :
+
+ Parameters :
+
+ Registers Affected :
+
+ Returns :
+
+================================================================================
+
+HLine macro PointAddr,cldec,clstart,ahmask
+        local HLine1, HLine2,HLine3
+        mov     ax,ARGy1
+        mov     bx,ARGx1
+        mov     dx,ARGx2
+        sub     dx,bx    ;; dx = number of pixels
+        jns     HLine1   ;; always draw left to right
+        neg     dx
+        mov     bx,ARGx2
+HLine1:
+        push    bx
+        PointAddr       ;; calculate address of first point
+        inc     dx
+        mov     di,bx   ;; es:di -> buffer
+        pop     bx
+HLine2:
+        mov     ax,ARGy1;; ax = y
+        call    word ptr _fgsv.fgsColorPtr
+        xchg    di,bx
+        mov     ah,ahmask
+        or      ah,1
+        and     al,ah
+        not     ah
+        rol     ah,cl   ;; shift mask (ah) to pixel
+        rol     al,cl   ;; shift color bits (al)
+        call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+        xchg    di,bx
+        sub     cl,cldec ;; update shift position
+        jns     HLine3  
+        mov     cl,clstart
+        inc     di      ;; if shifted around, increment buffer address
+HLine3:
+        inc     bx
+        dec     dx
+        jnz     HLine2
+endm
+; 
+~
+comment ~
+================================================================================
+   
+ (C) FinchWare
+
+ Module : 
+
+ Description :
+
+ Parameters :
+    CX = # pixels to draw
+
+ Registers Affected :
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+SHLine macro PointAddr,cldec,clstart,ahmask
+        local SHLine1, SHLine2,SHLine3
+        mov     ax,ARGy1
+        mov     bx,ARGx1
+        mov     dx,cx
+        push    bx
+        PointAddr       ;; calculate address of first point
+        inc     dx
+        mov     di,bx   ;; es:di -> buffer
+        pop     bx
+        mov     ax,ARGy1;; ax = y
+        call    word ptr _fgsv.fgsColorPtr
+        and     ch,ahmask
+        mov     ch,al
+SHLine2:
+        xchg    di,bx
+        mov     ah,NOT ahmask
+        mov     al,ch   ;; get back color value
+        rol     ah,cl   ;; shift mask (ah) to pixel
+        rol     al,cl   ;; shift color bits (al)
+        call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+        xchg    di,bx
+
+        sub     cl,cldec ;; update shift position
+
+        jns     SHLine3
+        mov     cl,clstart
+        inc     di      ;; if shifted around, increment buffer address
+SHLine3:
+        inc     bx
+        dec     dx
+        jnz     SHLine2
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : Point4
+
+ Description :
+    Plot point in 320 x 200 four colour mode (mode 4,5).
+
+ Parameters :
+
+ Registers Affected :
+
+ Returns :
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/02/19
+         Release     : 1.0
+         Description : new module
+
+================================================================================
+~
+Point macro PointAddr,ahmask
+        local   PointROP
+        enter   0,0
+        mov     ax,ARGy
+        mov     bx,ARGx
+        PointAddr
+        push    bx
+        mov     bx,ARGx
+        call    word ptr _fgsv.fgsColorPtr
+        pop     bx
+        mov     ah,ahmask
+        and     al,ah
+        not     ah
+        rol     ah,cl    ;; shift mask (ah) to pixel
+        rol     al,cl    ;; shift color bits (al)
+PointROP:
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+;;        call    word ptr _fgsv.fgsPointPtr
+        leave
+        ret
+endm
+; 
+comment ~
+================================================================================
+   
+ (C) 1992 FinchWare
+
+ Module : mGetPoint
+
+ Description :
+    Gets the value of a pixel in modes 4,5,6,11,13
+
+ Parameters :
+
+ Registers Affected :
+    AX,BX,CX,ES
+
+ Returns :
+    AX - value of pixel 0 to 3
+
+ Changes
+         Author      : R. Finch
+         Date        : 92/
+         Release     :
+         Description : new module
+
+================================================================================
+~
+mGetPoint macro PointAddr
+        enter   0,0
+        mov     ax,ARGy
+        mov     bx,ARGx
+        PointAddr
+        mov     al,es:[bx]
+        shr     al,cl
+        and     al,ah
+        sub     ah,ah
+        leave
+        ret
+endm
+; 
+
+

@@ -1,0 +1,2873 @@
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 1
+fgsa.asm
+
+
+
+      1					     .286
+      2	0000				     .model small
+      3
+      4				     include fgs.ah
+1     5				     comment ~
+1     6				     ================================================================================
+1     7
+1     8				      (C) FinchWare
+1     9
+1    10				      Module :
+1    11
+1    12				      Description :
+1    13
+1    14				      Parameters :
+1    15
+1    16				      Registers	Affected :
+1    17
+1    18				      Returns :
+1    19
+1    20				      Changes
+1    21					      Author	  : R. Finch
+1    22					      Date	  : 92/
+1    23					      Release	  :
+1    24					      Description : new	module
+1    25
+1    26				     ================================================================================
+1    27				     ~
+1    28					     .286
+1    29	0000				     .model  small
+1    30				     ;IFDEF   LPROG
+1    31				     ;	 DIST	 equ	 FAR
+1    32				     ;ELSE
+1    33				     ;	 DIST	 equ	 NEAR
+1    34				     ;ENDIF
+1    35
+1    36	      =8000		     MGET    equ     8000h
+1    37
+1    38				     ; Raster operation	parameter
+1    39				     ;
+1    40	      =	word ptr [bp+6]	     ARGrop	     equ   word	ptr [bp+6]
+1    41
+1    42				     ; Plotting	modes
+1    43
+1    44	      =0000		     MCOPY   equ     0
+1    45	      =0008		     MAND    equ     8h
+1    46	      =0010		     MOR     equ     10h
+1    47	      =0018		     MXOR    equ     18h
+1    48
+1    49	      =03C4		     SEQ_ADDR	     equ     3c4h
+1    50
+1    51				     ; Local parameters	/ variables for	line drawing routines
+1    52
+1    53	      =	word ptr [bp+4]	     ARGx1	     equ     word ptr [bp+4]
+1    54	      =	word ptr [bp+6]	     ARGy1	     equ     word ptr [bp+6]
+1    55	      =	word ptr [bp+8]	     ARGx2	     equ     word ptr [bp+8]
+1    56	      =	word ptr [bp+10]     ARGy2	     equ     word ptr [bp+10]
+1    57	      =	byte ptr [bp+12]     ARGn	     equ     byte ptr [bp+12]
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 2
+fgsa.asm
+
+
+
+1    58	      =	word ptr [bp-6]	     VARincr1	     equ     word ptr [bp-6]
+1    59	      =	word ptr [bp-8]	     VARincr2	     equ     word ptr [bp-8]
+1    60	      =	word ptr [bp-10]     VARroutine	     equ     word ptr [bp-10]
+1    61	      =	word ptr [bp-12]     VARleafincr     equ     word ptr [bp-12]
+1    62	      =	word ptr [bp-12]     VARvertincr     equ     word ptr [bp-12]
+1    63
+1    64				     ; Local paramters / variables for ellipse drawing routine
+1    65
+1    66	      =	word ptr [bp+4]	     ARGxc	     equ     word ptr [bp+4]
+1    67	      =	word ptr [bp+6]	     ARGyc	     equ     word ptr [bp+6]
+1    68	      =	word ptr [bp+8]	     ARGa	     equ     word ptr [bp+8]
+1    69	      =	word ptr [bp+10]     ARGb	     equ     word ptr [bp+10]
+1    70				     ;ARGn	      equ     byte ptr [bp+12] defined above
+1    71	      =	word ptr [bp-6]	     ULAddr	     equ     word ptr [bp-6]
+1    72	      =	word ptr [bp-8]	     URAddr	     equ     word ptr [bp-8]
+1    73	      =	word ptr [bp-10]     LLAddr	     equ     word ptr [bp-10]
+1    74	      =	word ptr [bp-12]     LRAddr	     equ     word ptr [bp-12]
+1    75	      =	byte ptr [bp-14]     LMask	     equ     byte ptr [bp-14]
+1    76	      =	byte ptr [bp-16]     RMask	     equ     byte ptr [bp-16]
+1    77	      =	word ptr [bp-20]     VARd	     equ     word ptr [bp-20]
+1    78	      =	word ptr [bp-24]     VARdx	     equ     word ptr [bp-24]
+1    79	      =	word ptr [bp-28]     VARdy	     equ     word ptr [bp-28]
+1    80	      =	word ptr [bp-32]     Asquared	     equ     word ptr [bp-32]
+1    81	      =	word ptr [bp-36]     Bsquared	     equ     word ptr [bp-36]
+1    82	      =	word ptr [bp-40]     TwoAsquared     equ     word ptr [bp-40]
+1    83	      =	word ptr [bp-44]     TwoBsquared     equ     word ptr [bp-44]
+1    84
+1    85				     ; parameters for scan right routine
+1    86
+1    87	      =	word ptr [bp+4]	     ARGx	     equ     word ptr [bp+4]
+1    88	      =	word ptr [bp+6]	     ARGy	     equ     word ptr [bp+6]
+1    89
+1    90				     ; parameters for putblk
+1    91
+1    92	      =	word ptr [bp+8]	     ARGbuf	     equ     word ptr [bp+8]
+1    93	      =	word ptr [bp+10]     ARGmask	     equ     word ptr [bp+10]
+1    94
+1    95				     ;	  Registers appearing at 3c5h when sequencer address register is set to	one
+1    96				     ; of these	values
+1    97
+1    98	      =0000		     RESET	     equ     0	     ; Bit 0 = 0 asynchronous reset - data loss	possible - sequencer+
+     99				     outputs high impedance
+1   100								     ; Bit 1 = 0 synchronous reset - synchronously halts and clears +
+    101				     sequencer register
+1   102								     ;	  This bit should be used to reset the sequencer if changing+
+    103				     the clocking mode
+1   104								     ;	register.
+1   105								     ; Bit 2 - 7 Not used
+1   106	      =0001		     CLOCK_MODE	     equ     1	     ; 76543210
+1   107								     ; ||||||||- 1=8/0=9 dot clocks for	characters
+1   108								     ; |||||||-- (EGA only) 1=2	of 5 cycles are	for CRTC, 0=4 of 5  +
+    109				     cycles are	for CRTC
+1   110								     ; ||||||--- Shift Load 0=Eight bits from each plane are	    +
+    111				     serialized	(4 streams), 1=16 bits (two streams)
+1   112								     ; |||||---- Dot Clock 0 = normal, 1=divide(frequency) by two
+1   113								     ; ||||----- (VGA only) similar to bit 2. 1=serialize 32 bits (4+
+    114				     planes) into 1 stream
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 3
+fgsa.asm
+
+
+
+1   115								     ; |||------ 1 = turn screen off (disable display)
+1   116								     ; ||------- not used
+1   117								     ; |-------- not used
+1   118
+1   119	      =0002		     MAP_MASK	     equ     2	     ; 76543210
+1   120								     ; ||||||||- bit plane 0 enable
+1   121								     ; |||||||-- bit plane 1 enable
+1   122								     ; ||||||--- bit plane 2 enable
+1   123								     ; |||||---- bit plane 3 enable
+1   124								     ; ||||----- not used
+1   125								     ; |||------ not used
+1   126								     ; ||------- not used
+1   127								     ; |-------- not used
+1   128
+1   129	      =0003		     CHAR_MAP_SEL    equ     3	     ; bit plane 2 (text mode) is used for character generator
+1   130								     ; 76543210
+1   131								     ; ||||||||- character map select A	(selects 8k section for	    +
+    132				     primary character set)
+1   133								     ; |||||||-- "
+1   134								     ; ||||||--- Character map select B
+1   135								     ; |||||---- "
+1   136								     ; ||||----- (VGA only) character map select B bit 2
+1   137								     ; |||------ (VGA only) character map select A bit 2
+1   138								     ; ||------- not used
+1   139								     ; |-------- not used
+1   140
+1   141	      =0004		     MEMORY_MODE     equ     4	     ; 76543210
+1   142								     ; ||||||||- (EGA only) 0 =	graphics, 1 = alpha mode
+1   143								     ; |||||||-- 1 = enable address bit	14 and 15 when more than 64k+
+    144				     is	available
+1   145								     ; ||||||--- 0 = odd/even mode
+1   146								     ; |||||---- (VGA only) chain 4, 1 = 4 bit planes appear as	    +
+    147				     consecutive bytes in memory (256 color mode)
+1   148								     ; ||||----- not used
+1   149								     ; |||------ not used
+1   150								     ; ||------- not used
+1   151								     ; |-------- not used
+1   152
+1   153	      =03CE		     GRAPHICS12	     equ     3ceh
+1   154				     ; 0 Set/Reset
+1   155				     ; 1 Enable	Set/Reset
+1   156				     ; 2 Color compare
+1   157				     ; 3 data rotate
+1   158				     ; 4 read map select
+1   159				     ; 5 mode register
+1   160				     ; 6 miscellaneous
+1   161				     ; 7 color don't care
+1   162				     ; 8 bit mask
+1   163
+1   164	      =0003		     DATA_ROT_FUNC  equ	     3	      ;	76543210
+1   165								      ;	   ³³ÀÄÁ rotate	count ?
+1   166								      ;	   ÀÁÄÄÄ alu function
+1   167								      ;		  00 = pass through
+1   168								      ;		  01 = AND
+1   169								      ;		  10 = OR
+1   170								      ;		  11 = XOR
+1   171
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 4
+fgsa.asm
+
+
+
+1   172	      =0004		     READ_MAP_SEL    equ     4	     ; 76543210
+1   173								     ; ³    ³ÀÁÄ bit plane number lsb (0, 1, 2,	3)
+1   174								     ; ÀÄÄÄÄÁÄÄÄ not used
+1   175
+1   176	      =0005		     MODE	     equ     5	     ; 76543210
+1   177								     ; ³³³³³³ÀÁÄ write mode
+1   178								     ; ³³³³³ÀÄÄÄ (EGA only) Test condition should always be 0 unless+
+    179				     doing diagnostics
+1   180								     ; ³³³³ÀÄÄÄÄ read mode 0 = read bit	plane bits, 1 =	each set bit+
+    181				     means read	bits matches color in color compare register
+1   182								     ; ³³³ÀÄÄÄÄÄ odd/even
+1   183								     ; ³³ÀÄÄÄÄÄÄ shift register
+1   184								     ; ³ÀÄÄÄÄÄÄÄ (VGA only) 256	color mode
+1   185								     ; ÀÄÄÄÄÄÄÄÄ not used
+1   186
+1   187	      =0006		     MISC	     equ     6	     ; 76543210
+1   188								     ; ³  ³³³³ÀÄ 1=graphics, 0=alpha
+1   189								     ; ³  ³³³ÀÄÄ chain odd maps	to even	maps
+1   190								     ; ³  ³ÀÁÄÄÄ memory	map 00 = 0a000h/128k
+1   191								     ; ³  ³		    01 = 0a000h/64k
+1   192								     ; ³  ³		    10 = 0b000h/32k
+1   193								     ; ³  ³		    11 = 0b800h/32k
+1   194								     ; ÀÄÄÁÄÄÄÄÄ not used
+1   195
+1   196	      =0007		     COLOR_DONT_CARE equ     7	     ; 76543210	 allows	CPU to ignore specified	bit planes when
+1   197								     ; ³  ³ÀÄÄÁÄ bit plane
+1   198								     ; ÀÄÄÁÄÄÄÄÄ not used
+1   199
+1   200	      =0008		     BIT_MASK	     equ     8	     ; 76543210
+1   201								     ; ÀÄÄÄÄÄÄÁÄ a one allows the corresponding	pixel to be changed +
+    202				     by	the CPU
+1   203
+1   204	      =03C0		     ATTRIB_ADDR     equ     3c0h    ; Attribute address register
+1   205				     ; 0-f Palette registers
+1   206				     ; 10 - mode control	     ; attribute registers should only be set during vertical retrace
+1   207				     ; 11 - overscan color	     ; 0-4 attribute register to address
+1   208				     ; 12 - color plane	enable	     ; 5 1= palette address 1=EGA internal registers can access
+1   209				     ; 13 - Horizontal pel panning   ; 6-7 not used
+1   210				     ; 14 - (VGA only) color select
+1   211				     ; VGA 3c1h	= attributes may be read from
+1   212
+1   213	      =03C7		     DAC_STATE	     equ     3c7h    ; read  register to determine if dac is in	read or	write mode
+1   214								     ; bits 0-1	= 11b means dac	is in write mode
+1   215								     ;		= 00b means dac	is in read mode
+1   216								     ; bits 2-7	reserved
+1   217				     ;-------------------------------
+1   218				     ;	 fgs structure variable
+1   219				     ;-------------------------------
+1   220	*000			     fgs     struc
+1   221	*000  01*(????)		     fgsOldState    dw	  ?  ; pointer to video	state save area
+1   222	*002  01*(????)		     fgsMaxX	    dw	  ?
+1   223	*004  01*(????)		     fgsMaxY	    dw	  ?
+1   224	*006  01*(????)		     fgsModeTbl	    dw	  ?  ; pointer to mode table
+1   225
+1   226	*008  01*(??)		     fgsPatType	    db	  ?  ; pattern type
+1   227	*009  01*(????)		     fgsPatWidth    dw	  ?  ; width of	pattern
+1   228	*00B  01*(????)		     fgsPatHeight   dw	  ?  ; height of pattern
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 5
+fgsa.asm
+
+
+
+1   229	*00D  01*(????)		     fgsPatDepth    dw	  ?  ; depth of	pattern
+1   230	*00F  01*(????)		     fgsColor	    dw	  ?  ; color (or pointer)
+1   231	*011  01*(????)		     fgsBorderColor dw	  ?
+1   232
+1   233	*013  01*(????)		     fgsCursorx	    dw	  ?
+1   234	*015  01*(????)		     fgsCursory	    dw	  ?
+1   235	*017  01*(????)		     fgsXRef	    dw	  ?
+1   236	*019  01*(????)		     fgsYRef	    dw	  ?
+1   237
+1   238	*01B  01*(??)		     fgsROP	    db	  ?
+1   239	*01C  01*(????)		     fgsROPTbl	    dw	  ?
+1   240
+1   241	*01E  01*(??)		     fgsALUreg	    db	  ?  ; ALU register setting for	drawing	mode
+1   242	*01F  01*(????)		     fgsColorPtr    dw	  ?  ; pointer to color	get routine
+1   243	*021  01*(????)		     fgsPointPtr    dw	  ?  ; pointer to draw mode dependant portion
+1   244	*023  01*(????)		     fgsLinePtr	    dw	  ?  ;
+1   245	*025  01*(????)		     fgsVScreen	    dw	  ?
+1   246	*027  01*(????)		     fgsRscreen	    dw	  ?
+1   247
+1   248	*029  01*(??)		     fgsClip	    db	  ?
+1   249	*02A  01*(????)		     fgsclipleft    dw	  ?
+1   250	*02C  01*(????)		     fgscliptop	    dw	  ?
+1   251	*02E  01*(????)		     fgsclipright   dw	  ?
+1   252	*030  01*(????)		     fgsclipbottom  dw	  ?
+1   253
+1   254	*032  01*(????)		     fgsVGAType	    dw	  ?  ; manufacturer
+1   255	*034  01*(????)		     fgsPrevBank    dw	  ?  ; previous	64k bank VGA was in
+1   256	*036  01*(????)		     fgsBankSwitch  dw	  ?  ; address of bank switch routine
+1   257	*038  01*(??)		     fgsVGA512k	    db	  ?  ; VGA has >= 512k
+1   258	*039  01*(??)		     fgsGranularity db	  ?  ; VESA granularity
+1   259
+1   260	*03A			     fgs ends
+1   261
+1   262				     ;---------------------------------
+1   263				     ;	 mode table structure variable
+1   264				     ;---------------------------------
+1   265	*000			     fgsMode struc
+1   266	*000  01*(????)		     fgsModeNo	     dw	?  ; mode number
+1   267	*002  01*(????????)	     fgsModeClrScrFn dd	?  ; clear screen function
+1   268	*006  01*(????)		     fgsModeGtPntFn  dw	?  ; get point
+1   269	*008  01*(????)		     fgsModePointFn  dw	?
+1   270	*00A  01*(????)		     fgsModeColorTbl dw	?  ; pointer to	color fn fetch table
+1   271	*00C  01*(????)		     fgsModeAHLineFn dw	?
+1   272	*00E  01*(????)		     fgsModeSHLineFn dw	?
+1   273	*010  01*(????)		     fgsModeLHLineFn dw	?
+1   274	*012  01*(????)		     fgsModeMaxX     dw	?
+1   275	*014  01*(????)		     fgsModeMaxY     dw	?
+1   276	*016  01*(????)		     fgsModeColors   dw	?
+1   277	*018  01*(????)		     fgsModeSeg	     dw	?
+1   278	*01A  01*(????)		     fgsModeROPTbl   dw	?
+1   279	*01C			     fgsMode ends
+1   280
+1   281				     comment ~
+1   282				     ================================================================================
+1   283
+1   284				      (C) 1992 FinchWare
+1   285
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 6
+fgsa.asm
+
+
+
+1   286				      Module : mPointAddr4
+1   287
+1   288				      Description :
+1   289					 Calculates the	address	of a point in the video	buffer in mode4
+1   290
+1   291				      Parameters :
+1   292					 bx - x	coordinate
+1   293					 ax - y	coordinate
+1   294
+1   295				      Registers	Affected :
+1   296
+1   297				      Returns :
+1   298					 es:[bx]     - byte address
+1   299					 ah	     - 3
+1   300					 cl	     - bit address
+1   301
+1   302				     ================================================================================
+1   303				     ~
+1   304				     mPointAddr4  macro
+1   305					     local   mPointAddr42
+1   306					     mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to	virtual	screen
+1   307					     mov     cl,bl
+1   308					     and     cl,3      ; pixel address calculation
+1   309					     xor     cl,3
+1   310					     shl     cl,1      ; 2 * cl
+1   311					     shr     bx,2      ; calculate byte	in row by dividing pixel column	by 4
+1   312					     shr     ax,1      ; odd scan lines	offset by 2000h
+1   313					     jnb     mPointAddr42
+1   314					     add     bh,20h   ;	add 2000h to bx
+1   315				     mPointAddr42:
+1   316					     shl     ax,4  ; * 16   ; multiply by 80 by	adding 16 * ax + 64 * ax
+1   317					     add     bx,ax	    ; to base (bx)
+1   318					     shl     ax,2  ; * 64
+1   319					     add     bx,ax
+1   320				     endm
+1   321				     comment ~
+1   322				     ================================================================================
+1   323
+1   324				      (C) 1992 FinchWare
+1   325
+1   326				      Module : PointAddr6
+1   327
+1   328				      Description :
+1   329					 Calculates the	address	of a point in the video	buffer in mode6
+1   330
+1   331				      Parameters :
+1   332					 bx - x	coordinate
+1   333					 ax - y	coordinate
+1   334
+1   335				      Registers	Affected :
+1   336
+1   337				      Returns :
+1   338					 es:[bx]     - byte address
+1   339					 ah	     - 1
+1   340					 cl	     - bit address
+1   341
+1   342				     ================================================================================
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 7
+fgsa.asm
+
+
+
+1   343				     ~
+1   344				     PointAddr6	 macro
+1   345					     local   PointAddr62
+1   346					     mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to	virtual	screen
+1   347					     mov     cl,bl
+1   348					     and     cl,7      ; pixel address calculation
+1   349					     xor     cl,7
+1   350					     shr     bx,3      ; calculate byte	in row by dividing pixel number	by 8
+1   351					     shr     ax,1      ; odd scan lines	offset by 2000h
+1   352					     jnb     PointAddr62
+1   353					     add     bh,20h   ;	add 2000h to bx
+1   354				     PointAddr62:
+1   355					     shl     ax,4  ; * 16   ; multiply by 80 by	adding 16 * ax + 64 * ax
+1   356					     add     bx,ax	    ; to base (bx)
+1   357					     shl     ax,2  ; * 64
+1   358					     add     bx,ax
+1   359				     endm
+1   360				     ; 
+1   361				     comment ~
+1   362				     ================================================================================
+1   363
+1   364				      (C) FinchWare
+1   365
+1   366				      Module :
+1   367
+1   368				      Description :
+1   369					 Calculates the	address	of a point in the video	buffer in mode10
+1   370
+1   371				      Parameters :
+1   372					 bx - x	coordinate
+1   373					 ax - y	coordinate
+1   374
+1   375				      Registers	Affected :
+1   376
+1   377				     ================================================================================
+1   378				     ~
+1   379				     PointAddr10 macro
+1   380					     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1   381					     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1   382					     add cl,2	; 4 if 640, 3 if 320
+1   383					     shl ax,cl	;  * 8 or 16
+1   384					     mov cx,ax
+1   385					     shl ax,2	; * 32 or 64)
+1   386					     add ax,cx	; *(32+8) or (64 + 16)
+1   387					     mov cl,bl ; pixel address calculation
+1   388					     and cl,7
+1   389					     xor cl,7
+1   390					     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1   391					     add bx,ax ; by eight and adding in	start of row.
+1   392					     mov ah,1  ; Set up	pixel mask
+1   393				     endm
+1   394				     ; 
+1   395				     comment ~
+1   396				     ================================================================================
+1   397
+1   398				      (C) 1992 FinchWare
+1   399
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 8
+fgsa.asm
+
+
+
+1   400				      Module : mPointAddr13
+1   401
+1   402				      Description :
+1   403					 Calculates the	address	of a point in mode 13h.	This is	coded as a macro
+1   404				      since it is very short and will save considerable	time over calling a
+1   405				      separate routine.
+1   406
+1   407				      Parameters :
+1   408					 BX = x	coordinate
+1   409					 AX = y	coordinate
+1   410
+1   411				      Registers	Affected :
+1   412					 AX,BX,DX,ES
+1   413
+1   414				      Returns :
+1   415
+1   416				      Changes
+1   417					      Author	  : R. Finch
+1   418					      Date	  : 92/
+1   419					      Release	  :
+1   420					      Description : new	module
+1   421
+1   422				     ================================================================================
+1   423				     ~
+1   424				     mPointAddr13  macro
+1   425					   mov	 es,word ptr _fgsv.fgsVScreen  ; Set es	to point to virtual screen
+1   426					   add	 bh,al ;; bx + 256 * y
+1   427					   shl	 ax,6
+1   428					   add	 bx,ax ;; bx + 64 * y
+1   429				     endm
+1   430				     ; 
+1   431				     comment ~
+1   432				     ================================================================================
+1   433
+1   434				      (C) 1992 FinchWare
+1   435
+1   436				      Module : mPointAddr256
+1   437
+1   438				      Description :
+1   439					 Calculates the	address	of a point in modes 10xh. This will also switch
+1   440				      the VGA bank if necessary. This is coded as a macro since	it is very short
+1   441				      and will save considerable time over calling a separate routine.
+1   442
+1   443				      Parameters :
+1   444					 BX = x	coordinate
+1   445					 AX = y	coordinate
+1   446
+1   447				      Registers	Affected :
+1   448					 AX,BX,DX,ES
+1   449
+1   450				      Returns :
+1   451
+1   452				      Changes
+1   453					      Author	  : R. Finch
+1   454					      Date	  : 92/
+1   455					      Release	  :
+1   456					      Description : new	module
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 9
+fgsa.asm
+
+
+
+1   457
+1   458				     ================================================================================
+1   459				     ~
+1   460				     mPointAddr256   macro
+1   461					   local PointAddr2561
+1   462					   mov	 es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1   463					   mul	 word ptr _fgsv.fgsMaxX	     ;;	y * screen width
+1   464					   add	 bx,ax				;; bx =	offset into 64k	bank
+1   465					   adc	 dx,0				;; dx =	bank number
+1   466					   cmp	 dx,word ptr _fgsv.fgsPrevBank	;; same	bank as	last time ?
+1   467					   je	 short PointAddr2561
+1   468					   push	 bx				;; save	64k index
+1   469					   mov	 bx,dx				;; need	bank number in bx
+1   470					   mov	 word ptr _fgsv.fgsPrevBank,dx
+1   471					   call	 word ptr _fgsv.fgsBankSwitch	;; switch VGA to correct bank
+1   472					   pop	 bx				;; get back index
+1   473				     PointAddr2561:
+1   474				     endm
+1   475				     ; 
+1   476				     comment ~
+1   477				     ================================================================================
+1   478
+1   479				      (C) 1992 FinchWare
+1   480
+1   481				      Module : mPointAddr256
+1   482
+1   483				      Description :
+1   484					 Calculates the	address	of a point in modes 10xh. This will also switch
+1   485				      the VGA bank if necessary. This is coded as a macro since	it is very short
+1   486				      and will save considerable time over calling a separate routine.
+1   487
+1   488				      Parameters :
+1   489					 BX = x	coordinate
+1   490					 AX = y	coordinate
+1   491
+1   492				      Registers	Affected :
+1   493					 AX,BX,DX,ES
+1   494
+1   495				      Returns :
+1   496
+1   497				      Changes
+1   498					      Author	  : R. Finch
+1   499					      Date	  : 92/
+1   500					      Release	  :
+1   501					      Description : new	module
+1   502
+1   503				     ================================================================================
+1   504				     ~
+1   505				     mPointAddr32k   macro
+1   506					   local PointAddr32k1
+1   507					   mov	 es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1   508					   mul	 word ptr _fgsv.fgsMaxX		;; y * screen width
+1   509					   add	 bx,ax				;; bx =	offset into 64k	bank
+1   510					   adc	 dx,0				;; dx =	bank number
+1   511					   add	 bx,bx				;; adjust memory index to account
+1   512					   adc	 dx,dx				;; for word access rather than byte
+1   513					   cmp	 dx,word ptr _fgsv.fgsPrevBank	;; same	bank as	last time ?
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 10
+fgsa.asm
+
+
+
+1   514					   je	 short PointAddr32k1
+1   515					   push	 bx				;; save	64k index
+1   516					   mov	 bx,dx				;; need	bank number in bx
+1   517					   mov	 word ptr _fgsv.fgsPrevBank,dx
+1   518					   call	 word ptr _fgsv.fgsBankSwitch	;; switch VGA to correct bank
+1   519					   pop	 bx				;; get back index
+1   520				     PointAddr32k1:
+1   521				     endm
+1   522				     ; 
+1   523				     comment ~
+1   524				     ================================================================================
+1   525
+1   526				      (C) FinchWare
+1   527
+1   528				      Module :
+1   529
+1   530				      Description :
+1   531
+1   532				      Parameters :
+1   533
+1   534				      Registers	Affected :
+1   535
+1   536				      Returns :
+1   537
+1   538				     ================================================================================
+1   539				     ~
+1   540				     HLine macro PointAddr,cldec,clstart,ahmask
+1   541					     local HLine1, HLine2,HLine3,HLine4,HLineROP
+1   542					     enter   0,0
+1   543					     push    di
+1   544					     mov     ax,ARGy1
+1   545					     mov     bx,ARGx1
+1   546					     mov     dx,ARGx2
+1   547					     sub     dx,bx
+1   548					     jns     HLine1
+1   549					     neg     dx
+1   550					     mov     bx,ARGx2
+1   551				     HLine1:
+1   552					     PointAddr	     ;;	calculate address of first point
+1   553				     ;;	       sub     ch,ch
+1   554					     inc     dx
+1   555				     HLine2:
+1   556					     mov     ax,ARGy1;;	ax = y
+1   557					     call    word ptr _fgsv.fgsColorPtr
+1   558					     mov     ah,ahmask
+1   559				     ;;	       or      ah,1
+1   560					     and     al,ah
+1   561					     not     ah
+1   562				     ;;	       jcxz    HLine4
+1   563					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1   564					     rol     al,cl   ;;	shift color bits (al)
+1   565				     HLine4:
+1   566				     HLineROP:
+1   567					     nop
+1   568					     nop
+1   569					     nop
+1   570					     nop
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 11
+fgsa.asm
+
+
+
+1   571					     nop
+1   572					     nop
+1   573					     nop
+1   574					     nop
+1   575					     nop
+1   576					     nop
+1   577				     ;	      call    _fgsv.fgsPointPtr	;; perform COPY/AND/OR/XOR
+1   578					     sub     cl,cldec;;	update shift position
+1   579					     jns     HLine3
+1   580					     mov     cl,clstart
+1   581					     inc     bx	      ;; if shifted around, increment buffer address
+1   582				     HLine3:
+1   583					     dec     dx
+1   584					     jnz     HLine2
+1   585					     pop     di
+1   586					     leave
+1   587					     ret
+1   588				     endm
+1   589				     ; 
+1   590				     comment ~
+1   591				     ================================================================================
+1   592
+1   593				      (C) FinchWare
+1   594
+1   595				      Module :
+1   596
+1   597				      Description :
+1   598
+1   599				      Parameters :
+1   600
+1   601				      Registers	Affected :
+1   602
+1   603				      Returns :
+1   604
+1   605				     ================================================================================
+1   606
+1   607				     HLine macro PointAddr,cldec,clstart,ahmask
+1   608					     local HLine1, HLine2,HLine3
+1   609					     mov     ax,ARGy1
+1   610					     mov     bx,ARGx1
+1   611					     mov     dx,ARGx2
+1   612					     sub     dx,bx    ;; dx = number of	pixels
+1   613					     jns     HLine1   ;; always	draw left to right
+1   614					     neg     dx
+1   615					     mov     bx,ARGx2
+1   616				     HLine1:
+1   617					     push    bx
+1   618					     PointAddr	     ;;	calculate address of first point
+1   619					     inc     dx
+1   620					     mov     di,bx   ;;	es:di -> buffer
+1   621					     pop     bx
+1   622				     HLine2:
+1   623					     mov     ax,ARGy1;;	ax = y
+1   624					     call    word ptr _fgsv.fgsColorPtr
+1   625					     xchg    di,bx
+1   626					     mov     ah,ahmask
+1   627					     or	     ah,1
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 12
+fgsa.asm
+
+
+
+1   628					     and     al,ah
+1   629					     not     ah
+1   630					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1   631					     rol     al,cl   ;;	shift color bits (al)
+1   632					     call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+1   633					     xchg    di,bx
+1   634					     sub     cl,cldec ;; update	shift position
+1   635					     jns     HLine3
+1   636					     mov     cl,clstart
+1   637					     inc     di	     ;;	if shifted around, increment buffer address
+1   638				     HLine3:
+1   639					     inc     bx
+1   640					     dec     dx
+1   641					     jnz     HLine2
+1   642				     endm
+1   643				     ; 
+1   644				     ~
+1   645				     comment ~
+1   646				     ================================================================================
+1   647
+1   648				      (C) FinchWare
+1   649
+1   650				      Module :
+1   651
+1   652				      Description :
+1   653
+1   654				      Parameters :
+1   655					 CX = #	pixels to draw
+1   656
+1   657				      Registers	Affected :
+1   658
+1   659				      Returns :
+1   660
+1   661				      Changes
+1   662					      Author	  : R. Finch
+1   663					      Date	  : 92/
+1   664					      Release	  :
+1   665					      Description : new	module
+1   666
+1   667				     ================================================================================
+1   668				     ~
+1   669				     SHLine macro PointAddr,cldec,clstart,ahmask
+1   670					     local SHLine1, SHLine2,SHLine3
+1   671					     mov     ax,ARGy1
+1   672					     mov     bx,ARGx1
+1   673					     mov     dx,cx
+1   674					     push    bx
+1   675					     PointAddr	     ;;	calculate address of first point
+1   676					     inc     dx
+1   677					     mov     di,bx   ;;	es:di -> buffer
+1   678					     pop     bx
+1   679					     mov     ax,ARGy1;;	ax = y
+1   680					     call    word ptr _fgsv.fgsColorPtr
+1   681					     and     ch,ahmask
+1   682					     mov     ch,al
+1   683				     SHLine2:
+1   684					     xchg    di,bx
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 13
+fgsa.asm
+
+
+
+1   685					     mov     ah,NOT ahmask
+1   686					     mov     al,ch   ;;	get back color value
+1   687					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1   688					     rol     al,cl   ;;	shift color bits (al)
+1   689					     call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+1   690					     xchg    di,bx
+1   691
+1   692					     sub     cl,cldec ;; update	shift position
+1   693
+1   694					     jns     SHLine3
+1   695					     mov     cl,clstart
+1   696					     inc     di	     ;;	if shifted around, increment buffer address
+1   697				     SHLine3:
+1   698					     inc     bx
+1   699					     dec     dx
+1   700					     jnz     SHLine2
+1   701				     endm
+1   702				     ; 
+1   703				     comment ~
+1   704				     ================================================================================
+1   705
+1   706				      (C) 1992 FinchWare
+1   707
+1   708				      Module : Point4
+1   709
+1   710				      Description :
+1   711					 Plot point in 320 x 200 four colour mode (mode	4,5).
+1   712
+1   713				      Parameters :
+1   714
+1   715				      Registers	Affected :
+1   716
+1   717				      Returns :
+1   718
+1   719				      Changes
+1   720					      Author	  : R. Finch
+1   721					      Date	  : 92/02/19
+1   722					      Release	  : 1.0
+1   723					      Description : new	module
+1   724
+1   725				     ================================================================================
+1   726				     ~
+1   727				     Point macro PointAddr,ahmask
+1   728					     local   PointROP
+1   729					     enter   0,0
+1   730					     mov     ax,ARGy
+1   731					     mov     bx,ARGx
+1   732					     PointAddr
+1   733					     push    bx
+1   734					     mov     bx,ARGx
+1   735					     call    word ptr _fgsv.fgsColorPtr
+1   736					     pop     bx
+1   737					     mov     ah,ahmask
+1   738					     and     al,ah
+1   739					     not     ah
+1   740					     rol     ah,cl    ;; shift mask (ah) to pixel
+1   741					     rol     al,cl    ;; shift color bits (al)
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 14
+fgsa.asm
+
+
+
+1   742				     PointROP:
+1   743					     nop
+1   744					     nop
+1   745					     nop
+1   746					     nop
+1   747					     nop
+1   748					     nop
+1   749					     nop
+1   750					     nop
+1   751					     nop
+1   752					     nop
+1   753					     nop
+1   754					     nop
+1   755				     ;;	       call    word ptr	_fgsv.fgsPointPtr
+1   756					     leave
+1   757					     ret
+1   758				     endm
+1   759				     ; 
+1   760				     comment ~
+1   761				     ================================================================================
+1   762
+1   763				      (C) 1992 FinchWare
+1   764
+1   765				      Module : mGetPoint
+1   766
+1   767				      Description :
+1   768					 Gets the value	of a pixel in modes 4,5,6,11,13
+1   769
+1   770				      Parameters :
+1   771
+1   772				      Registers	Affected :
+1   773					 AX,BX,CX,ES
+1   774
+1   775				      Returns :
+1   776					 AX - value of pixel 0 to 3
+1   777
+1   778				      Changes
+1   779					      Author	  : R. Finch
+1   780					      Date	  : 92/
+1   781					      Release	  :
+1   782					      Description : new	module
+1   783
+1   784				     ================================================================================
+1   785				     ~
+1   786				     mGetPoint macro PointAddr
+1   787					     enter   0,0
+1   788					     mov     ax,ARGy
+1   789					     mov     bx,ARGx
+1   790					     PointAddr
+1   791					     mov     al,es:[bx]
+1   792					     shr     al,cl
+1   793					     and     al,ah
+1   794					     sub     ah,ah
+1   795					     leave
+1   796					     ret
+1   797				     endm
+1   798				     ; 
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 15
+fgsa.asm
+
+
+
+1   799
+1   800
+    801
+    802				     comment ~
+    803				     ================================================================================
+    804
+    805				      (C) 1992 FinchWare
+    806
+    807				      Module : fgsa.asm
+    808
+    809				      Description :
+    810					 Supports point	drawing/getting	and line drawing for the following
+    811					 modes:
+    812
+    813					     mode resolution	 colors	   adapter
+    814					     6	    640	x 200	   2	   CGA/EGA/VGA
+    815					     d	    320	x 200	   16	   EGA/VGA
+    816					     e	    640	x 200	   16	   EGA/VGA
+    817					     f	    640	x 350	   mono	   EGA/VGA
+    818					     10	    640	x 350	   16	   EGA/VGA
+    819					     11	    640	x 480	   2	   MCGA/VGA
+    820					     12	    640	x 480	   16	   VGA
+    821
+    822					 Adapters
+    823					     CGA  - Color Graphics Adapter
+    824					     EGA  - Enhanced Graphics Adapter
+    825					     VGA  - Video Graphics Array
+    826					     MCGA - Multi Color	Graphics Array	(PS series)
+    827
+    828				      Parameters :
+    829
+    830				      Registers	Affected :
+    831
+    832				      Returns :
+    833
+    834					      Author	  : R. Finch
+    835					      Date	  : 90/06/08
+    836							  : 95/10/13
+    837							    96/04/04
+    838
+    839				     ================================================================================
+    840				     ~
+    841					     .286
+    842	0000				     .model  small
+    843
+    844				     include fgs.ah
+1   845				     comment ~
+1   846				     ================================================================================
+1   847
+1   848				      (C) FinchWare
+1   849
+1   850				      Module :
+1   851
+1   852				      Description :
+1   853
+1   854				      Parameters :
+1   855
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 16
+fgsa.asm
+
+
+
+1   856				      Registers	Affected :
+1   857
+1   858				      Returns :
+1   859
+1   860				      Changes
+1   861					      Author	  : R. Finch
+1   862					      Date	  : 92/
+1   863					      Release	  :
+1   864					      Description : new	module
+1   865
+1   866				     ================================================================================
+1   867				     ~
+1   868					     .286
+1   869	0000				     .model  small
+1   870				     ;IFDEF   LPROG
+1   871				     ;	 DIST	 equ	 FAR
+1   872				     ;ELSE
+1   873				     ;	 DIST	 equ	 NEAR
+1   874				     ;ENDIF
+1   875
+1   876	      =8000		     MGET    equ     8000h
+1   877
+1   878				     ; Raster operation	parameter
+1   879				     ;
+1   880	      =	word ptr [bp+6]	     ARGrop	     equ   word	ptr [bp+6]
+1   881
+1   882				     ; Plotting	modes
+1   883
+1   884	      =0000		     MCOPY   equ     0
+1   885	      =0008		     MAND    equ     8h
+1   886	      =0010		     MOR     equ     10h
+1   887	      =0018		     MXOR    equ     18h
+1   888
+1   889	      =03C4		     SEQ_ADDR	     equ     3c4h
+1   890
+1   891				     ; Local parameters	/ variables for	line drawing routines
+1   892
+1   893	      =	word ptr [bp+4]	     ARGx1	     equ     word ptr [bp+4]
+1   894	      =	word ptr [bp+6]	     ARGy1	     equ     word ptr [bp+6]
+1   895	      =	word ptr [bp+8]	     ARGx2	     equ     word ptr [bp+8]
+1   896	      =	word ptr [bp+10]     ARGy2	     equ     word ptr [bp+10]
+1   897	      =	byte ptr [bp+12]     ARGn	     equ     byte ptr [bp+12]
+1   898	      =	word ptr [bp-6]	     VARincr1	     equ     word ptr [bp-6]
+1   899	      =	word ptr [bp-8]	     VARincr2	     equ     word ptr [bp-8]
+1   900	      =	word ptr [bp-10]     VARroutine	     equ     word ptr [bp-10]
+1   901	      =	word ptr [bp-12]     VARleafincr     equ     word ptr [bp-12]
+1   902	      =	word ptr [bp-12]     VARvertincr     equ     word ptr [bp-12]
+1   903
+1   904				     ; Local paramters / variables for ellipse drawing routine
+1   905
+1   906	      =	word ptr [bp+4]	     ARGxc	     equ     word ptr [bp+4]
+1   907	      =	word ptr [bp+6]	     ARGyc	     equ     word ptr [bp+6]
+1   908	      =	word ptr [bp+8]	     ARGa	     equ     word ptr [bp+8]
+1   909	      =	word ptr [bp+10]     ARGb	     equ     word ptr [bp+10]
+1   910				     ;ARGn	      equ     byte ptr [bp+12] defined above
+1   911	      =	word ptr [bp-6]	     ULAddr	     equ     word ptr [bp-6]
+1   912	      =	word ptr [bp-8]	     URAddr	     equ     word ptr [bp-8]
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 17
+fgsa.asm
+
+
+
+1   913	      =	word ptr [bp-10]     LLAddr	     equ     word ptr [bp-10]
+1   914	      =	word ptr [bp-12]     LRAddr	     equ     word ptr [bp-12]
+1   915	      =	byte ptr [bp-14]     LMask	     equ     byte ptr [bp-14]
+1   916	      =	byte ptr [bp-16]     RMask	     equ     byte ptr [bp-16]
+1   917	      =	word ptr [bp-20]     VARd	     equ     word ptr [bp-20]
+1   918	      =	word ptr [bp-24]     VARdx	     equ     word ptr [bp-24]
+1   919	      =	word ptr [bp-28]     VARdy	     equ     word ptr [bp-28]
+1   920	      =	word ptr [bp-32]     Asquared	     equ     word ptr [bp-32]
+1   921	      =	word ptr [bp-36]     Bsquared	     equ     word ptr [bp-36]
+1   922	      =	word ptr [bp-40]     TwoAsquared     equ     word ptr [bp-40]
+1   923	      =	word ptr [bp-44]     TwoBsquared     equ     word ptr [bp-44]
+1   924
+1   925				     ; parameters for scan right routine
+1   926
+1   927	      =	word ptr [bp+4]	     ARGx	     equ     word ptr [bp+4]
+1   928	      =	word ptr [bp+6]	     ARGy	     equ     word ptr [bp+6]
+1   929
+1   930				     ; parameters for putblk
+1   931
+1   932	      =	word ptr [bp+8]	     ARGbuf	     equ     word ptr [bp+8]
+1   933	      =	word ptr [bp+10]     ARGmask	     equ     word ptr [bp+10]
+1   934
+1   935				     ;	  Registers appearing at 3c5h when sequencer address register is set to	one
+1   936				     ; of these	values
+1   937
+1   938	      =0000		     RESET	     equ     0	     ; Bit 0 = 0 asynchronous reset - data loss	possible - sequencer+
+    939				     outputs high impedance
+1   940								     ; Bit 1 = 0 synchronous reset - synchronously halts and clears +
+    941				     sequencer register
+1   942								     ;	  This bit should be used to reset the sequencer if changing+
+    943				     the clocking mode
+1   944								     ;	register.
+1   945								     ; Bit 2 - 7 Not used
+1   946	      =0001		     CLOCK_MODE	     equ     1	     ; 76543210
+1   947								     ; ||||||||- 1=8/0=9 dot clocks for	characters
+1   948								     ; |||||||-- (EGA only) 1=2	of 5 cycles are	for CRTC, 0=4 of 5  +
+    949				     cycles are	for CRTC
+1   950								     ; ||||||--- Shift Load 0=Eight bits from each plane are	    +
+    951				     serialized	(4 streams), 1=16 bits (two streams)
+1   952								     ; |||||---- Dot Clock 0 = normal, 1=divide(frequency) by two
+1   953								     ; ||||----- (VGA only) similar to bit 2. 1=serialize 32 bits (4+
+    954				     planes) into 1 stream
+1   955								     ; |||------ 1 = turn screen off (disable display)
+1   956								     ; ||------- not used
+1   957								     ; |-------- not used
+1   958
+1   959	      =0002		     MAP_MASK	     equ     2	     ; 76543210
+1   960								     ; ||||||||- bit plane 0 enable
+1   961								     ; |||||||-- bit plane 1 enable
+1   962								     ; ||||||--- bit plane 2 enable
+1   963								     ; |||||---- bit plane 3 enable
+1   964								     ; ||||----- not used
+1   965								     ; |||------ not used
+1   966								     ; ||------- not used
+1   967								     ; |-------- not used
+1   968
+1   969	      =0003		     CHAR_MAP_SEL    equ     3	     ; bit plane 2 (text mode) is used for character generator
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 18
+fgsa.asm
+
+
+
+1   970								     ; 76543210
+1   971								     ; ||||||||- character map select A	(selects 8k section for	    +
+    972				     primary character set)
+1   973								     ; |||||||-- "
+1   974								     ; ||||||--- Character map select B
+1   975								     ; |||||---- "
+1   976								     ; ||||----- (VGA only) character map select B bit 2
+1   977								     ; |||------ (VGA only) character map select A bit 2
+1   978								     ; ||------- not used
+1   979								     ; |-------- not used
+1   980
+1   981	      =0004		     MEMORY_MODE     equ     4	     ; 76543210
+1   982								     ; ||||||||- (EGA only) 0 =	graphics, 1 = alpha mode
+1   983								     ; |||||||-- 1 = enable address bit	14 and 15 when more than 64k+
+    984				     is	available
+1   985								     ; ||||||--- 0 = odd/even mode
+1   986								     ; |||||---- (VGA only) chain 4, 1 = 4 bit planes appear as	    +
+    987				     consecutive bytes in memory (256 color mode)
+1   988								     ; ||||----- not used
+1   989								     ; |||------ not used
+1   990								     ; ||------- not used
+1   991								     ; |-------- not used
+1   992
+1   993	      =03CE		     GRAPHICS12	     equ     3ceh
+1   994				     ; 0 Set/Reset
+1   995				     ; 1 Enable	Set/Reset
+1   996				     ; 2 Color compare
+1   997				     ; 3 data rotate
+1   998				     ; 4 read map select
+1   999				     ; 5 mode register
+1  1000				     ; 6 miscellaneous
+1  1001				     ; 7 color don't care
+1  1002				     ; 8 bit mask
+1  1003
+1  1004	      =0003		     DATA_ROT_FUNC  equ	     3	      ;	76543210
+1  1005								      ;	   ³³ÀÄÁ rotate	count ?
+1  1006								      ;	   ÀÁÄÄÄ alu function
+1  1007								      ;		  00 = pass through
+1  1008								      ;		  01 = AND
+1  1009								      ;		  10 = OR
+1  1010								      ;		  11 = XOR
+1  1011
+1  1012	      =0004		     READ_MAP_SEL    equ     4	     ; 76543210
+1  1013								     ; ³    ³ÀÁÄ bit plane number lsb (0, 1, 2,	3)
+1  1014								     ; ÀÄÄÄÄÁÄÄÄ not used
+1  1015
+1  1016	      =0005		     MODE	     equ     5	     ; 76543210
+1  1017								     ; ³³³³³³ÀÁÄ write mode
+1  1018								     ; ³³³³³ÀÄÄÄ (EGA only) Test condition should always be 0 unless+
+   1019				     doing diagnostics
+1  1020								     ; ³³³³ÀÄÄÄÄ read mode 0 = read bit	plane bits, 1 =	each set bit+
+   1021				     means read	bits matches color in color compare register
+1  1022								     ; ³³³ÀÄÄÄÄÄ odd/even
+1  1023								     ; ³³ÀÄÄÄÄÄÄ shift register
+1  1024								     ; ³ÀÄÄÄÄÄÄÄ (VGA only) 256	color mode
+1  1025								     ; ÀÄÄÄÄÄÄÄÄ not used
+1  1026
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 19
+fgsa.asm
+
+
+
+1  1027	      =0006		     MISC	     equ     6	     ; 76543210
+1  1028								     ; ³  ³³³³ÀÄ 1=graphics, 0=alpha
+1  1029								     ; ³  ³³³ÀÄÄ chain odd maps	to even	maps
+1  1030								     ; ³  ³ÀÁÄÄÄ memory	map 00 = 0a000h/128k
+1  1031								     ; ³  ³		    01 = 0a000h/64k
+1  1032								     ; ³  ³		    10 = 0b000h/32k
+1  1033								     ; ³  ³		    11 = 0b800h/32k
+1  1034								     ; ÀÄÄÁÄÄÄÄÄ not used
+1  1035
+1  1036	      =0007		     COLOR_DONT_CARE equ     7	     ; 76543210	 allows	CPU to ignore specified	bit planes when
+1  1037								     ; ³  ³ÀÄÄÁÄ bit plane
+1  1038								     ; ÀÄÄÁÄÄÄÄÄ not used
+1  1039
+1  1040	      =0008		     BIT_MASK	     equ     8	     ; 76543210
+1  1041								     ; ÀÄÄÄÄÄÄÁÄ a one allows the corresponding	pixel to be changed +
+   1042				     by	the CPU
+1  1043
+1  1044	      =03C0		     ATTRIB_ADDR     equ     3c0h    ; Attribute address register
+1  1045				     ; 0-f Palette registers
+1  1046				     ; 10 - mode control	     ; attribute registers should only be set during vertical retrace
+1  1047				     ; 11 - overscan color	     ; 0-4 attribute register to address
+1  1048				     ; 12 - color plane	enable	     ; 5 1= palette address 1=EGA internal registers can access
+1  1049				     ; 13 - Horizontal pel panning   ; 6-7 not used
+1  1050				     ; 14 - (VGA only) color select
+1  1051				     ; VGA 3c1h	= attributes may be read from
+1  1052
+1  1053	      =03C7		     DAC_STATE	     equ     3c7h    ; read  register to determine if dac is in	read or	write mode
+1  1054								     ; bits 0-1	= 11b means dac	is in write mode
+1  1055								     ;		= 00b means dac	is in read mode
+1  1056								     ; bits 2-7	reserved
+1  1057				     ;-------------------------------
+1  1058				     ;	 fgs structure variable
+1  1059				     ;-------------------------------
+1  1060	*000			     fgs     struc
+1  1061	*000  01*(????)		     fgsOldState    dw	  ?  ; pointer to video	state save area
+1  1062	*002  01*(????)		     fgsMaxX	    dw	  ?
+1  1063	*004  01*(????)		     fgsMaxY	    dw	  ?
+1  1064	*006  01*(????)		     fgsModeTbl	    dw	  ?  ; pointer to mode table
+1  1065
+1  1066	*008  01*(??)		     fgsPatType	    db	  ?  ; pattern type
+1  1067	*009  01*(????)		     fgsPatWidth    dw	  ?  ; width of	pattern
+1  1068	*00B  01*(????)		     fgsPatHeight   dw	  ?  ; height of pattern
+1  1069	*00D  01*(????)		     fgsPatDepth    dw	  ?  ; depth of	pattern
+1  1070	*00F  01*(????)		     fgsColor	    dw	  ?  ; color (or pointer)
+1  1071	*011  01*(????)		     fgsBorderColor dw	  ?
+1  1072
+1  1073	*013  01*(????)		     fgsCursorx	    dw	  ?
+1  1074	*015  01*(????)		     fgsCursory	    dw	  ?
+1  1075	*017  01*(????)		     fgsXRef	    dw	  ?
+1  1076	*019  01*(????)		     fgsYRef	    dw	  ?
+1  1077
+1  1078	*01B  01*(??)		     fgsROP	    db	  ?
+1  1079	*01C  01*(????)		     fgsROPTbl	    dw	  ?
+1  1080
+1  1081	*01E  01*(??)		     fgsALUreg	    db	  ?  ; ALU register setting for	drawing	mode
+1  1082	*01F  01*(????)		     fgsColorPtr    dw	  ?  ; pointer to color	get routine
+1  1083	*021  01*(????)		     fgsPointPtr    dw	  ?  ; pointer to draw mode dependant portion
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 20
+fgsa.asm
+
+
+
+1  1084	*023  01*(????)		     fgsLinePtr	    dw	  ?  ;
+1  1085	*025  01*(????)		     fgsVScreen	    dw	  ?
+1  1086	*027  01*(????)		     fgsRscreen	    dw	  ?
+1  1087
+1  1088	*029  01*(??)		     fgsClip	    db	  ?
+1  1089	*02A  01*(????)		     fgsclipleft    dw	  ?
+1  1090	*02C  01*(????)		     fgscliptop	    dw	  ?
+1  1091	*02E  01*(????)		     fgsclipright   dw	  ?
+1  1092	*030  01*(????)		     fgsclipbottom  dw	  ?
+1  1093
+1  1094	*032  01*(????)		     fgsVGAType	    dw	  ?  ; manufacturer
+1  1095	*034  01*(????)		     fgsPrevBank    dw	  ?  ; previous	64k bank VGA was in
+1  1096	*036  01*(????)		     fgsBankSwitch  dw	  ?  ; address of bank switch routine
+1  1097	*038  01*(??)		     fgsVGA512k	    db	  ?  ; VGA has >= 512k
+1  1098	*039  01*(??)		     fgsGranularity db	  ?  ; VESA granularity
+1  1099
+1  1100	*03A			     fgs ends
+1  1101
+1  1102				     ;---------------------------------
+1  1103				     ;	 mode table structure variable
+1  1104				     ;---------------------------------
+1  1105	*000			     fgsMode struc
+1  1106	*000  01*(????)		     fgsModeNo	     dw	?  ; mode number
+1  1107	*002  01*(????????)	     fgsModeClrScrFn dd	?  ; clear screen function
+1  1108	*006  01*(????)		     fgsModeGtPntFn  dw	?  ; get point
+1  1109	*008  01*(????)		     fgsModePointFn  dw	?
+1  1110	*00A  01*(????)		     fgsModeColorTbl dw	?  ; pointer to	color fn fetch table
+1  1111	*00C  01*(????)		     fgsModeAHLineFn dw	?
+1  1112	*00E  01*(????)		     fgsModeSHLineFn dw	?
+1  1113	*010  01*(????)		     fgsModeLHLineFn dw	?
+1  1114	*012  01*(????)		     fgsModeMaxX     dw	?
+1  1115	*014  01*(????)		     fgsModeMaxY     dw	?
+1  1116	*016  01*(????)		     fgsModeColors   dw	?
+1  1117	*018  01*(????)		     fgsModeSeg	     dw	?
+1  1118	*01A  01*(????)		     fgsModeROPTbl   dw	?
+1  1119	*01C			     fgsMode ends
+1  1120
+1  1121				     comment ~
+1  1122				     ================================================================================
+1  1123
+1  1124				      (C) 1992 FinchWare
+1  1125
+1  1126				      Module : mPointAddr4
+1  1127
+1  1128				      Description :
+1  1129					 Calculates the	address	of a point in the video	buffer in mode4
+1  1130
+1  1131				      Parameters :
+1  1132					 bx - x	coordinate
+1  1133					 ax - y	coordinate
+1  1134
+1  1135				      Registers	Affected :
+1  1136
+1  1137				      Returns :
+1  1138					 es:[bx]     - byte address
+1  1139					 ah	     - 3
+1  1140					 cl	     - bit address
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 21
+fgsa.asm
+
+
+
+1  1141
+1  1142				     ================================================================================
+1  1143				     ~
+1  1144				     mPointAddr4  macro
+1  1145					     local   mPointAddr42
+1  1146					     mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to	virtual	screen
+1  1147					     mov     cl,bl
+1  1148					     and     cl,3      ; pixel address calculation
+1  1149					     xor     cl,3
+1  1150					     shl     cl,1      ; 2 * cl
+1  1151					     shr     bx,2      ; calculate byte	in row by dividing pixel column	by 4
+1  1152					     shr     ax,1      ; odd scan lines	offset by 2000h
+1  1153					     jnb     mPointAddr42
+1  1154					     add     bh,20h   ;	add 2000h to bx
+1  1155				     mPointAddr42:
+1  1156					     shl     ax,4  ; * 16   ; multiply by 80 by	adding 16 * ax + 64 * ax
+1  1157					     add     bx,ax	    ; to base (bx)
+1  1158					     shl     ax,2  ; * 64
+1  1159					     add     bx,ax
+1  1160				     endm
+1  1161				     comment ~
+1  1162				     ================================================================================
+1  1163
+1  1164				      (C) 1992 FinchWare
+1  1165
+1  1166				      Module : PointAddr6
+1  1167
+1  1168				      Description :
+1  1169					 Calculates the	address	of a point in the video	buffer in mode6
+1  1170
+1  1171				      Parameters :
+1  1172					 bx - x	coordinate
+1  1173					 ax - y	coordinate
+1  1174
+1  1175				      Registers	Affected :
+1  1176
+1  1177				      Returns :
+1  1178					 es:[bx]     - byte address
+1  1179					 ah	     - 1
+1  1180					 cl	     - bit address
+1  1181
+1  1182				     ================================================================================
+1  1183				     ~
+1  1184				     PointAddr6	 macro
+1  1185					     local   PointAddr62
+1  1186					     mov     es,word ptr _fgsv.fgsVScreen  ; Set es to point to	virtual	screen
+1  1187					     mov     cl,bl
+1  1188					     and     cl,7      ; pixel address calculation
+1  1189					     xor     cl,7
+1  1190					     shr     bx,3      ; calculate byte	in row by dividing pixel number	by 8
+1  1191					     shr     ax,1      ; odd scan lines	offset by 2000h
+1  1192					     jnb     PointAddr62
+1  1193					     add     bh,20h   ;	add 2000h to bx
+1  1194				     PointAddr62:
+1  1195					     shl     ax,4  ; * 16   ; multiply by 80 by	adding 16 * ax + 64 * ax
+1  1196					     add     bx,ax	    ; to base (bx)
+1  1197					     shl     ax,2  ; * 64
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 22
+fgsa.asm
+
+
+
+1  1198					     add     bx,ax
+1  1199				     endm
+1  1200				     ; 
+1  1201				     comment ~
+1  1202				     ================================================================================
+1  1203
+1  1204				      (C) FinchWare
+1  1205
+1  1206				      Module :
+1  1207
+1  1208				      Description :
+1  1209					 Calculates the	address	of a point in the video	buffer in mode10
+1  1210
+1  1211				      Parameters :
+1  1212					 bx - x	coordinate
+1  1213					 ax - y	coordinate
+1  1214
+1  1215				      Registers	Affected :
+1  1216
+1  1217				     ================================================================================
+1  1218				     ~
+1  1219				     PointAddr10 macro
+1  1220					     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  1221					     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1  1222					     add cl,2	; 4 if 640, 3 if 320
+1  1223					     shl ax,cl	;  * 8 or 16
+1  1224					     mov cx,ax
+1  1225					     shl ax,2	; * 32 or 64)
+1  1226					     add ax,cx	; *(32+8) or (64 + 16)
+1  1227					     mov cl,bl ; pixel address calculation
+1  1228					     and cl,7
+1  1229					     xor cl,7
+1  1230					     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1  1231					     add bx,ax ; by eight and adding in	start of row.
+1  1232					     mov ah,1  ; Set up	pixel mask
+1  1233				     endm
+1  1234				     ; 
+1  1235				     comment ~
+1  1236				     ================================================================================
+1  1237
+1  1238				      (C) 1992 FinchWare
+1  1239
+1  1240				      Module : mPointAddr13
+1  1241
+1  1242				      Description :
+1  1243					 Calculates the	address	of a point in mode 13h.	This is	coded as a macro
+1  1244				      since it is very short and will save considerable	time over calling a
+1  1245				      separate routine.
+1  1246
+1  1247				      Parameters :
+1  1248					 BX = x	coordinate
+1  1249					 AX = y	coordinate
+1  1250
+1  1251				      Registers	Affected :
+1  1252					 AX,BX,DX,ES
+1  1253
+1  1254				      Returns :
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 23
+fgsa.asm
+
+
+
+1  1255
+1  1256				      Changes
+1  1257					      Author	  : R. Finch
+1  1258					      Date	  : 92/
+1  1259					      Release	  :
+1  1260					      Description : new	module
+1  1261
+1  1262				     ================================================================================
+1  1263				     ~
+1  1264				     mPointAddr13  macro
+1  1265					   mov	 es,word ptr _fgsv.fgsVScreen  ; Set es	to point to virtual screen
+1  1266					   add	 bh,al ;; bx + 256 * y
+1  1267					   shl	 ax,6
+1  1268					   add	 bx,ax ;; bx + 64 * y
+1  1269				     endm
+1  1270				     ; 
+1  1271				     comment ~
+1  1272				     ================================================================================
+1  1273
+1  1274				      (C) 1992 FinchWare
+1  1275
+1  1276				      Module : mPointAddr256
+1  1277
+1  1278				      Description :
+1  1279					 Calculates the	address	of a point in modes 10xh. This will also switch
+1  1280				      the VGA bank if necessary. This is coded as a macro since	it is very short
+1  1281				      and will save considerable time over calling a separate routine.
+1  1282
+1  1283				      Parameters :
+1  1284					 BX = x	coordinate
+1  1285					 AX = y	coordinate
+1  1286
+1  1287				      Registers	Affected :
+1  1288					 AX,BX,DX,ES
+1  1289
+1  1290				      Returns :
+1  1291
+1  1292				      Changes
+1  1293					      Author	  : R. Finch
+1  1294					      Date	  : 92/
+1  1295					      Release	  :
+1  1296					      Description : new	module
+1  1297
+1  1298				     ================================================================================
+1  1299				     ~
+1  1300				     mPointAddr256   macro
+1  1301					   local PointAddr2561
+1  1302					   mov	 es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  1303					   mul	 word ptr _fgsv.fgsMaxX	     ;;	y * screen width
+1  1304					   add	 bx,ax				;; bx =	offset into 64k	bank
+1  1305					   adc	 dx,0				;; dx =	bank number
+1  1306					   cmp	 dx,word ptr _fgsv.fgsPrevBank	;; same	bank as	last time ?
+1  1307					   je	 short PointAddr2561
+1  1308					   push	 bx				;; save	64k index
+1  1309					   mov	 bx,dx				;; need	bank number in bx
+1  1310					   mov	 word ptr _fgsv.fgsPrevBank,dx
+1  1311					   call	 word ptr _fgsv.fgsBankSwitch	;; switch VGA to correct bank
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 24
+fgsa.asm
+
+
+
+1  1312					   pop	 bx				;; get back index
+1  1313				     PointAddr2561:
+1  1314				     endm
+1  1315				     ; 
+1  1316				     comment ~
+1  1317				     ================================================================================
+1  1318
+1  1319				      (C) 1992 FinchWare
+1  1320
+1  1321				      Module : mPointAddr256
+1  1322
+1  1323				      Description :
+1  1324					 Calculates the	address	of a point in modes 10xh. This will also switch
+1  1325				      the VGA bank if necessary. This is coded as a macro since	it is very short
+1  1326				      and will save considerable time over calling a separate routine.
+1  1327
+1  1328				      Parameters :
+1  1329					 BX = x	coordinate
+1  1330					 AX = y	coordinate
+1  1331
+1  1332				      Registers	Affected :
+1  1333					 AX,BX,DX,ES
+1  1334
+1  1335				      Returns :
+1  1336
+1  1337				      Changes
+1  1338					      Author	  : R. Finch
+1  1339					      Date	  : 92/
+1  1340					      Release	  :
+1  1341					      Description : new	module
+1  1342
+1  1343				     ================================================================================
+1  1344				     ~
+1  1345				     mPointAddr32k   macro
+1  1346					   local PointAddr32k1
+1  1347					   mov	 es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  1348					   mul	 word ptr _fgsv.fgsMaxX		;; y * screen width
+1  1349					   add	 bx,ax				;; bx =	offset into 64k	bank
+1  1350					   adc	 dx,0				;; dx =	bank number
+1  1351					   add	 bx,bx				;; adjust memory index to account
+1  1352					   adc	 dx,dx				;; for word access rather than byte
+1  1353					   cmp	 dx,word ptr _fgsv.fgsPrevBank	;; same	bank as	last time ?
+1  1354					   je	 short PointAddr32k1
+1  1355					   push	 bx				;; save	64k index
+1  1356					   mov	 bx,dx				;; need	bank number in bx
+1  1357					   mov	 word ptr _fgsv.fgsPrevBank,dx
+1  1358					   call	 word ptr _fgsv.fgsBankSwitch	;; switch VGA to correct bank
+1  1359					   pop	 bx				;; get back index
+1  1360				     PointAddr32k1:
+1  1361				     endm
+1  1362				     ; 
+1  1363				     comment ~
+1  1364				     ================================================================================
+1  1365
+1  1366				      (C) FinchWare
+1  1367
+1  1368				      Module :
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 25
+fgsa.asm
+
+
+
+1  1369
+1  1370				      Description :
+1  1371
+1  1372				      Parameters :
+1  1373
+1  1374				      Registers	Affected :
+1  1375
+1  1376				      Returns :
+1  1377
+1  1378				     ================================================================================
+1  1379				     ~
+1  1380				     HLine macro PointAddr,cldec,clstart,ahmask
+1  1381					     local HLine1, HLine2,HLine3,HLine4,HLineROP
+1  1382					     enter   0,0
+1  1383					     push    di
+1  1384					     mov     ax,ARGy1
+1  1385					     mov     bx,ARGx1
+1  1386					     mov     dx,ARGx2
+1  1387					     sub     dx,bx
+1  1388					     jns     HLine1
+1  1389					     neg     dx
+1  1390					     mov     bx,ARGx2
+1  1391				     HLine1:
+1  1392					     PointAddr	     ;;	calculate address of first point
+1  1393				     ;;	       sub     ch,ch
+1  1394					     inc     dx
+1  1395				     HLine2:
+1  1396					     mov     ax,ARGy1;;	ax = y
+1  1397					     call    word ptr _fgsv.fgsColorPtr
+1  1398					     mov     ah,ahmask
+1  1399				     ;;	       or      ah,1
+1  1400					     and     al,ah
+1  1401					     not     ah
+1  1402				     ;;	       jcxz    HLine4
+1  1403					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1  1404					     rol     al,cl   ;;	shift color bits (al)
+1  1405				     HLine4:
+1  1406				     HLineROP:
+1  1407					     nop
+1  1408					     nop
+1  1409					     nop
+1  1410					     nop
+1  1411					     nop
+1  1412					     nop
+1  1413					     nop
+1  1414					     nop
+1  1415					     nop
+1  1416					     nop
+1  1417				     ;	      call    _fgsv.fgsPointPtr	;; perform COPY/AND/OR/XOR
+1  1418					     sub     cl,cldec;;	update shift position
+1  1419					     jns     HLine3
+1  1420					     mov     cl,clstart
+1  1421					     inc     bx	      ;; if shifted around, increment buffer address
+1  1422				     HLine3:
+1  1423					     dec     dx
+1  1424					     jnz     HLine2
+1  1425					     pop     di
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 26
+fgsa.asm
+
+
+
+1  1426					     leave
+1  1427					     ret
+1  1428				     endm
+1  1429				     ; 
+1  1430				     comment ~
+1  1431				     ================================================================================
+1  1432
+1  1433				      (C) FinchWare
+1  1434
+1  1435				      Module :
+1  1436
+1  1437				      Description :
+1  1438
+1  1439				      Parameters :
+1  1440
+1  1441				      Registers	Affected :
+1  1442
+1  1443				      Returns :
+1  1444
+1  1445				     ================================================================================
+1  1446
+1  1447				     HLine macro PointAddr,cldec,clstart,ahmask
+1  1448					     local HLine1, HLine2,HLine3
+1  1449					     mov     ax,ARGy1
+1  1450					     mov     bx,ARGx1
+1  1451					     mov     dx,ARGx2
+1  1452					     sub     dx,bx    ;; dx = number of	pixels
+1  1453					     jns     HLine1   ;; always	draw left to right
+1  1454					     neg     dx
+1  1455					     mov     bx,ARGx2
+1  1456				     HLine1:
+1  1457					     push    bx
+1  1458					     PointAddr	     ;;	calculate address of first point
+1  1459					     inc     dx
+1  1460					     mov     di,bx   ;;	es:di -> buffer
+1  1461					     pop     bx
+1  1462				     HLine2:
+1  1463					     mov     ax,ARGy1;;	ax = y
+1  1464					     call    word ptr _fgsv.fgsColorPtr
+1  1465					     xchg    di,bx
+1  1466					     mov     ah,ahmask
+1  1467					     or	     ah,1
+1  1468					     and     al,ah
+1  1469					     not     ah
+1  1470					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1  1471					     rol     al,cl   ;;	shift color bits (al)
+1  1472					     call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+1  1473					     xchg    di,bx
+1  1474					     sub     cl,cldec ;; update	shift position
+1  1475					     jns     HLine3
+1  1476					     mov     cl,clstart
+1  1477					     inc     di	     ;;	if shifted around, increment buffer address
+1  1478				     HLine3:
+1  1479					     inc     bx
+1  1480					     dec     dx
+1  1481					     jnz     HLine2
+1  1482				     endm
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 27
+fgsa.asm
+
+
+
+1  1483				     ; 
+1  1484				     ~
+1  1485				     comment ~
+1  1486				     ================================================================================
+1  1487
+1  1488				      (C) FinchWare
+1  1489
+1  1490				      Module :
+1  1491
+1  1492				      Description :
+1  1493
+1  1494				      Parameters :
+1  1495					 CX = #	pixels to draw
+1  1496
+1  1497				      Registers	Affected :
+1  1498
+1  1499				      Returns :
+1  1500
+1  1501				      Changes
+1  1502					      Author	  : R. Finch
+1  1503					      Date	  : 92/
+1  1504					      Release	  :
+1  1505					      Description : new	module
+1  1506
+1  1507				     ================================================================================
+1  1508				     ~
+1  1509				     SHLine macro PointAddr,cldec,clstart,ahmask
+1  1510					     local SHLine1, SHLine2,SHLine3
+1  1511					     mov     ax,ARGy1
+1  1512					     mov     bx,ARGx1
+1  1513					     mov     dx,cx
+1  1514					     push    bx
+1  1515					     PointAddr	     ;;	calculate address of first point
+1  1516					     inc     dx
+1  1517					     mov     di,bx   ;;	es:di -> buffer
+1  1518					     pop     bx
+1  1519					     mov     ax,ARGy1;;	ax = y
+1  1520					     call    word ptr _fgsv.fgsColorPtr
+1  1521					     and     ch,ahmask
+1  1522					     mov     ch,al
+1  1523				     SHLine2:
+1  1524					     xchg    di,bx
+1  1525					     mov     ah,NOT ahmask
+1  1526					     mov     al,ch   ;;	get back color value
+1  1527					     rol     ah,cl   ;;	shift mask (ah)	to pixel
+1  1528					     rol     al,cl   ;;	shift color bits (al)
+1  1529					     call    _fgsv.fgsPointPtr ;; perform COPY/AND/OR/XOR
+1  1530					     xchg    di,bx
+1  1531
+1  1532					     sub     cl,cldec ;; update	shift position
+1  1533
+1  1534					     jns     SHLine3
+1  1535					     mov     cl,clstart
+1  1536					     inc     di	     ;;	if shifted around, increment buffer address
+1  1537				     SHLine3:
+1  1538					     inc     bx
+1  1539					     dec     dx
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 28
+fgsa.asm
+
+
+
+1  1540					     jnz     SHLine2
+1  1541				     endm
+1  1542				     ; 
+1  1543				     comment ~
+1  1544				     ================================================================================
+1  1545
+1  1546				      (C) 1992 FinchWare
+1  1547
+1  1548				      Module : Point4
+1  1549
+1  1550				      Description :
+1  1551					 Plot point in 320 x 200 four colour mode (mode	4,5).
+1  1552
+1  1553				      Parameters :
+1  1554
+1  1555				      Registers	Affected :
+1  1556
+1  1557				      Returns :
+1  1558
+1  1559				      Changes
+1  1560					      Author	  : R. Finch
+1  1561					      Date	  : 92/02/19
+1  1562					      Release	  : 1.0
+1  1563					      Description : new	module
+1  1564
+1  1565				     ================================================================================
+1  1566				     ~
+1  1567				     Point macro PointAddr,ahmask
+1  1568					     local   PointROP
+1  1569					     enter   0,0
+1  1570					     mov     ax,ARGy
+1  1571					     mov     bx,ARGx
+1  1572					     PointAddr
+1  1573					     push    bx
+1  1574					     mov     bx,ARGx
+1  1575					     call    word ptr _fgsv.fgsColorPtr
+1  1576					     pop     bx
+1  1577					     mov     ah,ahmask
+1  1578					     and     al,ah
+1  1579					     not     ah
+1  1580					     rol     ah,cl    ;; shift mask (ah) to pixel
+1  1581					     rol     al,cl    ;; shift color bits (al)
+1  1582				     PointROP:
+1  1583					     nop
+1  1584					     nop
+1  1585					     nop
+1  1586					     nop
+1  1587					     nop
+1  1588					     nop
+1  1589					     nop
+1  1590					     nop
+1  1591					     nop
+1  1592					     nop
+1  1593					     nop
+1  1594					     nop
+1  1595				     ;;	       call    word ptr	_fgsv.fgsPointPtr
+1  1596					     leave
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 29
+fgsa.asm
+
+
+
+1  1597					     ret
+1  1598				     endm
+1  1599				     ; 
+1  1600				     comment ~
+1  1601				     ================================================================================
+1  1602
+1  1603				      (C) 1992 FinchWare
+1  1604
+1  1605				      Module : mGetPoint
+1  1606
+1  1607				      Description :
+1  1608					 Gets the value	of a pixel in modes 4,5,6,11,13
+1  1609
+1  1610				      Parameters :
+1  1611
+1  1612				      Registers	Affected :
+1  1613					 AX,BX,CX,ES
+1  1614
+1  1615				      Returns :
+1  1616					 AX - value of pixel 0 to 3
+1  1617
+1  1618				      Changes
+1  1619					      Author	  : R. Finch
+1  1620					      Date	  : 92/
+1  1621					      Release	  :
+1  1622					      Description : new	module
+1  1623
+1  1624				     ================================================================================
+1  1625				     ~
+1  1626				     mGetPoint macro PointAddr
+1  1627					     enter   0,0
+1  1628					     mov     ax,ARGy
+1  1629					     mov     bx,ARGx
+1  1630					     PointAddr
+1  1631					     mov     al,es:[bx]
+1  1632					     shr     al,cl
+1  1633					     and     al,ah
+1  1634					     sub     ah,ah
+1  1635					     leave
+1  1636					     ret
+1  1637				     endm
+1  1638				     ; 
+1  1639
+1  1640
+   1641
+   1642				     extrn   _fgsv:word
+   1643				     extrn   AHLine256:near
+   1644				     extrn   SHLine256:near
+   1645				     extrn   LHLine256:near
+   1646				     extrn   GetPoint256:near
+   1647				     extrn   Point256:near
+   1648				     extrn   ClrScr256:far
+   1649
+   1650				     extrn   AHLine13:near
+   1651				     extrn   SHLine13:near
+   1652				     extrn   LHLine13:near
+   1653				     extrn   GetPoint13:near
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 30
+fgsa.asm
+
+
+
+   1654				     extrn   Point13:near
+   1655				     extrn   ClrScr13:far
+   1656
+   1657				     extrn   AHLine32k:near
+   1658				     extrn   SHLine32k:near
+   1659				     extrn   LHLine32k:near
+   1660				     extrn   GetPoint32k:near
+   1661				     extrn   Point32k:near
+   1662				     extrn   ClrScr32k:far
+   1663
+   1664				     extrn   ROP13Tbl:near
+   1665				     extrn   ROP256Tbl:near
+   1666				     extrn   ROP32kTbl:near
+   1667
+   1668				     extrn _RCopy:near
+   1669				     extrn _ROPAnd:near
+   1670				     extrn _ROr:near
+   1671				     extrn _RXor:near
+   1672				     extrn _RBlack:near
+   1673				     extrn _RWhite:near
+   1674				     extrn _RNOP:near
+   1675				     extrn _RNot:near
+   1676				     extrn _RNotCopy:near
+   1677				     extrn _RNotAnd:near
+   1678				     extrn _RNotOr:near
+   1679				     extrn _RNotXor:near
+   1680				     extrn _RNotScrOr:near
+   1681				     extrn _RNotScrAnd:near
+   1682				     extrn _RScrOrNot:near
+   1683				     extrn _RScrAndNot:near
+   1684
+   1685				     extrn   ClrScr4:far
+   1686				     extrn   GetPoint4:near
+   1687				     extrn   Point4:near
+   1688				     extrn   HLine4:near
+   1689				     extrn   ROP4Tbl:near
+   1690
+   1691				     extrn   ClrScr6:far
+   1692				     extrn   GetPoint6:near
+   1693				     extrn   Point6:near
+   1694				     extrn   HLine6:near
+   1695				     extrn   ROP6Tbl:near
+   1696
+   1697				     extrn   ClrScr10:far
+   1698				     extrn   GetPoint10:near
+   1699				     extrn   Point10:near
+   1700				     extrn   HLine10:near
+   1701				     extrn   SHLine10:near
+   1702				     extrn   ROP10Tbl:near
+   1703
+   1704				     extrn   ColorTbl:near
+   1705				     extrn   ColorTbl256:near
+   1706				     extrn   ColorTbl32k:near
+   1707
+   1708				     public  _ModeTable
+   1709
+   1710	0000				     .data
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 31
+fgsa.asm
+
+
+
+   1711
+   1712					     align  2
+   1713				     ;-----------------------------------------------------------------------------------------------
+   1714				     ----------------------------------------------
+   1715				     ; For any mode
+   1716				     ;				Clear			       color
+   1717				     ;			  Mode	Screen	  GetPoint    Point    table	   AHLine      SHLine	    +
+   1718				     LHLine	 MaxX  MaxY Colors Seg	   Raster op
+   1719				     ;-----------------------------------------------------------------------------------------------
+   1720				     ----------------------------------------------
+   1721
+   1722	0000			     _ModeTable	  label	    word
+   1723	0000  0004 00000000se	  +	     fgsMode   <  04h,	ClrScr4,  GetPoint4,  Point4,  ColorTbl,   HLine4,     HLine4,	    +
+   1724	      0000e 0000e 0000e	  +  HLine4,	 320,  200,	4, 0b800h, ROP4Tbl >
+   1725	      0000e 0000e 0000e	  +
+   1726	      0140 00C8	0004 B800 +
+   1727	      0000e
+   1728	001C  0005 00000000se	  +	     fgsMode   <  05h,	ClrScr4,  GetPoint4,  Point4,  ColorTbl,   HLine4,     HLine4,	    +
+   1729	      0000e 0000e 0000e	  +  HLine4,	 320,  200,	4, 0b800h, ROP4Tbl >
+   1730	      0000e 0000e 0000e	  +
+   1731	      0140 00C8	0004 B800 +
+   1732	      0000e
+   1733	0038  0006 00000000se	  +	     fgsMode   <  06h,	ClrScr6,  GetPoint6,  Point6,  ColorTbl,   HLine6,     HLine6,	    +
+   1734	      0000e 0000e 0000e	  +  HLine6,	 640,  200,	2, 0b800h, ROP6Tbl >
+   1735	      0000e 0000e 0000e	  +
+   1736	      0280 00C8	0002 B800 +
+   1737	      0000e
+   1738	0054  000D 00000000se	  +	     fgsMode   <  0dh,	ClrScr10, GetPoint10, Point10, ColorTbl,   HLine10,    SHLine10,    +
+   1739	      0000e 0000e 0000e	  +  HLine10,	 320,  200,    16, 0a000h, ROP10Tbl >
+   1740	      0000e 0000e 0000e	  +
+   1741	      0140 00C8	0010 A000 +
+   1742	      0000e
+   1743	0070  000E 00000000se	  +	     fgsMode   <  0eh,	ClrScr10, GetPoint10, Point10, ColorTbl,   HLine10,    SHLine10,    +
+   1744	      0000e 0000e 0000e	  +  HLine10,	 640,  200,    16, 0a000h, ROP10Tbl >
+   1745	      0000e 0000e 0000e	  +
+   1746	      0280 00C8	0010 A000 +
+   1747	      0000e
+   1748	008C  000F 00000000se	  +	     fgsMode   <  0fh,	ClrScr10, GetPointf,  Point10, ColorTbl,   HLine10,    SHLine10,    +
+   1749	      0038r 0000e 0000e	  +  HLine10,	 640,  350,	2, 0a000h, ROP10Tbl >
+   1750	      0000e 0000e 0000e	  +
+   1751	      0280 015E	0002 A000 +
+   1752	      0000e
+   1753	00A8  0010 00000000se	  +	     fgsMode   <  10h,	ClrScr10, GetPoint10, Point10, ColorTbl,   HLine10,    SHLine10,    +
+   1754	      0000e 0000e 0000e	  +  HLine10,	 640,  350,    16, 0a000h, ROP10Tbl >
+   1755	      0000e 0000e 0000e	  +
+   1756	      0280 015E	0010 A000 +
+   1757	      0000e
+   1758	00C4  0011 00000000se	  +	     fgsMode   <  11h,	ClrScr10, GetPoint11, Point11, ColorTbl,   HLine11,    HLine11,	    +
+   1759	      0000r 00DCr 0000e	  +  HLine11,	 640,  480,	2, 0a000h, ROP11Tbl >
+   1760	      0125r 0125r 0125r	  +
+   1761	      0280 01E0	0002 A000 +
+   1762	      0344r
+   1763	00E0  0012 00000000se	  +	     fgsMode   <  12h,	ClrScr10, GetPoint10, Point10, ColorTbl,   HLine10,    SHLine10,    +
+   1764	      0000e 0000e 0000e	  +  HLine10,	 640,  480,    16, 0a000h, ROP10Tbl >
+   1765	      0000e 0000e 0000e	  +
+   1766	      0280 01E0	0010 A000 +
+   1767	      0000e
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 32
+fgsa.asm
+
+
+
+   1768	00FC  0013 00000000se	  +	     fgsMode   <  13h,	ClrScr13, GetPoint13, Point13, ColorTbl,   AHLine13,   SHLine13,    +
+   1769	      0000e 0000e 0000e	  +  LHLine13,	 320,  200,   256, 0a000h, ROP13Tbl >
+   1770	      0000e 0000e 0000e	  +
+   1771	      0140 00C8	0100 A000 +
+   1772	      0000e
+   1773
+   1774	0118  0100 00000000se	  +	     fgsMode   < 100h,	ClrScr256,GetPoint256,Point256,ColorTbl256,AHLine256,  SHLine256,   +
+   1775	      0000e 0000e 0000e	  +  LHLine256,	 640,  400,   256, 0a000h, ROP256Tbl >
+   1776	      0000e 0000e 0000e	  +
+   1777	      0280 0190	0100 A000 +
+   1778	      0000e
+   1779	0134  0101 00000000se	  +	     fgsMode   < 101h,	ClrScr256,GetPoint256,Point256,ColorTbl256,AHLine256,  SHLine256,   +
+   1780	      0000e 0000e 0000e	  +  LHLine256,	 640,  480,   256, 0a000h, ROP256Tbl >
+   1781	      0000e 0000e 0000e	  +
+   1782	      0280 01E0	0100 A000 +
+   1783	      0000e
+   1784	0150  0103 00000000se	  +	     fgsMode   < 103h,	ClrScr256,GetPoint256,Point256,ColorTbl256,AHLine256,  SHLine256,   +
+   1785	      0000e 0000e 0000e	  +  LHLine256,	 800,  600,   256, 0a000h, ROP256Tbl >
+   1786	      0000e 0000e 0000e	  +
+   1787	      0320 0258	0100 A000 +
+   1788	      0000e
+   1789	016C  0105 00000000se	  +	     fgsMode   < 105h,	ClrScr256,GetPoint256,Point256,ColorTbl256,AHLine256,  SHLine256,   +
+   1790	      0000e 0000e 0000e	  +  LHLine256,	1024,  768,   256, 0a000h, ROP256Tbl >
+   1791	      0000e 0000e 0000e	  +
+   1792	      0400 0300	0100 A000 +
+   1793	      0000e
+   1794	0188  0107 00000000se	  +	     fgsMode   < 107h,	ClrScr256,GetPoint256,Point256,ColorTbl256,AHLine256,  SHLine256,   +
+   1795	      0000e 0000e 0000e	  +  LHLine256,	1280, 1024,   256, 0a000h, ROP256Tbl >
+   1796	      0000e 0000e 0000e	  +
+   1797	      0500 0400	0100 A000 +
+   1798	      0000e
+   1799
+   1800	01A4  010D 00000000se	  +	     fgsMode   < 10dh,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1801	      0000e 0000e 0000e	  +  LHLine32k,	 320,  200, 32768, 0a000h, ROP32kTbl >
+   1802	      0000e 0000e 0000e	  +
+   1803	      0140 00C8	8000 A000 +
+   1804	      0000e
+   1805	01C0  010E 00000000se	  +	     fgsMode   < 10eh,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1806	      0000e 0000e 0000e	  +  LHLine32k,	 320,  200, 65535, 0a000h, ROP32kTbl >
+   1807	      0000e 0000e 0000e	  +
+   1808	      0140 00C8	FFFF A000 +
+   1809	      0000e
+   1810	01DC  0110 00000000se	  +	     fgsMode   < 110h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1811	      0000e 0000e 0000e	  +  LHLine32k,	 640,  480, 32768, 0a000h, ROP32kTbl >
+   1812	      0000e 0000e 0000e	  +
+   1813	      0280 01E0	8000 A000 +
+   1814	      0000e
+   1815	01F8  0111 00000000se	  +	     fgsMode   < 111h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1816	      0000e 0000e 0000e	  +  LHLine32k,	 640,  480, 65535, 0a000h, ROP32kTbl >
+   1817	      0000e 0000e 0000e	  +
+   1818	      0280 01E0	FFFF A000 +
+   1819	      0000e
+   1820	0214  0113 00000000se	  +	     fgsMode   < 113h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1821	      0000e 0000e 0000e	  +  LHLine32k,	 800,  600, 32768, 0a000h, ROP32kTbl >
+   1822	      0000e 0000e 0000e	  +
+   1823	      0320 0258	8000 A000 +
+   1824	      0000e
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 33
+fgsa.asm
+
+
+
+   1825	0230  0114 00000000se	  +	     fgsMode   < 114h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1826	      0000e 0000e 0000e	  +  LHLine32k,	 800,  600, 65535, 0a000h, ROP32kTbl >
+   1827	      0000e 0000e 0000e	  +
+   1828	      0320 0258	FFFF A000 +
+   1829	      0000e
+   1830	024C  0116 00000000se	  +	     fgsMode   < 116h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1831	      0000e 0000e 0000e	  +  LHLine32k,	1024,  768, 32768, 0a000h, ROP32kTbl >
+   1832	      0000e 0000e 0000e	  +
+   1833	      0400 0300	8000 A000 +
+   1834	      0000e
+   1835	0268  0117 00000000se	  +	     fgsMode   < 117h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1836	      0000e 0000e 0000e	  +  LHLine32k,	1024,  768, 65535, 0a000h, ROP32kTbl >
+   1837	      0000e 0000e 0000e	  +
+   1838	      0400 0300	FFFF A000 +
+   1839	      0000e
+   1840	0284  0119 00000000se	  +	     fgsMode   < 119h,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1841	      0000e 0000e 0000e	  +  LHLine32k,	1280, 1024, 32768, 0a000h, ROP32kTbl >
+   1842	      0000e 0000e 0000e	  +
+   1843	      0500 0400	8000 A000 +
+   1844	      0000e
+   1845	02A0  011A 00000000se	  +	     fgsMode   < 11ah,	ClrScr32k,GetPoint32k,Point32k,ColorTbl32k,AHLine32k,  SHLine32k,   +
+   1846	      0000e 0000e 0000e	  +  LHLine32k,	1280, 1024, 65535, 0a000h, ROP32kTbl >
+   1847	      0000e 0000e 0000e	  +
+   1848	      0500 0400	FFFF A000 +
+   1849	      0000e
+   1850
+   1851					     public  _GetColorTbl
+   1852	02BC			     _GetColorTbl    label    word
+   1853	02BC  ????			     dw	     ?	   ; Solid color
+   1854	02BE  ????			     dw	     ?	   ; linear pattern color
+   1855	02C0  ????			     dw	     ?	   ; area pattern color
+   1856	02C2  ????			     dw	     ?	   ; volume pattern color
+   1857
+   1858				     comment ~
+   1859				     ================================================================================
+   1860				      Description :
+   1861					 Raster	operation table
+   1862				     ================================================================================
+   1863				     ~
+   1864					     public ROPPointTbl
+   1865	02C4			     ROPPointTbl label word
+   1866	02C4  0000e 0008		     dw	     _RCopy,	  8
+   1867	02C8  0000e 0007		     dw	     _ROPAnd,	  7
+   1868	02CC  0000e 0005		     dw	     _ROr,	  5
+   1869	02D0  0000e 000A		     dw	     _RXor,	  10
+   1870	02D4  0000e 0005		     dw	     _RBlack,	  5
+   1871	02D8  0000e 0007		     dw	     _RWhite,	  7
+   1872	02DC  0000e 0002		     dw	     _RNOP,	  2
+   1873	02E0  0000e 0007		     dw	     _RNot,	  7
+   1874	02E4  0000e 000C		     dw	     _RNotCopy,	  12
+   1875	02E8  0000e 000C		     dw	     _RNotAnd,	  12
+   1876	02EC  0000e 000C		     dw	     _RNotOr,	  12
+   1877	02F0  0000e 000C		     dw	     _RNotXor,	  12
+   1878	02F4  0000e 000A		     dw	     _RNotScrOr,  10
+   1879	02F8  0000e 000C		     dw	     _RNotScrAnd, 12
+   1880	02FC  0000e 0009		     dw	     _RScrOrNot,  9
+   1881	0300  0000e 0007		     dw	     _RScrAndNot, 7
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 34
+fgsa.asm
+
+
+
+   1882
+   1883					     public ROPLineTbl
+   1884	0304			     ROPLineTbl	label word
+   1885	0304  0000e 0006		     dw	     _RCopy,	  6
+   1886	0308  0000e 0005		     dw	     _ROPAnd,	  5
+   1887	030C  0000e 0003		     dw	     _ROr,	  3
+   1888	0310  0000e 0008		     dw	     _RXor,	  8
+   1889	0314  0000e 0003		     dw	     _RBlack,	  3
+   1890	0318  0000e 0005		     dw	     _RWhite,	  5
+   1891	031C  0000e 0000		     dw	     _RNOP,	  0
+   1892	0320  0000e 0005		     dw	     _RNot,	  5
+   1893	0324  0000e 000A		     dw	     _RNotCopy,	  10
+   1894	0328  0000e 000A		     dw	     _RNotAnd,	  10
+   1895	032C  0000e 000A		     dw	     _RNotOr,	  10
+   1896	0330  0000e 000A		     dw	     _RNotXor,	  10
+   1897	0334  0000e 0008		     dw	     _RNotScrOr,  8
+   1898	0338  0000e 000A		     dw	     _RNotScrAnd, 10
+   1899	033C  0000e 0007		     dw	     _RScrOrNot,  7
+   1900	0340  0000e 0005		     dw	     _RScrAndNot, 5
+   1901
+   1902					     public ROP11Tbl
+   1903	0344			     ROP11Tbl label word
+   1904	0344  0119r 02C4r 000C		     dw	     Point11ROP, ROPPointTbl, 12
+   1905	034A  016Er 0304r 000A		     dw	     HLine11ROP, ROPLineTbl, 10
+   1906	0350  016Er 0304r 000A		     dw	     HLine11ROP, ROPLineTbl, 10
+   1907	0356  016Er 0304r 000A		     dw	     HLine11ROP, ROPLineTbl, 10
+   1908
+   1909	035C  B000		     Screen2 dw	0b000h	 ; second 64k segment
+   1910
+   1911	035E  0050		     Width80	     dw	   80
+   1912	0360  00A0		     Width160	     dw	   160
+   1913
+   1914	0362				     .code
+   1915				     comment ~
+   1916				     ================================================================================
+   1917
+   1918				      (C) 1992 FinchWare
+   1919
+   1920				      GetPoint4,6,11
+   1921
+   1922				      Description :
+   1923					 Gets the value	of a pixel in modes 4,5
+   1924					     4	  - 320	x 200	 4	   CGA/EGA/VGA/MCGA
+   1925					     5	  - 320	x 200	 4	   CGA/EGA/VGA/MCGA
+   1926					     6	  - 640	x 200	 2	   CGA/EGA/VGA
+   1927					     11	  - 640	x 480	 2	   MCGA/VGA
+   1928
+   1929				      Parameters :
+   1930
+   1931				      Registers	Affected :
+   1932					 AX,BX,CX,ES
+   1933
+   1934				      Returns :
+   1935					 AX - value of pixel 0 to 3
+   1936
+   1937				      Changes
+   1938					      Author	  : R. Finch
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 35
+fgsa.asm
+
+
+
+   1939					      Date	  : 92/
+   1940					      Release	  :
+   1941					      Description : new	module
+   1942
+   1943				     ================================================================================
+   1944				     ~
+   1945	0000			     GetPoint11	 proc near
+   1946					     mGetPoint PointAddr10
+1  1947	0000  C8 0000 00		     enter   0,0
+1  1948	0004  8B 46 06			     mov     ax,ARGy
+1  1949	0007  8B 5E 04			     mov     bx,ARGx
+1  1950					     PointAddr10
+2  1951	000A  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+2  1952	000E  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+2  1953	0012  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+2  1954	0015  D3 E0			     shl ax,cl	;  * 8 or 16
+2  1955	0017  8B C8			     mov cx,ax
+2  1956	0019  C1 E0 02			     shl ax,2	; * 32 or 64)
+2  1957	001C  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+2  1958	001E  8A CB			     mov cl,bl ; pixel address calculation
+2  1959	0020  80 E1 07			     and cl,7
+2  1960	0023  80 F1 07			     xor cl,7
+2  1961	0026  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+2  1962	0029  03 D8			     add bx,ax ; by eight and adding in	start of row.
+2  1963	002B  B4 01			     mov ah,1  ; Set up	pixel mask
+1  1964	002D  26: 8A 07			     mov     al,es:[bx]
+1  1965	0030  D2 E8			     shr     al,cl
+1  1966	0032  22 C4			     and     al,ah
+1  1967	0034  2A E4			     sub     ah,ah
+1  1968	0036  C9			     leave
+1  1969	0037  C3			     ret
+   1970	0038			     GetPoint11	 endp
+   1971				     ; 
+   1972				     comment ~
+   1973				     ================================================================================
+   1974
+   1975				      (C) 1992 FinchWare
+   1976
+   1977				      Module :
+   1978
+   1979				      Description :
+   1980					 Handles getting of points for modes:
+   1981
+   1982					     mode resolution	 colors	   adapter
+   1983					     f	  - 640	x 350	 2	   EGA/VGA
+   1984
+   1985				      Parameters :
+   1986
+   1987				      Registers	Affected :
+   1988
+   1989				      Returns :
+   1990
+   1991				      Changes
+   1992					      Author	  : R. Finch
+   1993					      Date	  : 92/
+   1994					      Release	  :
+   1995					      Description : new	module
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 36
+fgsa.asm
+
+
+
+   1996
+   1997				     ================================================================================
+   1998				     ~
+   1999	0038			     GetPointf	 proc near
+   2000	0038  55			     push    bp
+   2001	0039  8B EC			     mov     bp,sp
+   2002	003B  56			     push    si
+   2003	003C  8B 46 06			     mov     ax,ARGy
+   2004	003F  8B 5E 04			     mov     bx,ARGx
+   2005					     PointAddr10
+1  2006	0042  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  2007	0046  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1  2008	004A  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+1  2009	004D  D3 E0			     shl ax,cl	;  * 8 or 16
+1  2010	004F  8B C8			     mov cx,ax
+1  2011	0051  C1 E0 02			     shl ax,2	; * 32 or 64)
+1  2012	0054  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+1  2013	0056  8A CB			     mov cl,bl ; pixel address calculation
+1  2014	0058  80 E1 07			     and cl,7
+1  2015	005B  80 F1 07			     xor cl,7
+1  2016	005E  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1  2017	0061  03 D8			     add bx,ax ; by eight and adding in	start of row.
+1  2018	0063  B4 01			     mov ah,1  ; Set up	pixel mask
+   2019	0065  D2 E4			     shl     ah,cl
+   2020	0067  8A EC			     mov     ch,ah
+   2021	0069  8B F3			     mov     si,bx
+   2022	006B  2A DB			     sub     bl,bl
+   2023	006D  B8 0204			     mov     ax,204h
+   2024	0070  BA 03CE			     mov     dx,3ceh
+   2025	0073			     GetPointf1:
+   2026	0073  EF			     out     dx,ax
+   2027	0074  26: 8A 3C			     mov     bh,es:[si]
+   2028	0077  22 FD			     and     bh,ch
+   2029	0079  F6 DF			     neg     bh
+   2030	007B  D1 C3			     rol     bx,1
+   2031	007D  80 EC 02			     sub     ah,2
+   2032	0080  7D F1			     jge     GetPointf1
+   2033	0082  8A C3			     mov     al,bl
+   2034	0084  98			     cbw	      ;	ah = 0
+   2035	0085  5E			     pop     si
+   2036	0086  C9			     leave
+   2037	0087  C3			     ret
+   2038	0088			     GetPointf	 endp
+   2039				     ; 
+   2040				     comment ~
+   2041				     ================================================================================
+   2042
+   2043				      (C) FinchWare
+   2044
+   2045				      Module : GetPoint10 - 64K	EGA
+   2046
+   2047				      Description :
+   2048					 Handles getting of points for modes
+   2049					     mode resolution	 colors	   adapter
+   2050					     d	  - 320	x 200	 16	   EGA/VGA
+   2051					     e	  - 640	x 200	 16	   EGA/VGA
+   2052					     f	  - 640	x 350	 mono (4)  EGA/VGA
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 37
+fgsa.asm
+
+
+
+   2053					     10	  - 640	x 350	 16	   EGA/VGA
+   2054					     12	  - 640	x 480	 16	   VGA
+   2055
+   2056				      Parameters :
+   2057
+   2058				      Registers	Affected :
+   2059
+   2060				      Returns :
+   2061
+   2062				      Changes
+   2063					      Author	  : R. Finch
+   2064					      Date	  : 92/
+   2065					      Release	  :
+   2066					      Description : new	module
+   2067
+   2068				     ================================================================================
+   2069				     ~
+   2070	0088			     GetPoint10_64k   proc near
+   2071	0088  55			     push    bp
+   2072	0089  8B EC			     mov     bp,sp
+   2073	008B  56			     push    si
+   2074	008C  8B 46 06			     mov     ax,ARGy
+   2075	008F  8B 5E 04			     mov     bx,ARGx
+   2076					     PointAddr10
+1  2077	0092  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  2078	0096  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1  2079	009A  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+1  2080	009D  D3 E0			     shl ax,cl	;  * 8 or 16
+1  2081	009F  8B C8			     mov cx,ax
+1  2082	00A1  C1 E0 02			     shl ax,2	; * 32 or 64)
+1  2083	00A4  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+1  2084	00A6  8A CB			     mov cl,bl ; pixel address calculation
+1  2085	00A8  80 E1 07			     and cl,7
+1  2086	00AB  80 F1 07			     xor cl,7
+1  2087	00AE  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1  2088	00B1  03 D8			     add bx,ax ; by eight and adding in	start of row.
+1  2089	00B3  B4 01			     mov ah,1  ; Set up	pixel mask
+   2090	00B5  D2 E4			     shl     ah,cl
+   2091	00B7  8A EC			     mov     ch,ah
+   2092	00B9  8A E3			     mov     ah,bl	    ; ah = low order byte of address
+   2093	00BB  8B F3			     mov     si,bx
+   2094	00BD  2A DB			     sub     bl,bl	    ; accumulator for pixel value
+   2095	00BF  25 0100			     and     ax,100h
+   2096	00C2  05 0204			     add     ax,204h	    ; ah = bit plane (2	or 3) al = read	map select register
+   2097	00C5  BA 03CE			     mov     dx,3ceh	    ; graphics controller port address
+   2098	00C8			     GetPoint10_64k1:
+   2099	00C8  EF			     out     dx,ax	    ; select bit plane
+   2100	00C9  26: 8A 3C			     mov     bh,es:[si]	    ; read byte
+   2101	00CC  22 FD			     and     bh,ch	    ; select bit
+   2102	00CE  F6 DF			     neg     bh		    ; bh bit 7 = 1 if masked bit = 1
+   2103	00D0  D1 C3			     rol     bx,1	    ; bit 0 of bl = next bit of	pixel value
+   2104	00D2  FE CC			     dec     ah		    ; ah = next	bit plane
+   2105	00D4  7D F2			     jge     GetPoint10_64k1
+   2106	00D6  8A C3			     mov     al,bl
+   2107	00D8  98			     cbw		    ; return value in ax
+   2108	00D9  5E			     pop     si
+   2109	00DA  C9			     leave
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 38
+fgsa.asm
+
+
+
+   2110	00DB  C3			     ret
+   2111	00DC			     GetPoint10_64k   endp
+   2112				     ; 
+   2113				     comment ~
+   2114				     ================================================================================
+   2115
+   2116				      (C) 1992 FinchWare
+   2117
+   2118				      Point4,6,11
+   2119
+   2120				      Description :
+   2121					 Plot point in 320 x 200 four colour mode (mode	4,5).
+   2122
+   2123				      Parameters :
+   2124
+   2125				      Registers	Affected :
+   2126
+   2127				      Returns :
+   2128
+   2129				      Author	  : R. Finch
+   2130				      Date	  : 92/02/19
+   2131
+   2132				     ================================================================================
+   2133				     ~
+   2134	00DC			     Point11 proc near
+   2135	00DC  55			     push    bp
+   2136	00DD  8B EC			     mov     bp,sp
+   2137	00DF  8B 46 06			     mov     ax,ARGy
+   2138	00E2  8B 5E 04			     mov     bx,ARGx
+   2139					     PointAddr10
+1  2140	00E5  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  2141	00E9  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1  2142	00ED  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+1  2143	00F0  D3 E0			     shl ax,cl	;  * 8 or 16
+1  2144	00F2  8B C8			     mov cx,ax
+1  2145	00F4  C1 E0 02			     shl ax,2	; * 32 or 64)
+1  2146	00F7  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+1  2147	00F9  8A CB			     mov cl,bl ; pixel address calculation
+1  2148	00FB  80 E1 07			     and cl,7
+1  2149	00FE  80 F1 07			     xor cl,7
+1  2150	0101  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1  2151	0104  03 D8			     add bx,ax ; by eight and adding in	start of row.
+1  2152	0106  B4 01			     mov ah,1  ; Set up	pixel mask
+   2153	0108  53			     push    bx
+   2154	0109  8B 5E 04			     mov     bx,ARGx
+   2155	010C  FF 16 001Fe		     call    word ptr _fgsv.fgsColorPtr
+   2156	0110  5B			     pop     bx
+   2157	0111  B4 01			     mov     ah,1
+   2158	0113  22 C4			     and     al,ah
+   2159	0115  D3 C0			     rol     ax,cl    ;	shift color bits (al) and mask (ah) to pixel
+   2160	0117  F6 D4			     not     ah
+   2161	0119			     Point11ROP:
+   2162	0119  90			     nop
+   2163	011A  90			     nop
+   2164	011B  90			     nop
+   2165	011C  90			     nop
+   2166	011D  90			     nop
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 39
+fgsa.asm
+
+
+
+   2167	011E  90			     nop
+   2168	011F  90			     nop
+   2169	0120  90			     nop
+   2170	0121  90			     nop
+   2171	0122  90			     nop
+   2172	0123  C9			     leave
+   2173	0124  C3			     ret
+   2174	0125			     Point11 endp
+   2175				     ; 
+   2176
+   2177	0125			     HLine11 proc    near
+   2178	0125  55			     push    bp
+   2179	0126  8B EC			     mov     bp,sp
+   2180	0128  57			     push    di
+   2181	0129  8B 46 06			     mov     ax,ARGy1
+   2182	012C  8B 5E 04			     mov     bx,ARGx1
+   2183	012F  8B 56 08			     mov     dx,ARGx2
+   2184	0132  2B D3			     sub     dx,bx
+   2185	0134  79 05			     jns     HLine111
+   2186	0136  F7 DA			     neg     dx
+   2187	0138  8B 5E 08			     mov     bx,ARGx2
+   2188	013B			     HLine111:
+   2189					     PointAddr10      ;; calculate address of first point
+1  2190	013B  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+1  2191	013F  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+1  2192	0143  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+1  2193	0146  D3 E0			     shl ax,cl	;  * 8 or 16
+1  2194	0148  8B C8			     mov cx,ax
+1  2195	014A  C1 E0 02			     shl ax,2	; * 32 or 64)
+1  2196	014D  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+1  2197	014F  8A CB			     mov cl,bl ; pixel address calculation
+1  2198	0151  80 E1 07			     and cl,7
+1  2199	0154  80 F1 07			     xor cl,7
+1  2200	0157  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+1  2201	015A  03 D8			     add bx,ax ; by eight and adding in	start of row.
+1  2202	015C  B4 01			     mov ah,1  ; Set up	pixel mask
+   2203	015E  42			     inc     dx
+   2204	015F			     HLine112:
+   2205	015F  8B 46 06			     mov     ax,ARGy1;;	ax = y
+   2206	0162  FF 16 001Fe		     call    word ptr _fgsv.fgsColorPtr
+   2207	0166  B4 01			     mov     ah,1
+   2208	0168  22 C4			     and     al,ah
+   2209	016A  D3 C0			     rol     ax,cl    ;	shift color bits (al) and mask (ah) to pixel
+   2210	016C  F6 D4			     not     ah
+   2211	016E			     HLine11ROP:
+   2212	016E  90			     nop     ; This room reserved for the raster operation
+   2213	016F  90			     nop
+   2214	0170  90			     nop
+   2215	0171  90			     nop
+   2216	0172  90			     nop
+   2217	0173  90			     nop
+   2218	0174  90			     nop
+   2219	0175  90			     nop
+   2220	0176  90			     nop
+   2221	0177  90			     nop
+   2222	0178  FE C9			     dec     cl
+   2223	017A  79 03			     jns     HLine113
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 40
+fgsa.asm
+
+
+
+   2224	017C  B1 07			     mov     cl,7
+   2225	017E  43			     inc     bx	      ;; if shifted around, increment buffer address
+   2226	017F			     HLine113:
+   2227	017F  4A			     dec     dx
+   2228	0180  75 DD			     jnz     HLine112
+   2229	0182  5F			     pop     di
+   2230	0183  C9			     leave
+   2231	0184  C3			     ret
+   2232					     HLine   PointAddr10, 1, 7,	1
+1  2233	0185  C8 0000 00		     enter   0,0
+1  2234	0189  57			     push    di
+1  2235	018A  8B 46 06			     mov     ax,ARGy1
+1  2236	018D  8B 5E 04			     mov     bx,ARGx1
+1  2237	0190  8B 56 08			     mov     dx,ARGx2
+1  2238	0193  2B D3			     sub     dx,bx
+1  2239	0195  79 05			     jns     ??0000
+1  2240	0197  F7 DA			     neg     dx
+1  2241	0199  8B 5E 08			     mov     bx,ARGx2
+1  2242	019C			     ??0000:
+1  2243					     PointAddr10       ;
+2  2244	019C  8E 06 0025e		     mov es,word ptr _fgsv.fgsVScreen	; Set es to point to virtual screen
+2  2245	01A0  8A 0E 0003e		     mov cl,byte ptr _fgsv.fgsMaxX+1	; Get high order byte of max X
+2  2246	01A4  80 C1 02			     add cl,2	; 4 if 640, 3 if 320
+2  2247	01A7  D3 E0			     shl ax,cl	;  * 8 or 16
+2  2248	01A9  8B C8			     mov cx,ax
+2  2249	01AB  C1 E0 02			     shl ax,2	; * 32 or 64)
+2  2250	01AE  03 C1			     add ax,cx	; *(32+8) or (64 + 16)
+2  2251	01B0  8A CB			     mov cl,bl ; pixel address calculation
+2  2252	01B2  80 E1 07			     and cl,7
+2  2253	01B5  80 F1 07			     xor cl,7
+2  2254	01B8  C1 EB 03			     shr bx,3  ;   Calculate byte in row by dividing pixel number
+2  2255	01BB  03 D8			     add bx,ax ; by eight and adding in	start of row.
+2  2256	01BD  B4 01			     mov ah,1  ; Set up	pixel mask
+1  2257	01BF  42			     inc     dx
+1  2258	01C0			     ??0001:
+1  2259	01C0  8B 46 06			     mov     ax,ARGy1;
+1  2260	01C3  FF 16 001Fe		     call    word ptr _fgsv.fgsColorPtr
+1  2261	01C7  B4 01			     mov     ah,1
+1  2262	01C9  22 C4			     and     al,ah
+1  2263	01CB  F6 D4			     not     ah
+1  2264	01CD  D2 C4			     rol     ah,cl   ;
+1  2265	01CF  D2 C0			     rol     al,cl   ;
+1  2266	01D1			     ??0003:
+1  2267	01D1			     ??0004:
+1  2268	01D1  90			     nop
+1  2269	01D2  90			     nop
+1  2270	01D3  90			     nop
+1  2271	01D4  90			     nop
+1  2272	01D5  90			     nop
+1  2273	01D6  90			     nop
+1  2274	01D7  90			     nop
+1  2275	01D8  90			     nop
+1  2276	01D9  90			     nop
+1  2277	01DA  90			     nop
+1  2278				     ;	      call    _fgsv.fgsPointPtr	;
+1  2279	01DB  80 E9 01			     sub     cl,1;
+1  2280	01DE  79 03			     jns     ??0002
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 41
+fgsa.asm
+
+
+
+1  2281	01E0  B1 07			     mov     cl,7
+1  2282	01E2  43			     inc     bx	      ;
+1  2283	01E3			     ??0002:
+1  2284	01E3  4A			     dec     dx
+1  2285	01E4  75 DA			     jnz     ??0001
+1  2286	01E6  5F			     pop     di
+1  2287	01E7  C9			     leave
+1  2288	01E8  C3			     ret
+   2289	01E9			     HLine11 endp
+   2290				     ; 
+   2291				     comment ~
+   2292				     ================================================================================
+   2293
+   2294				      (C) FinchWare
+   2295
+   2296				      Module :
+   2297
+   2298				      Description :
+   2299
+   2300				      Parameters :
+   2301
+   2302				      Registers	Affected :
+   2303
+   2304				      Returns :
+   2305
+   2306				      Changes
+   2307					      Author	  : R. Finch
+   2308					      Date	  : 92/
+   2309					      Release	  :
+   2310					      Description : new	module
+   2311
+   2312				     ================================================================================
+   2313				     ~
+   2314	01E9			     Set4Pixels	  proc near
+   2315	01E9  50			     push ax
+   2316	01EA  53			     push bx
+   2317	01EB  52			     push dx
+   2318	01EC  BA 03CE			     mov  dx,3ceh
+   2319	01EF  33 DB			     xor  bx,bx
+   2320	01F1  84 ED			     test ch,ch
+   2321	01F3  74 05			     jz	  Set4Pixels30
+   2322	01F5  BB 0050			     mov  bx,80
+   2323	01F8  F7 DB			     neg  bx
+   2324	01FA			     Set4Pixels30:
+   2325	01FA  B0 08			     mov  al,8	    ; AL = bit mask register number
+   2326
+   2327				     ; pixels at (xc-x,yc+y) and (xc-x,	yc-y)
+   2328
+   2329	01FC  33 F6			     xor  si,si
+   2330	01FE  8A 66 F2			     mov  ah,LMask
+   2331	0201  D2 C4			     rol  ah,cl
+   2332	0203  D1 D6			     rcl  si,1	    ; SI = 1 if	bit mask rotated around
+   2333	0205  F7 DE			     neg  si
+   2334
+   2335	0207  8B FE			     mov  di,si
+   2336
+   2337	0209  03 76 FA			     add  si,ULAddr
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 42
+fgsa.asm
+
+
+
+   2338	020C  03 F3			     add  si,bx
+   2339	020E  03 7E F6			     add  di,LLAddr
+   2340	0211  2B FB			     sub  di,bx
+   2341
+   2342	0213  88 66 F2			     mov  LMask,ah
+   2343	0216  89 76 FA			     mov  ULAddr,si
+   2344	0219  89 7E F6			     mov  LLAddr,di
+   2345
+   2346	021C  EF			     out  dx,ax
+   2347	021D  26: 8A 2C			     mov  ch,es:[si]	 ; update upper	left pixel
+   2348	0220  26: 88 2C			     mov  es:[si],ch
+   2349	0223  26: 8A 2D			     mov  ch,es:[di]	 ; update lower	left pixel
+   2350	0226  26: 88 2D			     mov  es:[di],ch
+   2351
+   2352				     ; pixels at (xc+x,	yc+y) and (xc+x,yc-y)
+   2353
+   2354	0229  33 F6			     xor  si,si
+   2355	022B  8A 66 F0			     mov  ah,RMask
+   2356	022E  D2 CC			     ror  ah,cl		 ; AH =	bit mask rotated horizontally
+   2357	0230  D1 D6			     rcl  si,1		 ; SI =	1 if bit mask rotated around
+   2358	0232  8B FE			     mov  di,si		 ; SI,DI = right horizontal increment
+   2359	0234  03 76 F8			     add  si,URAddr
+   2360	0237  03 F3			     add  si,bx
+   2361	0239  03 7E F4			     add  di,LRAddr
+   2362	023C  2B FB			     sub  di,bx
+   2363	023E  88 66 F0			     mov  RMask,ah
+   2364	0241  89 76 F8			     mov  URAddr,si
+   2365	0244  89 7E F4			     mov  LRAddr,di
+   2366	0247  EF			     out  dx,ax
+   2367	0248  26: 8A 2C			     mov  ch,es:[si]	 ; update upper	right pixel
+   2368	024B  26: 88 2C			     mov  es:[si],ch
+   2369	024E  26: 8A 2D			     mov  ch,es:[di]	 ; update lower	right pixel
+   2370	0251  26: 88 2D			     mov  es:[di],ch
+   2371	0254  5A			     pop  dx
+   2372	0255  5B			     pop  bx
+   2373	0256  58			     pop  ax
+   2374	0257  C3			     ret
+   2375	0258			     Set4Pixels	  endp
+   2376				     ; 
+   2377				     comment ~
+   2378				     ================================================================================
+   2379
+   2380				      (C) FinchWare
+   2381
+   2382				      Module :
+   2383
+   2384				      Description :
+   2385
+   2386				      Parameters :
+   2387
+   2388				      Registers	Affected :
+   2389
+   2390				      Returns :
+   2391
+   2392				      Changes
+   2393					      Author	  : R. Finch
+   2394					      Date	  : 92/
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 43
+fgsa.asm
+
+
+
+   2395					      Release	  :
+   2396					      Description : new	module
+   2397
+   2398				     ================================================================================
+   2399				     ~
+   2400	0258			     LongMultiply proc near
+   2401	0258  50			     push ax	    ; DX:AX = 32 bit number
+   2402	0259  8B C2			     mov  ax,dx	    ; CX = 16 bit number
+   2403	025B  F7 E1			     mul  cx
+   2404	025D  91			     xchg ax,cx
+   2405	025E  5A			     pop  dx
+   2406	025F  F7 E2			     mul  dx
+   2407	0261  03 D1			     add  dx,cx
+   2408	0263  C3			     ret
+   2409	0264			     LongMultiply endp
+   2410				     ; 
+   2411					     end
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 44
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??0000				  Near	 _TEXT:019C
+??0001				  Near	 _TEXT:01C0
+??0002				  Near	 _TEXT:01E3
+??0003				  Near	 _TEXT:01D1
+??0004				  Near	 _TEXT:01D1
+??date				  Text	 "04/13/96"
+??filename			  Text	 "fgsa	  "
+??time				  Text	 "13:23:18"
+??version			  Number 030A
+@32Bit				  Text	 0
+@CodeSize			  Text	 0
+@Cpu				  Text	 0707H
+@DataSize			  Text	 0
+@FileName			  Text	 fgsa
+@Interface			  Text	 00h
+@Model				  Text	 2
+@WordSize			  Text	 2
+@code				  Text	 _TEXT
+@curseg				  Text	 _TEXT
+@data				  Text	 DGROUP
+@stack				  Text	 DGROUP
+AHLine13			  Near	 ----:---- Extern
+AHLine256			  Near	 ----:---- Extern
+AHLine32k			  Near	 ----:---- Extern
+ARGa				  Text	 word ptr [bp+8]
+ARGb				  Text	 word ptr [bp+10]
+ARGbuf				  Text	 word ptr [bp+8]
+ARGmask				  Text	 word ptr [bp+10]
+ARGn				  Text	 byte ptr [bp+12]
+ARGrop				  Text	 word ptr [bp+6]
+ARGx				  Text	 word ptr [bp+4]
+ARGx1				  Text	 word ptr [bp+4]
+ARGx2				  Text	 word ptr [bp+8]
+ARGxc				  Text	 word ptr [bp+4]
+ARGy				  Text	 word ptr [bp+6]
+ARGy1				  Text	 word ptr [bp+6]
+ARGy2				  Text	 word ptr [bp+10]
+ARGyc				  Text	 word ptr [bp+6]
+ATTRIB_ADDR			  Number 03C0
+Asquared			  Text	 word ptr [bp-32]
+BIT_MASK			  Number 0008
+Bsquared			  Text	 word ptr [bp-36]
+CHAR_MAP_SEL			  Number 0003
+CLOCK_MODE			  Number 0001
+COLOR_DONT_CARE			  Number 0007
+ClrScr10			  Far	 ----:---- Extern
+ClrScr13			  Far	 ----:---- Extern
+ClrScr256			  Far	 ----:---- Extern
+ClrScr32k			  Far	 ----:---- Extern
+ClrScr4				  Far	 ----:---- Extern
+ClrScr6				  Far	 ----:---- Extern
+ColorTbl			  Near	 ----:---- Extern
+ColorTbl256			  Near	 ----:---- Extern
+ColorTbl32k			  Near	 ----:---- Extern
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 45
+Symbol Table
+
+
+
+DAC_STATE			  Number 03C7
+DATA_ROT_FUNC			  Number 0003
+GRAPHICS12			  Number 03CE
+GetPoint10			  Near	 ----:---- Extern
+GetPoint10_64k			  Near	 _TEXT:0088
+GetPoint10_64k1			  Near	 _TEXT:00C8
+GetPoint11			  Near	 _TEXT:0000
+GetPoint13			  Near	 ----:---- Extern
+GetPoint256			  Near	 ----:---- Extern
+GetPoint32k			  Near	 ----:---- Extern
+GetPoint4			  Near	 ----:---- Extern
+GetPoint6			  Near	 ----:---- Extern
+GetPointf			  Near	 _TEXT:0038
+GetPointf1			  Near	 _TEXT:0073
+HLine10				  Near	 ----:---- Extern
+HLine11				  Near	 _TEXT:0125
+HLine111			  Near	 _TEXT:013B
+HLine112			  Near	 _TEXT:015F
+HLine113			  Near	 _TEXT:017F
+HLine11ROP			  Near	 _TEXT:016E
+HLine4				  Near	 ----:---- Extern
+HLine6				  Near	 ----:---- Extern
+LHLine13			  Near	 ----:---- Extern
+LHLine256			  Near	 ----:---- Extern
+LHLine32k			  Near	 ----:---- Extern
+LLAddr				  Text	 word ptr [bp-10]
+LMask				  Text	 byte ptr [bp-14]
+LRAddr				  Text	 word ptr [bp-12]
+LongMultiply			  Near	 _TEXT:0258
+MAND				  Number 0008
+MAP_MASK			  Number 0002
+MCOPY				  Number 0000
+MEMORY_MODE			  Number 0004
+MGET				  Number 8000
+MISC				  Number 0006
+MODE				  Number 0005
+MOR				  Number 0010
+MXOR				  Number 0018
+Point10				  Near	 ----:---- Extern
+Point11				  Near	 _TEXT:00DC
+Point11ROP			  Near	 _TEXT:0119
+Point13				  Near	 ----:---- Extern
+Point256			  Near	 ----:---- Extern
+Point32k			  Near	 ----:---- Extern
+Point4				  Near	 ----:---- Extern
+Point6				  Near	 ----:---- Extern
+READ_MAP_SEL			  Number 0004
+RESET				  Number 0000
+RMask				  Text	 byte ptr [bp-16]
+ROP10Tbl			  Near	 ----:---- Extern
+ROP11Tbl			  Word	 DGROUP:0344
+ROP13Tbl			  Near	 ----:---- Extern
+ROP256Tbl			  Near	 ----:---- Extern
+ROP32kTbl			  Near	 ----:---- Extern
+ROP4Tbl				  Near	 ----:---- Extern
+ROP6Tbl				  Near	 ----:---- Extern
+ROPLineTbl			  Word	 DGROUP:0304
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 46
+Symbol Table
+
+
+
+ROPPointTbl			  Word	 DGROUP:02C4
+SEQ_ADDR			  Number 03C4
+SHLine10			  Near	 ----:---- Extern
+SHLine13			  Near	 ----:---- Extern
+SHLine256			  Near	 ----:---- Extern
+SHLine32k			  Near	 ----:---- Extern
+Screen2				  Word	 DGROUP:035C
+Set4Pixels			  Near	 _TEXT:01E9
+Set4Pixels30			  Near	 _TEXT:01FA
+TwoAsquared			  Text	 word ptr [bp-40]
+TwoBsquared			  Text	 word ptr [bp-44]
+ULAddr				  Text	 word ptr [bp-6]
+URAddr				  Text	 word ptr [bp-8]
+VARd				  Text	 word ptr [bp-20]
+VARdx				  Text	 word ptr [bp-24]
+VARdy				  Text	 word ptr [bp-28]
+VARincr1			  Text	 word ptr [bp-6]
+VARincr2			  Text	 word ptr [bp-8]
+VARleafincr			  Text	 word ptr [bp-12]
+VARroutine			  Text	 word ptr [bp-10]
+VARvertincr			  Text	 word ptr [bp-12]
+Width160			  Word	 DGROUP:0360
+Width80				  Word	 DGROUP:035E
+_GetColorTbl			  Word	 DGROUP:02BC
+_ModeTable			  Word	 DGROUP:0000
+_RBlack				  Near	 ----:---- Extern
+_RCopy				  Near	 ----:---- Extern
+_RNOP				  Near	 ----:---- Extern
+_RNot				  Near	 ----:---- Extern
+_RNotAnd			  Near	 ----:---- Extern
+_RNotCopy			  Near	 ----:---- Extern
+_RNotOr				  Near	 ----:---- Extern
+_RNotScrAnd			  Near	 ----:---- Extern
+_RNotScrOr			  Near	 ----:---- Extern
+_RNotXor			  Near	 ----:---- Extern
+_ROPAnd				  Near	 ----:---- Extern
+_ROr				  Near	 ----:---- Extern
+_RScrAndNot			  Near	 ----:---- Extern
+_RScrOrNot			  Near	 ----:---- Extern
+_RWhite				  Near	 ----:---- Extern
+_RXor				  Near	 ----:---- Extern
+__SMALL__			  Text
+_fgsv				  Word	 ----:---- Extern
+
+Macro Name
+
+HLine
+Point
+PointAddr10
+PointAddr6
+SHLine
+mGetPoint
+mPointAddr13
+mPointAddr256
+mPointAddr32k
+mPointAddr4
+Turbo Assembler	 Version 3.1	    04/13/96 13:23:18	    Page 47
+Symbol Table
+
+
+
+
+Structure Name			  Type	Offset
+
+fgs
+ fgsOldState			  Word	 0000
+ fgsMaxX			  Word	 0002
+ fgsMaxY			  Word	 0004
+ fgsModeTbl			  Word	 0006
+ fgsPatType			  Byte	 0008
+ fgsPatWidth			  Word	 0009
+ fgsPatHeight			  Word	 000B
+ fgsPatDepth			  Word	 000D
+ fgsColor			  Word	 000F
+ fgsBorderColor			  Word	 0011
+ fgsCursorx			  Word	 0013
+ fgsCursory			  Word	 0015
+ fgsXRef			  Word	 0017
+ fgsYRef			  Word	 0019
+ fgsROP				  Byte	 001B
+ fgsROPTbl			  Word	 001C
+ fgsALUreg			  Byte	 001E
+ fgsColorPtr			  Word	 001F
+ fgsPointPtr			  Word	 0021
+ fgsLinePtr			  Word	 0023
+ fgsVScreen			  Word	 0025
+ fgsRscreen			  Word	 0027
+ fgsClip			  Byte	 0029
+ fgsclipleft			  Word	 002A
+ fgscliptop			  Word	 002C
+ fgsclipright			  Word	 002E
+ fgsclipbottom			  Word	 0030
+ fgsVGAType			  Word	 0032
+ fgsPrevBank			  Word	 0034
+ fgsBankSwitch			  Word	 0036
+ fgsVGA512k			  Byte	 0038
+ fgsGranularity			  Byte	 0039
+fgsMode
+ fgsModeNo			  Word	 0000
+ fgsModeClrScrFn		  Dword	 0002
+ fgsModeGtPntFn			  Word	 0006
+ fgsModePointFn			  Word	 0008
+ fgsModeColorTbl		  Word	 000A
+ fgsModeAHLineFn		  Word	 000C
+ fgsModeSHLineFn		  Word	 000E
+ fgsModeLHLineFn		  Word	 0010
+ fgsModeMaxX			  Word	 0012
+ fgsModeMaxY			  Word	 0014
+ fgsModeColors			  Word	 0016
+ fgsModeSeg			  Word	 0018
+ fgsModeROPTbl			  Word	 001A
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  _DATA				  16  0362 Word	  Public  DATA
+_TEXT				  16  0264 Word	  Public  CODE
+

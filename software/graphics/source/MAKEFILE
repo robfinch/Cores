@@ -1,0 +1,138 @@
+#-------------------------------------------------------------------------------
+#
+#  (C) 1992 FinchWare
+#
+#  Description :
+#
+#  Returns :
+#
+#  Examples :
+#
+#  Changes
+#          Author      : R. Finch
+#          Date        : 92/
+#          Version     :
+#          Description : new module
+#
+#-------------------------------------------------------------------------------
+
+# /zi for debug
+CFLAGS = /G2 /Gs /AS /c /J /W3 /Zp1 /nologo
+CC = cl
+# /zi for debug
+AFLAGS = /d__SMALL__ /ml /la
+ASM = tasm
+
+sbcgs.lib: 4.obj 6.obj 10.obj 10rop.obj 256.obj 32k.obj \
+   banksw.obj bline.obj color.obj drawmode.obj \
+   bcgs.obj bcgsa.obj fill.obj font.obj circle.obj ellipse.obj lowrop.obj \
+   polygon.obj \
+   printf.obj putch.obj puts.obj rectangl.obj setmode.obj setrop.obj \
+   vgatype.obj window.obj \
+   sbcgs.lbr makefile
+
+4.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+6.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+10.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+10rop.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+256.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+32k.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+banksw.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+bline.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+circle.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+color.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+drawmode.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+ellipse.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+bcgs.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+bcgsa.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+fill.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+font.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+lowrop.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+polygon.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+printf.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+putch.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+puts.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+rectangl.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+setmode.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+setrop.obj: $*.asm bcgs.ah
+   $(ASM) $(AFLAGS) $*.asm
+   lib sbcgs.lib -+$*.obj;
+
+vgatype.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+window.obj: $*.c \inc\bcgs.h
+   $(CC) $(CFLAGS) $*.c
+   lib sbcgs.lib -+$*.obj;
+
+
