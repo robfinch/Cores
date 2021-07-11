@@ -19,7 +19,7 @@ char *rtrim(char *str);
 
 char *SubMacroArg(char *bdy, int n, char *sub)
 {
-	static char buf[16000];
+	static char buf[160000];
 	char *s = sub, *o = buf;
 	int stringize = 0;
 	SDef *p, tdef;
@@ -66,7 +66,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 char *GetMacroBody(char *parmlist[])
 {
    char *b, *id = NULL, *p1, *p2;
-   static char buf[16000];
+   static char buf[160000];
    int ii, found, c;
    int InQuote = 0;
    int count = sizeof(buf)-1;
@@ -190,7 +190,7 @@ char *GetMacroArg()
 {
    int Depth = 0;
    int c;
-   static char argbuf[4000];
+   static char argbuf[40000];
    char *argstr = argbuf;
 
    SkipSpaces();
@@ -221,7 +221,8 @@ char *GetMacroArg()
    *argstr = '\0';         // NULL terminate buffer.
    if (argbuf[0])
 	   if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);
-   return argbuf[0] ? argbuf : NULL;
+   return (argbuf);
+   //return argbuf[0] ? argbuf : NULL;
 }
 
 
@@ -238,12 +239,16 @@ int GetMacroParmList(char *parmlist[])
 {
    char *id;
    int Depth = 0, c, count;
+   int vargs = 0;
 
    count = 0;
    while(1)
    {
       id = GetIdentifier();
       if (id) {
+        if (strncmp(id, "...", 3) == 0) {
+          vargs = 1;
+        }
          if (count >= 10) {
             err(15);
             goto errxit;
@@ -273,7 +278,7 @@ int GetMacroParmList(char *parmlist[])
    if (count < 10)
       parmlist[count] = NULL;
 errxit:;
-   return count;
+   return vargs ? -count : count;
 }
 
 

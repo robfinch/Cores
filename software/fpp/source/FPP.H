@@ -43,6 +43,7 @@ typedef struct
    char *name;    // name of the macro
    char *body;    // test to substitute when macro name is encountered
    int nArgs;     // Number of arguments passed to this macro
+   int varg;      // variable argument list indicator
    int line;      // line number macro is defined on
    char *file;    // file macro is defined in
    char *st;		// start of definiton
@@ -120,4 +121,6 @@ E char *cmdStart I(=0);
 E char *cmdEnd I(=0);
 E int collect I(=0);
 E int debug I(=0);
-
+E int lasttk I(= 0);
+E int in_comment I(= 0);
+extern char *SkipComments();

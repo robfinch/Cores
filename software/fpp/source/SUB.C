@@ -67,7 +67,7 @@ int SubParmMacro(SDef *p)
 
    // Substitute arguments into macro body
    bdy = _strdup(p->body);                    // make a copy of the macro body
-   for(xx = 0; xx < ArgCount; xx++)          // we don't want to change the original
+   for(xx = 0; (xx < ArgCount) || (p->varg && Args[xx]); xx++)          // we don't want to change the original
    {
       tp = SubMacroArg(bdy, xx, Args[xx]);        // Substitute argument into body
       free(bdy);                             // free old body
@@ -231,6 +231,7 @@ void DoPastes(char *buf)
    char *p = buf;
    int QuoteToggle = 0;
    int len = strlen(buf);
+   int ls = 0, ts = 0;
 
    while (1)
    {
@@ -255,9 +256,16 @@ void DoPastes(char *buf)
       }
 
       if (*p == '#' && *(p+1) == '#') {
-         memmove(p, p+2, len - (p - buf)); // shift over top ## in input buffer
-         buf[len-1] = 0;
-         buf[len-2] = 0;
+        ls = -1;
+        while (isspace(p[ls]))
+          ls--;
+        ls++;
+        ts = 2;
+        while (isspace(p[ts]))
+          ts++;
+        ts-=2;
+         memmove(p+ls, p+2+ts, len - (p+ls - buf)); // shift over top ## in input buffer
+         memset(&buf[len - 1 + ls - ts], 0, ts - ls + 2);
          --p;
       }
       p++;
@@ -277,6 +285,7 @@ void SearchForDefined()
    char *ptr, *id, *sptr;
    int c;
    SDef tdef, *p;
+   int needClosePa = 0;
 
    ptr = inptr;
    while(1)
@@ -291,18 +300,23 @@ void SearchForDefined()
          if (strcmp(id, "defined") == 0)
          {
             c = NextNonSpace(0);
-            if (c != '(') {
-               err(20);
-               break;
-            }
+            if (c == '(')
+              needClosePa = 1;
+            else
+              unNextCh();
+//               err(20);
+//               break;
+//            }
             id = GetIdentifier();
             if (id == NULL) {
                err(21);
                break;
             }
-            c = NextNonSpace(0);
-            if (c != ')')
-               err(22);
+            if (needClosePa) {
+              c = NextNonSpace(0);
+              if (c != ')')
+                err(22);
+            }
             tdef.name = id;
             p = (SDef *)htFind(&HashInfo, &tdef);
             SubMacro((char *)(p ? "1" : "0"), inptr-sptr);

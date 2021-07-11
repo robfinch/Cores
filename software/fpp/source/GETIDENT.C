@@ -17,6 +17,11 @@ char *GetIdentifier()
    p = buf;
    iptr = inptr;
    c = NextNonSpace(0);
+   if (c == '.' && inptr[0] == '.' && inptr[1] == '.') {
+     strncpy(buf, "...", 3);
+     inptr += 2;
+     return (buf);
+   }
    if (IsFirstIdentChar(c) && c != 0)
    {
       count = 0;

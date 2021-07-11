@@ -46,5 +46,5 @@ char *GetArg()
          *argstr++ = c;    // copy input argument to argstr.
    }
    *argstr = '\0';         // NULL terminate buffer.
-   return argbuf;
+   return (argbuf);
 }

@@ -112,7 +112,12 @@ void ddefine()
    // macro name and ')'.
    if (PeekCh() == '(') {
       NextCh();
+    dp.varg = 0;
    	dp.nArgs = GetMacroParmList(parms);
+    if (dp.nArgs < 0) {
+      dp.nArgs = -dp.nArgs;
+      dp.varg = 1;
+    }
       c = NextNonSpace(0);
       if (c != ')') {
          err(16);
@@ -125,7 +130,7 @@ void ddefine()
          free(parms[n]);
 
    // Do pasteing
-   DoPastes(ptr);
+   //DoPastes(ptr);
 
    // See if the macro is already defined. If it is then if the definition
    // is not the same spit out an error, otherwise spit out warning.
@@ -292,7 +297,7 @@ void dline()
    SearchAndSub();
    DoPastes(inbuf);
    InLineNo = atoi(inptr);
-   sprintf(bbline.body, "%5d", InLineNo);
+   sprintf(bbline.body, "%5d", InLineNo-2);
    if ((ptr = strchr(inptr, '"')) != NULL)
    {
       inptr = ptr;
@@ -346,7 +351,7 @@ int directive()
       "if",      2, dif,      // must come after ifdef/ifndef
       "undef",   5, dundef,  
       "line",    4, dline,   
-      "pragma",  6, dpragma 
+      "pragma",  6, dpragma,
    };
 
    // Skip any whitespace following '#'
@@ -362,10 +367,10 @@ int directive()
 		 // scans to the end of the line
 		 //ScanPastEOL();
          //for (; *inptr != 0; inptr++); // skip to eol
-         return (TRUE);
+         return (i+1);
       }
    }
-   return (FALSE);
+   return (0);
 }
 
 
@@ -380,31 +385,45 @@ int directive()
 void ProcLine()
 {
    int ch;
+   int def = 0;
+   char* ptr, *ptr2;
 
    //printf("Processing line: %d\r", InLineNo);
    inptr = inbuf;
+   ptr = inbuf;
+   ptr2 = inbuf;
    memset(inbuf, 0, sizeof(inbuf));
 //   ch = NextCh();          // get first character
+   inptr = SkipComments();
    ch = NextNonSpace(0);
-   if (ch == '#') {
+   if (ch == '#' && in_comment==0) {
       if (ShowLines)
          fprintf(stdout, "#line %5d\n", InLineNo);
-      directive();
+      def = directive()==1;
+      if (def)
+        ptr = inptr;
    }
    else {
-      inptr = inbuf;
-//      unNextCh();
-	  if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf);
+//      inptr = inbuf;
+      unNextCh();
+     ptr2 = SkipComments();
+     inptr = ptr2;
+	  if (fdbg) fprintf(fdbg, "bef sub  :%s", ptr2);
       SearchAndSub();
-	  if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf);
-      DoPastes(inbuf);
+	  if (fdbg) fprintf(fdbg, "aft sub  :%s", ptr2);
+      DoPastes(ptr2);
 	  // write out the current input buffer
-	  if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf);
-      if (fputs(inbuf,ofp)==EOF)
+	  if (fdbg) fprintf(fdbg, "aft paste:%s", ptr2);
+    rtrim(ptr2);
+    do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
+    ptr2--;
+      if (fputs(ptr2,ofp)==EOF)
 		  printf("fputs failed.\n");
+      fputs("\n",ofp);
    }
+   lasttk = 0;
    InLineNo++;          // Update line number (including __LINE__).
-   sprintf(bbline.body, "%5d", InLineNo);
+   sprintf(bbline.body, "%5d", InLineNo-1);
 }
 
 /* -----------------------------------------------------------------------------
@@ -635,7 +654,7 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 1.25  (C) 1998-2018 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.27  (C) 1998-2021 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -661,7 +680,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 1.25  (C) 1998-2018 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.27  (C) 1998-2021 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
