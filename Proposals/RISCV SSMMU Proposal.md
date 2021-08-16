@@ -5,13 +5,13 @@ RISCV HW specification. Working draft, subject to change.
 
 ## Introduction
 Many systems can benefit from the provision of virtual memory management. Virtual memory may be used to protect the address space of one app from another, enhancing the reliability and security of a system.
-The simplified system MMU provides minimalistic base and bound and paging capabilities for a small to mid size system. Base bound and paging are applied only to user mode apps. In machine mode the system sees a flat address space with no restrictions on access. Base address generation is applied to virtual addresses first to generate a linear address which is then mapped using a paged mapping system. Access rights are governed by the base register since all pages in the based on the same address are likely to require the same access. Support for access rights is optional if it’s desired to reduce the hardware cost. To simplify hardware there are no bound registers. Bounds are determined by what memory is mapped into the base address area.
+The simplified system MMU provides minimalistic base and bound and paging capabilities for a small to mid size system. Base bound and paging are applied in all modes of operation. Base address generation is applied to virtual addresses first to generate a linear address which is then mapped using a paged mapping system. Access rights are governed by the base register since all pages based on the same address are likely to require the same access. Support for access rights is optional if it’s desired to reduce the hardware cost.
 
 ## Proposal
 We Propose:
-*	an MMU system containing 16 base registers, and a small page mapping memory
+*	an MMU system containing 16 base/bound registers, and a small page mapping memory
 *	a custom instruction ‘mvmap’ to access the page mapping memory
-*	a custom instruction ‘mvbase’ to access the base registers
+*	a custom instruction ‘mvbase’ to access the base/bound registers
 * the page mapping system does not fault if pages are not present
 
 ## Rationale
@@ -23,7 +23,7 @@ The ‘mvmap’ instruction works in manner similar to the CSR instruction. It atomi
 Keeping the page mapping table internal to core means no external memory access is required. It can be accessed at high speed.
 
 ## Base Registers
-It is assumed for a smaller system that upper address bits are not used for addressing memory and are available to select base register. The SSMMU includes 16 base registers. The base register in use is selected by the upper nybble of the virtual address. In the case of the program address, program counter bits 30 and 31 are used to select one of four registers. If the program address has all ones in bits 24 to 31 then base addressing is bypassed. This provides a shared program area containing the BIOS and OS code.
+It is assumed for a smaller system that upper address bits are not used for addressing memory and are available to select a base/bound register. The SSMMU includes 16 base/bound registers. The base/bound register in use is selected by the upper nybble of the virtual address. In the case of the program address, base/bound register #15 is always used. If the program address has all ones in bits 24 to 31 then base addressing is bypassed. This provides a shared program area containing the BIOS and OS code. Suggested usage of base/bound registers are shown in the table below.
 
 | Base Regno |  Usage   |  Selected By                         |
 |------------|----------|--------------------------------------|
@@ -31,20 +31,39 @@ It is assumed for a smaller system that upper address bits are not used for addr
 |    8,9     | reserved | bits 28 to 31 of the virtual address |
 |     10     |  stack   | bits 28 to 31 of the virtual address |
 |     11     |   I/O    | bits 28 to 31 of the virtual address |
-|  12 to 15  |   code   | bits 30 to 31 of the program counter |
+|     13     |  rodata  | bits 28 to 31 of the virtual address |
+|     14     |   code   | storage for return base/bound        |
+|     15     |   code   | always for program counter           |
 
 ## Base Register Format
 | Base Address 28 bits |  RWX  |
 |----------------------|-------|
 The low order four bits of the base register are reserved for access rights bits. Supporting memory access rights is optional.
-* R: 1=segment readable
+* R: 1 = segment readable
 * W: 1 = segment writeable
 * X: 1 = segment executable
+
+## Bound Register Format
+| Bounding Address 18 bits |
+|--------------------------|
+The bound register contains only 18 bits which when shifted left by 10 bits provides a 28-bit bound address. Note virtual address cannot exceed 28 bits due to the presence of the base/bound selection in the upper four bits. The ten low order bits of a bounding address are filled with ones.
 
 ## Linear Address Generation
 The base address value contained in the upper 28 bits of a base register is shifted left 10 bits before being added to the virtual address. This gives potentially a 38-bit address space.
 The address shift of 10 bits is determined to be the same size as a mapped page.
-Note there is no limit field. Access is limited by what is mapped into the base address range.
+
+## Exceptions / Faults
+The base/bound system may generate faults if the access rights are violated or if the bounding address is exceeded. When a fault occurs the cause code is set corresponding to the type of fault and the bad address register loaded with the faulting address. One code from the designated custom use faults is used for a bounding address exceeded fault.
+
+|Cause Code|Event                                                 |
+|----------|------------------------------------------------------|
+|    24    | Bounding address exceeded                            |
+|     5    | Attempt to read from un-reabled address range        |
+|     7    | Attempt to write to un-writable address range        |
+|     1    | Attempt to execute from non-executable address range |
+
+## Reset
+On reset the code base register is set to zero, and the code bounds register set to all ones. No other base/bound registers are initialized.
 
 ## The Page Map
 The page directly maps virtual address pages to physical ones. The page map is a dedicated memory internal to the processing core accessible with the custom ‘mvmap’ instruction. It is similar in operation to a TLB but is much simpler. TLB’s cache address translations and create TLB miss exceptions. Page walks of mapping tables are required to update the TLB on a miss. There are no exceptions associated with the page mapping table. 
@@ -74,8 +93,8 @@ Exceptions may be generated if the access rights specified in a base register do
 Since the mapping mechanism prevents access to unmapped memory areas an app may crash without affecting other apps.
 
 ## MVBASE
-mvbase atomically swaps the current value to Rd for a new value in Rs1 of the base register identified by Rs2.
-If Rs1 is x0 then only the current value is returned, no update of the base register takes place.
+mvbase atomically swaps the current value to Rd for a new value in Rs1 of the base/bound register identified by Rs2. Values 0 to 15 in Rs2 identify a base register. Values 16 to 31 in Rs2 identify a bounds register.
+If Rs1 is x0 then only the current value is returned, no update of the base/bound register takes place.
 
 ### Instruction Format
 |  0  | Rs2 | Rs1 | 0 |  Rd  |    13   |
