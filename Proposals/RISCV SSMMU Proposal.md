@@ -37,7 +37,7 @@ It is assumed for a smaller system that upper address bits are not used for addr
 
 ## Base Register Format
 | Base Address 28 bits |  RWX  |
-|----------------------|-------|
+
 The low order four bits of the base register are reserved for access rights bits. Supporting memory access rights is optional.
 * R: 1 = segment readable
 * W: 1 = segment writeable
@@ -45,7 +45,7 @@ The low order four bits of the base register are reserved for access rights bits
 
 ## Bound Register Format
 | Bounding Address 18 bits |
-|--------------------------|
+
 The bound register contains only 18 bits which when shifted left by 10 bits provides a 28-bit bound address. Note virtual address cannot exceed 28 bits due to the presence of the base/bound selection in the upper four bits. The ten low order bits of a bounding address are filled with ones.
 
 ## Linear Address Generation
