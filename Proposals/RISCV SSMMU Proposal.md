@@ -11,7 +11,7 @@ The simplified system MMU provides minimalistic base and bound and paging capabi
 We Propose:
 *	an MMU system containing 16 base/bound registers, and a small page mapping memory
 *	a custom instruction ‘mvmap’ to access the page mapping memory
-*	a custom instruction ‘mvbase’ to access the base/bound registers
+*	a custom instruction ‘mvseg’ to access the base/bound registers
 * the page mapping system does not fault if pages are not present
 
 ## Rationale
@@ -23,7 +23,7 @@ The ‘mvmap’ instruction works in manner similar to the CSR instruction. It atomi
 Keeping the page mapping table internal to core means no external memory access is required. It can be accessed at high speed.
 
 ## Base Registers
-It is assumed for a smaller system that upper address bits are not used for addressing memory and are available to select a base/bound register. The SSMMU includes 16 base/bound registers. The base/bound register in use is selected by the upper nybble of the virtual address. In the case of the program address, base/bound register #15 is always used. If the program address has all ones in bits 24 to 31 then base addressing is bypassed. This provides a shared program area containing the BIOS and OS code. Suggested usage of base/bound registers are shown in the table below.
+It is assumed for a smaller system that upper address bits are not used for addressing memory and are available to select a base/bound register. The SSMMU includes 16 base/bound registers. The base/bound register in use is selected by the upper nybble of the virtual address. In the case of the program address, base/bound register #15 is always used. If an address has all ones in bits 26 to 31 then base/bounds addressing is bypassed. This provides a shared program area containing the BIOS and OS code. Suggested usage of base/bound registers are shown in the table below.
 
 | Base Regno |  Usage   |  Selected By                         |
 |------------|----------|--------------------------------------|
@@ -49,18 +49,18 @@ The low order four bits of the base register are reserved for access rights bits
 The bound register contains only 18 bits which when shifted left by 10 bits provides a 28-bit bound address. Note virtual address cannot exceed 28 bits due to the presence of the base/bound selection in the upper four bits. The ten low order bits of a bounding address are filled with ones.
 
 ## Linear Address Generation
-The base address value contained in the upper 28 bits of a base register is shifted left 10 bits before being added to the virtual address. This gives potentially a 38-bit address space.
+The base address value contained in the upper 28 bits of a base register is shifted left 10 bits before being added to the virtual address. This gives potentially a 38-bit address space. Note however that the page mapping table limits the physical address space to 26 bits.
 The address shift of 10 bits is determined to be the same size as a mapped page.
 
 ## Exceptions / Faults
 The base/bound system may generate faults if the access rights are violated or if the bounding address is exceeded. When a fault occurs the cause code is set corresponding to the type of fault and the bad address register loaded with the faulting address. One code from the designated custom use faults is used for a bounding address exceeded fault.
 
-|Cause Code|Event                                                 |
-|----------|------------------------------------------------------|
-|    24    | Bounding address exceeded                            |
-|     5    | Attempt to read from un-reabled address range        |
-|     7    | Attempt to write to un-writable address range        |
-|     1    | Attempt to execute from non-executable address range |
+|Cause Code|Standard      | Event                                                |
+|----------|--------------|------------------------------------------------------|
+|    24    |              | Bounding address exceeded                            |
+|     5    | read fault   | Attempt to read from un-reabled address range        |
+|     7    | write fault  | Attempt to write to un-writable address range        |
+|     1    | instr. fault | Attempt to execute from non-executable address range |
 
 ## Reset
 On reset the code base register is set to zero, and the code bounds register set to all ones. No other base/bound registers are initialized.
@@ -86,14 +86,17 @@ The page mapping table is indexed by the ASID and the virtual page number to det
 ## The 1kB Page
 Many memory systems use a 4kB page size or larger. That size was not chosen here as the available memory is assumed to be small and a 4kB page size would result in too few pages of memory to support multiple tasks. A smaller page size results in less wasted space which is important with a small memory system. It’s a careful balance, an even smaller page size would waste less memory but would require a much larger page mapping ram.
 
+## Physical Page Zero (PPN=0)
+To avoid the necessity of an additional bit in the page mapping table to indicate active entries, a physical page number of zero shall indicate that the entry is available to be mapped. This means that physical memory page zero is not accessible. Note that a virtual address of zero remains accessible.
+
 ## Exceptions
 Unused page map entries should point to an unimplemented area of memory so that an access exception will be generated. It is assumed that an exception (generated by the system, not the mmu) is generated for unimplemented regions of the address space.
 Alternately, one page of the memory space could be reserved as a general crash area if exceptions are not supported.
 Exceptions may be generated if the access rights specified in a base register don't match the type of access attempted.
 Since the mapping mechanism prevents access to unmapped memory areas an app may crash without affecting other apps.
 
-## MVBASE
-mvbase atomically swaps the current value to Rd for a new value in Rs1 of the base/bound register identified by Rs2. Values 0 to 15 in Rs2 identify a base register. Values 16 to 31 in Rs2 identify a bounds register.
+## MVSEG
+mvseg atomically swaps the current value to Rd for a new value in Rs1 of the base/bound register identified by Rs2. Values 0 to 15 in Rs2 identify a base register. Values 16 to 31 in Rs2 identify a bounds register.
 If Rs1 is x0 then only the current value is returned, no update of the base/bound register takes place.
 
 ### Instruction Format
@@ -111,6 +114,11 @@ Rs1 Value
 Rs2 Value
 | Unused - should be zero 16 bits |  Physical Page Number 16 bits max  |
 
+## Memory Fence
+Both the MVSEG and MVMAP instructions may require a memory fence be inserted before-hand to ensure that all memory, instruction fetch, and I/O operations are complete before the MVSEG or MVMAP instruction is executed. Changing the mapping table or base/bound registers should be done in a manner that does not cause the processor to lose its stream of execution. Updates may be done when the top six bits of a program address are all ones in which case base/bound and mapping will not be applied.
+
+## CSR Usage
+The SSMMU is specified in the satp register - CSR $180. Mode=bare=0 and ASID[8:7]=3. The low order bits 0 to 6 of the ASID are used to indicate the ASID. Since the mapping table in an internal resource accessed by the 'mvmap' instruction it does not require a base address. So, bits 0 to 21 of the satp register are used to indicate the size of the mapping table. Bit 0 to 15 indicate the number of map entries per map. Bits 16 to 21 indicate the number of maps in the table.
 
 ## Examples
 
