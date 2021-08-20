@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -27,10 +27,15 @@
 ;------------------------------------------------------------------------------
 
 MMUInit:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi		$t0,#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
 	stt		$t0,NPAGES
+
+	; satp register setting
+	ldi		$t0,#$60200100			; 32 maps of 256 entries, ASID = 0, custom MMU selected
+	csrrw	$x0,#CSR_SATP,$t0	  ; set ASID
+
 	; Free all memory for all tasks
 	; Sets all pages to map to page zero for all tasks, except for the system
 	; task (task #0) which pre-allocates the first 16kB of memory.
@@ -55,9 +60,7 @@ MMUInit:
 	bnez	$t2,.0001
 	sub		$t4,$t4,#1      ; next app id
 	bge		$t4,$x0,.0004
-	; Now ensure all pages in PAM are marked as free or OS allocated
-	call  PAMInit
-
+	
 	; allocate last 4 pages for system stacks
 	ldi		$t1,#$FF				
 	ldi		$t0,#$1FF
@@ -78,8 +81,19 @@ MMUInit:
 .0002:
 	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
 	add		$t0,$t0,#1			; pick next segment register
-	slt		$t2,$t0,#16			; 16 segment regs
+	slt		$t2,$t0,#128		; 128 base regs
 	bnez	$t2,.0002
+	ldi		$t0,#128
+	ldi		$t1,#-1					; t1 = value to load, bounds max
+.0003:
+	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
+	add		$t0,$t0,#1			; pick next segment register
+	slt		$t2,$t0,#256		; 128 bound regs
+	bnez	$t2,.0003
+
+	; Now ensure all pages in PAM are marked as free or OS allocated
+	call  PAMInit
+
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
@@ -139,7 +153,7 @@ FindRun:
 ;------------------------------------------------------------------------------
 ;
 Alloc:
-	gcsub		$sp,$sp,#24
+	sub			$sp,$sp,#24
 	stt			$ra,[$sp]
 	stt			$s1,4[$sp]			; these regs must be saved
 	stt			$s2,8[$sp]
@@ -215,7 +229,7 @@ Alloc:
 ;------------------------------------------------------------------------------
 
 AllocStack:
-  gcsub   $sp,$sp,#12
+  sub   	$sp,$sp,#12
   stt     $ra,[$sp]
   stt     $s1,4[$sp]
   stt     $s2,8[$sp]
@@ -258,7 +272,7 @@ AllocStack:
 ;------------------------------------------------------------------------------
 
 FreeAll:
-  gcsub   $sp,$sp,#4
+  sub   	$sp,$sp,#4
   stt     $ra,[$sp]
 	ldi			$t3,#0
 	sll			$t4,$a0,#16
@@ -339,7 +353,7 @@ VirtToLinear:
 ;------------------------------------------------------------------------------
 
 VirtToPhys:
-	gcsub $sp,$sp,#8
+	sub 	$sp,$sp,#8
 	stt   $ra,[$sp]
 	stt   $s1,4[$sp]
 	mov   $s1,$a0
@@ -376,7 +390,7 @@ VirtToPhys:
 ;------------------------------------------------------------------------------
 
 VirtToPhys2:
-	gcsub $sp,$sp,#4
+	sub 	$sp,$sp,#4
 	stt   $ra,[$sp]
 ;	call  VirtToLinear2
 ;	bltz	$v0,.notMapped

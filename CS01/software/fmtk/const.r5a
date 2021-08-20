@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -88,13 +88,16 @@ E_NoMoreTCBs	=	0x45
 E_NoMoreAppIds = 0x46
 E_NoMem = 0x47
 
+CSR_SATP		= $180
 CSR_MSTATUS = $300
 CSR_MEPC    = $341
+CSR_TRACECTRL = $7A0
 CSR_REGSET  = $7C0
 CSR_MSEMA   = $7C1
 CSR_TASKID  = $7C2
 CSR_RSSTACK = $7C3
 CSR_PMSTACK = $7C4
+CSR_IMSTACK = $7C5
 TCBPTR_MASK = $FFF803FF
 
 ; Message types

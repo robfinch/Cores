@@ -93,8 +93,6 @@ TCBException	EQU	$308
 TCBNext			EQU		$310
 TCBPrev			EQU		$318
 TCBTimeout	EQU		$320
-IOF_NEXT		EQU		$328
-IOF_PREV		EQU		$330
 TCBtid      EQU   $338
 TCBmid      EQU   $340
 TCBappid    EQU   $342
@@ -121,8 +119,8 @@ ACBpCode      EQU   134
 ACBObjectList EQU   144
 ACBGarbageList  EQU   152
 ACBHeap       EQU   160   ; 640+ bytes for heap object info
-ACBIOFNext    EQU   824
-ACBIOFPrev    EQU   832
+ACBiofNext    EQU   824
+ACBiofPrev    EQU   832
 ACBUserName   EQU   840   ; 2 byte index of string in string area
 ACBPath       EQU   842   ; 2 byte index of string in string area
 ACBExitRunFile  EQU   844 ; 2 byte index of string in string area

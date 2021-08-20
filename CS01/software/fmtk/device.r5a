@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2014-2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2014-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -34,15 +34,15 @@ DCB_LastErc			EQU		0x18		; last error code
 DCB_StartBlock		EQU		0x20		; starting block number (partitioned devices)
 DCB_nBlocks			EQU		0x28		; number of blocks on device
 DCB_pCmdProc		EQU		0x30		; pointer to command processor routine
-DCB_ReentCount		EQU		0x38		; re-entrancy count (1 to 255)
-DCB_fSingleUser		EQU		0x39
-DCB_fUI       EQU   0x3A    ; user interface device
-DCB_hJob			EQU		0x40		; handle to associated job
-DCB_Mbx				EQU		0x48
-DCB_pSema			EQU		0x50		; pointer to device semaphore
-DCB_Resv1			EQU		0x58		; reserved
-DCB_Resv2			EQU		0x60		; reserved
-DCB_Size			EQU		0x60
+DCB_pIRQProc		EQU		0x38		; pointer to IRQ processing routine
+DCB_ReentCount		EQU		0x40		; re-entrancy count (1 to 255)
+DCB_fSingleUser		EQU		0x41
+DCB_fUI       EQU   0x42    ; user interface device
+DCB_hJob			EQU		0x48		; handle to associated job
+DCB_Mbx				EQU		0x50
+DCB_pSema			EQU		0x58		; pointer to device semaphore
+DCB_Resv1			EQU		0x60		; reserved
+DCB_Size			EQU		0x60		; 96 bytes
 
 ; Device command opcodes
 ;

@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -99,10 +99,16 @@ FMTKInit:
 	csrrw $x0,#CSR_TASKID,$t0   ; task id = 0
 	stt   $x0,TaskNum
 	stt		$x0,TimeoutList
-	stt		$x0,READYQ
-	stt		$x0,READYQ+4
-	stt		$x0,READYQ+8
-	stt		$x0,READYQ+12
+	stt		$x0,HEADRDY0
+	stt		$x0,HEADRDY1
+	stt		$x0,HEADRDY2
+	stt		$x0,HEADRDY3
+	stt		$x0,HEADRDY4
+	stt		$x0,TAILRDY0
+	stt		$x0,TAILRDY1
+	stt		$x0,TAILRDY2
+	stt		$x0,TAILRDY3
+	stt		$x0,TAILRDY4
 	
 	stt		$x0,IOFocusNdx
 
@@ -198,7 +204,11 @@ FMTK_GetAppTaskId:
   ldi   $a0,#E_Ok
   jmp   OSExit
 
+; The following only really needed by startup code, otherwise the task id
+; is completely managed by the OS.
 FMTK_SetTaskId:
+  ; Should get the id and see if it's currently zero (unset).
+  ; but this would be more code bloat.
   csrrw $x0,#CSR_TASKID,$a1
   ldi   $a0,#E_Ok
   jmp   OSExit
@@ -304,12 +314,10 @@ SelectTaskToRun:
 	ldi		$t2,#5							; 5 queues to check
 .nxtQ:
   mEI
-  peekq $a0,$a1
-  bltz  $a0,.nxtQa          ; queue empty?
-  srl   $t0,$a0,#16
-  and   $t0,$t0,#$3F        ; check data count
-  bnez  $t0,.dq
-.nxtQa:
+  sll		$a1,$a1,#2					; turn $a1 into index
+  ldt		$a0,HEADRDY[$a1]
+  srl		$a1,$a1,#2					; get back $a1
+  bnez  $a0,.dq      				;
 	add		$a1,$a1,#1					; no, advance to next queue
 	slt   $a0,$a1,#5
 	bnez  $a0,.mod
@@ -321,9 +329,11 @@ SelectTaskToRun:
 	; -> Go to low power mode, stop clock, wait for interrupt
 	; Then push the idle task which will search for other tasks
 	; ready to run.
+;	ldi		$a3,#'T'
+;	call	SerialPutChar
 	wfi
 	ldwu  $a0,IdleTaskId
-	beqz  $a0,.checkAgain
+;	beqz  $a0,.checkAgain
 	ldi   $a1,#4
   call  InsertIntoReadyQueue
 ;	pushq $a0,$a1
@@ -332,17 +342,14 @@ SelectTaskToRun:
   ; If we got a task but it isn't actually ready anymore go back
   ; and get another task. This is how tasks get removed from the
   ; queue.
-;  and   $t2,$v0,#$4000      ; empty flag?
-;  bnez  $t2,.nxtQa
-  popq  $a0,$a1
-  and   $a0,$a0,#$1FF
-  beqz  $a0,.nxtQ             ; zero is not accepted
-  sll   $t1,$a0,#LOG_PGSZ
-  ldb   $t0,TCBStatus[$t1]
+  ldb   $t0,TCBStatus[$a0]
   and   $t0,$t0,#TS_READY
-  beqz  $t0,.nxtQ
-  ; The task was ready and we removed it from the queue by popping
-  ; it so push it back on the queue.
+  ; Remove task from ready list
+  ldt   $t1,TCBNext[$a0]
+  stt		$t1,HEADRDY[$a1]
+  beqz  $t0,.checkAgain
+  ; The task was ready and we removed it from the queue so put it back on the
+  ; queue.
   ; The task's priority level may have been changed, so update accordingly.
   call  InsertIntoReadyQueue
 .xit:
@@ -363,6 +370,42 @@ SelectTaskToRun:
 ;------------------------------------------------------------------------------
   align 16
 SwapContext:
+	; Save the operating mode
+	csrrw $t3,#CSR_PMSTACK,$x0
+	and   $t3,$t3,#$38
+	stb   $t3,TCBOpMode[$s1]
+
+	; Switch to destination memory map
+  ldbu  $a0,TCBmid[$s2]
+  sll		$a0,$a0,#22					; shift into position
+  csrrw	$t1,#$180,$x0				; get satp
+  and		$t1,$t1,#$f83fffff	; mask off asid
+  or		$t1,$t1,$a0					; set new asid
+	csrrw	$x0,#$180,$t1				; set satp
+  srl   $a0,$s2,#LOG_PGSZ
+	csrrw $x0,#CSR_TASKID,$a0
+	; User map has now been switched
+
+	; Select register set to return to
+	csrrw $t1,#CSR_RSSTACK,$x0
+	and   $t1,$t1,#$FFFFFC1F
+	sll   $t0,$a0,#5
+	or    $t1,$t1,$t0
+	csrrw $x0,#CSR_RSSTACK,$t1
+
+  ; Setup return privilege mode
+  ldbu  $t3,TCBOpMode[$s2]
+  csrrw $t0,#CSR_PMSTACK,$x0
+  and   $t0,$t0,#$FFFFFFC7
+  and   $t3,$t3,#$38          ; four operating modes max
+  or    $t0,$t0,$t3
+  csrrw $x0,#CSR_PMSTACK,$t0
+
+	; Setup EPC to return to task
+  ldt   $t3,TCBepc[$s2]
+  csrrw $x0,#CSR_MEPC,$t3
+	ret
+/*
 	; Save outgoing register set in TCB
 	csrrs	$x0,#CSR_REGSET,#4	  ; select prior register set for Rs2, epc
 	stt		$x1,TCBxRA[$s1]
@@ -419,7 +462,11 @@ SwapContext:
 ;	srl		$v0,$a1,#10					; convert pointer to tid
 ;	and		$v0,$v0,#$F					; mask to 16 task
   ldbu  $a0,TCBmid[$s2]
-	csrrw	$x0,#$181,$a0				; set ASID
+  sll		$a0,$a0,#22					; shift into position
+  csrrw	$t1,#$180,$x0				; get satp
+  and		$t1,$t1,#$f83fffff	; mask off asid
+  or		$t1,$t1,$a0					; set new asid
+	csrrw	$x0,#$180,$t1				; set satp
   srl   $a0,$s2,#LOG_PGSZ
 	csrrw $x0,#CSR_TASKID,$a0
 	; User map has now been switched
@@ -447,8 +494,8 @@ SwapContext:
 	; Restore incoming registers
 	ldbu  $t0,TCBRegset[$s2]
 	csrrw $t1,#CSR_RSSTACK,$x0
-	and   $t1,$t1,#$FFFFFF0F
-	sll   $t0,$t0,#4
+	and   $t1,$t1,#$FFFFFC1F
+	sll   $t0,$t0,#5
 	or    $t1,$t1,$t0
 	csrrw $x0,#CSR_RSSTACK,$t1
 	; We can skip over a bunch of load operations if the last task to use the
@@ -506,6 +553,7 @@ SwapContext:
   ldt   $t3,TCBepc[$s2]
   csrrw $x0,#CSR_MEPC,$t3
 	ret
+*/
 
 ;------------------------------------------------------------------------------
 ; Operating system ordinary call dispatcher.
@@ -578,7 +626,7 @@ OSExit:
 	mEI
 	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
 	mTimeSliceEI
-	jmp   ERETx2
+	mret
 
 ;------------------------------------------------------------------------------
 ; Time accounting.
@@ -659,14 +707,14 @@ UpdateMsgFields:
 ;------------------------------------------------------------------------------
   align 16
 ISleep:
-  gcsub $sp,$sp,#12
+  sub 	$sp,$sp,#12
   stt   $ra,[$sp]
   stt   $s1,4[$sp]
   stt   $s2,8[$sp]
-	bltz	$a1,OSExit
+	bltz	$a1,.xit
 	mGetCurrentTid
-	beqz  $a0,.xit
-	sll   $s1,$a0,#LOG_PGSZ
+;	beqz  $a0,.xit
+	mov   $s1,$a0
 	mov   $s2,$s1               ; for bad ppinter processing
 	beqz	$a1,.0001             ; zero timeout?
 	call	RemoveFromReadyQueue
@@ -678,7 +726,7 @@ ISleep:
 
 	call	AccountTime						; uses s1
 	call	SelectTaskToRun
-  sll   $s2,$a0,#LOG_TCBSZ    ; $a0 = tid
+  mov   $s2,$a0    						; $s2 = $a0 = tid
   stt   $s2,$3F00
 	ldbu	$t2,TCBStatus[$s2]		; x2 = incoming status
 	or		$t2,$t2,#TS_RUNNING	  ; set status = running
@@ -732,13 +780,34 @@ SchedulerIRQ:
 	beqz  $a0,.noOS
 	ret                   ; refuse to continue this function
 .noOS:
-	decto                 ; decrement timeouts for tasks on timeout list
-	gcsub	$sp,$sp,#12
+	sub		$sp,$sp,#12
 	stt		$ra,[$sp]
 	stt   $s1,4[$sp]
 	stt   $s2,8[$sp]
+	; Keep popping the timeout list as long as there are tasks on it with
+	; expired timeouts.
+.0001:
+	ldt		$a0,TimeoutList
+	beqz	$a0,.toDone
+	ldt		$t1,TCBTimeout[$a0]
+	sub		$t1,$t1,#1			; decrement timeouts for tasks on timeout list
+	stt		$t1,TCBTimeout[$a0]
+	beqz	$t1,.rmvFromTol
+	bra		.toDone
+.rmvFromTol:
+	ldbu	$t2,TCBStatus[$a0]
+	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG) ; no longer timing out or waiting
+	stb		$t2,TCBStatus[$a0]
+	call  MbxRemoveTask
+	call	InsertIntoReadyQueue
+	ldt		$t1,TCBNext[$a0]
+	stt		$t1,TimeoutList
+	beqz	$t1,.toDone				; list empty?
+	stt		$x0,TCBPrev[$t1]
+	bra		.0001
+.toDone:
 	mGetCurrentTid
-	sll   $s1,$a0,#LOG_TCBSZ
+	mov   $s1,$a0
 ; Might need the following if the external timer isn't used.
 ;	csrrw	$v0,#$701,$x0					; get the time
 ;	add		$v0,$v0,#600000				; wait 600,000 cycles @20MHz (30ms)
@@ -751,35 +820,10 @@ SchedulerIRQ:
 	or		$t5,$t5,#TS_PREEMPT
 	and		$t5,$t5,#~TS_RUNNING	; no longer running, but may still be ready
 	stb		$t5,TCBStatus[$s1]
-	; Keep popping the timeout list as long as there are tasks on it with
-	; expired timeouts.
-	ldi		$s5,#0
-	ldi		$s3,#1
-	; There should be at least 64 clock cycles between the time the decto
-	; instruction is used to decrement timeouts and the getzl instruction
-	; is used to pop tasks that have timed out. The decto instruction runs
-	; in the background.
-.0001:
-	getzl	$s4           ; pop task with timeout finished
-	and   $a1,$s4,#$4000  ; empty queue?
-	bnez  $a1,.qEmpty
-	bge   $s4,$x0,.0001 ; valid info?
-.0002:
-  and   $s4,$s4,#$FF        ; mask off queue address bits
-	sll   $t4,$s4,#LOG_TCBSZ  ; 
-	ldbu	$t2,TCBStatus[$t4]
-	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG) ; no longer timing out or waiting
-	stb		$t2,TCBStatus[$t4]
-	srl   $a0,$s4,#LOG_TCBSZ
-	call  MbxRemoveTask
-	call	InsertIntoReadyQueue
-	bra   .0001
-.qEmpty:
-.bypass2:
 	; The ready queue was just updated, there could be new tasks
 	; ready to run.
 	call	SelectTaskToRun
-  sll   $s2,$a0,#LOG_TCBSZ
+  mov   $s2,$a0
 	lbu		$t3,TCBStatus[$s2]	; t3 = incoming status
 	or		$t2,$t3,#TS_RUNNING|TS_READY	; status = running
 	and   $t2,$t2,#~TS_PREEMPT
@@ -823,7 +867,7 @@ SchedulerIRQ:
 ;------------------------------------------------------------------------------
   align 16
 IStartTask:
-  gcsub $sp,$sp,#24
+  sub 	$sp,$sp,#24
   stt   $ra,[$sp]
   stt   $s1,4[$sp]
   stt   $s2,8[$sp]
@@ -850,7 +894,7 @@ IStartTask:
   stw   $a0,TCBmid[$s4] ; record the mid
 	call	AllocStack
 	beqz  $a0,.err
-	or		$t0,$a0,#$A0000FFC	; set stack pointer
+	or		$t0,$a0,#$20000FFC	; set stack pointer
 	stt		$t0,TCBxSP[$s1]
 	stt		$s5,TCBepc[$s1]	; address task will begin at
 	ldi		$t0,#TS_READY
@@ -858,30 +902,34 @@ IStartTask:
 	ldi		$t0,#2					; normal execution priority
 	stb		$t0,TCBPriority[$s1]
 	stt   $x0,TCBTimeout[$s1]
+
 	; leave segment base at $0, flat memory model
 	ldi		$t0,#6							; read,write
-	stt		$t0,TCBbases[$s1]		; bases 0 to 11
-	stt		$t0,TCBbases+4[$s1]
-	stt		$t0,TCBbases+8[$s1]
-	stt		$t0,TCBbases+12[$s1]
-	stt		$t0,TCBbases+16[$s1]
-	stt		$t0,TCBbases+20[$s1]
-	stt		$t0,TCBbases+24[$s1]
-	stt		$t0,TCBbases+28[$s1]
-	stt		$t0,TCBbases+32[$s1]
-	stt		$t0,TCBbases+36[$s1]
-	stt		$t0,TCBbases+40[$s1]
-	stt		$t0,TCBbases+44[$s1]
-	ldi		$t0,#5							; read,execute
-	stt		$t0,TCBbases+48[$s1]	; segs 12 to 15
-	stt		$t0,TCBbases+52[$s1]
-	stt		$t0,TCBbases+56[$s1]
-	stt		$t0,TCBbases+60[$s1]
+	sll		$a0,$s3,#2					; $a0 = appid shifted into place
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	; Set bounds registers
+	ldi		$t0,#-1
+	or		$a0,$a0,#128
+	and		$a0,$a0,#$FC
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	add		$a0,$a0,#1
+	mvseg	$x0,$a0,$t0
+	
 ;	srl		$a0,$s1,#LOG_TCBSZ	; need the tid again
   stt   $x0,TCBMbxNext[$s1]
   stt   $x0,TCBMbxPrev[$s1]
-  srl   $a0,$s1,#LOG_TCBSZ  ; a0 = tid
-  and   $t0,$a4,#15
+  mov   $a0,$s1							; a0 = tid
+  and   $t0,$a4,#31
   stb   $t0,TCBRegset[$s1]
   and   $t0,$a4,#$30
   or    $t0,$t0,#$08        ; enable interrupts at startup
@@ -896,7 +944,7 @@ IStartTask:
   ; Don't add the idle task to the queue.
   sub   $t0,$t0,#1
   bnez  $t0,.notIdleTask
-  stw   $a0,IdleTask
+  stt   $a0,IdleTask
 .notIdleTask:
 	call	InsertIntoReadyQueue
   mov   $a1,$a0
@@ -912,7 +960,7 @@ IStartTask:
   ret
 .err:
   ldi   $a0,#E_NoMem
-  jmp   .xit
+  bra   .xit
 
 FMTK_StartTask:
   call  IStartTask
@@ -938,7 +986,6 @@ FMTK_ExitTask:
 ;------------------------------------------------------------------------------
   align 16
 FMTK_KillTask:
-	sll		$a1,$a1,#LOG_TCBSZ	        
 	ldt   $t0,TCBTaskNum[$a1]
 	beqz	$t0,.immortal		    ; tid #0 is immortal (the system)
 	ldi		$t0,#TS_UNDEAD			; flag task as undead

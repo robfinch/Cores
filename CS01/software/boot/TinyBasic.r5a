@@ -709,7 +709,7 @@ WAITIRQ:
 	call	CHKIO		; see if a control-C was pressed
 	ldi   $a0,#35
 	ecall
-	beqz	$s8,WAITIRQ
+	beqz	$a0,WAITIRQ
 	jmp		FINISH
 
 
@@ -740,12 +740,12 @@ LS4:
 	add   $t3,$t3,$a0 ; set pointer for next
 ;	mov		$t3,$s8		
 	call	CHKIO		; check for listing halt request
-	beqz	$s8,LS3
+	beqz	$a0,LS3
 	ldi		$t1,#CTRLS
-	bne		$s8,$t1,LS3 ; pause the listing?
+	bne		$a0,$t1,LS3 ; pause the listing?
 LS2:
 	call 	CHKIO		; if so, wait for another keypress
-	beqz	$s8,LS2
+	beqz	$a0,LS2
 LS3:
 ;	mov		$s8,$x0
 	bra		LS5
@@ -848,7 +848,7 @@ GOSUB:
 	call	OREXPR		; get line number
 	mov		$a0,$s8
 	call	FNDLN		; find the target line
-	bne		s8,r0,gosub1
+	bnez	$s8,gosub1
 	ldi		a0,#msgBadGotoGosub
 	jmp		ERROR		; if not there, say "How?"
 gosub1:
@@ -2308,26 +2308,25 @@ GETLN:
 	ldi		$t2,#BUFFER	; $t2 is the buffer pointer
 .GL1:
 	call	CHKIO		; check keyboard
-	beqz	$s8,.GL1	; wait for a char. to come in
+	beqz	$a0,.GL1	; wait for a char. to come in
 	ldi		$t1,#CTRLH
-	beq		$s8,$t1,.GL3	; delete last character? if so
+	beq		$a0,$t1,.GL3	; delete last character? if so
 	ldi		$t1,#CTRLX
-	beq		$s8,$t1,.GL4	; delete the whole line?
+	beq		$a0,$t1,.GL4	; delete the whole line?
 	ldi		$t1,#CR
-	beq		$s8,$t1,.GL2		; accept a CR
+	beq		$a0,$t1,.GL2		; accept a CR
 	ldi		$t1,#' '
-	blt		$s8,$t1,.GL1	; if other control char., discard it
+	blt		$a0,$t1,.GL1	; if other control char., discard it
 .GL2:
-	stb		$s8,[$t2]		; save the char.
+	stb		$a0,[$t2]		; save the char.
 	add		$t2,$t2,#1
 	gcsub	$sp,$sp,#4
-	stt		$s8,[$sp]
-	mov		$a0,$s8
-	call	GOOUT		; echo the char back out
-	ldt		$s8,[$sp]; get char back (GOOUT destroys a0)
+	stt		$a0,[$sp]
+	call	GOOUT		  ; echo the char back out
+	ldt		$a0,[$sp] ; get char back (GOOUT destroys a0)
 	add		$sp,$sp,#4
 	ldi		$t1,#CR
-	beq		$s8,$t1,.GL7			; if it's a CR, end the line
+	beq		$a0,$t1,.GL7			; if it's a CR, end the line
 	ldi		$t1,#BUFFER+BUFLEN-1
 	blt		$t2,$t1,.GL1		; any more room? ; yes: get some more, else delete last char.
 .GL3:
@@ -2604,9 +2603,9 @@ QT5:					; not " ' or _
 prCRLF:
 	gcsub	$sp,$sp,#4
 	stt		$ra,[$sp]
-	ldi		a0,#CR
+	ldi		$a0,#CR
 	call	GOOUT
-	ldi		a0,#LINEFD
+	ldi		$a0,#LINEFD
 	call	GOOUT
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -2754,24 +2753,24 @@ PRTLN:
 ;		t2 = updated text pointer
 ;
 TSTC:
-	sub		$sp,$sp,#12
-	sw		$a0,[$sp]
-	sw		$ra,4[$sp]
-	sw		$a1,8[$sp]
+	gcsub	$sp,$sp,#12
+	stt		$a0,[$sp]
+	stt		$ra,4[$sp]
+	stt		$a1,8[$sp]
 	call	IGNBLK		; ignore leading blanks
-	lw		$ra,4[$sp]	; get return address, it's needed for a reference
-	lbu		$a0,[$t2]
-	lbu		$a1,[$ra]
+	ldt		$ra,4[$sp]	; get return address, it's needed for a reference
+	ldbu	$a0,[$t2]
+	ldbu	$a1,[$ra]
 	beq		$a1,$a0,TC1	; is it = to what t2 points to? if so
-	lw		$a0,[$sp]		; restore a0
-	lw		$a1,8[$sp]
+	ldt		$a0,[$sp]		; restore a0
+	ldt		$a1,8[$sp]
 	add		$sp,$sp,#12	;
 	jmp		4[$ra]			; jump to the routine skip param
 TC1:
 	add		$t2,$t2,#1	; if equal, bump text pointer
-	lw		$a0,[$sp]
-	lw		$ra,4[$sp]
-	lw		$a1,8[$sp]
+	ldt		$a0,[$sp]
+	ldt		$ra,4[$sp]
+	ldt		$a1,8[$sp]
 	add		$sp,$sp,#12
 	jmp		8[$ra]			; jump back, skip parm and branch
 
@@ -2854,21 +2853,21 @@ IGBRET:
 ;
 TOUPBUF:
 	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
+	stt		$ra,[$sp]
 	ldi		$t2,#BUFFER	; set up text pointer
 	mov		r3,x0		; clear quote flag
 TOUPB1:
-	lbu		a0,[$t2]		; get the next text char.
+	lbu		$a0,[$t2]		; get the next text char.
 	add		$t2,$t2,#1
 	ldi		$t1,#CR
-	beq		a0,$t1,TOUPBRT		; is it end of line?
+	beq		$a0,$t1,TOUPBRT		; is it end of line?
 	ldi		$t1,#'"'
-	beq		a0,$t1,DOQUO	; a double quote?
-	ldi		$t1,#'\''
-	beq		a0,$t1,DOQUO	; or a single quote?
+	beq		$a0,$t1,DOQUO	; a double quote?
+	ldi		$t1,#'\''     ; '
+	beq		$a0,$t1,DOQUO	; or a single quote?
 	bne		r3,x0,TOUPB1	; inside quotes?
 	call	toUpper 	; convert to upper case
-	sb		s8,-1[$t2]	; store it
+	stb		$a0,-1[$t2]	; store it
 	bra		TOUPB1		; and go back for more
 DOQUO:
 	bne		r3,x0,DOQUO1; are we inside quotes?
@@ -2879,20 +2878,27 @@ DOQUO1:
 	mov		r3,r0		; else clear quote flag
 	bra		TOUPB1
 TOUPBRT:
-	lw		$ra,[$sp]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 
 
 ; ===== Convert the character in a0 to upper case
 ;
+;toUpper:
+;  sge     $cr0,$a0,#'a'
+;  sle.and $cr0,$a0,#'z'
+;  asl     $t1,$cr0.C,#5
+;  sub     $a0,$a0,$t1
+;  ret
+
 toUpper:
-	mov		$s8,$a0
-	slt		$t1,$s8,#'a'
-	bne   $t1,$x0,TOUPRET	; is it < 'a'?
-	ldi		$t1,#'z'
-	bgt		$s8,$t1,TOUPRET	; or > 'z'?
-	sub		$s8,$s8,#32	  ; if not, make it upper case
+	slt		$t1,$a0,#'a'
+	bnez  $t1,TOUPRET	    ; is it < 'a'?
+	ldi		$t1,#'z'+1
+	slt   $t1,$a0,$t1     ; >= 'a' and <= 'z'?
+	sll   $t1,$t1,#5
+	sub		$a0,$a0,$t1	    ; if not, make it upper case
 TOUPRET:
 	ret
 
@@ -2903,15 +2909,15 @@ TOUPRET:
 ;
 //message "CHKIO"
 CHKIO:
-	sub		$sp,$sp,#4
-	sw		$ra,[$sp]
-	call	INCH		; get input if possible
-	beq		$s8,$x0,CHKRET	; if Zero, no input
-	xor		$s9,$s8,#CTRLC
-	bne		$s9,$x0,CHKRET; is it control-C?
-	jmp		WSTART		; if so, do a warm start
+	gcsub	$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	INCH		    ; get input if possible
+	beqz	$a0,CHKRET  ; if Zero, no input
+	xor		$s9,$a0,#CTRLC
+	bnez	$s9,CHKRET  ; is it control-C?
+	jmp		WSTART		  ; if so, do a warm start
 CHKRET:
-	lw		$ra,[$sp]
+	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
 
@@ -3088,12 +3094,12 @@ OUTC:
 ;	return Zero status if there's no character available).
 ;
 INCH:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	sw		$ra,[$sp]
 	call	Getch
-	add		$s8,$s8,#1			; prepare test -1
-	beqz	$s8,INCH1			  ; was = -1
-	sub		$s8,$s8,#1			; get char back
+	add		$a0,$a0,#1			; prepare test -1
+	beqz	$a0,INCH1			  ; was = -1
+	sub		$a0,$a0,#1			; get char back
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
@@ -3114,7 +3120,7 @@ BYEBYE:
 	ecall
  
 
-msgInit	db	CR,LINEFD,"CS01 Tiny BASIC s9.2",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
+msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.3",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
 OKMSG	db	CR,LINEFD,"OK",CR,0
 msgWhat	db	"What?",CR,0
 SRYMSG	db	"Sorry."

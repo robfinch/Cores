@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -103,10 +103,10 @@ FMTK_GetDCBField:
 	add		$t2,$t2,#DCB_Base		; base address of function table
 	add   $t2,$t2,$a2         ; add field offset
 	beqz  $a3,.ldWord
-	ldb   $t3,[$t2]
+	ldb   $a1,[$t2]
 	bra   .ok
 .ldWord:
-  ldt   $t3,[$t2]
+  ldt   $a1,[$t2]
 .ok:
   ldi   $a0,#E_Ok
 .xit:

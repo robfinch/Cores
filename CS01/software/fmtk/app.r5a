@@ -62,6 +62,8 @@ FMTK_StartApp:
   ldi   $t0,#ACB_MAGIC
   stt   $t0,OBJMagic[$s3]
   stt   $x0,ACBGarbageList[$s3]
+  stt   $x0,ACBiofNext[$s3]
+  stt   $x0,ACBiofPrev[$s3]
   ldb   $t0,ASRmid[$s1]
   stb   $t0,ACBmid[$s3]
   ; Allocate a virtual screen and set pointers to it.

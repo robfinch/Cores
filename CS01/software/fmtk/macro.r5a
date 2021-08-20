@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -149,18 +149,5 @@ macro mTimeSliceDI
 	stt		$t0,VIA_IER+VIA
 	nop                   ; make sure disable has time for effect
 	nop
-endm
-
-; Inserting into the ready queue is done by both OS ecall functions and
-; interrupt driven scheduling. It's important to have interrupts disabled
-; so that there is no contention for the ready queue.
-
-macro mInsertIntoReadyQueue
-	sll   $t0,$a0,#LOG_TCBSZ
-	ldbu	$t1,TCBStatus[$t0]	; set status to ready
-	or		$t1,$t1,#TS_READY
-	stb		$t1,TCBStatus[$t0]
-	ldb		$t1,TCBPriority[$t0]
-	pushq	$a0,$t1
 endm
 

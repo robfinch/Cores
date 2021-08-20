@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -25,9 +25,12 @@
 	align	4
 ;------------------------------------------------------------------------------
 ; Insert task into ready queue.
+; Inserting into the ready queue is done by both OS ecall functions and
+; interrupt driven scheduling. It's important to have interrupts disabled
+; so that there is no contention for the ready queue.
 ;
 ; Parameters:
-;		$a0 = tid to insert
+;		$a0 = tid to insert (TCB pointer)
 ; Modifies:
 ;	  $t0,$t1
 ; Returns:
@@ -35,8 +38,23 @@
 ;------------------------------------------------------------------------------
 
 InsertIntoReadyQueue:
-  mInsertIntoReadyQueue
+	ldbu	$t1,TCBStatus[$a0]		; set status to ready
+	or		$t1,$t1,#TS_READY
+	stb		$t1,TCBStatus[$a0]
+	ldb		$t1,TCBPriority[$a0]	; $t1 = priority
+	sll		$t1,$t1,#2						; $t1 = index to priority list
+	ldt		$t2,TAILRDY[$t1]
+	beqz	$t2,.qempty
+	stt		$a0,TCBNext[$t2]
+	stt		$a0,TAILRDY[$t1]
+	stt		$x0,TCBNext[$a0]
 	ret
+.qempty:
+	stt		$a0,HEADRDY[$t1]
+	stt		$a0,TAILRDY[$t1]
+	stt		$x0,TCBNext[$a0]
+	ret
+
 
 ;------------------------------------------------------------------------------
 ; Removal from the ready queue is easy. Just flag the task status as no longer
@@ -52,10 +70,9 @@ InsertIntoReadyQueue:
 ;------------------------------------------------------------------------------
 
 RemoveFromReadyQueue:
-	sll   $t0,$a0,#LOG_PGSZ
-	ldb		$t1,TCBStatus[$t0]		; set status no longer ready or running
+	ldb		$t1,TCBStatus[$a0]		; set status no longer ready or running
 	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
-	stb		$t1,TCBStatus[$t0]
+	stb		$t1,TCBStatus[$a0]
 	ret
 
 ;------------------------------------------------------------------------------
@@ -67,11 +84,46 @@ RemoveFromReadyQueue:
 ;------------------------------------------------------------------------------
 
 InsertIntoTimeoutList:
-	sll   $t5,$a0,#LOG_TCBSZ
-	setto	$a0,$a1
-	ldbu	$t2,TCBStatus[$t5]		; set status to timing out
+	ldbu	$t2,TCBStatus[$a0]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
-	stb		$t2,TCBStatus[$t5]
+	stb		$t2,TCBStatus[$a0]
+	ldt		$t0,TimeoutList
+	beqz	$t0,.listEmpty
+.loop:
+	ldt		$t1,TCBTimeout[$t0]
+	sltu	$t2,$a1,$t1
+	bnez	$t2,.lessThan
+	; Here timeout was >
+	sub		$a1,$a1,$t1
+	ldt		$t0,TCBNext[$t0]
+	bnez	$t0,.loop
+	; Add at end
+	stt		$a0,TCBNext[$t0]
+	stt		$t0,TCBPrev[$a0]
+	stt		$x0,TCBNext[$a0]
+	stt		$a1,TCBTimeout[$a0]
+	ldi		$a0,#E_Ok
+	ret
+.listEmpty:
+	stt		$a1,TCBTimeout[$a0]
+	stt		$a0,TimeoutList
+	stt		$x0,TCBNext[$a0]
+	stt		$x0,TCBPrev[$a0]
+	ldi		$a0,#E_Ok
+	ret
+.lessThan:
+	sub		$t1,$t1,$a1
+	stt		$t1,TCBTimeout[$t0]
+	ldt		$t2,TCBPrev[$t0]
+	stt		$t0,TCBNext[$a0]
+	stt		$a0,TCBPrev[$t0]
+	stt		$t2,TCBPrev[$a0]
+	beqz	$t2,.atHead
+	stt		$a0,TCBNext[$t2]
+	ldi		$a0,#E_Ok
+	ret
+.atHead:
+	stt		$a0,TimeoutList
 	ldi		$a0,#E_Ok
 	ret
 
@@ -89,7 +141,37 @@ InsertIntoTimeoutList:
 ;------------------------------------------------------------------------------
 
 RemoveFromTimeoutList:
-	setto	$a0,$x0
+	ldt		$t0,TCBPrev[$a0]
+	beqz	$t0,.atHead
+	ldt		$t1,TCBNext[$a0]
+	beqz	$t1,.atTail2
+	ldt		$t3,TCBTimeout[$t1]
+	ldt		$t4,TCBTimeout[$a0]
+	sub		$t3,$t3,$t4
+	stt		$t3,TCBTimeout[$t1]
+	stt		$t1,TCBNext[$t0]	; this->prev->next = this->next
+	ldt		$t2,TCBNext[$a0]
+	beqz	$t2,.atTail
+	stt		$t0,TCBPrev[$t2]	; this->next->prev = this->prev
+.atTail:
+	stt		$x0,TCBTimeout[$a0]
+	ret
+.atHead:
+	ldt		$t1,TimeoutList
+	bne		$t1,$t0,.notAtHead
+	ldt		$t1,TCBNext[$a0]
+	beqz	$t1,.atTail
+	ldt		$t3,TCBTimeout[$t1]
+	ldt		$t4,TCBTimeout[$a0]
+	sub		$t3,$t3,$t4
+	stt		$t3,TCBTimeout[$t1]
+	stt		$t1,TimeoutList
+.notAtHead:
+	stt		$x0,TCBTimeout[$a0]
+	ret
+.atTail2:
+	stt		$x0,TCBNext[$t0]
+	stt		$x0,TCBTimeout[$a0]
 	ret
 
 ;------------------------------------------------------------------------------

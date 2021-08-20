@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -148,7 +148,7 @@ ViaIRQ:
 .0001:
 	and   $a0,$t0,#$100       ; timer 3? (bit 8)
 	bnez  $a0,.timer3irq
-	jmp   ERETx2
+	mret
 .timer3irq:
 	ldi		$t2,#1							; assume timer3, select timer 3 access
 	stb		$t2,VIA_PCR+1[$t1]
@@ -159,7 +159,7 @@ ViaIRQ:
 	stt		$t2,switchflag
 	ldi   $a0,#0
 	call  OSOCall
-	jmp   ERETx2
+	mret
 	; reset countdown to clear interrupt
 .timer2irq:
 	ldi   $t2,#$004C4B40      ; divider value for 10 Hz (100 ms)

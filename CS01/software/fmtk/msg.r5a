@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -39,13 +39,12 @@
 ;------------------------------------------------------------------------------
   align  16
 MbxRemoveTask:
-	gcsub	$sp,$sp,#20
+	sub		$sp,$sp,#20
 	stt		$s1,[$sp]
 	stt		$t0,4[$sp]
 	stt		$t1,8[$sp]
 	stt		$t2,12[$sp]
 	stt   $a0,16[$sp]
-	sll   $a0,$a0,#LOG_PGSZ
 	mDI
 	ldt   $t0,TCBMbxPrev[$a0]
 	ldt   $t1,TCBMbxNext[$a0]

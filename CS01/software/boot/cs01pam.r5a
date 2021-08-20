@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -40,7 +40,7 @@
 ;------------------------------------------------------------------------------
 
 PAMFindRun:
-  gcsub $sp,$sp,#20
+  sub 	$sp,$sp,#20
   stt   $ra,[$sp]
   stt   $s1,4[$sp]
   stt   $s2,8[$sp]
@@ -68,11 +68,14 @@ PAMFindRun:
   add   $a0,$s3,#1          ; increment run start pos
   bra   .nextPage
 .notAvailable:
+;	add		$a3,$a0,#'0'
+;	call	SerialPutChar
+;	stt		$s4,$4030
   add   $a0,$s4,#1
   slt   $t1,$a0,#MEMSZ
   bnez  $t1,.nextPage
 .outOfMem:
-  mov   $a0,#-1
+  ldi   $a0,#-1
   bra   .xit
 .foundRun:
   mov   $a0,$s3
@@ -95,7 +98,7 @@ PAMFindRun:
 ;------------------------------------------------------------------------------
 
 PAMAlloc:
-  gcsub $sp,$sp,#16
+  sub 	$sp,$sp,#16
   stt   $ra,[$sp]
   stt   $s1,4[$sp]
   stt   $s4,8[$sp]
@@ -109,7 +112,7 @@ PAMAlloc:
   bltz  $t0,.outOfMem
   stt   $t0,NPAGES          ; update the number of available pages
   call  PAMFindRun
-  bltz  $a0,.xit
+  bltz  $a0,.xit2
   mov   $s1,$a0
   mov   $a3,$a0
   mov   $s5,$a0             ; $s5 = start of run
@@ -121,8 +124,7 @@ PAMAlloc:
   add   $a3,$a3,#1          ; increment page number
   sub   $s4,$s4,#1          ; decrement length
   bgtz  $s4,.markNext
-  mov   $a0,$s5             ; $a0 = start of run
-  sll   $a0,$a0,#LOG_PGSZ   ; $a0 = physical address of page
+  sll   $a0,$s5,#LOG_PGSZ   ; $a0 = physical address of page
 .xit:
   ldt   $ra,[$sp]
   ldt   $s1,4[$sp]
@@ -133,6 +135,13 @@ PAMAlloc:
 .outOfMem:
   ldi   $a0,#-1
   bra   .xit
+  ; Failed to find a run so,
+  ; restore number of pages available
+.xit2:
+	ldt		$t0,NPAGES
+	add		$t0,$t0,$s4
+	stt		$t0,NPAGES
+	bra		.xit
 
 ;------------------------------------------------------------------------------
 ; Free memory previously allocated with PAMAlloc.
@@ -146,7 +155,7 @@ PAMAlloc:
 ;------------------------------------------------------------------------------
 
 PAMFree:
-  gcsub   $sp,$sp,#12
+  sub   	$sp,$sp,#12
   stt     $ra,[$sp]
   stt     $s1,4[$sp]
   mov     $s1,$a0
@@ -192,7 +201,7 @@ PAMFree:
 ;------------------------------------------------------------------------------
 ;
 PAMMarkPage:
-	gcsub	$sp,$sp,#8
+	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt   $s1,4[$sp]
 	ldi   $a0,#OSPAGES
@@ -260,17 +269,17 @@ PAMxit:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		$a0 = bit number to get
+;		$a0 = bit pair number to get
 ; Modifies:
 ;		$t0,$t2,$t3
 ; Returns:
-;   $a0 = value of bit (1 or 0)
+;   $a0 = value of bit pair (0, 1, 2 or 3)
 ;------------------------------------------------------------------------------
 
 PAMGetbitPair:
-  srl   $t2,$a0,#4          ; $t2 = word
-  sll   $t2,$t2,#2          ; $t2 = word index
-  and   $t3,$a0,#15         ; $t3 = bit pair no
+  srl   $t2,$a0,#4          ; $t2 = word, bit pair num/16
+  sll   $t2,$t2,#2          ; $t2 = word index, 4 bytes per word
+  and   $t3,$a0,#15         ; $t3 = bit pair num in word = 0 to 15
   sll   $t3,$t3,#1          ; $t3 = bit pair index
 	ldt		$t0,PAM[$t2]        ; get word
 	srl   $t2,$t0,$t3         ; extract bits
@@ -281,7 +290,7 @@ PAMGetbitPair:
 ;------------------------------------------------------------------------------
 
 PAMInit:
-  gcsub $sp,$sp,#4
+  sub 	$sp,$sp,#4
   stt   $ra,[$sp]
   ; First zero out the entire PAM using word stores
   ldi   $a0,#0
@@ -321,3 +330,20 @@ GetPamBit:
   mov   $a1,$a0
   ldi   $a0,#E_Ok
   jmp   OSExit
+
+PAMDump:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	ldi		$s1,#0
+.0001:
+	mov		$a0,$s1
+	call	PAMGetbitPair
+	add		$a3,$a0,#'0'
+	call	SerialPutChar
+	add		$s1,$s1,#1
+	slt		$t1,$s1,#MEMSZ
+	bnez	$t1,.0001
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+	

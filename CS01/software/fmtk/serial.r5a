@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -71,12 +71,16 @@ SerialDCB:
   dw    0
   dw    0     ; last error code
   dw    0
+; 32
   dw    0     ; starting block number
   dw    0
   dw    0     ; number of blocks
   dw    0
   dw    0     ; command processing routine
+  dw		0
+  dw		SerialIRQ			; IRQ routine
   dw    0
+;64
   db    0     ; reentrancy count
   db    0     ; single user flag
   db    1     ; user interface device flag
@@ -88,8 +92,7 @@ SerialDCB:
   dw    0
   dw    0     ; pointer to device semaphore
   dw    0
-  dw    0     ; reserved
-  dw    0
+; 96
 ;  dw    0     ; reserved
 ;  dw    0
 
@@ -135,35 +138,43 @@ SerialServiceInit:
 	ldi		$a2,#SerialService
 	ecall
 	ret
+
 SerialService:
-	sub		$sp,$sp,#512+24
-	ldi		$a0,#14			; get current tid
+	sub		$sp,$sp,#40		; allocate stack for local vars
+	ldi		$a0,#14				; get current tid
 	ecall
-	add		$a2,$sp,#516
-	mov		$a1,$a0
-	ldi		$a0,#6			; alloc mailbox
+	mov		$a2,$sp				; where to put mailbox handle
+	mov		$a1,$a0				; a1 = tid
+	ldi		$a0,#6				; alloc mailbox
 	ecall
 
 SerialServiceLoop:
-	ldi		$a0,#10			; waitmsg
-	add		$a1,$sp,#516
-	add		$a2,$sp,#520
-	add		$a3,$sp,#524
-	add		$a4,$sp,#528
-	ldi		$a5,#-1
+.0001:
+	ldi		$a0,#10				; waitmsg
+	lw		$a1,[$sp]			; mailbox handle
+	add		$a2,$sp,#4		; where to put D1
+	add		$a3,$sp,#8		; where to put D2
+	add		$a4,$sp,#12		; where to put D3
+	ldi		$a5,#-1				; timeout
 	ecall
+	bnez	$a0,.0001			; E_Ok?
 
-	lw		$t0,[$sp]
-	and		$t0,$t0,#31
+	lw		$t0,4[$sp]
+	lw		$a0,8[$sp]
+	lw		$a1,12[$sp]
+	and		$t0,$t0,#31		; command in bits 0 to 4 of D1
 	sll		$t0,$t0,#1
 	lw		$t0,SerialFuncTbl[$t0]
+	beqz	$t0,.0001
 	jmp		[$t0]
 
 SerialFinishCmd:
-	lw		$a1,12[$sp]		; reply mbx
+	lw		$a1,4[$sp]		; reply mbx handle in bits 8 to 23 of D1
+	srl		$a1,$a1,#8
+	and		$a1,$a1,#$FFFF
 	add		$a1,$a1,#1		; -1 = no reply requested
-	beq		$a1,$a0,.0001
-	sub		$a1,$a1,#1
+	beqz	$a1,.0001
+	sub		$a1,$a1,#1		; $a1 = mailbox handle again
 	ldi		$a0,#9				; sendmsg
 	ldi		$a2,#-1
 	ldi		$a3,#-1
@@ -191,42 +202,42 @@ SerialFinishCmd:
 ;------------------------------------------------------------------------------
 
 SerialGetChar:
-		gcsub	$sp,$sp,#16
-		stt		$ra,[$sp]
-		stt		$s1,8[$sp]          ; XON status
-		stt   $s2,12[$sp]         ; interrupt state
-		ldb		$s1,SerRcvXon				; skip sending XON if already sent
-		csrrc	$s2,#$300,#1				; disable interrupts
-		call	SerialRcvCount			; check number of chars in receive buffer
-		slt		$a0,$a0,#8					; less than 8?
-		beqz	$a0,.0002
-		bnez	$s1,.0002           ; XON already sent?
-		ldi		$a0,#XON						; if <8 send an XON
-		stb		$x0,SerRcvXoff			; clear XOFF status
-		stb		$a0,SerRcvXon				; flag so we don't send it multiple times
-		stb		$a0,UART+UART_TRB
+	sub		$sp,$sp,#16
+	stt		$ra,[$sp]
+	stt		$s1,8[$sp]          ; XON status
+	stt   $s2,12[$sp]         ; interrupt state
+	ldb		$s1,SerRcvXon				; skip sending XON if already sent
+	csrrc	$s2,#$7C4,#1				; disable interrupts
+	call	SerialRcvCount			; check number of chars in receive buffer
+	slt		$a0,$a0,#8					; less than 8?
+	beqz	$a0,.0002
+	bnez	$s1,.0002           ; XON already sent?
+	ldi		$a0,#XON						; if <8 send an XON
+	stb		$x0,SerRcvXoff			; clear XOFF status
+	stb		$a0,SerRcvXon				; flag so we don't send it multiple times
+	stb		$a0,UART+UART_TRB
 .0002:
-		ldbu	$a1,SerHeadRcv			; check if anything is in buffer
-		ldbu	$a0,SerTailRcv
-		beq		$a0,$a1,.noChars		; no?
-		ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
-		add		$a1,$a1,#1					; update head index
-		and   $a1,$a1,#255        ; ring buffer wrapping
-		stb		$a1,SerHeadRcv
-		bra		.xit
+	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
+	ldbu	$a0,SerTailRcv
+	beq		$a0,$a1,.noChars		; no?
+	ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
+	add		$a1,$a1,#1					; update head index
+	and   $a1,$a1,#255        ; ring buffer wrapping
+	stb		$a1,SerHeadRcv
+	bra		.xit
 .noChars:
 .0001:
-		ldi		$a0,#-1
+	ldi		$a0,#-1
 .xit:
-    mov   $a1,$a0
-    ldi   $a0,#E_Ok
-		csrrw	$x0,#$300,$s2				; restore interrupts
-		csrrc $x0,#$004,#1
-		ldt		$ra,[$sp]
-		ldt		$s1,8[$sp]
-		ldt   $s2,12[$sp]
-		add		$sp,$sp,#16
-		ret
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+	csrrw	$x0,#$7C4,$s2				; restore interrupts
+	csrrc $x0,#$004,#1
+	ldt		$ra,[$sp]
+	ldt		$s1,8[$sp]
+	ldt   $s2,12[$sp]
+	add		$sp,$sp,#16
+	ret
 
 ;------------------------------------------------------------------------------
 ; SerialPeekChar
@@ -247,10 +258,10 @@ SerialGetChar:
 ;------------------------------------------------------------------------------
 
 SerialPeekChar:
-	gcsub	$sp,$sp,#8
+	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$s1,4[$sp]
-	csrrc	$s1,#$300,#1				; disable interrupts
+	csrrc	$s1,#$7C4,#1				; disable interrupts
 	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
 	ldbu	$a0,SerTailRcv
 	beq		$a0,$a1,.noChars		; no?
@@ -262,7 +273,7 @@ SerialPeekChar:
 .xit
   mov   $a1,$a0
   ldi   $a0,#E_Ok
-	csrrw	$x0,#$300,$s1				; restore interrupts
+	csrrw	$x0,#$7C4,$s1				; restore interrupts
 	ldt		$ra,[$sp]
 	ldt		$s1,4[$sp]
 	add		$sp,$sp,#8
@@ -285,10 +296,10 @@ SerialPeekChar:
 ;------------------------------------------------------------------------------
 
 SerialPeekCharDirect:
-	gcsub	$sp,$sp,#8
+	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$s1,4[$sp]
-	csrrc	$s1,#$300,#1				; disable interrupts
+	csrrc	$s1,#$7C4,#1				; disable interrupts
 	ldb		$a0,UART+UART_STAT
 	and		$a0,$a0,#8					; look for Rx not empty
 	beqz	$a0,.0001
@@ -298,7 +309,7 @@ SerialPeekCharDirect:
 	ldi		$a1,#-1
 .xit:
   ldi   $a0,#E_Ok
-	csrrw	$x0,#$300,$s1				; restore interrupts
+	csrrw	$x0,#$7C4,$s1				; restore interrupts
 	csrrs $x0,#$004,#1
 	ldt		$ra,[$sp]
 	ldt		$s1,4[$sp]
@@ -322,40 +333,34 @@ SerialPeekCharDirect:
 ;------------------------------------------------------------------------------
 
 SerialPutChar:
-  mDI
-	sub		$sp,$sp,#12
+	sub		$sp,$sp,#16
 	stt		$a0,[$sp]
 	stt		$ra,4[$sp]
 	stt		$a1,8[$sp]
+	stt		$s1,12[$sp]
 .0002:
 	ldi		$a1,#10
+	csrrc	$s1,#$7C4,#1				; disable interrupts
 .0001:
-;  mEI
-;	sub		$a1,$a1,#1
-;	beqz	$a1,.goSleep
-;	mDI
+	sub		$a1,$a1,#1
+	beqz	$a1,.goSleep
+	pfi												; poll for an interrupt here
 	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
-;	mEI
+	csrrw	$x0,#$7C4,$s1				; restore interrupt setting
 	ldt		$a0,[$sp]
 	ldt		$ra,4[$sp]
 	ldt		$a1,8[$sp]
-	add		$sp,$sp,#12
+	ldt		$s1,12[$sp]
+	add		$sp,$sp,#16
 	ret
 .goSleep:
-  mEI
-	sub		$sp,$sp,#8
-	stt		$a0,[$sp]
-	stt		$a1,4[$sp]
-	ldi		$a0,#3								; ISleep function
-	ldi		$a1,#1								; 1 tick
+	csrrw	$x0,#$7C4,$s1				; restore interrupt setting
+	ldi		$a0,#3							; ISleep function
+	ldi		$a1,#1							; 1 tick
 	call  OSOCall
-	ldt		$a0,[$sp]
-	ldt		$a1,4[$sp]
-	add		$sp,$sp,#8
-	mDI
 	bra		.0002
 
 ;------------------------------------------------------------------------------
@@ -383,6 +388,12 @@ SerialIRQ:
 	and		$t0,$a0,#$08				; bit 3 = rx full
 	beqz	$t0,.notRxInt
 	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	xor   $t2,$a1,#CTRLT
+	bnez  $t2,.0001
+	mov   $s1,$a1
+	call  DumpTraceQueue
+	mov   $a1,$s1
+.0001:
 	ldbu	$t2,SerHeadRcv			; get buffer indexes
 	ldbu	$t3,SerTailRcv
 	mov   $t4,$t3
@@ -405,7 +416,7 @@ SerialIRQ:
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
-	jmp   ERETx2
+	mret
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
