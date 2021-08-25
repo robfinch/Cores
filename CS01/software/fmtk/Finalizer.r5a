@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -28,7 +28,7 @@
 ; exit by invoking the FinalizerExit routine of the OS.
 
   code  18 bits
-  align 4
+  align 16
 Finalizer:
   ldi   $a0,#24               ; request I/O focus
   ecall
@@ -64,15 +64,17 @@ Finalizer:
   ; queue with the operating address set to the finalizer code.
   stt   $t1,TCBepc[$a1]       ; Cause task to return to finalizer
   ldi   $t1,#PRI_LOW
-  ldbu  $a0,TCBtid[$a1]
-  pushq $a0,$t1
+  stb		$t1,TCBPriority[$a1]
+  mov		$a0,$a1
+  call	InsertIntoReadyQueue
+;  pushq $a0,$t1
 .noFinalizer:
   ldi   $t1,#TS_DEAD
   stb   $t1,TCBStatus[$a1]
   ldi   $t1,#OST_DEAD
   stb   $t1,OBJState[$a1]
   ldi   $a0,#E_Ok
-  jmp   OSExit
+  ret
   bra   .nxt2
 
 FMTK_TCBFinalizerExit:
@@ -86,7 +88,7 @@ FMTK_TCBFinalizerExit:
   ldi   $t1,#OST_DEAD
   stb   $t1,OBJState[$a1]
 .0001:
-  jmp   OSExit
+  ret
 
 msgFinalizerRunning:
   db  "Finalizer task running",CR,0

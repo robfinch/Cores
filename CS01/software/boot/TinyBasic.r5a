@@ -79,7 +79,7 @@ CursorFlash	EQU		INPPTR+4
 ;bitmap dw	0x00100000	; bitmap graphics memory 0x04100000-0x417FFFF
 TXTBGN		EQU		0x001800	;TXT ;beginning of program memory
 ENDMEM		EQU		0x00F000	; end of available memory
-STACKOFFS	EQU		0x07FFFC	; stack offset
+STACKOFFS	EQU		0x00FFFC	; stack offset
 
 
 		code
@@ -108,14 +108,18 @@ GOBYE:
 //message "CSTART"
 public CSTART:
 	; First save off the link register and OS sp value
-	stt		$sp,OSSP
-	ldi		$sp,#STACKOFFS	; initialize stack pointer
 	ldi		$a0,#14							; Get current tid
 	ecall                     ; $a1 = task id
 	ldi   $a0,#18             ; Get task app id
 	ecall
 	ldi		$a0,#24							; RequestIOFocus
 	ecall
+	ldi		$a0,#37							; Allocate memory
+	ldi		$a2,#$10000					; request 64k
+	ecall
+	mov		$gp,$a1
+	stt		$sp,OSSP[$gp]
+	add		$sp,$gp,#STACKOFFS	; initialize stack pointer
 ;	call	_DBGHomeCursor[pc]
 	mov		a0,r0			; turn off keyboard echoing
 //	call	SetKeyboardEcho
@@ -125,19 +129,21 @@ public CSTART:
 ;	call	_DBGClearScreen[pc]
 	ldi		$a0,#msgInit  ;	tell who we are
 	call	PRMESG
-	ldi		$a0,#TXTBGN	;	init. end-of-program pointer
-	stt		$a0,TXTUNF
-	ldi		$a0,#ENDMEM	;	get address of end of memory
-	ldi		$a0,#$7F800 ; 2k stack
-	stt		$a0,STKBOT
-	ldi		$a0,#ENDMEM
-	stt		$a0,VAREND
+	add		$a0,$gp,#TXTBGN	;	init. end-of-program pointer
+	stt		$a0,TXTUNF[$gp]
+	add		$a0,$gp,#ENDMEM	;	get address of end of memory
+	mov		$a0,$gp
+	add		$a0,$a0,#$F800	; 2k stack
+;	ldi		$a0,#$7F800 ; 2k stack
+	stt		$a0,STKBOT[$gp]
+	add		$a0,$gp,#ENDMEM
+	stt		$a0,VAREND[$gp]
 	sub		$a0,$a0,#800  ;   100 vars
-	stt   $a0,VARBGN
+	stt   $a0,VARBGN[$gp]
 	call  clearVars   ; clear the variable area
-	stt		$x0,IRQROUT
-	ldt   $a0,VARBGN   ; calculate number of bytes free
-	ldt		$a1,TXTUNF
+	stt		$x0,IRQROUT[$gp]
+	ldt   $a0,VARBGN[$gp]  ; calculate number of bytes free
+	ldt		$a1,TXTUNF[$gp]
 	sub   $a0,$a0,$a1
 	ldi		$a1,#6		; max 6 digits
 	ldi		$a2,#10	  ; base 10
@@ -145,10 +151,10 @@ public CSTART:
 	ldi		$a0,#msgBytesFree
 	call	PRMESG
 WSTART:
-	stt		$x0,LOPVAR  ; initialize internal variables
-	stt		$x0,STKGOS
-	stt		$x0,CURRNT	;	current line number pointer = 0
-	ldi		$sp,#STACKOFFS	;	init S.P. again, just in case
+	stt		$x0,LOPVAR[$gp]  ; initialize internal variables
+	stt		$x0,STKGOS[$gp]
+	stt		$x0,CURRNT[$gp]	;	current line number pointer = 0
+	add		$sp,$gp,#STACKOFFS	;	init S.P. again, just in case
 	ldi		$a0,#msgReady	;	display "Ready"
 	call	PRMESG
 BASPRMPT:
@@ -159,7 +165,7 @@ BASPRMPT:
 	ldi		$a0,#'>'	; Prompt with a '>' and
 	call	GETLN		  ; read a line.
 	call	TOUPBUF 	; convert to upper case
-	ldi		$t2,#BUFFER	; point to the beginning of line
+	add		$t2,$gp,#BUFFER	; point to the beginning of line
 	call	TSTNUM		; is there a number there?
 	call	IGNBLK		; skip trailing blanks
 	ldbu	$s6,[$t2]
@@ -292,10 +298,10 @@ GetBuflen:
 ;------------------------------------------------------------------------------
 
 OpenSpace:
-	ldt		$t2,TXTUNF
+	ldt		$t2,TXTUNF[$gp]
 	mov		$t3,$t2				; t3 = old end of text
 	add		$t2,$t2,$a1		; increment end of text by buffer length
-	ldt		$t1,VARBGN		; compare to start of variables
+	ldt		$t1,VARBGN[$gp]		; compare to start of variables
 	bgeu	$t2,$t1,.noSpace	; enough room?
 	stt		$t2,TXTUNF		; yes, set new end of text
 .0003:
@@ -551,7 +557,7 @@ EXGO:
 NEW:
 	call	ENDCHK
 	ldi		$s8,#TXTBGN
-	stt		$s8,TXTUNF	;	set the end pointer
+	stt		$s8,TXTUNF[$gp]	;	set the end pointer
 	call  clearVars
 
 ; 'STOP<CR>' goes back to WSTART
@@ -600,19 +606,19 @@ YIELD0:
 RUN:
 	call	ENDCHK
 	ldi		$t2,#TXTBGN	;	set pointer to beginning
-	stt		$t2,CURRNT
+	stt		$t2,CURRNT[$gp]
 	call  clearVars
 
 RUNNXL:					; RUN <next line>
-	ldt		$t2,CURRNT	; executing a program?
+	ldt		$t2,CURRNT[$gp]	; executing a program?
 	bnez	$t2,RUN3	  ; if not, we've finished a direct stat.
 RUN2:
 	jmp		WSTART
 RUN3:
-  stt   $t2,SRCHLN
+  stt   $t2,SRCHLN[$gp]
   ldbu  $t3,[$t2]
   add   $t2,$t2,$t3
-	ldt		$a0,IRQROUT		; are we handling IRQ's ?
+	ldt		$a0,IRQROUT[$gp]	; are we handling IRQ's ?
 	beqz  $a0,RUN1
 	ldi   $a0,#35       ; Get IRQ flag, was there an IRQ?
 	ecall
@@ -621,25 +627,25 @@ RUN3:
 	ldi   $a1,#0        ; set the flag to zero
 	ecall
 	call	PUSHA_		; the same code as a GOSUB
-	gcsub	$sp,$sp,#12
-	ldt		$a0,STKGOS
+	sub		$sp,$sp,#12
+	ldt		$a0,STKGOS[$gp]
 	stt		$a0,[$sp]
-	ldt		$a0,CURRNT
+	ldt		$a0,CURRNT[$gp]
 	stt		$a0,4[$sp]
 	stt		$t2,8[$sp]
-	stt		$x0,LOPVAR		; load new values
-	stt		$sp,STKGOS
-	ldt		$t3,IRQROUT
+	stt		$x0,LOPVAR[$gp]		; load new values
+	stt		$sp,STKGOS[$gp]
+	ldt		$t3,IRQROUT[$gp]
 	bra		RUNTSL
 RUN1:
 	mov		$t3,$t2
 	mov		$a0,$x0
 	call	FNDNXT  		; else find the next line number
-	ldt		$t1,TXTUNF	; if we've fallen off the end, stop
+	ldt		$t1,TXTUNF[$gp]	; if we've fallen off the end, stop
 	bgeu	$t3,$t1,RUN2
 
 RUNTSL:					; RUN <this line>
-	stt		$t3,CURRNT	; set CURRNT to point to the line no.
+	stt		$t3,CURRNT[$gp]	; set CURRNT to point to the line no.
 	add		$t2,$t3,#5	; set the text pointer to
 
 RUNSML:                 ; RUN <same line>
@@ -670,11 +676,11 @@ _clr:
 
 ; Clear the variable area of memory
 clearVars:
-	gcsub	$sp,$sp,#8
+	sub		$sp,$sp,#8
 	stt		r6,[$sp]
 	stt		$ra,4[$sp]
   ldi   r6,#100    	; number of word pairs to clear
-  ldt   s8,VARBGN
+  ldt   $s8,VARBGN[$gp]
 .cv1:
   stt		x0,[$s8]		; variable name
   stt		x0,4[$s8]		; and value
@@ -699,10 +705,10 @@ ONIRQ:
 	mov   $a0,$t0
 	call 	FNDLN		; find the target line
 	bnez	$s8,ONIRQ1
-	stt		$x0,IRQROUT
+	stt		$x0,IRQROUT[$gp]
 	jmp		FINISH
 ONIRQ1:
-	stt		$t3,IRQROUT
+	stt		$t3,IRQROUT[$gp]
 	jmp		FINISH
 
 WAITIRQ:
@@ -731,7 +737,7 @@ LISTX:
 LS1:
 	bnez		$s8,LS4
 LS5:
-	ldt		$t1,TXTUNF
+	ldt		$t1,TXTUNF[$gp]
 	bgeu	$t3,$t1,WSTART	; warm start if we passed the end
 LS4:
 	mov		$a0,$t3
@@ -855,11 +861,11 @@ gosub1:
 	sub		$sp,$sp,#12
 	lw		a0,STKGOS	; 'STKGOS'
 	sw		a0,[$sp]
-	lw		a0,CURRNT	; found it, save old 'CURRNT'...
+	lw		a0,CURRNT[$gp]	; found it, save old 'CURRNT'...
 	sw		a0,4[$sp]
 	sw		$t2,8[$sp]
-	sw		$x0,LOPVAR		; load new values
-	sw		$sp,STKGOS
+	sw		$x0,LOPVAR[$gp]		; load new values
+	sw		$sp,STKGOS[$gp]
 	jmp		RUNTSL
 
 
@@ -872,7 +878,7 @@ gosub1:
 ;
 RETURN:
 	call	ENDCHK		; there should be just a <CR>
-	lw		a1,STKGOS		; get old stack pointer
+	ldt		$a1,STKGOS[$gp]		; get old stack pointer
 	bne		a1,x0,return1
 	ldi		a0,#msgRetWoGosub
 	jmp		ERROR		; if zero, it doesn't exist
@@ -880,10 +886,10 @@ return1:
 	mov		$sp,a1		; else restore it
 	lw		a0,[$sp]
 	add		$sp,$sp,#4
-	sw		a0,STKGOS	; and the old 'STKGOS'
+	sw		a0,STKGOS[$gp]	; and the old 'STKGOS'
 	lw		a0,[$sp]
 	add		$sp,$sp,#4
-	sw		a0,CURRNT	; and the old 'CURRNT'
+	stt		$a0,CURRNT[$gp]	; and the old 'CURRNT'
 	lw		$t2,[$sp]	; and the old text pointer
 	add		$sp,$sp,#4
 	call	POPA_		;and the old 'FOR' parameters
@@ -911,13 +917,13 @@ return1:
 FOR:
 	call	PUSHA_		; save the old 'FOR' save area
 	call	SETVAL		; set the control variable
-	sw		s8,LOPVAR		; save its address
+	stt		$s8,LOPVAR[$gp]		; save its address
 	ldi		$t3,#TAB5
 	ldi		$t4,#TAB5_1	; use 'EXEC' to test for 'TO'
 	jmp		EXEC
 FR1:
 	call	OREXPR		; evaluate the limit
-	sw		s8,LOPLMT	; save that
+	stt		$s8,LOPLMT[$gp]	; save that
 	ldi		$t3,#TAB6
 	ldi		$t4,#TAB6_1	; use 'EXEC' to test for the word 'STEP
 	jmp		EXEC
@@ -927,13 +933,13 @@ FR2:
 FR3:
 	ldi		s8,#1		; not found, step defaults to 1
 FR4:
-	sw		s8,LOPINC	; save that too
+	sw		s8,LOPINC[$gp]	; save that too
 FR5:
-	lw		a1,CURRNT
-	sw		a1,LOPLN	; save address of current line number
-	sw		$t2,LOPPT	; and text pointer
+	lw		a1,CURRNT[$gp]
+	sw		a1,LOPLN[$gp]	; save address of current line number
+	sw		$t2,LOPPT[$gp]	; and text pointer
 	mov		r3,$sp		; dig into the stack to find 'LOPVAR'
-	lw		r6,LOPVAR
+	lw		r6,LOPVAR[$gp]
 	bra		FR7
 FR6:
 	add		r3,r3,#20	; look at next stack frame
@@ -974,7 +980,7 @@ NEXT:
 NX4:
 	mov		$t3,s8	; save variable's address
 NX0:
-	lw		a0,LOPVAR	; If 'LOPVAR' is zero, we never...
+	lw		a0,LOPVAR[$gp]	; If 'LOPVAR' is zero, we never...
 	bne		a0,x0,NX5	; had a FOR loop
 	ldi		a0,#msgNextFor
 	bra		ERROR
@@ -984,20 +990,20 @@ NX5:
 	bra		NX0
 NX2:
 	lw		a0,[$t3]		; get control variable's value
-	lw		a1,LOPINC
+	lw		a1,LOPINC[$gp]
 	add		a0,a0,a1	; add in loop increment
 ;	BVS.L	QHOW		say "How?" for 32-bit overflow
 	sw		a0,[$t3]		; save control variable's new value
-	lw		r3,LOPLMT	; get loop's limit value
+	lw		r3,LOPLMT[$gp]	; get loop's limit value
 	bge		a1,x0,NX1	; check loop increment, branch if loop increment is positive
 	blt		a0,r3,NXPurge	; test against limit
 	bra     NX3
 NX1:
 	bgt		a0,r3,NXPurge
 NX3:
-	lw		$t2,LOPLN	; Within limit, go back to the...
-	sw		$t2,CURRNT
-	lw		$t2,LOPPT	; saved 'CURRNT' and text pointer.
+	lw		$t2,LOPLN[$gp]	; Within limit, go back to the...
+	sw		$t2,CURRNT[$gp]
+	lw		$t2,LOPPT[$gp]	; saved 'CURRNT' and text pointer.
 	jmp		FINISH
 NXPurge:
   call    POPA_        ; purge this loop
@@ -1028,11 +1034,11 @@ IF1:
 IF2:
   mov		$t3,$t2	; set lookup pointer
 	mov		$a0,$x0		; find line #0 (impossible)
-	ldt   $a0,CURRNT  ; move to the next line
+	ldt   $a0,CURRNT[$gp]  ; move to the next line
 	ldbu  $a1,[$a0]
 	add   $a1,$a1,$a0
-	stt   $a1,CURRNT
-	ldt   $a0,TXTUNF  ; do a warm start if past end
+	stt   $a1,CURRNT[$gp]
+	ldt   $a0,TXTUNF[$gp]  ; do a warm start if past end
 	bltu  $a1,$a0,IF3
 	jmp		WSTART
 IF3:
@@ -1046,7 +1052,7 @@ INPERR:
 	ldt		$sp,STKINP		; restore the old stack pointer
 	ldt		$a0,[$sp]
 	add		$sp,$sp,#4
-	stt		$a0,CURRNT		; and old 'CURRNT'
+	stt		$a0,CURRNT[$gp]		; and old 'CURRNT'
 	ldt		$t2,[$sp]		; and old text pointer
 	add		$sp,$sp,#4
 	add		$sp,$sp,#20	; fall through will subtract 20
@@ -1096,20 +1102,20 @@ IP7:
 	sb		r5,[$t2]		; un-null terminate
 IP3
 	sw		$t2,4[$sp]	; save in case of error
-	lw		a0,CURRNT
+	lw		a0,CURRNT[$gp]
 	sw		a0,8[$sp]	; also save 'CURRNT'
 	ldi		a0,#-1
-	sw		a0,CURRNT	; flag that we are in INPUT
-	sw		$sp,STKINP	; save the stack pointer too
+	sw		a0,CURRNT[$gp]	; flag that we are in INPUT
+	sw		$sp,STKINP[$gp]	; save the stack pointer too
 	sw		$t4,12[$sp]	; save the variable address
 	ldi		a0,#':'		; print a colon first
 	call	GETLN		; then get an input line
-	ldi		$t2,#BUFFER	; point to the buffer
+	add		$t2,$gp,#BUFFER	; point to the buffer
 	call	OREXPR		; evaluate the input
 	lw		$t4,12[$sp]	; restore the variable address
 	sw		a0,[$t4]	; save value in variable
 	lw		a0,8[$sp]	; restore old 'CURRNT'
-	sw		a0,CURRNT
+	sw		a0,CURRNT[$gp]
 	lw		$t2,4[$sp]	; and the old text pointer
 IP4:
 	call	TSTC
@@ -1306,8 +1312,8 @@ SAVE4:
 	bra		WSTART
 
 SAVE:
-	ldi		$t2,#TXTBGN	;set pointer to start of prog. area
-	lw		$t3,TXTUNF	;set pointer to end of prog. area
+	add		$t2,$gp,#TXTBGN	;set pointer to start of prog. area
+	lw		$t3,TXTUNF[$gp]	;set pointer to end of prog. area
 SAVE1:
 	call	AUXOCRLF    ; send out a CR & LF (CP/M likes this)
 	bgt		$t2,$t3,SAVEND; are we finished?
@@ -1353,7 +1359,7 @@ PWORD:
 	sub		$sp,$sp,#8
 	sw		r5,[$sp]
 	sw		$ra,4[$sp]
-	ldi		r5,#NUMWKA+14
+	add		r5,$gp,#NUMWKA+14
 	mov		r4,a0		; r4 = value
 pword1:
   mov   a0,r4	    ; a0 = value
@@ -1361,13 +1367,13 @@ pword1:
   call	toAsciiHex  ; convert LS nybble to ascii hex
   sb    a0,[r5]		; save in work area
   sub		r5,r5,#1
-  ldi		$t1,#NUMWKA
+  add		$t1,$gp,#NUMWKA
 	bge		r5,$t1,pword1
 pword2:
   add		r5,r5,#1
   lbu   a0,[r5]     ; get char to output
 	call	GOAUXO		; send it
-	ldi		$t1,#NUMWKA+14
+	add		$t1,$gp,#NUMWKA+14
 	blt		r5,$t1,pword2
 	lw		r5,[$sp]
 	lw		$ra,4[$sp]
@@ -1882,7 +1888,7 @@ TV3:
 	add		$sp,$sp,#8
 	jmp   QSORRY		; if not, say "Sorry"
 TV2:
-	lw		a0,VARBGN	; put address of array element...
+	lw		a0,VARBGN[$gp]	; put address of array element...
 	sub   s8,a0,a1    ; into a0 (neg. offset is used)
 	bra   TSTVRT
 TV1:	
@@ -1979,13 +1985,13 @@ findVar:
 	sub		$sp,$sp,#8
 	sw		x7,[$sp]
 	sw		x3,4[$sp]
-  lw    x3,VARBGN
+  lw    x3,VARBGN[$gp]
 fv4:
   lw    x7,[x3]     ; get varname / type
   beq   x7,x0,fv3		; no more vars ?
   beq   a0,x7,fv1		; match ?
 	add		x3,x3,#8		; move to next var
-  lw    x7,VAREND		; 
+  ldt   x7,VAREND[$gp]		; 
   blt   x3,x7,fv4		; loop back to look at next var
 
   ; variable not found
@@ -2057,7 +2063,7 @@ USRX:
 	mov		$a1,$s9
 	gcsub	$sp,$sp,#4	; save the text pointer
 	stt		$t2,[$sp]
-	ldt		$t0,usrJmp
+	ldt		$t0,usrJmp[$gp]
 	call	[$t0]			; get usr vector, jump to the subroutine
 	ldt		$t2,[$sp]	; restore the text pointer
 	add		$sp,$sp,#4
@@ -2144,8 +2150,8 @@ SGN1:
 ; does not consider memory used by @()
 ;
 SIZEX:
-	lw		s8,VARBGN	; get the number of free bytes...
-	lw		s9,TXTUNF	; between 'TXTUNF' and 'VARBGN'
+	ldt		s8,VARBGN[$gp]	; get the number of free bytes...
+	ldt		s9,TXTUNF[$gp]	; between 'TXTUNF' and 'VARBGN'
 	sub		s8,s8,s9
 	mov		s9,x0			; type = int
 	lw		$ra,[$sp]
@@ -2265,13 +2271,13 @@ QWHAT:
 	ldi		a0,#msgWhat
 ERROR:
 	call	PRMESG		; display the error message
-	ldt		$a0,CURRNT	; get the current line pointer
+	ldt		$a0,CURRNT[$gp]	; get the current line pointer
 	beqz	$a0,ERROR1	; if zero, do a warm start
 	ldi		$t1,#-1
 	beq		$a0,$t1,INPERR	; is the line no. pointer = -1? if so, redo input
 	ldbu	r5,[$t2]		; save the char. pointed to
 	stb		$x0,[$t2]		; put a zero where the error is
-	ldt		$a0,CURRNT	; point to start of current line
+	ldt		$a0,CURRNT[$gp]	; point to start of current line
 	call	PRTLN		; display the line in error up to the 0
 	mov     r6,$a0	    ; save off end pointer
 	sb		r5,[$t2]		; restore the character
@@ -2305,7 +2311,7 @@ GETLN:
 ;	sw		a0,CursorFlash	; turn on cursor flash
 	ldi		$a0,#' '		; and a space
 	call	GOOUT
-	ldi		$t2,#BUFFER	; $t2 is the buffer pointer
+	add		$t2,$gp,#BUFFER	; $t2 is the buffer pointer
 .GL1:
 	call	CHKIO		; check keyboard
 	beqz	$a0,.GL1	; wait for a char. to come in
@@ -2327,14 +2333,14 @@ GETLN:
 	add		$sp,$sp,#4
 	ldi		$t1,#CR
 	beq		$a0,$t1,.GL7			; if it's a CR, end the line
-	ldi		$t1,#BUFFER+BUFLEN-1
+	add		$t1,$gp,#BUFFER+BUFLEN-1
 	blt		$t2,$t1,.GL1		; any more room? ; yes: get some more, else delete last char.
 .GL3:
 	ldi		$a0,#CTRLH	; delete a char. if possible
 	call	GOOUT
 	ldi		$a0,#' '
 	call	GOOUT
-	ldi		$t1,#BUFFER
+	add		$t1,$gp,#BUFFER
 	ble		$t2,$t1,.GL1	; any char.'s left?	; if not
 	ldi		$a0,#CTRLH		; if so, finish the BS-space-BS sequence
 	call	GOOUT
@@ -2342,7 +2348,8 @@ GETLN:
 	bra		.GL1		; back for more
 .GL4:
 	mov		$a0,$t2		; delete the whole line
-	sub		r5,$a0,#BUFFER   ; figure out how many backspaces we need
+	add		$t3,$gp,#BUFFER	; figure out how many backspaces we need
+	sub		r5,$a0,$t3 
 	beqz	r5,.GL6		  ; if none needed, branch
 	sub		r5,r5,#1		; loop count is one less
 .GL5:
@@ -2355,7 +2362,7 @@ GETLN:
 	sub		r5,r5,#1
 	bne		r5,r0,.GL5
 .GL6:
-	ldi		$t2,#BUFFER	; reinitialize the text pointer
+	add		$t2,$gp,#BUFFER	; reinitialize the text pointer
 	bra		.GL1		; and go back for more
 .GL7:
 	stb		$x0,[$t2]		; null terminate line
@@ -2399,14 +2406,14 @@ FNDLN:
 	ldi		$a0,#msgLineRange
 	jmp		ERROR
 fl1:
-	ldi		$t3,#TXTBGN	; init. the text save pointer
-	stt   $t3,SRCHLN
+	add		$t3,$gp,#TXTBGN	; init. the text save pointer
+	stt   $t3,SRCHLN[$gp]
   bra   FNDLNP
 FNDLNT:
-  ldt   $t3,CURRNT
-  stt   $t3,SRCHLN
+  ldt   $t3,CURRNT[$gp]
+  stt   $t3,SRCHLN[$gp]
 FNDLNP:
-	ldt		$t4,TXTUNF	; check if we passed the end
+	ldt		$t4,TXTUNF[$gp]	; check if we passed the end
 	bgeu	$t3,$t4,FNDRET1 ; if so, return with r9=0,a0=0
 	;call	LoadWord		; get line number
 	ldt   $s8,1[$t3]
@@ -2429,10 +2436,10 @@ FNDRET2:
 
 ; Move from the current line to the next one.
 FNDNXT:
-  ldt   $s8,SRCHLN
+  ldt   $s8,SRCHLN[$gp]
 	ldbu	$s9,[$s8]
 	add		$t3,$s8,$s9
-	stt   $t3,SRCHLN
+	stt   $t3,SRCHLN[$gp]
 	bra   FNDLNP
 
 
@@ -2474,35 +2481,35 @@ MVDOWN:
 POPA_:
 	ldt		$a0,[$sp]
 	add		$sp,$sp,#4
-	stt		$a0,LOPVAR	; restore LOPVAR, but zero means no more
+	stt		$a0,LOPVAR[$gp]	; restore LOPVAR, but zero means no more
 	beqz	$a0,PP1
 	ldt		$a0,[$sp]
-	stt		$a0,LOPPT
+	stt		$a0,LOPPT[$gp]
 	ldt		$a0,4[$sp]
-	stt		$a0,LOPLN
+	stt		$a0,LOPLN[$gp]
 	ldt		$a0,8[$sp]
-	stt		$a0,LOPLMT
+	stt		$a0,LOPLMT[$gp]
 	ldt		$a0,12[$sp]
-	stt		$a0,LOPINC
+	stt		$a0,LOPINC[$gp]
 	add		$sp,$sp,#16
 PP1:
 	ret
 
 
 PUSHA_:
-	ldt		$a0,STKBOT	; Are we running out of stack room?
+	ldt		$a0,STKBOT[$gp]	; Are we running out of stack room?
 	add		$a0,$a0,#20	; we might need this many bytes
 	blt		$sp,$a0,QSORRY	; out of stack space
-	ldt		$a1,LOPVAR		; save loop variables
+	ldt		$a1,LOPVAR[$gp]		; save loop variables
 	beqz	$a1,PU1		; if LOPVAR is zero, that's all
 	sub		$sp,$sp,#16
-	ldt		$a0,LOPPT
+	ldt		$a0,LOPPT[$gp]
 	stt		$a0,[$sp]
-	ldt		$a0,LOPLN
+	ldt		$a0,LOPLN[$gp]
 	stt		$a0,4[$sp]
-	ldt		$a0,LOPLMT
+	ldt		$a0,LOPLMT[$gp]
 	stt		$a0,8[$sp]
-	ldt		$a0,LOPINC
+	ldt		$a0,LOPINC[$gp]
 	stt		$a0,12[$sp]
 PU1:
 	sub		$sp,$sp,#4
@@ -2526,7 +2533,7 @@ PU1:
 ; return s8 = pointer to end of line + 1
 
 PRTSTG:
-	gcsub	$sp,$sp,#20
+	sub		$sp,$sp,#20
 	stt		x5,[$sp]
 	stt		x6,4[$sp]
 	stt		x7,8[$sp]
@@ -2564,7 +2571,7 @@ PRTSTG:
 ; skipped over (usually a branch instruction).
 ;
 QTSTG:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	TSTC		; *** QTSTG ***
 	dw		'"'
@@ -2601,7 +2608,7 @@ QT5:					; not " ' or _
 ; Output a CR LF sequence
 ;
 prCRLF:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi		$a0,#CR
 	call	GOOUT
@@ -2629,15 +2636,15 @@ prCRLF:
 ; Returns:
 ;		none
 ;-------------------------------------------------------------------------------
-
+	align	16
 public PRTNUM:
-	gcsub	$sp,$sp,#20
+	sub		$sp,$sp,#20
 	stt		$s1,[$sp]
 	stt		$s2,4[$sp]
 	stt		$s3,8[$sp]
 	stt		$s4,12[$sp]
 	stt		$ra,16[$sp]
-	ldi		$s4,#NUMWKA	; r7 = pointer to numeric work area
+	add		$s4,$gp,#NUMWKA	; r7 = pointer to numeric work area
 	mov		$s3,$a0		; save number for later
 	mov		$s2,$a1		; s2 = min number of chars
 	bge		$a0,$x0,.PN2	; is it negative? if not
@@ -2667,7 +2674,7 @@ public PRTNUM:
 	ldi		$a0,#'-'		; if so, display the sign
 	call	GOOUT
 .PN5:
-	ldi		$t1,#NUMWKA
+	add		$t1,$gp,#NUMWKA
 .PN6:
 	sub		$s4,$s4,#1
 	ldbu	$a0,[$s4]		; now unstack the digits and display
@@ -2854,7 +2861,7 @@ IGBRET:
 TOUPBUF:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
-	ldi		$t2,#BUFFER	; set up text pointer
+	add		$t2,$gp,#BUFFER	; set up text pointer
 	mov		r3,x0		; clear quote flag
 TOUPB1:
 	lbu		$a0,[$t2]		; get the next text char.
@@ -2909,7 +2916,7 @@ TOUPRET:
 ;
 //message "CHKIO"
 CHKIO:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	INCH		    ; get input if possible
 	beqz	$a0,CHKRET  ; if Zero, no input
@@ -3120,7 +3127,7 @@ BYEBYE:
 	ecall
  
 
-msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.3",CR,LINEFD,"(C) 2017-2020  Robert Finch",CR,CR,0
+msgInit	db	CR,LINEFD,"CS01 Tiny BASIC v1.3",CR,LINEFD,"(C) 2017-2021  Robert Finch",CR,CR,0
 OKMSG	db	CR,LINEFD,"OK",CR,0
 msgWhat	db	"What?",CR,0
 SRYMSG	db	"Sorry."

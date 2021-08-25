@@ -71,8 +71,8 @@ assign pio3 = 23'bz;
 // -----------------------------------------------------------------------------
 wire xrst;					// external reset (push button)
 wire rst;						// internal reset
-wire clk100;
-wire clk50;
+wire clk80;
+wire clk40;
 wire clk;						// system clock (50MHz)
 wire clk14p7;				// uart clock 14.746 MHz
 wire clk20;					// 20MHz for wall clock time
@@ -99,7 +99,7 @@ wire cs_sema;
 wire ack_rom;
 wire ack_mem;
 wire uart_irq, via_irq;
-wire ack_uart, ack_via;
+wire ack_uart, ack_via, ack_sema;
 wire [31:0] uart_dato;
 wire [31:0] via_dato;
 wire [31:0] mem_dato;
@@ -115,8 +115,8 @@ wire [31:0] pa_o;
 cs01clkgen ucg1
 (
   // Clock out ports
-  .clk100(clk100),
-  .clk50(clk50),
+  .clk80(clk80),
+  .clk40(clk40),
   .clk14p7(clk14p7),
   .clk20(clk20),
   // Status and control signals
@@ -128,8 +128,8 @@ cs01clkgen ucg1
 
 assign rst = !locked;
 assign irq = uart_irq|via_irq;
-assign clk = clk50;
-assign cpuclk = clk50;
+assign clk = clk40;
+assign cpuclk = clk40;
 
 // -----------------------------------------------------------------------------
 // Circuit select logic
@@ -168,7 +168,7 @@ assign cs_rom = cyc && stb && adr[31:16]==16'b1111_1111_1111_1100;	// $FFFCxxxx 
 assign cs_mem = cyc && stb && adr[31:16] < 16'h0008;
 assign cs_via = cyc && stb && adr[31:8]==24'hFFDC06;
 assign cs_uart = cyc && stb && adr[31:4]==28'hFFDC0A0;
-assign cs_sema = cyc && stb && adr[31:12]==20'hFFDB0;
+assign cs_sema = cyc && stb && adr[31:16]==16'hFFDB;
 
 (* ram_style="block" *)
 reg [31:0] rommem [0:6143];
@@ -240,7 +240,7 @@ assign led0_b = ~(pa_o[2] & dvd[12]);	// PWM 50% at about 12kHz.
 cs01memInterface umi1
 (
 	.rst_i(rst),
-	.clk_i(clk100),
+	.clk_i(clk80),
 	.cs_i(cs_mem),
 	.cyc_i(cyc),
 	.stb_i(stb),
@@ -259,24 +259,27 @@ cs01memInterface umi1
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
-/*
+
 semamem usema1
 (
-	.clk(cpuclk),
-	.cs(cs_sema),
-	.wr(we),
-	.ad(adr[9:0]),
-	.i(dat_o[7:0]),
-	.o(sema_dato)
+	.clk_i(cpuclk),
+	.cs_i(cs_sema),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(ack_sema),
+	.we_i(we),
+	.adr_i(adr[14:2]),
+	.dat_i(dat_o[7:0]),
+	.dat_o(sema_dato)
 );
-*/
+
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
 via6522 uvia1
 (
 	.rst_i(rst),
-	.clk_i(cpuclk),
+	.clk_i(clk40),
 	.irq_o(via_irq),
 	.cs_i(cs_via),
 	.cyc_i(cyc),
@@ -304,7 +307,7 @@ via6522 uvia1
 uart6551 uuart1
 (
 	.rst_i(rst),
-	.clk_i(cpuclk),
+	.clk_i(clk40),
 	.cs_i(cs_uart),
 	.irq_o(uart_irq),
 	.cyc_i(cyc),
@@ -326,7 +329,7 @@ uart6551 uuart1
 	.data_present(),
 	.rxDRQ_o(),
 	.txDRQ_o(),
-	.xclk_i(clk14p7),
+	.xclk_i(clk20),
 	.RxC_i(1'b0)
 );
 
@@ -335,7 +338,7 @@ uart6551 uuart1
 // -----------------------------------------------------------------------------
 
 always @(posedge cpuclk)
-	ack <= ack_rom|ack_mem|ack_via|ack_uart|cs_sema;
+	ack <= ack_rom|ack_mem|ack_via|ack_uart|ack_sema;
 
 always @(posedge cpuclk)
 casez({cs_rom,cs_mem,cs_via,cs_uart,cs_sema})
@@ -352,7 +355,7 @@ friscv_wb ucpu1
 	.rst_i(rst),
 	.clk_i(cpuclk),
 	.wc_clk_i(clk20),
-	.irq_i(uart_irq|via_irq),
+	.irq_i({1'b0,uart_irq,via_irq}),
 	.cause_i(uart_irq ? 8'd37 : via_irq ? 8'd47 : 8'd00),
 	.cyc_o(cyc),
 	.stb_o(stb),

@@ -39,13 +39,14 @@
 ;------------------------------------------------------------------------------
   align  16
 MbxRemoveTask:
-	sub		$sp,$sp,#20
+	sub		$sp,$sp,#24
 	stt		$s1,[$sp]
 	stt		$t0,4[$sp]
 	stt		$t1,8[$sp]
 	stt		$t2,12[$sp]
 	stt   $a0,16[$sp]
-	mDI
+	stt		$ra,20[$sp]
+	call	LockOS
 	ldt   $t0,TCBMbxPrev[$a0]
 	ldt   $t1,TCBMbxNext[$a0]
 	beqz  $t0,.atHead
@@ -55,27 +56,25 @@ MbxRemoveTask:
 .atHead:
 	ldw		$t0,TCBWaitMbx[$a0]		; get mailbox handle
 	ble	  $t0,$x0,.xit  		    ; handle good?
-	sll		$t0,$t0,#LOG_PGSZ			; convert to pointer
+	mMbxHandleToPointer2( $t0, $t2)
 	ldt		$t1,MBX_TQHEAD[$t0]		; get waiting task list
 	beqz  $t1,.tqEmpty
-	ldt   $t1,MBX_TQTAIL[$t0]
-	stt   $a0,TCBMbxNext[$t1]
-	stt   $t1,TCBMbxPrev[$a0]
-	stt   $x0,TCBMbxNext[$a0]
-	bra   .xit
-.tqEmpty
-	stt   $a0,MBX_TQHEAD[$t0]
-	stt   $a0,MBX_TQTAIL[$t0]
+	bne		$t1,$a0,.tqEmpty
+	ldt		$t1,TCBMbxNext[$a0]
+	stt		$t1,MBX_TQHEAD[$t0]
+	stt		$x0,TCBMbxPrev[$t1]
+.tqEmpty:
 	stt   $x0,TCBMbxPrev[$a0]
 	stt   $x0,TCBMbxNext[$a0]
 .xit:
-  mEI
+  call	UnlockOS
 	ldt		$s1,[$sp]
 	ldt		$t0,4[$sp]
 	ldt		$t1,8[$sp]
 	ldt		$t2,12[$sp]
 	ldt   $a0,16[$sp]
-	add		$sp,$sp,#20
+	ldt		$ra,20[$sp]
+	add		$sp,$sp,#24
   ret
 
 ;------------------------------------------------------------------------------
@@ -85,6 +84,7 @@ MbxRemoveTask:
 ; Returns:
 ;		a0 = E_Ok
 ;------------------------------------------------------------------------------
+/*
   align 16
 FMTK_AllocMbx_Old:
   csrrs $x0,#$300,#1        ; enable interrupts
@@ -98,7 +98,7 @@ FMTK_AllocMbx_Old:
 	slt		$t1,$t0,#mbxs_end
 	bne		$t1,$x0,.nxt
 	ldi		$a0,#E_NoMoreMbx
-	jmp   OSExit
+	ret
 .noOwner:
 	stb		$a1,MBX_OWNER[$t0]
 	stt   $x0,MBX_TQHEAD[$t0]
@@ -113,11 +113,11 @@ FMTK_AllocMbx_Old:
 	stw		$t5,[$a0]
   mEI
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
 .badArg:
 	ldi		$a0,#E_Arg
-	jmp		OSExit
-
+	ret
+*/
 ;------------------------------------------------------------------------------
 ; FMTK_AllocMbx
 ;   Allocate a mailbox. Get the mailbox off the free list. If there are no
@@ -184,16 +184,17 @@ FMTK_AllocMbx:
 	or    $a1,$t1,$t2
 	srl   $a1,$a1,#2            ; 2 LSB's will be zero
   ldi   $a0,#E_Ok
-  jmp   OSExit
+  ret
 .outOfMem:
   ldi   $a0,#E_NoMem
-  jmp   OSExit
+  ret
 
 ;------------------------------------------------------------------------------
 ; Dequeue any waiting tasks returning to them a E_NoMsg status and removing
 ; them from the timeout list as well. Then move any messages that are queued
 ; back to the free message list.
 ;------------------------------------------------------------------------------
+/*
   align 16
 FMTK_FreeMbx_Old:
   csrrs $x0,#$300,#1        ; enable interrupts
@@ -202,20 +203,23 @@ FMTK_FreeMbx_Old:
 	sll		$s1,$a1,#4					; convert handle to pointer
 	add		$s1,$s1,#mbxs
 	bra   FreeMbx1
-
+*/
   align 16
 FMTK_FreeMbx:
+	sub		$sp,$sp,#16
+	stt		$ra,[$sp]
+	stt		$s1,4[$sp]
+	stt		$s5,8[$sp]
+	stt		$s6,12[$sp]
   mov   $a0,$a1
   mMbxHandleToPointer
-  mDI
+  call	LockOS
   ldt   $t0,FreeMbx
   stt   $t0,MBX_LINK[$a0]
   stt   $a0,FreeMbx
 
   mov   $s1,$a0
 FreeMbx1:
-	ldi		$s2,#0
-	ldi		$s4,#NTASK							; possibly 32 tasks
 	ldt		$s6,MBX_TQHEAD[$s1]
 .0002:
 	beqz	$s6,.0001
@@ -223,12 +227,16 @@ FreeMbx1:
 	and		$t2,$t2,#~TS_WAITMSG	; no longer waiting
 	stb		$t2,TCBStatus[$s6]
 	and		$t2,$t2,#TS_TIMEOUT   ; Is the task timing out?
-	ldt   $a0,TCBTaskNum[$s6]
 	beqz	$t2,.0003
-	setto	$a0,$x0           ; Remove from the timeout list
+	mov		$a0,$s6
+	call	UnlockOS
+	call	RemoveFromTimeoutList
+	call	LockOS
 .0003:
-  ldwu  $a0,TCBtid[$s6]
+  mov		$a0,$s6
+  call	UnlockOS
 	call	InsertIntoReadyQueue
+	call	LockOS
 	ldi		$t2,#E_NoMsg					; but no message
 	stt		$t2,TCBxA0[$s6]	; a0 = E_NoMsg
 	ldt   $s5,TCBMbxNext[$s6]
@@ -247,12 +255,22 @@ FreeMbx1:
   stt   $s5,MSG_LINK[$s6]   ; link current free list onto it
   ldt   $s6,MBX_MQHEAD[$s1]
   stt   $s6,FreeMsg         ; set new head of free list
-  mEI
+  call	UnlockOS
+  ldt		$ra,[$sp]
+  ldt		$s1,4[$sp]
+  ldt		$s5,8[$sp]
+  ldt		$s6,12[$sp]
+  add		$sp,$sp,#16
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
 .badMbx:
+  ldt		$ra,[$sp]
+  ldt		$s1,4[$sp]
+  ldt		$s5,8[$sp]
+  ldt		$s6,12[$sp]
+  add		$sp,$sp,#16
 	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
-	jmp		OSExit
+	ret
 
 
 ;------------------------------------------------------------------------------
@@ -413,10 +431,7 @@ ISendMsg:
 
   align 16
 FMTK_SendMsg:
-  mDI
-  call  ISendMsg
-  mEI
-  jmp   OSExit
+  jmp  ISendMsg
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -428,7 +443,7 @@ FMTK_SendMsg:
 ;------------------------------------------------------------------------------
   align 16
 PeekMsg:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 ;	slt		$t0,$a1,#32
 ;	beq		$t0,$x0,.badMbx
@@ -437,7 +452,7 @@ PeekMsg:
 	mov   $a0,$a1
 	mMbxHandleToPointer
 	mov   $t2,$a0
-	mDI
+	call	LockOS
 	ldt		$t1,MBX_MQHEAD[$t2]
 	beqz	$t1,.noMsg
 	beqz	$a5,.nodq
@@ -478,7 +493,7 @@ PeekMsg:
 .badMbx:
 	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
 .ret:
-  mEI
+  call	UnlockOS
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
@@ -497,8 +512,7 @@ PeekMsg:
 ;------------------------------------------------------------------------------
 
 FMTK_PeekMsg:
-	call	PeekMsg
-	jmp		OSExit
+	jmp		PeekMsg
 
 ;------------------------------------------------------------------------------
 ; Calling WaitMsg will cause the task to be queued at the mailbox and a task
@@ -513,21 +527,26 @@ FMTK_PeekMsg:
 ;------------------------------------------------------------------------------
   align 16
 FMTK_WaitMsg:
+	sub		$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$s5,4[$sp]
 	mov		$s5,$a5
 	ldi		$a5,#1              ; dequeue messages
 	call	PeekMsg							; check for a message, return if available
 	ldi		$t1,#E_NoMsg
 	beq		$a0,$t1,.qt					; no message? Then go queue task
-	jmp		OSExit
+	ldt		$ra,[$sp]
+	ldt		$s5,4[$sp]
+	add		$sp,$sp,#8
+	ret
 .qt:
+	mov		$a5,$s5
   mov   $a0,$a1
   mMbxHandleToPointer
   mov   $t3,$a0
 	mGetCurrentTid
 	sll		$t1,$a0,#LOG_TCBSZ  ; $t1 = tcb pointer
-;	sll		$t3,$a1,#5					; convert handle to pointer
-;	add		$t3,$t3,#mbxs
-  mDI
+  call	LockOS
 	ldt		$t4,MBX_TQTAIL[$t3]	; get waiting task list tail
 	beqz  $t4,.qempty
   stt   $t4,TCBMbxPrev[$t1] ; add task onto tail of waiting list
@@ -538,16 +557,25 @@ FMTK_WaitMsg:
   stt   $t1,MBX_TQHEAD[$t3]
   stt   $t1,MBX_TQTAIL[$t3]
 .setA:
+	stt		$a1,TCBxA1[$t1]
   stt   $a2,TCBxA2[$t1]   ; save pointers for data in task regs
   stt   $a3,TCBxA3[$t1]
   stt   $a4,TCBxA4[$t1]
+  stt   $a5,TCBxA5[$t1]
 	ldbu	$t3,TCBStatus[$t1]
 	or		$t3,$t3,#TS_WAITMSG	; set waiting for message status
 	and		$t3,$t3,#~TS_READY	; not ready
 	stb		$t3,TCBStatus[$t1]
-	stb		$a1,TCBWaitMbx[$t1]	; set mailbox task is waiting for
-	mEI
+	stw		$a1,TCBWaitMbx[$t1]	; set mailbox task is waiting for
+	call	UnlockOS
+	mov		$a0,$t1
+	mov		$a1,$a5
+	call	InsertIntoTimeoutList
+	ldt		$ra,[$sp]
+	ldt		$s5,4[$sp]
+	add		$sp,$sp,#8
 	jmp		FMTK_Sleep          ; Continue by switching tasks
 
+	align	16
 MsgFinalizer:
   ret

@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -55,6 +55,7 @@ AllocAppId:
   align 16
 FMTK_StartApp:
   mov   $s1,$a1
+  stt		$s1,$10008
   mov   $a0,$x0           ; OS owns the ACB
   ldi   $a1,#4096         ; size of application control block
   call  PAMAlloc          ; allocate ACB
@@ -64,7 +65,8 @@ FMTK_StartApp:
   stt   $x0,ACBGarbageList[$s3]
   stt   $x0,ACBiofNext[$s3]
   stt   $x0,ACBiofPrev[$s3]
-  ldb   $t0,ASRmid[$s1]
+;  ldb   $t0,ASRmid[$s1]
+  ldbu	$t0,ASRRegset[$s1]
   stb   $t0,ACBmid[$s3]
   ; Allocate a virtual screen and set pointers to it.
   srl   $a0,$s3,#LOG_PGSZ ; App owns the screen
@@ -84,20 +86,23 @@ FMTK_StartApp:
   stt   $t0,ACBNormAttr[$s3]
 
   ; Allocate memory for application code and copy code into position
+  ldbu	$a0,ASRRegset[$s1]
   ldt   $a1,ASRCodeSize[$s1]
+  stt		$a1,$10000
+  stt		$s1,$10004
   beqz  $a1,.0004         ; 0 size code = in ROM
   call  Alloc
   bltz  $a0,.noMem
   stt   $a1,ACBpCode[$s3] ; save pointer to code area in ACB
   mov   $s4,$a1           ; $s4 = pointer to application code
-  mov   $t0,ASRCodeSize[$s1]  ; $t0 = code size
+  ldt   $t0,ASRCodeSize[$s1]  ; $t0 = code size
   ldt   $s5,ASRpCode[$s1] ; $s5 = pointer to application code
 .0001:
   ldt   $t1,[$s5]
   stt   $t1,[$s4]
   add   $s5,$s5,#4
   add   $s4,$s4,#4
-  sub   $t0,$t0,#1
+  sub   $t0,$t0,#4
   bgtz  $t0,.0001
   bra   .0003
 .0004:
@@ -112,6 +117,7 @@ FMTK_StartApp:
   ; of the data area.
   stt   $x0,ACBpData[$s3]
   stt   $x0,ACBpUIData[$s3]
+  ldbu	$a0,ASRRegset[$s1]
   ldt   $a1,ASRDataSize[$s1]
   ldt   $a2,ASRIUDataSize[$s1]
   add   $a1,$a1,$a2
@@ -145,6 +151,7 @@ FMTK_StartApp:
 
 .0006:
   ; Allocate memory for heap
+  ldbu	$a0,ASRRegset[$s1]
   ldt   $a1,ASRHeapSize[$s1]
   beqz  $a1,.0007         ; no heap?
   call  Alloc
@@ -154,13 +161,16 @@ FMTK_StartApp:
 .0007:
   ldi   $a0,#1            ; IStartTask
   srl   $a1,$s3,#LOG_PGSZ ; $a1 = app id
-  stt   $a1,$3F48
-  stt   $s3,$3F50
   ldi   $a2,#1024         ; task local memory
   ldt   $a3,ASRpCode[$s1] ; get pointer to code area
-  ldi   $a4,#$04
+  ldbu	$a4,ASRRegset[$s1]
+  ldi		$t0,#28						; register set 28 and above are Machine
+  blt		$a4,$t0,.norm
+  or		$a4,$a4,#$300			; set Machine Mode
+.norm:
   call  OSOCall           ; start the initial app task
   bnez  $a0,.tskErr       ; error?
+  srl		$a1,$a1,#LOG_PGSZ
   stw   $a1,ACBTask[$s3]
   stw   $a1,$3F48
   sll   $t0,$a1,#LOG_PGSZ
@@ -170,16 +180,16 @@ FMTK_StartApp:
   stb   $t1,ACBStatus[$s3]
   srl   $a1,$s3,#LOG_PGSZ ; return app id
   ldi   $a0,#E_Ok
-  jmp   OSExit
+  ret
 .tskErr:
   ldi   $t1,#AS_UNDEAD
   stb   $t1,ACBStatus[$s3]
-  jmp   OSExit
+  ret
 
 .noMoreApps:
   ldi   $a0,#E_NoMoreAppIds
 .noMem
-  jmp   OSExit
+  ret
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -189,12 +199,12 @@ FMTK_StartApp:
 ; Modifies:
 ;		a1 = task id
 ;------------------------------------------------------------------------------
-
+	align	16
 FMTK_ExitApp:
 	mGetCurrentTid
-	sll		$a1,$a0,#LOG_TCBSZ  ; convert TID to TCB address
+;	sll		$a1,$a0,#LOG_TCBSZ  ; convert TID to TCB address
 	ldb   $a1,TCBmid[$a1]     ; get the mid
-	; fall through to KillApp
+	bra		FMTK_KillApp
 	
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -205,7 +215,8 @@ FMTK_KillApp:
 	beqz	$a1,.immortal		    ; app #0 is immortal (the system)
 	ldi		$t0,#TS_DEAD				; flag app as dead (prevents it from being re-queued)
 	sll		$a1,$a1,#2	        
-	ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB address
+;	ldt   $a1,TidTcbMap[$a1]  ; convert TID to TCB address
+	ldt		$a1,ACBTask[$a1]
 	stb		$t0,TCBStatus[$a1]
 ;	ldbu  $a0,TCBmid[$a1]
 ;	call	FreeAll							; free all the memory associated with the task
@@ -213,5 +224,5 @@ FMTK_KillApp:
 	ldbu  $a0,TCBtid[$a1]
 .immortal:
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
 

@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -25,7 +25,6 @@
 ;-----------------------------------------------------------------------------
 
 	code
-	align	4
 
 ;-----------------------------------------------------------------------------
 ; Determine if the currently running app has the I/O focus.
@@ -40,7 +39,7 @@
 ;		$a0 = E_Ok
 ;		$a1 = 1 if task has IO focus, 0 otherwise
 ;-----------------------------------------------------------------------------
-
+	align	16
 FMTK_HasIOFocus:
 	mGetCurrentTid
 	sll   $a0,$a0,#LOG_PGSZ
@@ -52,12 +51,12 @@ FMTK_HasIOFocus:
 .hasFocus:
 	ldi   $a1,#1
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
 .notEqual:
-  ldi   $a1,#1
+  ldi   $a1,#0
 	ldi		$a0,#E_Ok
-	jmp		OSExit
-	
+	ret
+
 ;-----------------------------------------------------------------------------
 ; First check if it's even possible to switch the focus to another
 ; app. The I/O focus list could be empty or there may be only a
@@ -72,6 +71,7 @@ FMTK_HasIOFocus:
 ;		a0 = E_Ok
 ;-----------------------------------------------------------------------------
 
+	align	16
 SwitchIOFocusHelper:
   ldt   $t0,IOFocusNdx
   ldt   $t1,ACBiofNext[$t0]
@@ -87,9 +87,9 @@ SwitchIOFocusHelper:
 	ldi		$a0,E_Ok
 	ret
     
+	align	16
 FMTK_SwitchIOFocus:
-	call	SwitchIOFocusHelper
-	jmp		OSExit
+	jmp		SwitchIOFocusHelper
 
 ;-----------------------------------------------------------------------------
 ; RequestIOFocus requests that the task receive the I/O focus. It does not
@@ -107,7 +107,13 @@ FMTK_SwitchIOFocus:
 ;   $a1 (unmodified)
 ;-----------------------------------------------------------------------------
 
+	align	16
 FMTK_RequestIOFocus:
+	ldi		$a2,#512
+	bgeu	$a1,$a2,.badAppId
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
 	ldi   $a2,#1
   sll   $t2,$a1,#LOG_PGSZ
 	ldb		$t1,ACBHasFocus[$t2]  ; Is the task already included in the IO focus?
@@ -127,19 +133,26 @@ FMTK_RequestIOFocus:
   stt   $t1,ACBiofPrev[$t2]     ; new->prev = head->prev
 .ret:
 	stb   $a2,ACBHasFocus[$t2]  ; set has focus flag
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
+.badAppId:
+	ldi		$a0,#E_BadAppId
+	ret
 
 ;-----------------------------------------------------------------------------
 ; ReleaseIOFocus called when the app no longer desires to be on the I/O
 ; focus list.
 ;-----------------------------------------------------------------------------
 
+	align	16
 FMTK_ReleaseIOFocus:
 	mGetCurrentTid
 	sll   $a1,$a0,#LOG_TCBSZ
 	ldwu  $a1,TCBappid[$a1]
-	; fall into ForceReleaseIOFocus
+	jmp		FMTK_ForceReleaseIOFocus
 
 ;-----------------------------------------------------------------------------
 ; Releasing the I/O focus causes the focus to switch if the running app
@@ -155,7 +168,11 @@ FMTK_ReleaseIOFocus:
 ;		$a0 = E_Ok
 ;-----------------------------------------------------------------------------
 
+	align	16
 FMTK_ForceReleaseIOFocus:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
 	sll		$t0,$a1,#LOG_PGSZ
 	ldb		$t1,ACBHasFocus[$t0]
 	beqz	$t1,.noFocus	    ; does it even have the focus?
@@ -168,8 +185,7 @@ FMTK_ForceReleaseIOFocus:
 	stt   $x0,IOFocusNdx
 	stt   $x0,ACBiofNext[$t0]
 	stt   $x0,ACBiofPrev[$t0]
-	ldi		$a0,#E_Ok
-	jmp		OSExit
+	bra		.noFocus
 .0001:	
 	stt   $t1,IOFocusNdx
 .notAtTop:
@@ -179,8 +195,12 @@ FMTK_ForceReleaseIOFocus:
 	stt   $t1,ACBiofNext[$t2]
 	stt   $x0,ACBiofNext[$t0]
 	stt   $x0,ACBiofPrev[$t0]
+.noFocus:
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
 	ldi		$a0,#E_Ok
-	jmp		OSExit
+	ret
 
 ;------------------------------------------------------------------------------
 ;     Wait for the IO Focus. Returns only when focus is present. This function
@@ -191,6 +211,7 @@ FMTK_ForceReleaseIOFocus:
 ;   a1 = device # to check, 5 = COM1 serial port, 1 = KBD keyboard
 ;------------------------------------------------------------------------------
 
+	align	16
 _WaitForIOFocus:
 WaitForIOFocus:
   sub 	$sp,$sp,#12
@@ -205,10 +226,12 @@ WaitForIOFocus:
 	ldi   $a1,#5            ; hardcoded to serial port for now
 	ldi   $a2,#9            ; peekchar function
 	ecall
+;	call	SerialPeekChar
 	bltz  $a1,.0001
 .0001:
 	ldi		$a0,#$14					; CTRL-T
 	bne		$a1,$a0,.WFF2
+;	call	SerialGetChar
 	; eat up the CTRL-T
 	ldi		$a0,#26						; FMTK_IO
 	ldi   $a1,#5  ;4[$sp]        ; get back device #
@@ -231,6 +254,7 @@ WaitForIOFocus:
 
 ;------------------------------------------------------------------------------
 
+	align	16
 GetUIFlag:
   sub 	$sp,$sp,#12
   stt   $a2,4[$sp]

@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020  Robert Finch, Stratford
+;   \\__/ o\    (C) 2020-2021  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -80,8 +80,8 @@ TCBepc  		EQU		$2C0
 TCBStatus		EQU		$2C8
 TCBPriority	EQU		$2C9
 TCBWaitMbx	EQU		$2CA
-TCBRegset   EQU   $2CB
-TCBHasFocus EQU   $2CC
+TCBRegset   EQU   $2CC
+TCBHasFocus EQU   $2CD
 TCBStackBot	EQU		$2D0
 TCBMsgD1		EQU		$2D8
 TCBMsgD2		EQU		$2E0
@@ -97,6 +97,7 @@ TCBtid      EQU   $338
 TCBmid      EQU   $340
 TCBappid    EQU   $342
 TCBOpMode   EQU   $344
+TCBImMask		EQU		$345
 TCBMbxNext  EQU   $348
 TCBMbxPrev  EQU   $350
 TCBTaskNum  EQU   $358

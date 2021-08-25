@@ -102,6 +102,15 @@ macro mMbxHandleToPointer
   or    $a0,$a0,$t0
 endm
 
+macro mMbxHandleToPointer2(handle,temp)
+  srl   temp,handle,#8    ; extract collection index
+  sll   temp,temp,#2
+  ldt   temp,MbxBlockPtr[temp]
+  and   handle,handle,#$FF
+  sll   handle,handle,#2
+  or    handle,handle,temp
+endm
+
 ;------------------------------------------------------------------------------
 ; Pop an entry off the timeout list. It is assumed the entry is popped when
 ; its timeout reached zero. Hence there is no adjustment of the following
@@ -141,6 +150,11 @@ endm
 ; Macros to enable and disable time-slice interrupts
 macro mTimeSliceEI
 	ldi		$t0,#$1A000180			; enable timer3 interrupts after 26 cycles
+	stt		$t0,VIA_IER+VIA
+endm
+
+macro mTimeSliceEI2(tm)
+	ldi		$t0,#$000180|(tm<<24)		; enable timer3 interrupts after tm cycles
 	stt		$t0,VIA_IER+VIA
 endm
 

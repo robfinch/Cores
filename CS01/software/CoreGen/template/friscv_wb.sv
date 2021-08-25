@@ -227,19 +227,20 @@ ReadyList url1
 */
 reg traceOn;
 reg traceRd;
-reg [9:0] traceCounter;
+reg poptrace;
+reg [10:0] traceCounter;
 wire traceWr = state==IFETCH && traceOn;
-wire traceValid, traceEmpty;
-wire [9:0] traceDataCount;
+wire traceValid, traceEmpty, traceFull;
+wire [10:0] traceDataCount;
 wire [31:0] traceOut;
 TraceFifo utf1 (
   .clk(clk_g),                // input wire clk
   .srst(rst_i),              // input wire srst
   .din(pc),                // input wire [31 : 0] din
   .wr_en(traceWr),            // input wire wr_en
-  .rd_en(popq && ia[3:0]==4'd14),            // input wire rd_en
+  .rd_en((popq && ia[3:0]==4'd14)||poptrace),            // input wire rd_en
   .dout(traceOut),              // output wire [31 : 0] dout
-  .full(),              // output wire full
+  .full(traceFull),              // output wire full
   .empty(traceEmpty),            // output wire empty
   .valid(traceValid),            // output wire valid
   .data_count(traceDataCount)  // output wire [9 : 0] data_count
@@ -253,6 +254,7 @@ reg [31:0] ipc;			// pc value at instruction
 reg [2:0] rm;
 reg [4:0] Rs1x, Rs2x, Rs3x, Rdx;
 reg [4:0] Rs1x1, Rs2x1, Rs3x1, Rdx1;
+reg [4:0] Rs1x2, Rs2x2, Rs3x2, Rdx2;
 wire [WID-1:0] irfoa;
 wire [WID-1:0] irfob;
 wire [WID-1:0] irfoc;
@@ -293,9 +295,13 @@ parameter CSR2 = 5'd27;
 parameter MEMORY_SETUP = 5'd28;
 parameter MEMORY2_SETUP = 5'd29;
 
+reg wbs;
+always_comb
+	wbs <= state==WRITEBACK;
+
 RegfileRam urf1 (
   .clka(clk_g),    // input wire clka
-  .ena(state==WRITEBACK),      // input wire ena
+  .ena(wbs),      // input wire ena
   .wea(wrirf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[WID-1:0]),    // input wire [31 : 0] dina
@@ -309,7 +315,7 @@ RegfileRam urf1 (
 );
 RegfileRam urf2 (
   .clka(clk_g),    // input wire clka
-  .ena(state==WRITEBACK),      // input wire ena
+  .ena(wbs),      // input wire ena
   .wea(wrirf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[WID-1:0]),    // input wire [31 : 0] dina
@@ -323,7 +329,7 @@ RegfileRam urf2 (
 );
 RegfileRam urf3 (
   .clka(clk_g),    // input wire clka
-  .ena(state==WRITEBACK),      // input wire ena
+  .ena(wbs),      // input wire ena
   .wea(wrirf),      // input wire [0 : 0] wea
   .addra({Rdx,Rd}),  // input wire [9 : 0] addra
   .dina(res[WID-1:0]),    // input wire [31 : 0] dina
@@ -336,8 +342,8 @@ RegfileRam urf3 (
   .doutb(irfoc)  // output wire [31 : 0] doutb
 );
 {+F}
-always @(posedge clk_i)
-if (wrfrf && state==WRITEBACK)
+always @(posedge clk_g)
+if (wrfrf && wbs)
 	fregfile[Rd] <= res;
 {-F}
 reg illegal_insn;
@@ -346,7 +352,6 @@ reg illegal_insn;
 reg [5:0] gcloc;    // garbage collect lockout count
 reg [2:0] mrloc;    // mret lockout
 reg [31:0] uip;     // user interrupt pending
-reg [4:0] regset;
 reg [31:0] rsStack;
 reg [31:0] pmStack;
 reg [31:0] imStack;
@@ -746,8 +751,13 @@ if (rst_i) begin
 	Rs1x1 <= 5'd29;
 	Rs2x1 <= 5'd29;
 	Rs3x1 <= 5'd29;
+	Rdx2 <= 5'd29;
+	Rs1x2 <= 5'd29;
+	Rs2x2 <= 5'd29;
+	Rs3x2 <= 5'd29;
 	rsStack <= 32'hFFFFFFFD;
 	set_wfi <= 1'b0;
+	poptrace <= 1'b0;
 end
 else begin
 decto <= 1'b0;
@@ -773,6 +783,7 @@ readyqrmv <= 1'b0;
 pushq <= 1'b0;
 popq <= 1'b0;
 peekq <= 1'b0;
+poptrace <= 1'b0;
 
 if (MachineMode)
 	adr_o <= ladr;
@@ -792,16 +803,18 @@ case (state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 IFETCH:
 	begin
+		if (traceDataCount > 11'd2040)
+			poptrace <= 1'b1;
 	  if (mrloc != 3'd0)
 	    mrloc <= mrloc - 2'd1;
 	  if (gcloc==6'd1)
 	    gcie[asid] <= 1'b1;
 	  if (gcloc != 6'd0)
 	    gcloc <= gcloc - 2'd1;
-	  Rdx <= Rdx1;
-	  Rs1x <= Rs1x1;
-	  Rs2x <= Rs2x1;
-	  Rs3x <= Rs3x1;
+	  Rdx2 <= Rdx1;
+	  Rs1x2 <= Rs1x1;
+	  Rs2x2 <= Rs2x1;
+	  Rs3x2 <= Rs3x1;
 		illegal_insn <= 1'b1;
 		ipc <= pc;
 		wrirf <= 1'b0;
@@ -835,6 +848,10 @@ IFETCH:
 			tException(32'h80000003, pc, 5'd30, imStack[3:0]); // garbage collect IRQ
 			uip[0] <= 1'b0;
 		end
+		else if (pc[1:0] != 2'b00) begin
+			lcyc <= LOW;
+			tException(32'h00000000,pc,5'd30,imStack[3:0]);
+		end
 		else
 			pc <= pc + 3'd4;
 	end
@@ -846,6 +863,10 @@ IFETCH2:
 		sel_o <= 4'h0;
 		tPC();
 		ir <= dat_i[31:0];
+	  Rdx <= Rdx2;
+	  Rs1x <= Rs1x2;
+	  Rs2x <= Rs2x2;
+	  Rs3x <= Rs3x2;
 		state <= DECODE;
 	end
 
@@ -1483,8 +1504,8 @@ CSR2:
   begin
     casez(ia[3:0])
     4'b0???:  res <= queueo;
-    4'b1110:  res <= {traceEmpty,traceValid,traceDataCount,traceOut[19:0]};
-    4'b1111:  res <= {traceEmpty,traceValid,traceDataCount,8'h00,traceOut[31:20]};
+    4'b1110:  res <= {traceEmpty,traceValid,traceDataCount[9:0],traceOut[19:0]};
+    4'b1111:  res <= {traceEmpty,traceValid,traceDataCount[9:0],8'h00,traceOut[31:20]};
     default:  res <= 32'h0;
     endcase
     goto (WRITEBACK);

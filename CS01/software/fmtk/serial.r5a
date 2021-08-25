@@ -29,7 +29,7 @@
 	align	8
 SerialFuncTbl:
 	dw		SerialNOP			; no operation
-	dw		0							; setup
+	dw		SerialSetup		; setup
 	dw		0							; initialize
 	dw		0							; status
 	dw		0							; media check
@@ -96,14 +96,10 @@ SerialDCB:
 ;  dw    0     ; reserved
 ;  dw    0
 
+	align	16
 ;------------------------------------------------------------------------------
-; Initialize serial port.
-;
-; Modifies:
-;		$t0
 ;------------------------------------------------------------------------------
-
-SerialInit:
+SerialSetup:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi		$a0,#5							; serial device
@@ -112,6 +108,21 @@ SerialInit:
 	ldi		$a0,#5							; serial device
 	ldi   $a1,#SerialDCB
 	call  CopyDevDCB
+	call	SerialInit
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+;------------------------------------------------------------------------------
+; Initialize serial port.
+;
+; Modifies:
+;		$t0
+;------------------------------------------------------------------------------
+	align	16
+SerialInit:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
 	stt		$x0,SerHeadRcv
 	stt		$x0,SerTailRcv
 	stt		$x0,SerHeadXmit
@@ -197,17 +208,17 @@ SerialFinishCmd:
 ; Modifies:
 ;		none
 ; Returns:
-;   $v0 = E_Ok
-;		$v1 = character or -1
+;   $a0 = E_Ok
+;		$a1 = character or -1
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialGetChar:
 	sub		$sp,$sp,#16
 	stt		$ra,[$sp]
 	stt		$s1,8[$sp]          ; XON status
 	stt   $s2,12[$sp]         ; interrupt state
 	ldb		$s1,SerRcvXon				; skip sending XON if already sent
-	csrrc	$s2,#$7C4,#1				; disable interrupts
+	call	LockOS
 	call	SerialRcvCount			; check number of chars in receive buffer
 	slt		$a0,$a0,#8					; less than 8?
 	beqz	$a0,.0002
@@ -231,8 +242,8 @@ SerialGetChar:
 .xit:
   mov   $a1,$a0
   ldi   $a0,#E_Ok
-	csrrw	$x0,#$7C4,$s2				; restore interrupts
-	csrrc $x0,#$004,#1
+  call	UnlockOS
+;	csrrc $x0,#$004,#1
 	ldt		$ra,[$sp]
 	ldt		$s1,8[$sp]
 	ldt   $s2,12[$sp]
@@ -253,15 +264,15 @@ SerialGetChar:
 ; Modifies:
 ;		none
 ; Returns:
-;   $v0 = E_Ok
-;		$v1 = character or -1
+;   $a0 = E_Ok
+;		$a1 = character or -1
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialPeekChar:
 	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
 	stt		$s1,4[$sp]
-	csrrc	$s1,#$7C4,#1				; disable interrupts
+	call	LockOS
 	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
 	ldbu	$a0,SerTailRcv
 	beq		$a0,$a1,.noChars		; no?
@@ -271,9 +282,9 @@ SerialPeekChar:
 .0001:
 	ldi		$a0,#-1
 .xit
+  call	UnlockOS
   mov   $a1,$a0
   ldi   $a0,#E_Ok
-	csrrw	$x0,#$7C4,$s1				; restore interrupts
 	ldt		$ra,[$sp]
 	ldt		$s1,4[$sp]
 	add		$sp,$sp,#8
@@ -294,7 +305,7 @@ SerialPeekChar:
 ;   $v0 = E_Ok
 ;		$v1 = character or -1
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialPeekCharDirect:
 	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
@@ -322,7 +333,9 @@ SerialPeekCharDirect:
 ; transmitter is empty. The routine will attempt to transmit the char up to 
 ; 10 times. If it still can't transmit the char then sleep is called and the
 ; task is put to sleep for a tick. When it wakes up the routine continues to
-; try and send a character.
+; try and send a character up to 10 times. If sleep has been called 10 times
+; and the character still has not made it to the transmit fifo, then an
+; error is flagged.
 ;
 ; Stack Space
 ;		5 words
@@ -330,43 +343,79 @@ SerialPeekCharDirect:
 ;		$a3 = character to put
 ; Modifies:
 ;		none
+; Returns:
+;		$a0 = character put
+; Side Effects:
+;		LastErc in DCB set to E_NoDev (no device) if transmit times out
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialPutChar:
-	sub		$sp,$sp,#16
-	stt		$a0,[$sp]
+	sub		$sp,$sp,#20
 	stt		$ra,4[$sp]
 	stt		$a1,8[$sp]
 	stt		$s1,12[$sp]
-.0002:
+	stt		$a3,16[$sp]
+	ldi		$s1,#10
+.0003:
+	sub		$s1,$s1,#1
+	beqz	$s1,.noFunc
 	ldi		$a1,#10
-	csrrc	$s1,#$7C4,#1				; disable interrupts
+	call	LockOS
 .0001:
 	sub		$a1,$a1,#1
 	beqz	$a1,.goSleep
-	pfi												; poll for an interrupt here
+;	pfi												; poll for an interrupt here
 	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
 	stb		$a3,UART+UART_TRB		; send the byte
-	csrrw	$x0,#$7C4,$s1				; restore interrupt setting
-	ldt		$a0,[$sp]
+	call	UnlockOS
+.xit:
 	ldt		$ra,4[$sp]
 	ldt		$a1,8[$sp]
 	ldt		$s1,12[$sp]
-	add		$sp,$sp,#16
+	ldt		$a3,16[$sp]
+	mov		$a0,$a3
+	add		$sp,$sp,#20
 	ret
 .goSleep:
-	csrrw	$x0,#$7C4,$s1				; restore interrupt setting
+	call	UnlockOS
 	ldi		$a0,#3							; ISleep function
 	ldi		$a1,#1							; 1 tick
-	call  OSOCall
-	bra		.0002
+	call  OSOCall							; this may trash registers
+	ldt		$a3,16[$sp]
+	bra		.0003
+.noFunc:
+	sub		$sp,$sp,#8
+	stt		$a2,[$sp]
+	stt		$a4,4[$sp]
+	ldi		$a0,#4							; Set DCB field
+	ldi		$a1,#5							; $a1 = I/O channel
+	ldi		$a2,#$18						; LastErc
+	ldi		$a3,#0							; 0 = set word
+	ldi		$a4,#E_NoDev				; error code to set
+	call	OSOCall
+	ldt		$a2,[$sp]
+	ldt		$a4,4[$sp]
+	add		$sp,$sp,#8
+	ldi		$a3,#-1							; flag EOF on error
+	bra		.xit
+
+	align	16
+SerialPutCharEx:
+.0001:
+;	pfi												; poll for an interrupt here
+	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
+	and		$a0,$a0,#16					; bit #4 of the status reg
+	beqz	$a0,.0001				    ; branch if transmitter is not empty
+	stb		$a3,UART+UART_TRB		; send the byte
+	mov		$a0,$a3
+	ret
 
 ;------------------------------------------------------------------------------
 ; Calculate number of character in input buffer
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialRcvCount:
 	ldbu	$a0,SerTailRcv	; v0 = tail index
 	ldbu	$a1,SerHeadRcv	; v1 = head index
@@ -381,7 +430,7 @@ SerialRcvCount:
 	
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+	align	16
 SerialIRQ:
 .nxtByte:
 	ldt		$a0,UART+UART_STAT	; check the status
@@ -391,7 +440,9 @@ SerialIRQ:
 	xor   $t2,$a1,#CTRLT
 	bnez  $t2,.0001
 	mov   $s1,$a1
-	call  DumpTraceQueue
+	mov		$a3,$a1
+;	call	SerialPutcharEx
+;	call  DumpTraceQueue
 	mov   $a1,$s1
 .0001:
 	ldbu	$t2,SerHeadRcv			; get buffer indexes
@@ -420,6 +471,7 @@ SerialIRQ:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+	align	16
 SerialGetUI:
   ldi   $a0,#E_Ok           ; no errors
   ldi   $a1,#1              ; yes this is a UI device

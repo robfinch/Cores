@@ -90,7 +90,7 @@ ViaDCB:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+	align	16
 ViaSetup:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
@@ -114,6 +114,7 @@ ViaNOP:
 ; input. Setup timer #3 as the system time slice (30ms).
 ;------------------------------------------------------------------------------
 
+	align	16
 ViaInit:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
@@ -124,10 +125,10 @@ ViaInit:
 	stb		$t0,VIA_PCR+1[$t1]
 	ldi		$t0,#$1F00
 	stw		$t0,VIA_ACR[$t1]		; set timer 3 mode, timer 1/2 = 64 bit
-	ldi		$t0,#$0016E360			;	divider value for 33.333Hz (30 ms)
+	ldi		$t0,#$00124F80			;	divider value for 33.333Hz (30 ms)
 	stt		$t0,VIA_T1CL[$t1]
 	stt		$x0,VIA_T1CH[$t1]		; trigger transfer to count registers
-	ldi   $t0,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	ldi   $t0,#$003D0900      ; divider value for 10 Hz (100 ms)
 	stt   $t0,VIA_T2CL[$t1]
 	stt   $x0,VIA_T2CH[$t1]
 	ldi		$t0,#$1C0						; emable timer3/timer2 interrupts
@@ -140,6 +141,7 @@ ViaInit:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
+	align	16
 ViaIRQ:
 	ldi		$t1,#VIA
 	ldw		$t0,VIA_IFR[$t1]    ; get the flag register
@@ -157,13 +159,31 @@ ViaIRQ:
 	add		$t2,$t2,#30
 	stt		$t2,milliseconds
 	stt		$t2,switchflag
-	ldi   $a0,#0
+	ldi   $a0,#0							; invoke SchedulerIRQ()
 	call  OSOCall
 	mret
 	; reset countdown to clear interrupt
 .timer2irq:
-	ldi   $t2,#$004C4B40      ; divider value for 10 Hz (100 ms)
+	ldi   $t2,#$003D0900      ; divider value for 10 Hz (100 ms)
 	stt   $t2,VIA_T2CL[$t1]
 	stt   $x0,VIA_T2CH[$t1]
 	csrrs $x0,#$044,#1        ; set GC interrupt pending bit
 	bra   .0001               ; there might be a timer 3 irq too
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+	align	16
+ViaTime:
+	ldi		$t1,#VIA
+	ldi		$t0,#1							; select timer 3 access
+	stb		$t0,VIA_PCR+1[$t1]
+	ldt		$t0,VIA_T1CL[$t1]
+	ldi		$t3,#1200000				; timer counts down from here
+	sub		$t0,$t3,$t0					; calc elapsed clocks
+	ldi		$t3,#40000					; 40,000 clocks per millisecond
+	div		$t0,$t0,$t3
+	ldt		$t2,milliseconds
+	add		$a0,$t2,$t0
+	ret
+	

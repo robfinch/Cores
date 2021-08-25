@@ -69,6 +69,7 @@ E_BadDevNum	=		0x18
 E_DCBInUse	=		0x19
 E_BadDCBOffset = 0x1A
 E_Busy = 0x1B
+E_BadAppId = 0x1C
 ; Device driver errors
 E_BadDevNum	=		0x20
 E_NoDev		=		0x21

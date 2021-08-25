@@ -22,13 +22,10 @@
 ; ============================================================================
 
 		code	18 bits
-		align	4
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+	align	16
 MMUInit:
-	sub		$sp,$sp,#4
-	stt		$ra,[$sp]
 	ldi		$t0,#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
 	stt		$t0,NPAGES
 
@@ -38,9 +35,10 @@ MMUInit:
 
 	; Free all memory for all tasks
 	; Sets all pages to map to page zero for all tasks, except for the system
-	; task (task #0) which pre-allocates the first 16kB of memory.
+	; tasks (task #28 to 31) which pre-allocates the first 16kB of memory.
 	ldi		$t0,#$00
 	ldi		$t4,#31					; app id
+	ldi		$t5,#28
 .0004:
 	ldi		$t1,#$000				; regno
 	ldi		$t2,#256				; number of registers to update
@@ -51,7 +49,9 @@ MMUInit:
 	mvmap	$x0,$t0,$s1
 	add		$t0,$t0,#$01
 	add		$t1,$t1,#$01		; increment page number
-	bgtz  $t4,.0005
+	beqz	$t4,.0008
+	blt   $t4,$t5,.0005
+.0008:
 	bltu	$t1,$t3,.0003
 .0005:
 	mov		$t0,$x0					; mark pages unallocated
@@ -61,19 +61,16 @@ MMUInit:
 	sub		$t4,$t4,#1      ; next app id
 	bge		$t4,$x0,.0004
 	
-	; allocate last 4 pages for system stacks
+	; allocate last 12 pages for system stacks
+	ldi		$t2,#12
 	ldi		$t1,#$FF				
 	ldi		$t0,#$1FF
+.0006:
 	mvmap	$x0,$t0,$t1
-	ldi		$t1,#$FE
-	ldi		$t0,#$1FE
-	mvmap	$x0,$t0,$t1
-	ldi		$t1,#$FD			
-	ldi		$t0,#$1FD
-	mvmap	$x0,$t0,$t1
-	ldi		$t1,#$FC			
-	ldi		$t0,#$1FC
-	mvmap	$x0,$t0,$t1
+	sub		$t1,$t1,#1
+	sub		$t0,$t0,#1
+	sub		$t2,$t2,#1
+	bnez	$t2,.0006
 
 	; Now setup segment registers
 	ldi		$t0,#$0
@@ -85,15 +82,17 @@ MMUInit:
 	bnez	$t2,.0002
 	ldi		$t0,#128
 	ldi		$t1,#-1					; t1 = value to load, bounds max
-.0003:
+.0007:
 	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
 	add		$t0,$t0,#1			; pick next segment register
 	slt		$t2,$t0,#256		; 128 bound regs
-	bnez	$t2,.0003
+	bnez	$t2,.0007
 
 	; Now ensure all pages in PAM are marked as free or OS allocated
+	; Cannot use stack until here, after segment regs and mem mapped.
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
 	call  PAMInit
-
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
 	ret
@@ -109,7 +108,7 @@ MMUInit:
 ; Returns:
 ;		a0 = starting bucket number (includes ASID), -1 if no run found
 ;------------------------------------------------------------------------------
-
+	align	16
 FindRun:
 	and			$t3,$a0,#$1F			; t3 = mid
 	sll			$t3,$t3,#16				; shift into usable position
@@ -151,7 +150,7 @@ FindRun:
 ;		$a1 = pointer to allocated memory in virtual address space.
 ;		$a0 = E_Ok for success, E_NotAlloc otherwise
 ;------------------------------------------------------------------------------
-;
+	align	16
 Alloc:
 	sub			$sp,$sp,#24
 	stt			$ra,[$sp]
@@ -227,7 +226,7 @@ Alloc:
 ;		$a0 = physical address, 0 if unsuccessful
 ;		$a1 = virtual address, not valid unless successful
 ;------------------------------------------------------------------------------
-
+	align 	16
 AllocStack:
   sub   	$sp,$sp,#12
   stt     $ra,[$sp]
@@ -270,7 +269,7 @@ AllocStack:
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
-
+	align		16
 FreeAll:
   sub   	$sp,$sp,#4
   stt     $ra,[$sp]
@@ -306,7 +305,7 @@ FreeAll:
 ; Returns:
 ;		$a0 = linear address
 ;------------------------------------------------------------------------------
-
+	align	16
 VirtToLinear:
 	srl   $a1,$a0,#28         ; get segment register of address
 	mvseg $a1,$x0,$a1         ; get segment register value
@@ -351,7 +350,7 @@ VirtToLinear:
 ; Returns:
 ;		$a0 = physical address
 ;------------------------------------------------------------------------------
-
+	align	16
 VirtToPhys:
 	sub 	$sp,$sp,#8
 	stt   $ra,[$sp]
@@ -388,7 +387,7 @@ VirtToPhys:
 ; Returns:
 ;		$v0 = physical address
 ;------------------------------------------------------------------------------
-
+	align	16
 VirtToPhys2:
 	sub 	$sp,$sp,#4
 	stt   $ra,[$sp]
@@ -411,8 +410,17 @@ VirtToPhys2:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+	align	16
 FetchMemoryWord:
   ldt   $a1,[$a1]
   ldi   $a0,#E_Ok
   jmp   OSExit
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+	align	16
+FMTK_Alloc:
+	mov		$a0,$a1
+	mov		$a1,$a2
+	call	Alloc
+	jmp		OSExit

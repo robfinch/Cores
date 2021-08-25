@@ -22,7 +22,6 @@
 ; ============================================================================
 
 	code
-	align	4
 ;------------------------------------------------------------------------------
 ; Insert task into ready queue.
 ; Inserting into the ready queue is done by both OS ecall functions and
@@ -33,98 +32,166 @@
 ;		$a0 = tid to insert (TCB pointer)
 ; Modifies:
 ;	  $t0,$t1
+; Stack Space:
+;		1 word
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
-
+	align	16
 InsertIntoReadyQueue:
-	ldbu	$t1,TCBStatus[$a0]		; set status to ready
-	or		$t1,$t1,#TS_READY
-	stb		$t1,TCBStatus[$a0]
-	ldb		$t1,TCBPriority[$a0]	; $t1 = priority
-	sll		$t1,$t1,#2						; $t1 = index to priority list
-	ldt		$t2,TAILRDY[$t1]
-	beqz	$t2,.qempty
-	stt		$a0,TCBNext[$t2]
-	stt		$a0,TAILRDY[$t1]
-	stt		$x0,TCBNext[$a0]
+	beqz	$a0,.retx
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
+	ldbu	$t0,TCBStatus[$a0]		; set status to ready
+	or		$t0,$t0,#TS_READY
+	stb		$t0,TCBStatus[$a0]
+	ldb		$t0,TCBPriority[$a0]	; $t0 = priority
+	and		$t0,$t0,#7
+	sll		$t0,$t0,#2						; $t0 = index to priority list
+	ldt		$t1,TAILRDY[$t0]			; $t1 = tail
+	beqz	$t1,.qempty
+	stt		$a0,TCBNext[$t1]			; tail->next = new
+	stt		$a0,TAILRDY[$t0]			; tail = new
+	stt		$t1,TCBPrev[$a0]			; new->prev = $t1
+	ldt		$t1,HEADRDY[$t0]
+	stt		$t1,TCBNext[$a0]			; new->next = head
+	stt		$a0,TCBPrev[$t1]			; head->prev = new
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+.retx:
 	ret
 .qempty:
-	stt		$a0,HEADRDY[$t1]
-	stt		$a0,TAILRDY[$t1]
-	stt		$x0,TCBNext[$a0]
+	stt		$a0,HEADRDY[$t0]
+	stt		$a0,TAILRDY[$t0]
+	stt		$a0,TCBNext[$a0]
+	stt		$a0,TCBPrev[$a0]
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
 	ret
 
 
 ;------------------------------------------------------------------------------
-; Removal from the ready queue is easy. Just flag the task status as no longer
-; ready or running. The next time it appears in a dequeue the code will ignore
-; it and pop the next ready task.
+; Remove from ready queue.
 ;
 ; Parameters:
-;		$a0 = tid to remove
+;		$a0 = tid to remove (TCB pointer)
 ; Modifies:
-;		t0,t1
+;		$t0,$t1
+; Stack Space:
+;		1 word
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
 
+	align	16
 RemoveFromReadyQueue:
-	ldb		$t1,TCBStatus[$a0]		; set status no longer ready or running
-	and		$t1,$t1,#~(TS_READY|TS_RUNNING)
-	stb		$t1,TCBStatus[$a0]
+	beqz	$a0,.retx
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
+	ldb		$t0,TCBStatus[$a0]		; set status no longer ready or running
+	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
+	stb		$t0,TCBStatus[$a0]
+	ldt		$t0,TCBNext[$a0]
+	beq		$t0,$a0,.emptyList
+	ldt		$t1,TCBPrev[$a0]
+	stt		$t1,TCBPrev[$t0]
+	stt		$t0,TCBNext[$t1]
+.xit:
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+.retx:
 	ret
 
+; Removing the last task from a ready list.
+; Find the task in the ready lists
+.emptyList:
+	ldt		$t0,HEADRDY0
+	bne		$t0,$a0,.hr1
+	stt		$x0,HEADRDY0
+	stt		$x0,TAILRDY0
+.hr1:
+	ldt		$t0,HEADRDY1
+	bne		$t0,$a0,.hr2
+	stt		$x0,HEADRDY1
+	stt		$x0,TAILRDY1
+.hr2:
+	ldt		$t0,HEADRDY2
+	bne		$t0,$a0,.hr3
+	stt		$x0,HEADRDY2
+	stt		$x0,TAILRDY2
+.hr3:
+	ldt		$t0,HEADRDY3
+	bne		$t0,$a0,.hr4
+	stt		$x0,HEADRDY3
+	stt		$x0,TAILRDY3
+.hr4:
+	ldt		$t0,HEADRDY4
+	bne		$t0,$a0,.xit
+	stt		$x0,HEADRDY4
+	stt		$x0,TAILRDY4
+	bra		.xit
+	
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		$a0 = task id to insert
 ;		$a1 = timeout value
 ; Modifies:
-;		t0,t1,t2,t3,t4,t5
+;		t0,t1,t2,t3,t4
 ;------------------------------------------------------------------------------
 
+	align	16
 InsertIntoTimeoutList:
+	beqz	$a0,.retx
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
 	ldbu	$t2,TCBStatus[$a0]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
 	stb		$t2,TCBStatus[$a0]
 	ldt		$t0,TimeoutList
+	ldi		$t3,#0
 	beqz	$t0,.listEmpty
 .loop:
+	beq		$t0,$a0,.xit				; task already on TimeoutList
 	ldt		$t1,TCBTimeout[$t0]
 	sltu	$t2,$a1,$t1
 	bnez	$t2,.lessThan
 	; Here timeout was >
 	sub		$a1,$a1,$t1
+	mov		$t3,$t0
 	ldt		$t0,TCBNext[$t0]
 	bnez	$t0,.loop
 	; Add at end
 	stt		$a0,TCBNext[$t0]
-	stt		$t0,TCBPrev[$a0]
 	stt		$x0,TCBNext[$a0]
 	stt		$a1,TCBTimeout[$a0]
-	ldi		$a0,#E_Ok
-	ret
+	bra		.xit
 .listEmpty:
 	stt		$a1,TCBTimeout[$a0]
 	stt		$a0,TimeoutList
 	stt		$x0,TCBNext[$a0]
-	stt		$x0,TCBPrev[$a0]
-	ldi		$a0,#E_Ok
-	ret
+	bra		.xit
 .lessThan:
+	beq		$t0,$a0,.xit
 	sub		$t1,$t1,$a1
 	stt		$t1,TCBTimeout[$t0]
-	ldt		$t2,TCBPrev[$t0]
 	stt		$t0,TCBNext[$a0]
-	stt		$a0,TCBPrev[$t0]
-	stt		$t2,TCBPrev[$a0]
-	beqz	$t2,.atHead
-	stt		$a0,TCBNext[$t2]
-	ldi		$a0,#E_Ok
-	ret
+	beqz	$t3,.atHead
+	stt		$a0,TCBNext[$t3]
+	bra		.xit
 .atHead:
 	stt		$a0,TimeoutList
+.xit:
+	call	UnlockOS
 	ldi		$a0,#E_Ok
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+.retx:
 	ret
 
 ;------------------------------------------------------------------------------
@@ -135,49 +202,63 @@ InsertIntoTimeoutList:
 ; Parameters:
 ;		$a0 = task id to remove
 ; Modifies:
-;		none
+;		$t0,$t1,$t2,$t3,$t4
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
 
+	align	16
 RemoveFromTimeoutList:
-	ldt		$t0,TCBPrev[$a0]
-	beqz	$t0,.atHead
-	ldt		$t1,TCBNext[$a0]
-	beqz	$t1,.atTail2
-	ldt		$t3,TCBTimeout[$t1]
-	ldt		$t4,TCBTimeout[$a0]
-	sub		$t3,$t3,$t4
-	stt		$t3,TCBTimeout[$t1]
-	stt		$t1,TCBNext[$t0]	; this->prev->next = this->next
-	ldt		$t2,TCBNext[$a0]
-	beqz	$t2,.atTail
-	stt		$t0,TCBPrev[$t2]	; this->next->prev = this->prev
-.atTail:
+	beqz	$a0,.retx
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	call	LockOS
+	ldt		$t0,TimeoutList
+	beq		$t0,$a0,.atHead				; quick test for head of list
+	ldi		$t3,#0
+.0001:
+	beq		$t0,$a0,.found
+	mov		$t3,$t0
+	ldt		$t0,TCBNext[$t0]
+	bnez	$t0,.0001
+	bra		.xit
+.found:
+	ldt		$t0,TCBNext[$a0]
+	beqz	$t0,.atTail2
+	ldt		$t1,TCBTimeout[$t0]
+	ldt		$t2,TCBTimeout[$a0]
+	sub		$t1,$t1,$t2
+	stt		$t1,TCBTimeout[$t0]
+	stt		$t0,TCBNext[$t3]			; this->prev->next = this->next
+	stt		$x0,TCBNext[$a0]
 	stt		$x0,TCBTimeout[$a0]
-	ret
+	bra		.xit
 .atHead:
-	ldt		$t1,TimeoutList
-	bne		$t1,$t0,.notAtHead
-	ldt		$t1,TCBNext[$a0]
-	beqz	$t1,.atTail
-	ldt		$t3,TCBTimeout[$t1]
-	ldt		$t4,TCBTimeout[$a0]
-	sub		$t3,$t3,$t4
-	stt		$t3,TCBTimeout[$t1]
-	stt		$t1,TimeoutList
-.notAtHead:
+	ldt		$t0,TCBNext[$a0]
+	ldt		$t1,TCBTimeout[$t0]
+	ldt		$t2,TCBTimeout[$a0]
+	sub		$t1,$t1,$t2
+	stt		$t1,TCBTimeout[$t0]
+	stt		$t0,TimeoutList
+	stt		$x0,TCBNext[$a0]
 	stt		$x0,TCBTimeout[$a0]
-	ret
+	bra		.xit
 .atTail2:
-	stt		$x0,TCBNext[$t0]
+	stt		$x0,TCBNext[$t3]
+	stt		$x0,TCBNext[$a0]
 	stt		$x0,TCBTimeout[$a0]
+.xit:
+	call	UnlockOS
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+.retx:
 	ret
 
 ;------------------------------------------------------------------------------
 ; Diagnostics
 ;------------------------------------------------------------------------------
 
+	align	16
 DumpReadyQueue:
 	sub		$sp,$sp,#32
 	stt		$ra,[$sp]
@@ -197,7 +278,11 @@ DumpReadyQueue:
 .0006:
   ldi   $a0,#32       ; Get PAM bit pair
   mov   $a1,$t1
+;  csrrw	$t0,#CSR_RSSTACK,$x0
+;  stt		$t0,$10000
   ecall
+;  csrrw	$t0,#CSR_RSSTACK,$x0
+;  stt		$t0,$10004
   add   $a0,$a1,#'0'
   call  Putch
   add   $t1,$t1,#1
@@ -206,8 +291,8 @@ DumpReadyQueue:
 
 	ldi		$a0,#msgReadyQueue
 	call	PutString
-	ldi		$t1,#0
-	csrrc	$s1,#$300,#1
+	ldi		$s2,#0
+;	csrrc	$s1,#CSR_PMSTACK,#1
 .0002:
 ;	call	SerialPeekCharDirect
 ;	xor		$v0,$v0,#CTRLC
@@ -217,38 +302,28 @@ DumpReadyQueue:
 	ldi		$a0,#'Q'
 	call	Putch
 	;srl		$a0,$t1,#1
-	mov   $a0,$t1
+	mov   $a0,$s2
 	call	PutHexNybble
 	ldi		$a0,#':'
 	call	Putch
-	popq  $a2,$t1         ; get number of queue entries
-	srl   $t2,$a2,#16
-	and   $t2,$t2,#63
-	ldi		$a0,#'['
-	call	Putch
-	mov		$a0,$t2
-	call	PutHexByte
-	ldi		$a0,#']'
-	call	Putch
-	ldi		$a0,#' '
-	call	Putch
-	and   $a2,$a2,#$1FF
-	pushq $a2,$t1         ; put the entry back on the queue
-.0003:
-	popq  $a2,$t1
-	bltz  $a2,.nxt        ; if empty get next
-	srl   $a3,$a2,#30     ; extract valid bit
-	beqz  $a3,.0005       ; valid entry ? no: get next
-	and   $a2,$a2,#$1FF
-	pushq $a2,$t1         ; put the entry back on the queue
-	mov		$a0,$a2
+	sll		$t1,$s2,#2
+	ldt		$s3,HEADRDY[$t1]
+	mov		$s4,$s3							; record head of list
+.0007:
+	beqz	$s3,.0008
+	srl		$a0,$s3,#LOG_PGSZ
 	call	PutHexHalf
-	ldi		$a0,#' '
+	ldi		$a0,#CR
 	call	Putch
+	ldt		$s3,TCBNext[$s3]
+	beqz	$s3,.0008
+	bne		$s3,$s4,.0007
+.0008:
+	add		$s2,$s2,#1
+	ldi		$t1,#5
+	blt		$s2,$t1,.0002
 .0005:
-	sub   $t2,$t2,#1
-	bgtz  $t2,.0003
-	bra   .0001
+;	bra   .0001
 ;	sll		$a3,$a3,#LOG_TCBSZ
 ;	ldw		$a0,TCBNext[$a3]
 ;	call	PutHexHalf
@@ -256,27 +331,12 @@ DumpReadyQueue:
 ;	call	Putch
 ;	ldw		$a0,TCBPrev[$a3]
 ;	call	PutHexHalf
-.nxt:
-	mov		$a0,$a2
-	call	PutHexByte
-	ldi		$a0,#' '
-	call	Putch
-	and   $a2,$a2,#$1FF
-	pushq $a2,$t1         ; put the entry back on the queue
-.0001:
-	ldi		$a0,#CR
-	call	Putch
-;	ldw		$a3,TCBNext[$a3]
-;	bne		$a2,$a3,.0001
-	add		$t1,$t1,#1
-	slt		$t2,$t1,#8
-	bnez	$t2,.0002
 .brk:
 	ldi		$a0,#msgTaskInfo
 	call	PutString
-  ldi   $t0,#$4000
+  ldi   $s0,#$1000
 .0004:
-  ldt   $a0,[$t0]
+  ldt   $a0,[$s0]
   xor   $a0,$a0,#TCB_MAGIC
   bnez  $a0,.nxtT
 ;  ldi   $t2,#1
@@ -284,8 +344,8 @@ DumpReadyQueue:
 ;  ldt   $a0,TID_POOL
 ;  and   $t2,$t2,$a0
 ;  beqz  $t2,.nxtT
-  mov   $t2,$a0
-  srl   $t0,$t0,#2
+  mov   $t2,$s0
+  mov		$a0,$s0
   call  PutHexWord
   ldi   $a0,' '
   call  Putch
@@ -310,10 +370,10 @@ DumpReadyQueue:
 	ldi		$a0,#CR
 	call	Putch
 .nxtT:
-  add   $t0,$t0,#$400
-  slt   $t1,$t0,#$80000
+  add   $s0,$s0,#$400
+  slt   $t1,$s0,#$7D000
   bnez  $t1,.0004
-	csrrw	$x0,#$300,$s1
+;	csrrw	$x0,#CSR_PMSTACK,$s1
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
 	ldt		$a2,8[$sp]
@@ -325,6 +385,7 @@ DumpReadyQueue:
 	add		$sp,$sp,#32
 	ret
 
+	align	16
 DumpTimeoutList:
 	sub		$sp,$sp,#32
 	stt		$ra,[$sp]
@@ -337,36 +398,25 @@ DumpTimeoutList:
 	stt		$s1,28[$sp]
 	ldi		$a0,#msgTimeoutList
 	call	PutString
-	ldi		$t1,#0
-	csrrc	$s1,#$300,#1
-	ldi		$a3,#0
+	ldt		$a2,TimeoutList
 .0002:
 	call	SerialPeekCharDirect
 	xor		$a0,$a0,#CTRLC
 	beqz	$a0,.brk
 	ldi		$a0,#CR
 	call	Putch
-;	ldw		$a2,TimeoutList
-;	bltz	$a2,.brk
-;	mov		$a3,$a2
-;.0001:
-	mov		$a0,$a3
+	beqz	$a2,.brk
+	srl		$a0,$a2,#LOG_PGSZ
 	call	PutHexHalf
 	ldi		$a0,#'-'
 	call	Putch
-	getto	$a0,$t1
-;	sll		$a3,$a3,#LOG_TCBSZ
-;	ldt		$a0,TCBTimeout[$a3]
+	ldt		$a0,TCBTimeout[$a2]
 	call	PutHexWord
-;	ldi		$a0,#CR
-;	call	Putch
-	add		$a3,$a3,#1
-	and		$a3,$a3,#15
-	bgt		$a3,$x0,.0002
-;	ldw		$a3,TCBNext[$a3]
-;	bge		$a3,$x0,.0001
+	ldi		$a0,#CR
+	call	Putch
+	ldt		$a2,TCBNext[$a2]
+	bnez	$a2,.0002
 .brk:
-	csrrw	$x0,#$300,$s1
 	ldt		$ra,[$sp]
 	ldt		$a0,4[$sp]
 	ldt		$a2,8[$sp]

@@ -38,7 +38,7 @@
 ; Returns:
 ;   $a0 = page starting run, -1 if not enough memory
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMFindRun:
   sub 	$sp,$sp,#20
   stt   $ra,[$sp]
@@ -96,7 +96,7 @@ PAMFindRun:
 ; Returns:
 ;   $a0 = pointer to memory, -1 if insufficient memory
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMAlloc:
   sub 	$sp,$sp,#16
   stt   $ra,[$sp]
@@ -153,7 +153,7 @@ PAMAlloc:
 ; Returns:
 ;   none
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMFree:
   sub   	$sp,$sp,#12
   stt     $ra,[$sp]
@@ -199,7 +199,7 @@ PAMFree:
 ; Returns:
 ;		$a0 = page allocated
 ;------------------------------------------------------------------------------
-;
+	align	16
 PAMMarkPage:
 	sub		$sp,$sp,#8
 	stt		$ra,[$sp]
@@ -231,14 +231,14 @@ PAMMarkPage:
 ; Modifies:
 ;		$a1,$t0,$t1,$t2,$t3
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMUnmarkPage:
 	ldi		$t2,#MEMSZ-1  			; last page is permanently allocated to system stack
 	bgeu	$a0,$t2,PAMxit
 	ldi		$t2,#OSPAGES
 	bltu	$a0,$t2,PAMxit			; first 64 pages (64kB) allocated permanently to system
 	ldi   $a1,#0
-; Tail recursion here
+	bra		PAMSetbitPair
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -249,7 +249,7 @@ PAMUnmarkPage:
 ; Modifies:
 ;		$t0,$t1,$t2,$t3
 ;------------------------------------------------------------------------------
-
+	align 16
 PAMSetbitPair:
   srl   $t2,$a0,#4          ; t2 = word
   sll   $t2,$t2,#2          ; t2 = word index
@@ -275,7 +275,7 @@ PAMxit:
 ; Returns:
 ;   $a0 = value of bit pair (0, 1, 2 or 3)
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMGetbitPair:
   srl   $t2,$a0,#4          ; $t2 = word, bit pair num/16
   sll   $t2,$t2,#2          ; $t2 = word index, 4 bytes per word
@@ -288,7 +288,7 @@ PAMGetbitPair:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+	align	16
 PAMInit:
   sub 	$sp,$sp,#4
   stt   $ra,[$sp]
@@ -310,20 +310,22 @@ PAMInit:
   ldi   $a0,#15         ; Last OS page
   ldi   $a1,#2          ; set mark end of run
   call  PAMSetbitPair
+  ldi   $a0,#MEMSZ-24   ; OS stack page
+  ldi		$s0,#24					; 24 pages to mark
+.0003:
+  ldi   $a1,#3          ; mid of run
+  call  PAMSetbitPair
+	add		$a0,$a0,#1
   ldi   $a1,#2          ; end of run
-  ldi   $a0,#MEMSZ-1    ; OS stack page
   call  PAMSetbitPair
-  ldi   $a0,#MEMSZ-2    ; OS stack page
-  ldi   $a1,#3          ; mid run
-  call  PAMSetbitPair
-  ldi   $a0,#MEMSZ-3    ; OS stack page
-  call  PAMSetbitPair
-  ldi   $a0,#MEMSZ-4    ; OS stack page
-  call  PAMSetbitPair
+	add		$a0,$a0,#1
+	sub		$s0,$s0,#2
+	bnez	$s0,.0003  
   ldt   $ra,[$sp]
   add   $sp,$sp,#4
   ret
 
+	align	16
 GetPamBit:
   mov   $a0,$a1
   call  PAMGetbitPair
@@ -331,6 +333,7 @@ GetPamBit:
   ldi   $a0,#E_Ok
   jmp   OSExit
 
+	align	16
 PAMDump:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
@@ -338,8 +341,8 @@ PAMDump:
 .0001:
 	mov		$a0,$s1
 	call	PAMGetbitPair
-	add		$a3,$a0,#'0'
-	call	SerialPutChar
+	add		$a0,$a0,#'0'
+	call	Putch
 	add		$s1,$s1,#1
 	slt		$t1,$s1,#MEMSZ
 	bnez	$t1,.0001

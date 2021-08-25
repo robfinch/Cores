@@ -58,15 +58,19 @@
 ;30   Random Number		PRNG
 ;31		Debug						DBG
 
+	code
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a1 = I/O channel
 ;		a2 = function
 ;		a3 = data
 ;------------------------------------------------------------------------------
-
+	align	16
 FMTK_IO:
 ;  mEI
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	csrrc	$x0,#$7C1,#1				; clear OS running semaphore
 	ldi		$a0,#32
 	bgeu	$a1,$a0,.badDev
 	ldi		$t2,#32
@@ -78,14 +82,20 @@ FMTK_IO:
 	ldt		$t3,[$t3]
 	beqz	$t3,.badFunc
 	call	[$t3]
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
 .xit:
-	jmp		OSExit
+	ret
 .badFunc:
 	ldi		$a0,#E_BadDevOp
-	bra		.xit
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 .badDev:
 	ldi		$a0,#E_BadDevNum
-	bra		.xit
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -93,7 +103,7 @@ FMTK_IO:
 ;		a2 = field offset
 ;   a3 = 0 = get word, 1 = get byte
 ;------------------------------------------------------------------------------
-
+	align 16
 FMTK_GetDCBField:
 	ldi		$t2,#32
 	bgeu	$a1,$t2,.badDev
@@ -110,13 +120,13 @@ FMTK_GetDCBField:
 .ok:
   ldi   $a0,#E_Ok
 .xit:
-	jmp		OSExit
+	ret
 .badFunc:
 	ldi		$a0,#E_BadDCBOffset
-	bra		.xit
+	ret
 .badDev:
 	ldi		$a0,#E_BadDevNum
-	bra		.xit
+	ret
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -125,8 +135,8 @@ FMTK_GetDCBField:
 ;   a3 = 0 = get word, 1 = get byte
 ;   a4 = value to set
 ;------------------------------------------------------------------------------
-
-FMTK_SetDCBField:
+	align	16
+ISetDCBField:
 	ldi		$t2,#32
 	bgeu	$a1,$t2,.badDev
 	ldi		$t3,#DCB_Size
@@ -142,20 +152,25 @@ FMTK_SetDCBField:
 .ok:
   ldi   $a0,#E_Ok
 .xit:
-	jmp		OSExit
+	ret
 .badFunc:
 	ldi		$a0,#E_BadDCBOffset
-	bra		.xit
+	ret
 .badDev:
 	ldi		$a0,#E_BadDevNum
-	bra		.xit
+	ret
+
+	align	16
+FMTK_SetDCBField:
+	call	ISetDCBField
+	jmp		OSExit
 
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;		a0 = I/O channel
 ;		a1 = points to function table
 ;------------------------------------------------------------------------------
-
+	align	16
 CopyDevFuncTbl:
 	sll		$t2,$a0,#7					; each device allowed 32 functions (*128)
 	add		$t2,$t2,#DVF_Base		; base address of function table
@@ -170,7 +185,7 @@ CopyDevFuncTbl:
 	ret
 
 ;------------------------------------------------------------------------------
-
+	align	16
 CopyDevDCB:
   ldi   $t2,#DCB_Size
   mul   $t2,$a0,$t2
@@ -190,7 +205,7 @@ CopyDevDCB:
 ;    Compare the current APPID against the device owner to see if the device
 ; is owned.
 ;------------------------------------------------------------------------------
-
+	align	16
 CheckDevOwner:
   sub   $sp,$sp,#4
   stt   $s1,[$sp]
