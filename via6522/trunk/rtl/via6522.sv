@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2004-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2004-2021  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -125,12 +125,17 @@ reg ca1_irq, ca2_irq;
 reg cb1_irq, cb2_irq;
 reg t1_irq, t2_irq, t3_irq;
 reg sr_irq;
+wire pe_t1z, pe_t2z, pe_t3z;
 
 edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ca1), .pe(ca1_pe), .ne(ca1_ne), .ee(ca1_ee));
 edge_det ued2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ca2), .pe(ca2_pe), .ne(ca2_ne), .ee(ca2_ee));
 edge_det ued3 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cb1), .pe(cb1_pe), .ne(cb1_ne), .ee(cb1_ee));
 edge_det ued4 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cb2), .pe(cb2_pe), .ne(cb2_ne), .ee(cb2_ee));
 edge_det ued5 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(pb[6]), .pe(), .ne(pb6_ne), .ee());
+edge_det ued6 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(t3==64'd0), .pe(pe_t3z), .ne(), .ee());
+edge_det ued7 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(t2==64'd0), .pe(pe_t2z), .ne(), .ee());
+edge_det ued8 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(t1==64'd0), .pe(pe_t1z), .ne(), .ee());
+
 
 assign ca1_trans = (ca1_mode & ca1_pe) | (~ca1_mode & ca1_ne);
 assign ca2_trans = (ca2_mode[2:1]==2'b00&&ca2_ne)||(ca2_mode[2:1]==2'b01&&ca2_pe);
@@ -198,7 +203,7 @@ else begin
  		ca2o <= 1'b1;
 	
 	t1 <= t1 - 2'd1;
-	if (t1==64'd0) begin
+	if (pe_t1z) begin
 		t1_if <= 1'b1;
 		case(t1_mode)
 		2'd1:	t1 <= t1l;
@@ -216,11 +221,11 @@ else begin
 	1'd0:	t2 <= t2 - 2'd1;
 	1'd1:	if (pb6_ne) t2 <= t2 - 2'd1;
 	endcase
-	if (t2==64'd0)
+	if (pe_t2z)
 		t2_if <= 1'b1;
 
 	t3 <= t3 - 2'd1;
-	if (t3==64'd0) begin
+	if (pe_t3z) begin
 		t3_if <= 1'b1;
 		case(t3_mode)
 		1'd1:	t3 <= t3l;
