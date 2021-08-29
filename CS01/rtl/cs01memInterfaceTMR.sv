@@ -73,6 +73,8 @@ parameter WR0 = 4'd8;
 parameter RD1a = 4'd9;
 parameter RD1b = 4'd10;
 parameter RD1c = 4'd11;
+parameter WR0a = 4'd12;
+parameter WR0b = 4'd13;
 reg [31:0] memDat;
 reg [3:0] sel;  // ring counter
 reg [1:0] tmr;
@@ -98,6 +100,10 @@ RD1:
 RD2:
 	state <= we_i ? WR0 : RD1;
 WR0:
+	state <= WR0a;
+WR0a:
+	state <= WR0b;
+WR0b:
 	state <= WR1;
 WR1:
 	state <= WR2;
@@ -116,6 +122,8 @@ WR3:
 		state <= WR0;
 RWDONE:
 	state <= RWNACK;
+// Wait until the processor is done with the read / write then go back to the
+// idle state to wait for another operation.
 RWNACK:
 	if (!csi)
 		state <= IDLE;
@@ -124,14 +132,119 @@ default:
 endcase
 end
 
+// RamCEn is used to reduce power requirements. If the RAM is sitting idle then
+// the chip enable will be inactive. The RAM consumes much less power when
+// inactive.
+always @(posedge clk_i)
+if (rst_i)
+	RamCEn <= HIGH;
+else begin
+case(state)
+IDLE:
+	// Tell the ram it's selected, move out of low-power mode.
+	if (csi)
+		RamCEn <= LOW;					
+RWDONE:
+	RamCEn <= HIGH;
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	RamWEn <= HIGH;
+else begin
+// AFter a cycle disable the write input. This will cause the ram to latch
+// the data.
+RamWEn <= HIGH;
+case(state)
+WR0:
+	RamWEn <= LOW;
+WR0a:
+	RamWEn <= LOW;
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	RamOEn <= HIGH;
+else begin
+case(state)
+IDLE:
+	RamOEn <= we_i;
+WR1:
+	RamOEn <= LOW;
+WR2:
+	RamOEn <= HIGH;
+RWDONE:
+	RamOEn <= HIGH;
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	MemT <= HIGH;
+else begin
+case(state)
+IDLE:
+	MemT <= ~we_i;
+RD2:
+	if (we_i)
+		MemT <= LOW;
+WR1:
+	MemT <= HIGH;
+WR2:
+	MemT <= LOW;
+RWDONE:
+	MemT <= HIGH;
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	dat_o <= 32'h0;
+else
+	dat_o <= rdat[0];
+
+always @(posedge clk_i)
+if (rst_i)
+	ack_o <= LOW;
+else begin
+case(state)
+IDLE:
+	ack_o <= LOW;
+// RD2 gives more time for address settling, variation in I/O delay.
+// The write signal is checked here in case the write signal shows up delayed by
+// a cycle.
+RWDONE:
+	ack_o <= HIGH;
+RWNACK:
+	if (!csi) begin
+		ack_o <= LOW;
+	end
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	sel <= 4'h0;
+else begin
+case(state)
+IDLE:
+	casez(sel_i)
+	4'b???1:	sel <= sel_i;
+	4'b??10:	sel <= {1'b0,sel_i[3:1]};
+	4'b?100:	sel <= {2'b0,sel_i[3:2]};
+	4'b1000:	sel <= {3'b0,sel_i[3]};
+	endcase
+RD1:
+	sel <= {1'b0,sel[3:1]};
+WR3:
+	sel <= {1'b0,sel[3:1]};
+endcase
+end
+
 always @(posedge clk_i)
 if (rst_i) begin
-	RamWEn <= HIGH;
-	RamOEn <= HIGH;
-	RamCEn <= HIGH;
-	sel <= 4'b0;
-	MemT <= HIGH;
-	ack_o <= 1'b0;
 	badram <= 1'b0;
 	errcnt <= 4'd0;
 	rc <= 1'b1;
@@ -141,37 +254,19 @@ case(state)
 IDLE:
 	begin
 		// Default action is to disable all bus drivers
-		ack_o <= LOW;
 		badram <= 1'b0;
 		errcnt <= 4'd0;
-		RamWEn <= HIGH;
-		RamCEn <= HIGH;
-		RamOEn <= HIGH;
-		MemT <= HIGH;
 		rdat[0] <= 32'h0;
-		if (csi) begin
-			tmr <= 2'b00;
-			MemAdr[18:2] <= adr_i[18:2];
-			memDat <= dat_i;
-			casez(sel_i)
-			4'b???1:	begin MemAdr[1:0] <= 2'b00; sel <= sel_i; end
-			4'b??10:	begin MemAdr[1:0] <= 2'b01; sel <= {1'b0,sel_i[3:1]}; end
-			4'b?100:	begin MemAdr[1:0] <= 2'b10; sel <= {2'b0,sel_i[3:2]}; end
-			4'b1000:	begin MemAdr[1:0] <= 2'b11; sel <= {3'b0,sel_i[3]}; end
-			endcase
-			RamCEn <= LOW;					// tell the ram it's selected
-			// For a read cycle enable the ram's output drivers
-			// For a write cycle send back an ack right away.
-			if (!we_i) begin
-				rc <= 1'b1;
-				RamOEn <= LOW;
-			end
-			else begin
-				rc <= 1'b0;
-				ack_o <= HIGH;
-				MemT <= LOW;
-			end
-		end
+		tmr <= 2'b00;
+		MemAdr[18:2] <= adr_i[18:2];
+		memDat <= dat_i;
+		rc <= ~we_i;
+		casez(sel_i)
+		4'b???1:	begin MemAdr[1:0] <= 2'b00; end
+		4'b??10:	begin MemAdr[1:0] <= 2'b01; end
+		4'b?100:	begin MemAdr[1:0] <= 2'b10; end
+		4'b1000:	begin MemAdr[1:0] <= 2'b11; end
+		endcase
 	end
 	// For a read, after a clock cycle latch the input data.
 	// Increment the memory address and count.
@@ -207,18 +302,6 @@ RD1:
 		2'd3:	rdat[tmr][31:24] <= MemDB_i;
 		endcase
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		sel <= {1'b0,sel[3:1]};
-	end
-
-// Gives more time for address settling, variation in I/O delay.
-// The write signal is checked here in case the write signal shows up delayed by
-// a cycle.
-RD2:
-	if (we_i) begin
-		MemT <= LOW;
-		RamOEn <= HIGH;
-		if (!csi)
-			ack_o <= LOW;
 	end
 
 WR0:
@@ -230,71 +313,31 @@ WR0:
 	  2'd3: MemDB_o <= memDat[31:24];
 	  default:  ;
 	  endcase
-		RamWEn <= LOW;
-		if (!csi)
-			ack_o <= LOW;
   end
-	// AFter a cycle disable the write input. This will cause the ram to latch
-	// the data.
-WR1:
-	begin
-		RamWEn <= HIGH;
-		MemT <= HIGH;
-		RamOEn <= LOW;
-		if (!csi)
-			ack_o <= LOW;
-	end
 WR2:
 	begin
 		if (MemDB_i != MemDB_o) begin
-			MemT <= LOW;
-			RamOEn <= HIGH;
 			errcnt <= errcnt + 2'd1;
 			if (errcnt==4'd10) begin
 				badram <= 1'b1;
-				RamCEn <= HIGH;
-				RamWEn <= HIGH;
 			end
 		end
-		else begin
-			RamCEn <= HIGH;
-			RamWEn <= HIGH;
-		end
-		if (!csi)
-			ack_o <= LOW;
 	end
 	// After another cycle increment the memory address and memory count.
 	// If the count expired goto the done state, otherwise go back to the first
 	// write state.
 WR3:
 	begin
-		RamCEn <= HIGH;
-		RamWEn <= HIGH;
 		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		sel <= {1'b0,sel[3:1]};
-		if (sel[3:1]!=3'b0)
+		if (sel[3:1]!=3'b0) begin
 			errcnt <= 4'd0;
-		if (!csi)
-			ack_o <= LOW;
+		end
 	end
 	// Here a read/write is done. Signal the processor.
 RWDONE:
 	begin
 		badram <= 1'b0;
-		RamOEn <= HIGH;
-		MemT <= HIGH;
 //		dat_o <= (rdat[0]&rdat[1])|(rdat[0]&rdat[2])|(rdat[1]&rdat[2]);
-		dat_o <= rdat[0];
-		if (rc)
-			ack_o <= HIGH;
-		else if (!csi)
-			ack_o <= LOW;
-	end
-	// Wait until the processor is done with the read / write then go back to the
-	// idle state to wait for another operation.
-RWNACK:
-	if (!csi) begin
-		ack_o <= LOW;
 	end
 default:
 	;
