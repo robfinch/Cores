@@ -1702,7 +1702,13 @@ int NextToken()
 								tbndx++;
 								return token = tk_dw;
             }
-            if ((inptr[1]=='i' || inptr[1]=='I') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
+						if ((inptr[1] == 'i' || inptr[1] == 'I') && isspace(inptr[2])) {
+							inptr += 2;
+							tokenBuffer[tbndx] = tk_di;
+							tbndx++;
+							return (token = tk_di);
+						}
+						if ((inptr[1]=='i' || inptr[1]=='I') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
                 inptr += 3;
 								tokenBuffer[tbndx] = tk_div;
 								tbndx++;

@@ -50,6 +50,11 @@ ACB_MAGIC     EQU   ((' ' << 24) | ('A' << 16) | ('C' << 8) | 'B')
 MSG_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('S' << 8) | 'G')
 MBX_MAGIC     EQU   ((' ' << 24) | ('M' << 16) | ('B' << 8) | 'X')
 
+OT_TCB		EQU		0
+OT_ACB		EQU		1
+OT_MSG		EQU		2
+OT_MBX		EQU		3
+
 UNDEADQ     EQU   7
 
 ; error codes
@@ -85,7 +90,7 @@ E_BadTid = 0x28
 E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
 E_NoMoreAlarmBlks	= 0x44
-E_NoMoreTCBs	=	0x45
+E_NoMoreTcbs	=	0x45
 E_NoMoreAppIds = 0x46
 E_NoMem = 0x47
 

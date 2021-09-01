@@ -250,6 +250,43 @@ SerialGetChar:
 	add		$sp,$sp,#16
 	ret
 
+SerialGetCharEx:
+	sub		$sp,$sp,#16
+	stt		$ra,[$sp]
+	stt		$s1,8[$sp]          ; XON status
+	stt   $s2,12[$sp]         ; interrupt state
+	ldb		$s1,SerRcvXon				; skip sending XON if already sent
+	call	SerialRcvCount			; check number of chars in receive buffer
+	slt		$a0,$a0,#8					; less than 8?
+	beqz	$a0,.0002
+	bnez	$s1,.0002           ; XON already sent?
+	ldi		$a0,#XON						; if <8 send an XON
+	stb		$x0,SerRcvXoff			; clear XOFF status
+	stb		$a0,SerRcvXon				; flag so we don't send it multiple times
+	stb		$a0,UART+UART_TRB
+.0002:
+	di		2	
+	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
+	ldbu	$a0,SerTailRcv
+	beq		$a0,$a1,.noChars		; no?
+	ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
+	add		$a1,$a1,#1					; update head index
+	and   $a1,$a1,#255        ; ring buffer wrapping
+	stb		$a1,SerHeadRcv
+	bra		.xit
+.noChars:
+.0001:
+	ldi		$a0,#-1
+.xit:
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+;	csrrc $x0,#$004,#1
+	ldt		$ra,[$sp]
+	ldt		$s1,8[$sp]
+	ldt   $s2,12[$sp]
+	add		$sp,$sp,#16
+	ret
+
 ;------------------------------------------------------------------------------
 ; SerialPeekChar
 ;
@@ -283,6 +320,27 @@ SerialPeekChar:
 	ldi		$a0,#-1
 .xit
   call	UnlockOS
+  mov   $a1,$a0
+  ldi   $a0,#E_Ok
+	ldt		$ra,[$sp]
+	ldt		$s1,4[$sp]
+	add		$sp,$sp,#8
+	ret
+
+SerialPeekCharEx:
+	sub		$sp,$sp,#8
+	stt		$ra,[$sp]
+	stt		$s1,4[$sp]
+	di		2
+	ldbu	$a1,SerHeadRcv			; check if anything is in buffer
+	ldbu	$a0,SerTailRcv
+	beq		$a0,$a1,.noChars		; no?
+	ldb		$a0,SerRcvBuf[$a1]	; get byte from buffer
+	bra		.xit
+.noChars:
+.0001:
+	ldi		$a0,#-1
+.xit
   mov   $a1,$a0
   ldi   $a0,#E_Ok
 	ldt		$ra,[$sp]
@@ -357,6 +415,7 @@ SerialPutChar:
 	stt		$a3,16[$sp]
 	ldi		$s1,#10
 .0003:
+	ldi		$t1,#UART
 	sub		$s1,$s1,#1
 	beqz	$s1,.noFunc
 	ldi		$a1,#10
@@ -365,10 +424,10 @@ SerialPutChar:
 	sub		$a1,$a1,#1
 	beqz	$a1,.goSleep
 ;	pfi												; poll for an interrupt here
-	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
+	ldb		$a0,UART_STAT[$t1]	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
-	stb		$a3,UART+UART_TRB		; send the byte
+	stb		$a3,UART_TRB[$t1]		; send the byte
 	call	UnlockOS
 .xit:
 	ldt		$ra,4[$sp]
@@ -403,12 +462,13 @@ SerialPutChar:
 
 	align	16
 SerialPutCharEx:
+	ldi		$t0,#UART
 .0001:
 ;	pfi												; poll for an interrupt here
-	ldb		$a0,UART+UART_STAT	; wait until the uart indicates tx empty
+	ldb		$a0,UART_STAT[$t0]	; wait until the uart indicates tx empty
 	and		$a0,$a0,#16					; bit #4 of the status reg
 	beqz	$a0,.0001				    ; branch if transmitter is not empty
-	stb		$a3,UART+UART_TRB		; send the byte
+	stb		$a3,UART_TRB[$t0]		; send the byte
 	mov		$a0,$a3
 	ret
 
@@ -417,6 +477,7 @@ SerialPutCharEx:
 ;------------------------------------------------------------------------------
 	align	16
 SerialRcvCount:
+	di		2
 	ldbu	$a0,SerTailRcv	; v0 = tail index
 	ldbu	$a1,SerHeadRcv	; v1 = head index
 	sub		$t0,$a0,$a1
@@ -432,11 +493,14 @@ SerialRcvCount:
 ;------------------------------------------------------------------------------
 	align	16
 SerialIRQ:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	ldi		$t1,#UART
 .nxtByte:
-	ldt		$a0,UART+UART_STAT	; check the status
+	ldt		$a0,UART_STAT[$t1]	; check the status
 	and		$t0,$a0,#$08				; bit 3 = rx full
 	beqz	$t0,.notRxInt
-	ldt		$a1,UART+UART_TRB		; get data from Rx buffer to clear interrupt
+	ldt		$a1,UART_TRB[$t1]		; get data from Rx buffer to clear interrupt
 	xor   $t2,$a1,#CTRLT
 	bnez  $t2,.0001
 	mov   $s1,$a1
@@ -461,13 +525,15 @@ SerialIRQ:
 	ldi		$a0,#XOFF
 	stb		$x0,SerRcvXon				; clear XON status
 	stb		$a0,SerRcvXoff			; set XOFF status
-	stb		$a0,UART+UART_TRB
+	stb		$a0,UART_TRB[$t1]
 	bra		.nxtByte            ; check the status for another byte
 ;	ldi		$a0,#$0B						; dtr,rts active, rxint disabled, no parity
 ;	sw		$a0,UART+UART_CMD
 .rxFull:
 .notRxInt:
-	mret
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	jmp		IRQExit
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014-2020  Robert Finch, Stratford
+//   \\__/ o\    (C) 2014-2021  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// A64 - Assembler
+// AS64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -41,11 +41,12 @@ extern char *pif1;
 static int64_t ca;
 
 extern int use_gp;
+int regTmp = 17;
 
 #define OPT64     2
 #define OPTX32    0
 #define OPTLUI0   1
-#define OPT_NSI		3
+#define OPT_NSI		0
 
 #define RD(x)		((x) << 7)
 #define FN3(x)	((x) << 12)
@@ -136,34 +137,35 @@ static int getRegisterX()
         }
 				if (isdigit(inptr[1])) {
 					reg = inptr[1] - '0';
-					if (isIdentChar(inptr[2])) {
-						return -1;
-					}
-					switch (reg) {
-					case 0:	reg = 8; break;
-					case 1:
-						if ((inptr[2] == '0') && !isIdentChar(inptr[3])) {
-							inptr++;
-							reg = 10;
-						}
-						else if ((inptr[2] == '1') && !isIdentChar(inptr[3])) {
-								inptr++;
-								reg = 11;
-							}
-						else
-							reg = 9;
-						break;
-					case 2:
-					case 3:
-					case 4:
-					case 5:
-					case 6:
-					case 7:
-					case 8:
-					case 9:
-						reg = reg + 16;
-						break;
-					}
+          if (isdigit(inptr[2])) {
+            if ((inptr[2] == '0') && !isIdentChar(inptr[3])) {
+              inptr++;
+              reg = 26;
+            }
+            else if ((inptr[2] == '1') && !isIdentChar(inptr[3])) {
+              inptr++;
+              reg = 27;
+            }
+            else
+              return -1;
+          }
+          else if (isIdentChar(inptr[2])) {
+            return -1;
+          }
+          switch (reg) {
+            case 0:	reg = 8; break;
+            case 1: reg = 9; break;
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+            case 9:
+              reg = reg + 16;
+              break;
+            }
 					inptr += 2;
 					NextToken();
 					return (reg);
@@ -372,7 +374,10 @@ static void emit_insn(int oc, int can_compress)
      emitCode((oc >> 8) & 255);
      emitCode((oc >> 16) & 255);
      emitCode((oc >> 24) & 255);
-    }
+		 num_bytes += 4;
+		 if ((oc & 0x7F) != 0x3F)
+			 num_insns += 1;
+		}
     /*
     if (processOpt==2) {
        for (ndx = 0; ndx < htblmax; ndx++) {
@@ -395,9 +400,6 @@ static void emit_insn(int oc, int can_compress)
      emitCode((oc >> 24) & 255);
     }
     */
-	num_bytes += 4;
-	if ((oc & 0x7F) != 0x3F)
-	num_insns += 1;
 }
  
 // ---------------------------------------------------------------------------
@@ -616,9 +618,9 @@ static void process_addi(int funct3)
 				emit_insn(val, !expand_flag);
 				return;
 			}
-			emit_insn((val & 0xFFFFF000) | RD(12) | 0x37, 1);    // LUI
+			emit_insn((val & 0xFFFFF000) | RD(regTmp) | 0x37, 1);    // LUI
 			emit_insn(((val & 0xFFF) << 20) | (Ra << 15) | (funct3 << 12) | RD(Rt) | 0x13, !expand_flag);
-			emit_insn(RS2(12)|RS1(Rt)|RD(Rt)|FN3(0) | 0x33, !expand_flag);	// ADD
+			emit_insn(RS2(regTmp)|RS1(Rt)|RD(Rt)|FN3(0) | 0x33, !expand_flag);	// ADD
 			return;
 		}
       emit_insn(((val & 0xFFF) << 20)|(Ra << 15)|(funct3<<12)|RD(Rt)|0x13,!expand_flag);
@@ -677,13 +679,13 @@ static void process_riop(int oc, int funct3, int funct7)
 			return;
 		}
 		if (val & 0x800LL)
-			emit_insn(((val+0x1000LL) & 0xFFFFF000LL) | RD(12) | 0x37, 1);    // LUI
+			emit_insn(((val+0x1000LL) & 0xFFFFF000LL) | RD(regTmp) | 0x37, 1);    // LUI
 		else
-      emit_insn((val & 0xFFFFF000LL) | RD(12) |0x37,1);    // LUI
-		emit_insn(((val & 0xFFFLL) << 20LL) | FN3(0) | RS1(12) | RD(12) | 0x13, !expand_flag);  // ADDI
+      emit_insn((val & 0xFFFFF000LL) | RD(regTmp) |0x37,1);    // LUI
+		emit_insn(((val & 0xFFFLL) << 20LL) | FN3(0) | RS1(regTmp) | RD(regTmp) | 0x13, !expand_flag);  // ADDI
 		switch (funct3) {
-		case 0: case 1: case 3: case 4: case 5: case 6: case 7:	// ADD, SLL, SLT, SLTU, XOR, OR, AND
-			emit_insn(FN7(funct7) | RD(Rt) | RS2(Ra) | RS1(12) | FN3(funct3) | 0x33, 1);
+    case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:	// ADD, SLL, SLT, SLTU, SRL, XOR, OR, AND
+			emit_insn(FN7(funct7) | RD(Rt) | RS1(Ra) | RS2(regTmp) | FN3(funct3) | 0x33, 1);
 			break;
 		}
 		return;
@@ -876,10 +878,10 @@ j2:
     if (disp > 524287 || disp < -524288) {
         Ra = 0;
 				if (val & 0x800)
-					emit_insn(((val-0x800) & 0xFFFFF000) | RD(12) | 0x37, 1);
+					emit_insn(((val-0x800) & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
 				else
-					emit_insn((val & 0xFFFFF000) | RD(12) | 0x37, 1);
-				emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+					emit_insn((val & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
+				emit_insn(((val & 0xFFF) << 20) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 				return;
     }
 		val =
@@ -1311,12 +1313,12 @@ static void process_store(int oc, int func3)
 			}
 			else {
 				if (disp & 0x800)
-					emit_insn(((disp + 0x1000) & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
+					emit_insn(((disp + 0x1000) & 0xFFFFF000) | RD(regTmp) | 0x37, 1); // LUI
 				else
-					emit_insn((disp & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
-				emit_insn(((disp & 0xfff) << 20) | RD(12) | RS1(12) | FN3(0) | 0x13, 1);	// ADDI
-				emit_insn(FN7(0) | RD(12) | RS1(12) | RS2(Ra) | FN3(0) | 0x33, 1);	// ADD
-				emit_insn(RS2(Rs) | RS1(12) | FN3(func3) | RD(0) | oc, !expand_flag);
+					emit_insn((disp & 0xFFFFF000) | RD(regTmp) | 0x37, 1); // LUI
+				emit_insn(((disp & 0xfff) << 20) | RD(regTmp) | RS1(regTmp) | FN3(0) | 0x13, 1);	// ADDI
+				emit_insn(FN7(0) | RD(regTmp) | RS1(regTmp) | RS2(Ra) | FN3(0) | 0x33, 1);	// ADD
+				emit_insn(RS2(Rs) | RS1(regTmp) | FN3(func3) | RD(0) | oc, !expand_flag);
 				return;
 			}
     }
@@ -1394,13 +1396,18 @@ static void process_ldi()
   else 
 	*/
 	if (val < -2048 || val > 2047) {
-		if (OPT_NSI) {
+		if (OPT_NSI && 0) {
 			emit_insn((0x800 << 20LL) | FN3(6) | RS1(0) | RD(Rt) | 0x13, !expand_flag);  // ORI
 			emit_insn(val, !expand_flag);
 			return;
 		}
 		else {
-			if (val & 0x800LL)
+			if (((val & 0xFFF) == 0x800) && OPT_NSI) {
+				emit_insn((0x800 << 20LL) | FN3(6) | RS1(0) | RD(Rt) | 0x13, !expand_flag);  // ORI
+				emit_insn(val, !expand_flag);
+				return;
+			}
+			else if (val & 0x800LL)
 				emit_insn(((val + 0x1000LL) & 0xFFFFF000LL) | RD(Rt) | 0x37, 1);
 			else
 				emit_insn((val & 0xFFFFF000LL) | RD(Rt) | 0x37, 1);
@@ -1444,12 +1451,12 @@ static void process_load(int oc, int func3)
 			}
 			else {
 				if (disp & 0x800)
-					emit_insn(((disp + 0x1000) & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
+					emit_insn(((disp + 0x1000) & 0xFFFFF000) | RD(regTmp) | 0x37, 1); // LUI
 				else
-					emit_insn((disp & 0xFFFFF000) | RD(12) | 0x37, 1); // LUI
-				emit_insn(((disp & 0xfff) << 20) | RD(12) | RS1(12) | FN3(0) | 0x13, 1);	// ADDI
-				emit_insn(FN7(0) | RD(12) | RS1(12) | RS2(Ra) | FN3(0) | 0x33, 1);	// ADD
-				emit_insn(RS1(12) | FN3(func3) | RD(Rt) | oc, !expand_flag);
+					emit_insn((disp & 0xFFFFF000) | RD(regTmp) | 0x37, 1); // LUI
+				emit_insn(((disp & 0xfff) << 20) | RD(regTmp) | RS1(regTmp) | FN3(0) | 0x13, 1);	// ADDI
+				emit_insn(FN7(0) | RD(regTmp) | RS1(regTmp) | RS2(Ra) | FN3(0) | 0x33, 1);	// ADD
+				emit_insn(RS1(regTmp) | FN3(func3) | RD(Rt) | oc, !expand_flag);
 				return;
 			}
 		}
@@ -1796,10 +1803,10 @@ static void process_call()
 		}
 		val += code_address;
 		if (val & 0x800LL)
-			emit_insn(((val - 0x800LL) & 0xFFFFF000LL) | RD(12) | 0x37, 1);
+			emit_insn(((val - 0x800LL) & 0xFFFFF000LL) | RD(regTmp) | 0x37, 1);
 		else
-			emit_insn((val & 0xFFFFF000LL) | RD(12) | 0x37, 1);
-		emit_insn(((val & 0xFFFLL) << 20LL) | RS1(12) | RD(Rt) | 0x67, 1);
+			emit_insn((val & 0xFFFFF000LL) | RD(regTmp) | 0x37, 1);
+		emit_insn(((val & 0xFFFLL) << 20LL) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 		return;
 	}
 	if (val == 0) {
@@ -1809,18 +1816,18 @@ static void process_call()
 	if (Ra == 0) {
 		if (val < -2048 || val > 2047) {
 			if (OPT_NSI) {
-				emit_insn((0x800 << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+				emit_insn((0x800 << 20) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 				emit_insn(val, 1);
 				return;
 			}
 			if (val & 0x800)
-				emit_insn(((val-0x800) & 0xFFFFF000) | RD(12) | 0x37, 1);
+				emit_insn(((val-0x800) & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
 			else
-				emit_insn((val & 0xFFFFF000) | RD(12) | 0x37, 1);
-			emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+				emit_insn((val & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
+			emit_insn(((val & 0xFFF) << 20) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 			return;
 		}
-		emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+		emit_insn(((val & 0xFFF) << 20) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 		return;
 	}
 	if (val < -2048 || val > 2047) {
@@ -1830,11 +1837,11 @@ static void process_call()
 			return;
 		}
 		if (val & 0x800)
-			emit_insn(((val - 0x800) & 0xFFFFF000) | RD(12) | 0x37, 1);
+			emit_insn(((val - 0x800) & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
 		else
-			emit_insn((val & 0xFFFFF000) | RD(12) | 0x37, 1);
-		emit_insn(FN7(0) | RD(12) | RS2(12) | RS1(Ra) | FN3(0) | 0x33, 1);	// ADD
-		emit_insn(((val & 0xFFF) << 20) | RS1(12) | RD(Rt) | 0x67, 1);
+			emit_insn((val & 0xFFFFF000) | RD(regTmp) | 0x37, 1);
+		emit_insn(FN7(0) | RD(regTmp) | RS2(regTmp) | RS1(Ra) | FN3(0) | 0x33, 1);	// ADD
+		emit_insn(((val & 0xFFF) << 20) | RS1(regTmp) | RD(Rt) | 0x67, 1);
 	}
 	return;
 }
@@ -1867,6 +1874,18 @@ static void process_csrrw(int opcode3)
 	prevToken();
   }
   emit_insn((val << 20) | RS1(Rs|val2) | FN3(opcode3|flag) | RD(Rd) | 0x73,!expand_flag);
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_di()
+{
+  int Ra;
+
+  NextToken();
+  Ra = expr();
+  emit_insn(FN7(33)|RS1(Ra)|0x13,!expand_flag);
 }
 
 // ----------------------------------------------------------------------------
@@ -2172,6 +2191,7 @@ void Friscv_processMaster()
 				case tk_dcb:  process_db(); break;
 				case tk_decto: emit_insn(0x1600000D,1); break;
 				case tk_dh:  process_dh(); break;
+        case tk_di:  process_di(); break;
 				case tk_div: process_rrop(0x33, 0x04, 0x01); break;
 				case tk_divu: process_rrop(0x33, 0x05, 0x01); break;
         case tk_dw:  process_dw(); break;

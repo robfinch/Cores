@@ -9,6 +9,7 @@ CTRLC				equ		$03
 CTRLT       equ   $14
 BS					equ		$08
 LF					equ		$0A
+LNFD				equ		$0A
 CR					equ		$0D
 XON					equ		$11
 XOFF				equ		$13
@@ -30,6 +31,7 @@ UART				equ		$FFDC0A00
 UART_TRB		equ		$00
 UART_STAT		equ		$04
 UART_CMD		equ		$08
+TMOQ				equ		$FFDC0400
 OS_SEMA			equ		$FFDB0000
 
 CSR_UIE     equ   $004
@@ -63,6 +65,51 @@ MachineStart:
 	call	FMTKInit
 	call	ViaSetup
 	call	SerialSetup
+
+	ldi		$sp,#$FF07CFFC
+ramtest:
+	ldi		$a0,#msgRamTest
+	call	PutString
+	ldi		$t0,#$FF000000
+	ldi		$t1,#$55555555
+.0001:
+	stt		$t1,[$t0]
+	sll		$t1,$t1,#1
+	stt		$t1,4[$t0]
+	srl		$t1,$t1,#1
+	add		$t0,$t0,#8
+	ldi		$t3,#$FF07CFE0
+	bltu	$t0,$t3,.0001
+
+	ldi		$t0,#$FF000000
+	ldi		$t1,#$55555555
+.0002:
+	ldt		$t2,[$t0]
+	beq		$t2,$t1,.0003
+	mov		$a0,$t0
+	call	PutHexWord
+	ldi		$a0,#' '
+	call	Putch
+.0003:
+	sll		$t1,$t1,#1
+	ldt		$t2,4[$t0]
+	beq		$t2,$t1,.0004
+	mov		$a0,$t0
+	call	PutHexWord
+	ldi		$a0,#' '
+	call	Putch
+.0004:
+	srl		$t1,$t1,#1
+	add		$t0,$t0,#8
+	ldi		$t3,#$FF07CFE0
+	bltu	$t0,$t3,.0002
+
+	; re-run setup, it got toasted by the ram test
+	call	MMUInit					; initialize MMU for address space zero.
+	call	FMTKInit
+	call	ViaSetup
+	call	SerialSetup
+
 	ldi   $t0,#5          ; set current input and output to serial port
 	stb   $t0,CURIN
 	stb   $t0,CUROUT
@@ -71,11 +118,8 @@ MachineStart:
 	ldi		$t0,#UserStart
 	csrrw	$x0,#$341,$t0		; set mepc
 	stt   $t0,MEPC1
-  ldi   $a0,#1          ; start task
-  ldi   $a1,#0
-  ldi   $a2,#0
-  ldi   $a3,#UserStart2
-  ldi   $a4,#$00				; register set (bits 0 to 7), operating mode (bits 8 to 9)
+  ldi   $a0,#5         	; start app
+  ldi   $a1,#UserASR
   call  OSOCall
   csrrw $x0,#CSR_TASKID,$a1
   csrrw	$a0,#CSR_IMSTACK,$x0
@@ -83,7 +127,7 @@ MachineStart:
 	csrrw	$x0,#CSR_IMSTACK,$a0	; set lowest IRQ level on return
   csrrs $x0,#CSR_PMSTACK,#8 	; enable interrupts on return
 ;	csrrc $x0,#CSR_TRACECTRL,#0 ; turn off tracing
-	call	DumpReadyQueue
+;	call	DumpReadyQueue
 	mret                      	; switch to user mode
 ;------------------------------------------------------------------------------
 ; User mode code starts here
@@ -101,40 +145,65 @@ UserStart2:
   ldi   $a1,#SystemASR
   ecall
 .appBad:
-  bnez  $a0,.appBad
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,UserStart2
+	stt		$a0,$10004
+;  bnez  $a0,.appBad
   mov   $s1,$a1
+.0001:
+  mov   $a1,$s1
   ldi   $a0,#14         ; get current tid
   ecall                 ; $a1 = task id
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0001
+
   mov		$s2,$a1
+.0002:
+  mov		$a1,$s2
   stw		$s2,IdleTaskId
   ldi   $a0,#30         ; set task's app id
   mov   $a2,$s1         ; $a2 = app id
   ecall
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0002
 
   mov   $s1,$a1         ; s1 = app id
 	ldi		$sp,#$2007A000-4  ; setup user mode stack pointer
 
+.0003:
   ldi   $a0,#12         ; start app
   ldi   $a1,#TinyBasicASR
   ecall
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0003
+
 	ldi		$a0,#1          ; Start finalizer task, task #1
+.0004:
 	mov   $a1,$s1
 	ldi		$a2,#0
 	ldi		$a3,#Finalizer
 	ldi   $a4,#$0B        ; user mode, regset 11
 	ecall
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0004
+.0005:
   ldi   $a0,#12         ; start app
   ldi   $a1,#MonitorASR
   ecall
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0005
 ;	ldi		$a0,#1          ; Start task for monitor, task #2
 ;	mov   $a1,$s1
 ;	ldi		$a2,#0
 ;	ldi		$a3,#MonEntry
 ;	ldi   $a4,#$0A        ; user mode, regset 10
 ;	ecall
+.0006:
   ldi   $a0,#25         ; map OS vars
   ecall
   mov   $gp,$a1
+	ldi		$t0,#E_Busy
+	beq		$a0,$t0,.0006
 
 UserStart3:
 	ldi		$sp,#$20079800-4  ; setup user mode stack pointer
@@ -172,7 +241,7 @@ UserStart3:
 ;		ldi		a1,#24000
 ;		ldi		a2,#Monitor
 ;		ecall
-	call	DumpReadyQueue
+;	call	DumpReadyQueue
 	jmp		MonEntry
 
 		; Now a loop to recieve and echo back characters
@@ -342,7 +411,7 @@ fputc:
 	; If the device is a UI device there may be multiple owning jobs. It doesn't
 	; do any good to check for ownership. Instead the I/O focus is checked to
 	; see if it's present.
-;	bra		.0001
+	bra		.0001
 	call  GetUIFlag
 	beqz  $a1,.checkOwner
   ldt   $a1,16[$sp]
@@ -352,12 +421,12 @@ fputc:
   call  CheckDevOwner
   bnez  $a0,.notOwner
 .0001:
-;	call	SerialPutCharEx
-  ldt   $a1,16[$sp]
-  ldt		$a3,24[$sp]
-	ldi		$a0,#26							; FMTK_IO
-	ldi		$a2,#13							; putchar function
-	ecall
+	call	SerialPutCharEx
+;  ldt   $a1,16[$sp]
+;  ldt		$a3,24[$sp]
+;	ldi		$a0,#26							; FMTK_IO
+;	ldi		$a2,#13							; putchar function
+;	ecall
 .xit:
 	ldt		$ra,[$sp]
 	ldt		$a0,8[$sp]
@@ -390,9 +459,9 @@ fputc:
 fgetc:
 	sub		$sp,$sp,#24
 	stt		$ra,[$sp]
-	stt		$a0,8[$sp]
 	stt		$a1,16[$sp]
 	stt		$a2,20[$sp]
+	bra		.0001
 	call  GetUIFlag
 	beqz  $a1,.checkOwner
 	ldt		$a1,16[$sp]
@@ -403,18 +472,17 @@ fgetc:
   call  CheckDevOwner
   bnez  $a0,.notOwner
 .0001:
-;	call	SerialPeekChar
-;	bltz	$a1,.0003
-;	call	SerialGetChar
-	ldi		$a0,#26							; FMTK_IO
-	ldt		$a1,16[$sp]
-	ldi		$a2,#8							; getchar function
-	ecall
+	call	SerialPeekCharEx
+	bltz	$a1,.0003
+	call	SerialGetCharEx
+;	ldi		$a0,#26							; FMTK_IO
+;	ldt		$a1,16[$sp]
+;	ldi		$a2,#8							; getchar function
+;	ecall
 .0003:
 	mov   $a0,$a1
 .0002:
 	ldt		$ra,[$sp]
-	ldt		$a0,8[$sp]
 	ldt		$a1,16[$sp]
 	ldt		$a2,20[$sp]
 	add		$sp,$sp,#24
@@ -478,6 +546,11 @@ Monitor:
 	beqz	$t0,.doDelete
 	stb		$a0,INBUF[$s1]
 	add		$s1,$s1,#1
+	ldi		$t0,#80
+	sltu	$t0,$s1,$t0
+	bnez	$t0,.bufndx1
+	sub		$s1,$s1,#1
+.bufndx1:
 	call	Putch
 	bra		.0001
 .doDelete:
@@ -542,26 +615,27 @@ Monitor:
 	ldi		$a0,#12					; Start App
 	ldi   $a1,#TBASR
 	ecall
-	mov		$s1,$a1					; save v1
+	mov		$s1,$a1					; save a1
 	ldi		$a0,#msgCRLF
 	call	PutString
-	mov		$a0,$s1					; get back v1
+	mov		$a0,$s1					; get back a1
 	call	PutHexByte
 	ldi		$a0,#msgTaskStart
 	call	PutString
-	call  DumpReadyQueue
+;	call  DumpReadyQueue
 	; The monitor is running in machine mode. A return instruction is used to
 	; switch to user mode. The return address must be set to the desired user
 	; code address.
-	mDI                     ; disable interrupts
-	ldi   $t0,#CSTART       ; pick start of Tiny Basic
-	csrrw $x0,#$341,$t0     ; set as return address
-	ldi   $t0,#$00011111    ; bits to select register set #1
-	csrrw $x0,#CSR_REGSET,$t0     ; select register set #1 (will decrement to zero then on mret)
-	mret                    ; will begin running Tiny Basic in user mode
+;	mDI                     ; disable interrupts
+;	ldi   $t0,#CSTART       ; pick start of Tiny Basic
+;	csrrw $x0,#$341,$t0     ; set as return address
+;	ldi   $t0,#$00011111    ; bits to select register set #1
+;	csrrw $x0,#CSR_REGSET,$t0     ; select register set #1 (will decrement to zero then on mret)
+;	mret                    ; will begin running Tiny Basic in user mode
 	;ldi		$a0,#5					; Reschedule task
 	;ldi		$a1,#1					; sleep(0)
 	;ecall
+	jmp		CSTART
 	jmp		Monitor
 .0006:
 	ldi		$t1,#'D'
@@ -572,9 +646,9 @@ Monitor:
 	call	DumpTimeoutList
 	jmp		Monitor
 .noT:
-	call 	DumpReadyQueue
-	;ldi		$a0,#15
-	;ecall
+	ldi		$a0,#39						; Dump ready queue
+	ecall
+	;call 	DumpReadyQueue
 	jmp		Monitor
 .0007:
 	ldi		$t1,#'E'
@@ -612,12 +686,65 @@ Monitor:
 	call	PutString
 	jmp		Monitor
 .0012:
+	ldi		$t1,#'R'
+	bne		$t0,$t1,.0013
+	jmp		DumpRegs
+.0013:
 .0005:
 	jmp		Monitor
 
   align 16
+DumpRegs:
+  add   $s1,$s1,#1
+  call  GetDecNum
+  ldi		$t1,#255
+  bne		$a0,$t1,.0001
+  ldi   $a0,#14         ; get current tid
+  ecall                 ; $a1 = task id
+  mov		$a0,$a1
+.0001:
+  mov		$s2,$a0
+  ldt		$s2,TCBPtrs[$s2]
+  ldbu	$a0,TCBOpMode[$s2]
+  call  PutHexByte
+  ldi		$s4,#0
+.0003:
+  sll		$s3,$s4,#2
+  add		$s3,$s3,#msgRegName
+  ldbu	$a0,[$s3]
+  call	Putch
+  ldbu	$a0,1[$s3]
+  call	Putch
+  ldbu	$a0,2[$s3]
+  call	Putch
+  ldbu	$a0,3[$s3]
+  call	Putch
+  ldi		$a0,#':'
+  call	Putch
+  sll		$s3,$s4,#2
+  ldt		$a0,TCBIntRegs[$s3]
+  call	PutHexWord
+  and		$s3,$s4,#3
+  bnez	$s3,.0002
+  ldi		$a0,#CR
+  call	Putch
+.0002:
+  add		$s4,$s4,#1
+  ldi		$a0,#32
+  bltu	$s4,$a0,.0003
+  jmp		Monitor
+
+msgRegName:
+	db	" x0 "," ra "," sp "," gp "," tp "," t0 "," t1 "," t2 "," fp "," s1 "
+	db	" a0 "," a1 "," a2 "," a3 "," a4 "," a5 "," a6 "," a7 "," s2 "," s3 "
+	db	" s4 "," s5 "," s6 "," s7 "," s8 "," s9 "," s10"," s11"," t3 "," t4 "
+	db	" t5 "," t6 "
+msgPC:
+	db	" pc ",0
+
+  align 16
 doMem:
-	gcsub	$sp,$sp,#4
+	sub		$sp,$sp,#4
 	add		$s1,$s1,#1
 	ldb		$t0,INBUF[$s1]
 	xor   $t0,$t0,#'O'
@@ -664,13 +791,9 @@ doMem:
 	add		$s3,$s3,#1
 	sub		$s2,$s2,#1
 	bge		$s2,$x0,.loop
-	bltu	$s3,$s4,.loop2
-	ldi		$a0,#' '
-	call	Putch
-	ldi		$a0,#' '
-	call	Putch
-	
-	mov   $s3,$s5
+
+	sub		$s3,$s3,#8
+	ldi		$s2,#7
 .0004:
 	ldbu  $a0,[$s3]
 	slt   $t0,$a0,#$20
@@ -682,9 +805,15 @@ doMem:
   call  Putch
 .0003:
   add   $s3,$s3,#1
-  bltu  $s3,$s4,.0004
-  ldi   $a0,#CR
-  call  Putch
+	sub		$s2,$s2,#1
+	bge		$s2,$x0,.0004
+	bltu	$s3,$s4,.loop2
+	ldi		$a0,#' '
+	call	Putch
+	ldi		$a0,#' '
+	call	Putch
+	
+	mov   $s3,$s5
 	jmp		Monitor		
 
   align 16
@@ -706,27 +835,27 @@ EditMem:
 doVMem:
   add   $s1,$s1,#1
   call  GetDecNum
-  ldi   $t1,#0
-  sll   $t0,$a0,#16
+  ldi   $s3,#0
+  sll   $s2,$a0,#16
 .0001:
-  and   $a0,$t1,#3
+  and   $a0,$s3,#3
   bnez  $a0,.notLF
   ldi   $a0,#CR
   call  Putch
   ldi   $a0,#LF
   call  Putch
 .notLF:
-  mov   $a0,$t0
+  mov   $a0,$s2
   call  PutHexWord
   ldi   $a0,#':'
   call  Putch
-  mvmap $a0,$x0,$t0
+  mvmap $a0,$x0,$s2
   call  PutHexHalf
   ldi   $a0,#' '
   call  Putch
-  add   $t0,$t0,#1
-  add   $t1,$t1,#1
-  slt   $a0,$t1,#256
+  add   $s2,$s2,#1
+  add   $s3,$s3,#1
+  slt   $a0,$s3,#256
   bnez  $a0,.0001  
   jmp   Monitor
 
@@ -1049,9 +1178,10 @@ DumpTraceQueue:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	ldi   $a6,#'X'        ; bypass='B' in fputc routine
-.dmpTrace:
+	ldi		$s1,#0
 	ldi   $a0,#CR
 	call  Putch
+.dmpTrace:
 	ldi   $a1,#14         ; processor trace queue
 	popq  $a0,$a1
 	bltz  $a0,.dmpTraceEmpty  ; emptied out?
@@ -1059,6 +1189,17 @@ DumpTraceQueue:
 	call  PutHexWord
 	ldi		$a0,#' '
 	call	Putch
+	ldi   $a1,#13         ; processor trace queue
+	peekq $a0,$a1
+	call	PutHexWord
+	ldi		$a0,#' '
+	call	Putch
+	add		$s1,$s1,#1
+	and		$s2,$s1,#7
+	bnez	$s2,.0001
+	ldi		$a0,#CR
+	call	Putch
+.00001:
 	bra   .dmpTrace
 .dmpTraceEmpty:
 	ldi   $a0,#CR
@@ -1109,35 +1250,38 @@ StackTbl:
   dw    $0
   dw    $0
   dw    $0
-  dw    $2007E800-4
-  dw    $2007F000-4
-  dw    $2007F800-4
-  dw    $20080000-4
+  dw    $F207E800-4
+  dw    $F607F000-4
+  dw    $FA07F800-4
+  dw    $FE080000-4
 
 StackTbl2:
-	dw		$2007A800-4
-	dw		$2007B000-4
-	dw		$2007B800-4
-	dw		$2007C000-4
-	dw		$2007C800-4
-	dw		$2007D000-4
-	dw		$2007D800-4
-	dw		$2007E000-4
+	dw		$D207A800-4
+	dw		$D607B000-4
+	dw		$DA07B800-4
+	dw		$DE07C000-4
+	dw		$E207C800-4
+	dw		$E607D000-4
+	dw		$EA07D800-4
+	dw		$EE07E000-4
 	
 	code
 	align	16
 IRQRout:
 	csrrw	$t0,#$342,$x0			; get cause code
+	bltz	$t0,.isIRQ		  	; irq or ecall?
 	beqz	$t0,.instAlign
-	bltz	$t0,.isIRQ		  ; irq or ecall?
-	xor   $t2,$t0,#2      ; illegal instruction?
+	xor		$t2,$t0,#25				; bus error?
+	beqz	$t2,.busError
+	xor   $t2,$t0,#2      	; illegal instruction?
 	beqz  $t2,.illegal
 	and   $t2,$t0,#$FFFFFFFC
 	xor   $t2,$t2,#8
 	beqz  $t2,.ecall
 	; Some other cause
+.busError:
 .illegal:
-	ldi		$sp,#$2007D000
+	ldi		$sp,#$FE080000-4
 	csrrc $x0,#CSR_TRACECTRL,#1 ; turn off tracing
 	csrrc	$x0,#CSR_PMSTACK,#1		; disable interrupts
 	call	DumpTraceQueue
@@ -1148,29 +1292,43 @@ IRQRout:
 	mret
 .soc:
   bra   .soc
+
 .instAlign:
-	ldi		$sp,#$2007D000
+	ldi		$sp,#$FE080000-4
 	csrrc $x0,#CSR_TRACECTRL,#1 ; turn off tracing
 	csrrc	$x0,#CSR_PMSTACK,#1		; disable interrupts
 	call	DumpTraceQueue
 .instAlign1:
 	bra		.instAlign1
+
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Environment Call entry point.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 .ecall:
-  ; We reset the stack pointer at each call to the OS in case an error causes
-  ; it to be messed up.
-	ldt		$sp,StackTbl+116	; setup machine mode stack pointer
 	jmp		OSECALL					  ; goto operating system call dispatcher
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; For IRQs the register set is automatically set according to the interrupt
+; level active level 0 to 7 use register sets 52 to 59.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 .isIRQ:
-;  csrrw $t0,#CSR_RSSTACK,$x0   ; get register sets
-;  and   $t0,$t0,#31       ; extract register set selection (will be 30)
+	; Switch to map 52 to 59
+  csrrw	$t1,#CSR_SATP,$x0
+  and		$t1,$t1,#$f03fffff			; mask off asid
+  csrrw	$t2,#CSR_RSSTACK,$x0
+  and		$t2,$t2,#63
+  sll		$t2,$t2,#22
+  or		$t1,$t1,$t2							; set new asid
+	csrrw	$x0,#CSR_SATP,$t1				; set satp
+  ; Reset stack pointer for interrupt register set.
 	csrrw	$t0,#CSR_IMSTACK,$x0
 	and		$t0,$t0,#7
-  sll   $t2,$t0,#2        ; $t2 = table index
+  sll   $t2,$t0,#2        	; $t2 = table index
 	ldt		$sp,StackTbl2[$t2]	; setup machine mode stack pointer
-; Cannot enable interrupts without switching register sets
-;	csrrs	$x0,#CSR_PMSTACK,#1	; enable higher-level interrupts
-	csrrw	$t0,#$342,$x0			; get cause code
-  ldt   $t1,IRQFlag     ; update IRQ flag for Tiny Basic
+	csrrw	$t0,#$342,$x0				; get cause code
+	csrrs	$x0,#CSR_PMSTACK,#1	; enable higher-level interrupts
+  ldt   $t1,IRQFlag     		; update IRQ flag for Tiny Basic
   add   $t1,$t1,#1
   stt   $t1,IRQFlag
   and   $t0,$t0,#$FF
@@ -1190,6 +1348,26 @@ IRQRout:
 	ldt		$t5,[$t5]
 	beqz	$t5,.noIRQ	    ; make sure there's an address to go to
 	jmp		[$t5]						; jump to the IRQ routine
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; IRQ exit point. All IRQ routines should exit through this piece of code.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+IRQExit:
+	; Switch back to app map
+	di		11
+  csrrw	$t1,#CSR_SATP,$x0
+  and		$t1,$t1,#$f03fffff		; mask off asid
+  csrrw	$t2,#CSR_RSSTACK,$x0
+  srl		$t2,$t2,#6
+  and		$t2,$t2,#$3f
+  sll		$t2,$t2,#22
+  or		$t1,$t1,$t2						; restore asid
+	csrrw	$x0,#CSR_SATP,$t1			; set satp
+	mret
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 .noIRQ:
   sub   $t3,$t3,#1
   bnez  $t3,.InitDev
@@ -1244,13 +1422,16 @@ ERETx2:
 	nop
   nop
 
+msgRamTest:
+	db	"RAM Test:",CR,LNFD,0
+
 	align	4
 ; Application startup record for Monitor
 MonitorASR:
   db    0     ; page size (can't change on this system)
   db    2     ; priority normal
-  db    10    ; register set for startup task
-  db    10    ; memory map #0
+  db    60    ; register set for startup task
+  db    60    ; memory map #0
   dw    0     ; processor affinity
   dw    0     ; code size (0 = in ROM, don't move)
   dw    0     ; reserved
@@ -1273,8 +1454,8 @@ MonitorASR:
 SystemASR:
   db    0     ; page size (can't change on this system)
   db    2     ; priority normal
-  db    28    ; register set for startup task
-  db    28    ; memory map #0
+  db    60    ; register set for startup task
+  db    60    ; memory map #0
   dw    0     ; processor affinity
   dw    0     ; code size (0 = in ROM, don't move)
   dw    0     ; reserved
@@ -1317,6 +1498,30 @@ TinyBasicASR:
   dw    0     ; ui data
   dw    0     ; reserved
     
+; Application startup record for Tiny Basic
+UserASR:
+  db    0     ; page size (can't change on this system)
+  db    2     ; priority normal
+  db    0     ; register set
+  db    0     ; memory map
+  dw    0     ; processor affinity
+  dw    0     ; code size (0 = in ROM, don't move)
+  dw    0     ; reserved
+  dw    0     ; data size (preinitialized data)
+  dw    0     ; reserved
+  dw    32768 ; uninitialized data size
+  dw    0     ; reserved
+  dw    0     ; Heap size
+  dw    0     ; reserved
+  dw    1024  ; stack size
+  dw    0     ; reserved
+  dw    UserStart2  ; pointer to code
+  dw    0       ; reserved
+  dw    0     ; pointer to data
+  dw    0     ; reserved
+  dw    0     ; ui data
+  dw    0     ; reserved
+    
 ;------------------------------------------------------------------------------
 ; Message strings
 ;------------------------------------------------------------------------------
@@ -1333,6 +1538,7 @@ msgMonHelp:
 		db		"K <tid> - kill task", 13
 		db		"M <start> <length>	- dump memory",13
 		db    "P - display PAM",13
+		db		"R - registers",13
 		db		"S - switch task",13
 		db    "V <mid> dump virtual memory map",13
 		db		0

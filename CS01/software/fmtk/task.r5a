@@ -29,6 +29,7 @@ OSCallTbl:
   dh    ISendMsg >> 4
   dh    ISleep >> 4
   dh		ISetDCBField >> 4
+  dh		IStartApp >> 4							; 5
 
 OSEcallTbl:
 	dh		FMTK_Initialize	>> 4				; 0
@@ -70,7 +71,7 @@ OSEcallTbl:
 	dh    SetIRQFlag >> 4             ; 36
 	dh    FMTK_Alloc >> 4							; 37
 	dh    FMTK_GetCurrentAppId >> 4		; 38
-	dh    0
+	dh    FMTK_DumpReadyQueue >> 4		; 39
 	dh    0                       ; 40
 	dh    0                       ; 41
 	dh    0                       ; 42
@@ -143,6 +144,22 @@ FMTKInit:
 	sub   $t0,$t0,#1
 	bnez  $t0,.0001
 
+	; Initialize ACB pointers
+	ldi		$t0,#31*4
+.0002:
+	stt		$x0,ACBPtrs[$t0]
+	sub		$t0,$t0,#4
+	bge		$t0,$x0,.0002
+
+	; Initialize TCB pointers
+	stt		$x0,TCBID_POOL
+	stt		$x0,TCBID_POOL+4
+	ldi		$t0,#63*4
+.0004:
+	stt		$x0,TCBPtrs[$t0]
+	sub		$t0,$t0,#4
+	bge		$t0,$x0,.0004
+
 	; unlock the system semaphore	
 	mUnlockSemaphore(SysSema)
 	ret
@@ -193,22 +210,27 @@ FMTK_GetCurrentAppId:
 
 	align	16
 FMTK_GetTaskAppId:
-  sll   $a1,$a1,#LOG_PGSZ
-  ldwu  $a1,TCBappid[$a1]
+	sll		$t0,$a1,#2
+	ldt		$t0,TCBPtrs[$t0]
+	and		$t0,$t0,#$FFC00
+  ldwu  $a1,TCBappid[$t0]
   ldi   $a0,#E_Ok
   ret
 
 	align	16
 FMTK_SetTaskAppId:
-  sll   $a1,$a1,#LOG_PGSZ
-  stw   $a2,TCBappid[$a1]
-  srl   $a1,$a1,#LOG_PGSZ ; be nice, return what was passed
+  sll		$t0,$a1,#2
+  ldt		$t0,TCBPtrs[$t0]
+	and		$t0,$t0,#$FFC00
+  stw   $a2,TCBappid[$t0]
   ldi   $a0,#E_Ok
   ret
 
 	align	16
 FMTK_GetAppTaskId:
-  sll   $a1,$a1,#LOG_PGSZ
+	sll		$a1,$a1,#2
+	ldt		$a1,ACBPtrs[$a1]
+	and		$a1,$a1,#$FFC00
   ldwu  $a1,ACBTask[$a1]
   ldi   $a0,#E_Ok
   ret
@@ -235,7 +257,9 @@ FMTK_SetTaskId:
 	align	16
 FMTK_SetTaskPriority:
   mGetCurrentTid
-  sll   $t0,$a0,#LOG_TCBSZ
+  sll		$t0,$a0,#2
+  ldt		$t0,TCBPtrs[$t0]
+	and		$t0,$t0,#$FFC00
   stb   $a1,TCBPriority[$t0]
   ldi   $a0,#E_Ok
   ret
@@ -276,6 +300,8 @@ FMTK_RunAsOS:
 FMTK_MapOSVars:
   ldi   $a0,#0          ; OS app
   ldi   $a1,#OSPAGES
+  sub		$sp,$sp,#4
+  stt		$ra,[$sp]
   call  FindRun
   bltz  $a0,.noMem
   ldi   $t0,#0
@@ -289,11 +315,14 @@ FMTK_MapOSVars:
   and   $a1,$a1,#$1FF
   sll   $a1,$a1,#LOG_PGSZ
   ldi   $a0,#E_Ok
+.retx:
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
   ret
 .noMem:
   ldi   $a1,#-1
   ldi   $a0,#E_NoMem
-  ret
+  bra		.retx
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -307,7 +336,6 @@ LockOS:
 	csrrs	$x0,#CSR_PMSTACK,#1			; ensure interrupts are enabled
 	ldt		$t0,OS_SEMA+4						; try and lock semaphore
 	beqz	$t0,.spin
-  csrrc	$x0,#CSR_PMSTACK,#1			; disable interrupts
 	ret
 	
 	align	16
@@ -330,23 +358,18 @@ UnlockOS:
 ; Modifies:
 ;		$a1, t0, t1, t2, t3, t4
 ;	Returns:
-;		$a0 = task id of task to run. 0 if no task is ready to run.
+;		$a0 = TCB pointer of task to run. 0 if no task is ready to run.
 ;------------------------------------------------------------------------------
   align 16
 SelectTaskToRun:
-  sub   $sp,$sp,#4
+  sub   $sp,$sp,#12
   stt   $ra,[$sp]
+  stt		$s1,4[$sp]
+  stt		$s2,8[$sp]
 	; Pick the first queue to check, occasionally the queue
 	; chosen isn't the highest priority one in order to 
 	; prevent starvation of lower priority tasks.
 	
-	; Every UnlockOS must have a correpsonding LockOS preceding it. $s11 is
-	; used to store the interrupt enable status. Here an unlock is desired
-	; without a preceding lock.
-;  csrrs	$x0,#CSR_PMSTACK,#1			; enable interrupts
-;	ldi		$s11,#1
-;	stt		$s11,OS_SEMA+$4000			; unlock semaphore
-.checkAgain:
 	call	LockOS
 	ldbu	$a1,QNDX						; get index into que check table
 	add		$a1,$a1,#1					; increment it, and limit
@@ -372,22 +395,39 @@ SelectTaskToRun:
 	call	UnlockOS
 	bra		.xit
 .dq:
-  ; If we got a task but it isn't actually ready anymore go back
-  ; and get another task.
-  ldb   $t0,TCBStatus[$a0]
-  and   $t0,$t0,#TS_READY
+	; TCBs should be 1kB aligned and within the RAM memory range.
+	and		$a0,$a0,#$0007FC00
+	ldt		$t0,[$a0]
+	xor		$t0,$t0,#TCB_MAGIC
+	bnez	$t0,.listCorrupt
   ; Rotate ready list
 ;  call	LockOS
+	mov		$s1,$a0
+	mov		$s2,$a1
+	call	PutHexWord
+	ldi		$a0,#' '
+	call	Putch
+	mov		$a0,$s1
+	mov		$a1,$s2
   ldt   $t1,TCBNext[$a0]
   stt		$t1,HEADRDY[$a1]
   stt		$a0,TAILRDY[$a1]
 	call	UnlockOS
-  beqz  $t0,.checkAgain
   ; Return $a0 equal selected task
 .xit:
   ldt   $ra,[$sp]
-  add   $sp,$sp,#4
+  ldt		$s1,4[$sp]
+  ldt		$s2,8[$sp]
+  add   $sp,$sp,#12
 	ret
+.listCorrupt:
+	ldi		$a0,#msgReadyQueueCorrupt
+	call	PutString
+.0001:
+	bra		.0001
+
+msgReadyQueueCorrupt:
+	db	"Ready Queue corrupt",CR,LNFD,0
 
 ;------------------------------------------------------------------------------
 ; Swap from outgoing context to incoming context.
@@ -481,7 +521,7 @@ SwapContext:
 ;  ldbu  $a0,TCBmid[$s2]
   sll		$a0,$a0,#22							; shift into position
   csrrw	$t1,#CSR_SATP,$x0				; get satp
-  and		$t1,$t1,#$f83fffff			; mask off asid
+  and		$t1,$t1,#$f03fffff			; mask off asid
   or		$t1,$t1,$a0							; set new asid
 	csrrw	$x0,#CSR_SATP,$t1				; set satp
 	; User map has now been switched
@@ -489,7 +529,7 @@ SwapContext:
 	; Select register set to return to
   ldbu  $a0,TCBRegset[$s2]
 	csrrw $t1,#CSR_RSSTACK,$x0
-	and   $t1,$t1,#$FFFFFC1F
+	and   $t1,$t1,#$FFFFF03F
 	sll   $t0,$a0,#5
 	or    $t1,$t1,$t0
 	csrrw $x0,#CSR_RSSTACK,$t1
@@ -625,7 +665,9 @@ SwapContext:
 OSOCall:
   slt   $t0,$a0,#8
 	beqz  $t0,.badFunc
-  csrrs $x0,#$7C1,#1    		; set OS running semaphore
+  csrrs $t0,#$7C1,#1    		; set OS running semaphore
+  and		$t0,$t0,#1
+  bnez	$t0,.busy
   sub		$sp,$sp,#4
   stt		$ra,[$sp]
 	mTimeSliceDI
@@ -646,6 +688,9 @@ OSOCall:
 .badFunc:
   ldi   $a0,#E_Func
   ret
+.busy:
+	ldi		$a0,#E_Busy
+	ret
   
 ;------------------------------------------------------------------------------
 ; Operating system ecall dispatcher.
@@ -653,11 +698,21 @@ OSOCall:
 ;------------------------------------------------------------------------------
   align 16
 OSECALL:
-  csrrs $x0,#$7C1,#1    ; set OS running semaphore
+	; Switch to map 61
+	di		16
+  csrrw	$t1,#CSR_SATP,$x0
+  and		$t1,$t1,#$f03fffff			; mask off asid
+  or		$t1,$t1,#$0f400000			; set new asid
+	csrrw	$x0,#CSR_SATP,$t1				; set satp
+  csrrs $t0,#$7C1,#1    ; set OS running semaphore
+  and		$t0,$t0,#1
+  bnez	$t0,.busy
+  ; We reset the stack pointer at each call to the OS in case an error causes
+  ; it to be messed up.
+	ldi		$sp,#$F607F000-4	; setup machine mode stack pointer
   call	LockOS
   mTimeSliceDI
 	csrrs	$x0,#CSR_REGSET,#2  ; get register sets
-	nop
 	mov		$a0,$a0					; move user to machine
 	mov		$a1,$a1
 	mov		$a2,$a2
@@ -665,7 +720,6 @@ OSECALL:
 	mov		$a4,$a4
 	mov		$a5,$a5
 	csrrc	$x0,#CSR_REGSET,#15 ; get back current registers for all
-	nop
   ; Enable other kinds of interrupts. While accessing the previous register set
   ; we cannot be interrupted because the regset would be in flux.
   call	UnlockOS
@@ -684,6 +738,9 @@ OSECALL:
 .badFunc:
   ldi   $a0,#E_Func
   jmp   OSExit
+.busy:
+	ldi		$a0,#E_Busy
+	jmp		OSExit
 
 ;------------------------------------------------------------------------------
 ; Exit from the operating system. All operating system routines use this
@@ -695,12 +752,20 @@ OSExit:
   call	LockOS
   nop                       ; landing zone for interrupts
   nop
+	; Switch back to app map
+	di		16
+  csrrw	$t1,#CSR_SATP,$x0
+  and		$t1,$t1,#$f03fffff		; mask off asid
+  csrrw	$t2,#CSR_RSSTACK,$x0
+  srl		$t2,$t2,#6
+  and		$t2,$t2,#$3f
+  sll		$t2,$t2,#22
+  or		$t1,$t1,t2						; restore asid
+	csrrw	$x0,#CSR_SATP,$t1			; set satp
 	csrrs	$x0,#CSR_REGSET,#1		; get register sets
-	nop
 	mov		$a1,$a1							; move return values to user registers
 	mov		$a0,$a0
 	csrrc $x0,#CSR_REGSET,#15 ; restore register set selection
-	nop
 	call	UnlockOS
 	csrrc $x0,#$7C1,#1        ; clear OS running semaphore
 	mTimeSliceEI
@@ -806,7 +871,9 @@ ISleep:
 	bltz	$a1,.xit
 	mGetCurrentTid
 ;	beqz  $a0,.xit
-	sll   $s1,$a0,#LOG_PGSZ
+	sll		$s1,$a0,#2
+	ldt		$s1,TCBPtrs[$s1]
+	and		$s1,$s1,#$FFC00
 	mov   $s2,$s1               ; for bad pointer processing
 	beqz	$a1,.0001             ; zero timeout?
 	mov		$a0,$s1
@@ -851,6 +918,10 @@ ISleep:
 	call	ViaTime
 	stt		$a0,TCBStartTick[$s1]
 .xit:
+;	mov		$a0,$s1
+;	call	PutHexWord
+;	ldi		$a0,#' '
+;	call	Putch
 	ldi   $a0,#E_Ok
   ldt   $ra,[$sp]
   ldt   $s1,4[$sp]
@@ -877,7 +948,7 @@ SchedulerIRQ:
 	beqz  $a0,.noOS
 	ret                   ; refuse to continue this function
 .noOS:
-	sub		$sp,$sp,#16
+	sub		$sp,$sp,#20
 	stt		$ra,[$sp]
 	stt   $s1,4[$sp]
 	stt   $s2,8[$sp]
@@ -885,7 +956,79 @@ SchedulerIRQ:
 	; Keep popping the timeout list as long as there are tasks on it with
 	; expired timeouts.
 	call	LockOS
+
 .0001:
+	ldt		$s1,TMOQ+$200
+	stt		$x0,TMOQ+$200
+	beqz	$s1,.0002
+	ldi		$a0,#0
+.0004:
+	and		$s3,$s1,#1
+	beqz	$s3,.0003
+	ldt		$t0,TCBPtrs[$a0]									; $t0 = TCB pointer
+	and		$t0,$t0,#$7FC00										; help ensure valid pointer
+	ldt		$t2,[$t0]													; check magic number
+	xor		$t2,$t2,#TCB_MAGIC
+	bnez	$t2,.0003													; not pointing to a TCB? Go to next
+	ldbu	$t2,TCBStatus[$t0]
+	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG) ; no longer timing out or waiting
+	stb		$t2,TCBStatus[$t0]
+	call	RemoveFromTimeoutList
+	; Remove task from task queue of mailbox
+	stt		$a0,16[$sp]
+	mov		$a0,$t0
+	call	UnlockOS
+	call  MbxRemoveTask
+	call	LockOS
+	call	UnlockOS
+	call	InsertIntoReadyQueue
+	call	LockOS
+	ldt		$a0,16[$sp]
+.0003:
+	srl		$s1,$s1,#1
+	beqz	$s1,.0002
+	add		$a0,$a0,#4
+	ldi		$s3,#128
+	bltu	$a0,$s3,.0004
+
+.0002:
+	ldt		$s1,TMOQ+$204
+	stt		$x0,TMOQ+$204
+	beqz	$s1,.0007
+	ldi		$a0,#32
+.0005:
+	and		$s3,$s1,#1
+	beqz	$s3,.0006
+	ldt		$t0,TCBPtrs[$a0]									; $t0 = TCB pointer
+	and		$t0,$t0,#$7FC00										; help ensure valid pointer
+	ldt		$t2,[$t0]													; check magic number
+	xor		$t2,$t2,#TCB_MAGIC
+	bnez	$t2,.0006													; not pointing to a TCB? Go to next
+	ldbu	$t2,TCBStatus[$t0]
+	and		$t2,$t2,#~(TS_TIMEOUT|TS_WAITMSG) ; no longer timing out or waiting
+	stb		$t2,TCBStatus[$t0]
+	call	RemoveFromTimeoutList
+	; Remove task from task queue of mailbox
+	stt		$a0,16[$sp]
+	mov		$a0,$t0
+	call	UnlockOS
+	call  MbxRemoveTask
+	call	LockOS
+	call	UnlockOS
+	call	InsertIntoReadyQueue
+	call	LockOS
+	ldt		$a0,16[$sp]
+.0006:
+	srl		$s1,$s1,#1
+	beqz	$s1,.0007
+	add		$a0,$a0,#4
+	ldi		$s3,#256
+	bltu	$a0,$s3,.0005
+.0007:
+	; Clear timeout flags
+	stt		$x0,TMOQ+$200
+	stt		$x0,TMOQ+$200
+/*
 	ldt		$a0,TimeoutList
 	beqz	$a0,.toDone
 	ldi		$t1,#512<<LOG_PGSZ			; valid tid?
@@ -912,6 +1055,7 @@ SchedulerIRQ:
 	call	LockOS
 	beqz	$s3,.toDone						; list empty?
 	bra		.0001
+*/
 .toDone:
 	call	UnlockOS
 	mGetCurrentTid
@@ -936,6 +1080,7 @@ SchedulerIRQ:
 	lbu		$t3,TCBStatus[$s2]	; t3 = incoming status
 	or		$t2,$t3,#TS_RUNNING|TS_READY	; status = running
 	and   $t2,$t2,#~TS_PREEMPT
+	stt		$t2,TCBStatus[$s2]
 	call	UnlockOS
 	ldt		$t3,TCBException[$s2]	;
 	beqz	$t3,.noException
@@ -992,20 +1137,38 @@ IStartTask:
   ldi   $a0,#1024     ; TCB is 1kB
   call  PAMAlloc      ; allocate storage for the TCB
 	bltz	$a0,.err
+	call	MapTCBStorage
+
+	; Initialize OBJECT fields
+	; More todo here yet.
+	ldi		$t0,#TCB_MAGIC
+	stt		$t0,[$a0]
+	ldi		$t0,#1024
+	stt		$t0,OBJSize[$a0]
+	ldi		$t0,#OST_WHITE
+	stb		$t0,OBJState[$a0]
+	stb		$x0,OBJScavcnt[$a0]
+	stt		$x0,OBJFinalizer[$a0]
+
 	mov   $s4,$a0
-	srl   $a1,$a0,#LOG_PGSZ
-  stw   $a1,TCBtid[$s4]
-  mov   $s1,$a0         ; $s1 = pointer to TCB
+	call	LockOS
+	call	AllocTCBId
+	bltz	$a0,.noTcbId
+  stw   $a0,TCBtid[$s4]
+  sll		$a0,$a0,#2
+  stt		$s4,TCBPtrs[$a0]
+	and		$s4,$s4,#$FFC00
+  call	UnlockOS
+  mov   $s1,$s4         ; $s1 = pointer to TCB
 ;	call	FreeAll
 ;	call	MapOSPages			; Map OS pages into address space
   mov   $a0,$s3         ; $a0 = app id
   stw   $a0,TCBappid[$s4]
-  beqz  $a0,.appidZero
+  call	DumpACBPtrs
   mGetAppMid
-.appidZero:
   stw   $a0,TCBmid[$s4] ; record the mid
 	call	AllocStack
-	beqz  $a0,.err
+	beqz  $a0,.AllocStackErr
 	or		$t0,$a0,#$200003FC	; set stack pointer
 	stt		$t0,TCBxSP[$s1]
 	stt		$s5,TCBepc[$s1]	; address task will begin at
@@ -1046,11 +1209,19 @@ IStartTask:
   stt   $x0,TCBMbxNext[$s1]
   stt   $x0,TCBMbxPrev[$s1]
   mov   $a0,$s1							; a0 = tid
-  and   $t0,$a4,#31
+  and   $t0,$a4,#63
   stb   $t0,TCBRegset[$s1]
   and   $t0,$a4,#$300
-  srl		$t0,$t0,#4
-  or    $t0,$t0,#$08        ; enable interrupts at startup
+  ldi		$t1,#$300
+  beq		$t0,$t1,.mm
+  ldb		$t0,TCBRegset[$s1]
+  ldi		$t1,#52
+  bgeu	$t0,$t1,.mm
+  ldi		$t0,#$08						; enable interrupts, user mode
+  bra		.mm1
+.mm:
+	ldi		$t0,#$38						; enable interrupts, machine mode
+.mm1:
   stb   $t0,TCBOpMode[$s1]
   stb		$x0,TCBImMask[$s1]
   stb   $x0,TCBHasFocus[$s1]
@@ -1067,7 +1238,7 @@ IStartTask:
   sll		$a0,$a0,#LOG_PGSZ
 .notIdleTask:
 	call	InsertIntoReadyQueue
-  srl   $a1,$a0,#LOG_PGSZ
+	ldwu	$a1,TCBtid[$s1]
 	ldi   $a0,#E_Ok
 .xit:
 	ldt   $ra,[$sp]
@@ -1081,6 +1252,54 @@ IStartTask:
 .err:
   ldi   $a0,#E_NoMem
   bra   .xit
+.AllocStackErr:
+	call	LockOS
+	ldwu	$a0,TCBtid[$s4]
+	sll		$t0,$a0,#2
+	stt		$x0,TCBPtrs[$t0]
+	call	FreeTCBId
+	call	UnlockOS
+	mov		$a0,$s4
+	call	PAMFree
+	call	UnmapTCBStorage
+	ldi		$a0,#E_NoMem
+	bra		.xit
+.noTcbId:
+	call	UnlockOS
+	mov		$a0,$s4
+	call	PAMFree
+	call	UnmapTCBStorage
+	ldi		$a0,#E_NoMoreTcbs
+	bra		.xit
+
+; Map the TCB storage into maps 60 to 63
+MapTCBStorage:
+	srl		$t0,$a0,#LOG_PGSZ
+	ldi		$t1,#60<<16
+	or		$t1,$t1,$t0
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	ret
+
+; Remove TCB storage from maps 60 to 63
+UnmapTCBStorage:
+	srl		$t0,$s4,#LOG_PGSZ
+	ldi		$t1,#60<<16
+	or		$t1,$t1,$t0
+	ldi		$t0,#0
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	add		$t1,$t1,#1
+	mvmap	$x0,$t0,$t1
+	ret
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -1102,6 +1321,9 @@ FMTK_ExitTask:
 ;------------------------------------------------------------------------------
   align 16
 FMTK_KillTask:
+	sll		$a1,$a1,#2
+	ldt		$a1,TCBPtrs[$a1]
+	and		$a1,$a1,#$FFC00
 	ldt   $t0,TCBTaskNum[$a1]
 	beqz	$t0,.immortal		    ; tid #0 is immortal (the system)
 	ldi		$t0,#TS_UNDEAD			; flag task as undead

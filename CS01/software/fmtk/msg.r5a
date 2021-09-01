@@ -35,7 +35,7 @@
 ; Remove the task from the list of tasks waiting at the mailbox.
 ;
 ; Parameters:
-;		$a0 = task id
+;		$a0 = task id (TCB pointer)
 ;------------------------------------------------------------------------------
   align  16
 MbxRemoveTask:
@@ -77,47 +77,6 @@ MbxRemoveTask:
 	add		$sp,$sp,#24
   ret
 
-;------------------------------------------------------------------------------
-; Parameters:
-;		a1 = app id of owner
-;		a2 = pointer where to store handle
-; Returns:
-;		a0 = E_Ok
-;------------------------------------------------------------------------------
-/*
-  align 16
-FMTK_AllocMbx_Old:
-  csrrs $x0,#$300,#1        ; enable interrupts
-	beq		$a2,$x0,.badArg
-	ldi		$t0,#mbxs
-  mDI
-.nxt:
-	lbu		$t1,MBX_OWNER[$t0]
-	beq		$t1,$x0,.noOwner
-	add		$t0,$t0,#MBX_SIZE
-	slt		$t1,$t0,#mbxs_end
-	bne		$t1,$x0,.nxt
-	ldi		$a0,#E_NoMoreMbx
-	ret
-.noOwner:
-	stb		$a1,MBX_OWNER[$t0]
-	stt   $x0,MBX_TQHEAD[$t0]
-	stt   $x0,MBX_TQTAIL[$t0]
-	stt   $x0,MBX_MQHEAD[$t0]
-	stt   $x0,MBX_MQTAIL[$t0]
-	sub		$t5,$t0,#mbxs				; convert pointer to handle
-	srl		$t5,$t5,#5
-	mov   $a0,$a1             ; $a0 = mid
-	mov		$a1,$a2
-	call	VirtToPhys2
-	stw		$t5,[$a0]
-  mEI
-	ldi		$a0,#E_Ok
-	ret
-.badArg:
-	ldi		$a0,#E_Arg
-	ret
-*/
 ;------------------------------------------------------------------------------
 ; FMTK_AllocMbx
 ;   Allocate a mailbox. Get the mailbox off the free list. If there are no
@@ -289,12 +248,16 @@ FreeMbx1:
 ;------------------------------------------------------------------------------
   align 16
 AllocMsg:
-  mDI
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+  call	LockOS
   ldt   $a0,FreeMsg
   bnez  $a0,.gotMsg
   ; no free messages?
   ldi   $a0,#1024         ; 1 page
+  call	UnlockOS
   call  PAMAlloc
+  call	LockOS
   bltz  $a0,.outOfMem
   ldi   $t0,#47           ; 48 messages in block
   ; Initialize object fields
@@ -322,13 +285,17 @@ AllocMsg:
   ldt   $t0,MSG_LINK[$a0]
   stt   $t0,FreeMsg
   stt   $x0,MSG_LINK[$a0]
-  mEI
+  call	UnlockOS
   mov   $a1,$a0
   ldi   $a0,#E_Ok
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
   ret
 .outOfMem:
-  mEI
+  call	UnlockOS
   ldi   $a0,#E_NoMem
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
   ret
 
 ;------------------------------------------------------------------------------
@@ -344,12 +311,16 @@ AllocMsg:
 ;------------------------------------------------------------------------------
   align 16
 FreeMsgRout:
-  mDI
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+  call	LockOS
   ldt   $t0,FreeMsg
   stt   $t0,MSG_LINK[$a0]
   stt   $a0,FreeMsg
-  mEI
+  call	UnlockOS
   ldi   $a0,#E_Ok
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
   ret
 
 ;------------------------------------------------------------------------------
@@ -545,7 +516,9 @@ FMTK_WaitMsg:
   mMbxHandleToPointer
   mov   $t3,$a0
 	mGetCurrentTid
-	sll		$t1,$a0,#LOG_TCBSZ  ; $t1 = tcb pointer
+	sll		$t1,$a0,#2
+	ldt		$t1,TCBPtrs[$t1]		; $t1 = tcb pointer
+	and		$t1,$t1,#$FFC00
   call	LockOS
 	ldt		$t4,MBX_TQTAIL[$t3]	; get waiting task list tail
 	beqz  $t4,.qempty

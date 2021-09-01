@@ -143,6 +143,8 @@ ViaInit:
 
 	align	16
 ViaIRQ:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
 	ldi		$t1,#VIA
 	ldw		$t0,VIA_IFR[$t1]    ; get the flag register
 	and   $a0,$t0,#$40        ; timer 2? (bit 6)
@@ -150,7 +152,9 @@ ViaIRQ:
 .0001:
 	and   $a0,$t0,#$100       ; timer 3? (bit 8)
 	bnez  $a0,.timer3irq
-	mret
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	jmp		IRQExit
 .timer3irq:
 	ldi		$t2,#1							; assume timer3, select timer 3 access
 	stb		$t2,VIA_PCR+1[$t1]
@@ -161,7 +165,9 @@ ViaIRQ:
 	stt		$t2,switchflag
 	ldi   $a0,#0							; invoke SchedulerIRQ()
 	call  OSOCall
-	mret
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	jmp		IRQExit
 	; reset countdown to clear interrupt
 .timer2irq:
 	ldi   $t2,#$003D0900      ; divider value for 10 Hz (100 ms)

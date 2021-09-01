@@ -42,7 +42,7 @@ input clk_i;          // 100 MHz
 input cs_i;
 input cyc_i;
 input stb_i;
-output reg ack_o;
+output ack_o;
 input we_i;
 input [3:0] sel_i;
 input [31:0] adr_i;
@@ -54,7 +54,7 @@ output reg RamOEn;
 output reg [18:0] MemAdr;
 output reg [7:0] MemDB_o;
 input [7:0] MemDB_i;
-output reg MemT;
+output reg [7:0] MemT;
 output reg badram;
 
 parameter HIGH = 1'b1;
@@ -73,17 +73,16 @@ parameter WR0 = 4'd8;
 parameter RD1a = 4'd9;
 parameter RD1b = 4'd10;
 parameter RD1c = 4'd11;
-parameter WR0a = 4'd12;
-parameter WR0b = 4'd13;
 reg [31:0] memDat;
 reg [3:0] sel;  // ring counter
-reg [1:0] tmr;
-reg [31:0] rdat [0:3];
 reg [7:0] tdat;
-reg [3:0] errcnt;
-reg rc;
-wire csi = cs_i & cyc_i & stb_i;
+reg ack;
 
+wire csi = cs_i & cyc_i & stb_i;
+// Setup ack_o so that it goes low as soon as cs goes away.
+assign ack_o = ack & csi;
+
+// State machine.
 always @(posedge clk_i)
 if (rst_i)
 	state <= IDLE;
@@ -93,28 +92,19 @@ IDLE:
 	if (csi)
 		state <= we_i ? WR0 : RD2;
 RD1:
+	state <= RD1a;
+RD1a:
 	if (sel[3:1]==3'b0)
 		state <= RWDONE;
 	else
 		state <= RD2;
+// RD2 gives more time for address settling, variation in I/O delay.
 RD2:
-	state <= we_i ? WR0 : RD1;
+	state <= RD1;
 WR0:
-	state <= WR0a;
-WR0a:
-	state <= WR0b;
-WR0b:
 	state <= WR1;
 WR1:
-	state <= WR2;
-WR2:
-	if (MemDB_i != MemDB_o) begin
-		state <= WR0;
-		if (errcnt==4'd10)
-			state <= WR3;
-	end
-	else
-		state <= WR3;
+	state <= WR3;
 WR3:
 	if (sel[3:1]==3'b0)
 		state <= RWDONE;
@@ -149,6 +139,8 @@ RWDONE:
 endcase
 end
 
+// Write pulses low for a single cycle during a write operation. The clock
+// must have a period of at least 8.0 ns (125MHz or slower).
 always @(posedge clk_i)
 if (rst_i)
 	RamWEn <= HIGH;
@@ -159,8 +151,6 @@ RamWEn <= HIGH;
 case(state)
 WR0:
 	RamWEn <= LOW;
-WR0a:
-	RamWEn <= LOW;
 endcase
 end
 
@@ -170,56 +160,38 @@ if (rst_i)
 else begin
 case(state)
 IDLE:
-	RamOEn <= we_i;
-WR1:
-	RamOEn <= LOW;
-WR2:
-	RamOEn <= HIGH;
+	RamOEn <= we_i | ~csi;
 RWDONE:
 	RamOEn <= HIGH;
 endcase
 end
 
+// External tri-state drive goes active one cycle before write, and inactive
+// one cycle after.
 always @(posedge clk_i)
 if (rst_i)
-	MemT <= HIGH;
+	MemT <= 8'hFF;
 else begin
 case(state)
 IDLE:
-	MemT <= ~we_i;
-RD2:
-	if (we_i)
-		MemT <= LOW;
-WR1:
-	MemT <= HIGH;
-WR2:
-	MemT <= LOW;
+	MemT <= (we_i & csi) ? 8'h00 : 8'hFF;
 RWDONE:
-	MemT <= HIGH;
+	MemT <= 8'hFF;
 endcase
 end
 
 always @(posedge clk_i)
 if (rst_i)
-	dat_o <= 32'h0;
-else
-	dat_o <= rdat[0];
-
-always @(posedge clk_i)
-if (rst_i)
-	ack_o <= LOW;
+	ack <= LOW;
 else begin
 case(state)
 IDLE:
-	ack_o <= LOW;
-// RD2 gives more time for address settling, variation in I/O delay.
-// The write signal is checked here in case the write signal shows up delayed by
-// a cycle.
+	ack <= LOW;
 RWDONE:
-	ack_o <= HIGH;
+	ack <= HIGH;
 RWNACK:
 	if (!csi) begin
-		ack_o <= LOW;
+		ack <= LOW;
 	end
 endcase
 end
@@ -236,31 +208,78 @@ IDLE:
 	4'b?100:	sel <= {2'b0,sel_i[3:2]};
 	4'b1000:	sel <= {3'b0,sel_i[3]};
 	endcase
-RD1:
+RD1a:
 	sel <= {1'b0,sel[3:1]};
 WR3:
 	sel <= {1'b0,sel[3:1]};
 endcase
 end
 
+// Hold the bus at zero unless a read access is taking place. This should allow
+// a wire-or of the bus with other sources.
 always @(posedge clk_i)
-if (rst_i) begin
-	badram <= 1'b0;
-	errcnt <= 4'd0;
-	rc <= 1'b1;
+if (rst_i)
+	dat_o <= 32'h0;
+else begin
+case(state)
+IDLE:
+	dat_o <= 32'h0;
+RD1:
+	case(MemAdr[1:0])
+	2'd0:	dat_o[7:0] <= MemDB_i;
+	2'd1: dat_o[15:8] <= MemDB_i;
+	2'd2: dat_o[23:16] <= MemDB_i;
+	2'd3:	dat_o[31:24] <= MemDB_i;
+	endcase
+RWNACK:
+	if (!csi)
+		dat_o <= 32'h0;
+default:	;
+endcase
 end
+
+always @(posedge clk_i)
+if (rst_i)
+	memDat <= 32'h0;
+else begin
+case(state)
+IDLE:
+	memDat <= dat_i;
+default:	;
+endcase
+end
+
+always @(posedge clk_i)
+if (rst_i)
+	MemDB_o <= 8'h00;
+else
+case(state)
+IDLE:
+	MemDB_o <= 8'h00;
+WR0:
+  case(MemAdr[1:0])
+  2'd0: MemDB_o <= memDat[7:0];
+  2'd1: MemDB_o <= memDat[15:8];
+  2'd2: MemDB_o <= memDat[23:16];
+  2'd3: MemDB_o <= memDat[31:24];
+  default:  ;
+  endcase
+RWNACK:
+	MemDB_o <= 8'h00;
+default:	;
+endcase
+
+// The address is allowed to start in the middle of a word to improve
+// performance of byte and wyde accesses.
+
+always @(posedge clk_i)
+if (rst_i)
+	MemAdr <= 19'h0;
 else
 case(state)
 IDLE:
 	begin
-		// Default action is to disable all bus drivers
-		badram <= 1'b0;
-		errcnt <= 4'd0;
-		rdat[0] <= 32'h0;
-		tmr <= 2'b00;
 		MemAdr[18:2] <= adr_i[18:2];
-		memDat <= dat_i;
-		rc <= ~we_i;
 		casez(sel_i)
 		4'b???1:	begin MemAdr[1:0] <= 2'b00; end
 		4'b??10:	begin MemAdr[1:0] <= 2'b01; end
@@ -268,79 +287,16 @@ IDLE:
 		4'b1000:	begin MemAdr[1:0] <= 2'b11; end
 		endcase
 	end
-	// For a read, after a clock cycle latch the input data.
-	// Increment the memory address and count.
-	// Simply stay in this state until the count expires.
-/*
-RD1c:
-	begin
-		case(MemAdr[1:0])
-		2'd0:	rdat[tmr][7:0] <= MemDB;
-		2'd1: rdat[tmr][15:8] <= MemDB;
-		2'd2:	rdat[tmr][23:16] <= MemDB;
-		2'd3:	rdat[tmr][31:24] <= MemDB;
-		endcase
-		tmr <= tmr + 2'd1;
-	end
-RD1b:
-	begin
-		case(MemAdr[1:0])
-		2'd0:	rdat[tmr][7:0] <= MemDB;
-		2'd1: rdat[tmr][15:8] <= MemDB;
-		2'd2:	rdat[tmr][23:16] <= MemDB;
-		2'd3:	rdat[tmr][31:24] <= MemDB;
-		endcase
-		tmr <= tmr + 2'd1;
-	end
-*/
-RD1:
-	begin
-		case(MemAdr[1:0])
-		2'd0:	rdat[tmr][7:0] <= MemDB_i;
-		2'd1: rdat[tmr][15:8] <= MemDB_i;
-		2'd2:	rdat[tmr][23:16] <= MemDB_i;
-		2'd3:	rdat[tmr][31:24] <= MemDB_i;
-		endcase
-		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-	end
 
-WR0:
-  begin
-	  case(MemAdr[1:0])
-	  2'd0: MemDB_o <= memDat[7:0];
-	  2'd1: MemDB_o <= memDat[15:8];
-	  2'd2: MemDB_o <= memDat[23:16];
-	  2'd3: MemDB_o <= memDat[31:24];
-	  default:  ;
-	  endcase
-  end
-WR2:
-	begin
-		if (MemDB_i != MemDB_o) begin
-			errcnt <= errcnt + 2'd1;
-			if (errcnt==4'd10) begin
-				badram <= 1'b1;
-			end
-		end
-	end
-	// After another cycle increment the memory address and memory count.
-	// If the count expired goto the done state, otherwise go back to the first
-	// write state.
+RD1a:
+	MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
+
 WR3:
-	begin
-		MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
-		if (sel[3:1]!=3'b0) begin
-			errcnt <= 4'd0;
-		end
-	end
-	// Here a read/write is done. Signal the processor.
-RWDONE:
-	begin
-		badram <= 1'b0;
-//		dat_o <= (rdat[0]&rdat[1])|(rdat[0]&rdat[2])|(rdat[1]&rdat[2]);
-	end
-default:
-	;
+	MemAdr[1:0] <= MemAdr[1:0] + 2'd1;
+
+RWNACK:
+	MemAdr <= 19'h0;	
+default:	;
 endcase
 
 endmodule

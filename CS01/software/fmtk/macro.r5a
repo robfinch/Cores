@@ -143,7 +143,9 @@ endm
 endm
 
 macro mGetAppMid
-  sll   $a0,$a0,#LOG_PGSZ
+  sll   $a0,$a0,#2
+  ldt		$a0,ACBPtrs[$a0]
+  and		$a0,$a0,#$FFC00
   ldb   $a0,ACBmid[$a0]
 endm
 

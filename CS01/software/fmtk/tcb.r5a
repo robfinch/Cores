@@ -23,7 +23,99 @@
 
 	code
 ;------------------------------------------------------------------------------
+; Parameters:
+;   none
+; Returns:
+;   $a0 = tcb id (0 to 63), -1 if none available
+;------------------------------------------------------------------------------
+  align 16
+AllocTCBId:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+  ldi   $s0,#64					; bit count
+  ldi		$a1,#0
+.0002:
+	ldi		$a0,#TCBID_POOL
+	call	Getbit
+	beqz	$a0,.0001
+	add		$a1,$a1,#1
+	sub		$s0,$s0,#1
+	bnez	$s0,.0002
+	ldi		$a0,#-1
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+.0001:
+	ldi		$a0,#TCBID_POOL
+	call	Setbit
+	mov		$a0,$a1
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+  align 16
+FreeTCBId:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	mov		$a1,$a0
+	and		$a1,$a1,#63
+	ldi		$a0,#TCBID_POOL
+	call	Clrbit
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
+	ret
+
+  align 16
+FreeAllTCBId:
+	stt		$x0,TCBID_POOL
+	stt		$x0,TCBID_POOL+4
+	ret
+
+; Parameters:
+;		$a0 start address of bit field
+;		$a1 bit number to get
+;
+  align 16
+Getbit:
+	srl		$t0,$a1,#5	; $t0 = word index
+	sll		$t0,$t0,#2	; *4 bytes per word
+	and		$t1,$a1,#31	; $t1 = bit index
+	add		$t3,$a0,$t0
+	ldt		$t2,[$t3]
+	srl		$t2,$t2,$t1
+	and		$a0,$t2,#1
+	ret
+
+  align 16
+Setbit:
+	srl		$t0,$a1,#5	; $t0 = word index
+	sll		$t0,$t0,#2	; *4 bytes per word
+	and		$t1,$a1,#31	; $t1 = bit index
+	add		$t4,$a0,$t0
+	ldt		$t2,[$t4]
+	ldi		$t3,#1
+	sll		$t3,$t3,$t1
+	or		$t2,$t2,$t3
+	stt		$t2,[$t4]
+	ret
+	
+  align 16
+Clrbit:
+	srl		$t0,$a1,#5	; $t0 = word index
+	sll		$t0,$t0,#2	; *4 bytes per word
+	and		$t1,$a1,#31	; $t1 = bit index
+	add		$t4,$a0,$t0
+	ldt		$t2,[$t4]
+	ldi		$t3,#1
+	sll		$t3,$t3,$t1
+	xor		$t3,$t3,#-1
+	and		$t2,$t2,$t3
+	stt		$t2,[$t4]
+	ret
+	
+;------------------------------------------------------------------------------
 ; Insert task into ready queue.
+; The ready queue is a circular doubley-linked list. 
 ; Inserting into the ready queue is done by both OS ecall functions and
 ; interrupt driven scheduling. It's important to have interrupts disabled
 ; so that there is no contention for the ready queue.
@@ -42,7 +134,11 @@ InsertIntoReadyQueue:
 	beqz	$a0,.retx
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
+	and		$a0,$a0,#$007FC00
 	call	LockOS
+	ldt		$t0,[$a0]
+	xor		$t0,$t0,#TCB_MAGIC
+	bnez	$t0,.badTcb
 	ldbu	$t0,TCBStatus[$a0]		; set status to ready
 	or		$t0,$t0,#TS_READY
 	stb		$t0,TCBStatus[$a0]
@@ -57,6 +153,7 @@ InsertIntoReadyQueue:
 	ldt		$t1,HEADRDY[$t0]
 	stt		$t1,TCBNext[$a0]			; new->next = head
 	stt		$a0,TCBPrev[$t1]			; head->prev = new
+.badTcb:
 	call	UnlockOS
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -91,7 +188,11 @@ RemoveFromReadyQueue:
 	beqz	$a0,.retx
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
+	and		$a0,$a0,#$007FC00
 	call	LockOS
+	ldt		$t0,[$a0]
+	xor		$t0,$t0,#TCB_MAGIC
+	bnez	$t0,.badTcb
 	ldb		$t0,TCBStatus[$a0]		; set status no longer ready or running
 	and		$t0,$t0,#~(TS_READY|TS_RUNNING)
 	stb		$t0,TCBStatus[$a0]
@@ -101,6 +202,9 @@ RemoveFromReadyQueue:
 	stt		$t1,TCBPrev[$t0]
 	stt		$t0,TCBNext[$t1]
 .xit:
+	stt		$x0,TCBPrev[$a0]
+	stt		$x0,TCBNext[$a0]
+.badTcb:
 	call	UnlockOS
 	ldt		$ra,[$sp]
 	add		$sp,$sp,#4
@@ -138,7 +242,7 @@ RemoveFromReadyQueue:
 	
 ;------------------------------------------------------------------------------
 ; Parameters:
-;		$a0 = task id to insert
+;		$a0 = task id to insert (TCB pointer)
 ;		$a1 = timeout value
 ; Modifies:
 ;		t0,t1,t2,t3,t4
@@ -147,26 +251,58 @@ RemoveFromReadyQueue:
 	align	16
 InsertIntoTimeoutList:
 	beqz	$a0,.retx
-	sub		$sp,$sp,#4
+	and		$a0,$a0,#$07FC00
+	ldt		$t0,[$a0]
+	xor		$t0,$t0,#TCB_MAGIC
+	bnez	$t0,.retx
+	ldi		$t0,#TMOQ
+	ldbu	$t1,TCBtid[$a0]
+	sll		$t1,$t1,#2
+	and		$t1,$t1,#$FF
+	add		$t1,$t1,$t0
+	stt		$a1,[$t1]
+.retx:
+	ret
+/*
+	sub		$sp,$sp,#20
 	stt		$ra,[$sp]
+	stt		$x0,TCBID_TL
+	stt		$x0,TCBID_TL+4
 	call	LockOS
 	ldbu	$t2,TCBStatus[$a0]		; set status to timing out
 	or		$t2,$t2,#TS_TIMEOUT
 	stb		$t2,TCBStatus[$a0]
 	ldt		$t0,TimeoutList
-	ldi		$t3,#0
 	beqz	$t0,.listEmpty
 .loop:
 	beq		$t0,$a0,.xit				; task already on TimeoutList
 	ldt		$t1,TCBTimeout[$t0]
 	sltu	$t2,$a1,$t1
 	bnez	$t2,.lessThan
-	; Here timeout was >
+	; Here timeout was >=
 	sub		$a1,$a1,$t1
-	mov		$t3,$t0
 	ldt		$t0,TCBNext[$t0]
+	stt		$t0,4[$sp]
+	stt		$t3,8[$sp]
+	stt		$a0,12[$sp]
+	stt		$a1,16[$sp]
+	; Is a task on the list twice? List corrupt?
+	ldi		$a0,#TCBID_TL
+	ldbu	$a1,TCBtid[$t0]
+	call	Getbit
+	bnez	$a0,.tolCorrupt
+	ldi		$a0,#TCBID_TL
+	ldbu	$a1,TCBtid[$t0]
+	call	Setbit
+	ldt		$t0,4[$sp]
+	ldt		$t3,8[$sp]
+	ldt		$a0,12[$sp]
+	ldt		$a1,16[$sp]
 	bnez	$t0,.loop
+.hitAlready:
 	; Add at end
+	ldt		$t0,4[$sp]
+	ldt		$a0,12[$sp]
 	stt		$a0,TCBNext[$t0]
 	stt		$x0,TCBNext[$a0]
 	stt		$a1,TCBTimeout[$a0]
@@ -175,24 +311,36 @@ InsertIntoTimeoutList:
 	stt		$a1,TCBTimeout[$a0]
 	stt		$a0,TimeoutList
 	stt		$x0,TCBNext[$a0]
+	stt		$x0,TCBPrev[$a0]
 	bra		.xit
 .lessThan:
 	beq		$t0,$a0,.xit
 	sub		$t1,$t1,$a1
 	stt		$t1,TCBTimeout[$t0]
 	stt		$t0,TCBNext[$a0]
-	beqz	$t3,.atHead
-	stt		$a0,TCBNext[$t3]
+	ldt		$t1,TCBPrev[$t0]
+	stt		$a0,TCBPrev[$t0]
+	stt		$t1,TCBPrev[$a0]
+	beqz	$t1,.atHead
+	stt		$a0,TCBNext[$t1]
 	bra		.xit
 .atHead:
 	stt		$a0,TimeoutList
+	stt		$x0,TCBPrev[$a0]
 .xit:
 	call	UnlockOS
 	ldi		$a0,#E_Ok
 	ldt		$ra,[$sp]
-	add		$sp,$sp,#4
+	add		$sp,$sp,#20
 .retx:
 	ret
+.tolCorrupt:
+	ldi		$a0,#msgTOLCorrupt
+	call	PutString
+	bra		.hitAlready
+*/
+msgTOLCorrupt:
+	db	"TOL Corrupt",CR,LNFD,0
 
 ;------------------------------------------------------------------------------
 ; Remove a task from the timeout list.
@@ -202,7 +350,7 @@ InsertIntoTimeoutList:
 ; Parameters:
 ;		$a0 = task id to remove
 ; Modifies:
-;		$t0,$t1,$t2,$t3,$t4
+;		$t0,$t1,$t2
 ; Returns:
 ;		none
 ;------------------------------------------------------------------------------
@@ -210,42 +358,55 @@ InsertIntoTimeoutList:
 	align	16
 RemoveFromTimeoutList:
 	beqz	$a0,.retx
+	and		$a0,$a0,#$07FC00
+	ldt		$t0,[$a0]
+	xor		$t0,$t0,#TCB_MAGIC
+	bnez	$t0,.retx
+	ldi		$t0,#TMOQ
+	ldbu	$t1,TCBtid[$a0]
+	sll		$t1,$t1,#2
+	and		$t1,$t1,#$FF
+	add		$t1,$t1,$t0
+	ldi		$t2,#-1					; max timeout
+	stt		$t2,[$t1]
+.retx:
+	ret
+/*
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	LockOS
 	ldt		$t0,TimeoutList
 	beq		$t0,$a0,.atHead				; quick test for head of list
-	ldi		$t3,#0
-.0001:
-	beq		$t0,$a0,.found
-	mov		$t3,$t0
-	ldt		$t0,TCBNext[$t0]
-	bnez	$t0,.0001
-	bra		.xit
-.found:
 	ldt		$t0,TCBNext[$a0]
 	beqz	$t0,.atTail2
 	ldt		$t1,TCBTimeout[$t0]
 	ldt		$t2,TCBTimeout[$a0]
 	sub		$t1,$t1,$t2
 	stt		$t1,TCBTimeout[$t0]
+	ldt		$t3,TCBPrev[$a0]
 	stt		$t0,TCBNext[$t3]			; this->prev->next = this->next
-	stt		$x0,TCBNext[$a0]
-	stt		$x0,TCBTimeout[$a0]
+	stt		$t3,TCBPrev[$t0]			; this->next->prev = this->prev
+	stt		$x0,TCBNext[$a0]			; this->next = null
+	stt		$x0,TCBPrev[$a0]			; this->prev = null
+	stt		$x0,TCBTimeout[$a0]		; this->timeout = 0
 	bra		.xit
 .atHead:
 	ldt		$t0,TCBNext[$a0]
+	stt		$x0,TCBPrev[$t0]
 	ldt		$t1,TCBTimeout[$t0]
 	ldt		$t2,TCBTimeout[$a0]
 	sub		$t1,$t1,$t2
 	stt		$t1,TCBTimeout[$t0]
 	stt		$t0,TimeoutList
 	stt		$x0,TCBNext[$a0]
+	stt		$x0,TCBPrev[$a0]
 	stt		$x0,TCBTimeout[$a0]
 	bra		.xit
 .atTail2:
-	stt		$x0,TCBNext[$t3]
+	ldt		$t0,TCBPrev[$a0]
+	stt		$x0,TCBNext[$t0]
 	stt		$x0,TCBNext[$a0]
+	stt		$x0,TCBPrev[$a0]
 	stt		$x0,TCBTimeout[$a0]
 .xit:
 	call	UnlockOS
@@ -253,12 +414,14 @@ RemoveFromTimeoutList:
 	add		$sp,$sp,#4
 .retx:
 	ret
+*/
 
 ;------------------------------------------------------------------------------
 ; Diagnostics
 ;------------------------------------------------------------------------------
 
 	align	16
+FMTK_DumpReadyQueue:
 DumpReadyQueue:
 	sub		$sp,$sp,#32
 	stt		$ra,[$sp]
@@ -293,6 +456,7 @@ DumpReadyQueue:
 	call	PutString
 	ldi		$s2,#0
 ;	csrrc	$s1,#CSR_PMSTACK,#1
+	ldi		$s5,#64
 .0002:
 ;	call	SerialPeekCharDirect
 ;	xor		$v0,$v0,#CTRLC
@@ -315,6 +479,8 @@ DumpReadyQueue:
 	call	PutHexHalf
 	ldi		$a0,#CR
 	call	Putch
+	sub		$s5,$s5,#1
+	beqz	$s5,.0005
 	ldt		$s3,TCBNext[$s3]
 	beqz	$s3,.0008
 	bne		$s3,$s4,.0007
@@ -336,14 +502,10 @@ DumpReadyQueue:
 	call	PutString
   ldi   $s0,#$1000
 .0004:
+	mov		$a0,$s0
   ldt   $a0,[$s0]
   xor   $a0,$a0,#TCB_MAGIC
   bnez  $a0,.nxtT
-;  ldi   $t2,#1
-;  sll   $t2,$t2,$t0
-;  ldt   $a0,TID_POOL
-;  and   $t2,$t2,$a0
-;  beqz  $t2,.nxtT
   mov   $t2,$s0
   mov		$a0,$s0
   call  PutHexWord
@@ -354,6 +516,10 @@ DumpReadyQueue:
   ldi   $a0,' '
   call  Putch
   ldbu  $a0,TCBPriority[$t2]
+  call  PutHexByte
+  ldi   $a0,' '
+  call  Putch
+  ldbu  $a0,TCBOpMode[$t2]
   call  PutHexByte
   ldi   $a0,' '
   call  Putch
@@ -371,7 +537,8 @@ DumpReadyQueue:
 	call	Putch
 .nxtT:
   add   $s0,$s0,#$400
-  slt   $t1,$s0,#$7D000
+;  ldi		$t1,#$7D000
+  sltu  $t1,$s0,#$7D000
   bnez  $t1,.0004
 ;	csrrw	$x0,#CSR_PMSTACK,$s1
 	ldt		$ra,[$sp]
@@ -434,7 +601,7 @@ msgReadyQueue:
 	db	"-------------",CR,0
 msgTaskInfo:
   db  CR,"Task Info",CR
-  db  "TCB Ptr   Tid  Pr St Timeout    SP",CR
+  db  "TCB Ptr   Tid  Pr Om St Timeout    SP",CR
   db  0
 msgTimeoutList:
 	db	CR,"Timeout List",CR

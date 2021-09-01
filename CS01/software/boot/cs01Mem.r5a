@@ -26,7 +26,7 @@
 ;------------------------------------------------------------------------------
 	align	16
 MMUInit:
-	ldi		$t0,#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
+	ldi		$t0,#MEMSZ-72  ; set number of available pages (72 pages already allocated)
 	stt		$t0,NPAGES
 
 	; satp register setting
@@ -37,19 +37,19 @@ MMUInit:
 	; Sets all pages to map to page zero for all tasks, except for the system
 	; tasks (task #28 to 31) which pre-allocates the first 16kB of memory.
 	ldi		$t0,#$00
-	ldi		$t4,#31					; app id
-	ldi		$t5,#28
+	ldi		$t4,#63					; app id
+	ldi		$t5,#52
 .0004:
 	ldi		$t1,#$000				; regno
 	ldi		$t2,#256				; number of registers to update
-	ldi		$t3,#16					; number of pages pre-allocated
+	ldi		$t3,#256				; number of pages pre-allocated (OS maps)
 .0001:
 	sll		$s1,$t4,#16			; put app id in place
 	or		$s1,$s1,$t1			; or in page number
 	mvmap	$x0,$t0,$s1
 	add		$t0,$t0,#$01
 	add		$t1,$t1,#$01		; increment page number
-	beqz	$t4,.0008
+;	beqz	$t4,.0008
 	blt   $t4,$t5,.0005
 .0008:
 	bltu	$t1,$t3,.0003
@@ -61,8 +61,8 @@ MMUInit:
 	sub		$t4,$t4,#1      ; next app id
 	bge		$t4,$x0,.0004
 	
-	; allocate last 12 pages for system stacks
-	ldi		$t2,#12
+	; allocate last 24 pages for system stacks
+	ldi		$t2,#24
 	ldi		$t1,#$FF				
 	ldi		$t0,#$1FF
 .0006:
@@ -78,14 +78,14 @@ MMUInit:
 .0002:
 	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
 	add		$t0,$t0,#1			; pick next segment register
-	slt		$t2,$t0,#128		; 128 base regs
+	slt		$t2,$t0,#256		; 256 base regs
 	bnez	$t2,.0002
-	ldi		$t0,#128
+	ldi		$t0,#256
 	ldi		$t1,#-1					; t1 = value to load, bounds max
 .0007:
 	mvseg	$x0,$t1,$t0			; move to the segment register identifed by t0
 	add		$t0,$t0,#1			; pick next segment register
-	slt		$t2,$t0,#256		; 128 bound regs
+	slt		$t2,$t0,#512		; 256 bound regs
 	bnez	$t2,.0007
 
 	; Now ensure all pages in PAM are marked as free or OS allocated

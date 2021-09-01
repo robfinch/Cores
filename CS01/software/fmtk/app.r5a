@@ -51,15 +51,27 @@ AllocAppId:
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;   $a1 = pointer to application start record
+; Modifies:
+;		$s1 = pointer to application start record
+;		$s3 = pointer to ACB
 ;------------------------------------------------------------------------------
   align 16
 FMTK_StartApp:
+IStartApp:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
   mov   $s1,$a1
-  stt		$s1,$10008
   mov   $a0,$x0           ; OS owns the ACB
-  ldi   $a1,#4096         ; size of application control block
+  call	AllocAppId
+  bltz	$a0,.noMoreApps
+  sll		$s2,$a0,#2
+  ldi   $a0,#4096         ; size of application control block
   call  PAMAlloc          ; allocate ACB
-  mov   $s3,$a1           ; $s3 = pointer to ACB
+  bltz	$a0,.noMem
+  stt		$a0,ACBPtrs[$s2]	; store pointer to ACB in list
+  mov   $s3,$a0           ; $s3 = pointer to ACB
+  srl		$s2,$s2,#2
+  stb   $s2,ACBmid[$s3]
   ldi   $t0,#ACB_MAGIC
   stt   $t0,OBJMagic[$s3]
   stt   $x0,ACBGarbageList[$s3]
@@ -67,14 +79,13 @@ FMTK_StartApp:
   stt   $x0,ACBiofPrev[$s3]
 ;  ldb   $t0,ASRmid[$s1]
   ldbu	$t0,ASRRegset[$s1]
-  stb   $t0,ACBmid[$s3]
   ; Allocate a virtual screen and set pointers to it.
-  srl   $a0,$s3,#LOG_PGSZ ; App owns the screen
-  ldi   $a1,#8192         ; size of virtual screen
+;  srl   $a0,$s3,#LOG_PGSZ ; App owns the screen
+  ldi   $a0,#8192         ; size of virtual screen
   call  PAMAlloc
   bltz  $a0,.noMem
-  stt   $a1,ACBpVidMem[$s3]
-  stt   $a1,ACBpVirtVidMem[$s3]
+  stt   $a0,ACBpVidMem[$s3]
+  stt   $a0,ACBpVirtVidMem[$s3]
   ; Setup screen attributes
   ldi   $t0,#56
   stb   $t0,ACBVideoCols[$s3]
@@ -86,10 +97,8 @@ FMTK_StartApp:
   stt   $t0,ACBNormAttr[$s3]
 
   ; Allocate memory for application code and copy code into position
-  ldbu	$a0,ASRRegset[$s1]
+  ldbu	$a0,ACBmid[$s3]
   ldt   $a1,ASRCodeSize[$s1]
-  stt		$a1,$10000
-  stt		$s1,$10004
   beqz  $a1,.0004         ; 0 size code = in ROM
   call  Alloc
   bltz  $a0,.noMem
@@ -117,9 +126,9 @@ FMTK_StartApp:
   ; of the data area.
   stt   $x0,ACBpData[$s3]
   stt   $x0,ACBpUIData[$s3]
-  ldbu	$a0,ASRRegset[$s1]
+  ldbu	$a0,ACBmid[$s3]
   ldt   $a1,ASRDataSize[$s1]
-  ldt   $a2,ASRIUDataSize[$s1]
+  ldt   $a2,ASRUIDataSize[$s1]
   add   $a1,$a1,$a2
   beqz  $a1,.0005         ; no data?
   call  Alloc
@@ -151,7 +160,7 @@ FMTK_StartApp:
 
 .0006:
   ; Allocate memory for heap
-  ldbu	$a0,ASRRegset[$s1]
+  ldbu	$a0,ACBmid[$s3]
   ldt   $a1,ASRHeapSize[$s1]
   beqz  $a1,.0007         ; no heap?
   call  Alloc
@@ -159,37 +168,40 @@ FMTK_StartApp:
   stt   $a1,ACBHeap[$s3]
 
 .0007:
-  ldi   $a0,#1            ; IStartTask
-  srl   $a1,$s3,#LOG_PGSZ ; $a1 = app id
+  ldwu	$a1,ACBmid[$s3]		; $a1 = app id
   ldi   $a2,#1024         ; task local memory
   ldt   $a3,ASRpCode[$s1] ; get pointer to code area
   ldbu	$a4,ASRRegset[$s1]
-  ldi		$t0,#28						; register set 28 and above are Machine
+  ldi		$t0,#52						; register set 52 and above are Machine
   blt		$a4,$t0,.norm
   or		$a4,$a4,#$300			; set Machine Mode
 .norm:
-  call  OSOCall           ; start the initial app task
+  call  IStartTask        ; start the initial app task
   bnez  $a0,.tskErr       ; error?
-  srl		$a1,$a1,#LOG_PGSZ
   stw   $a1,ACBTask[$s3]
-  stw   $a1,$3F48
-  sll   $t0,$a1,#LOG_PGSZ
+  sll   $t0,$a1,#2
+  ldt		$t0,TCBPtrs[$t0]
   ldt   $t1,ACBpData[$s3]
   stt   $t1,TCBxGP[$t0]   ; set global pointer to data area
   ldi   $t1,#AS_LIVE
   stb   $t1,ACBStatus[$s3]
-  srl   $a1,$s3,#LOG_PGSZ ; return app id
+  ldwu	$a1,ACBmid[$s3]		; return app id
   ldi   $a0,#E_Ok
+.retx:
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
   ret
 .tskErr:
   ldi   $t1,#AS_UNDEAD
   stb   $t1,ACBStatus[$s3]
-  ret
+  bra		.retx
 
 .noMoreApps:
   ldi   $a0,#E_NoMoreAppIds
+  bra		.retx
 .noMem
-  ret
+	ldi		$a0,#E_NoMem
+  bra		.retx
 
 ;------------------------------------------------------------------------------
 ; Exit the current task.
@@ -226,3 +238,44 @@ FMTK_KillApp:
 	ldi		$a0,#E_Ok
 	ret
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+PickACB:
+	ldi		$t0,#31*4
+.0001:
+	ldt		$a0,ACBPtrs[$t0]
+	and		$a0,$a0,#$07FC00
+	bnez	$a0,.xit
+	sub		$t0,$t0,#4
+	bge		$t0,$x0,.0001
+.xit:
+	ret
+
+DumpACBPtrs:
+	sub		$sp,$sp,#8
+	stt		$ra,[$sp]
+	ldi		$t0,#0
+	stt		$t0,4[$sp]
+	ldi		$a0,#msgACBPtrs
+	call	PutString
+	ldt		$t0,4[$sp]
+.0001:
+	stt		$t0,4[$sp]
+	ldt		$a0,ACBPtrs[$t0]
+	call	PutHexWord
+	ldi		$a0,#CR
+	call	Putch
+	ldt		$t0,4[$sp]
+	add		$t0,$t0,#4
+	ldi		$t1,#128
+	blt		$t0,$t1,.0001
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#8
+	ret
+
+DumpACB:
+	ret
+
+msgACBPtrs:
+	db		"ACB Pointers",CR,LNFD,0

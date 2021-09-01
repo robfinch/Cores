@@ -42,10 +42,14 @@
 	align	16
 FMTK_HasIOFocus:
 	mGetCurrentTid
-	sll   $a0,$a0,#LOG_PGSZ
+	sll   $a0,$a0,#2
+	ldt		$a0,TCBPtrs[$a0]
+	and		$a0,$a0,#$FFC00
 	ldwu  $a0,TCBappid[$a0]
 	beqz  $a0,.hasFocus       ; startup appid = zero
-	sll   $a0,$a0,#LOG_PGSZ   ; $a0 = ACB pointer
+	sll		$a0,$a0,#2
+	ldt		$a0,ACBPtrs[$a0]		; $a0 = ACB pointer
+	and		$a0,$a0,#$FFC00
 	ldt   $a1,IOFocusNdx
 	bne   $a1,$a0,.notEqual
 .hasFocus:
@@ -73,19 +77,34 @@ FMTK_HasIOFocus:
 
 	align	16
 SwitchIOFocusHelper:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
+	; Ensure the focus index is valid
   ldt   $t0,IOFocusNdx
+  ldt		$t1,OBJMagic[$t0]
+  xor		$t1,$t1,#ACB_MAGIC
+  bnez	$t1,.pickACB
   ldt   $t1,ACBiofNext[$t0]
-  beqz  $t1,.zeroAppid
+  ; Ensure new choice is valid
+  beqz  $t1,.zeroAppId
+  ldt		$t2,OBJMagic[$t1]
+  xor		$t2,$t2,#ACB_MAGIC
+  bnez	$t2,.zeroAppId
   stt   $t1,IOFocusNdx
   bne   $t0,$t1,.notSame
-.zeroAppid:
+.zeroAppId:
 	ldi		$a0,E_Ok
+	ldt		$ra,[$sp]
+	add		$sp,$sp,#4
 	ret
 .notSame:
 	; swap virtual screens
 	; set vidmem pointer
-	ldi		$a0,E_Ok
-	ret
+	bra		.zeroAppId
+.pickACB:
+	call	PickACB
+	stt		$a0,IOFocusNdx
+	bra		.zeroAppId
     
 	align	16
 FMTK_SwitchIOFocus:
@@ -109,13 +128,16 @@ FMTK_SwitchIOFocus:
 
 	align	16
 FMTK_RequestIOFocus:
-	ldi		$a2,#512
+	ldi		$a2,#31
 	bgeu	$a1,$a2,.badAppId
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
-	call	LockOS
 	ldi   $a2,#1
-  sll   $t2,$a1,#LOG_PGSZ
+	sll		$t2,$a1,#2
+	ldt		$t2,ACBPtrs[$t2]
+	and		$t2,$t2,#$FFC00
+	beqz	$t2,.badAppId
+	call	LockOS
 	ldb		$t1,ACBHasFocus[$t2]  ; Is the task already included in the IO focus?
 	bnez	$t1,.ret				      ; If so, don't add again
 	ldt	  $t0,IOFocusNdx			  ; get current index
@@ -173,7 +195,9 @@ FMTK_ForceReleaseIOFocus:
 	sub		$sp,$sp,#4
 	stt		$ra,[$sp]
 	call	LockOS
-	sll		$t0,$a1,#LOG_PGSZ
+	sll		$t0,$a1,#2
+	ldt		$t0,ACBPtrs[$t0]
+	and		$t0,$t0,#$FFC00
 	ldb		$t1,ACBHasFocus[$t0]
 	beqz	$t1,.noFocus	    ; does it even have the focus?
 	stb   $x0,ACBHasFocus[$t0]
@@ -257,12 +281,14 @@ WaitForIOFocus:
 	align	16
 GetUIFlag:
   sub 	$sp,$sp,#12
+  stt		$ra,[$sp]
   stt   $a2,4[$sp]
   stt   $a3,8[$sp]
   ldi   $a0,#27           ; Get DCB Field
   ldi   $a2,#DCB_fUI      ; Get UI Flag
   ldi   $a3,#1            ; 1 byte
   ecall
+  ldt		$ra,[$sp]
   ldt   $a2,4[$sp]
   ldt   $a3,8[$sp]
   add   $sp,$sp,#12

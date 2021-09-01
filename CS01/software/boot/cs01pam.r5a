@@ -47,11 +47,19 @@ PAMFindRun:
   stt   $s3,12[$sp]
   stt   $s4,16[$sp]
   mov   $s1,$a0             ; save argument value
-  stt   $a0,$4010
   ldi   $a0,#OSPAGES
 .nextPage:
   mov   $s4,$a0
-  call  PAMGetbitPair
+
+;  call  PAMGetbitPair
+  srl   $t2,$a0,#4          ; $t2 = word, bit pair num/16
+  sll   $t2,$t2,#2          ; $t2 = word index, 4 bytes per word
+  and   $t3,$a0,#15         ; $t3 = bit pair num in word = 0 to 15
+  sll   $t3,$t3,#1          ; $t3 = bit pair index
+	ldt		$t0,PAM[$t2]        ; get word
+	srl   $t2,$t0,$t3         ; extract bits
+	and   $a0,$t2,#3          ; return 0,1,2, or 3
+
   bnez  $a0,.notAvailable
   mov   $s3,$s4             ; remember start of run
   mov   $s2,$s1             ; $s2 = run length
@@ -62,8 +70,16 @@ PAMFindRun:
   slt   $t1,$a0,#MEMSZ
   beqz  $t1,.outOfMem
   mov   $s4,$a0             ; remember $a0
-  stt   $s4,$4020
-  call  PAMGetbitPair
+
+;  call  PAMGetbitPair
+  srl   $t2,$a0,#4          ; $t2 = word, bit pair num/16
+  sll   $t2,$t2,#2          ; $t2 = word index, 4 bytes per word
+  and   $t3,$a0,#15         ; $t3 = bit pair num in word = 0 to 15
+  sll   $t3,$t3,#1          ; $t3 = bit pair index
+	ldt		$t0,PAM[$t2]        ; get word
+	srl   $t2,$t0,$t3         ; extract bits
+	and   $a0,$t2,#3          ; return 0,1,2, or 3
+
   beqz  $a0,.runInc
   add   $a0,$s3,#1          ; increment run start pos
   bra   .nextPage
@@ -79,7 +95,8 @@ PAMFindRun:
   bra   .xit
 .foundRun:
   mov   $a0,$s3
-.xit
+.xit:
+	di		#7
   ldt   $ra,[$sp]
   ldt   $s1,4[$sp]
   ldt   $s2,8[$sp]
@@ -126,6 +143,7 @@ PAMAlloc:
   bgtz  $s4,.markNext
   sll   $a0,$s5,#LOG_PGSZ   ; $a0 = physical address of page
 .xit:
+	di		#6
   ldt   $ra,[$sp]
   ldt   $s1,4[$sp]
   ldt   $s4,8[$sp]
@@ -259,10 +277,12 @@ PAMSetbitPair:
   sll   $t0,$t0,$t3
   xor   $t0,$t0,#-1         ; get inverted mask
   sll   $a1,$a1,$t3
-	ldt		$t1,PAM[$t2]        ; get word
+  add		$t2,$t2,#PAM
+  di		#5
+	ldt		$t1,[$t2]        		; get word
 	and		$t0,$t1,$t0					; clear bit
 	or    $t0,$t0,$a1         ; set new bit status
-	stt		$t0,PAM[$t2]        ; store word
+	stt		$t0,[$t2]        		; store word
 	srl   $a1,$a1,$t3         ; restore $a1
 PAMxit:
 	ret
@@ -292,6 +312,12 @@ PAMGetbitPair:
 PAMInit:
   sub 	$sp,$sp,#4
   stt   $ra,[$sp]
+
+	; Set number of pages available
+	; = memory size - 72 pages for OS vars and stack
+  ldi		$t0,#MEMSZ-72
+  stt		$t0,NPAGES
+
   ; First zero out the entire PAM using word stores
   ldi   $a0,#0
 .0002:
@@ -307,7 +333,7 @@ PAMInit:
   call  PAMSetbitPair
   sub   $a0,$a0,#1
   bge   $a0,$x0,.0001
-  ldi   $a0,#15         ; Last OS page
+  ldi   $a0,#47         ; Last OS page
   ldi   $a1,#2          ; set mark end of run
   call  PAMSetbitPair
   ldi   $a0,#MEMSZ-24   ; OS stack page
@@ -327,11 +353,15 @@ PAMInit:
 
 	align	16
 GetPamBit:
+	sub		$sp,$sp,#4
+	stt		$ra,[$sp]
   mov   $a0,$a1
   call  PAMGetbitPair
   mov   $a1,$a0
   ldi   $a0,#E_Ok
-  jmp   OSExit
+  ldt		$ra,[$sp]
+  add		$sp,$sp,#4
+  ret
 
 	align	16
 PAMDump:
