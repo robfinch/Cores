@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2021  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -400,7 +400,7 @@ char_ram charRam0
 	.dot_clk_i(vclk),
 	.ce_i(ld_shft),
 	.fontAddress_i(fontAddress),
-	.char_code_i(screen_ram_out[19:0]),
+ 	.char_code_i({8'h00,screen_ram_out[11:0]}),
 	.maxScanpix_i(maxScanpix),
 	.maxscanline_i(maxScanlinePlusOne),
 	.scanline_i(rowscan),

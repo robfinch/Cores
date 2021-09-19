@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2003-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2003-2021  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,15 +24,15 @@
 module uart6551Fifo(clk, rst, wr, rd, din, dout, ctr, full, empty);
 parameter WID=8;
 parameter DEP=16;
-localparam pCtrBits = $clog2(DEP)-1;
+localparam pCtrBits = $clog2(DEP-1);
 input clk;
 input rst;
 input wr;
 input rd;
 input [WID-1:0] din;
 output [WID-1:0] dout;
-output [pCtrBits:0] ctr;
-reg [pCtrBits:0] ctr;
+output [pCtrBits-1:0] ctr;
+reg [pCtrBits-1:0] ctr;
 output full;
 output empty;
 
