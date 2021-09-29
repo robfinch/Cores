@@ -438,11 +438,15 @@ edge_det uedar (.rst(rst_i), .clk(clk_g), .ce(1'b1), .i(advance_r), .pe(pe_advan
 reg [255:0] ici, iri;
 reg [2:0] icnt;
 reg [1:0] waycnt;
-(* ram_style="distributed" *)
+(* ram_style="block" *)
 reg [255:0] icache0 [0:pL1CacheLines-1];
 reg [255:0] icache1 [0:pL1CacheLines-1];
 reg [255:0] icache2 [0:pL1CacheLines-1];
 reg [255:0] icache3 [0:pL1CacheLines-1];
+wire [255:0] ic0 = icache0[pc[pL1msb:5]];
+wire [255:0] ic1 = icache1[pc[pL1msb:5]];
+wire [255:0] ic2 = icache2[pc[pL1msb:5]];
+wire [255:0] ic3 = icache3[pc[pL1msb:5]];
 (* ram_style="distributed" *)
 reg [AWID-1:5] ictag0 [0:pL1CacheLines-1];
 reg [AWID-1:5] ictag1 [0:pL1CacheLines-1];
@@ -473,6 +477,7 @@ initial begin
   icvalid2 = {pL1CacheLines{1'd0}};
   icvalid3 = {pL1CacheLines{1'd0}};
   for (n = 0; n < pL1CacheLines; n = n + 1) begin
+  /*
   	if (RIBO) begin
 	  	icache0[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
 	  	icache1[n] <= {8{{NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]}}};
@@ -485,6 +490,7 @@ initial begin
 	  	icache2[n] <= {8{NOP_INSN}};
 	  	icache3[n] <= {8{NOP_INSN}};
   	end
+  	*/
     ictag0[n] = 32'd1;
     ictag1[n] = 32'd1;
     ictag2[n] = 32'd1;
@@ -526,10 +532,10 @@ IFETCH1:
   begin
     if (!ifetch_done)
       case(1'b1)
-      ihit1a: begin iri <= icache0[pc[pL1msb:5]]; end
-      ihit1b: begin iri <= icache1[pc[pL1msb:5]]; end
-      ihit1c: begin iri <= icache2[pc[pL1msb:5]]; end
-      ihit1d: begin iri <= icache3[pc[pL1msb:5]]; end
+      ihit1a: begin iri <= ic0; end
+      ihit1b: begin iri <= ic1; end
+      ihit1c: begin iri <= ic2; end
+      ihit1d: begin iri <= ic3; end
       default:  iri <= {8{NOP_INSN}};
       endcase
     if (!ihit) begin

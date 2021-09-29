@@ -57,6 +57,7 @@ output reg [31:0] dat_o = 32'd0;
 wire clk_g;
 assign clk_g = clk_i;
 
+reg [2:0] loop_mode;
 reg [5:0] state;
 reg [31:0] pc;
 
@@ -78,9 +79,10 @@ wire iaccess_pending = !ifetch_done;
 reg [1:0] dstate;
 reg [7:0] dcause;
 wire advance_d;
+reg d_loop_bust;
 reg decode_done;
 reg dval;
-reg wrrf, wrcrf, rdcrf;
+reg wrrf, wrcrf, rdcrf, wrsrf;
 reg wrlr, wrctr, rdlr, rdctr;
 reg wrxer, rdxer;
 reg [AWID-1:0] dpc;
@@ -92,13 +94,14 @@ reg [4:0] Bt;
 reg [4:0] Ba;
 reg [4:0] Bb;
 reg [31:0] dimm;
+reg [4:0] dmb, dme;
 reg dmod_pc;
 reg [AWID-1:0] dnext_pc;
 reg illegal_insn;
+reg d_cbranch;
 reg d_addi;
 reg d_ld, d_st;
 reg d_cmp;
-reg d_bc;
 reg d_sync;
 reg d_multicycle;
 reg lsu;
@@ -108,11 +111,13 @@ reg [1:0] rstate;
 reg [7:0] rcause;
 wire advance_r;
 wire stall_r;
+reg r_cbranch;
+reg r_loop_bust;
 reg rdone;
 reg regfetch_done;
 reg rval;
 reg [31:0] rir;
-reg rwrrf, rwrcrf, rrdcrf;
+reg rwrrf, rwrcrf, rrdcrf, rwrsrf;
 reg rwrlr, rwrctr, rrdlr, rrdctr;
 reg rwrxer, rrdxer;
 reg [AWID-1:0] rpc;
@@ -123,6 +128,8 @@ reg [5:0] rRc;
 reg [4:0] rBa;
 reg [4:0] rBb;
 reg [31:0] rimm;
+reg [4:0] rmb, rme;
+reg [31:0] rmask;
 reg [31:0] rid;
 reg [31:0] ria;
 reg [31:0] rib;
@@ -142,10 +149,12 @@ reg [31:0] rxer;
 // Execute stage vars
 reg [2:0] estate;
 wire advance_e;
+reg e_cbranch;
+reg e_loop_bust;
 reg execute_done;
 reg eval;
 reg [31:0] eir;
-reg ewrrf, ewrcrf;
+reg ewrrf, ewrcrf, ewrsrf;
 reg ewrlr, ewrctr;
 reg ewrxer;
 reg [AWID-1:0] epc;
@@ -156,6 +165,8 @@ reg [31:0] ia;
 reg [31:0] ib;
 reg [31:0] ic;
 reg [31:0] imm;
+reg [4:0] emb, eme;
+reg [31:0] emask;
 reg [31:0] eres, eres2;
 reg [AWID-1:0] eea;
 reg eillegal_insn;
@@ -165,7 +176,6 @@ reg e_ra0;
 reg e_ld, e_st;
 reg e_lsu;
 reg e_cmp;
-reg e_bc;
 reg e_sync;
 reg e_multicycle;
 reg [AWID-1:0] elr;
@@ -179,6 +189,8 @@ reg takb;
 // Memory stage vars
 reg [2:0] mstate;
 wire advance_m;
+reg m_cbranch;
+reg m_loop_bust;
 reg [AWID-1:0] mpc;
 reg memory_done;
 reg maccess_pending;
@@ -186,7 +198,7 @@ reg mval;
 reg [31:0] mir;
 reg [5:0] mRa;
 reg [5:0] mRd;
-reg [1:0] mwrrf, mwrcrf;
+reg [1:0] mwrrf, mwrcrf, mwrsrf;
 reg [1:0] mwrlr, mwrctr;
 reg [1:0] mwrxer;
 reg [AWID-1:0] ea;
@@ -195,7 +207,7 @@ reg [31:0] mia;
 reg [31:0] mres, mres2;
 reg millegal_insn;
 reg m_lsu;
-reg m_st;
+reg m_ld, m_st;
 reg m_sync;
 reg [31:0] mcr;
 reg [31:0] mctr;
@@ -210,6 +222,8 @@ reg [7:0] mcause;
 // Writeback stage vars
 reg [2:0] wstate;
 wire advance_w;
+reg w_cbranch;
+reg w_loop_bust;
 reg writeback_done;
 reg [AWID-1:0] wpc;
 reg [31:0] wia;
@@ -225,7 +239,8 @@ reg wwval;
 reg wval;
 reg wwwrrf;
 reg wwwrcrf;
-reg wwrrf, wwrcrf;
+reg wwwrsrf;
+reg wwrrf, wwrcrf, wwrsrf;
 reg wwrlr, wwrctr;
 reg wwrxer;
 reg wwwrlr, wwwrctr;
@@ -243,6 +258,25 @@ reg [31:0] wxer;
 reg [31:0] wwxer;
 reg [7:0] wcause;
 
+// T,U,V-stage
+wire advance_t;
+reg tval;
+reg t_cbranch;
+reg t_loop_bust;
+reg [AWID-1:0] tpc;
+reg [31:0] tir;
+wire advance_u;
+reg uval;
+reg u_cbranch;
+reg u_loop_bust;
+reg [AWID-1:0] upc;
+reg [31:0] uir;
+wire advance_v;
+reg vval;
+reg v_cbranch;
+reg v_loop_bust;
+reg [AWID-1:0] vpc;
+reg [31:0] vir;
 
 reg [31:0] tick;
 reg [31:0] inst_ctr;
@@ -309,7 +343,12 @@ always @(posedge clk_g)
 always @(posedge clk_g)
   if (wwwrcrf)
     cregfile <= wwcr;
-    
+
+reg [31:0] sregfile [0:15];
+always @(posedge clk_g)
+  if (wwrsrf & wval & advance_w)
+    sregfile[wwRd] <= wwres;
+
 reg [31:0] sprg [0:3];
 
 
@@ -323,13 +362,31 @@ assign stall_r = 	((e_ld||e_st) && ((rRd==eRd && r_st) || (rRa==eRd) || (rRb==eR
 								 	  */
                 		;
 // Pipeline advance
-assign advance_w = ifetch_done & &decode_done & &regfetch_done & &execute_done & &memory_done & &writeback_done;
+assign advance_v = ifetch_done & &decode_done & &regfetch_done & &execute_done & &memory_done & &writeback_done;
+assign advance_u = advance_v;
+assign advance_t = advance_u;
+assign advance_w = advance_t;
 assign advance_m = advance_w & ~(|w_sync);
 assign advance_e = advance_m & ~(|m_sync | |w_sync);
 assign advance_r = advance_e & ~stall_r & ~(|e_sync | |m_sync | |w_sync);
 assign advance_d = advance_r & ~stall_r & ~(|r_sync | |e_sync | |m_sync | |w_sync);
 assign advance_i = advance_d & ~stall_i;
 
+wire cbranch_in_pipe = 
+  r_cbranch |
+  e_cbranch |
+  m_cbranch |
+  w_cbranch |
+  t_cbranch |
+  u_cbranch ;
+
+wire loop_bust =
+  r_loop_bust |
+  e_loop_bust |
+  m_loop_bust |
+  w_loop_bust |
+  t_loop_bust |
+  u_loop_bust ; 
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute stage combo logic
@@ -339,49 +396,39 @@ wire [63:0] shli;
 wire [31:0] roli;
 wire [63:0] shlr;
 wire [31:0] rolr;
-assign shli = {32'h0,ia} << ir[15:11];
+assign shli = {32'h0,ia} << eir[15:11];
 assign shlr = {32'h0,ia} << ib[4:0];
 assign roli = shli[63:32]|shli[31:0];
 assign rolr = shlr[63:32]|shlr[31:0];
-wire [4:0] mb;
-wire [4:0] me;
-assign mb = ir[10:6];
-assign me = ir[ 5:1];
 reg [31:0] rlwimi_o;
 reg [31:0] rlwinm_o;
 reg [31:0] rlwnm_o;
+reg [31:0] mask;
+
+integer n4;
+always_comb
+begin
+  for (n4 = 0; n4 < 32; n4 = n4 + 1)
+    mask[n4] = (n4 >= rme) ^ (n4 <= rmb) ^ (rmb >= rme);
+end
 
 integer n1;
 always_comb
 begin
-  for (n1 = 0; n1 < 32; n1 = n1 + 1) begin
-    if (n1 >= mb && n1 <= me)
-      rlwimi_o[n1] = roli[n1];
-    else
-      rlwimi_o[n1] = id[n1];
-  end
+  for (n1 = 0; n1 < 32; n1 = n1 + 1)
+    rlwimi_o[n1] = emask[n1] ? roli[n1] : id[n1];
 end
 
 integer n2;
 always_comb
 begin
-  for (n2 = 0; n2 < 32; n2 = n2 + 1) begin
-    if (n2 >= mb && n2 <= me)
-      rlwinm_o[n2] <= roli[n2];
-    else
-      rlwinm_o[n2] <= 1'b0;
-  end
+  rlwinm_o = emask & roli;
 end
 
 integer n3;
 always_comb
 begin
-  for (n3 = 0; n3 < 32; n3 = n3 + 1) begin
-    if (n3 >= mb && n3 <= me)
-      rlwnm_o[n3] <= rolr[n3];
-    else
-      rlwnm_o[n3] <= 1'b0;
-  end
+  rlwnm_o = emask & rolr;
 end
 
 wire [63:0] prodr;
@@ -509,6 +556,8 @@ begin
   tExecute();
   tMemory();
   tWriteback();
+  tStage();
+  uStage();
 
   tValid();
 end
@@ -527,6 +576,7 @@ begin
 	  msr <= 32'd1;		// little endian mode
 	  iaccess <= FALSE;
 	  waycnt <= 2'd0;
+	  loop_mode <= 3'd0;
 		igoto (IFETCH1);
 	end
 	else begin
@@ -559,14 +609,26 @@ IALIGN:
   end
 `else
 	IFETCH1:
-		if (!ack_i) begin
-			iaccess <= TRUE;
-			vpa_o <= HIGH;
-			cyc_o <= HIGH;
-			stb_o <= HIGH;
-			sel_o <= 4'hF;
-			adr_o <= pc;
-			igoto (IACK);
+		begin
+			case(loop_mode)
+			3'd0:
+				if (!ack_i && !maccess_pending && !maccess) begin
+					iaccess <= TRUE;
+					vpa_o <= HIGH;
+					cyc_o <= HIGH;
+					stb_o <= HIGH;
+					sel_o <= 4'hF;
+					adr_o <= pc;
+					igoto (IACK);
+				end
+	    3'd1: begin iir <= rir; ipc <= rpc; igoto (IWAIT); end
+	    3'd2: begin iir <= eir; ipc <= epc; igoto (IWAIT); end
+	    3'd3: begin iir <= mir; ipc <= mpc; igoto (IWAIT); end
+	    3'd4: begin iir <= wir; ipc <= wpc; igoto (IWAIT); end
+	    3'd5: begin iir <= tir; ipc <= tpc; igoto (IWAIT); end
+	    3'd6: begin iir <= uir; ipc <= upc; igoto (IWAIT); end
+	    3'd7: begin iir <= vir; ipc <= vpc; igoto (IWAIT); end
+	    endcase
 		end
 	IACK:
 		if (ack_i) begin
@@ -583,14 +645,27 @@ IALIGN:
 		begin
 	    if (wmod_pc) begin
 	      pc <= wnext_pc;
+	      iir <= NOP_INSN;
+	      rir <= NOP_INSN;
+	       ir <= NOP_INSN;
+	      eir <= NOP_INSN;
+	      mir <= NOP_INSN;
+	      wir <= NOP_INSN;
 	      if (be) dcause <= FLT_TRACE;
 	    end
 	    else if (emod_pc) begin
 	      pc <= enext_pc;
+	      iir <= NOP_INSN;
+	      rir <= NOP_INSN;
+	       ir <= NOP_INSN;
+	      eir <= NOP_INSN;
 	      if (be) dcause <= FLT_TRACE;
 	    end
 	    else if (dmod_pc) begin
 	      pc <= dnext_pc;
+	      iir <= NOP_INSN;
+	      rir <= NOP_INSN;
+	       ir <= NOP_INSN;
 	      if (be) dcause <= FLT_TRACE;
 	    end
 			if (advance_i) begin
@@ -728,11 +803,15 @@ begin
     Rb <= 6'd0;
     Rc <= 6'd0;
     dimm <= 32'd0;
+    rmb <= 5'd0;
+    rme <= 5'd31;
+    rmask <= 32'hFFFFFFFF;
     d_ld <= FALSE;
     d_st <= FALSE;
     d_addi <= FALSE;
     d_cmp <= FALSE;
-    d_bc <= FALSE;
+    d_cbranch <= FALSE;
+    d_loop_bust <= FALSE;
     d_multicycle <= FALSE;
     r_ld <= FALSE;
     r_st <= FALSE;
@@ -740,7 +819,8 @@ begin
     r_lsu <= FALSE;
     r_cmp <= FALSE;
     r_sync <= FALSE;
-    r_bc <= FALSE;
+    r_cbranch <= FALSE;
+    r_loop_bust <= FALSE;
     r_multicycle <= FALSE;
     rcr <= 32'd0;
     rctr <= 32'd0;
@@ -790,6 +870,9 @@ begin
         Bt <= ir[25:21];
         Ba <= ir[20:16];
         Bb <= ir[15:11];
+				// PowerPC encodes bit 0 as MSB.
+				dmb <= 5'd31-ir[10:6];
+				dme <= 5'd31-ir[ 5:1];
         lsu <= FALSE;
         wrrf <= FALSE;
         wrcrf <= FALSE;
@@ -801,7 +884,7 @@ begin
         rdctr <= FALSE;
         rdlr <= FALSE;
         dmod_pc <= FALSE;
-        d_bc <= FALSE;
+        d_cbranch <= FALSE;
         d_cmp <= FALSE;
         d_ld <= FALSE;
         d_st <= FALSE;
@@ -834,7 +917,7 @@ begin
           		wrcrf <= ir[0];
           		illegal_insn <= FALSE;
           	end
-          SRAWI:begin wrrf <= TRUE; wrcrf <= ir[0]; illegal_insn <= FALSE; end
+          SRAWI:begin wrrf <= TRUE; wrcrf <= ir[0]; Ra <= ir[25:21]; Rd <= ir[20:16]; illegal_insn <= FALSE; end
           EXTSB:begin wrrf <= TRUE; wrcrf <= ir[0]; illegal_insn <= FALSE; end
           EXTSH:begin wrrf <= TRUE; wrcrf <= ir[0]; illegal_insn <= FALSE; end
           CNTLZW:	begin wrrf <= TRUE; wrcrf <= ir[0]; illegal_insn <= FALSE; end
@@ -857,7 +940,7 @@ begin
           MTCRF:  begin wrcrf <= TRUE; illegal_insn <= FALSE; end
           MFSPR:
           	begin
-              case(eir[20:11])
+              case(ir[20:11])
               10'd32:	rdxer <= TRUE;
               10'd256:	rdlr <= TRUE;
               10'd288:	rdctr <= TRUE;
@@ -867,13 +950,28 @@ begin
           	end
           MTSPR:
             begin
-              case(eir[20:11])
+            	Ra <= ir[25:21];
+              case(ir[20:11])
               10'd32:   begin wrxer <= TRUE; illegal_insn <= FALSE; end
               10'd256:  begin wrlr <= TRUE; illegal_insn <= FALSE; end
               10'd288:  begin wrctr <= TRUE; illegal_insn <= FALSE; end
               default:  ;
               endcase
             end
+          MTSR:
+          	begin
+          		illegal_insn <= FALSE;
+          		wrsrf <= TRUE;
+            	Ra <= ir[25:21];
+            	Rd <= {1'b0,ir[19:16]};
+          	end
+          MTSRIN:
+          	begin
+          		illegal_insn <= FALSE;
+          		wrsrf <= TRUE;
+            	Ra <= ir[25:21];
+            	Rb <= ir[20:16];
+          	end
           SYNC:
           	begin
           		// force a flush of the incoming instruction.
@@ -921,29 +1019,36 @@ begin
         CMPI:  begin dimm <= {{16{ir[15]}},ir[15:0]}; illegal_insn <= FALSE; wrcrf <= TRUE; d_cmp <= TRUE; end
         CMPLI: begin dimm <= {16'h0000,ir[15:0]}; illegal_insn <= FALSE; wrcrf <= TRUE; d_cmp <= TRUE; end
         MULLI: begin wrrf <= TRUE; dimm <= {{16{ir[15]}},ir[15:0]}; illegal_insn <= FALSE; end
-        ANDI:  begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {16'hFFFF,ir[15:0]}; illegal_insn <= FALSE; end
-        ANDIS: begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {ir[15:0],16'hFFFF}; illegal_insn <= FALSE; end
+        ANDI:  begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {16'hFFFF,ir[15:0]}; illegal_insn <= FALSE; wrcrf <= TRUE; end
+        ANDIS: begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {ir[15:0],16'hFFFF}; illegal_insn <= FALSE; wrcrf <= TRUE; end
         ORI:   begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {16'h0000,ir[15:0]}; illegal_insn <= FALSE; end
         ORIS:  begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {ir[15:0],16'h0000}; illegal_insn <= FALSE; end
         XORI:  begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {16'h0000,ir[15:0]}; illegal_insn <= FALSE; end
         XORIS: begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= {ir[15:0],16'h0000}; illegal_insn <= FALSE; end
-        RLWIMI:begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= ir[15:11]; illegal_insn <= FALSE; end
-        RLWINM:begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= ir[15:11]; illegal_insn <= FALSE; end
-        RLWNM: begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; illegal_insn <= FALSE; end
+        RLWIMI:begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= ir[15:11]; illegal_insn <= FALSE; wrcrf <= ir[0];end
+        RLWINM:begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; dimm <= ir[15:11]; illegal_insn <= FALSE; wrcrf <= ir[0];end
+        RLWNM: begin Ra <= ir[25:21]; Rd <= ir[20:16]; wrrf <= TRUE; illegal_insn <= FALSE; wrcrf <= ir[0]; end
         TWI:	 begin illegal_insn <= FALSE; end
 				SC:		 begin illegal_insn <= ~ir[1]; end
         B:     begin
                   illegal_insn <= FALSE;
                   dmod_pc <= dval;
-                  if (ir[1])
+                  d_loop_bust <= TRUE;
+                  if (ir[1]) begin
                     dnext_pc <= {dpc,ir[25:2],2'b00};
-                  else
+                    if (~|loop_mode)
+                    	tLoop({dpc,ir[25:2],2'b00});
+                  end
+                  else begin
                     dnext_pc <= dpc + {{6{ir[25]}},ir[25:2],2'b00};
+                    if (~|loop_mode)
+                    	tLoop(dpc + {{6{ir[25]}},ir[25:2],2'b00});
+                  end
                   wrlr <= ir[0];
                 end
         BC:
         	begin
-        		d_bc <= TRUE;
+        		d_cbranch <= TRUE;
         		wrlr <= ir[0];
         		rdcrf <= TRUE;
         		illegal_insn <= FALSE;
@@ -952,6 +1057,7 @@ begin
           case(ir[10:1])
           BCCTR:
           	begin
+          		d_loop_bust <= TRUE;
       				wrlr <= ir[0];
       				rdctr <= TRUE;
       				rdcrf <= TRUE;
@@ -959,6 +1065,7 @@ begin
       			end
           BCLR:
           	begin
+          		d_loop_bust <= TRUE;
           		wrlr <= ir[0];
           		rdlr <= TRUE;
           		rdcrf <= TRUE;
@@ -975,6 +1082,7 @@ begin
           RFI:
           	begin
           		if (dval) begin
+	          		d_loop_bust <= TRUE;
           			dmod_pc <= TRUE;
           			dnext_pc <= srr1;
           		end
@@ -1013,6 +1121,8 @@ begin
         rwrlr <= wrlr;
         rwrctr <= wrctr;
         rimm <= dimm;
+        rmb <= dmb;
+        rme <= dme;
         r_lsu <= lsu;
         r_ld <= d_ld;
         r_st <= d_st;
@@ -1020,9 +1130,11 @@ begin
         if (d_ld|d_st|d_addi)
         	r_ra0 <= ir[20:16]==5'd0;
         r_sync <= d_sync;
-        r_bc <= d_bc;
+        r_cbranch <= d_cbranch;
+        r_loop_bust <= d_loop_bust;
         r_multicycle <= d_multicycle;
         rwrrf <= wrrf;
+        rwrsrf <= wrsrf;
         rwrcrf <= wrcrf;
         rwrxer <= wrxer;
         rcause <= dcause;
@@ -1054,9 +1166,13 @@ if (rst_i) begin
   e_st <= 1'b0;
   e_ra0 <= 1'b0;
   e_lsu <= 1'b0;
-  e_bc <= 1'b0;
+  e_cbranch <= 1'b0;
+  e_loop_bust <= FALSE;
   e_sync <= 1'b0;
   e_multicycle <= 1'b0;
+  emb <= 5'd0;
+  eme <= 5'd31;
+  emask <= 32'hFFFFFFFF;
   eRd <= 6'd0;
   eRa <= 6'd0;
   eres <= 32'd0;
@@ -1079,6 +1195,7 @@ if (rst_i) begin
   ewrlr <= 1'b0;
   ewrctr <= 1'b0;
   ewrrf <= 1'b0;
+  ewrsrf <= 1'b0;
   ewrxer <= 1'b0;
   rval <= 1'b0;
   ecause <= FLT_NONE;
@@ -1191,6 +1308,32 @@ default:
   end
 endcase
   if (advance_r) begin
+
+    eRd <= rRd;
+  	case(rir[31:26])
+  	R2:
+  		case(rir[10:1])
+  		MTSRIN:
+  			begin
+				  if (rRb==eRd && eval && ewrrf)
+				    eRd <= eres[3:0];
+				  else if (rRb==eRa && eval && e_lsu)
+				    eRd <= eea[3:0];
+				  else if (rRb==mRd && mval && mwrrf)
+				    eRd <= mres[3:0];
+				  else if (rRb==mRa && mval && m_lsu)
+				    eRd <= ea[3:0];
+				  else if (rRb==wRd && wval && wwrrf)
+				    eRd <= wres[3:0];
+				  else if (rRb==wRa && wval && w_lsu)
+				    eRd <= wea[3:0];
+				  else
+				    eRd <= rfob[3:0];
+  			end
+  		endcase
+  	default:	;
+  	endcase
+
 	  if (rRa==6'd0 && r_ra0 && rval)
 	    ia <= 32'd0;
 	  else if (rRa==eRd && eval && ewrrf)
@@ -1208,8 +1351,6 @@ endcase
 /*	    
 	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
 	    ia[0] <= tres[0];
-	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
-	    ia[0] <= tres[1];
 */
 	  else
 	    ia <= rfoa;
@@ -1278,27 +1419,29 @@ endcase
       exer <= xer;
 
     if (ewrlr & eval)
-      elr <= eres;
+      elr <= elr;
     else if (mwrlr & mval)
-      elr <= mres;
+      elr <= mlr;
     else if (wwrlr & wval)
-      elr <= wres;
+      elr <= wlr;
     else
       elr <= lr;
 
     if (ewrctr & eval)
-      ectr <= eres;
+      ectr <= ectr;
     else if (mwrctr & mval)
-      ectr <= mres;
+      ectr <= mctr;
     else if (wwrctr & wval)
-      ectr <= wres;
+      ectr <= wctr;
     else
       ectr <= ctr;
 
     eir <= rir;
   	eval <= rval;
     imm <= rimm;
-    eRd <= rRd;
+    emb <= rmb;
+    eme <= rme;
+    emask <= mask;
     eRa <= rRa;
 //    ecr <= rcr;
     epc <= rpc;
@@ -1312,8 +1455,10 @@ endcase
     e_cmp <= r_cmp;
     ewrrf <= rwrrf;
     ewrcrf <= rwrcrf;
+    ewrsrf <= rwrsrf;
     ewrxer <= rwrxer;
-    e_bc <= d_bc;
+    e_cbranch <= r_cbranch;
+    e_loop_bust <= r_loop_bust;
     ewrlr <= rwrlr;
     ewrctr <= rwrctr;
 		e_ld <= r_ld;
@@ -1371,8 +1516,12 @@ begin
     mRd <= 6'd0;
     mRa <= 6'd0;
     mres <= 32'd0;
+    m_cbranch <= FALSE;
+    m_loop_bust <= FALSE;
     m_lsu <= FALSE;
     m_sync <= FALSE;
+    m_ld <= FALSE;
+    m_st <= FALSE;
     mcr <= 32'd0;
     mctr <= 32'd0;
     mlr <= 32'd0;
@@ -1381,6 +1530,7 @@ begin
     mwrlr <= FALSE;
     mwrctr <= FALSE;
     mwrrf <= FALSE;
+    mwrsrf <= FALSE;
     mwrxer <= FALSE;
     mia <= 32'd0;
     ecause <= 8'h00;
@@ -1614,6 +1764,7 @@ begin
             10'd288:  ectr <= ia;
             default:  ;
             endcase
+          MTSR:	eres <= ia;
 					TW:
 						case(eir[25:21])
 						5'd1:	etrap <=  trpr[4];							// gtu
@@ -1780,10 +1931,10 @@ begin
 						5'd31:etrap <=  TRUE;
 						endcase
 					end
-        B:  eres <= epc + 3'd4;
+        B:  elr <= epc + 3'd4;
         BC: 
         	begin
-        		eres <= epc + 3'd4;
+        		elr <= epc + 3'd4;
         		casez(eir[25:21])
         		5'b0?00?:
         			begin
@@ -1791,10 +1942,16 @@ begin
         				if ((ectr - 1'd1 != 32'd0 && ecr[eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
-        					if (eir[1])
+        					if (eir[1]) begin
         						enext_pc <= {{16{eir[15]}},eir[15:2],2'b00};
-        					else
+        						if (~|loop_mode)
+        							tLoop({{16{eir[15]}},eir[15:2],2'b00});
+        					end
+        					else begin
         						enext_pc <= epc + {{16{eir[15]}},eir[15:2],2'b00};
+        						if (~|loop_mode)
+        							tLoop(epc + {{16{eir[15]}},eir[15:2],2'b00});
+        					end
         				end
         			end
         		5'b0?01?:
@@ -1803,10 +1960,16 @@ begin
         				if ((ectr - 1'd1 == 32'd0 && ecr[eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
-        					if (eir[1])
+        					if (eir[1]) begin
         						enext_pc <= {{16{eir[15]}},eir[15:2],2'b00};
-        					else
+        						if (~|loop_mode)
+        							tLoop({{16{eir[15]}},eir[15:2],2'b00});
+        					end
+        					else begin
         						enext_pc <= epc + {{16{eir[15]}},eir[15:2],2'b00};
+        						if (~|loop_mode)
+        							tLoop(epc + {{16{eir[15]}},eir[15:2],2'b00});
+        					end
         				end
         			end
         		5'b0?1??:
@@ -1814,10 +1977,16 @@ begin
         				if ((ecr[eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
-        					if (eir[1])
+        					if (eir[1]) begin
         						enext_pc <= {{16{eir[15]}},eir[15:2],2'b00};
-        					else
+        						if (~|loop_mode)
+        							tLoop({{16{eir[15]}},eir[15:2],2'b00});
+        					end
+        					else begin
         						enext_pc <= epc + {{16{eir[15]}},eir[15:2],2'b00};
+        						if (~|loop_mode)
+        							tLoop(epc + {{16{eir[15]}},eir[15:2],2'b00});
+        					end
         				end
         			end
         		5'b1?00?:
@@ -1826,10 +1995,16 @@ begin
         				if ((ectr - 1'd1 != 32'd0)) begin
         					takb <= eval;
         					emod_pc <= eval;
-        					if (eir[1])
+        					if (eir[1]) begin
         						enext_pc <= {{16{eir[15]}},eir[15:2],2'b00};
-        					else
+        						if (~|loop_mode)
+        							tLoop({{16{eir[15]}},eir[15:2],2'b00});
+        					end
+        					else begin
         						enext_pc <= epc + {{16{eir[15]}},eir[15:2],2'b00};
+        						if (~|loop_mode)
+        							tLoop(epc + {{16{eir[15]}},eir[15:2],2'b00});
+        					end
         				end
         			end
         		5'b1?01?:
@@ -1838,10 +2013,16 @@ begin
         				if ((ectr - 1'd1 == 32'd0)) begin
         					takb <= eval;
         					emod_pc <= eval;
-        					if (eir[1])
+        					if (eir[1]) begin
         						enext_pc <= {{16{eir[15]}},eir[15:2],2'b00};
-        					else
+        						if (~|loop_mode)
+        							tLoop({{16{eir[15]}},eir[15:2],2'b00});
+        					end
+        					else begin
         						enext_pc <= epc + {{16{eir[15]}},eir[15:2],2'b00};
+        						if (~|loop_mode)
+        							tLoop(epc + {{16{eir[15]}},eir[15:2],2'b00});
+        					end
         				end
         			end
         		endcase
@@ -1850,7 +2031,7 @@ begin
           case(eir[10:1])
           BCCTR:
           	begin
-	          	eres <= epc + 3'd4;
+	          	elr <= epc + 3'd4;
 	        		casez(eir[25:21])
 	        		5'b0?00?:
 	        			begin
@@ -1859,6 +2040,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        				end
 	        			end
 	        		5'b0?01?:
@@ -1868,6 +2051,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        				end
 	        			end
 	        		5'b0?1??:
@@ -1876,6 +2061,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        				end
 	        			end
 	        		5'b1?00?:
@@ -1885,6 +2072,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        				end
 	        			end
 	        		5'b1?01?:
@@ -1894,6 +2083,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        				end
 	        			end
 	        		5'b10100:
@@ -1901,12 +2092,14 @@ begin
         					takb <= eval;
         					emod_pc <= eval;
         					enext_pc <= ectr;
+        						if (~|loop_mode)
+        							tLoop(ectr);
 	        			end
 	        		endcase
           	end
           BCLR:
           	begin
-	          	eres <= epc + 3'd4;
+	          	elr <= epc + 3'd4;
 	        		casez(eir[25:21])
 	        		5'b0?00?:
 	        			begin
@@ -1915,6 +2108,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
+        						if (~|loop_mode)
+        							tLoop(elr);
 	        				end
 	        			end
 	        		5'b0?01?:
@@ -1924,6 +2119,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
+        						if (~|loop_mode)
+        							tLoop(elr);
 	        				end
 	        			end
 	        		5'b0?1??:
@@ -1932,6 +2129,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
+        						if (~|loop_mode)
+        							tLoop(elr);
 	        				end
 	        			end
 	        		5'b1?00?:
@@ -1941,6 +2140,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
+        						if (~|loop_mode)
+        							tLoop(elr);
 	        				end
 	        			end
 	        		5'b1?01?:
@@ -1950,6 +2151,8 @@ begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
+        						if (~|loop_mode)
+        							tLoop(elr);
 	        				end
 	        			end
 	        		5'b10100:
@@ -1957,6 +2160,8 @@ begin
         					takb <= eval;
         					emod_pc <= eval;
         					enext_pc <= elr;
+      						if (~|loop_mode)
+      							tLoop(elr);
 	        			end
 	        		endcase
           	end
@@ -2114,7 +2319,10 @@ begin
         ea <= eea;
         mid <= id;
         mir <= eir;
+        m_cbranch <= e_cbranch;
+        m_loop_bust <= e_loop_bust;
         m_lsu <= e_lsu;
+        m_ld <= e_ld;
         m_st <= e_st;
         m_sync <= e_sync;
 	      mval <= eval;
@@ -2124,6 +2332,7 @@ begin
         mcr <= ecr;
         mwrrf <= ewrrf;
         mwrcrf <= ewrcrf;
+        mwrsrf <= ewrsrf;
         mwrxer <= ewrxer;
         mwrlr <= ewrlr;
         mwrctr <= ewrctr;
@@ -2172,6 +2381,8 @@ begin
     wpc <= RSTPC;
     wRd <= 6'd0;
     wRa <= 6'd0;
+    w_cbranch <= FALSE;
+    w_loop_bust <= FALSE;
     w_lsu <= FALSE;
     w_sync <= FALSE;
     wia <= 32'd0;
@@ -2181,6 +2392,7 @@ begin
     wlr <= 32'd0;
     wnext_pc <= RSTPC;
     wwrcrf <= FALSE;
+    wwrsrf <= FALSE;
     wwrctr <= FALSE;
     wwrlr <= FALSE;
     wwrxer <= FALSE;
@@ -2197,32 +2409,18 @@ begin
     case(mstate)
     MEMORY1:
       begin
-        memory_done <= TRUE;
-        mstate <= MWAIT;
-        case(mir[31:26])
-        R2:
-          case(mir[10:1])
-          LBZX,LBZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          LHZX,LHZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          LHAX,LHAUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          LWZX,LWZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          STBX,STBUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          STHX,STHUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          STWX,STWUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-          default:  begin mstate <= MWAIT; memory_done <= TRUE; end
-          endcase
-        LBZ,LBZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        LHZ,LHZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        LHA,LHAU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        LWZ,LWZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        STB,STBU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        STH,STHU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        STW,STWU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
-        default:  begin mstate <= MWAIT; memory_done <= TRUE; end
-        endcase
+      	if (m_ld|m_st) begin
+      		maccess_pending <= TRUE;
+      		mstate <= MEMORY2;
+      		memory_done <= FALSE; 
+      	end
+      	else begin
+        	memory_done <= TRUE;
+        	mstate <= MWAIT;
+      	end
       end
     MEMORY2:
-      if (!iaccess && !maccess) begin
+      if (!ack_i && !iaccess && !maccess) begin
         maccess_pending <= FALSE;
         maccess <= TRUE;
         cyc_o <= HIGH;
@@ -2231,21 +2429,21 @@ begin
         R2:
           case(mir[10:1])
           LBZX,LBZUX:  begin we_o <= LOW; sel_o <= 4'h1 << ea[1:0]; adr_o <= ea; end
-          LHZX,LHZUX:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[1:0]; adr_o <= ea; end
-          LHAX,LHAUX:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[1:0]; adr_o <= ea; end
-          LWZX,LWZUX:  begin we_o <= LOW; sel_o <= 4'hF << ea[1:0]; sel <= 4'hF << ea[1:0]; adr_o <= ea; end
-          STBX,STBUX:  begin we_o <= HIGH; sel_o <= 4'h1 << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; end
-          STHX,STHUX:  begin we_o <= HIGH; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= mid << {ea[1:0],3'b0}; end
-          STWX,STWUX:  begin we_o <= HIGH; sel_o <= 4'hF << ea[1:0]; sel <= 4'hF << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= mid << {ea[1:0],3'b0}; end
+          LHZX,LHZUX:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[1:0]; adr_o <= ea; end
+          LHAX,LHAUX:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[1:0]; adr_o <= ea; end
+          LWZX,LWZUX:  begin we_o <= LOW; sel_o <= 4'hF << ea[1:0]; sel <= 8'h0F << ea[1:0]; adr_o <= ea; end
+          STBX,STBUX:  begin we_o <= HIGH; sel_o <= 4'h1 << ea[1:0]; sel <= 8'h01 << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; end
+          STHX,STHUX:  begin we_o <= HIGH; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= {32'h0,mid} << {ea[1:0],3'b0}; end
+          STWX,STWUX:  begin we_o <= HIGH; sel_o <= 4'hF << ea[1:0]; sel <= 8'h0F << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= {32'h0,mid} << {ea[1:0],3'b0}; end
           default:  ;
           endcase
         LBZ,LBZU:  begin we_o <= LOW; sel_o <= 4'h1 << ea[1:0]; adr_o <= ea; end
-        LHZ,LHZU:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[3:0]; adr_o <= ea; end
-        LHA,LHAU:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[3:0]; adr_o <= ea; end
-        LWZ,LWZU:  begin we_o <= LOW; sel_o <= 4'hF << ea[1:0]; sel <= 4'hF << ea[3:0]; adr_o <= ea; end
+        LHZ,LHZU:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[3:0]; adr_o <= ea; end
+        LHA,LHAU:  begin we_o <= LOW; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[3:0]; adr_o <= ea; end
+        LWZ,LWZU:  begin we_o <= LOW; sel_o <= 4'hF << ea[1:0]; sel <= 8'h0F << ea[3:0]; adr_o <= ea; end
         STB,STBU:  begin we_o <= HIGH; sel_o <= 4'h1 << ea[1:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; end
-        STH,STHU:  begin we_o <= HIGH; sel_o <= 4'h3 << ea[1:0]; sel <= 4'h3 << ea[3:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= mid << {ea[1:0],3'b0}; end
-        STW,STWU:  begin we_o <= HIGH; sel_o <= 4'hF << ea[1:0]; sel <= 4'hF << ea[3:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= mid << {ea[1:0],3'b0}; end
+        STH,STHU:  begin we_o <= HIGH; sel_o <= 4'h3 << ea[1:0]; sel <= 8'h03 << ea[3:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= {32'h0,mid} << {ea[1:0],3'b0}; end
+        STW,STWU:  begin we_o <= HIGH; sel_o <= 4'hF << ea[1:0]; sel <= 8'h0F << ea[3:0]; adr_o <= ea; dat_o <= mid << {ea[1:0],3'b0}; dat <= {32'h0,mid} << {ea[1:0],3'b0}; end
         default:  ;
         endcase
         mstate <= MEMORY3;
@@ -2259,18 +2457,14 @@ begin
           case(mir[10:1])
           LBZX,LBZUX,STBX,STBUX:
           	begin
-          		cyc_o <= LOW;
-          		we_o <= LOW;
-          		sel_o <= 8'h00;
+          		wb_nack();
         			maccess <= FALSE;
           		mstate <= MALIGN;
           	end
           LHZX,LHZUX,LHAX,LHAUX,STHX,STHUX:
             begin
               if (ea[1:0]!=2'b11) begin
-                cyc_o <= LOW;
-                we_o <= LOW;
-                sel_o <= 4'h0;
+              	wb_nack();
 				        maccess <= FALSE;
                 mstate <= MALIGN;
               end
@@ -2280,9 +2474,7 @@ begin
           LWZX,LWZUX,STWX,STWUX:  
             begin
               if (ea[1:0]==2'd0) begin
-                cyc_o <= LOW;
-                we_o <= LOW;
-                sel_o <= 4'h0;
+              	wb_nack();
 				        maccess <= FALSE;
                 mstate <= MALIGN;
               end
@@ -2293,17 +2485,14 @@ begin
           endcase
         LBZ,LBZU:
         	begin
-        		cyc_o <= LOW;
-        		sel_o <= 8'h00;
+        		wb_nack();
 		        maccess <= FALSE;
         		mstate <= MALIGN;
         	end
         LHZ,LHZU,LHA,LHAU:
           begin
             if (ea[1:0]!=2'd3) begin
-              cyc_o <= LOW;
-              we_o <= LOW;
-              sel_o <= 4'h0;
+            	wb_nack();
 			        maccess <= FALSE;
               mstate <= MALIGN;
             end
@@ -2313,9 +2502,7 @@ begin
         STH,STHU:
           begin
             if (ea[1:0]!=2'd3) begin
-              cyc_o <= LOW;
-              we_o <= LOW;
-              sel_o <= 4'h0;
+            	wb_nack();
 			        memory_done <= TRUE;
 			        mstate <= MWAIT;
 			        maccess <= FALSE;
@@ -2326,9 +2513,7 @@ begin
         LWZ,LWZU:  
           begin
             if (ea[1:0] == 2'd0) begin
-              cyc_o <= LOW;
-              we_o <= LOW;
-              sel_o <= 4'h0;
+            	wb_nack();
 			        maccess <= FALSE;
               mstate <= MALIGN;
             end
@@ -2338,9 +2523,7 @@ begin
         STW,STWU:  
           begin
             if (ea[1:0] == 2'd0) begin
-              cyc_o <= LOW;
-              we_o <= LOW;
-              sel_o <= 4'h0;
+            	wb_nack();
 			        memory_done <= TRUE;
 			        mstate <= MWAIT;
 			        maccess <= FALSE;
@@ -2350,9 +2533,7 @@ begin
           end
         STB,STBU:
         	begin
-        		cyc_o <= LOW;
-        		we_o <= LOW;
-        		sel_o <= 4'h0;
+        		wb_nack();
 		        memory_done <= TRUE;
 		        mstate <= MWAIT;
 		        maccess <= FALSE;
@@ -2361,22 +2542,26 @@ begin
         endcase
       end
     MEMORY4:
-      begin
+      if (~ack_i) begin
+      	cyc_o <= HIGH;
         stb_o <= HIGH;
         sel_o <= sel[7:4];
         adr_o <= {ea[AWID-1:2]+1'd1,2'b0};
         dat_o <= dat[63:32];
-        mstate <= MEMORY5;
+       	we_o <= m_st;
+       	mstate <= MEMORY5;
       end
     MEMORY5:
       if (ack_i) begin
-        cyc_o <= LOW;
-        stb_o <= LOW;
-        we_o <= LOW;
-        sel_o <= 4'h0;
+      	wb_nack();
         dati[63:32] <= dat_i;
+        if (m_st) begin
+        	memory_done <= TRUE;
+          mstate <= MWAIT;
+      	end
+        else
+	        mstate <= MALIGN;
         maccess <= FALSE;
-        mstate <= MALIGN;
       end
     MALIGN:
       begin
@@ -2423,10 +2608,13 @@ begin
        	wres <= mres;
        	mres2 <= mres;
         wea <= ea;
+        w_cbranch <= m_cbranch;
+        w_loop_bust <= m_loop_bust;
         w_lsu <= m_lsu;
         w_sync <= m_sync;
         wwrrf <= mwrrf;
-        wwrcrf <= wwrcrf;
+        wwrcrf <= mwrcrf;
+        wwrsrf <= mwrsrf;
         wcr <= mcr;
         wwrlr <= mwrlr;
         wwrctr <= mwrctr;
@@ -2462,13 +2650,11 @@ begin
   if (rst_i) begin
     wval <= 1'b0;
     writeback_done <= TRUE;
+    t_cbranch <= FALSE;
+    t_loop_bust <= FALSE;
     wgoto (WWAIT);
   end
   else begin
-	  if (wwwrlr)
-	    lr <= wwres;
-	  if (wwwrctr)
-	    ctr <= wwres;
 		wwval <= 1'b0;
 		wwwrrf <= 1'b0;
   	wmod_pc <= FALSE;
@@ -2502,8 +2688,8 @@ begin
 	            10'd27:	  srr1 <= wia;
 	            10'd272,10'd273,10'd274,10'd275:
 	            					sprg[wir[12:11]] <= wia;
-	            10'd256:  lr <= wia;
-	            10'd288:  ctr <= wia;
+	            10'd256:  lr <= wlr;
+	            10'd288:  ctr <= wctr;
 	            default:  ;
 	            endcase
 	    			default:	;
@@ -2571,7 +2757,15 @@ begin
 		  	$display("wRd:%d wres:%h%c%c", wRd, wres, wval ? "v" : " ", wwrrf ? "w" : " ");
 `endif		  	
 	      if (advance_w) begin
+				  if (wwrlr & wval)
+				    lr <= wlr;
+				  if (wwrctr & wval)
+				    ctr <= wctr;
 	        writeback_done <= FALSE;
+	        t_cbranch <= w_cbranch;
+	        t_loop_bust <= w_loop_bust;
+	        tir <= wir;
+	        tpc <= wpc;
 	        tval <= wval;
 	        twrrf <= wwrrf;
 	        tRd <= wRd;
@@ -2590,6 +2784,41 @@ begin
 end
 endtask
 
+task tStage;
+begin
+	if (rst_i) begin
+		u_cbranch <= FALSE;
+		u_loop_bust <= FALSE;
+	end
+	else begin
+	  if (advance_t) begin
+	  	uval <= tval;
+	  	u_cbranch <= t_cbranch;
+	  	u_loop_bust <= t_loop_bust;
+			uir <= tir;
+			upc <= tpc;
+		end
+	end
+end
+endtask
+
+task uStage;
+begin
+	if (rst_i) begin
+		v_cbranch <= FALSE;
+		v_loop_bust <= FALSE;
+	end
+	else begin
+		if (advance_u) begin
+			vval <= uval;
+			v_cbranch <= u_cbranch;
+			v_loop_bust <= u_loop_bust;
+			vir <= uir;
+			vpc <= upc;
+		end
+	end
+end
+endtask
 
 task igoto;
 input [3:0] nst;
@@ -2642,6 +2871,10 @@ begin
 	else
 	begin
 	  if (wmod_pc & wval & advance_w) begin
+			if (RIBO)
+				iir <= {NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]};
+			else
+				iir <= NOP_INSN;
 	    ir <= NOP_INSN;
 	    dval <= 1'b00;
 	    rir <= NOP_INSN;
@@ -2654,6 +2887,10 @@ begin
 	    wval <= 1'b0;
 	  end
 	  else if (emod_pc & eval & advance_e) begin
+			if (RIBO)
+				iir <= {NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]};
+			else
+				iir <= NOP_INSN;
 	    ir <= NOP_INSN;
 	    dval <= 1'b0;
 	    rir <= NOP_INSN;
@@ -2662,10 +2899,64 @@ begin
 	    eval <= 1'b0;
 	  end
 	  else if (dmod_pc & dval & advance_d) begin
+			if (RIBO)
+				iir <= {NOP_INSN[7:0],NOP_INSN[15:8],NOP_INSN[23:16],NOP_INSN[31:24]};
+			else
+				iir <= NOP_INSN;
 	    ir <= NOP_INSN;
 	    dval <= 1'b0;
 	  end
 	end
+end
+endtask
+
+task tLoop;
+input [AWID-1:0] ad;
+begin
+  loop_mode <= 3'd0;
+  if (1'b0 && !cbranch_in_pipe && !loop_bust) begin
+    case(ad[31:0])  
+    rpc[31:0]:
+      begin
+        loop_mode <= 3'd1;
+        dmod_pc <= FALSE;
+      end
+    epc[31:0]:
+      if (eval) begin
+        loop_mode <= 3'd2;
+        dmod_pc <= FALSE;
+      end
+    mpc[31:0]:
+      if (mval) begin
+        loop_mode <= 3'd3;
+        dmod_pc <= FALSE;
+      end
+    wpc[31:0]:
+      if (wval) begin
+        loop_mode <= 3'd4;
+        dmod_pc <= FALSE;
+      end
+    tpc[31:0]:
+      if (tval) begin
+        loop_mode <= 3'd5;
+        dmod_pc <= FALSE;
+      end
+    upc[31:0]:
+      if (uval) begin
+        loop_mode <= 3'd6;
+        dmod_pc <= FALSE;
+      end
+    vpc[31:0]:
+      if (vval) begin
+        loop_mode <= 3'd7;
+        dmod_pc <= FALSE;
+      end
+    default:
+      begin
+        loop_mode <= 3'd0;
+      end
+    endcase
+  end
 end
 endtask
 
