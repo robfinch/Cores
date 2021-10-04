@@ -45,7 +45,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[343] =
+Instruction opl[362] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -59,6 +59,7 @@ Instruction opl[343] =
 { "addu", op_addu,1,1 },
 { "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "andcm",op_andcm,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "andi",op_andi,1,1,false,am_reg,am_reg,am_imm,0 },
 { "andis",op_andis,1,1,false,am_reg,am_reg,am_imm,0 },
 { "asl", op_asl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
 { "aslx", op_aslx,2,1,false,am_reg,am_reg,am_reg | am_ui6,0 },
@@ -136,6 +137,9 @@ Instruction opl[343] =
 { "eq",op_eq },
 { "ext", op_ext,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg | am_imm | am_imm0 },
 { "extr", op_extr,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg|am_imm | am_imm0 },
+{ "extsb",op_extsb,1,1,false,am_reg,am_reg,0,0 },
+{ "extsh",op_extsh,1,1,false,am_reg,am_reg,0,0 },
+{ "extsw",op_extsw,1,1,false,am_reg,am_reg,0,0 },
 { "extu", op_extu,1,1,false,am_reg,am_reg,am_reg | am_imm | am_imm0, am_reg | am_imm | am_imm0 },
 { "fadd", op_fadd, 6, 1, false, am_reg, am_reg, am_reg, 0 },
 { "fadd.d", op_fdadd,6,1,false,am_reg,am_reg,am_reg,0 },
@@ -198,6 +202,7 @@ Instruction opl[343] =
 { "la",op_la,1,1,false,am_reg,am_mem,0,0 },
 { "lb", op_lb,4,1,true,am_reg,am_mem,0,0 },
 { "lbu", op_lbu,4,1,true,am_reg,am_mem,0,0 },
+{ "lbx", op_lbx,4,1,true,am_reg,am_mem,0,0 },
 { "ld", op_ld,4,1,true,am_reg,am_mem,0,0 },
 { "ldb", op_ldb,4,1,true,am_reg,am_mem,0,0 },
 { "ldbu", op_ldbu,4,1,true,am_reg,am_mem,0,0 },
@@ -216,13 +221,17 @@ Instruction opl[343] =
 { "ldtu", op_ldtu,4,1,true,am_reg,am_mem,0,0 },
 { "ldw", op_ldw,4,1,true,am_reg,am_mem,0,0 },
 { "ldwu", op_ldwu,4,1,true,am_reg,am_mem,0,0 },
+{ "ldx", op_ldx,4,1,true,am_reg,am_mem,0,0 },
 { "le",op_le },
 { "lea",op_lea,1,1,false,am_reg,am_mem,0,0 },
 { "leave",op_leave,10,2,true, 0, 0, 0, 0 },
 { "leave_far",op_leave_far,12,2,true, 0, 0, 0, 0 },
 { "leu",op_leu },
 { "lh", op_lh,4,1,true,am_reg,am_mem,0,0 },
+{ "lha", op_lha,4,1,true,am_reg,am_mem,0,0 },
+{ "lhax", op_lhax,4,1,true,am_reg,am_mem,0,0 },
 { "lhu", op_lhu,4,1,true,am_reg,am_mem,0,0 },
+{ "lhzx", op_lhzx,4,1,true,am_reg,am_mem,0,0 },
 { "li",op_li,1,1,false,am_reg,am_imm,0,0 },
 { "link",op_link,4,1,true,am_imm,0,0,0 },
 { "lis",op_lis,1,1,false,am_reg,am_imm,0,0 },
@@ -240,8 +249,11 @@ Instruction opl[343] =
 { "lwu", op_lwu,4,1,true,am_reg,am_mem,0,0 },
 { "lwx", op_lwx,4,1,true,am_reg,am_reg,am_reg,0 },
 { "lwz", op_lwz,4,1,true,am_reg,am_mem,0,0 },
+{ "lwzx", op_lwzx,4,1,true,am_reg,am_mem,0,0 },
 { "mfbase", op_mfbase,1,0,false,am_reg,am_reg | am_ui6,0,0 },
+{ "mfcr", op_mfcr,1,1,false,am_reg,0,0,0 },
 { "mffp",op_mffp },
+{ "mflr", op_mflr,1,1,false,am_reg,0,0,0 },
 { "mod", op_mod,68,1, false,am_reg,am_reg,am_reg|am_imm,0 },
 { "modu", op_modu,68,1,false,am_reg,am_reg,am_reg,0 },
 { "mov", op_mov,1,1,false,am_reg,am_reg,0,0 },
@@ -250,7 +262,7 @@ Instruction opl[343] =
 { "mr", op_mr,1,1,false,am_reg,am_reg,0,0 },
 { "mtbase", op_mtbase,1,0,false,am_reg,am_reg | am_ui6,0,0 },
 { "mtfp", op_mtfp },
-{ "mtlr", op_mtlr,1,1,false,am_reg,0,0,0 },
+{ "mtlr", op_mtlr,1,0,false,am_reg,0,0,0 },
 { "mul",op_mul,18,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "mulf",op_mulf,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "mullw", op_mullw, 10, 1, false, am_reg, am_reg, am_reg | am_imm, 0 },
@@ -335,12 +347,16 @@ Instruction opl[343] =
 { "sraw", op_sraw,2,1,false,am_reg,am_reg,am_reg,0 },
 { "srawi", op_srawi,2,1,false,am_reg,am_reg,am_ui6,0 },
 { "srl", op_srl,2,1,false,am_reg,am_reg,am_reg | am_ui6,0 },
+{ "srwi", op_srwi,2,1,false,am_reg,am_reg,am_ui6,0 },
 { "stb",op_stb,4,0,true,am_reg,am_mem,0,0 },
+{ "stbx",op_stbx,4,0,true,am_reg,am_mem,0,0 },
 { "std", op_std,4,0,true,am_reg,am_mem,0,0 },
 { "stdcr", op_stdc,4,0,true, am_reg, am_mem,0,0 },
+{ "stdx", op_stdx,4,0,true,am_reg,am_mem,0,0 },
 { "stfd", op_stfd,4,0,true, am_reg, am_mem,0,0 },
 { "stft", op_stft,4,0,true, am_reg, am_mem,0,0 },
 { "sth", op_sth,4,0,true,am_reg,am_mem,0,0 },
+{ "sthx", op_sthx,4,0,true,am_reg,am_mem,0,0 },
 { "sti", op_sti,1,0 },
 { "stm", op_stm,20,1,true,am_mem,0,0,0 },
 { "sto",op_sto,4,0,true,am_reg,am_mem,0,0 },
@@ -348,6 +364,7 @@ Instruction opl[343] =
 { "stp",op_stp,4,0,true,am_reg,am_mem,0,0 },
 { "stt",op_stt,4,0,true,am_reg,am_mem,0,0 },
 { "stw",op_stw,4,0,true,am_reg,am_mem,0,0 },
+{ "stwx",op_stwx,4,0,true,am_reg,am_mem,0,0 },
 { "sub",op_sub,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "subf",op_subf,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "subu", op_subu,1,1 },
@@ -387,6 +404,8 @@ Instruction opl[343] =
 { "wydndx", op_wydendx,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "xnor",op_xnor,1,1,false,am_reg,am_reg,am_reg,0 },
 { "xor",op_xor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "xori",op_xori,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
+{ "xoris",op_xoris,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "zxb",op_zxb,1,1,false,am_reg,am_reg,0,0 },
 { "zxt",op_zxt,1,1,false,am_reg,am_reg,0,0 },
 { "zxw",op_zxw,1,1,false,am_reg,am_reg,0,0 }
@@ -570,25 +589,29 @@ void gen_strlab(char *s)
 /*
  *      output a compiler generated label.
  */
-char *gen_label(int lab, char *nm, char *ns, char d, int sz)
+char *gen_label(int lab, char *nm, char *ns, char d, int sz, int algn)
 {
 	static char buf[500];
+	static char nam[200];
 
-	if (nm == NULL)
-		sprintf_s(buf, sizeof(buf), "%.400s_%d[%d]:\n", ns, lab, sz);
-	else if (strlen(nm) == 0)
-		sprintf_s(buf, sizeof(buf), "%.400s_%d[%d]:\n", ns, lab, sz);
+	if (algn == 0)
+		algn = 8;
+	sprintf_s(nam, sizeof(nam), "%.400s_%d", ns, lab);
+	sprintf_s(buf, sizeof(buf), "\t.type %s,@object\n\t.size %s,%d\n\t.align %d\n%s:\n", nam, nam, sz, algn, nam);
+	if (nm == NULL || strlen(nm) == 0)
+		sprintf(&buf[strlen(buf)], "\n");
 	else
-		sprintf_s(buf, sizeof(buf), "%.400s_%d[%d]: ; %s\n", ns, lab, sz, nm);
+		sprintf(&buf[strlen(buf)], " #%s\n", nm);
 	return (buf);
 }
+
 char *put_labels(char *buf)
 {
 	ofs.printf("%s", buf);
 	return (buf);
 }
 
-char *put_label(int lab, char *nm, char *ns, char d, int sz)
+char *put_label(int lab, char *nm, char *ns, char d, int sz, int algn)
 {
   static char buf[500];
 
@@ -596,8 +619,11 @@ char *put_label(int lab, char *nm, char *ns, char d, int sz)
 		buf[0] = '\0';
 		return buf;
 	}
+	if (algn == 0)
+		algn = 8;
 	if (d == 'C') {
-		sprintf_s(buf, sizeof(buf), ".C%05d", lab);
+//		sprintf_s(buf, sizeof(buf), ".C%05d", lab);
+		sprintf_s(buf, sizeof(buf), "%s_%05d", currentFn->sym->mangledName->c_str(), lab);
 		if (nm == NULL)
 			ofs.printf("%s:\n", buf);
 		else if (strlen(nm) == 0) {
@@ -609,17 +635,18 @@ char *put_label(int lab, char *nm, char *ns, char d, int sz)
 		}
 	}
 	else {
+		ofs.write("\t.type ");
 		sprintf_s(buf, sizeof(buf), "%.400s_%d", ns, lab);
-		if (nm == NULL)
-			ofs.printf("%s[%d]:\n", buf, sz);
-		else if (strlen(nm) == 0) {
-			ofs.printf("%s[%d]:\n", buf, sz);
-		}
-		else {
-			//sprintf_s(buf, sizeof(buf), "%s_%s:\n", nm, ns);
-			ofs.printf("%s[%d]: ", buf, sz);
-			ofs.printf("; %s\n", nm);
-		}
+		ofs.printf("%s,@object\n", buf);
+		ofs.write("\t.size ");
+		ofs.printf("%s,", buf);
+		ofs.printf("%d\n", sz);
+		ofs.printf("\t.align %d\n", algn);
+		ofs.printf("%s:", buf);
+		if (nm == NULL || strlen(nm) == 0)
+			ofs.printf("\n");
+		else
+			ofs.printf(" #%s\n", nm);
 	}
 	return (buf);
 }
@@ -633,7 +660,7 @@ void GenerateByte(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdcb\t%d",(int)val & 0x00ff);
+        ofs.printf("\t.byte\t%d",(int)val & 0x00ff);
         gentype = bytegen;
         outcol = 19;
     }
@@ -648,7 +675,7 @@ void GenerateChar(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdcw\t%d",(int)val & 0xffff);
+        ofs.printf("\t.2byte\t%d",(int)val & 0xffff);
         gentype = chargen;
         outcol = 21;
     }
@@ -663,7 +690,7 @@ void GenerateHalf(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdct\t%ld",(long)(val & 0xffffffffLL));
+        ofs.printf("\t.4byte\t%ld",(long)(val & 0xffffffffLL));
         gentype = halfgen;
         outcol = 25;
     }
@@ -678,7 +705,7 @@ void GenerateWord(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdco\t%I64d",val);
+        ofs.printf("\t.8byte\t%I64d",val);
         gentype = wordgen;
         outcol = 33;
     }
@@ -693,7 +720,7 @@ void GenerateLong(int64_t val)
                 }
         else    {
                 nl();
-                ofs.printf("\tdco\t%I64d",val);
+                ofs.printf("\t.8byte\t%I64d",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -705,7 +732,7 @@ void GenerateFloat(Float128 *val)
 	if (val==nullptr)
 		return;
 	ofs.printf("\r\n\t.align 2\r\n");
-	ofs.printf("\tdct\t%s",val->ToString(64));
+	ofs.printf("\t.4byte\t%s",val->ToString(64));
   gentype = longgen;
   outcol = 65;
 	genst_cumulative += 8;
@@ -716,7 +743,7 @@ void GenerateQuad(Float128 *val)
 	if (val==nullptr)
 		return;
 	ofs.printf("\r\n\t.align 2\r\n");
-	ofs.printf("\tdct\t%s",val->ToString(128));
+	ofs.printf("\t.4byte\t%s",val->ToString(128));
   gentype = longgen;
   outcol = 65;
 	genst_cumulative += 16;
@@ -725,7 +752,7 @@ void GenerateQuad(Float128 *val)
 void GeneratePosit(Posit64 val)
 {
 	ofs.printf("\r\n\t.align 8\r\n");
-	ofs.printf("\tdco\t%s", val.ToString());
+	ofs.printf("\t.8byte\t%s", val.ToString());
 	gentype = longgen;
 	outcol = 65;
 	genst_cumulative += 8;
@@ -816,12 +843,16 @@ void genstorageskip(int nbytes)
 
 std::streampos genstorage(int64_t nbytes)
 {
+	static int nn = 1;
+
 	std::streampos pos = ofs.tellp();
 	nl();
 	if (nbytes) {
-		ofs.printf("\tfill.b\t%lld,0x00                    \n", nbytes);
+		ofs.printf("\t.byte 0\n");
+//		ofs.printf("\t.lcomm %s,%lld                    \n", nam, nbytes);
 	}
 	genst_cumulative += nbytes;
+	nn++;
 	return (pos);
 }
 
@@ -1067,6 +1098,7 @@ void dumplits()
 	} Flt;
 	union _tagFlt uf;
 	int ln;
+	int algn;
 
 	dfs.printf("<Dumplits>\n");
 	roseg();
@@ -1078,7 +1110,7 @@ void dumplits()
 	while (casetab != nullptr) {
 		nl();
 		if (casetab->pass == 2)
-			put_label(casetab->label, "", casetab->nmspace, 'C', 0);// 'D');
+			put_label(casetab->label, "", casetab->nmspace, 'C', 0, 0);// 'D');
 		for (nn = 0; nn < casetab->num; nn++) {
 			if (casetab->cases[nn].pass==2)
 				GenerateLabelReference(casetab->cases[nn].label, 0);
@@ -1096,14 +1128,14 @@ void dumplits()
 			switch (numeric_tab->typ) {
 			case bt_float:
 			case bt_double:
-				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', sizeOfFPD);
+				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', sizeOfFPD, 8);
 				ofs.printf("\tdct\t");
 				numeric_tab->f128.Pack(64);
 				ofs.printf("%s", numeric_tab->f128.ToString(64));
 				outcol += 35;
 				break;
 			case bt_quad:
-				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', sizeOfFPQ);
+				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', sizeOfFPQ, 16);
 				ofs.printf("\tdct\t");
 				numeric_tab->f128.Pack(64);
 				ofs.printf("%s", numeric_tab->f128.ToString(64));
@@ -1112,19 +1144,19 @@ void dumplits()
 			case bt_posit:
 				switch (numeric_tab->precision) {
 				case 16:
-					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 2);
+					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 2, 2);
 					ofs.printf("\t\dcw\t");
 					ofs.printf("0x%04X\n", (int)(numeric_tab->p.val & 0xffffLL));
 					outcol += 35;
 					break;
 				case 32:
-					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 4);
+					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 4, 4);
 					ofs.printf("\t\dct\t");
 					ofs.printf("0x%08X\n", (int)(numeric_tab->p.val & 0xffffffffLL));
 					outcol += 35;
 					break;
 				default:
-					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 8);
+					put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 8, 8);
 					ofs.printf("\t\dco\t");
 					ofs.printf("0x%016I64X\n", numeric_tab->p.val);
 					outcol += 35;
@@ -1132,10 +1164,10 @@ void dumplits()
 				}
 				break;
 			case bt_void:
-				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 0);
+				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 0, 1);
 				break;
 			default:
-				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 0);
+				put_label(numeric_tab->label, "", numeric_tab->nmspace, 'D', 0, 2);
 				;// printf("hi");
 			}
 		numeric_tab = numeric_tab->next;
@@ -1158,7 +1190,7 @@ void dumplits()
 	while(quadtab != nullptr) {
 		nl();
 		if (DataLabels[quadtab->label]) {
-			put_label(quadtab->label, "", quadtab->nmspace, 'D', sizeOfFPQ);
+			put_label(quadtab->label, "", quadtab->nmspace, 'D', sizeOfFPQ, 16);
 			ofs.printf("\tdh\t");
 			quadtab->Pack(64);
 			ofs.printf("%s", quadtab->ToString(64));
@@ -1184,38 +1216,42 @@ void dumplits()
 		nl();
 		if (!lit->isString) {
 			if (DataLabels[lit->label])
-				put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ep->esize);
+				put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ep->esize, ep->GetAggregateAlignment());
 		}
 		else {
 			cp = lit->str;
 			ln = 0;
 			switch (*cp) {
 			case 'B':
+				algn = 1;
 				cp++;
 				while (*cp++)
 					ln++;
 				ln++;
 				break;
 			case 'W':
+				algn = 2;
 				cp++;
 				while (*cp++)
 					ln+=2;
 				ln+=2;
 				break;
 			case 'T':
+				algn = 4;
 				cp++;
 				while (*cp++)
 					ln += 4;
 				ln += 4;
 				break;
 			case 'O':
+				algn = 8;
 				cp++;
 				while (*cp++)
 					ln += 8;
 				ln += 8;
 				break;
 			}
-			put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ln);
+			put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ln, algn);
 		}
 		if (lit->isString) {
 			cp = lit->str;
@@ -1297,7 +1333,7 @@ void tseg()
 {    
 	if( curseg != tlsseg) {
 		nl();
-		ofs.printf("\t.tls\n");
+		ofs.printf("\t.section .tls\n");
 		ofs.printf("\t.align\t8\n");
 		curseg = tlsseg;
     }
@@ -1307,7 +1343,7 @@ void roseg()
 {
 	if( curseg != rodataseg) {
 		nl();
-		ofs.printf("\t.rodata\n");
+		ofs.printf("\t.section .rodata\n");
 		ofs.printf("\t.align\t16\n");
 		curseg = rodataseg;
     }
@@ -1319,13 +1355,13 @@ void seg(int sg, int algn)
 	if( curseg != sg) {
 		switch(sg) {
 		case bssseg:
-			ofs.printf("\t.bss\n");
+			ofs.printf("\t.section .bss\n");
 			break;
 		case dataseg:
 			ofs.printf("\t.data\n");
 			break;
 		case tlsseg:
-			ofs.printf("\t.tls\n");
+			ofs.printf("\t.section .tls\n");
 			break;
 		case idataseg:
 			ofs.printf("\t.idata\n");
@@ -1334,7 +1370,7 @@ void seg(int sg, int algn)
 			ofs.printf("\t.text\n");
 			break;
 		case rodataseg:
-			ofs.printf("\t.rodata\n");
+			ofs.printf("\t.section .rodata\n");
 			break;
 		}
 		curseg = sg;

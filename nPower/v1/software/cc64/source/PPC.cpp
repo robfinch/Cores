@@ -45,7 +45,8 @@ void PPCCodeGenerator::SignExtendBitfield(Operand* ap3, uint64_t mask)
 
 	umask = 0x8000000000000000LL | ~(mask >> 1);
 	ap2 = GetTempRegister();
-	GenerateDiadic(cpu.ldi_op, 0, ap2, cg.MakeImmediate((int64_t)umask));
+	//GenerateDiadic(cpu.ldi_op, 0, ap2, cg.MakeImmediate((int64_t)umask));
+	GenerateLoadConst(cg.MakeImmediate((int64_t)umask), ap2);
 	GenerateTriadic(op_add, 0, ap3, ap3, ap2);
 	GenerateTriadic(op_xor, 0, ap3, ap3, ap2);
 	ReleaseTempRegister(ap2);
@@ -56,6 +57,8 @@ Operand* PPCCodeGenerator::MakeBoolean(Operand* ap)
 {
 	Operand* ap1;
 	OCODE* ip;
+	int lab1 = nextlabel++;
+	int lab2 = nextlabel++;
 
 	ap1 = GetTempRegister();
 	ip = currentFn->pl.tail;
@@ -65,8 +68,15 @@ Operand* PPCCodeGenerator::MakeBoolean(Operand* ap)
 		GenerateTriadic(op_slt, 0, ap1, ap, MakeImmediate(1LL));
 		GenerateTriadic(op_xor, 0, ap1, ap1, MakeImmediate(1LL));
 	}
-	else
-		GenerateTriadic(op_sne, 0, ap1, ap, makereg(regZero));
+	else {
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap, MakeImmediate(0LL));
+		GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(lab1));
+		GenerateLoadConst(MakeImmediate(1), ap1);
+		GenerateMonadic(op_b, 0, MakeCodeLabel(lab2));
+		GenerateLabel(lab1);
+		GenerateLoadConst(MakeImmediate(0), ap1);
+		GenerateLabel(lab2);
+	}
 	ap1->isBool = true;
 	return (ap1);
 }
@@ -285,12 +295,13 @@ Operand* PPCCodeGenerator::GenerateEq(ENODE *node)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
 	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	if (isRiscv) {
-		GenerateTriadic(op_xor, 0, ap3, ap1, ap2);
-		GenerateTriadic(op_slt, 0, ap3, ap3, MakeImmediate(1LL));
-	}
+	if (ap2->mode == am_imm)
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
 	else
-		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
+	GenerateMonadic(op_mfcr, 0, ap3);
+	GenerateTriadic(op_srwi, 0, ap3, ap3, MakeImmediate(29));
+	GenerateTriadic(op_andi|op_dot, 0, ap3, ap3, MakeImmediate(1));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	return (ap3);
@@ -298,23 +309,11 @@ Operand* PPCCodeGenerator::GenerateEq(ENODE *node)
 
 Operand* PPCCodeGenerator::GenerateNe(ENODE* node)
 {
-	Operand* ap1, * ap2, * ap3;
-	int size;
+	Operand* ap1;
 
-	size = node->GetNaturalSize();
-	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	if (isRiscv) {
-		GenerateTriadic(op_xor, 0, ap3, ap1, ap2);
-		GenerateTriadic(op_slt, 0, ap3, ap3, MakeImmediate(1LL));
-		GenerateTriadic(op_xor, 0, ap3, ap3, MakeImmediate(1LL));
-	}
-	else
-		GenerateTriadic(op_sne, 0, ap3, ap1, ap2);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	return (ap3);
+	ap1 = GenerateEq(node);
+	GenerateTriadic(op_xori, 0, ap1, ap1, MakeImmediate(1));
+	return (ap1);
 }
 
 Operand* PPCCodeGenerator::GenerateLt(ENODE* node)
@@ -326,7 +325,13 @@ Operand* PPCCodeGenerator::GenerateLt(ENODE* node)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
 	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
+	if (ap2->mode == am_imm)
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+	else
+		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
+	GenerateMonadic(op_mfcr, 0, ap3);
+	GenerateTriadic(op_srwi, 0, ap3, ap3, MakeImmediate(31));
+	GenerateTriadic(op_andi | op_dot, 0, ap3, ap3, MakeImmediate(1));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	return (ap3);
@@ -334,20 +339,11 @@ Operand* PPCCodeGenerator::GenerateLt(ENODE* node)
 
 Operand* PPCCodeGenerator::GenerateLe(ENODE* node)
 {
-	Operand* ap1, * ap2, * ap3;
-	int size;
+	Operand* ap1;
 
-	size = node->GetNaturalSize();
-	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	if (ap2->mode == am_reg)
-		GenerateTriadic(op_sgt, 0, ap3, ap2, ap1);
-	else
-		GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	return (ap3);
+	ap1 = GenerateGt(node);
+	GenerateTriadic(op_xori, 0, ap1, ap1, MakeImmediate(1));
+	return (ap1);
 }
 
 Operand* PPCCodeGenerator::GenerateGt(ENODE* node)
@@ -359,10 +355,13 @@ Operand* PPCCodeGenerator::GenerateGt(ENODE* node)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], am_reg, size, 1);
 	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size, 1);
-	if (ap2->mode == am_reg)
-		GenerateTriadic(op_slt, 0, ap3, ap2, ap1);
+	if (ap2->mode == am_imm)
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
 	else
-		GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
+	GenerateMonadic(op_mfcr, 0, ap3);
+	GenerateTriadic(op_srwi, 0, ap3, ap3, MakeImmediate(30));
+	GenerateTriadic(op_andi | op_dot, 0, ap3, ap3, MakeImmediate(1));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	//		GenerateDiadic(op_sgt,0,ap3,ap3);
@@ -371,17 +370,11 @@ Operand* PPCCodeGenerator::GenerateGt(ENODE* node)
 
 Operand* PPCCodeGenerator::GenerateGe(ENODE* node)
 {
-	Operand* ap1, * ap2, * ap3;
-	int size;
+	Operand* ap1;
 
-	size = node->GetNaturalSize();
-	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	GenerateTriadic(op_sge, 0, ap3, ap1, ap2);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	return (ap3);
+	ap1 = GenerateLt(node);
+	GenerateTriadic(op_xori, 0, ap1, ap1, MakeImmediate(1));
+	return (ap1);
 }
 
 Operand* PPCCodeGenerator::GenerateLtu(ENODE* node)
@@ -393,7 +386,13 @@ Operand* PPCCodeGenerator::GenerateLtu(ENODE* node)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
 	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
+	if (ap2->mode == am_imm)
+		GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
+	else
+		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
+	GenerateMonadic(op_mfcr, 0, ap3);
+	GenerateTriadic(op_srwi, 0, ap3, ap3, MakeImmediate(31));
+	GenerateTriadic(op_andi | op_dot, 0, ap3, ap3, MakeImmediate(1));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	return (ap3);
@@ -401,20 +400,11 @@ Operand* PPCCodeGenerator::GenerateLtu(ENODE* node)
 
 Operand* PPCCodeGenerator::GenerateLeu(ENODE* node)
 {
-	Operand* ap1, * ap2, * ap3;
-	int size;
+	Operand* ap1;
 
-	size = node->GetNaturalSize();
-	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize(), 1);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize(), 1);
-	if (ap2->mode == am_reg)
-		GenerateTriadic(op_sgtu, 0, ap3, ap2, ap1);
-	else
-		GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	return (ap3);
+	ap1 = GenerateGtu(node);
+	GenerateTriadic(op_xori, 0, ap1, ap1, MakeImmediate(1));
+	return (ap1);
 }
 
 Operand* PPCCodeGenerator::GenerateGtu(ENODE* node)
@@ -426,10 +416,13 @@ Operand* PPCCodeGenerator::GenerateGtu(ENODE* node)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], am_reg, size, 1);
 	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size, 1);
-	if (ap2->mode == am_reg)
-		GenerateTriadic(op_sltu, 0, ap3, ap2, ap1);
+	if (ap2->mode == am_imm)
+		GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
 	else
-		GenerateTriadic(op_sgtu, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
+	GenerateMonadic(op_mfcr, 0, ap3);
+	GenerateTriadic(op_srwi, 0, ap3, ap3, MakeImmediate(30));
+	GenerateTriadic(op_andi | op_dot, 0, ap3, ap3, MakeImmediate(1));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	//		GenerateDiadic(op_sgt,0,ap3,ap3);
@@ -438,17 +431,11 @@ Operand* PPCCodeGenerator::GenerateGtu(ENODE* node)
 
 Operand* PPCCodeGenerator::GenerateGeu(ENODE* node)
 {
-	Operand* ap1, * ap2, * ap3;
-	int size;
+	Operand* ap1;
 
-	size = node->GetNaturalSize();
-	ap3 = GetTempRegister();
-	ap1 = cg.GenerateExpression(node->p[0], am_reg, size, 1);
-	ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size, 1);
-	GenerateTriadic(op_sgeu, 0, ap3, ap1, ap2);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
-	return (ap3);
+	ap1 = GenerateLtu(node);
+	GenerateTriadic(op_xori, 0, ap1, ap1, MakeImmediate(1));
+	return (ap1);
 }
 
 Operand* PPCCodeGenerator::GenerateFeq(ENODE* node)
@@ -731,25 +718,30 @@ void PPCCodeGenerator::GenerateBeq(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
 		}
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
@@ -763,25 +755,30 @@ void PPCCodeGenerator::GenerateBne(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
 		}
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
@@ -795,25 +792,30 @@ void PPCCodeGenerator::GenerateBlt(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateDiadic(op_blt, 0, makecreg(0), MakeCodeLabel(label));
 		}
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_blt, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
@@ -829,7 +831,11 @@ void PPCCodeGenerator::GenerateBge(Operand* ap1, Operand* ap2, int label)
 	if (ap2->mode == am_imm) {
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32767) {
 			if (ap2->offset->i > -32768) {
+				GenerateZeradic(op_nop);
+				GenerateZeradic(op_nop);
 				GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+				GenerateZeradic(op_nop);
+				GenerateZeradic(op_nop);
 				GenerateDiadic(op_bge, 0, makecreg(0), MakeCodeLabel(label));
 			}
 			else {
@@ -840,11 +846,14 @@ void PPCCodeGenerator::GenerateBge(Operand* ap1, Operand* ap2, int label)
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
-				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL)+1LL));
-			else
+			if (n & 0x8000LL) {
+				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_bge, 0, makecreg(0), MakeCodeLabel(label));
@@ -862,25 +871,30 @@ void PPCCodeGenerator::GenerateBle(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateDiadic(op_ble, 0, makecreg(0), MakeCodeLabel(label));
 		}
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_ble, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
@@ -894,25 +908,30 @@ void PPCCodeGenerator::GenerateBgt(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateTriadic(op_cmpwi, 0, makecreg(0), ap1, ap2);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
 			GenerateDiadic(op_bgt, 0, makecreg(0), MakeCodeLabel(label));
 		}
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_bgt, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmpw, 0, makecreg(0), ap1, ap2);
@@ -926,7 +945,6 @@ void PPCCodeGenerator::GenerateBltu(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
 			GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
@@ -935,16 +953,18 @@ void PPCCodeGenerator::GenerateBltu(Operand* ap1, Operand* ap2, int label)
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_blt, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
@@ -958,7 +978,6 @@ void PPCCodeGenerator::GenerateBgeu(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
 			GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
@@ -967,16 +986,18 @@ void PPCCodeGenerator::GenerateBgeu(Operand* ap1, Operand* ap2, int label)
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_bge, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
@@ -990,7 +1011,6 @@ void PPCCodeGenerator::GenerateBleu(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
 			GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
@@ -999,16 +1019,18 @@ void PPCCodeGenerator::GenerateBleu(Operand* ap1, Operand* ap2, int label)
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_ble, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
@@ -1022,7 +1044,6 @@ void PPCCodeGenerator::GenerateBgtu(Operand* ap1, Operand* ap2, int label)
 	int64_t n;
 
 	if (ap2->mode == am_imm) {
-		ap3 = GetTempRegister();
 		if (ap2->offset->i >= -32768 && ap2->offset->i < 32768)
 		{
 			GenerateTriadic(op_cmplwi, 0, makecreg(0), ap1, ap2);
@@ -1031,16 +1052,18 @@ void PPCCodeGenerator::GenerateBgtu(Operand* ap1, Operand* ap2, int label)
 		else {
 			ap3 = GetTempRegister();
 			n = ap2->offset->i;
-			if (n & 0x8000LL)
+			if (n & 0x8000LL) {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate((n >> 16LL) + 1LL));
-			else
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n | 0xffffffffffff8000LL));
+			}
+			else {
 				GenerateDiadic(op_lis, 0, ap3, MakeImmediate(n >> 16LL));
-			GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+				GenerateTriadic(op_addi, 0, ap3, ap3, MakeImmediate(n & 0xffffLL));
+			}
 			GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap3);
 			ReleaseTempRegister(ap3);
 			GenerateDiadic(op_bgt, 0, makecreg(0), MakeCodeLabel(label));
 		}
-		ReleaseTempReg(ap3);
 	}
 	else {
 		GenerateTriadic(op_cmplw, 0, makecreg(0), ap1, ap2);
@@ -1057,7 +1080,8 @@ void PPCCodeGenerator::GenerateBand(Operand* ap1, Operand* ap2, int label)
 	else {
 		ap3 = GetTempRegister();
 		GenerateTriadic(op_and, 0, ap3, ap1, ap2);
-		GenerateDiadic(op_bnez, 0, ap3, MakeCodeLabel(label));
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap3, MakeImmediate(0));
+		GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
 		ReleaseTempReg(ap3);
 	}
 }
@@ -1071,7 +1095,8 @@ void PPCCodeGenerator::GenerateBor(Operand* ap1, Operand* ap2, int label)
 	else {
 		ap3 = GetTempRegister();
 		GenerateTriadic(op_or, 0, ap3, ap1, ap2);
-		GenerateDiadic(op_bnez, 0, ap3, MakeCodeLabel(label));
+		GenerateTriadic(op_cmpwi, 0, makecreg(0), ap3, MakeImmediate(0));
+		GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(label));
 		ReleaseTempReg(ap3);
 	}
 }
@@ -1082,7 +1107,8 @@ void PPCCodeGenerator::GenerateBnand(Operand* ap1, Operand* ap2, int label)
 
 	ap3 = GetTempRegister();
 	GenerateTriadic(op_and, 0, ap3, ap1, ap2);
-	GenerateDiadic(op_beqz, 0, ap3, MakeCodeLabel(label));
+	GenerateTriadic(op_cmpwi, 0, makecreg(0), ap3, MakeImmediate(0));
+	GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
 	ReleaseTempReg(ap3);
 }
 
@@ -1092,7 +1118,8 @@ void PPCCodeGenerator::GenerateBnor(Operand* ap1, Operand* ap2, int label)
 
 	ap3 = GetTempRegister();
 	GenerateTriadic(op_or, 0, ap3, ap1, ap2);
-	GenerateDiadic(op_beqz, 0, ap3, MakeCodeLabel(label));
+	GenerateTriadic(op_cmpwi, 0, makecreg(0), ap3, MakeImmediate(0));
+	GenerateDiadic(op_beq, 0, makecreg(0), MakeCodeLabel(label));
 	ReleaseTempReg(ap3);
 }
 

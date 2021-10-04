@@ -532,8 +532,7 @@ void PeepList::OptDoubleTargetRemoval()
 void PeepList::OptConstReg()
 {
 	OCODE *ip;
-	Instruction *insn;
-	MachineReg *mr, *mr2;
+	MachineReg *mr;
 	Operand *top;
 	int n;
 	int count = 0;
@@ -549,7 +548,7 @@ void PeepList::OptConstReg()
 		if (ip->insn) {
 			// Swap operands around commutativly for addition and multiplication so
 			// that constant is at right.
-			if (ip->insn->opcode == op_add || ip->insn->opcode == op_mul || ip->insn->opcode == op_mulu) {
+			if (ip->insn->opcode == op_add || ip->insn->opcode == op_mul || ip->insn->opcode == op_mulu || ip->insn->opcode == op_mullw) {
 				if (ip->oper2->mode == am_reg) {
 					mr = &regs[ip->oper2->preg];
 					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
@@ -714,11 +713,10 @@ void PeepList::OptInstructions()
 			case op_mov:	ip->OptMove();	break;
 			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
-			case op_gcsub:	ip->OptSubtract(); break;
-			case op_ldb:		ip->OptLoadByte(); break;
-			case op_ldw:		ip->OptLoadChar(); break;
+			case op_lb:		ip->OptLoadByte(); break;
+			case op_lha:		ip->OptLoadChar(); break;
 			case op_ldp:		ip->OptLoadHalf(); break;
-			case op_ldo:		ip->OptLoadWord(); break;
+			case op_ldd:		ip->OptLoadWord(); break;
 			case op_sxb:	ip->OptSxb();	break;
 			case op_sxw:	ip->OptSxw();	break;
 			case op_beq:	ip->OptBeq(); break;
@@ -743,6 +741,7 @@ void PeepList::OptInstructions()
 			case op_sth:		ip->OptStore();	break;
 			case op_and:	ip->OptAnd(); break;
 			case op_redor:	ip->OptRedor();	break;
+			case op_mullw:
 			case op_mul:	ip->OptMul(); break;
 			case op_mulu:	ip->OptMulu(); break;
 			case op_div:	ip->OptDiv(); break;
@@ -1168,7 +1167,7 @@ void PeepList::RemoveStackAlloc()
 
 	for (ip = head; ip; ip = ip->fwd) {
 		if (ip->insn) {
-			if ((ip->opcode == op_add || ip->opcode == op_sub || ip->opcode == op_gcsub) &&
+			if ((ip->opcode == op_add || ip->opcode == op_sub) &&
 				ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
 				ip->MarkRemove();
 			}
@@ -1209,7 +1208,6 @@ void PeepList::loadHex(txtiStream& ifs)
 {
 	char buf[50];
 	OCODE *cd;
-	int op;
 
 	head = tail = nullptr;
 	while (!ifs.eof()) {
@@ -1233,7 +1231,6 @@ void PeepList::loadHex(txtiStream& ifs)
 void PeepList::flush()
 {
 	static bool first = true;
-	txtoStream* oofs;
 	OCODE *ip;
 
 /*
@@ -1252,7 +1249,7 @@ void PeepList::flush()
 	for (ip = head; ip; ip = ip->fwd)
 	{
 		if (ip->opcode == op_label)
-			put_label((int)ip->oper1, "", GetNamespace(), 'C', 0);
+			put_label((int)ip->oper1, "", GetNamespace(), 'C', 0, 0);
 		else
 			ip->store(ofs);
 	}

@@ -107,6 +107,8 @@ Statement *Function::ParseBody()
 			lbl += "_func";
 		//gen_strlab(lbl);
 	}
+	ofs.printf("\t.sdreg r27\n");
+	ofs.printf("\t.sd2reg r28\n");
 	dfs.printf("B");
 	p = my_strdup((char *)lbl.c_str());
 	dfs.printf("b");
@@ -653,7 +655,7 @@ int Function::RestoreFPRegisterVars()
 			GenerateDiadic(op_fldo, 0, makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
+		GenerateTriadic(op_addi, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
 	}
 	return (cnt2);
 }
@@ -672,7 +674,7 @@ int Function::RestorePositRegisterVars()
 			GenerateDiadic(op_pldo, 0, compiler.of.makepreg(nn), MakeIndexed(cnt2 - cnt, regSP));
 			cnt -= sizeOfWord;
 		}
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
+		GenerateTriadic(op_addi, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
 	}
 	return (cnt2);
 }
@@ -719,6 +721,8 @@ void Function::RestoreTemporaries(int sp, int fsp, int psp)
 
 void Function::UnlinkStack(int64_t amt)
 {
+	Operand* ap;
+
 	/* auto news are garbage collected
 	if (hasAutonew) {
 		GenerateMonadic(op_call, 0, MakeStringAsNameConst("__autodel",codeseg));
@@ -727,10 +731,20 @@ void Function::UnlinkStack(int64_t amt)
 	*/
 	if (alstk) {
 		GenerateMonadic(op_hint, 0, MakeImmediate(begin_stack_unlink));
-		GenerateDiadic(cpu.mov_op, 0, makereg(regSP), makereg(regFP));
-		GenerateDiadic(cpu.ldt_op, 0, makereg(regFP), MakeIndirect(regSP));
-		if (doesJAL)
-			GenerateDiadic(cpu.ldt_op, 0, makereg(regLR), MakeIndexed(2 * sizeOfWord, regFP));
+		GenerateDiadic(op_mr, 0, makereg(regSP), makereg(regFP));
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		GenerateDiadic(op_lwz, 0, makereg(regFP), MakeIndirect(regSP));
+		GenerateZeradic(op_nop);
+		GenerateZeradic(op_nop);
+		if (doesJAL) {
+			ap = GetTempRegister();
+			GenerateDiadic(op_lwz, 0, ap, MakeIndexed(2 * sizeOfWord, regFP));
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
+			GenerateMonadic(op_mtlr, 0, ap);
+			ReleaseTempReg(ap);
+		}
 		GenerateMonadic(op_hint, 0, MakeImmediate(end_stack_unlink));
 	}
 	return;
@@ -781,8 +795,8 @@ void Function::SetupReturnBlock()
 	alstk = false;
 	GenerateMonadic(op_hint,0,MakeImmediate(begin_return_block));
 	GenerateTriadic(op_addi, 0, makereg(regSP), makereg(regSP), MakeImmediate(-Compiler::GetReturnBlockSize()));
-	GenerateDiadic(cpu.stt_op, 0, makereg(regFP), MakeIndirect(regSP));
-	GenerateDiadic(cpu.mov_op, 0, makereg(regFP), makereg(regSP));
+	GenerateDiadic(op_stw, 0, makereg(regFP), MakeIndirect(regSP));
+	GenerateDiadic(op_mr, 0, makereg(regFP), makereg(regSP));
 	if (stkspace != 0)
 		GenerateTriadic(op_addi, 0, makereg(regSP), makereg(regSP), MakeImmediate(-stkspace));
 	alstk = true;
@@ -802,7 +816,12 @@ void Function::SetupReturnBlock()
 		if (!cpu.SupportsEnter) {
 			//if (IsFar)
 			//	GenerateMonadic(op_di, 0, MakeImmediate(2));
-			GenerateDiadic(cpu.stt_op, 0, makereg(regLR), MakeIndexed(2 * sizeOfWord, regFP));
+			ap = GetTempRegister();
+			GenerateMonadic(op_mflr, 0, ap);
+			GenerateZeradic(op_nop);
+			GenerateZeradic(op_nop);
+			GenerateDiadic(op_stw, 0, ap, MakeIndexed(2 * sizeOfWord, regFP));
+			ReleaseTempReg(ap);
 			if (IsFar)
 				GenerateDiadic(cpu.stt_op, 0, makereg(regRS), MakeIndexed(3 * sizeOfWord, regFP));
 		}
@@ -829,9 +848,9 @@ void Function::SetupReturnBlock()
 		ap = GetTempRegister();
 		DataLabels[defCatchLabel] = true;
 		defCatchLabelPatchPoint = currentFn->pl.tail;
-		sprintf_s(buf, sizeof(buf), ".C%05lld@ha", defCatchLabel);
+		sprintf_s(buf, sizeof(buf), "%s_%05lld@ha", currentFn->sym->mangledName->c_str(), defCatchLabel);
 		GenerateDiadic(op_lis, 0, ap, MakeStringAsNameConst(buf, codeseg));
-		sprintf_s(buf, sizeof(buf), ".C%05lld@l", defCatchLabel);
+		sprintf_s(buf, sizeof(buf), "%s_%05lld@l", currentFn->sym->mangledName->c_str(), defCatchLabel);
 		GenerateTriadic(op_addi, 0, ap, ap, MakeStringAsNameConst(buf, codeseg));
 		if (IsFar)
 			GenerateMonadic(op_di, 0, MakeImmediate(2));
@@ -898,7 +917,7 @@ void Function::GenerateReturn(Statement* stmt)
 						GenerateMonadic(op_call, 0, MakeStringAsNameConst("__aacpy", codeseg));
 						GenerateMonadic(op_bex, 0, MakeDataLabel(throwlab, regZero));
 						if (!IsPascal)
-							GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
+							GenerateTriadic(op_addi, 0, makereg(regSP), makereg(regSP), MakeImmediate(sizeOfWord * 3));
 					}
 					else {
 						error(ERR_MISSING_HIDDEN_STRUCTPTR);
@@ -1167,14 +1186,16 @@ void Function::Generate()
 	if (gp != 0) {
 		Operand* ap = GetTempRegister();
 		//cg.GenerateLoadConst(MakeStringAsNameConst("#__data_base", dataseg), ap);
-		GenerateDiadic(cpu.lea_op, 0, makereg(regGP), MakeStringAsNameConst("__data_start", dataseg));
+		GenerateDiadic(op_lis, 0, makereg(regGP), MakeStringAsNameConst("__data_start@ha", dataseg));
+		GenerateTriadic(op_addi, 0, makereg(regGP), makereg(regGP), MakeStringAsNameConst("__data_start@l", dataseg));
 		//GenerateTriadic(op_base, 0, makereg(regGP), makereg(regGP), ap);
 		ReleaseTempRegister(ap);
 	}
 	if (gp1 != 0) {
 		Operand* ap = GetTempRegister();
 		//cg.GenerateLoadConst(MakeStringAsNameConst("#__rodata_base", dataseg), ap);
-		GenerateDiadic(cpu.lea_op, 0, makereg(regGP1), MakeStringAsNameConst("__rodata_start", dataseg));
+		GenerateDiadic(op_lis, 0, makereg(regGP1), MakeStringAsNameConst("_start_rodata@ha", dataseg));
+		GenerateTriadic(op_addi, 0, makereg(regGP1), makereg(regGP1), MakeStringAsNameConst("_start_rodata@l", dataseg));
 		//if (!compiler.os_code)
 		//GenerateTriadic(op_base, 0, makereg(regGP1), makereg(regGP1), ap);
 		ReleaseTempRegister(ap);

@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 	exceptions=1;
 	compiler.nogcskips = true;
 	compiler.os_code = false;
-	cpu.fileExt = ".ppa";
+	cpu.fileExt = ".asm";
 	cpu.SupportsBand = false;
 	cpu.SupportsBor = false;
 	cpu.SupportsBBC = false;
@@ -170,14 +170,14 @@ int main(int argc, char **argv)
 	cpu.bra_op = op_b;
 	cpu.mov_op = op_mr;
 	cpu.lea_op = op_la;
-	cpu.ldi_op = op_ldi;
+	cpu.ldi_op = op_li;
 	cpu.ldbu_op = op_lbz;
 	cpu.ldb_op = op_lb;
 	cpu.ldo_op = op_ld;
 	cpu.ldtu_op = op_lwz;
-	cpu.ldt_op = op_lw;
-	cpu.ldwu_op = op_ldwu;
-	cpu.ldw_op = op_lh;
+	cpu.ldt_op = op_lwz;
+	cpu.ldwu_op = op_lwz;
+	cpu.ldw_op = op_lha;
 	cpu.stb_op = op_stb;
 	cpu.sto_op = op_std;
 	cpu.stt_op = op_stw;

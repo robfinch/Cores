@@ -127,10 +127,10 @@ Operand *Operand::GenerateSignExtend(int isize, int osize, int flags)
 		ReleaseTempRegister(ap);
 		switch (isize)
 		{
-		case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
-		case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
-		case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
-		case 8:	GenerateDiadic(op_sxo, 0, ap1, ap1); break;
+		case 1:	GenerateDiadic(op_extsb, 0, ap1, ap1); break;
+		case 2:	GenerateDiadic(op_extsh, 0, ap1, ap1); break;
+		case 4:	GenerateDiadic(op_extsw, 0, ap1, ap1); break;
+		case 8:	GenerateDiadic(op_extsw, 0, ap1, ap1); break;
 		}
 		//GenStore(ap1, ap, osize);
 		//ReleaseTempRegister(ap1);
@@ -145,10 +145,10 @@ Operand *Operand::GenerateSignExtend(int isize, int osize, int flags)
 	else {
 		switch (isize)
 		{
-		case 1:	GenerateDiadic(op_sxb, 0, ap, ap); break;
-		case 2:	GenerateDiadic(op_sxw, 0, ap, ap); break;
-		case 4:	GenerateDiadic(op_sxt, 0, ap, ap); break;
-		case 8:	GenerateDiadic(op_sxo, 0, ap, ap); break;
+		case 1:	GenerateDiadic(op_extsb, 0, ap, ap); break;
+		case 2:	GenerateDiadic(op_extsh, 0, ap, ap); break;
+		case 4:	GenerateDiadic(op_extsw, 0, ap, ap); break;
+		case 8:	GenerateDiadic(op_extsw, 0, ap, ap); break;
 		}
 	}
 	return (ap);
@@ -626,7 +626,7 @@ void Operand::store(txtoStream& ofs)
 	case am_ind:
 		//if (preg == 0)
 		//	printf("hello");
-		ofs.printf("(%s)", RegMoniker(preg));
+		ofs.printf("0(%s)", RegMoniker(preg));
 		break;
 	case am_indx:
 		// It's not known the function is a leaf routine until code

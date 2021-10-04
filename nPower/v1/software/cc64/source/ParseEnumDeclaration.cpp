@@ -57,12 +57,21 @@ void Declaration::ParseEnum(TABLE *table)
       sp->SetName(*(new std::string(lastid)));
       sp->tp->sname = new std::string(*sp->name);
       NextToken();
+      if (lastst == openpa) {
+        NextToken();
+        if (lastst == star) {
+          NextToken();
+          power = true;
+        }
+        amt = (int)GetIntegerExpression((ENODE**)NULL, nullptr, 0);
+        needpunc(closepa, 10);
+      }
       if (lastst != begin)
         ;// error(ERR_INCOMPLETE);
       else {
 				tagtable.insert(sp);
 				NextToken();
-				ParseEnumerationList(table,amt,sp,false);
+				ParseEnumerationList(table,amt,sp,power);
       }
 		}
     else
@@ -75,11 +84,11 @@ void Declaration::ParseEnum(TABLE *table)
 		tp->size = 2;
 		if (lastst==openpa) {
 			NextToken();
-			amt = (int)GetIntegerExpression((ENODE **)NULL,nullptr,0);
-      if (lastst == uparrow) {
+      if (lastst == star) {
         NextToken();
         power = true;
       }
+      amt = (int)GetIntegerExpression((ENODE **)NULL,nullptr,0);
 			needpunc(closepa,10);
 		}
     if( lastst != begin)

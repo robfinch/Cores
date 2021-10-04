@@ -90,6 +90,7 @@ bool Instruction::IsLoad()
 	if (this == nullptr)
 		return (false);
 	if (opcode == op_ldb
+		|| opcode == op_ldd
 		|| opcode == op_ldw
 		|| opcode == op_ldt
 		|| opcode == op_ldp
@@ -115,6 +116,7 @@ bool Instruction::IsIntegerLoad()
 	if (this == nullptr)
 		return (false);
 	if (opcode == op_ldb
+		|| opcode == op_ldd
 		|| opcode == op_ldw
 		|| opcode == op_ldt
 		|| opcode == op_ldp
@@ -135,7 +137,9 @@ bool Instruction::IsStore()
 	if (this == nullptr)
 		return (false);
 	if (opcode == op_stb
+		|| opcode == op_std
 		|| opcode == op_stw
+		|| opcode == op_sth
 		|| opcode == op_stt
 		|| opcode == op_stp
 		|| opcode == op_sto
@@ -159,6 +163,9 @@ bool Instruction::IsExt()
 	if (opcode == op_sxb
 		|| opcode == op_sxw
 		|| opcode == op_sxt
+		|| opcode == op_extsb
+		|| opcode == op_extsh
+		|| opcode == op_extsw
 		|| opcode == op_zxb
 		|| opcode == op_zxw
 		|| opcode == op_zxt

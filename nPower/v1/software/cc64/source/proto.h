@@ -60,8 +60,8 @@ extern void dseg();
 extern void tseg();
 //extern void put_code(int op, int len,Operand *aps, Operand *apd, Operand *);
 extern void put_code(OCODE*);
-extern char* put_label(int lab, char*, char*, char, int);
-extern char* gen_label(int lab, char*, char*, char, int);
+extern char* put_label(int lab, char*, char*, char, int, int);
+extern char* gen_label(int lab, char*, char*, char, int, int);
 extern char* put_labels(char*);
 extern char* opstr(int op);
 

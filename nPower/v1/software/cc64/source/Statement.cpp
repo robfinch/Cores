@@ -58,7 +58,7 @@ static SYM *makeint(char *name)
 	TYP *tp;
 
 	sp = allocSYM();
-	tp = TYP::Make(bt_long, 8);
+	tp = TYP::Make(bt_long, sizeOfWord);
 	tp->sname = new std::string("");
 	tp->isUnsigned = FALSE;
 	tp->isVolatile = FALSE;
@@ -730,7 +730,7 @@ j1:
 		stmtdepth++;
 		snp = ParseCompound();
 		stmtdepth--;
-		return snp;
+		return (snp);
 	case end:
 		return (snp);
 	case kw_check:
@@ -1446,7 +1446,7 @@ j1:
 	{
 		GenerateDiadic(cpu.bra_op, 0, MakeCodeLabel(lab2), 0);
 		if (mixedSource)
-			GenerateMonadic(op_remark, 0, MakeStringAsNameConst("; else",codeseg));
+			GenerateMonadic(op_remark, 0, MakeStringAsNameConst("# else",codeseg));
 		GenerateLabel(lab1);
 		s2->Generate();
 		GenerateLabel(lab2);
@@ -1626,7 +1626,7 @@ void Statement::GenerateThrow()
 		if (compiler.ipoll)
 			GenerateZeradic(op_pfi);
 		initstack();
-		ap = cg.GenerateExpression(exp, am_all, 8, 0);
+		ap = cg.GenerateExpression(exp, am_all, sizeOfWord, 0);
 		if (ap->mode == am_imm)
 			GenerateDiadic(cpu.ldi_op, 0, makereg(regFirstArg), ap);
 		else if (ap->mode != am_reg)
@@ -1700,8 +1700,8 @@ void Statement::GenerateCatch(int opt, int oldthrow, int olderthrow)
 				GenerateTriadic(op_bne, 0, makereg(regFirstArg + 1), MakeImmediate(stmt->num), MakeCodeLabel(curlab));
 			else {
 				ap2 = GetTempRegister();
-				GenerateTriadic(op_sne, 0, ap2, makereg(regFirstArg + 1), MakeImmediate(stmt->num));
-				GenerateDiadic(op_bnez, 0, ap2, MakeCodeLabel(curlab));
+				GenerateTriadic(op_cmpwi, 0, makecreg(0), makereg(regFirstArg + 1), MakeImmediate(stmt->num));
+				GenerateDiadic(op_bne, 0, makecreg(0), MakeCodeLabel(curlab));
 				ReleaseTempRegister(ap2);
 			}
 		}
@@ -1797,7 +1797,7 @@ void Statement::GenerateCompound()
 	while (sp) {
 		if (sp->initexp) {
 			initstack();
-			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, am_all, 8, 0));
+			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, am_all, sizeOfWord, 0));
 		}
 		sp = sp->GetNextPtr();
 	}

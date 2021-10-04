@@ -136,7 +136,7 @@ int NumTempRegs()
 	if (isRiscv)
 		return (7);
 	else
-		return (6);
+		return (7);
 	if (currentFn->IsLeaf)
 		return (regLastTemp - 1 + 1);
 	else
@@ -164,6 +164,7 @@ void initRegStack()
 		tmpregs[3] = 14;
 		tmpregs[4] = 15;
 		tmpregs[5] = 16;
+		tmpregs[6] = 17;
 	}
 
 	next_reg = regFirstTemp;
@@ -235,7 +236,7 @@ int IsTempReg(int rg)
 
 void SpillRegister(Operand *ap, int number)
 {
-	GenerateDiadic(op_stt,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_stw,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	if (pass==1)
 		max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
     //reg_stack[reg_stack_ptr].Operand = ap;
@@ -276,7 +277,7 @@ void LoadRegister(int regno, int number)
 	if (reg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	reg_in_use[regno] = number;
-	GenerateDiadic(op_ldt,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_lwz,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
 }
 

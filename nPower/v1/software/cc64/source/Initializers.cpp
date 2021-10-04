@@ -132,21 +132,18 @@ void doinit(SYM *sp)
 			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001\n");
 			ofs.printf(buf);
 		}
-		sp->realname = my_strdup(put_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D', sp->tp->size));
-		strcpy_s(glbl2, sizeof(glbl2), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D', sp->tp->size));
+		sp->realname = my_strdup(put_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D', sp->tp->size, (sp->tp->alignment == 0) ? sizeOfWord : sp->tp->alignment));
+		strcpy_s(glbl2, sizeof(glbl2), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D', sp->tp->size, (sp->tp->alignment==0)?sizeOfWord:sp->tp->alignment));
 	}
 	else {
+		static char buf[500];
+		static char nam[200];
+
 		if (sp->storage_class == sc_global) {
-			strcpy_s(lbl, sizeof(lbl), isRiscv ? ".global " : "public ");
-			if (curseg==dataseg)
-				strcat_s(lbl, sizeof(lbl), isRiscv ? "" : "data ");
-			else if (curseg==bssseg)
-				strcat_s(lbl, sizeof(lbl), isRiscv ? "" : "bss ");
-			else if (curseg==tlsseg)
-				strcat_s(lbl, sizeof(lbl), isRiscv ? "" : "tls ");
+			strcpy_s(lbl, sizeof(lbl), "\t.global ");
 		}
 		strcat_s(lbl, sizeof(lbl), sp->name->c_str());
-		sprintf_s(&lbl[strlen(lbl)], sizeof(lbl) - strlen(lbl), "[%d]", sp->tp->size);
+		//sprintf_s(&lbl[strlen(lbl)], sizeof(lbl) - strlen(lbl), "[%d]", sp->tp->size);
 		if (sp->tp->IsSkippable()) {
 			patchpoint = ofs.tellp();
 			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001\n");
@@ -154,7 +151,12 @@ void doinit(SYM *sp)
 		}
 		strcpy_s(glbl2, sizeof(glbl2), sp->name->c_str());
 		lblpoint = ofs.tellp();
-		gen_strlab(lbl);
+		sprintf_s(nam, sizeof(nam), "%.400s", sp->name->c_str());
+		sprintf_s(buf, sizeof(buf), "\t.type %s,@object\n\t.size %s,%lld\n\t.align %lld\n", nam, nam, (sp->tp->size==0) ? sizeOfWord : sp->tp->size,
+			(sp->tp->alignment==0) ? sizeOfWord : sp->tp->alignment);
+		ofs.printf(buf);
+		ofs.printf("%s:\n", nam);
+		//gen_strlab(lbl);
 	}
 	if (lastst == kw_firstcall) {
         GenerateByte(1);
@@ -174,11 +176,7 @@ void doinit(SYM *sp)
 				ENODE* n;
 				char buf[400];
 				char buf2[40];
-				if (sp->storage_class == sc_global)
-					strcpy(buf2, isRiscv ? "" : "endpublic\n");
-				else
-					strcpy(buf2, "");
-				sprintf(buf, "%s[%d]:\ndco %s_dat\n%s%s_dat():\n", lbl, 8, sp->name->c_str(), buf2, lbl);
+				sprintf(buf, "%s[%d]:\n.8byte %s_dat\n%s%s_dat():\n", lbl, 8, sp->name->c_str(), buf2, lbl);
 				ofs.seekp(lblpoint);
 				ofs.write(buf);
 				//			while (lastst != begin && lastst != semicolon && lastst != my_eof)
@@ -191,10 +189,7 @@ void doinit(SYM *sp)
 			char buf[400];
 			char buf2[40];
 			int64_t val = 0;
-			if (sp->storage_class == sc_global)
-				strcpy(buf2, isRiscv ? "" : "endpublic\n");
-			else
-				strcpy(buf2, "");
+			strcpy(buf2, "");
 			if (sp->initexp) {
 				n2 = sp->initexp;
 				opt_const_unchecked(&n2);	// This should reduce to a single integer expression
@@ -218,13 +213,13 @@ void doinit(SYM *sp)
 						}
 					}
 				}
-				sprintf(buf, "%s[%d]:\ndco ", lbl, 8);
+				sprintf(buf, "%s:\n.8byte ", lbl);
 				ofs.seekp(lblpoint);
 				ofs.write(buf);
 				n2->PutConstant(ofs, 0, 0, false, 0);
 			}
 			else {
-				sprintf(buf, "%s[%d]:\ndco %s_func\n", lbl, 8, sp->name->c_str());
+				sprintf(buf, "%s:\n.8byte %s_func\n", lbl, sp->name->c_str());
 				ofs.seekp(lblpoint);
 				ofs.write(buf);
 			}
@@ -261,7 +256,7 @@ void doinit(SYM *sp)
 	if (!hasPointer && sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
-		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
+		sprintf_s(buf, sizeof(buf), "\t.align\t8\n\t.8byte\t$%I64X\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
 		ofs.printf(buf);
 		ofs.seekp(endpoint);
 		genst_cumulative = 0;
@@ -269,15 +264,13 @@ void doinit(SYM *sp)
 	else if (sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
-		sprintf_s(buf, sizeof(buf), "\talign\t8\n\t  \t                 \n");
+		sprintf_s(buf, sizeof(buf), "\t.align\t8\n\t  \t                 \n");
 		ofs.printf(buf);
 		ofs.seekp(endpoint);
 		genst_cumulative = 0;
 	}
 	if (!IsFuncptrAssign(sp))
 		endinit();
-	if (sp->storage_class == sc_global)
-		ofs.printf(isRiscv ? "" : "\nendpublic\n");
 xit:
 	sp->storage_endpos = ofs.tellp();
 }

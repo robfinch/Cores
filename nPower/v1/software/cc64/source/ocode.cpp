@@ -118,6 +118,7 @@ int OCODE::GetTargetReg(int *rg1, int *rg2) const
 		case op_divmod:
 		case op_mul:
 		case op_mulu:
+		case op_mullw:
 		case op_sort:
 		case op_demux:
 		case op_mov2:
@@ -591,7 +592,7 @@ void OCODE::OptStore()
 {
 	OCODE *ip;
 
-	if (opcode == op_stt)
+	if (opcode == op_stw)
 		OptStoreHalf();
 	for (ip = fwd; ip; ip = ip->fwd)
 		if (ip->opcode != op_remark && ip->opcode != op_hint)
@@ -602,9 +603,9 @@ void OCODE::OptStore()
 		return;
 	if (!OCODE::IsEqualOperand(oper2, ip->oper2))
 		return;
-	if (opcode == op_stt && ip->opcode != op_ldt)
+	if (opcode == op_stw && ip->opcode != op_lwz)
 		return;
-	if (opcode == op_sto && ip->opcode != op_ldo)
+	if (opcode == op_std && ip->opcode != op_ldd)
 		return;
 	if (ip->isVolatile)
 		return;
@@ -981,6 +982,8 @@ void OCODE::OptDoubleTargetRemoval()
 	// push has an implicit target, but we don't want to remove it.
 	if (opcode == op_push)
 		return;
+	if (opcode == op_addis || opcode == op_andis || opcode == op_oris || opcode == op_xoris || opcode == op_andis | op_dot)
+		return;
 	//if (rg3 == regSP)
 	//	return;
 	// Set type instructions can merge results into previous target cr.
@@ -1295,19 +1298,19 @@ void OCODE::OptLdi()
 	return;
 	if (fwd) {
 		if (oper2->offset && oper2->offset->constflag) {
-			if (fwd->opcode == op_sxt) {
+			if (fwd->opcode == op_extsw) {
 				if (oper2->offset->i >= -(int64_t)2147483648L && oper2->offset->i <= 2147483647L) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_sxw) {
+			if (fwd->opcode == op_extsh) {
 				if (oper2->offset->i >= -32768 && oper2->offset->i <= 32767) {
 					fwd->MarkRemove();
 					optimized++;
 				}
 			}
-			if (fwd->opcode == op_sxb) {
+			if (fwd->opcode == op_extsb) {
 				if (oper2->offset->i >= -128 && oper2->offset->i <= 127) {
 					fwd->MarkRemove();
 					optimized++;

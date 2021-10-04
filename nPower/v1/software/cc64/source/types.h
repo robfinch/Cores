@@ -45,6 +45,7 @@ typedef struct tagCase {
 	bool first;
 	bool done;
 	int label;
+	int nextlabel;
 	int64_t val;
 	Statement* stmt;
 } Case;
@@ -757,6 +758,7 @@ public:
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);
 
+	int GetAggregateAlignment();
 	int PutStructConst(txtoStream& ofs);
 	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt = false, int display_opt = 0);
 	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
@@ -1636,6 +1638,7 @@ public:
 	char *lptr2;			// pointer to source code
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
+	bool fallthru;		// fallthru case
 	e_sym kw;				// statement's keyword
 	static int throwlab;
 	static int oldthrow;
@@ -1691,6 +1694,7 @@ public:
 	Operand *MakeDirect(ENODE *node);
 	Operand *MakeIndexed(ENODE *node, int rg);
 	void GenStore(Operand *ap1, Operand *ap3, int size);
+	void GenerateCmpw(Operand* ap, int64_t val);
 
 	void GenMixedSource();
 	void GenMixedSource2();
@@ -1707,17 +1711,18 @@ public:
 	void GenerateDoLoop();
 	void GenerateDoOnce();
 	void GenerateCompound();
-	void GenerateCase();
+	void GenerateSwitchCase(Case* cases, int ncase, int ndx, int xitlab, int deflab);
+	Statement* GenerateCase();
 	void GenerateDefault();
 	int CountSwitchCasevals();
 	int CountSwitchCases();
 	bool IsTabularSwitch(int64_t numcases, int64_t min, int64_t max, bool nkd);
 	bool IsOneHotSwitch();
 	void GetMinMaxSwitchValue(int64_t* min, int64_t* max);
-	void GenerateSwitchSearch(Case* cases, Operand*, Operand*, int, int, int, int, int, bool, bool);
-	void GenerateSwitchLo(Case* cases, Operand*, Operand*, int, int, int, bool, bool);
-	void GenerateSwitchLop1(Case* cases, Operand*, Operand*, int, int, int, bool, bool);
-	void GenerateSwitchLop2(Case* cases, Operand*, Operand*, int, int, int, bool, bool);
+	void GenerateSwitchSearch(Case* cases, int ncase, Operand*, int, int, int, int, int, bool, bool);
+	void GenerateSwitchLo(Case* cases, int ncase, Operand*, int, int, int, bool, bool);
+	void GenerateSwitchLop1(Case* cases, int ncase, Operand*, int, int, int, bool, bool);
+	void GenerateSwitchLop2(Case* cases, int ncase, Operand*, int, int, int, bool, bool);
 	void GenerateNakedTabularSwitch(int64_t, Operand*, int);
 	void GenerateTry();
 	void GenerateThrow();

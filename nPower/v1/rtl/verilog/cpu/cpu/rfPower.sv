@@ -340,9 +340,9 @@ wire [31:0] cro = cregfile;
 always @(posedge clk_g)
   if (wwwrxer)
     xer <= wwxer;
-always @(posedge clk_g)
-  if (wwwrcrf)
-    cregfile <= wwcr;
+//always @(posedge clk_g)
+//  if (wwwrcrf)
+//    cregfile <= wwcr;
 
 reg [31:0] sregfile [0:15];
 always @(posedge clk_g)
@@ -353,23 +353,19 @@ reg [31:0] sprg [0:3];
 
 
 // If there is a sync in the pipeline stall the following stages until the sync clears.
-assign stall_i = |d_sync | |r_sync | |e_sync | |m_sync | |w_sync;
+assign stall_i = d_sync | r_sync | e_sync | m_sync | w_sync;
 assign stall_r = 	((e_ld||e_st) && ((rRd==eRd && r_st) || (rRa==eRd) || (rRb==eRd) || (rRc==eRd)) && eval && rval) ||
               		((e_st & e_lsu) && ((rRd==eRa) || (rRa==eRa) || (rRb==eRa) || (rRc==eRa)) && eval && rval)
-								 	  /*
-								 	  ((rrdlr[0] & ewrlr[0]) || (rrdctr[0] & ewrctr[0]) || (rrdxer[0] & ewrxer[0]) || (rrdcrf[0] & ewrcrf[0]) && rval[0] && eval[0]) ||
-								 	  ((rrdlr[0] & ewrlr[1]) || (rrdctr[0] & ewrctr[1]) || (rrdxer[0] & ewrxer[1]) || (rrdcrf[0] & ewrcrf[1]) && rval[0] && eval[1])
-								 	  */
                 		;
 // Pipeline advance
-assign advance_v = ifetch_done & &decode_done & &regfetch_done & &execute_done & &memory_done & &writeback_done;
+assign advance_v = ifetch_done & decode_done & regfetch_done & execute_done & memory_done & writeback_done;
 assign advance_u = advance_v;
 assign advance_t = advance_u;
 assign advance_w = advance_t;
-assign advance_m = advance_w & ~(|w_sync);
-assign advance_e = advance_m & ~(|m_sync | |w_sync);
-assign advance_r = advance_e & ~stall_r & ~(|e_sync | |m_sync | |w_sync);
-assign advance_d = advance_r & ~stall_r & ~(|r_sync | |e_sync | |m_sync | |w_sync);
+assign advance_m = advance_w & ~(w_sync);
+assign advance_e = advance_m & ~(m_sync | w_sync);
+assign advance_r = advance_e & ~stall_r & ~(e_sync | m_sync | w_sync);
+assign advance_d = advance_r & ~stall_r & ~(r_sync | e_sync | m_sync | w_sync);
 assign advance_i = advance_d & ~stall_i;
 
 wire cbranch_in_pipe = 
@@ -1207,100 +1203,18 @@ else begin
 case(rstate)
 RFETCH:
   begin
-  	// Register fetch bypassing needs the output of the execute, memory and
-  	// writeback stages. The output is available only when they are done.
-/*  	
-  	regfetch_done[0] <= &execute_done & &memory_done & writeback_done;
-  	regfetch_done[1] <= &execute_done & &memory_done & writeback_done;
-    if (&execute_done & &memory_done & writeback_done)
-    	rgoto(RWAIT);
-*/
   	regfetch_done <= 1'b1;
    	rgoto(RWAIT);
-
-//    tin(0,rRd[0],rfod[0],rid[0]);
-//    tin(1,rRd[1],rfod[1],rid[1]);
-//    tin(0,rRa[0],rfoa[0],ria[0]);
-//    tin(1,rRa[1],rfoa[1],ria[1]);
-//    tin(0,rRb[0],rfob[0],rib[0]);
-//    tin(1,rRb[1],rfob[1],rib[1]);
-//    tin(0,rRc[0],rfoc[0],ric[0]);
-//    tin(1,rRc[1],rfoc[1],ric[1]);
-
-/*
-		if (smt) begin
-		end
-		else begin
-	    if (ewrcrf[1] & eval[1])
-	      rcr <= ecr[1];
-	    else if (ewrcrf[0] & eval[0])
-	      rcr <= ecr[0];
-	    else if (mwrcrf[1] & mval[1])
-	      rcr <= mcr[1];
-	    else if (mwrcrf[0] & mval[0])
-	      rcr <= mcr[0];
-	    else if (wwrcrf[1] & wval[1])
-	      rcr <= wcr[1];
-	    else if (wwrcrf[0] & wval[0])
-	      rcr <= wcr[0];
-	    else
-	      rcr <= cro;
-
-	    if (ewrxer[1] & eval[1])
-	      rxer <= exer[1];
-	    else if (ewrcrf[0] & eval[0])
-	      rxer <= exer[0];
-	    else if (mwrcrf[1] & mval[1])
-	      rxer <= mxer[1];
-	    else if (mwrcrf[0] & mval[0])
-	      rxer <= mxer[0];
-	    else if (wwrcrf[1] & wval[1])
-	      rxer <= wxer[1];
-	    else if (wwrcrf[0] & wval[0])
-	      rxer <= wxer[0];
-	    else
-	      rxer <= xer;
-
-	    if (ewrlr[1] & eval[1])
-	      rlr <= eres[1];
-	    else if (ewrlr[0] & eval[0])
-	      rlr <= eres[0];
-	    else if (mwrlr[1] & mval[1])
-	      rlr <= mres[1];
-	    else if (mwrlr[0] & mval[0])
-	      rlr <= mres[0];
-	    else if (wwrlr[1] & wval[1])
-	      rlr <= wres[1];
-	    else if (wwrlr[0] & wval[0])
-	      rlr <= wres[0];
-	    else
-	      rlr <= lr;
-
-	    if (ewrctr[1] & eval[1])
-	      rctr <= eres[1];
-	    else if (ewrctr[0] & eval[0])
-	      rctr <= eres[0];
-	    else if (mwrctr[1] & mval[1])
-	      rctr <= mres[1];
-	    else if (mwrctr[0] & mval[0])
-	      rctr <= mres[0];
-	    else if (wwrctr[1] & wval[1])
-	      rctr <= wres[1];
-	    else if (wwrctr[0] & wval[0])
-	      rctr <= wres[0];
-	    else
-	      rctr <= ctr;
-		end
-*/
   end
 RWAIT:
-	if (advance_r) begin
+	begin
   	if (stall_r)
   		stall_ctr <= stall_ctr + 2'd1;
-
-    regfetch_done <= 1'b0;
-    rgoto (RFETCH);
-  end
+		if (advance_r) begin
+	    regfetch_done <= 1'b0;
+	    rgoto (RFETCH);
+	  end
+	end
 default:
   begin
     regfetch_done <= 1'b1;
@@ -1351,6 +1265,8 @@ endcase
 /*	    
 	  else if (rRa[0]==tRd[0] && tval[0] && twrrf[0])
 	    ia[0] <= tres[0];
+	  else if (rRa[0]==tRd[1] && tval[1] && twrrf[1])
+	    ia[0] <= tres[1];
 */
 	  else
 	    ia <= rfoa;
@@ -1478,30 +1394,6 @@ endcase
 end
 endtask
 
-task tin;
-input [5:0] Rn;
-input [31:0] rfo;
-output [31:0] in;
-begin
-  if (Rn==6'd0 && (r_ld|r_st) && rval)
-    in = 32'd0;
-  else if (Rn==eRd && eval && ewrrf)
-    in = eres;
-  else if (Rn==eRa && eval && e_lsu)
-    in = eea;
-  else if (Rn==mRd && mval && mwrrf)
-    in = mres;
-  else if (Rn==mRa && mval && m_lsu)
-    in = ea;
-  else if (Rn==wRd && wval && wwrrf)
-    in = wres;
-  else if (Rn==wRa && wval && w_lsu)
-    in = wea;
-  else
-    in = rfo;
-end
-endtask
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Execute Stage
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1582,59 +1474,59 @@ begin
               case(eir[25:23])
               3'd0:
                 begin
-                  ecr[0] <= $signed(ia) <  $signed(ib);
-                  ecr[1] <= $signed(ia) >  $signed(ib);
-                  ecr[2] <= $signed(ia) == $signed(ib);
-                  ecr[3] <= 1'b0;
+                  ecr[31] <= $signed(ia) <  $signed(ib);
+                  ecr[30] <= $signed(ia) >  $signed(ib);
+                  ecr[29] <= $signed(ia) == $signed(ib);
+                  ecr[28] <= 1'b0;
                 end
               3'd1:
                 begin
-                  ecr[4] <= $signed(ia) <  $signed(ib);
-                  ecr[5] <= $signed(ia) >  $signed(ib);
-                  ecr[6] <= $signed(ia) == $signed(ib);
-                  ecr[7] <= 1'b0;
+                  ecr[27] <= $signed(ia) <  $signed(ib);
+                  ecr[26] <= $signed(ia) >  $signed(ib);
+                  ecr[25] <= $signed(ia) == $signed(ib);
+                  ecr[24] <= 1'b0;
                 end
               3'd2:
                 begin
-                  ecr[8] <= $signed(ia) <  $signed(ib);
-                  ecr[9] <= $signed(ia) >  $signed(ib);
-                  ecr[10] <= $signed(ia) == $signed(ib);
-                  ecr[11] <= 1'b0;
+                  ecr[23] <= $signed(ia) <  $signed(ib);
+                  ecr[22] <= $signed(ia) >  $signed(ib);
+                  ecr[21] <= $signed(ia) == $signed(ib);
+                  ecr[20] <= 1'b0;
                 end
               3'd3:
                 begin
-                  ecr[12] <= $signed(ia) <  $signed(ib);
-                  ecr[13] <= $signed(ia) >  $signed(ib);
-                  ecr[14] <= $signed(ia) == $signed(ib);
-                  ecr[15] <= 1'b0;
+                  ecr[19] <= $signed(ia) <  $signed(ib);
+                  ecr[18] <= $signed(ia) >  $signed(ib);
+                  ecr[17] <= $signed(ia) == $signed(ib);
+                  ecr[16] <= 1'b0;
                 end
               3'd4:
                 begin
-                  ecr[16] <= $signed(ia) <  $signed(ib);
-                  ecr[17] <= $signed(ia) >  $signed(ib);
-                  ecr[18] <= $signed(ia) == $signed(ib);
-                  ecr[19] <= 1'b0;
+                  ecr[15] <= $signed(ia) <  $signed(ib);
+                  ecr[14] <= $signed(ia) >  $signed(ib);
+                  ecr[13] <= $signed(ia) == $signed(ib);
+                  ecr[12] <= 1'b0;
                 end
               3'd5:
                 begin
-                  ecr[20] <= $signed(ia) <  $signed(ib);
-                  ecr[21] <= $signed(ia) >  $signed(ib);
-                  ecr[22] <= $signed(ia) == $signed(ib);
-                  ecr[23] <= 1'b0;
+                  ecr[11] <= $signed(ia) <  $signed(ib);
+                  ecr[10] <= $signed(ia) >  $signed(ib);
+                  ecr[9] <= $signed(ia) == $signed(ib);
+                  ecr[8] <= 1'b0;
                 end
               3'd6:
                 begin
-                  ecr[24] <= $signed(ia) <  $signed(ib);
-                  ecr[25] <= $signed(ia) >  $signed(ib);
-                  ecr[26] <= $signed(ia) == $signed(ib);
-                  ecr[27] <= 1'b0;
+                  ecr[7] <= $signed(ia) <  $signed(ib);
+                  ecr[6] <= $signed(ia) >  $signed(ib);
+                  ecr[5] <= $signed(ia) == $signed(ib);
+                  ecr[4] <= 1'b0;
                 end
               3'd7:
                 begin
-                  ecr[28] <= $signed(ia) <  $signed(ib);
-                  ecr[29] <= $signed(ia) >  $signed(ib);
-                  ecr[30] <= $signed(ia) == $signed(ib);
-                  ecr[31] <= 1'b0;
+                  ecr[3] <= $signed(ia) <  $signed(ib);
+                  ecr[2] <= $signed(ia) >  $signed(ib);
+                  ecr[1] <= $signed(ia) == $signed(ib);
+                  ecr[0] <= 1'b0;
                 end
               endcase
             end
@@ -1643,59 +1535,59 @@ begin
               case(eir[25:23])
               3'd0:
                 begin
-                  ecr[0] <= ia <  ib;
-                  ecr[1] <= ia >  ib;
-                  ecr[2] <= ia == ib;
-                  ecr[3] <= 1'b0;
+                  ecr[31] <= ia <  ib;
+                  ecr[30] <= ia >  ib;
+                  ecr[29] <= ia == ib;
+                  ecr[28] <= 1'b0;
                 end
               3'd1:
                 begin
-                  ecr[4] <= ia <  ib;
-                  ecr[5] <= ia >  ib;
-                  ecr[6] <= ia == ib;
-                  ecr[7] <= 1'b0;
+                  ecr[27] <= ia <  ib;
+                  ecr[26] <= ia >  ib;
+                  ecr[25] <= ia == ib;
+                  ecr[24] <= 1'b0;
                 end
               3'd2:
                 begin
-                  ecr[8] <= ia <  ib;
-                  ecr[9] <= ia >  ib;
-                  ecr[10] <= ia == ib;
-                  ecr[11] <= 1'b0;
+                  ecr[23] <= ia <  ib;
+                  ecr[22] <= ia >  ib;
+                  ecr[21] <= ia == ib;
+                  ecr[20] <= 1'b0;
                 end
               3'd3:
                 begin
-                  ecr[12] <= ia <  ib;
-                  ecr[13] <= ia >  ib;
-                  ecr[14] <= ia == ib;
-                  ecr[15] <= 1'b0;
+                  ecr[19] <= ia <  ib;
+                  ecr[18] <= ia >  ib;
+                  ecr[17] <= ia == ib;
+                  ecr[16] <= 1'b0;
                 end
               3'd4:
                 begin
-                  ecr[16] <= ia <  ib;
-                  ecr[17] <= ia >  ib;
-                  ecr[18] <= ia == ib;
-                  ecr[19] <= 1'b0;
+                  ecr[15] <= ia <  ib;
+                  ecr[14] <= ia >  ib;
+                  ecr[13] <= ia == ib;
+                  ecr[12] <= 1'b0;
                 end
               3'd5:
                 begin
-                  ecr[20] <= ia <  ib;
-                  ecr[21] <= ia >  ib;
-                  ecr[22] <= ia == ib;
-                  ecr[23] <= 1'b0;
+                  ecr[11] <= ia <  ib;
+                  ecr[10] <= ia >  ib;
+                  ecr[9] <= ia == ib;
+                  ecr[8] <= 1'b0;
                 end
               3'd6:
                 begin
-                  ecr[24] <= ia <  ib;
-                  ecr[25] <= ia >  ib;
-                  ecr[26] <= ia == ib;
-                  ecr[27] <= 1'b0;
+                  ecr[7] <= ia <  ib;
+                  ecr[6] <= ia >  ib;
+                  ecr[5] <= ia == ib;
+                  ecr[4] <= 1'b0;
                 end
               3'd7:
                 begin
-                  ecr[28] <= ia <  ib;
-                  ecr[29] <= ia >  ib;
-                  ecr[30] <= ia == ib;
-                  ecr[31] <= 1'b0;
+                  ecr[3] <= ia <  ib;
+                  ecr[2] <= ia >  ib;
+                  ecr[1] <= ia == ib;
+                  ecr[0] <= 1'b0;
                 end
               endcase
             end
@@ -1723,26 +1615,26 @@ begin
           STWX,STWUX:  begin eea <= ia + ib; end
           MCRXR:
             case(eir[25:23])
-            3'd0: begin ecr[3:0] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd1: begin ecr[7:4] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd2: begin ecr[11:8] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd3: begin ecr[15:12] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd4: begin ecr[19:16] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd5: begin ecr[23:20] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd6: begin ecr[27:24] <= exer[3:0]; exer[3:0] <= 4'd0; end
-            3'd7: begin ecr[31:28] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd7: begin ecr[3:0] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd6: begin ecr[7:4] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd5: begin ecr[11:8] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd4: begin ecr[15:12] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd3: begin ecr[19:16] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd2: begin ecr[23:20] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd1: begin ecr[27:24] <= exer[3:0]; exer[3:0] <= 4'd0; end
+            3'd0: begin ecr[31:28] <= exer[3:0]; exer[3:0] <= 4'd0; end
             endcase
           MFCR: eres <= ecr;
           MTCRF: 
             begin
-              if (eir[12]) ecr[3:0] <= ia[3:0];
-              if (eir[13]) ecr[7:4] <= ia[7:4];
-              if (eir[14]) ecr[11:8] <= ia[11:8];
-              if (eir[15]) ecr[15:12] <= ia[15:12];
-              if (eir[16]) ecr[19:16] <= ia[19:16];
-              if (eir[17]) ecr[23:20] <= ia[23:20];
-              if (eir[18]) ecr[27:24] <= ia[27:24];
-              if (eir[19]) ecr[31:28] <= ia[31:28];
+              if (eir[19]) ecr[3:0] <= ia[3:0];
+              if (eir[18]) ecr[7:4] <= ia[7:4];
+              if (eir[17]) ecr[11:8] <= ia[11:8];
+              if (eir[16]) ecr[15:12] <= ia[15:12];
+              if (eir[15]) ecr[19:16] <= ia[19:16];
+              if (eir[14]) ecr[23:20] <= ia[23:20];
+              if (eir[13]) ecr[27:24] <= ia[27:24];
+              if (eir[12]) ecr[31:28] <= ia[31:28];
             end
           MFMSR:	eres <= msr;
           MFSPR:
@@ -1791,59 +1683,59 @@ begin
             case(eir[25:23])
             3'd0:
               begin
-                ecr[0] <= $signed(ia) <  $signed(imm);
-                ecr[1] <= $signed(ia) >  $signed(imm);
-                ecr[2] <= $signed(ia) == $signed(imm);
-                ecr[3] <= 1'b0;
+                ecr[31] <= $signed(ia) <  $signed(imm);
+                ecr[30] <= $signed(ia) >  $signed(imm);
+                ecr[29] <= $signed(ia) == $signed(imm);
+                ecr[28] <= 1'b0;
               end
             3'd1:
               begin
-                ecr[4] <= $signed(ia) <  $signed(imm);
-                ecr[5] <= $signed(ia) >  $signed(imm);
-                ecr[6] <= $signed(ia) == $signed(imm);
-                ecr[7] <= 1'b0;
+                ecr[27] <= $signed(ia) <  $signed(imm);
+                ecr[26] <= $signed(ia) >  $signed(imm);
+                ecr[25] <= $signed(ia) == $signed(imm);
+                ecr[24] <= 1'b0;
               end
             3'd2:
               begin
-                ecr[8] <= $signed(ia) <  $signed(imm);
-                ecr[9] <= $signed(ia) >  $signed(imm);
-                ecr[10] <= $signed(ia) == $signed(imm);
-                ecr[11] <= 1'b0;
+                ecr[23] <= $signed(ia) <  $signed(imm);
+                ecr[22] <= $signed(ia) >  $signed(imm);
+                ecr[21] <= $signed(ia) == $signed(imm);
+                ecr[20] <= 1'b0;
               end
             3'd3:
               begin
-                ecr[12] <= $signed(ia) <  $signed(imm);
-                ecr[13] <= $signed(ia) >  $signed(imm);
-                ecr[14] <= $signed(ia) == $signed(imm);
-                ecr[15] <= 1'b0;
+                ecr[19] <= $signed(ia) <  $signed(imm);
+                ecr[18] <= $signed(ia) >  $signed(imm);
+                ecr[17] <= $signed(ia) == $signed(imm);
+                ecr[16] <= 1'b0;
               end
             3'd4:
               begin
-                ecr[16] <= $signed(ia) <  $signed(imm);
-                ecr[17] <= $signed(ia) >  $signed(imm);
-                ecr[18] <= $signed(ia) == $signed(imm);
-                ecr[19] <= 1'b0;
+                ecr[15] <= $signed(ia) <  $signed(imm);
+                ecr[14] <= $signed(ia) >  $signed(imm);
+                ecr[13] <= $signed(ia) == $signed(imm);
+                ecr[12] <= 1'b0;
               end
             3'd5:
               begin
-                ecr[20] <= $signed(ia) <  $signed(imm);
-                ecr[21] <= $signed(ia) >  $signed(imm);
-                ecr[22] <= $signed(ia) == $signed(imm);
-                ecr[23] <= 1'b0;
+                ecr[11] <= $signed(ia) <  $signed(imm);
+                ecr[10] <= $signed(ia) >  $signed(imm);
+                ecr[9] <= $signed(ia) == $signed(imm);
+                ecr[8] <= 1'b0;
               end
             3'd6:
               begin
-                ecr[24] <= $signed(ia) <  $signed(imm);
-                ecr[25] <= $signed(ia) >  $signed(imm);
-                ecr[26] <= $signed(ia) == $signed(imm);
-                ecr[27] <= 1'b0;
+                ecr[7] <= $signed(ia) <  $signed(imm);
+                ecr[6] <= $signed(ia) >  $signed(imm);
+                ecr[5] <= $signed(ia) == $signed(imm);
+                ecr[4] <= 1'b0;
               end
             3'd7:
               begin
-                ecr[28] <= $signed(ia) <  $signed(imm);
-                ecr[29] <= $signed(ia) >  $signed(imm);
-                ecr[30] <= $signed(ia) == $signed(imm);
-                ecr[31] <= 1'b0;
+                ecr[3] <= $signed(ia) <  $signed(imm);
+                ecr[2] <= $signed(ia) >  $signed(imm);
+                ecr[1] <= $signed(ia) == $signed(imm);
+                ecr[0] <= 1'b0;
               end
             endcase
           end
@@ -1852,59 +1744,59 @@ begin
             case(eir[25:23])
             3'd0:
               begin
-                ecr[0] <= ia <  imm;
-                ecr[1] <= ia >  imm;
-                ecr[2] <= ia == imm;
-                ecr[3] <= 1'b0;
+                ecr[31] <= ia <  imm;
+                ecr[30] <= ia >  imm;
+                ecr[29] <= ia == imm;
+                ecr[28] <= 1'b0;
               end
             3'd1:
               begin
-                ecr[4] <= ia <  imm;
-                ecr[5] <= ia >  imm;
-                ecr[6] <= ia == imm;
-                ecr[7] <= 1'b0;
+                ecr[27] <= ia <  imm;
+                ecr[26] <= ia >  imm;
+                ecr[25] <= ia == imm;
+                ecr[24] <= 1'b0;
               end
             3'd2:
               begin
-                ecr[8] <= ia <  imm;
-                ecr[9] <= ia >  imm;
-                ecr[10] <= ia == imm;
-                ecr[11] <= 1'b0;
+                ecr[23] <= ia <  imm;
+                ecr[22] <= ia >  imm;
+                ecr[21] <= ia == imm;
+                ecr[20] <= 1'b0;
               end
             3'd3:
               begin
-                ecr[12] <= ia <  imm;
-                ecr[13] <= ia >  imm;
-                ecr[14] <= ia == imm;
-                ecr[15] <= 1'b0;
+                ecr[19] <= ia <  imm;
+                ecr[18] <= ia >  imm;
+                ecr[17] <= ia == imm;
+                ecr[16] <= 1'b0;
               end
             3'd4:
               begin
-                ecr[16] <= ia <  imm;
-                ecr[17] <= ia >  imm;
-                ecr[18] <= ia == imm;
-                ecr[19] <= 1'b0;
+                ecr[15] <= ia <  imm;
+                ecr[14] <= ia >  imm;
+                ecr[13] <= ia == imm;
+                ecr[12] <= 1'b0;
               end
             3'd5:
               begin
-                ecr[20] <= ia <  imm;
-                ecr[21] <= ia >  imm;
-                ecr[22] <= ia == imm;
-                ecr[23] <= 1'b0;
+                ecr[11] <= ia <  imm;
+                ecr[10] <= ia >  imm;
+                ecr[9] <= ia == imm;
+                ecr[8] <= 1'b0;
               end
             3'd6:
               begin
-                ecr[24] <= ia <  imm;
-                ecr[25] <= ia >  imm;
-                ecr[26] <= ia == imm;
-                ecr[27] <= 1'b0;
+                ecr[7] <= ia <  imm;
+                ecr[6] <= ia >  imm;
+                ecr[5] <= ia == imm;
+                ecr[4] <= 1'b0;
               end
             3'd7:
               begin
-                ecr[28] <= ia <  imm;
-                ecr[29] <= ia >  imm;
-                ecr[30] <= ia == imm;
-                ecr[31] <= 1'b0;
+                ecr[3] <= ia <  imm;
+                ecr[2] <= ia >  imm;
+                ecr[1] <= ia == imm;
+                ecr[0] <= 1'b0;
               end
             endcase
           end
@@ -1939,7 +1831,7 @@ begin
         		5'b0?00?:
         			begin
         				ectr <= ectr - 1'd1;
-        				if ((ectr - 1'd1 != 32'd0 && ecr[eir[20:16]]==eir[24])) begin
+        				if ((ectr - 1'd1 != 32'd0 && ecr[~eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
         					if (eir[1]) begin
@@ -1957,7 +1849,7 @@ begin
         		5'b0?01?:
         			begin
         				ectr <= ectr - 1'd1;
-        				if ((ectr - 1'd1 == 32'd0 && ecr[eir[20:16]]==eir[24])) begin
+        				if ((ectr - 1'd1 == 32'd0 && ecr[~eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
         					if (eir[1]) begin
@@ -1974,7 +1866,7 @@ begin
         			end
         		5'b0?1??:
         			begin
-        				if ((ecr[eir[20:16]]==eir[24])) begin
+        				if ((ecr[~eir[20:16]]==eir[24])) begin
         					takb <= eval;
         					emod_pc <= eval;
         					if (eir[1]) begin
@@ -2025,6 +1917,14 @@ begin
         					end
         				end
         			end
+        		5'b10100:
+        			begin
+      					takb <= eval;
+      					emod_pc <= eval;
+      					enext_pc <= elr;
+    						if (~|loop_mode)
+    							tLoop(elr);
+        			end
         		endcase
         	end
         CR2:
@@ -2036,7 +1936,7 @@ begin
 	        		5'b0?00?:
 	        			begin
 	        				ectr <= ectr - 1'd1;
-	        				if (ectr - 1'd1 != 32'd0 && ecr[eir[20:16]]==eir[24]) begin
+	        				if (ectr - 1'd1 != 32'd0 && ecr[~eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
@@ -2047,7 +1947,7 @@ begin
 	        		5'b0?01?:
 	        			begin
 	        				ectr <= ectr - 1'd1;
-	        				if (ectr - 1'd1 == 32'd0 && ecr[eir[20:16]]==eir[24]) begin
+	        				if (ectr - 1'd1 == 32'd0 && ecr[~eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
@@ -2057,7 +1957,7 @@ begin
 	        			end
 	        		5'b0?1??:
 	        			begin
-	        				if (ecr[eir[20:16]]==eir[24]) begin
+	        				if (ecr[~eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= ectr;
@@ -2104,7 +2004,7 @@ begin
 	        		5'b0?00?:
 	        			begin
 	        				ectr <= ectr - 1'd1;
-	        				if (ectr - 1'd1 != 32'd0 && ecr[eir[20:16]]==eir[24]) begin
+	        				if (ectr - 1'd1 != 32'd0 && ecr[~eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
@@ -2115,7 +2015,7 @@ begin
 	        		5'b0?01?:
 	        			begin
 	        				ectr <= ectr - 1'd1;
-	        				if (ectr - 1'd1 == 32'd0 && ecr[eir[20:16]]==eir[24]) begin
+	        				if (ectr - 1'd1 == 32'd0 && ecr[~eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
@@ -2125,7 +2025,7 @@ begin
 	        			end
 	        		5'b0?1??:
 	        			begin
-	        				if (ecr[eir[20:16]]==eir[24]) begin
+	        				if (~ecr[eir[20:16]]==eir[24]) begin
 	        					takb <= eval;
 	        					emod_pc <= eval;
         						enext_pc <= elr;
@@ -2165,14 +2065,14 @@ begin
 	        			end
 	        		endcase
           	end
-          CRAND: ecr[eir[25:21]] <=  ecr[eir[20:16]] & ecr[eir[15:11]];
-          CROR:  ecr[eir[25:21]] <=  ecr[eir[20:16]] | ecr[eir[15:11]];
-          CRXOR: ecr[eir[25:21]] <=  ecr[eir[20:16]] ^ ecr[eir[15:11]];
-          CRNAND:ecr[eir[25:21]] <= ~(ecr[eir[20:16]] & ecr[eir[15:11]]);
-          CRNOR: ecr[eir[25:21]] <= ~(ecr[eir[20:16]] | ecr[eir[15:11]]);
-          CREQV: ecr[eir[25:21]] <= ~(ecr[eir[20:16]] ^ ecr[eir[15:11]]);
-          CRANDC:ecr[eir[25:21]] <=  ecr[eir[20:16]] & ~ecr[eir[15:11]];
-          CRORC: ecr[eir[25:21]] <=  ecr[eir[20:16]] | ~ecr[eir[15:11]];
+          CRAND: ecr[~eir[25:21]] <=  ecr[~eir[20:16]] & ecr[~eir[15:11]];
+          CROR:  ecr[~eir[25:21]] <=  ecr[~eir[20:16]] | ecr[~eir[15:11]];
+          CRXOR: ecr[~eir[25:21]] <=  ecr[~eir[20:16]] ^ ecr[~eir[15:11]];
+          CRNAND:ecr[~eir[25:21]] <= ~(ecr[~eir[20:16]] & ecr[~eir[15:11]]);
+          CRNOR: ecr[~eir[25:21]] <= ~(ecr[~eir[20:16]] | ecr[~eir[15:11]]);
+          CREQV: ecr[~eir[25:21]] <= ~(ecr[~eir[20:16]] ^ ecr[~eir[15:11]]);
+          CRANDC:ecr[~eir[25:21]] <=  ecr[~eir[20:16]] & ~ecr[~eir[15:11]];
+          CRORC: ecr[~eir[25:21]] <=  ecr[~eir[20:16]] | ~ecr[~eir[15:11]];
           default:  ;
           endcase
         LBZ,LBZU:  begin eea <= ia + imm; end
@@ -2255,23 +2155,23 @@ begin
         default:	;
 				endcase      	
         if (ewrcrf & ~e_cmp) begin
-          ecr[0] <= eres[31];
-          ecr[1] <= eres==32'd0;
-          ecr[2] <= ~eres[31] && eres!=32'd0;
+          ecr[31] <= eres[31];
+          ecr[30] <= ~eres[31] && eres!=32'd0;
+          ecr[29] <= eres==32'd0;
 	        case(eir[31:26])
 	        R2:
 	          case(eir[10:1])
 	          ADDO,ADDCO,ADDEO,ADDMEO,ADDZEO:	
 	          	begin
-	          		ecr[3] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
+	          		ecr[28] <= (eres[31] ^ ib[31]) & (1'b1 ^ ia[31] ^ ib[31]);
 	          	end
 	          SUBFO:
 	          	begin
-	          		ecr[3] <= (1'b1^ eres[31] ^ ia[31]) & (ia[31] ^ ib[31]);
+	          		ecr[28] <= (1'b1^ eres[31] ^ ia[31]) & (ia[31] ^ ib[31]);
 	          	end
 	          MULLWO:
 	          	begin
-	              ecr[3] <= prodr[63:32] != {32{prodr[31]}};
+	              ecr[28] <= prodr[63:32] != {32{prodr[31]}};
 	            end
 	          default:  ;
 	          endcase
@@ -2352,6 +2252,8 @@ begin
       	mwrlr <= FALSE;
       	m_sync <= FALSE;
       	mir <= NOP_INSN;
+      	m_ld <= FALSE;
+      	m_st <= FALSE;
       end
     default:
       begin
@@ -2409,7 +2311,8 @@ begin
     case(mstate)
     MEMORY1:
       begin
-      	if (m_ld|m_st) begin
+      	/*
+      	if (mval & (m_ld|m_st)) begin
       		maccess_pending <= TRUE;
       		mstate <= MEMORY2;
       		memory_done <= FALSE; 
@@ -2418,6 +2321,28 @@ begin
         	memory_done <= TRUE;
         	mstate <= MWAIT;
       	end
+      	*/
+        case(mir[31:26])
+        R2:
+          case(mir[10:1])
+          LBZX,LBZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          LHZX,LHZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          LHAX,LHAUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          LWZX,LWZUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          STBX,STBUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          STHX,STHUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          STWX,STWUX:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+          default:  begin mstate <= MWAIT; memory_done <= TRUE; end
+          endcase
+        LBZ,LBZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        LHZ,LHZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        LHA,LHAU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        LWZ,LWZU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        STB,STBU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        STH,STHU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        STW,STWU:  begin maccess_pending <= TRUE; mstate <= MEMORY2; memory_done <= FALSE; end
+        default:  begin mstate <= MWAIT; memory_done <= TRUE; end
+        endcase
       end
     MEMORY2:
       if (!ack_i && !iaccess && !maccess) begin
@@ -2761,6 +2686,8 @@ begin
 				    lr <= wlr;
 				  if (wwrctr & wval)
 				    ctr <= wctr;
+				  if (wwrcrf & wval)
+				  	cregfile <= wcr;
 	        writeback_done <= FALSE;
 	        t_cbranch <= w_cbranch;
 	        t_loop_bust <= w_loop_bust;

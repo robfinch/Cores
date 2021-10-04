@@ -104,6 +104,9 @@ int64_t ENODE::GetReferenceSize()
 	switch (nodetype)        /* get load size */
 	{
 	case en_ref:
+		if (tp)
+			return (tp->size);
+		return (esize);
 	case en_fieldref:
 		return (esize);// tp->size);
 	case en_fpregvar:
@@ -121,7 +124,7 @@ int64_t ENODE::GetReferenceSize()
 		return (sizeOfWord);
 		//			return node->esize;
 	}
-	return (8);
+	return (sizeOfWord);
 }
 // return the natural evaluation size of a node.
 
@@ -135,9 +138,9 @@ int ENODE::GetNaturalSize()
 	case en_fieldref:
 		return (tp->size);
 	case en_icon:
-		if (i >= -128 && i < 128)
+		if (i >= -128LL && i < 128LL)
 			return (1);
-		if (-32768 <= i && i <= 32767)
+		if (-32768LL <= i && i <= 32767LL)
 			return (2);
 		if (-2147483648LL <= i && i <= 2147483647LL)
 			return (4);
@@ -1129,10 +1132,10 @@ Operand *ENODE::GenIndex(bool neg)
 		return (ap1);
 	}
 	GenerateHint(8);
-	ap1 = cg.GenerateExpression(p[0], am_reg | am_imm, 8, 1);
+	ap1 = cg.GenerateExpression(p[0], am_reg | am_imm, sizeOfWord, 1);
 	if (ap1->mode == am_imm)
 	{
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, 8, 1);
+		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, sizeOfWord, 1);
 		if (ap2->mode == am_reg && ap2->preg==0) {	// value is zero
 			ap1->mode = am_direct;
 			if (ap1->offset)
@@ -1155,7 +1158,7 @@ Operand *ENODE::GenIndex(bool neg)
 		ap2->isUnsigned = ap1->isUnsigned;
 		return (ap2);
 	}
-	ap2 = cg.GenerateExpression(p[1], am_all, 8, 1);   /* get right op */
+	ap2 = cg.GenerateExpression(p[1], am_all, sizeOfWord, 1);   /* get right op */
 	GenerateHint(9);
 	if (ap2->mode == am_imm && ap1->mode == am_reg) /* make am_indx */
 	{
@@ -1192,7 +1195,7 @@ Operand *ENODE::GenIndex(bool neg)
 		return (ap2);
 	}
 	// ap1->mode must be am_reg
-	ap2->MakeLegal(am_reg, 8);
+	ap2->MakeLegal(am_reg, sizeOfWord);
 	if (cpu.SupportsIndexed) {
 		ap1->mode = am_indx2;            /* make indexed */
 		ap1->sreg = ap2->preg;
@@ -1504,6 +1507,8 @@ Operand *ENODE::GenerateShift(int flags, int size, int op)
 		}
 		break;
 	}
+	if (ap2->mode != am_reg && op == op_slw) op = op_slwi;
+	if (ap2->mode != am_reg && op == op_sld) op = op_sldi;
 
 	GenerateTriadic(op, 0, ap3, ap1, ap2);
 	// Rotates automatically sign extend
@@ -1569,11 +1574,11 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 	}
 	else {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, 8, 0);
+		ap1 = cg.GenerateExpression(p[0], am_reg, sizeOfWord, 0);
 		if (op == op_modu)	// modu only supports register mode
-			ap2 = cg.GenerateExpression(p[1], am_reg, 8, 1);
+			ap2 = cg.GenerateExpression(p[1], am_reg, sizeOfWord, 1);
 		else
-			ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, 8, 1);
+			ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, sizeOfWord, 1);
 	}
 	if (op == op_fdiv) {
 		// Generate a convert operation ?
@@ -1589,12 +1594,15 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 				ap4 = GetTempRegister();
 				ap5 = GetTempRegister();
 				n = ap2->offset->i;
-				if (n < -32768 || n > 32767) {
-					if (n & 0x8000)
+				if (n < -32768LL || n > 32767LL) {
+					if (n & 0x8000) {
 						GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
-					else
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+					}
+					else {
 						GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
-					GenerateTriadic(op_addis, 0, ap5, ap5, MakeImmediate(n & 0xffffLL));
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+					}
 				}
 				else
 					GenerateDiadic(op_li, 0, ap5, MakeImmediate(n));
@@ -1612,8 +1620,28 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 				ReleaseTempReg(ap4);
 			}
 		}
-		else
-			GenerateTriadic(op, 0, ap3, ap1, ap2);
+		else {
+			if (ap2->mode == am_imm) {
+				ap5 = GetTempRegister();
+				n = ap2->offset->i;
+				if (n < -32768LL || n > 32767LL) {
+					if (n & 0x8000) {
+						GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+					}
+					else {
+						GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+					}
+				}
+				else
+					GenerateDiadic(op_li, 0, ap5, MakeImmediate(n));
+				GenerateTriadic(op, 0, ap3, ap1, ap5);
+				ReleaseTempReg(ap5);
+			}
+			else
+				GenerateTriadic(op, 0, ap3, ap1, ap2);
+		}
 	}
 	//    GenerateDiadic(op_ext,0,ap3,0);
 	ap3->MakeLegal( flags, 2);
@@ -1644,9 +1672,9 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 	}
 	else {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], am_reg, 8, 0);
+		ap1 = cg.GenerateExpression(p[0], am_reg, sizeOfWord, 0);
 		if (!square)
-			ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, 8, 1);
+			ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, sizeOfWord, 1);
 	}
 	if (op == op_fmul) {
 		// Generate a convert operation ?
@@ -1662,8 +1690,31 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 	else {
 		if (square)
 			GenerateTriadic(op, 0, ap3, ap1, ap1);
-		else
-			GenerateTriadic(op, 0, ap3, ap1, ap2);
+		else {
+			if (ap2->mode == am_imm) {
+				Operand* ap5;
+				int64_t n;
+
+				ap5 = GetTempRegister();
+				n = ap2->offset->i;
+				if (n < -32768LL || n > 32767LL) {
+					if (n & 0x8000) {
+						GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+					}
+					else {
+						GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
+						GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+					}
+				}
+				else
+					GenerateDiadic(op_li, 0, ap5, MakeImmediate(n));
+				GenerateTriadic(op, 0, ap3, ap1, ap5);
+				ReleaseTempReg(ap5);
+			}
+			else
+				GenerateTriadic(op, 0, ap3, ap1, ap2);
+		}
 	}
 	if (!square)
 		ReleaseTempReg(ap2);
@@ -1816,23 +1867,50 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 					case op_and:
 						n = ap2->offset->i;
 						if (n < -32768LL || n > 32767LL) {
-							if (n & 0x8000LL)
-								GenerateTriadic(op_andis, 0, ap3, ap1, MakeImmediate((n >> 16) + 1));
-							else
-								GenerateTriadic(op_andis, 0, ap3, ap1, MakeImmediate(n >> 16));
+							if (n & 0x8000LL) {
+								GenerateTriadic(op_andis|op_dot, 0, ap3, ap1, MakeImmediate((n >> 16LL) + 1LL));
+								GenerateTriadic(op_andi|op_dot, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+							}
+							else {
+								GenerateTriadic(op_andis|op_dot, 0, ap3, ap1, MakeImmediate(n >> 16LL));
+								GenerateTriadic(op_andi|op_dot, 0, ap3, ap1, MakeImmediate(n & 0x7fffLL));
+							}
 						}
-						GenerateTriadic(op_andi, 0, ap3, ap1, MakeImmediate(n & 0xffffLL));
+						else
+							GenerateTriadic(op_andi|op_dot, 0, ap3, ap1, MakeImmediate(n & 0xffffLL));
 						break;
 					case op_or:
 						n = ap2->offset->i;
-						if (n < -32768LL || n > 32767LL)
-							GenerateTriadic(op_oris, 0, ap3, ap1, MakeImmediate(n >> 16));
-						GenerateTriadic(op_ori, 0, ap3, ap1, MakeImmediate(n & 0xffffLL));
+						if (n < -32768LL || n > 32767LL) {
+							if (n & 0x8000) {
+								GenerateTriadic(op_oris, 0, ap3, ap1, MakeImmediate(n >> 16));
+								GenerateTriadic(op_ori, 0, ap3, ap1, MakeImmediate(n & 0x7fffLL | 0x8000LL));
+							}
+							else {
+								GenerateTriadic(op_oris, 0, ap3, ap1, MakeImmediate(n >> 16));
+								GenerateTriadic(op_ori, 0, ap3, ap1, MakeImmediate(n & 0x7fffLL));
+							}
+						}
+						else
+							GenerateTriadic(op_ori, 0, ap3, ap1, MakeImmediate(n & 0x7fffLL));
 						break;
 					// If there is a pointer plus a constant we really wanted an address calc.
 					case op_add:
-						if (ap1->isPtr && ap2->isPtr)
-							GenerateTriadic(op_addi, 0, ap3, ap1, ap2);
+						if (ap1->isPtr && ap2->isPtr) {
+							n = ap2->offset->i;
+							if (n < -32768LL || n > 32767LL) {
+								if (n & 0x8000LL) {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate((n >> 16) + 1));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+								else {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate(n >> 16));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+							}
+							else
+								GenerateTriadic(op_addi, 0, ap3, ap1, ap2);
+						}
 						else if (ap2->isPtr) {
 							GenerateDiadic(cpu.lea_op, 0, ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
 							//if (!compiler.os_code) {
@@ -1843,7 +1921,19 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 							//}
 						}
 						else {
-							GenerateTriadic(op_addi, 0, ap3, ap1, ap2);
+							n = ap2->offset->i;
+							if (n < -32768LL || n > 32767LL) {
+								if (n & 0x8000LL) {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate((n >> 16) + 1));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+								else {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate(n >> 16));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+							}
+							else
+								GenerateTriadic(op_addi, 0, ap3, ap1, ap2);
 						}
 						break;
 					case op_sub:
@@ -1859,21 +1949,70 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 							//}
 						}
 						else {
-							GenerateTriadic(op, 0, ap3, ap1, ap2);
+							n = -ap2->offset->i;
+							if (n < -32768LL || n > 32767LL) {
+								if (n & 0x8000LL) {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate((n >> 16) + 1));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+								else {
+									GenerateTriadic(op_addis, 0, ap3, ap1, MakeImmediate(n >> 16));
+									GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+								}
+							}
+							else
+								GenerateTriadic(op_addi, 0, ap3, ap1, MakeImmediate(n));
+//							GenerateTriadic(op, 0, ap3, ap1, ap2);
 						}
 						break;
 					case op_rem:
 						ap4 = GetTempRegister();
 						ap5 = GetTempRegister();
 						n = ap2->offset->i;
-						if (n & 0x8000)
-							GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL)+1LL));
-						else
+						if (n & 0x8000) {
+							GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+						}
+						else {
 							GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
-						GenerateTriadic(op_addis, 0, ap5, ap5, MakeImmediate(n & 0xffffLL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+						}
 						GenerateTriadic(op_divw, 0, ap4, ap1, ap5);
 						GenerateTriadic(op_mullw, 0, ap4, ap4, ap5);
 						GenerateTriadic(op_subf, 0, ap3, ap4, ap1);
+						ReleaseTempReg(ap5);
+						ReleaseTempReg(ap4);
+						break;
+
+					case op_mullw:
+						ap4 = GetTempRegister();
+						ap5 = GetTempRegister();
+						n = ap2->offset->i;
+						if (n & 0x8000) {
+							GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+						}
+						else {
+							GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+						}
+						GenerateTriadic(op_mullw, 0, ap4, ap1, ap5);
+						ReleaseTempReg(ap5);
+						ReleaseTempReg(ap4);
+						break;
+					case op_divw:
+						ap4 = GetTempRegister();
+						ap5 = GetTempRegister();
+						n = ap2->offset->i;
+						if (n & 0x8000) {
+							GenerateDiadic(op_lis, 0, ap5, MakeImmediate((n >> 16LL) + 1LL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n | 0xffffffffffff8000LL));
+						}
+						else {
+							GenerateDiadic(op_lis, 0, ap5, MakeImmediate(n >> 16LL));
+							GenerateTriadic(op_addi, 0, ap5, ap5, MakeImmediate(n & 0x7fffLL));
+						}
+						GenerateTriadic(op_divw, 0, ap4, ap1, ap5);
 						ReleaseTempReg(ap5);
 						ReleaseTempReg(ap4);
 						break;
@@ -1889,8 +2028,9 @@ Operand *ENODE::GenerateBinary(int flags, int size, int op)
 						GenerateTriadic(op_subf, 0, ap3, ap4, ap1);
 						ReleaseTempReg(ap4);
 					}
-					else
+					else {
 						GenerateTriadic(op, 0, ap3, ap1, ap2);
+					}
 				}
 			}
 		}
@@ -1970,13 +2110,17 @@ Operand *ENODE::GenerateAssignAdd(int flags, int size, int op)
 			if (op == op_sub)
 				n = -n;
 			if (n < -32768LL || n > 32767LL) {
-				if (n & 0x8000LL)
-					GenerateTriadic(op_addis, 0, ap1, ap1, MakeImmediate((ap2->offset->i >> 16) + 1));
-				else
-					GenerateTriadic(op_addis, 0, ap1, ap1, MakeImmediate(ap2->offset->i >> 16));
-				n &= 0xffffLL;
+				if (n & 0x8000LL) {
+					GenerateTriadic(op_addis, 0, ap1, ap1, MakeImmediate((n >> 16LL) + 1LL));
+					GenerateTriadic(op_addi, 0, ap1, ap1, MakeImmediate(n | 0xffffffffffff8000LL));
+				}
+				else {
+					GenerateTriadic(op_addis, 0, ap1, ap1, MakeImmediate(n >> 16LL));
+					GenerateTriadic(op_addi, 0, ap1, ap1, MakeImmediate(n & 0x7fffLL));
+				}
 			}
-			GenerateTriadic(op_addi, 0, ap1, ap1, MakeImmediate(n));
+			else
+				GenerateTriadic(op_addi, 0, ap1, ap1, MakeImmediate(n));
 			if (intreg) {
 				mr = &regs[ap1->preg];
 				if (mr->assigned)
@@ -2046,9 +2190,9 @@ Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
 				ap1->MakeLegal( am_reg, ssize);
 			}
 			switch (ssize) {
-			case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
-			case 2:	GenerateDiadic(op_sxw, 0, ap1, ap1); break;
-			case 4:	GenerateDiadic(op_sxt, 0, ap1, ap1); break;
+			case 1:	GenerateDiadic(op_extsb, 0, ap1, ap1); break;
+			case 2:	GenerateDiadic(op_extsh, 0, ap1, ap1); break;
+			case 4:	GenerateDiadic(op_extsw, 0, ap1, ap1); break;
 			}
 			ap1->MakeLegal( flags, size);
 			return (ap1);
@@ -2079,7 +2223,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(0));
 	GenerateLabel(lab0);
 	*/
-	ap1->MakeLegal(flags, 8);
+	ap1->MakeLegal(flags, sizeOfWord);
 	ap1->isBool = true;
 	return (ap1);
 }
@@ -2323,11 +2467,11 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 	case en_autocon:
 	case en_icon:
 		if (lowhigh == 2) {
-			sprintf_s(buf, sizeof(buf), "%lld", i & 0xffff);
+			sprintf_s(buf, sizeof(buf), "%lld", i & 0xffffLL);
 			ofs.write(buf);
 		}
 		else if (lowhigh == 3) {
-			sprintf_s(buf, sizeof(buf), "%lld", (i >> 16) & 0xffff);
+			sprintf_s(buf, sizeof(buf), "%lld", (i >> 16LL) & 0xffffLL);
 			ofs.write(buf);
 		}
 		else {
@@ -2362,7 +2506,8 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		break;
 	case en_clabcon:
 //		sprintf_s(buf, sizeof(buf), ".C%s_%lld", GetNamespace(), i);
-		sprintf_s(buf, sizeof(buf), ".C%05d", (int)i);
+//		sprintf_s(buf, sizeof(buf), ".C%05d", (int)i);
+		sprintf_s(buf, sizeof(buf), "%s_%05d", currentFn->sym->mangledName->c_str(), (int)i);
 		DataLabels[i] = true;
 		ofs.write(buf);
 		if (rshift > 0) {
@@ -2661,6 +2806,40 @@ int ENODE::load(char *buf)
 		p[3] = compiler.ef.Makenode();
 		ndx += p[3]->load(&buf[ndx]);
 	}
+}
+
+int ENODE::GetAggregateAlignment()
+{
+	int64_t n, k, algn;
+	ENODE* ep = this;
+	ENODE* ep1;
+	bool isStruct;
+	bool isArray;
+
+	if (ep == nullptr)
+		return (0);
+	if (ep->nodetype != en_aggregate)
+		return (0);
+
+	algn = 1;
+	isStruct = ep->tp->IsStructType();
+	isArray = ep->tp->type == bt_array;
+	if (isArray)
+		return (int)ep->p[0]->p[2]->tp->walignment();
+	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
+		if (ep1->nodetype == en_aggregate) {
+			algn = max(ep1->GetAggregateAlignment(), algn);
+		}
+		else {
+			if (isStruct)
+				algn = max(ep1->tp->walignment(),algn);
+			else if (isArray)
+				algn = max(ep1->tp->walignment(),algn);
+			else
+				algn = max(ep1->esize,algn);
+		}
+	}
+	return (algn);
 }
 
 int ENODE::PutStructConst(txtoStream& ofs)
