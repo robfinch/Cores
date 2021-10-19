@@ -1,1 +1,0 @@
-`define AMSB  63
