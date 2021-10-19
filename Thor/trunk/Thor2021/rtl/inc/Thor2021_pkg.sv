@@ -37,6 +37,16 @@
 //                                                                          
 // ============================================================================
 
+package Thor2021_pkg;
+
+`define QSLOTS	2		// number of simulataneously queueable instructions
+`define	RSLOTS	8		// number of reorder buffer entries
+
+parameter QSLOTS	= `QSLOTS;
+parameter RSLOTS	= `RSLOTS;
+parameter BitsQS	= $clog2(`QSLOTS-1);
+parameter BitsRS	= $clog2(`RSLOTS-1) + 1;
+
 parameter VALUE_SIZE = 64;
 
 parameter TRUE  = 1'b1;
@@ -90,10 +100,10 @@ parameter BLT			= 8'h28;
 parameter BGE			= 8'h29;
 parameter BLE			= 8'h2A;
 parameter BGT			= 8'h2B;
-parameter BLT			= 8'h2C;
-parameter BGE			= 8'h2D;
-parameter BLE			= 8'h2E;
-parameter BGT			= 8'h2F;
+parameter BLTU		= 8'h2C;
+parameter BGEU		= 8'h2D;
+parameter BLEU		= 8'h2E;
+parameter BGTU		= 8'h2F;
 parameter BBCL		= 8'h34;
 parameter BBSL		= 8'h35;
 parameter BEQL		= 8'h36;
@@ -102,15 +112,16 @@ parameter BLTL		= 8'h38;
 parameter BGEL		= 8'h39;
 parameter BLEL		= 8'h3A;
 parameter BGTL		= 8'h3B;
-parameter BLTL		= 8'h3C;
-parameter BGEL		= 8'h3D;
-parameter BLEL		= 8'h3E;
-parameter BGTL		= 8'h3F;
+parameter BLTUL		= 8'h3C;
+parameter BGEUL		= 8'h3D;
+parameter BLEUL		= 8'h3E;
+parameter BGTUL		= 8'h3F;
 parameter DIVI		= 8'h40;
 parameter CPUID		= 8'h41;
 parameter DIVIL		= 8'h42;
 parameter MUX			= 8'h43;
 parameter ADDIL		= 8'h44;
+parameter CHKI		= 8'h45;
 parameter MULIL		= 8'h46;
 parameter SNEIL		= 8'h47;
 parameter ANDIL		= 8'h48;
@@ -124,9 +135,9 @@ parameter CMPI		= 8'h50;
 parameter VM			= 8'h52;
 parameter VMFILL	= 8'h53;
 parameter ADDIS		= 8'h54;
-parameter BYTNDX	= 8'h55;
-parameter WYDNDX	= 8'h56;
-parameter UTF21NDX	= 8'h57;
+parameter BYTNDXI	= 8'h55;
+parameter WYDNDXI	= 8'h56;
+parameter UTF21NDXI	= 8'h57;
 parameter ANDIS		= 8'h58;
 parameter ORIS		= 8'h59;
 parameter XORIS		= 8'h5A;
@@ -170,6 +181,12 @@ parameter MEMDB		= 8'hF9;
 parameter WFI			= 8'hFA;
 parameter SEI			= 8'hFB;
 
+// R3
+parameter PTRDIF	= 4'h1;
+parameter	CHK			= 4'h2;
+parameter MUX			= 4'h4;
+parameter CMOVNZ	= 4'h6;
+
 // Cypto
 parameter SM4ED		= 4'hE;
 parameter SM4KS		= 4'hF;
@@ -184,7 +201,18 @@ parameter SHA512SUM1	= 7'h37;
 parameter SM3P0		= 7'h38;
 parameter SM3P1		= 7'h39;
 
-// FLT1
+// Neural Network Accelerator
+parameter NNA_MFACT	= 7'h62;
+parameter NNA_MTBC	= 7'h65;
+parameter NNA_MTBIAS	= 7'h62;
+parameter NNA_MTFB	= 7'h63;
+parameter NNA_MTIN	= 7'h61;
+parameter NNA_MTMC	= 7'h64;
+parameter NNA_MTWT	= 7'h60;
+parameter NNA_STAT	= 7'h61;
+parameter NNA_TRIG	= 7'h60;
+
+// F1
 parameter FMOV	= 6'h00;
 parameter I2F		= 6'h02;
 parameter F2I		= 6'h03;
@@ -196,7 +224,7 @@ parameter FABS	= 6'h20;
 parameter FNABS	= 6'h21;
 parameter FNEG	= 6'h22;
 
-// FLT2
+// F2
 parameter FMIN	= 6'h02;
 parameter FMAX	= 6'h03;
 parameter FADD	= 6'h04;
@@ -211,11 +239,11 @@ parameter FSNE	= 6'h14;
 parameter FCMPB	= 6'h15;
 parameter FSETM = 6'h16;
 
-// FLT3
-parameter FMA		= 6'h00;
-parameter FMS		= 6'h01;
-parameter FNMA	= 6'h02;
-parameter FNMS	= 6'h03;
+// F3
+parameter FMA		= 4'h00;
+parameter FMS		= 4'h01;
+parameter FNMA	= 4'h02;
+parameter FNMS	= 4'h03;
 
 
 parameter MR_LOAD = 3'd0;
@@ -281,6 +309,7 @@ typedef logic [63:0]	Value;
 typedef logic [31:0] Offset;
 typedef logic [32-13:0] BTBTag;
 typedef logic [7:0] ASID;
+typedef logic [BitsRS:0] SrcId;
 
 typedef struct packed
 {
@@ -371,7 +400,16 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [55:0] pad;
+	logic [47:0] pad;
+	logic [4:0] cnst;
+	logic [1:0] Ra;
+	logic v;
+	logic [7:0] opcode;
+} rts_inst;
+;
+typedef struct packed
+{
+	logic [54:0] pad;
 	logic v;
 	logic [7:0] opcode;
 } anyinst;
@@ -391,6 +429,103 @@ typedef struct packed
 	logic [7:0] opcode;
 } brinst;
 
+typedef struct packed
+{
+	logic [39:0] pad;
+	logic [4:0] func;
+	logic pad1;
+	logic [2:0] Vmb;
+	logic [2:0] Vma;
+	logic [2:0] Vmt;
+	logic v;
+	logic [7:0] opcode;
+} vmr2_inst;
+
+typedef struct packed
+{
+	logic [31:0] pad;
+	logic [2:0] seg;
+	logic [7:0] disp;
+	logic [5:0] Ra;
+	logic [5:0] Rt;
+	logic v;
+	logic [7:0] opcode;
+} ld_inst;
+
+typedef struct packed
+{
+	logic [15:0] pad;
+	logic [2:0] seg;
+	logic [10:0] disp;
+	logic C;
+	logic [2:0] m;
+	logic z;
+	logic [1:0] Tb;
+	logic [5:0] Rb;
+	logic [5:0] Ra;
+	logic [5:0] Rt;
+	logic v;
+	logic [7:0] opcode;
+} vld_inst;
+
+typedef struct packed
+{
+	logic [23:0] pad;
+	logic [6:0] func;
+	logic [2:0] seg;
+	logic [1:0] Sc;
+	logic [1:0] Tb;
+	logic [5:0] Rb;
+	logic [5:0] Ra;
+	logic [5:0] Rt;
+	logic v;
+	logic [7:0] opcode;
+} ldx_inst;
+
+typedef struct packed
+{
+	logic [31:0] pad;
+	logic [2:0] seg;
+	logic [1:0] Tb;
+	logic [5:0] Rb;
+	logic [5:0] Ra;
+	logic [5:0] disp;
+	logic v;
+	logic [7:0] opcode;
+} st_inst;
+
+typedef struct packed
+{
+	logic [15:0] pad;
+	logic [5:0] func;
+	logic [2:0] seg;
+	logic [1:0] Sc;
+	logic [1:0] Tc;
+	logic [5:0] Rc;
+	logic [1:0] Tb;
+	logic [5:0] Rb;
+	logic [5:0] Ra;
+	logic [5:0] Rt;
+	logic v;
+	logic [7:0] opcode;
+} stx_inst;
+
+typedef struct packed
+{
+	logic [15:0] pad;
+	logic [3:0] func;
+	logic S;
+	logic [5:0] Me;
+	logic [1:0] Tc;
+	logic [5:0] Rc;
+	logic [1:0] Tb;
+	logic [5:0] Rb;
+	logic [5:0] Ra;
+	logic [5:0] Rt;
+	logic v;
+	logic [7:0] opcode;
+} rm_inst;
+
 typedef union packed
 {
 	bmapinst bmap;
@@ -400,6 +535,14 @@ typedef union packed
 	rilinst ril;
 	riinst ri;
 	brinst br;
+	rts_inst rts;
+	vmr2_inst vmr2;
+	ld_inst ld;
+	vld_inst vld;
+	ldx_inst ldx;
+	st_inst st;
+	stx_inst stx;
+	rm_inst rm;
 	anyinst	any;
 } Instruction;
 
@@ -484,3 +627,332 @@ typedef struct packed
 	logic [63:0] pad_base;
 	logic [63:0] base;
 } MemSegDesc;
+
+typedef struct packed
+{
+	logic [5:0] rid;
+	logic v;
+	logic cmt;						// commit, clears as soon as committed
+	logic cmt2;						// sticky commit, clears when entry reassigned
+	logic vcmt;						// entire vector is committed.
+	logic dec;						// instruction decoded
+	logic out;						// instruction is out being executed
+	Address ip;
+	Instruction ir;
+	Instruction lsm_mask;
+	logic is_vec;
+	logic jump;
+	Address jump_tgt;
+	logic [3:0] btag;			// Branch tag
+	logic veins;
+	logic branch;
+	logic call;
+	logic mem_op;
+	logic lsm;
+	logic exec;
+	logic myst;
+	logic [5:0] count;		// LDM / STM count
+	logic mc;							// multi-cycle op
+	logic takb;
+	logic predict_taken;
+	logic rfwr;
+	logic ca_rfwr;				// write code address register file
+	logic srfwr;					// write selector register file
+	logic vrfwr;					// write vector register file
+	logic vmrfwr;					// write vector mask register file
+	logic [5:0] Rt;
+	logic [5:0] Ra;
+	logic [5:0] Rb;				// for VEX
+	logic [5:0] Rc;
+	logic [5:0] Rd;
+	logic [5:0] Rm;
+	logic Ravec;
+	logic Rbvec;
+	logic Rcvec;
+	logic Rdvec;
+	logic Rbsel;
+	logic Rtsel;
+	logic [5:0] pRt;			// physical Rt
+	logic [5:0] step;			// vector step
+	logic step_v;
+	Value ia;
+	Value ib;
+	Value ic;
+	Value id;
+	logic [5:0] ia_ele;
+	logic [5:0] ib_ele;
+	logic [5:0] ic_ele;
+	logic [5:0] id_ele;
+	logic [5:0] it_ele;
+	logic [127:0] imm;
+	Value vmask;						// vector mask register value
+	logic z;
+	logic iav;
+	logic ibv;
+	logic icv;
+	logic idv;
+	logic itv;
+	logic vmv;
+	SrcId ias;
+	SrcId ibs;
+	SrcId ics;
+	SrcId ids;
+	logic idib;					// id comes from ia
+	SrcId its;
+	SrcId vms;
+	Value res;
+	sFPFlags fp_flags;
+	logic [5:0] res_ele;
+//	logic [15:0] cause;
+	logic [2:0] irq_level;
+	logic lockout;
+	Address badAddr;
+	logic wr_fu;				// write to functional unit
+	logic [47:0] rob_q;
+} sReorderEntry;
+
+// Detect if a source is automatically valid
+function Source1Valid;
+input Instruction isn;
+casez(isn.any.opcode)
+// BUnit:	
+BRK:	Source1Valid = TRUE;
+R1:
+	case(isn.r1.func)
+	endcase
+R2:
+	case(isn.r2.func)
+	endcase
+R3:
+	case(isn.r3.func)
+	CHK:	Source1Valid = isn.r3.Ra==6'd0;
+	MUX:	Source1Valid = isn.r3.Ra==6'd0;
+	default:	Source1Valid = TRUE;
+	endcase
+ADDI,SUBFI,MULI,ANDI,ORI,XORI,ADCI,SBCFI,MULUI,CSR:
+	Source1Valid = isn.ri.Ra==6'd0;
+OSR2:
+	case(isn.r2.func)
+	RTE:	Source1Valid = isn.r2.Ra==6'd0;
+	SEI:	Source1Valid = isn.r2.Ra==6'd0;
+	REX:	Source1Valid = isn.r2.Ra==6'd0;
+	default: Source1Valid = TRUE;
+	endcase
+// Branches
+8'h2x:	Source1Valid = isn.br.Ra==6'd0;
+8'h3x:	Source1Valid = isn.br.Ra==6'd0;
+DIVI,CPUID,DIVIL,ADDIL,CHKI,MULIL,SNEIL,ANDIL,ORIL,XORIL,SEQIL,BMAPI,MULUI,DIVUI:
+	Source1Valid = isn.ri.Ra==6'd0;
+CMPI,ADDIS,BYTNDXI,WYDNDXI,UTF21NDXI,ANDIS,ORIS,XORIS:
+	Source1Valid = isn.ri.Ra==6'd0;
+VM:
+	case(isn.vmr2.func)
+	MFVM:	Source1Valid = TRUE;
+	MFVL:	Source1Valid = FALSE;
+	MTVM:	Source1Valid = isn[17:12]==6'd0;
+	MTVL:	Source1Valid = isn[17:12]==6'd0;
+	VMADD,VMAND,VMOR,VMXOR,VMSLL,VMSRL,VMSUB:
+	:	Source1Valid = FALSE;
+	VMCNTPOP,VMFIRST,VMLAST:
+		Source1Valid = TRUE;
+	default:	Source1Valid = TRUE;
+	endcase
+VMFILL:	Source1Valid = TRUE;
+CMPIL:	Source1Valid = isn.ri.Ra==6'd0;
+F1:
+	case(isn.r1.func)
+	FSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+F2:	Source1Valid = isn.r2.Ra==6'd0;
+F3:	Source1Valid = isn.r3.Ra==6'd0;
+DF1:
+	case(isn.r1.func)
+	DFSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+DF2:	Source1Valid = isn.r2.Ra==6'd0;
+DF3:	Source1Valid = isn.r3.Ra==6'd0;
+P1:
+	case(isn.r1.func)
+	PSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+P2:	Source1Valid = isn.r2.Ra==6'd0;
+P3:	Source1Valid = isn.r3.Ra==6'd0;
+CMPIS:	Source1Valid = isn.ri.Ra==6'd0;
+F1L:
+	case(isn.r1l.func)
+	FSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+F2L:	Source1Valid = isn.r2.Ra==6'd0;
+DF1L:
+	case(isn.r1l.func)
+	DFSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+DF2L:	Source1Valid = isn.r2.Ra==6'd0;
+P1L:
+	case(isn.r1l.func)
+	PSYNC:		Source1Valid = TRUE;
+	default:	Source1Valid = isn.r1.Ra==6'd0;
+	endcase
+P2L:	Source1Valid = isn.r2.Ra==6'd0;
+8'h8x:	Source1Valid = isn.ld.Ra==6'd0;
+8'h9x:	Source1Valid = isn.st.Ra==6'd0;
+SYS:	Source1Valid = TRUE;
+INT:	Source1Valid = TRUE;
+MOV:	Source1Valid = isn.r1.Ra==6'd0;
+BTFLD:	Source1Valid = isn.r1.Ra==6'd0;
+LDxX:	Source1Valid = isn.ldx.Ra==6'd0;
+STxX:	Source1Valid = isn.stx.Ra==6'd0;
+8'hDx:Source1Valid = isn.ld.Ra==6'd0;
+8'hEx:Source1Valid = isn.st.Ra==6'd0;
+NOP:	Source1Valid = TRUE;
+RTS:	Source1Valid = isn.rts.Ra==2'd0;
+BCD:	Source1Valid = isn.r1.Ra==6'd0;
+SYNC,MEMSB,MEMDB,WFI:	Source1Valid = TRUE;
+SEI:	Source1Valid = isn.r1.Ra==2'd0;
+default:
+	Source1Valid = TRUE;
+endcase
+endfunction
+
+function Source2Valid;
+input Instruction isn;
+casez(isn.any.opcode)
+// BUnit:	
+BRK:	Source2Valid = TRUE;
+R1:
+	case(isn.r1.func)
+	endcase
+R2:
+	case(isn.r2.func)
+	endcase
+R3:
+	case(isn.r3.func)
+	CHK:	Source2Valid = isn.r3.Rb==6'd0 || isn.r3.Tb[1];
+	MUX:	Source2Valid = isn.r3.Rb==6'd0 || isn.r3.Tb[1];
+	default:	Source1Valid = TRUE;
+	endcase
+ADDI,SUBFI,MULI,ANDI,ORI,XORI,ADCI,SBCFI,MULUI,CSR:
+	Source2Valid = TRUE;
+OSR2:
+	case(isn.r2.func)
+	RTE:	Source2Valid = TRUE;
+	SEI:	Source2Valid = TRUE;
+	REX:	Source2Valid = TRUE;
+	default: Source2Valid = TRUE;
+	endcase
+// Branches
+8'h2x:	Source2Valid = isn.br.Rb==6'd0 || isn.br.Tb[1];
+8'h3x:	Source2Valid = isn.br.Rb==6'd0 || isn.br.Tb[1];
+DIVI,CPUID,DIVIL,ADDIL,CHKI,MULIL,SNEIL,ANDIL,ORIL,XORIL,SEQIL,BMAPI,MULUI,DIVUI:
+	Source2Valid = TRUE;
+CMPI,ADDIS,BYTNDXI,WYDNDXI,UTF21NDXI,ANDIS,ORIS,XORIS:
+	Source2Valid = TRUE;
+VM:
+	case(isn.vmr2.func)
+	MFVM:	Source2Valid = FALSE;
+	MFVL:	Source2Valid = TRUE;
+	MTVM:	Source2Valid = TRUE;
+	MTVL:	Source2Valid = TRUE;
+	VMADD,VMAND,VMOR,VMXOR,VMSLL,VMSRL,VMSUB:
+	:	Source2Valid = FALSE;
+	VMCNTPOP,VMFIRST,VMLAST:
+		Source2Valid = FALSE;
+	default:	Source2Valid = TRUE;
+	endcase
+VMFILL:	Source2Valid = TRUE;
+CMPIL:	Source2Valid = TRUE;
+//`FUnit:
+F1:
+	case(isn.r1.func)
+	FSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+F2:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+F3:	Source2Valid = isn.r3.Rb==6'd0 || isn.r3.Tb[1];
+DF1:
+	case(isn.r1.func)
+	DFSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+DF2:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+DF3:	Source2Valid = isn.r3.Rb==6'd0 || isn.r2.Tb[1];
+P1:
+	case(isn.r1.func)
+	PSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+P2:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+P3:	Source2Valid = isn.r3.Rb==6'd0 || isn.r3.Tb[1];
+CMPIS:	Source2Valid = TRUE;
+F1L:
+	case(isn.r1l.func)
+	FSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+F2L:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+DF1L:
+	case(isn.r1l.func)
+	DFSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+DF2L:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+P1L:
+	case(isn.r1l.func)
+	PSYNC:		Source2Valid = TRUE;
+	default:	Source2Valid = TRUE;
+	endcase
+P2L:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+8'h8x:	Source2Valid = isn.ld.v ? isn.r2.Rb==6'b0 || isn.r2.Tb[1] : TRUE;
+8'h9x:	Source1Valid = isn.st.Rb==6'd0 || isn.r2.Tb[1];
+SYS:	Source2Valid = TRUE;
+INT:	Source2Valid = TRUE;
+MOV:	Source2Valid = TRUE;
+BTFLD:	
+	case(isn.rm.func)
+	BFINSI:	Source2Valid = TRUE;
+	default:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+	endcase
+LDxX:	Source2Valid = isn.ldx.Rb==6'd0 || isn.ldx.Tb[1];
+STxX:	Source2Valid = isn.stx.Rb==6'd0 || isn.stx.Tb[1];
+8'hDx:Source2Valid = isn.ld.v ? isn.r2.Rb==6'b0 || isn.r2.Tb[1] : TRUE;
+8'hEx:Source2Valid = isn.st.Rb==6'd0 || isn.r2.Tb[1];
+NOP:	Source2Valid = TRUE;
+RTS:	Source2Valid = TRUE;
+BCD:	Source2Valid = isn.r2.Rb==6'd0 || isn.r2.Tb[1];
+SYNC,MEMSB,MEMDB,WFI:	Source2Valid = TRUE;
+SEI:	Source2Valid = TRUE;
+default:
+	Source2Valid = TRUE;
+endcase
+endfunction
+
+function Source3Valid;
+input Instruction isn;
+casez(isn.any.opcode)
+R3:
+	case(isn.r3.func)
+	CHK:	Source3Valid = isn.r3.Rc==6'd0 || isn.r3.Tc[1];
+	MUX:	Source3Valid = isn.r3.Rc==6'd0 || isn.r3.Tc[1];
+	default:	Source3Valid = TRUE;
+	endcase
+// Branches
+8'h2x:	Source3Valid = FALSE;
+8'h3x:	Source3Valid = FALSE;
+F3:	Source3Valid = isn.r3.Rc==6'd0 || isn.r3.Tc[1];
+DF3:	Source3Valid = isn.r3.Rc==6'd0 || isn.r2.Tc[1];
+P3:	Source3Valid = isn.r3.Rc==6'd0 || isn.r3.Tc[1];
+8'h9x:	Source3Valid = isn.st.v ? isn.r3.Rc==6'd0 || isn.r3.Tc[1] : TRUE;
+BTFLD:	Source3Valid = isn.rm.Rc==6'd0 || isn.rm.Tc[1];
+STxX:	Source3Valid = isn.stx.Rc==6'd0 || isn.stx.Tc[1];
+8'hEx:Source3Valid = isn.r3.Rc==6'd0 || isn.r3.Tc[1];
+default:
+	Source3Valid = TRUE;
+endcase
+endfunction
+
+endpackage
