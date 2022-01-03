@@ -1,0 +1,14 @@
+
+1) drive E low
+2) wait 200 ns
+3) drive Q high
+3) sample the address/ rw / bs/ bs signals ( 19 bits)
+	- drive the S1,S0 = 1,1 for parallel load MR = 1
+	- drive the clock high
+	- drive the clock low
+	- sample a0
+	- drive S1,S0 = 1,0 for shift left (Q7->Q6...
+	- drive the clock high
+	- drive the clock low
+	- sample a1 to a15, ba, bs, and r/w
+4) 
