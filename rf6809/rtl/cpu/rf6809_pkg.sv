@@ -1,6 +1,47 @@
 
 package rf6809_pkg;
 
+`define EIGHTBIT	1
+//`define TWELVEBIT	2
+
+`ifdef EIGHTBIT
+parameter bitsPerByte =	8;
+parameter BPB = 8;
+parameter BPBM1 =	7;
+parameter BPBX2M1 =	15;
+`define LOBYTE	7:0
+`define HIBYTE	15:8
+`define DBLBYTE	15:0
+`define TRPBYTE		23:0
+`define BYTE3		23:16
+`define BYTE4		31:24
+`define BYTE5		39:32
+`define QUINBYTE	47:0
+`define HEXBYTE		55:0
+`define DBLBYTEP1	16:0
+`define LOBYTEP1	8:0
+`define HCBIT		3
+`endif
+
+`ifdef TWELVEBIT
+parameter bitsPerByte =	12;
+parameter BPB = 12;
+parameter BPBM1 =	11;
+parameter BPBX2M1	= 23;
+`define LOBYTE	11:0
+`define HIBYTE	23:12
+`define DBLBYTE	23:0
+`define TRPBYTE		35:0
+`define BYTE3		35:24
+`define BYTE4		47:36
+`define BYTE5		59:48
+`define QUINBYTE	59:0
+`define HEXBYTE		71:0
+`define DBLBYTEP1	24:0
+`define LOBYTEP1	12:0
+`define HCBIT		3
+`endif
+
 `define TRUE		1'b1
 `define FALSE		1'b0
 

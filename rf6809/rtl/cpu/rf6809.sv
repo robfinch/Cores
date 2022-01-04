@@ -68,7 +68,7 @@ input halt_i;
 input nmi_i;
 input irq_i;
 input firq_i;
-input [23:0] vec_i;
+input [`TRPBYTE] vec_i;
 output reg ba_o;
 output reg bs_o;
 output lic_o;
@@ -82,59 +82,66 @@ output reg stb_o;
 output reg we_o;
 output reg lock_o;
 input ack_i;
-output reg [23:0] adr_o;
-input [11:0] dat_i;
-output reg [11:0] dat_o;
+output reg [`TRPBYTE] adr_o;
+input [`LOBYTE] dat_i;
+output reg [`LOBYTE] dat_o;
 output [5:0] state;
 
 reg [5:0] state;
 reg [5:0] load_what,store_what,load_what2;
-reg [23:0] pc;
-wire [23:0] pcp2 = pc + 4'd2;
-wire [23:0] pcp16 = pc + 5'd16;
-wire [59:0] insn;
+reg [`TRPBYTE] pc;
+wire [`TRPBYTE] pcp2 = pc + 4'd2;
+wire [`TRPBYTE] pcp16 = pc + 5'd16;
+wire [`HEXBYTE] insn;
 wire icacheOn = 1'b1;
-reg [23:0] ibufadr;
-reg [59:0] ibuf;
+reg [`TRPBYTE] ibufadr;
+reg [`HEXBYTE] ibuf;
 wire ibufhit = ibufadr==pc;
 reg natMd,firqMd;
 reg md32;
-wire [23:0] mask = 24'hFFFFFF;
+wire [`DBLBYTE] mask = 24'hFFFFFF;
 reg [1:0] ipg;
+reg isFar;
 reg isOuterIndexed;
-reg [59:0] ir;
-wire [11:0] ir12 = ir[11:0];
-reg [11:0] dpr;		// direct page register
-wire [11:0] ndxbyte;
+reg [`HEXBYTE] ir;
+`ifdef EIGHTBIT
+wire [9:0] ir12 = {ipg,ir[`LOBYTE]};
+`endif
+`ifdef TWELVEBIT
+wire [`LOBYTE] ir12 = ir[`LOBYTE];
+`endif
+reg [`LOBYTE] dpr;		// direct page register
+reg [`DBLBYTE] usppg;	// user stack pointer page
+wire [`LOBYTE] ndxbyte;
 reg cf,vf,zf,nf,hf,ef;
-wire [11:0] cfx8 = {11'b0,cf};
-wire [23:0] cfx24 = {23'b0,cf};
+wire [`LOBYTE] cfx8 = cf;
+wire [`DBLBYTE] cfx24 = {23'b0,cf};
 reg im,firqim;
 reg sync_state,wait_state;
-wire [11:0] ccr = {ef,firqim,hf,im,nf,zf,vf,cf};
-reg [11:0] acca,accb;
-reg [23:0] accd;
-reg [23:0] xr,yr,usp,ssp;
-wire [23:0] prod = acca * accb;
-reg [23:0] vect;
-reg [24:0] res;
-reg [12:0] res12;
-wire res12n = res12[11];
-wire res12z = res12[11:0]==12'h000;
-wire res12c = res12[12];
-wire res24n = res[23];
-wire res24z = res[23:0]==24'h000000;
+wire [`LOBYTE] ccr = {ef,firqim,hf,im,nf,zf,vf,cf};
+reg [`LOBYTE] acca,accb;
+reg [`DBLBYTE] accd;
+reg [`DBLBYTE] xr,yr,usp,ssp;
+wire [`DBLBYTE] prod = acca * accb;
+reg [`DBLBYTE] vect;
+reg [`DBLBYTEP1] res;
+reg [`LOBYTEP1] res12;
+wire res12n = res12[BPBM1];
+wire res12z = res12[`LOBYTE]==12'h000;
+wire res12c = res12[bitsPerByte];
+wire res24n = res[BPBX2M1];
+wire res24z = res[`DBLBYTE]==24'h000000;
 wire res24c = res[24];
-reg [23:0] ia;
+reg [`TRPBYTE] ia;
 reg ic_invalidate;
 reg first_ifetch;
 reg tsc_latched;
 wire tsc = tsc_i|tsc_latched;
 
-reg [23:0] a,b;
-wire [11:0] b12 = b[11:0];
-reg [23:0] radr,wadr;
-reg [23:0] wdat;
+reg [`DBLBYTE] a,b;
+wire [`LOBYTE] b12 = b[`LOBYTE];
+reg [`TRPBYTE] radr,wadr;
+reg [`DBLBYTE] wdat;
 
 reg nmi1,nmi_edge;
 reg nmi_armed;
@@ -180,24 +187,24 @@ always_comb
 reg [4:0] cnt;
 always_comb
 begin
-	cnt = 	(ir[12] ? 5'd1 : 5'd0) +
-			(ir[13] ? 5'd1 : 5'd0) +
-			(ir[14] ? 5'd1 : 5'd0) +
-			(ir[15] ? 5'd1 : 5'd0) +
-			(ir[16] ? 5'd2 : 5'd0) +
-			(ir[17] ? 5'd2 : 5'd0) +
-			(ir[18] ? 5'd2 : 5'd0) +
-			(ir[19] ? 5'd2 : 5'd0)
+	cnt = 	(ir[bitsPerByte] ? 5'd1 : 5'd0) +
+			(ir[bitsPerByte+1] ? 5'd1 : 5'd0) +
+			(ir[bitsPerByte+2] ? 5'd1 : 5'd0) +
+			(ir[bitsPerByte+3] ? 5'd1 : 5'd0) +
+			(ir[bitsPerByte+4] ? 5'd2 : 5'd0) +
+			(ir[bitsPerByte+5] ? 5'd2 : 5'd0) +
+			(ir[bitsPerByte+6] ? 5'd2 : 5'd0) +
+			(ir[bitsPerByte+7] ? 5'd2 : 5'd0)
 			;
 //  cnt = 0;
 //	if (ir[8]) cnt = cnt + 5'd1;	// CC
 //	if (ir[9]) cnt = cnt + md32 ? 5'd4 : 5'd1;	// A
 //	if (ir[10]) cnt = cnt + md32 ? 5'd4 : 5'd1;	// B
-//	if (ir[11]) cnt = cnt + 5'd1;	// DP
+//	if (ir[BPBM1]) cnt = cnt + 5'd1;	// DP
 //	if (ir[12]) cnt = cnt + md32 ? 5'd4 : 5'd2;	// X
-//	if (ir[13]) cnt = cnt + md32 ? 5'd4 : 5'd2;	// Y
-//	if (ir[14]) cnt = cnt + md32 ? 5'd4 : 5'd2;	// U/S
-//	if (ir[15]) cnt = cnt + 5'd4;	// PC
+//	if (ir[bitsPerByte+1]) cnt = cnt + md32 ? 5'd4 : 5'd2;	// Y
+//	if (ir[bitsPerByte+2]) cnt = cnt + md32 ? 5'd4 : 5'd2;	// U/S
+//	if (ir[bitsPerByte+3]) cnt = cnt + 5'd4;	// PC
 end
 
 wire isRMW1 = 	ir12==`NEG_DP || ir12==`COM_DP || ir12==`LSR_DP || ir12==`ROR_DP || ir12==`ASR_DP || ir12==`ASL_DP || ir12==`ROL_DP || ir12==`DEC_DP || ir12==`INC_DP ||
@@ -210,8 +217,8 @@ wire isIndexed =
 	ir12==`LEAX_NDX || ir12==`LEAY_NDX || ir12==`LEAS_NDX || ir12==`LEAU_NDX
 	;
 reg isDblIndirect;
-wire isIndirect = ndxbyte[8] & ndxbyte[11];
-assign ndxbyte = ir[23:12];
+wire isIndirect = ndxbyte[BPBM1-3] & ndxbyte[BPBM1];
+assign ndxbyte = ir[`HIBYTE];
 
 // Detect type of interrupt
 wire isINT = ir12==`INT;
@@ -223,104 +230,193 @@ wire isFIRQ = vect[3:0]==4'h6;
 wire isSWI2 = vect[3:0]==4'h4;
 wire isSWI3 = vect[3:0]==4'h2;
 
-wire [23:0] address = {ir[23:12],ir[35:24]};
-wire [23:0] dp_address = {dpr,ir[23:12]};
-wire [23:0] ex_address = address;
-wire [23:0] offset12 = {{12{ir[35]}},ir[35:24]};
-wire [23:0] offset24 = {ir[35:24],ir[47:36]};
+wire [`TRPBYTE] far_address = {ir[`HIBYTE],ir[`BYTE3],ir[`BYTE4]};
+wire [`TRPBYTE] address = {ir[`HIBYTE],ir[`BYTE3]};
+wire [`TRPBYTE] dp_address = {dpr,ir[`HIBYTE]};
+wire [`TRPBYTE] ex_address = isFar ? far_address : address;
+wire [`TRPBYTE] offset12 = {{bitsPerByte{ir[bitsPerByte*3-1]}},ir[`BYTE3]};
+wire [`TRPBYTE] offset24 = {ir[`BYTE3],ir[`BYTE4]};
+wire [`TRPBYTE] offset36 = {ir[`BYTE3],ir[`BYTE4],ir[`BYTE5]};
 
 // Choose the indexing register
-reg [23:0] ndxreg;
+reg [`TRPBYTE] ndxreg;
 always_comb
-	case(ndxbyte[10:9])
-	2'b00:	ndxreg <= xr;
-	2'b01:	ndxreg <= yr;
-	2'b10:	ndxreg <= usp;
-	2'b11:	ndxreg <= ssp;
-	endcase
+	if (bitsPerByte==8)
+		case(ndxbyte[6:5])
+		2'b00:	ndxreg <= xr;
+		2'b01:	ndxreg <= yr;
+		2'b10:	ndxreg <= {usppg,8'h00} + usp;
+		2'b11:	ndxreg <= ssp;
+		endcase
+	else if (bitsPerByte==12)
+		case(ndxbyte[10:9])
+		2'b00:	ndxreg <= xr;
+		2'b01:	ndxreg <= yr;
+		2'b10:	ndxreg <= {usppg,8'h00} + usp;
+		2'b11:	ndxreg <= ssp;
+		endcase
+	
+reg [`DBLBYTE] a,b;
+wire [`LOBYTE] b12 = b[`LOBYTE];
 
-reg [23:0] a,b;
-wire [11:0] b12 = b[11:0];
-
-reg [23:0] NdxAddr;
+reg [`DBLBYTE] NdxAddr;
 always_comb
-	casex({isOuterIndexed,ndxbyte})
-	13'b00xxxxxxxxxxx:	NdxAddr <= (ndxreg + {{15{ndxbyte[8]}},ndxbyte[8:0]}) & mask;
-	13'b01xxx00000000:	NdxAddr <= ndxreg;
-	13'b01xxx00000001:	NdxAddr <= ndxreg;
-	13'b01xxx00000010:	NdxAddr <= (ndxreg - 2'd1) & mask;
-	13'b01xxx00000011:	NdxAddr <= (ndxreg - 2'd2) & mask;
-	13'b01xxx00000100:	NdxAddr <= ndxreg;
-	13'b01xxx00000101:	NdxAddr <= (ndxreg + {{12{accb[11]}},accb}) & mask;
-	13'b01xxx00000110:	NdxAddr <= (ndxreg + {{12{acca[11]}},acca}) & mask;
-	13'b01xxx00001000:	NdxAddr <= (ndxreg + offset12) & mask;
-	13'b01xxx00001001:	NdxAddr <= (ndxreg + offset24) & mask;
-	13'b01xxx00001010:	NdxAddr <= (ndxreg & mask) + offset24;
-	13'b01xxx00001011:	NdxAddr <= (ndxreg + {acca,accb}) & mask;
-	13'b01xxx00001100:	NdxAddr <= pc + offset12 + 3'd3;
-	13'b01xxx00001101:	NdxAddr <= pc + offset24 + 3'd4;
-	13'b01xxx00001110:	NdxAddr <= pc + offset24 + 3'd4;
-	13'b01xx000001111:	NdxAddr <= offset24 & 24'h0FFFFFF;
-	13'b01xx000011111:	NdxAddr <= offset24 & 24'h0FFFFFF;
-	13'b10xxxxxxxxxxx:	NdxAddr <= {{15{ndxbyte[8]}},ndxbyte[8:0]};
-	13'b11xxx00000000:	NdxAddr <= 24'd0;
-	13'b11xxx00000001:	NdxAddr <= 24'd0;
-	13'b11xxx00000010:	NdxAddr <= 24'd0;
-	13'b11xxx00000011:	NdxAddr <= 24'd0;
-	13'b11xxx00000100:	NdxAddr <= 24'd0;
-	13'b11xxx00000101:	NdxAddr <= {{12{accb[11]}},accb};
-	13'b11xxx00000110:	NdxAddr <= {{12{acca[11]}},acca};
-	13'b11xxx00001000:	NdxAddr <= offset12;
-	13'b11xxx00001001:	NdxAddr <= offset24;
-	13'b11xxx00001010:	NdxAddr <= offset24;
-	13'b11xxx00001011:	NdxAddr <= {acca,accb};
-	13'b11xxx00001100:	NdxAddr <= pc + offset12 + 3'd3;
-	13'b11xxx00001101:	NdxAddr <= pc + offset24 + 3'd4;
-	13'b11xxx00001110:	NdxAddr <= pc + offset24 + 3'd6;
-	13'b11xx000001111:	NdxAddr <= offset24 & 24'h0FFFFFF;
-	13'b11xx000011111:	NdxAddr <= offset24 & 24'h0FFFFFF;
-	default:		NdxAddr <= 24'hFFFFFF;
-	endcase
-
+	if (bitsPerByte==8)
+		casex({isOuterIndexed,ndxbyte})
+		9'b00xxxxxxx:	NdxAddr <= (ndxreg + {{11{ndxbyte[BPB-4]}},ndxbyte[BPB-4:0]});
+		9'b01xxx0000:	NdxAddr <= ndxreg;
+		9'b01xxx0001:	NdxAddr <= ndxreg;
+		9'b01xxx0010:	NdxAddr <= (ndxreg - 2'd1);
+		9'b01xxx0011:	NdxAddr <= (ndxreg - 2'd2);
+		9'b01xxx0100:	NdxAddr <= ndxreg;
+		9'b01xxx0101:	NdxAddr <= (ndxreg + {{BPB*2{accb[BPBM1]}},accb});
+		9'b01xxx0110:	NdxAddr <= (ndxreg + {{BPB*2{acca[BPBM1]}},acca});
+		9'b01xxx1000:	NdxAddr <= (ndxreg + offset12);
+		9'b01xxx1001:	NdxAddr <= (ndxreg + offset24);
+		9'b01xxx1010:	NdxAddr <=  ndxreg + offset24;
+		9'b01xxx1011:	NdxAddr <= (ndxreg + {acca,accb});
+		9'b01xxx1100:	NdxAddr <= pc + offset12 + 3'd3;
+		9'b01xxx1101:	NdxAddr <= pc + offset24 + 3'd4;
+		9'b01xxx1110:	NdxAddr <= pc + offset36 + 3'd5;
+		9'b01xx01111:	NdxAddr <= isFar ? offset36 : offset24;
+		9'b01xx11111:	NdxAddr <= offset24;
+		9'b10xxxxxxx:	NdxAddr <= {{11{ndxbyte[BPB-4]}},ndxbyte[BPB-4:0]};
+		9'b11xxx0000:	NdxAddr <= 24'd0;
+		9'b11xxx0001:	NdxAddr <= 24'd0;
+		9'b11xxx0010:	NdxAddr <= 24'd0;
+		9'b11xxx0011:	NdxAddr <= 24'd0;
+		9'b11xxx0100:	NdxAddr <= 24'd0;
+		9'b11xxx0101:	NdxAddr <= {{BPB*2{accb[BPBM1]}},accb};
+		9'b11xxx0110:	NdxAddr <= {{BPB*2{acca[BPBM1]}},acca};
+		9'b11xxx1000:	NdxAddr <= offset12;
+		9'b11xxx1001:	NdxAddr <= offset24;
+		9'b11xxx1010:	NdxAddr <= offset36;
+		9'b11xxx1011:	NdxAddr <= {acca,accb};
+		9'b11xxx1100:	NdxAddr <= pc + offset12 + 3'd3;
+		9'b11xxx1101:	NdxAddr <= pc + offset24 + 3'd4;
+		9'b11xxx1110:	NdxAddr <= pc + offset24 + 3'd6;
+		9'b11xx01111:	NdxAddr <= isFar ? offset36 : offset24;
+		9'b11xx11111:	NdxAddr <= offset24;
+		default:		NdxAddr <= 24'hFFFFFF;
+		endcase
+	else if (bitsPerByte==12)
+		casex({isOuterIndexed,ndxbyte})
+		13'b00xxxxxxxxxxx:	NdxAddr <= (ndxreg + {{15{ndxbyte[BPB-4]}},ndxbyte[BPB-4:0]});
+		13'b01xxx00000000:	NdxAddr <= ndxreg;
+		13'b01xxx00000001:	NdxAddr <= ndxreg;
+		13'b01xxx00000010:	NdxAddr <= (ndxreg - 2'd1);
+		13'b01xxx00010010:	NdxAddr <= (ndxreg - 2'd2);
+		13'b01xxx00100010:	NdxAddr <= (ndxreg - 2'd3);
+		13'b01xxx00000011:	NdxAddr <= (ndxreg - 2'd2);
+		13'b01xxx00000100:	NdxAddr <= ndxreg;
+		13'b01xxx00000101:	NdxAddr <= (ndxreg + {{BPB*2{accb[BPBM1]}},accb});
+		13'b01xxx00000110:	NdxAddr <= (ndxreg + {{BPB*2{acca[BPBM1]}},acca});
+		13'b01xxx00001000:	NdxAddr <= (ndxreg + offset12);
+		13'b01xxx00001001:	NdxAddr <= (ndxreg + offset24);
+		13'b01xxx00001010:	NdxAddr <=  ndxreg + offset24;
+		13'b01xxx00001011:	NdxAddr <= (ndxreg + {acca,accb});
+		13'b01xxx00001100:	NdxAddr <= pc + offset12 + 3'd3;
+		13'b01xxx00001101:	NdxAddr <= pc + offset24 + 3'd4;
+		13'b01xxx00001110:	NdxAddr <= pc + offset36 + 3'd5;
+		13'b01xx000001111:	NdxAddr <= isFar ? offset36 : offset24;
+		13'b01xx100001111:	NdxAddr <= offset24;
+		13'b01xxx10000000:	NdxAddr <= 24'd0;
+		13'b01xxx10000001:	NdxAddr <= 24'd0;
+		13'b01xxx10000010:	NdxAddr <= 24'd0;
+		13'b01xxx10000011:	NdxAddr <= 24'd0;
+		13'b01xxx10000100:	NdxAddr <= 24'd0;
+		13'b01xxx10000101:	NdxAddr <= {{BPB*2{accb[BPBM1]}},accb};
+		13'b01xxx10000110:	NdxAddr <= {{BPB*2{acca[BPBM1]}},acca};
+		13'b01xxx10001000:	NdxAddr <= offset12;
+		13'b01xxx10001001:	NdxAddr <= offset24;
+		13'b01xxx10001010:	NdxAddr <= offset24;
+		13'b01xxx10001011:	NdxAddr <= {acca,accb};
+		13'b01xxx10001100:	NdxAddr <= pc + offset12 + 3'd3;
+		13'b01xxx10001101:	NdxAddr <= pc + offset24 + 3'd4;
+		13'b01xxx10001110:	NdxAddr <= pc + offset36 + 3'd5;
+		13'b01xx010001111:	NdxAddr <= isFar ? offset36 : offset24;
+		13'b01xx110001111:	NdxAddr <= offset24;
+		13'b10xxxxxxxxxxx:	NdxAddr <= {{15{ndxbyte[BPB-4]}},ndxbyte[BPB-4:0]};
+		13'b11xxx00000000:	NdxAddr <= 24'd0;
+		13'b11xxx00000001:	NdxAddr <= 24'd0;
+		13'b11xxx00000010:	NdxAddr <= 24'd0;
+		13'b11xxx00000011:	NdxAddr <= 24'd0;
+		13'b11xxx00000100:	NdxAddr <= 24'd0;
+		13'b11xxx00000101:	NdxAddr <= {{BPB*2{accb[BPBM1]}},accb};
+		13'b11xxx00000110:	NdxAddr <= {{BPB*2{acca[BPBM1]}},acca};
+		13'b11xxx00001000:	NdxAddr <= offset12;
+		13'b11xxx00001001:	NdxAddr <= offset24;
+		13'b11xxx00001010:	NdxAddr <= offset24;
+		13'b11xxx00001011:	NdxAddr <= {acca,accb};
+		13'b11xxx00001100:	NdxAddr <= pc + offset12 + 3'd3;
+		13'b11xxx00001101:	NdxAddr <= pc + offset24 + 3'd4;
+		13'b11xxx00001110:	NdxAddr <= pc + offset36 + 3'd5;
+		13'b11xx000001111:	NdxAddr <= isFar ? offset36 : offset24;
+		13'b11xx000011111:	NdxAddr <= offset24;
+		default:		NdxAddr <= 24'hFFFFFF;
+		endcase
+	
 // Compute instruction length depending on indexing byte
 reg [2:0] insnsz;
 always_comb
-	casex(ndxbyte)
-	12'b0xxxxxxxxxxx:	insnsz <= 4'h2;
-	12'b1xxx00000000:	insnsz <= 4'h2;
-	12'b1xxx00000001:	insnsz <= 4'h2;
-	12'b1xxx00000010:	insnsz <= 4'h2;
-	12'b1xxx00000011:	insnsz <= 4'h2;
-	12'b1xxx00000100:	insnsz <= 4'h2;
-	12'b1xxx00000101:	insnsz <= 4'h2;
-	12'b1xxx00000110:	insnsz <= 4'h2;
-	12'b1xxx00001000:	insnsz <= 4'h3;
-	12'b1xxx00001001:	insnsz <= 4'h4;
-	12'b1xxx00001010:	insnsz <= 4'h6;
-	12'b1xxx00001011:	insnsz <= 4'h2;
-	12'b1xxx00001100:	insnsz <= 4'h3;
-	12'b1xxx00001101:	insnsz <= 4'h4;
-	12'b1xxx00001110:	insnsz <= 4'h6;
-	12'b1xx000001111:	insnsz <= 4'h4;
-	12'b1xx000011111:	insnsz <= 4'h4;
-	default:	insnsz <= 4'h2;
-	endcase
+	if (bitsPerByte==8)
+		casex(ndxbyte)
+		8'b0xxxxxxx:	insnsz <= 4'h2;
+		8'b1xx00000:	insnsz <= 4'h2;
+		8'b1xx00001:	insnsz <= 4'h2;
+		8'b1xx00010:	insnsz <= 4'h2;
+		8'b1xx00011:	insnsz <= 4'h2;
+		8'b1xx00100:	insnsz <= 4'h2;
+		8'b1xx00101:	insnsz <= 4'h2;
+		8'b1xx00110:	insnsz <= 4'h2;
+		8'b1xx01000:	insnsz <= 4'h3;
+		8'b1xx01001:	insnsz <= 4'h4;
+		8'b1xx01010:	insnsz <= 4'h6;
+		8'b1xx01011:	insnsz <= 4'h2;
+		8'b1xx01100:	insnsz <= 4'h3;
+		8'b1xx01101:	insnsz <= 4'h4;
+		8'b1xx01110:	insnsz <= 4'h6;
+		8'b1xx01111:	insnsz <= isFar ? 4'h5 : 4'h4;
+		8'b1xx11111:	insnsz <= 4'h4;
+		default:	insnsz <= 4'h2;
+		endcase
+	else if (bitsPerByte==12)
+		casex(ndxbyte)
+		12'b0xxxxxxxxxxx:	insnsz <= 4'h2;
+		12'b1xxx00000000:	insnsz <= 4'h2;
+		12'b1xxx00000001:	insnsz <= 4'h2;
+		12'b1xxx00000010:	insnsz <= 4'h2;
+		12'b1xxx00000011:	insnsz <= 4'h2;
+		12'b1xxx00000100:	insnsz <= 4'h2;
+		12'b1xxx00000101:	insnsz <= 4'h2;
+		12'b1xxx00000110:	insnsz <= 4'h2;
+		12'b1xxx00001000:	insnsz <= 4'h3;
+		12'b1xxx00001001:	insnsz <= 4'h4;
+		12'b1xxx00001010:	insnsz <= 4'h6;
+		12'b1xxx00001011:	insnsz <= 4'h2;
+		12'b1xxx00001100:	insnsz <= 4'h3;
+		12'b1xxx00001101:	insnsz <= 4'h4;
+		12'b1xxx00001110:	insnsz <= 4'h6;
+		12'b1xx000001111:	insnsz <= isFar ? 4'h5 : 4'h4;
+		12'b1xx000011111:	insnsz <= 4'h4;
+		default:	insnsz <= 4'h2;
+		endcase
 
 // Source registers for transfer or exchange instructions.
-reg [31:0] src1,src2;
+reg [`DBLBYTE] src1,src2;
 always_comb
 	case(ir[15:12])
-	4'b0000:	src1 <= {acca[11:0],accb[11:0]};
+	4'b0000:	src1 <= {acca[`LOBYTE],accb[`LOBYTE]};
 	4'b0001:	src1 <= xr;
 	4'b0010:	src1 <= yr;
 	4'b0011:	src1 <= usp;
 	4'b0100:	src1 <= ssp;
 	4'b0101:	src1 <= pcp2;
-	4'b1000:	src1 <= acca[11:0];
-	4'b1001:	src1 <= accb[11:0];
+	4'b1000:	src1 <= acca[`LOBYTE];
+	4'b1001:	src1 <= accb[`LOBYTE];
 	4'b1010:	src1 <= ccr;
 	4'b1011:	src1 <= dpr;
-	4'b1100:	src1 <= 24'h0000;
+	4'b1100:	src1 <= usppg;
 	4'b1101:	src1 <= 24'h0000;
 	4'b1110:	src1 <= 24'h0000;
 	4'b1111:	src1 <= 24'h0000;
@@ -328,17 +424,17 @@ always_comb
 	endcase
 always_comb
 	case(ir[11:8])
-	4'b0000:	src2 <= {acca[11:0],accb[11:0]};
+	4'b0000:	src2 <= {acca[`LOBYTE],accb[`LOBYTE]};
 	4'b0001:	src2 <= xr;
 	4'b0010:	src2 <= yr;
 	4'b0011:	src2 <= usp;
 	4'b0100:	src2 <= ssp;
 	4'b0101:	src2 <= pcp2;
-	4'b1000:	src2 <= acca[11:0];
-	4'b1001:	src2 <= accb[11:0];
+	4'b1000:	src2 <= acca[`LOBYTE];
+	4'b1001:	src2 <= accb[`LOBYTE];
 	4'b1010:	src2 <= ccr;
 	4'b1011:	src2 <= dpr;
-	4'b1100:	src2 <= 24'h0000;
+	4'b1100:	src2 <= usppg;
 	4'b1101:	src2 <= 24'h0000;
 	4'b1110:	src2 <= 24'h0000;
 	4'b1111:	src2 <= 24'h0000;
@@ -357,9 +453,9 @@ wire isAcca	= 	ir12==`NEGA || ir12==`COMA || ir12==`LSRA || ir12==`RORA || ir12=
 				ir12==`LDA_EXT || ir12==`EORA_EXT || ir12==`ADCA_EXT || ir12==`ORA_EXT || ir12==`ADDA_EXT
 				;
 
-wire [23:0] acc = isAcca ? acca : accb;
+wire [`DBLBYTE] acc = isAcca ? acca : accb;
 
-wire [23:0] sum12 = src1 + src2;
+wire [`DBLBYTE] sum12 = src1 + src2;
 
 always_ff @(posedge clk_i)
 if (state==DECODE) begin
@@ -416,8 +512,8 @@ assign lic_o =	(state==CALC && !isRMW) ||
 					(store_what==`SW_ACCA70 && !(isINT || isPSHS || isPSHU)) ||
 					(store_what==`SW_ACCB70 && !(isINT || isPSHS || isPSHU))
 				)) ||
-				(state==PUSH2 && ir[15:8]==8'h00 && !isINT) ||
-				(state==PULL1 && ir[15:8]==8'h00) ||
+				(state==PUSH2 && ir[`HIBYTE]==12'h000 && !isINT) ||
+				(state==PULL1 && ir[`HIBYTE]==12'h000) ||
 				(state==OUTER_INDEXING2 && isLEA) ||
 				(state==LOAD2 && 
 					(load_what==`LW_ACCA && !(isRTI || isPULU || isPULS)) ||
@@ -463,7 +559,7 @@ rf6809_itagmem u2
 	.wclk(clk_i),
 	.wce(1'b1),
 	.wr(ack_i && state==ICACHE2),
-	.wa(adr_o[23:0]),
+	.wa(adr_o[`DBLBYTE]),
 	.invalidate(ic_invalidate),
 	.rclk(~clk_i),
 	.rce(1'b1),
@@ -492,6 +588,7 @@ if (rst_i) begin
 	wait_state <= `FALSE;
 	md32 <= `FALSE;
 	ipg <= 2'b00;
+	isFar <= `FALSE;
 	isOuterIndexed <= `FALSE;
 	dpr <= 12'h000;
 	ibufadr <= 24'h000000;
@@ -543,6 +640,7 @@ IFETCH:
 			ba_o <= 1'b0;
 			bs_o <= 1'b0;
 			next_state(DECODE);
+			isFar <= `FALSE;
 			isOuterIndexed <= `FALSE;
 			ipg <= 2'b00;
 			ia <= 24'd0;
@@ -553,13 +651,13 @@ IFETCH:
 				sync_state <= `FALSE;
 			if (nmi_edge & nmi_armed) begin
 				bs_o <= 1'b1;
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `NMI_VECT;
 			end
 			else if (firq_i & !firqim) begin
 				bs_o <= 1'b1;
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `FIRQ_VECT;
 			end
@@ -568,7 +666,7 @@ IFETCH:
 				$display("****** Interrupt *********************");
 				$display("**************************************");
 				bs_o <= 1'b1;
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `IRQ_VECT;
 			end
@@ -583,6 +681,7 @@ IFETCH:
 					end
 					else begin
 						ipg <= ipg;
+						isFar <= isFar;
 						isOuterIndexed <= isOuterIndexed;
 						next_state(ICACHE1);
 					end
@@ -592,6 +691,7 @@ IFETCH:
 						ir <= ibuf;
 					else begin
 						ipg <= ipg;
+						isFar <= isFar;
 						isOuterIndexed <= isOuterIndexed;
 						next_state(IBUF1);
 					end
@@ -606,101 +706,101 @@ IFETCH:
 			`ADDA_IMM,`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
 			`ADCA_IMM,`ADCA_DP,`ADCA_NDX,`ADCA_EXT:
 				begin
-					cf <= (a[11]&b[11])|(a[11]&~res12[11])|(b[11]&~res12[11]);
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					vf <= (res12[11] ^ b[11]) & (1'b1 ^ a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					cf <= (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					vf <= (res12[BPBM1] ^ b[BPBM1]) & (1'b1 ^ a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`ADDB_IMM,`ADDB_DP,`ADDB_NDX,`ADDB_EXT,
 			`ADCB_IMM,`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
 				begin
-					cf <= (a[11]&b[11])|(a[11]&~res12[11])|(b[11]&~res12[11]);
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					vf <= (res12[11] ^ b[11]) & (1'b1 ^ a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					cf <= (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					vf <= (res12[BPBM1] ^ b[BPBM1]) & (1'b1 ^ a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`ADDD_IMM,`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
 				begin
-					cf <= (a[23]&b[23])|(a[23]&~res[23])|(b[23]&~res[23]);
-					vf <= (res[23] ^ b[23]) & (1'b1 ^ a[23] ^ b[23]);
-					nf <= res[23];
-					zf <= res[23:0]==24'h000000;
-					acca <= res[23:12];
-					accb <= res[11:0];
+					cf <= (a[BPBX2M1]&b[BPBX2M1])|(a[BPBX2M1]&~res[BPBX2M1])|(b[BPBX2M1]&~res[BPBX2M1]);
+					vf <= (res[BPBX2M1] ^ b[BPBX2M1]) & (1'b1 ^ a[BPBX2M1] ^ b[BPBX2M1]);
+					nf <= res[BPBX2M1];
+					zf <= res[`DBLBYTE]==24'h000000;
+					acca <= res[`HIBYTE];
+					accb <= res[`LOBYTE];
 				end
 			`ANDA_IMM,`ANDA_DP,`ANDA_NDX,`ANDA_EXT:
 				begin
 					nf <= res12n;
 					zf <= res12z;
 					vf <= 1'b0;
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 				end
 			`ANDB_IMM,`ANDB_DP,`ANDB_NDX,`ANDB_EXT:
 				begin
 					nf <= res12n;
 					zf <= res12z;
 					vf <= 1'b0;
-					accb <= res12[11:0];
+					accb <= res12[`LOBYTE];
 				end
 			`ASLA:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`ASLB:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`ASL_DP,`ASL_NDX,`ASL_EXT:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`ASRA:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`ASRB:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`ASR_DP,`ASR_NDX,`ASR_EXT:
 				begin
 					cf <= res12c;
-					hf <= (a[5]&b[5])|(a[5]&~res12[5])|(b[5]&~res12[5]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`BITA_IMM,`BITA_DP,`BITA_NDX,`BITA_EXT,
 			`BITB_IMM,`BITB_DP,`BITB_NDX,`BITB_EXT:
 				begin
 					vf <= 1'b0;
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`CLRA:
 				begin
@@ -728,28 +828,28 @@ IFETCH:
 			`CMPA_IMM,`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
 			`CMPB_IMM,`CMPB_DP,`CMPB_NDX,`CMPB_EXT:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`CMPD_IMM,`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
 				begin
-					cf <= (~a[23]&b[23])|(res[23]&~a[23])|(res[23]&b[23]);
-					vf <= (1'b1 ^ res[23] ^ b[23]) & (a[23] ^ b[23]);
-					nf <= res[23];
-					zf <= res[23:0]==24'h000000;
+					cf <= (~a[BPBX2M1]&b[BPBX2M1])|(res[BPBX2M1]&~a[BPBX2M1])|(res[BPBX2M1]&b[BPBX2M1]);
+					vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
+					nf <= res[BPBX2M1];
+					zf <= res[`DBLBYTE]==24'h000000;
 				end
 			`CMPS_IMM,`CMPS_DP,`CMPS_NDX,`CMPS_EXT,
 			`CMPU_IMM,`CMPU_DP,`CMPU_NDX,`CMPU_EXT,
 			`CMPX_IMM,`CMPX_DP,`CMPX_NDX,`CMPX_EXT,
 			`CMPY_IMM,`CMPY_DP,`CMPY_NDX,`CMPY_EXT:
 				begin
-					cf <= (~a[23]&b[23])|(res[23]&~a[23])|(res[23]&b[23]);
-					vf <= (1'b1 ^ res[23] ^ b[23]) & (a[23] ^ b[23]);
-					nf <= res[23];
-					zf <= res[23:0]==24'h000000;
+					cf <= (~a[BPBX2M1]&b[BPBX2M1])|(res[BPBX2M1]&~a[BPBX2M1])|(res[BPBX2M1]&b[BPBX2M1]);
+					vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
+					nf <= res[BPBX2M1];
+					zf <= res[`DBLBYTE]==24'h000000;
 				end
 			`COMA:
 				begin
@@ -757,7 +857,7 @@ IFETCH:
 					vf <= 1'b0;
 					nf <= res12n;
 					zf <= res12z;
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 				end
 			`COMB:
 				begin
@@ -765,7 +865,7 @@ IFETCH:
 					vf <= 1'b0;
 					nf <= res12n;
 					zf <= res12z;
-					accb <= res12[11:0];
+					accb <= res12[`LOBYTE];
 				end
 			`COM_DP,`COM_NDX,`COM_EXT:
 				begin
@@ -779,28 +879,28 @@ IFETCH:
 					cf <= res12c;
 					zf <= res12z;
 					nf <= res12n;
-					vf <= (res12[11] ^ b[11]) & (1'b1 ^ a[11] ^ b[11]);
-					acca <= res12[11:0];
+					vf <= (res12[BPBM1] ^ b[BPBM1]) & (1'b1 ^ a[BPBM1] ^ b[BPBM1]);
+					acca <= res12[`LOBYTE];
 				end
 			`DECA:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != acca[11];
-					acca <= res12[11:0];
+					vf <= res12[BPBM1] != acca[BPBM1];
+					acca <= res12[`LOBYTE];
 				end
 			`DECB:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != accb[11];
-					accb <= res12[11:0];
+					vf <= res12[BPBM1] != accb[BPBM1];
+					accb <= res12[`LOBYTE];
 				end
 			`DEC_DP,`DEC_NDX,`DEC_EXT:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != b[11];
+					vf <= res12[BPBM1] != b[BPBM1];
 				end
 			`EORA_IMM,`EORA_DP,`EORA_NDX,`EORA_EXT,
 			`ORA_IMM,`ORA_DP,`ORA_NDX,`ORA_EXT:
@@ -808,7 +908,7 @@ IFETCH:
 					nf <= res12n;
 					zf <= res12z;
 					vf <= 1'b0;
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 				end
 			`EORB_IMM,`EORB_DP,`EORB_NDX,`EORB_EXT,
 			`ORB_IMM,`ORB_DP,`ORB_NDX,`ORB_EXT:
@@ -816,23 +916,23 @@ IFETCH:
 					nf <= res12n;
 					zf <= res12z;
 					vf <= 1'b0;
-					accb <= res12[11:0];
+					accb <= res12[`LOBYTE];
 				end
 			`EXG:
 				begin
 					case(ir[11:8])
 					4'b0000:
 								begin
-									acca <= src1[23:12];
-									accb <= src1[11:0];
+									acca <= src1[`HIBYTE];
+									accb <= src1[`LOBYTE];
 								end
 					4'b0001:	xr <= src1;
 					4'b0010:	yr <= src1;
 					4'b0011:	usp <= src1;
 					4'b0100:	begin ssp <= src1; nmi_armed <= `TRUE; end
-					4'b0101:	pc <= src1[23:0];
-					4'b1000:	acca <= src1[11:0];
-					4'b1001:	accb <= src1[11:0];
+					4'b0101:	pc <= src1[`DBLBYTE];
+					4'b1000:	acca <= src1[`LOBYTE];
+					4'b1001:	accb <= src1[`LOBYTE];
 					4'b1010:
 						begin
 							cf <= src1[0];
@@ -844,24 +944,24 @@ IFETCH:
 							firqim <= src1[6];
 							ef <= src1[7];
 						end
-					4'b1011:	dpr <= src1[11:0];
-					4'b1110:	;
+					4'b1011:	dpr <= src1[`LOBYTE];
+					4'b1110:	usppg <= src1[`DBLBYTE];
 					4'b1111:	;
 					default:	;
 					endcase
 					case(ir[15:12])
 					4'b0000:
 								begin
-									acca <= src2[23:12];
-									accb <= src2[11:0];
+									acca <= src2[`HIBYTE];
+									accb <= src2[`LOBYTE];
 								end
 					4'b0001:	xr <= src2;
 					4'b0010:	yr <= src2;
 					4'b0011:	usp <= src2;
 					4'b0100:	begin ssp <= src2; nmi_armed <= `TRUE; end
-					4'b0101:	pc <= src2[23:0];
-					4'b1000:	acca <= src2[11:0];
-					4'b1001:	accb <= src2[11:0];
+					4'b0101:	pc <= src2[`DBLBYTE];
+					4'b1000:	acca <= src2[`LOBYTE];
+					4'b1001:	accb <= src2[`LOBYTE];
 					4'b1010:
 						begin
 							cf <= src2[0];
@@ -873,8 +973,8 @@ IFETCH:
 							firqim <= src2[6];
 							ef <= src2[7];
 						end
-					4'b1011:	dpr <= src2[11:0];
-					4'b1110:	;
+					4'b1011:	dpr <= src2[`LOBYTE];
+					4'b1110:	usppg <= src2[`DBLBYTE];
 					4'b1111:	;
 					default:	;
 					endcase
@@ -883,57 +983,57 @@ IFETCH:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != acca[11];
-					acca <= res12[11:0];
+					vf <= res12[BPBM1] != acca[BPBM1];
+					acca <= res12[`LOBYTE];
 				end
 			`INCB:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != accb[11];
-					accb <= res12[11:0];
+					vf <= res12[BPBM1] != accb[BPBM1];
+					accb <= res12[`LOBYTE];
 				end
 			`INC_DP,`INC_NDX,`INC_EXT:
 				begin
 					nf <= res12n;
 					zf <= res12z;
-					vf <= res12[11] != b[11];
+					vf <= res12[BPBM1] != b[BPBM1];
 				end
 			`LDA_IMM,`LDA_DP,`LDA_NDX,`LDA_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res12z;
 					nf <= res12n;
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 				end
 			`LDB_IMM,`LDB_DP,`LDB_NDX,`LDB_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res12z;
 					nf <= res12n;
-					accb <= res12[11:0];
+					accb <= res12[`LOBYTE];
 				end
 			`LDD_IMM,`LDD_DP,`LDD_NDX,`LDD_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res24z;
 					nf <= res24n;
-					acca <= res[23:12];
-					accb <= res[11:0];
+					acca <= res[`HIBYTE];
+					accb <= res[`LOBYTE];
 				end
 			`LDU_IMM,`LDU_DP,`LDU_NDX,`LDU_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res24z;
 					nf <= res24n;
-					usp <= res[23:0];
+					usp <= res[`DBLBYTE];
 				end
 			`LDS_IMM,`LDS_DP,`LDS_NDX,`LDS_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res24z;
 					nf <= res24n;
-					ssp <= res[23:0];
+					ssp <= res[`DBLBYTE];
 					nmi_armed <= 1'b1;
 				end
 			`LDX_IMM,`LDX_DP,`LDX_NDX,`LDX_EXT:
@@ -941,152 +1041,152 @@ IFETCH:
 					vf <= 1'b0;
 					zf <= res24z;
 					nf <= res24n;
-					xr <= res[23:0];
+					xr <= res[`DBLBYTE];
 				end
 			`LDY_IMM,`LDY_DP,`LDY_NDX,`LDY_EXT:
 				begin
 					vf <= 1'b0;
 					zf <= res24z;
 					nf <= res24n;
-					yr <= res[23:0];
+					yr <= res[`DBLBYTE];
 				end
 			`LEAS_NDX:
-				begin ssp <= res[23:0]; nmi_armed <= 1'b1; end
+				begin ssp <= res[`DBLBYTE]; nmi_armed <= 1'b1; end
 			`LEAU_NDX:
-				usp <= res[23:0];
+				usp <= res[`DBLBYTE];
 			`LEAX_NDX:
 				begin
 					zf <= res24z;
-					xr <= res[23:0];
+					xr <= res[`DBLBYTE];
 				end
 			`LEAY_NDX:
 				begin
 					zf <= res24z;
-					yr <= res[23:0];
+					yr <= res[`DBLBYTE];
 				end
 			`LSRA:
 				begin
 					cf <= res12c;
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`LSRB:
 				begin
 					cf <= res12c;
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`LSR_DP,`LSR_NDX,`LSR_EXT:
 				begin
 					cf <= res12c;
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`MUL:
 				begin
-					cf <= prod[11];
+					cf <= prod[BPBM1];
 					zf <= res24z;
-					acca <= prod[23:12];
-					accb <= prod[11:0];
+					acca <= prod[`HIBYTE];
+					accb <= prod[`LOBYTE];
 				end
 			`NEGA:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`NEGB:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`NEG_DP,`NEG_NDX,`NEG_EXT:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`ROLA:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`ROLB:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`ROL_DP,`ROL_NDX,`ROL_EXT:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end		
 			`RORA:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`RORB:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`ROR_DP,`ROR_NDX,`ROR_EXT:
 				begin
 					cf <= res12c;
-					vf <= res12[11] ^ res12[12];
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
+					vf <= res12[BPBM1] ^ res12[bitsPerByte];
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
 				end
 			`SBCA_IMM,`SBCA_DP,`SBCA_NDX,`SBCA_EXT:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					acca <= res12[11:0];
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					acca <= res12[`LOBYTE];
 				end
 			`SBCB_IMM,`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
 				begin
-					cf <= (~a[11]&b[11])|(res12[11]&~a[11])|(res12[11]&b[11]);
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
-					nf <= res12[11];
-					zf <= res12[11:0]==12'h000;
-					accb <= res12[11:0];
+					cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+					nf <= res12[BPBM1];
+					zf <= res12[`LOBYTE]==12'h000;
+					accb <= res12[`LOBYTE];
 				end
 			`SEX:
 				begin
 					vf <= 1'b0;
 					nf <= res12n;
 					zf <= res12z;
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 				end
 			`STA_DP,`STA_NDX,`STA_EXT,
 			`STB_DP,`STB_NDX,`STB_EXT:	
@@ -1109,16 +1209,16 @@ IFETCH:
 					case(ir[11:8])
 					4'b0000:
 								begin
-									acca <= src1[23:12];
-									accb <= src1[11:0];
+									acca <= src1[`HIBYTE];
+									accb <= src1[`LOBYTE];
 								end
 					4'b0001:	xr <= src1;
 					4'b0010:	yr <= src1;
 					4'b0011:	usp <= src1;
 					4'b0100:	begin ssp <= src1; nmi_armed <= `TRUE; end
-					4'b0101:	pc <= src1[23:0];
-					4'b1000:	acca <= src1[11:0];
-					4'b1001:	accb <= src1[11:0];
+					4'b0101:	pc <= src1[`DBLBYTE];
+					4'b1000:	acca <= src1[`LOBYTE];
+					4'b1001:	accb <= src1[`LOBYTE];
 					4'b1010:
 						begin
 							cf <= src1[0];
@@ -1130,8 +1230,8 @@ IFETCH:
 							firqim <= src1[6];
 							ef <= src1[7];
 						end
-					4'b1011:	dpr <= src1[11:0];
-					4'b1110:	;
+					4'b1011:	dpr <= src1[`LOBYTE];
+					4'b1110:	usppg <= src1[`DBLBYTE];
 					4'b1111:	;
 					default:	;
 					endcase
@@ -1150,30 +1250,30 @@ IFETCH:
 				end
 			`SUBA_IMM,`SUBA_DP,`SUBA_NDX,`SUBA_EXT:
 				begin
-					acca <= res12[11:0];
+					acca <= res12[`LOBYTE];
 					nf <= res12n;
 					zf <= res12z;
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 					cf <= res12c;
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				end
 			`SUBB_IMM,`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
 				begin
-					accb <= res12[11:0];
+					accb <= res12[`LOBYTE];
 					nf <= res12n;
 					zf <= res12z;
-					vf <= (1'b1 ^ res12[11] ^ b[11]) & (a[11] ^ b[11]);
+					vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 					cf <= res12c;
-					hf <= (~a[5]&b[5])|(res12[5]&~a[5])|(res12[5]&b[5]);
+					hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				end
 			`SUBD_IMM,`SUBD_DP,`SUBD_NDX,`SUBD_EXT:
 				begin
 					cf <= res24c;
-					vf <= (1'b1 ^ res[23] ^ b[23]) & (a[23] ^ b[23]);
-					nf <= res[23];
-					zf <= res[23:0]==24'h000000;
-					acca <= res[23:12];
-					accb <= res[11:0];
+					vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
+					nf <= res[BPBX2M1];
+					zf <= res[`DBLBYTE]==24'h000000;
+					acca <= res[`HIBYTE];
+					accb <= res[`LOBYTE];
 				end
 			endcase
 		end
@@ -1186,69 +1286,105 @@ DECODE:
 	begin
 		first_ifetch <= `TRUE;
 		next_state(IFETCH);		// default: move to IFETCH
-		pc <= pc + 24'd1;		// default: increment PC by one
+		pc <= pc + 2'd1;		// default: increment PC by one
 		a <= 24'd0;
 		b <= 24'd0;
 		ia <= 24'd0;
 		isDblIndirect <= `FALSE;//ndxbyte[11:4]==8'h8F;
 		if (isIndexed) begin
-			casex(ndxbyte)
-			12'b1xx000000000:	
-				if (!isOuterIndexed)
-					case(ndxbyte[10:9])
-					2'b00:	xr <= (xr + 4'd1);
-					2'b01:	yr <= (yr + 4'd1);
-					2'b10:	usp <= (usp + 4'd1);
-					2'b11:	ssp <= (ssp + 4'd1);
+			if (bitsPerByte==8) begin
+				casex(ndxbyte)
+				8'b1xx00000:	
+					if (!isOuterIndexed)
+						case(ndxbyte[6:5])
+						2'b00:	xr <= (xr + 4'd1);
+						2'b01:	yr <= (yr + 4'd1);
+						2'b10:	usp <= (usp + 4'd1);
+						2'b11:	ssp <= (ssp + 4'd1);
+						endcase
+				8'b1xx00001:
+					if (!isOuterIndexed)
+						case(ndxbyte[6:5])
+						2'b00:	xr <= (xr + 4'd2);
+						2'b01:	yr <= (yr + 4'd2);
+						2'b10:	usp <= (usp + 4'd2);
+						2'b11:	ssp <= (ssp + 4'd2);
+						endcase
+				8'b1xx00010:
+					case(ndxbyte[6:5])
+					2'b00:	xr <= (xr - 2'd1);
+					2'b01:	yr <= (yr - 2'd1);
+					2'b10:	usp <= (usp - 2'd1);
+					2'b11:	ssp <= (ssp - 2'd1);
 					endcase
-			12'b1xx000000001:
-				if (!isOuterIndexed)
-					case(ndxbyte[10:9])
-					2'b00:	xr <= (xr + 4'd2);
-					2'b01:	yr <= (yr + 4'd2);
-					2'b10:	usp <= (usp + 4'd2);
-					2'b11:	ssp <= (ssp + 4'd2);
+				8'b1xx00011:
+					case(ndxbyte[6:5])
+					2'b00:	xr <= (xr - 2'd2);
+					2'b01:	yr <= (yr - 2'd2);
+					2'b10:	usp <= (usp - 2'd2);
+					2'b11:	ssp <= (ssp - 2'd2);
 					endcase
-			12'b1xx000000010:
-				case(ndxbyte[10:9])
-				2'b00:	xr <= (xr - 2'd1);
-				2'b01:	yr <= (yr - 2'd1);
-				2'b10:	usp <= (usp - 2'd1);
-				2'b11:	ssp <= (ssp - 2'd1);
 				endcase
-			12'b1xx000000011:
-				case(ndxbyte[10:9])
-				2'b00:	xr <= (xr - 2'd2);
-				2'b01:	yr <= (yr - 2'd2);
-				2'b10:	usp <= (usp - 2'd2);
-				2'b11:	ssp <= (ssp - 2'd2);
+			end
+			else if (bitsPerByte==12) begin
+				casex(ndxbyte)
+				12'b1xx000000000:	
+					if (!isOuterIndexed && ndxbyte[7]==1'b0)
+						case(ndxbyte[10:9])
+						2'b00:	xr <= (xr + 4'd1);
+						2'b01:	yr <= (yr + 4'd1);
+						2'b10:	usp <= (usp + 4'd1);
+						2'b11:	ssp <= (ssp + 4'd1);
+						endcase
+				12'b1xx000000001:
+					if (!isOuterIndexed && ndxbyte[7]==1'b0)
+						case(ndxbyte[10:9])
+						2'b00:	xr <= (xr + 4'd2);
+						2'b01:	yr <= (yr + 4'd2);
+						2'b10:	usp <= (usp + 4'd2);
+						2'b11:	ssp <= (ssp + 4'd2);
+						endcase
+				12'b1xx0x0000010:
+					case(ndxbyte[10:9])
+					2'b00:	xr <= (xr - 2'd1);
+					2'b01:	yr <= (yr - 2'd1);
+					2'b10:	usp <= (usp - 2'd1);
+					2'b11:	ssp <= (ssp - 2'd1);
+					endcase
+				12'b1xx0x0000011:
+					case(ndxbyte[10:9])
+					2'b00:	xr <= (xr - 2'd2);
+					2'b01:	yr <= (yr - 2'd2);
+					2'b10:	usp <= (usp - 2'd2);
+					2'b11:	ssp <= (ssp - 2'd2);
+					endcase
 				endcase
-			endcase
+			end
 		end
 		case(ir12)
 		`NOP:	;
 		`SYNC:	sync_state <= `TRUE;
 		`ORCC:	begin
-				cf <= cf | ir[12];
-				vf <= vf | ir[13];
-				zf <= zf | ir[14];
-				nf <= nf | ir[15];
-				im <= im | ir[16];
-				hf <= hf | ir[17];
-				firqim <= firqim | ir[18];
-				ef <= ef | ir[19];
+				cf <= cf | ir[bitsPerByte];
+				vf <= vf | ir[bitsPerByte+1];
+				zf <= zf | ir[bitsPerByte+2];
+				nf <= nf | ir[bitsPerByte+3];
+				im <= im | ir[bitsPerByte+4];
+				hf <= hf | ir[bitsPerByte+5];
+				firqim <= firqim | ir[bitsPerByte+6];
+				ef <= ef | ir[bitsPerByte+7];
 				pc <= pcp2;
 				end
 		`ANDCC:
 				begin
-				cf <= cf & ir[12];
-				vf <= vf & ir[13];
-				zf <= zf & ir[14];
-				nf <= nf & ir[15];
-				im <= im & ir[16];
-				hf <= hf & ir[17];
-				firqim <= firqim & ir[18];
-				ef <= ef & ir[19];
+				cf <= cf & ir[bitsPerByte];
+				vf <= vf & ir[bitsPerByte+1];
+				zf <= zf & ir[bitsPerByte+2];
+				nf <= nf & ir[bitsPerByte+3];
+				im <= im & ir[bitsPerByte+4];
+				hf <= hf & ir[bitsPerByte+5];
+				firqim <= firqim & ir[bitsPerByte+6];
+				ef <= ef & ir[bitsPerByte+7];
 				pc <= pcp2;
 				end
 		`DAA:
@@ -1260,116 +1396,118 @@ DECODE:
 				end
 		`CWAI:
 				begin
-				cf <= cf & ir[12];
-				vf <= vf & ir[13];
-				zf <= zf & ir[14];
-				nf <= nf & ir[15];
-				im <= im & ir[16];
-				hf <= hf & ir[17];
-				firqim <= firqim & ir[18];
+				cf <= cf & ir[bitsPerByte];
+				vf <= vf & ir[bitsPerByte+1];
+				zf <= zf & ir[bitsPerByte+2];
+				nf <= nf & ir[bitsPerByte+3];
+				im <= im & ir[bitsPerByte+4];
+				hf <= hf & ir[bitsPerByte+5];
+				firqim <= firqim & ir[bitsPerByte+6];
 				ef <= 1'b1;
 				pc <= pc + 2'd2;
-				ir[23:12] <= 12'hFFF;
+				ir[`HIBYTE] <= -1;
+				isFar <= `TRUE;
 				wait_state <= `TRUE;
 				next_state(PUSH1);
 				end
 		`LDMD:	begin
-				natMd <= ir[12];
-				firqMd <= ir[13];
+				natMd <= ir[bitsPerByte];
+				firqMd <= ir[bitsPerByte+1];
 				pc <= pc + 2'd2;
 				end
 		`TFR:	pc <= pc + 2'd2;
 		`EXG:	pc <= pc + 2'd2;
 		`ABX:	res <= xr + accb;
-		`SEX: res <= {{12{accb[11]}},accb[11:0]};
-		`PG2:	begin ipg <= 2'b01; ir <= ir[59:12]; next_state(DECODE); end
-		`PG3:	begin ipg <= 2'b10; ir <= ir[59:12]; next_state(DECODE); end
-		`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[59:12]; next_state(DECODE); end
+		`SEX: res <= {{bitsPerByte{accb[BPBM1]}},accb[`LOBYTE]};
+		`PG2:	begin ipg <= 2'b01; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+		`PG3:	begin ipg <= 2'b10; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+		`FAR:	begin isFar <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+		`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
 
-		`NEGA,`NEGB:	begin res12 <= -acc[11:0]; a <= 24'h00; b <= acc; end
-		`COMA,`COMB:	begin res12 <= ~acc[11:0]; end
-		`LSRA,`LSRB:	begin res12 <= {acc[0],1'b0,acc[11:1]}; end
-		`RORA,`RORB:	begin res12 <= {acc[0],cf,acc[11:1]}; end
-		`ASRA,`ASRB:	begin res12 <= {acc[0],acc[11],acc[11:1]}; end
-		`ASLA,`ASLB:	begin res12 <= {acc[11:0],1'b0}; end
-		`ROLA,`ROLB:	begin res12 <= {acc[11:0],cf}; end
-		`DECA,`DECB:	begin res12 <= acc[11:0] - 2'd1; end
-		`INCA,`INCB:	begin res12 <= acc[11:0] + 2'd1; end
-		`TSTA,`TSTB:	begin res12 <= acc[11:0]; end
+		`NEGA,`NEGB:	begin res12 <= -acc[`LOBYTE]; a <= 24'h00; b <= acc; end
+		`COMA,`COMB:	begin res12 <= ~acc[`LOBYTE]; end
+		`LSRA,`LSRB:	begin res12 <= {acc[0],1'b0,acc[BPBM1:1]}; end
+		`RORA,`RORB:	begin res12 <= {acc[0],cf,acc[BPBM1:1]}; end
+		`ASRA,`ASRB:	begin res12 <= {acc[0],acc[BPBM1],acc[BPBM1:1]}; end
+		`ASLA,`ASLB:	begin res12 <= {acc[`LOBYTE],1'b0}; end
+		`ROLA,`ROLB:	begin res12 <= {acc[`LOBYTE],cf}; end
+		`DECA,`DECB:	begin res12 <= acc[`LOBYTE] - 2'd1; end
+		`INCA,`INCB:	begin res12 <= acc[`LOBYTE] + 2'd1; end
+		`TSTA,`TSTB:	begin res12 <= acc[`LOBYTE]; end
 		`CLRA,`CLRB:	begin res12 <= 13'h000; end
 
 		// Immediate mode instructions
 		`SUBA_IMM,`SUBB_IMM,`CMPA_IMM,`CMPB_IMM:
-			begin res12 <= acc[11:0] - ir[23:12]; pc <= pc + 4'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] - ir[`HIBYTE]; pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`SBCA_IMM,`SBCB_IMM:
-			begin res12 <= acc[11:0] - ir[23:12] - {11'b0,cf}; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] - ir[`HIBYTE] - cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`ANDA_IMM,`ANDB_IMM,`BITA_IMM,`BITB_IMM:
-			begin res12 <= acc[11:0] & ir[23:12]; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] & ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`LDA_IMM,`LDB_IMM:
-			begin res12 <= ir[23:12]; pc <= pc + 2'd2; end
+			begin res12 <= ir[`HIBYTE]; pc <= pc + 2'd2; end
 		`EORA_IMM,`EORB_IMM:
-			begin res12 <= acc[11:0] ^ ir[23:12]; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] ^ ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`ADCA_IMM,`ADCB_IMM:
-			begin res12 <= acc[11:0] + ir[23:12] + {11'b0,cf}; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] + ir[`HIBYTE] + cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`ORA_IMM,`ORB_IMM:
-			begin res12 <= acc[11:0] | ir[23:12]; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] | ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`ADDA_IMM,`ADDB_IMM:
-			begin res12 <= acc[11:0] + ir[23:12]; pc <= pc + 2'd2; a <= acc[11:0]; b <= ir[23:12]; end
+			begin res12 <= acc[`LOBYTE] + ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 		`ADDD_IMM:
 					begin 
-						res <= {acca[11:0],accb[11:0]} + {ir[23:12],ir[35:24]};
+						res <= {acca[`LOBYTE],accb[`LOBYTE]} + {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
 					end
 		`SUBD_IMM:	
 					begin 
-						res <= {acca[11:0],accb[11:0]} - {ir[23:12],ir[35:24]};
+						res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
 					end
 		`LDD_IMM:	
 					begin 
-						res <= {ir[23:12],ir[35:24]};
+						res <= {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
 					end
 		`LDX_IMM,`LDY_IMM,`LDU_IMM,`LDS_IMM:
 					begin
-						res <= {ir[23:12],ir[35:24]};
+						res <= {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
 					end
 
 		`CMPD_IMM:	
 					begin
-						res <= {acca[11:0],accb[11:0]} - {ir[23:12],ir[35:24]};
+						res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
-						a <= {acca[11:0],accb[11:0]};
-						b <= {ir[23:12],ir[35:24]};
+						a <= {acca[`LOBYTE],accb[`LOBYTE]};
+						b <= {ir[`HIBYTE],ir[`BYTE3]};
 					end
 		`CMPX_IMM:	
 					begin
-						res <= xr[23:0] - {ir[23:12],ir[35:24]};
+						res <= xr[`DBLBYTE] - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
-						a <= xr[23:0];
-						b <= {ir[23:12],ir[35:24]};
+						a <= xr[`DBLBYTE];
+						b <= {ir[`HIBYTE],ir[`BYTE3]};
 					end
 		`CMPY_IMM:	
 					begin
-						res <= yr[23:0] - {ir[23:12],ir[35:24]};
+						res <= yr[`DBLBYTE] - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
-						a <= yr[23:0];
-						b <= {ir[23:12],ir[35:24]};
+						a <= yr[`DBLBYTE];
+						b <= {ir[`HIBYTE],ir[`BYTE3]};
 					end
 		`CMPU_IMM:
 					begin
-						res <= usp[23:0] - {ir[23:12],ir[35:24]};
+						res <= usp[`DBLBYTE] - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
-						a <= usp[23:0];
-						b <= {ir[23:12],ir[35:24]};
+						a <= usp[`DBLBYTE];
+						b <= {ir[`HIBYTE],ir[`BYTE3]};
 					end
 		`CMPS_IMM:
 					begin
-						res <= ssp[23:0] - {ir[23:12],ir[35:24]};
+						res <= ssp[`DBLBYTE] - {ir[`HIBYTE],ir[`BYTE3]};
 						pc <= pc + 2'd3;
-						a <= ssp[23:0];
-						b <= {ir[23:12],ir[35:24]};
+						a <= ssp[`DBLBYTE];
+						b <= {ir[`HIBYTE],ir[`BYTE3]};
 					end
 
 		// Direct mode instructions
@@ -1420,7 +1558,7 @@ DECODE:
 			begin
 				pc <= pc + insnsz;
 				if (isIndirect) begin
-					load_what <= `LW_IAH;
+					load_what <= isFar ? `LW_IA2316 : `LW_IAH;
 					load_what2 <= `LW_BL;
 					radr <= NdxAddr;
 					next_state(LOAD1);
@@ -1437,7 +1575,7 @@ DECODE:
 			begin
 				pc <= pc + insnsz;
 				if (isIndirect) begin
-					load_what <= `LW_IAH;
+					load_what <= isFar ? `LW_IA2316 : `LW_IAH;
 					load_what2 <= `LW_BL;
 					radr <= NdxAddr;
 					next_state(LOAD1);
@@ -1453,7 +1591,7 @@ DECODE:
 			begin
 				pc <= pc + insnsz;
 				if (isIndirect) begin
-					load_what <= `LW_IAH;
+					load_what <= isFar ? `LW_IA2316 : `LW_IAH;
 					load_what2 <= `LW_BH;
 					radr <= NdxAddr;
 					next_state(LOAD1);
@@ -1469,7 +1607,7 @@ DECODE:
 			begin
 				pc <= pc + insnsz;
 				if (isIndirect) begin
-					load_what <= `LW_IAH;
+					load_what <= isFar ? `LW_IA2316 : `LW_IAH;
 					load_what2 <= `LW_BH;
 					radr <= NdxAddr;
 					next_state(LOAD1);
@@ -1498,7 +1636,7 @@ DECODE:
 			begin
 				load_what <= `LW_BL;
 				radr <= ex_address;
-				pc <= pc + 2'd3;
+				pc <= pc + (isFar ? 32'd4 : 32'd3);
 				next_state(LOAD1);
 			end
 		`SUBA_EXT,`CMPA_EXT,`SBCA_EXT,`ANDA_EXT,`BITA_EXT,`LDA_EXT,`EORA_EXT,`ADCA_EXT,`ORA_EXT,`ADDA_EXT,
@@ -1506,14 +1644,14 @@ DECODE:
 			begin
 				load_what <= `LW_BL;
 				radr <= ex_address;
-				pc <= pc + 2'd3;
+				pc <= pc + (isFar ? 32'd4 : 32'd3);
 				next_state(LOAD1);
 			end
 		`SUBD_EXT,`ADDD_EXT,`LDD_EXT,`CMPD_EXT,`ADCD_EXT,`SBCD_EXT:
 			begin
 				load_what <= `LW_BH;
 				radr <= ex_address;
-				pc <= pc + 2'd3;
+				pc <= pc + (isFar ? 32'd4 : 32'd3);
 				next_state(LOAD1);
 			end
 		`CMPX_EXT,`LDX_EXT,`LDU_EXT,`LDS_EXT,
@@ -1521,7 +1659,7 @@ DECODE:
 			begin
 				load_what <= `LW_BH;
 				radr <= ex_address;
-				pc <= pc + 2'd3;
+				pc <= pc + (isFar ? 32'd4 : 32'd3);
 				next_state(LOAD1);
 			end
 		`CLR_EXT:
@@ -1581,23 +1719,41 @@ DECODE:
 				pc <= pc + 2'd3;
 				next_state(STORE1);
 			end
+		`JSR_FAR:
+			begin
+				store_what <= `SW_PC2316;
+				wadr <= ssp - 16'd4;
+				ssp <= ssp - 16'd4;
+				pc <= pc + 32'd4;
+				next_state(STORE1);
+			end
 		`RTS:
 			begin
 				load_what <= `LW_PCH;
 				radr <= ssp;
 				next_state(LOAD1);
 			end
+		`RTF:
+			begin
+				load_what <= `LW_PC2316;
+				radr <= ssp;
+				next_state(LOAD1);
+			end
 		`JMP_DP:	pc <= dp_address;
 		`JMP_EXT:	pc <= address;
+		`JMP_FAR:	pc <= far_address;
 		`JMP_NDX:
 			begin
 				if (isIndirect) begin
 			        radr <= NdxAddr;
+				    if (isFar)
+					   load_what <= `LW_PC2316;
+				    else
 					   load_what <= `LW_PCH;
 					next_state(LOAD1);
 				end
 				else
-					pc <= NdxAddr[23:0];
+					pc <= isFar ? NdxAddr : {pc[`BYTE3],NdxAddr[`DBLBYTE]};
 			end
 		`LEAX_NDX,`LEAY_NDX,`LEAS_NDX,`LEAU_NDX:
 			begin
@@ -1608,7 +1764,7 @@ DECODE:
 					state <= LOAD1;
 				end
 				else
-					res <= NdxAddr[23:0];
+					res <= NdxAddr[`DBLBYTE];
 			end
 		`PSHU,`PSHS:
 			begin
@@ -1623,47 +1779,48 @@ DECODE:
 			end
 		`PULU:
 			begin
-				radr <= usp;
+				radr <= {usppg,8'h00} + usp;
 				next_state(PULL1);
 				pc <= pc + 2'd2;
 			end
 		`BEQ,`BNE,`BMI,`BPL,`BVS,`BVC,`BHI,`BLS,`BHS,`BLO,`BGT,`BGE,`BLT,`BLE,`BRA,`BRN:
 			if (takb)
-				pc <= pc + {{12{ir[23]}},ir[23:12]} + 2'd2;
+				pc <= pc + {{24{ir[BPBX2M1]}},ir[`HIBYTE]} + 2'd2;
 			else
 				pc <= pc + 2'd2;
 		// PC is already incremented by one due to the PG10 prefix.
 		`LBEQ,`LBNE,`LBMI,`LBPL,`LBVS,`LBVC,`LBHI,`LBLS,`LBHS,`LBLO,`LBGT,`LBGE,`LBLT,`LBLE,`LBRN:
 			if (takb)
-				pc <= pc + {ir[23:12],ir[35:24]} + 2'd3;
+				pc <= pc + {{12{ir[BPB*3-1]}},ir[`HIBYTE],ir[`BYTE3]} + 2'd3;
 			else
 				pc <= pc + 2'd3;
-		`LBRA:	pc <= pc + {ir[23:12],ir[35:24]} + 2'd3;
+		`LBRA:	pc <= pc + {{12{ir[BPB*3-1]}},ir[`HIBYTE],ir[`BYTE3]} + 2'd3;
 		`RTI:
 			begin
 				load_what <= `LW_CCR;
 				radr <= ssp;
+				isFar <= `TRUE;
 				next_state(LOAD1);
 			end
 		`SWI:
 			begin
 				im <= 1'b1;
 				firqim <= 1'b1;
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `SWI_VECT;
 				next_state(DECODE);
 			end
 		`SWI2:
 			begin
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `SWI2_VECT;
 				next_state(DECODE);
 			end
 		`SWI3:
 			begin
-				ir[11:0] <= `INT;
+				ir[`LOBYTE] <= `INT;
 				ipg <= 2'b11;
 				vect <= `SWI3_VECT;
 				next_state(DECODE);
@@ -1682,26 +1839,27 @@ DECODE:
 					else begin
 					    radr <= vect;
                         load_what <= `LW_PCH;
-					    pc <= 24'hFFFFFE;
+					    pc <= 32'hFFFFFFFE;
 					    next_state(LOAD1);
 					end
 				end
 				else begin
 					if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
-						ir[23:12] <= 12'hFFF;
+						ir[`HIBYTE] <= 16'hFFFF;
 						ef <= 1'b1;
 					end
 					else if (isFIRQ) begin
 						if (natMd) begin
 							ef <= firqMd;
-							ir[23:12] <= firqMd ? 12'hFFF : 12'h81;
+							ir[`HIBYTE] <= firqMd ? 16'hFFFF : 12'h81;
 						end
 						else begin
-							ir[23:12] <= 12'h81;
+							ir[`HIBYTE] <= 12'h81;
 							ef <= 1'b0;
 						end
 					end
 					pc <= pc;
+					isFar <= `TRUE;
 					next_state(PUSH1);
 				end
 			end
@@ -1719,26 +1877,26 @@ CALC:
 		`SUBD_DP,`SUBD_NDX,`SUBD_EXT,
 		`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
 			begin
-			    a <= {acca[11:0],accb[11:0]};
-				res <= {acca[11:0],accb[11:0]} - b[23:0];
+			    a <= {acca[`LOBYTE],accb[`LOBYTE]};
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} - b[`DBLBYTE];
 			end
 		`SBCD_DP,`SBCD_NDX,`SBCD_EXT:
 			begin
-			    a <= {acca[11:0],accb[11:0]};
-				res <= {acca[11:0],accb[11:0]} - b[23:0] - {23'b0,cf};
+			    a <= {acca[`LOBYTE],accb[`LOBYTE]};
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} - b[`DBLBYTE] - {23'b0,cf};
 			end
 		`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
 			begin
-			    a <= {acca[11:0],accb[11:0]};
-				res <= {acca[11:0],accb[11:0]} + b[23:0];
+			    a <= {acca[`LOBYTE],accb[`LOBYTE]};
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} + b[`DBLBYTE];
 			end
 		`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
 			begin
-			    a <= {acca[11:0],accb[11:0]};
-				res <= {acca[11:0],accb[11:0]} + b[23:0] + {23'b0,cf};
+			    a <= {acca[`LOBYTE],accb[`LOBYTE]};
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} + b[`DBLBYTE] + {23'b0,cf};
 			end
 		`LDD_DP,`LDD_NDX,`LDD_EXT:		
-			res <= b[23:0];
+			res <= b[`DBLBYTE];
 
 		`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
 		`SUBA_DP,`SUBA_NDX,`SUBA_EXT,
@@ -1746,65 +1904,65 @@ CALC:
 		`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
 		        begin
     		        a <= acc;
-             res12 <= acc[11:0] - b12;
+             res12 <= acc[`LOBYTE] - b12;
 				end
 		
 		`SBCA_DP,`SBCA_NDX,`SBCA_EXT,
 		`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
 		        begin
 		            a <= acc;
-            res12 <= acc[11:0] - b12 - {11'b0,cf};
+            res12 <= acc[`LOBYTE] - b12 - cf;
                 end
 		`BITA_DP,`BITA_NDX,`BITA_EXT,
 		`ANDA_DP,`ANDA_NDX,`ANDA_EXT,
 		`BITB_DP,`BITB_NDX,`BITB_EXT,
 		`ANDB_DP,`ANDB_NDX,`ANDB_EXT:
-					res12 <= acc[11:0] & b12;
+					res12 <= acc[`LOBYTE] & b12;
 		`LDA_DP,`LDA_NDX,`LDA_EXT,
 		`LDB_DP,`LDB_NDX,`LDB_EXT:
 				res12 <= b12;
 		`EORA_DP,`EORA_NDX,`EORA_EXT,
 		`EORB_DP,`EORB_NDX,`EORB_EXT:
-					res12 <= acc[11:0] ^ b12;
+					res12 <= acc[`LOBYTE] ^ b12;
 		`ADCA_DP,`ADCA_NDX,`ADCA_EXT,
 		`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
 				begin
 				    a <= acc;
-					res12 <= acc[11:0] + b12 + {11'b0,cf};
+					res12 <= acc[`LOBYTE] + b12 + cf;
 				end
 		`ORA_DP,`ORA_NDX,`ORA_EXT,
 		`ORB_DP,`ORB_NDX,`ORB_EXT:
-					res12 <= acc[11:0] | b12;
+					res12 <= acc[`LOBYTE] | b12;
 		`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
 		`ADDB_DP,`ADDB_NDX,`ADDB_EXT:
 		        begin
 		            a <= acc;
-                        res12 <= acc[11:0] + b12;
+                        res12 <= acc[`LOBYTE] + b12;
                 end
 		
 		`LDU_DP,`LDS_DP,`LDX_DP,`LDY_DP,
 		`LDU_NDX,`LDS_NDX,`LDX_NDX,`LDY_NDX,
-		`LDU_EXT,`LDS_EXT,`LDX_EXT,`LDY_EXT:	res <= b[23:0];
-		`CMPX_DP,`CMPX_NDX,`CMPX_EXT:	begin a <= xr; res <= xr[23:0] - b[23:0]; end
-		`CMPY_DP,`CMPY_NDX,`CMPY_EXT:	begin a <= yr; res <= yr[23:0] - b[23:0]; end
-		`CMPS_DP,`CMPS_NDX,`CMPS_EXT:	begin a <= ssp; res <= ssp[23:0] - b[23:0]; end
-		`CMPU_DP,`CMPU_NDX,`CMPU_EXT:	begin a <= usp; res <= usp[23:0] - b[23:0]; end
+		`LDU_EXT,`LDS_EXT,`LDX_EXT,`LDY_EXT:	res <= b[`DBLBYTE];
+		`CMPX_DP,`CMPX_NDX,`CMPX_EXT:	begin a <= xr; res <= xr[`DBLBYTE] - b[`DBLBYTE]; end
+		`CMPY_DP,`CMPY_NDX,`CMPY_EXT:	begin a <= yr; res <= yr[`DBLBYTE] - b[`DBLBYTE]; end
+		`CMPS_DP,`CMPS_NDX,`CMPS_EXT:	begin a <= ssp; res <= ssp[`DBLBYTE] - b[`DBLBYTE]; end
+		`CMPU_DP,`CMPU_NDX,`CMPU_EXT:	begin a <= usp; res <= usp[`DBLBYTE] - b[`DBLBYTE]; end
 
 		`NEG_DP,`NEG_NDX,`NEG_EXT:	begin res12 <= -b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`COM_DP,`COM_NDX,`COM_EXT:	begin res12 <= ~b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
-		`LSR_DP,`LSR_NDX,`LSR_EXT:	begin res12 <= {b[0],1'b0,b[11:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
-		`ROR_DP,`ROR_NDX,`ROR_EXT:	begin res12 <= {b[0],cf,b[11:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
-		`ASR_DP,`ASR_NDX,`ASR_EXT:	begin res12 <= {b[0],b[11],b[11:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
+		`LSR_DP,`LSR_NDX,`LSR_EXT:	begin res12 <= {b[0],1'b0,b[BPBM1:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
+		`ROR_DP,`ROR_NDX,`ROR_EXT:	begin res12 <= {b[0],cf,b[BPBM1:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
+		`ASR_DP,`ASR_NDX,`ASR_EXT:	begin res12 <= {b[0],b[BPBM1],b[BPBM1:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
 		`ASL_DP,`ASL_NDX,`ASL_EXT:	begin res12 <= {b12,1'b0}; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`ROL_DP,`ROL_NDX,`ROL_EXT:	begin res12 <= {b12,cf}; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`DEC_DP,`DEC_NDX,`DEC_EXT:	begin res12 <= b12 - 2'd1; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`INC_DP,`INC_NDX,`INC_EXT:	begin res12 <= b12 + 2'd1; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`TST_DP,`TST_NDX,`TST_EXT:	res12 <= b12;
 		
-		`AIM_DP,`AIM_NDX,`AIM_EXT:	begin res12 <= ir[23:12] & b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
-		`OIM_DP,`OIM_NDX,`OIM_EXT:	begin res12 <= ir[23:12] | b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
-		`EIM_DP,`EIM_NDX,`OIM_EXT:  begin res12 <= ir[23:12] ^ b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
-		`TIM_DP,`TIM_NDX,`TIM_EXT:	begin res12 <= ir[23:12] & b12; end
+		`AIM_DP,`AIM_NDX,`AIM_EXT:	begin res12 <= ir[`HIBYTE] & b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
+		`OIM_DP,`OIM_NDX,`OIM_EXT:	begin res12 <= ir[`HIBYTE] | b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
+		`EIM_DP,`EIM_NDX,`OIM_EXT:  begin res12 <= ir[`HIBYTE] ^ b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
+		`TIM_DP,`TIM_NDX,`TIM_EXT:	begin res12 <= ir[`HIBYTE] & b12; end
 		endcase
 	end
 
@@ -1853,25 +2011,26 @@ STORE1:
 	begin	
 		lock_o <= lock_bus;
 		case(store_what)
-		`SW_ACCDH:	wb_write(wadr,acca[11:0]);
-		`SW_ACCDL:	wb_write(wadr,accb[11:0]);
-		`SW_ACCA:	wb_write(wadr,acca[11:0]);
-		`SW_ACCB:	wb_write(wadr,accb[11:0]);
+		`SW_ACCDH:	wb_write(wadr,acca[`LOBYTE]);
+		`SW_ACCDL:	wb_write(wadr,accb[`LOBYTE]);
+		`SW_ACCA:	wb_write(wadr,acca[`LOBYTE]);
+		`SW_ACCB:	wb_write(wadr,accb[`LOBYTE]);
 		`SW_DPR:	wb_write(wadr,dpr);
-		`SW_XL:	wb_write(wadr,xr[11:0]);
-		`SW_XH:	wb_write(wadr,xr[23:12]);
-		`SW_YL:	wb_write(wadr,yr[11:0]);
-		`SW_YH:	wb_write(wadr,yr[23:12]);
-		`SW_USPL:	wb_write(wadr,usp[11:0]);
-		`SW_USPH:	wb_write(wadr,usp[23:12]);
-		`SW_SSPL:	wb_write(wadr,ssp[11:0]);
-		`SW_SSPH:	wb_write(wadr,ssp[23:12]);
-		`SW_PCH:	wb_write(wadr,pc[23:12]);
-		`SW_PCL:	wb_write(wadr,pc[11:0]);
+		`SW_XL:	wb_write(wadr,xr[`LOBYTE]);
+		`SW_XH:	wb_write(wadr,xr[`HIBYTE]);
+		`SW_YL:	wb_write(wadr,yr[`LOBYTE]);
+		`SW_YH:	wb_write(wadr,yr[`HIBYTE]);
+		`SW_USPL:	wb_write(wadr,usp[`LOBYTE]);
+		`SW_USPH:	wb_write(wadr,usp[`HIBYTE]);
+		`SW_SSPL:	wb_write(wadr,ssp[`LOBYTE]);
+		`SW_SSPH:	wb_write(wadr,ssp[`HIBYTE]);
+		`SW_PC2316:	wb_write(wadr,pc[`BYTE3]);
+		`SW_PCH:	wb_write(wadr,pc[`HIBYTE]);
+		`SW_PCL:	wb_write(wadr,pc[`LOBYTE]);
 		`SW_CCR:	wb_write(wadr,ccr);
-		`SW_RES8:	wb_write(wadr,res12[11:0]);
-		`SW_RES16H:	wb_write(wadr,res[23:12]);
-		`SW_RES16L:	wb_write(wadr,res[11:0]);
+		`SW_RES8:	wb_write(wadr,res12[`LOBYTE]);
+		`SW_RES16H:	wb_write(wadr,res[`HIBYTE]);
+		`SW_RES16L:	wb_write(wadr,res[`LOBYTE]);
 		`SW_DEF8:	wb_write(wadr,wdat);
 		default:	wb_write(wadr,wdat);
 		endcase
@@ -1961,6 +2120,11 @@ STORE2:
 				next_state(PUSH2);
 			else	// STS
 				next_state(IFETCH);
+		`SW_PC2316:
+			begin
+				store_what <= `SW_PCH;
+				next_state(STORE1);
+			end
 		`SW_PCH:
 			begin
 				store_what <= `SW_PCL;
@@ -1972,19 +2136,24 @@ STORE2:
 			else begin	// JSR
 				next_state(IFETCH);
 				case(ir12)
-				`BSR:		pc <= pc + {{12{ir[23]}},ir[23:12]};
-				`LBSR:	pc <= pc + {ir[23:12],ir[35:24]};
-				`JSR_DP:	pc <= {dpr,ir[23:12]};
+				`BSR:		pc <= pc + {{24{ir[BPBX2M1]}},ir[`HIBYTE]};
+				`LBSR:	pc <= pc + {{12{ir[BPB*3-1]}},ir[`HIBYTE],ir[`BYTE3]};
+				`JSR_DP:	pc <= {dpr,ir[`HIBYTE]};
 				`JSR_EXT:	pc <= address;
+				`JSR_FAR:	
+					begin
+						pc <= far_address;
+						$display("Loading PC with %h", far_address);
+					end
 				`JSR_NDX:
 					begin
 						if (isIndirect) begin
 							radr <= NdxAddr;
-							load_what <= `LW_PCH;
+							load_what <= isFar ? `LW_PC2316 : `LW_PCH;
 							next_state(LOAD1);
 						end
 						else
-							pc <= NdxAddr[23:0];
+							pc <= isFar ? NdxAddr : {pc[`BYTE3],NdxAddr[`DBLBYTE]};
 					end
 				endcase
 			end
@@ -2013,47 +2182,47 @@ PUSH1:
 			ssp <= (ssp - cnt);
 		end
 		else begin	// PSHU
-			wadr <= (usp - cnt);
+			wadr <= ({usppg,8'h00} + usp - cnt);
 			usp <= (usp - cnt);
 		end
 	end
 PUSH2:
 	begin
 		next_state(STORE1);
-		if (ir[12]) begin
+		if (ir[bitsPerByte]) begin
 			store_what <= `SW_CCR;
-			ir[12] <= 1'b0;
+			ir[bitsPerByte] <= 1'b0;
 		end
-		else if (ir[13]) begin
+		else if (ir[bitsPerByte+1]) begin
 			store_what <= `SW_ACCA;
-			ir[13] <= 1'b0;
+			ir[bitsPerByte+1] <= 1'b0;
 		end
-		else if (ir[14]) begin
+		else if (ir[bitsPerByte+2]) begin
 			store_what <= `SW_ACCB;
-			ir[14] <= 1'b0;
+			ir[bitsPerByte+2] <= 1'b0;
 		end
-		else if (ir[15]) begin
+		else if (ir[bitsPerByte+3]) begin
 			store_what <= `SW_DPR;
-			ir[15] <= 1'b0;
+			ir[bitsPerByte+3] <= 1'b0;
 		end
-		else if (ir[16]) begin
+		else if (ir[bitsPerByte+4]) begin
 			store_what <= `SW_XH;
-			ir[16] <= 1'b0;
+			ir[bitsPerByte+4] <= 1'b0;
 		end
-		else if (ir[17]) begin
+		else if (ir[bitsPerByte+5]) begin
 			store_what <= `SW_YH;
-			ir[17] <= 1'b0;
+			ir[bitsPerByte+5] <= 1'b0;
 		end
-		else if (ir[18]) begin
+		else if (ir[bitsPerByte+6]) begin
 			if (isINT | isPSHS)
 				store_what <= `SW_USPH;
 			else
 				store_what <= `SW_SSPH;
-			ir[18] <= 1'b0;
+			ir[bitsPerByte+6] <= 1'b0;
 		end
-		else if (ir[19]) begin
-			store_what <= `SW_PCH;
-			ir[19] <= 1'b0;
+		else if (ir[bitsPerByte+7]) begin
+			store_what <= isFar ? `SW_PC2316 : `SW_PCH;
+			ir[bitsPerByte+7] <= 1'b0;
 		end
 		else begin
 			if (isINT) begin
@@ -2064,6 +2233,7 @@ PUSH2:
 					next_state(IFETCH);
 				end
 				else begin
+					pc[`BYTE3] <= 8'h00;
 					load_what <= `LW_PCH;
 					next_state(LOAD1);
 				end
@@ -2075,40 +2245,40 @@ PUSH2:
 PULL1:
 	begin
 		next_state(LOAD1);
-		if (ir[12]) begin
+		if (ir[bitsPerByte]) begin
 			load_what <= `LW_CCR;
-			ir[12] <= 1'b0;
+			ir[bitsPerByte] <= 1'b0;
 		end
-		else if (ir[13]) begin
+		else if (ir[bitsPerByte+1]) begin
 			load_what <= `LW_ACCA;
-			ir[13] <= 1'b0;
+			ir[bitsPerByte+1] <= 1'b0;
 		end
-		else if (ir[14]) begin
+		else if (ir[bitsPerByte+2]) begin
 			load_what <= `LW_ACCB;
-			ir[14] <= 1'b0;
+			ir[bitsPerByte+2] <= 1'b0;
 		end
-		else if (ir[15]) begin
+		else if (ir[bitsPerByte+3]) begin
 			load_what <= `LW_DPR;
-			ir[15] <= 1'b0;
+			ir[bitsPerByte+3] <= 1'b0;
 		end
-		else if (ir[16]) begin
+		else if (ir[bitsPerByte+4]) begin
 			load_what <= `LW_XH;
-			ir[16] <= 1'b0;
+			ir[bitsPerByte+4] <= 1'b0;
 		end
-		else if (ir[17]) begin
+		else if (ir[bitsPerByte+5]) begin
 			load_what <= `LW_YH;
-			ir[17] <= 1'b0;
+			ir[bitsPerByte+5] <= 1'b0;
 		end
-		else if (ir[18]) begin
+		else if (ir[bitsPerByte+6]) begin
 			if (ir12==`PULU)
 				load_what <= `LW_SSPH;
 			else
 				load_what <= `LW_USPH;
-			ir[18] <= 1'b0;
+			ir[bitsPerByte+6] <= 1'b0;
 		end
-		else if (ir[19]) begin
-			load_what <= `LW_PCH;
-			ir[19] <= 1'b0;
+		else if (ir[bitsPerByte+7]) begin
+			load_what <= isFar ? `LW_PC2316 : `LW_PCH;
+			ir[bitsPerByte+7] <= 1'b0;
 		end
 		else
 			next_state(IFETCH);
@@ -2119,44 +2289,80 @@ PULL1:
 // ----------------------------------------------------------------------------
 OUTER_INDEXING:
 	begin
-		casex(ndxbyte)
-		12'b0xxxxxxxxxxx:	radr <= radr + ndxreg;
-		12'b1xxx00000000:
-						begin
-							radr <= radr + ndxreg;
-							case(ndxbyte[10:9])
-							2'b00:	xr <= (xr + 2'd1);
-							2'b01:	yr <= (yr + 2'd1);
-							2'b10:	usp <= (usp + 2'd1);
-							2'b11:	ssp <= (ssp + 2'd1);
-							endcase
-						end
-		12'b1xxx00000001:	begin
-							radr <= radr + ndxreg;
-							case(ndxbyte[10:9])
-							2'b00:	xr <= (xr + 2'd2);
-							2'b01:	yr <= (yr + 2'd2);
-							2'b10:	usp <= (usp + 2'd2);
-							2'b11:	ssp <= (ssp + 2'd2);
-							endcase
-						end
-		12'b1xxx00000010:	radr <= radr + ndxreg;
-		12'b1xxx00000011:	radr <= radr + ndxreg;
-		12'b1xxx00000100:	radr <= radr + ndxreg;
-		12'b1xxx00000101:	radr <= radr + ndxreg;
-		12'b1xxx00000110:	radr <= radr + ndxreg;
-		12'b1xxx00001000:	radr <= radr + ndxreg;
-		12'b1xxx00001001:	radr <= radr + ndxreg;
-		12'b1xxx00001010:	radr <= radr + ndxreg;
-		12'b1xxx00001011:	radr <= radr + ndxreg;
-		default:	radr <= radr;
-		endcase
+		if (bitsPerByte==8) begin
+			casex(ndxbyte)
+			8'b0xxxxxxx:	radr <= radr + ndxreg;
+			8'b1xxx0000:
+							begin
+								radr <= radr + ndxreg;
+								case(ndxbyte[6:5])
+								2'b00:	xr <= (xr + 2'd1);
+								2'b01:	yr <= (yr + 2'd1);
+								2'b10:	usp <= (usp + 2'd1);
+								2'b11:	ssp <= (ssp + 2'd1);
+								endcase
+							end
+			8'b1xxx0001:	begin
+								radr <= radr + ndxreg;
+								case(ndxbyte[6:5])
+								2'b00:	xr <= (xr + 2'd2);
+								2'b01:	yr <= (yr + 2'd2);
+								2'b10:	usp <= (usp + 2'd2);
+								2'b11:	ssp <= (ssp + 2'd2);
+								endcase
+							end
+			8'b1xxx0010:	radr <= radr + ndxreg;
+			8'b1xxx0011:	radr <= radr + ndxreg;
+			8'b1xxx0100:	radr <= radr + ndxreg;
+			8'b1xxx0101:	radr <= radr + ndxreg;
+			8'b1xxx0110:	radr <= radr + ndxreg;
+			8'b1xxx1000:	radr <= radr + ndxreg;
+			8'b1xxx1001:	radr <= radr + ndxreg;
+			8'b1xxx1010:	radr <= radr + ndxreg;
+			8'b1xxx1011:	radr <= radr + ndxreg;
+			default:	radr <= radr;
+			endcase
+		end
+		else if (bitsPerByte==12) begin
+			casex(ndxbyte)
+			12'b0xxxxxxxxxxx:	radr <= radr + ndxreg;
+			12'b1xxxx0000000:
+							begin
+								radr <= radr + ndxreg;
+								case(ndxbyte[10:9])
+								2'b00:	xr <= (xr + 2'd1);
+								2'b01:	yr <= (yr + 2'd1);
+								2'b10:	usp <= (usp + 2'd1);
+								2'b11:	ssp <= (ssp + 2'd1);
+								endcase
+							end
+			12'b1xxxx0000001:	begin
+								radr <= radr + ndxreg;
+								case(ndxbyte[10:9])
+								2'b00:	xr <= (xr + 2'd2);
+								2'b01:	yr <= (yr + 2'd2);
+								2'b10:	usp <= (usp + 2'd2);
+								2'b11:	ssp <= (ssp + 2'd2);
+								endcase
+							end
+			12'b1xxxx0000010:	radr <= radr + ndxreg;
+			12'b1xxxx0000011:	radr <= radr + ndxreg;
+			12'b1xxxx0000100:	radr <= radr + ndxreg;
+			12'b1xxxx0000101:	radr <= radr + ndxreg;
+			12'b1xxxx0000110:	radr <= radr + ndxreg;
+			12'b1xxxx0001000:	radr <= radr + ndxreg;
+			12'b1xxxx0001001:	radr <= radr + ndxreg;
+			12'b1xxxx0001010:	radr <= radr + ndxreg;
+			12'b1xxxx0001011:	radr <= radr + ndxreg;
+			default:	radr <= radr;
+			endcase
+		end
 		next_state(OUTER_INDEXING2);
 	end
 OUTER_INDEXING2:
 	begin
 		wadr <= radr;
-		res <= radr[23:0];
+		res <= radr[`DBLBYTE];
 		load_what <= load_what2;
 		if (isLEA)
 			next_state(IFETCH);
@@ -2181,7 +2387,7 @@ ICACHE1:
 			bl_o <= 6'd15;
 			stb_o <= 1'b1;
 			we_o <= 1'b0;
-			adr_o <= !hit0 ? {pc[23:4],4'b00} : {pcp16[23:4],4'b0000};
+			adr_o <= !hit0 ? {pc[bitsPerByte*2-1:4],4'b00} : {pcp16[bitsPerByte*2-1:4],4'b0000};
 			dat_o <= 12'd0;
 			next_state(ICACHE2);
 		end
@@ -2212,7 +2418,7 @@ ICACHE3:
 		bl_o <= 6'd15;
 		stb_o <= 1'b1;
 		we_o <= 1'b0;
-		adr_o <= !rhit0 ? {pc[23:4],4'b00} : {pcp16[23:4],4'b0000};
+		adr_o <= !rhit0 ? {pc[bitsPerByte*2-1:4],4'b00} : {pcp16[bitsPerByte*2-1:4],4'b0000};
 		dat_o <= 12'd0;
 		next_state(ICACHE2);
 	end
@@ -2224,7 +2430,7 @@ IBUF1:
 		bl_o <= 6'd2;
 		stb_o <= 1'b1;
 		we_o <= 1'b0;
-		adr_o <= pc[23:0];
+		adr_o <= pc[`DBLBYTE];
 		dat_o <= 12'd0;
 		next_state(IBUF2);
 	end
@@ -2246,7 +2452,7 @@ IBUF3:
 	else if (ack_i) begin
 		cti_o <= 3'b111;
 		adr_o <= adr_o + 2'd1;
-		ibuf[23:12] <= dat_i;
+		ibuf[`HIBYTE] <= dat_i;
 		next_state(IBUF4);
 	end
 IBUF4:
@@ -2256,7 +2462,7 @@ IBUF4:
 	end
 	else if (ack_i) begin
 		wb_nack();
-		ibuf[35:24] <= dat_i;
+		ibuf[`BYTE3] <= dat_i;
 		next_state(IBUF5);
 	end
 IBUF5:
@@ -2266,7 +2472,7 @@ IBUF5:
 	end
 	else if (ack_i) begin
 		wb_nack();
-		ibuf[47:36] <= dat_i;
+		ibuf[`BYTE4] <= dat_i;
 		next_state(IBUF6);
 	end
 IBUF6:
@@ -2276,7 +2482,7 @@ IBUF6:
 	end
 	else if (ack_i) begin
 		wb_nack();
-		ibuf[59:48] <= dat_i;
+		ibuf[`BYTE5] <= dat_i;
 		ibufadr <= pc;
 		next_state(IFETCH);
 	end
@@ -2303,7 +2509,7 @@ begin
 	store_what <= stw;
 	pc <= pc + insnsz;
 	if (isIndirect) begin
-		load_what <= `LW_IAH;
+		load_what <= isFar ? `LW_IA2316 : `LW_IAH;
 		radr <= NdxAddr;
 		next_state(LOAD1);
 	end
@@ -2317,7 +2523,7 @@ endtask
 task ex_store;
 input [5:0] stw;
 begin
-	pc <= pc + 2'd3;
+	pc <= pc + (isFar ? 3'd4 : 3'd3);
 	store_what <= stw;
 	wadr <= ex_address;
 	next_state(STORE1);
@@ -2333,7 +2539,7 @@ endtask
 
 task wb_burst;
 input [5:0] len;
-input [31:0] adr;
+input [bitsPerByte*2-1:0] adr;
 begin
 	if (!tsc) begin
 		bte_o <= 2'b00;
@@ -2347,7 +2553,7 @@ end
 endtask
 
 task wb_read;
-input [23:0] adr;
+input [`DBLBYTE] adr;
 begin
 	if (!tsc) begin
 		cyc_o <= 1'b1;
@@ -2358,8 +2564,8 @@ end
 endtask
 
 task wb_write;
-input [23:0] adr;
-input [11:0] dat;
+input [`DBLBYTE] adr;
+input [`LOBYTE] dat;
 begin
 	if (!tsc) begin
 		cyc_o <= 1'b1;
@@ -2384,13 +2590,13 @@ end
 endtask
 
 task load_tsk;
-input [11:0] dat;
+input [`LOBYTE] dat;
 begin
 	case(load_what)
 	`LW_BH:
 			begin
 				radr <= radr + 2'd1;
-				b[23:12] <= dat;
+				b[`HIBYTE] <= dat;
 				load_what <= `LW_BL;
 				next_state(LOAD1);
 			end
@@ -2398,7 +2604,7 @@ begin
 			begin
 				// Don't increment address here for the benefit of the memory
 				// operate instructions which set wadr=radr in CALC.
-				b[11:0] <= dat;
+				b[`LOBYTE] <= dat;
 				next_state(CALC);
 			end
 	`LW_CCR:	begin
@@ -2414,7 +2620,7 @@ begin
 				ef <= dat[7];
 				if (isRTI) begin
 					$display("loaded ccr=%b", dat);
-					ir[23:12] <= dat[7] ? 12'hFE : 12'h80;
+					ir[`HIBYTE] <= dat[7] ? 12'hFE : 12'h80;
 					ssp <= ssp + 2'd1;
 				end
 				else if (isPULS)
@@ -2482,7 +2688,7 @@ begin
 	`LW_XH:	begin
 				load_what <= `LW_XL;
 				next_state(LOAD1);
-				xr[23:12] <= dat;
+				xr[`HIBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loaded XH=%h from %h", dat, radr);
@@ -2496,7 +2702,7 @@ begin
 				end
 			end
 	`LW_XL:	begin
-				xr[11:0] <= dat;
+				xr[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loaded XL=%h from %h", dat, radr);
@@ -2518,7 +2724,7 @@ begin
 			begin
 				load_what <= `LW_YL;
 				next_state(LOAD1);
-				yr[23:12] <= dat;
+				yr[`HIBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loadded YH=%h", dat);
@@ -2532,7 +2738,7 @@ begin
 				end
 			end
 	`LW_YL:	begin
-				yr[11:0] <= dat;
+				yr[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loadded YL=%h", dat);
@@ -2553,7 +2759,7 @@ begin
 	`LW_USPH:	begin
 				load_what <= `LW_USPL;
 				next_state(LOAD1);
-				usp[23:12] <= dat;
+				usp[`HIBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loadded USPH=%h", dat);
@@ -2564,7 +2770,7 @@ begin
 				end
 			end
 	`LW_USPL:	begin
-				usp[11:0] <= dat;
+				usp[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					$display("loadded USPL=%h", dat);
@@ -2581,7 +2787,7 @@ begin
 	`LW_SSPH:	begin
 				load_what <= `LW_SSPL;
 				next_state(LOAD1);
-				ssp[23:12] <= dat;
+				ssp[`HIBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					ssp <= ssp + 2'd1;
@@ -2591,7 +2797,7 @@ begin
 				end
 			end
 	`LW_SSPL:	begin
-				ssp[11:0] <= dat;
+				ssp[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
 					ssp <= ssp + 2'd1;
@@ -2605,7 +2811,7 @@ begin
 					next_state(IFETCH);
 			end
 	`LW_PCL:	begin
-				pc[11:0] <= dat;
+				pc[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI|isRTS|isPULS) begin
 					$display("loadded PCL=%h", dat);
@@ -2616,7 +2822,7 @@ begin
 				next_state(IFETCH);
 			end
 	`LW_PCH:	begin
-				pc[23:12] <= dat;
+				pc[`HIBYTE] <= dat;
 				load_what <= `LW_PCL;
 				radr <= radr + 2'd1;
 				if (isRTI|isRTS|isPULS) begin
@@ -2627,12 +2833,22 @@ begin
 					usp <= usp + 2'd1;
 				next_state(LOAD1);
 			end
+	`LW_PC2316:	begin
+				pc[`BYTE3] <= dat;
+				load_what <= `LW_PCH;
+				radr <= radr + 16'd1;
+				if (isRTI|isRTF|isPULS)
+					ssp <= ssp + 16'd1;
+				else if (isPULU)
+					usp <= usp + 16'd1;
+				next_state(LOAD1);
+			end
 	`LW_IAL:
 			begin
-				ia[11:0] <= dat;
-				res[11:0] <= dat;
-				radr <= {ia[23:12],dat};
-				wadr <= {ia[23:12],dat};
+				ia[`LOBYTE] <= dat;
+				res[`LOBYTE] <= dat;
+				radr <= {ia[`BYTE3],ia[`HIBYTE],dat};
+				wadr <= {ia[`BYTE3],ia[`HIBYTE],dat};
 `ifdef SUPPORT_DBL_IND
 				if (isDblIndirect) begin
           load_what <= `LW_IAH;
@@ -2657,10 +2873,17 @@ begin
 			end
 	`LW_IAH:
 			begin
-				ia[23:12] <= dat;
-				res[23:12] <= dat;
+				ia[`HIBYTE] <= dat;
+				res[`HIBYTE] <= dat;
 				load_what <= `LW_IAL;
 				radr <= radr + 2'd1;
+				next_state(LOAD1);
+			end
+	`LW_IA2316:
+			begin
+				ia[`BYTE3] <= dat;
+				load_what <= `LW_IAH;
+				radr <= radr + 32'd1;
 				next_state(LOAD1);
 			end
 	endcase
@@ -2677,12 +2900,12 @@ input wclk;
 input wce;
 input wr;
 input [11:0] wa;
-input [11:0] i;
+input [`LOBYTE] i;
 input rclk;
 input rce;
 input [11:0] pc;
-output [47:0] insn;
-reg [47:0] insn;
+output [`HEXBYTE] insn;
+reg [`HEXBYTE] insn;
 
 reg [191:0] mem [0:255];
 reg [11:0] rpc,rpcp16;
@@ -2691,7 +2914,7 @@ genvar g;
 generate begin : gMem
 	for (g = 0; g < 16; g = g + 1)
 		always_ff @(posedge wclk)
-			if (wce & wr & wa[3:0]==g) mem[wa[11:4]][g*12+11:g*12] <= i;
+			if (wce & wr & wa[3:0]==g) mem[wa[11:4]][g*bitsPerByte+BPBM1:g*bitsPerByte] <= i;
 end
 endgenerate
 
@@ -2710,21 +2933,21 @@ module rf6809_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
 input wclk;
 input wce;
 input wr;
-input [23:0] wa;
+input [`DBLBYTE] wa;
 input invalidate;
 input rclk;
 input rce;
-input [23:0] pc;
+input [`DBLBYTE] pc;
 output hit0;
 output hit1;
 
-reg [23:12] mem [0:255];
+reg [`HIBYTE] mem [0:255];
 reg [0:255] tvalid;
-reg [23:0] rpc,rpcp16;
-wire [12:0] tag0,tag1;
+reg [`DBLBYTE] rpc,rpcp16;
+wire [`LOBYTEP1] tag0,tag1;
 
 always_ff @(posedge wclk)
-	if (wce & wr) mem[wa[11:4]] <= wa[23:12];
+	if (wce & wr) mem[wa[11:4]] <= wa[`HIBYTE];
 always_ff @(posedge wclk)
 	if (invalidate) tvalid <= 256'd0;
 	else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
@@ -2735,8 +2958,8 @@ always_ff @(posedge rclk)
 assign tag0 = {mem[rpc[11:4]],tvalid[rpc[11:4]]};
 assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
 
-assign hit0 = tag0 == {rpc[23:12],1'b1};
-assign hit1 = tag1 == {rpcp16[23:12],1'b1};
+assign hit0 = tag0 == {rpc[`HIBYTE],1'b1};
+assign hit1 = tag1 == {rpcp16[`HIBYTE],1'b1};
 
 endmodule
 
