@@ -232,7 +232,7 @@ wire [23:0] tileColor1;
 wire [23:0] tileColor2;
 reg  bgt, bgtd;
 
-wire [63:0] tdat_o;
+wire [7:0] tdat_o;
 wire [8:0] chdat_o;
 
 wire [2:0] scanindex = rowscan[2:0];
@@ -376,7 +376,7 @@ rfTextControllerRam screen_ram1
   .clkb(vclk),
   .enb(ld_shft|por),
   .web(por),
-  .addrb(txtAddr[13:0]),
+  .addrb(txtAddr[12:0]),
   .dinb(lfsr_o[15:0]),
   .doutb(screen_ram_out)
 );
@@ -459,8 +459,6 @@ syncRam4kx9 charRam0
 */
 
 // pipeline delay - sync color with character bitmap output
-wire [23:0] txtBkColor;
-wire [23:0] txtFgCodor;
 reg [5:0] txtZorder1;
 
 wire [3:0] txtBkCode1 = screen_ram_out[11: 8];

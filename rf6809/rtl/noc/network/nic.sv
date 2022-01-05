@@ -47,7 +47,7 @@ input rst_i;
 input clk_i;
 input s_cyc_i;
 input s_stb_i;
-output s_ack_o;
+output reg s_ack_o;
 input s_we_i;
 input [23:0] s_adr_i;
 input [7:0] s_dat_i;
@@ -70,16 +70,21 @@ parameter ST_ACK = 6'd3;
 parameter ST_ACK_ACK = 6'd4;
 parameter ST_WRITE = 6'd5;
 parameter ST_WRITE_ACK = 6'd6;
+parameter ST_XMIT = 6'd7;
 
 Packet packet_rx, packet_tx;
 
 always_ff @(posedge clk_i)
-begin
+if (rst_i) begin
+	s_ack_o <= FALSE;
+	s_dat_o <= 8'h00;
+end
+else begin
 	// Transfer the packet around the ring on every clock cycle.
 	packet_o <= packet_i;
 	
 	// Look for slave cycle termination.
-	if (~(s_syc_i & s_stb_i))
+	if (~(s_cyc_i & s_stb_i))
 		s_ack_o <= FALSE;
 
 	case(state)
@@ -88,16 +93,16 @@ begin
 			// Was this packet for us?
 			if (packet_i.did==id || packet_i.did==6'd63) begin
 				packet_rx <= packet_i;
-				case (packet_i.type)
+				case (packet_i.typ)
 				PT_ACK:
 					begin
 						state <= ST_ACK;
 						packet_o.did <= 6'd0;
 						packet_o.sid <= 6'd0;
 						packet_o.age <= 6'd0;
-						packet_o.type <= PT_NULL;
-						// If we got an ACK packet the slot can be used for a write.
-						tPrepWrite();
+						packet_o.typ <= PT_NULL;
+						// If we got an ACK packet the slot can be used for a read/write.
+						tPrepReadWrite();
 					end
 				PT_READ:
 					begin
@@ -105,7 +110,7 @@ begin
 						packet_o.did <= 6'd0;
 						packet_o.sid <= 6'd0;
 						packet_o.age <= 6'd0;
-						packet_o.type <= PT_NULL;
+						packet_o.typ <= PT_NULL;
 					end
 				PT_WRITE:
 					begin
@@ -113,13 +118,13 @@ begin
 						packet_o.did <= 6'd0;
 						packet_o.sid <= 6'd0;
 						packet_o.age <= 6'd0;
-						packet_o.type <= PT_NULL;
+						packet_o.typ <= PT_NULL;
 					end
 				default:	;
 				endcase
 			end
 			else begin
-				tPrepWrite();
+				tPrepReadWrite();
 			end
 		end
 
@@ -139,7 +144,7 @@ begin
 			packet_tx.sid <= id;
 			packet_tx.did <= packet_rx.sid;
 			packet_tx.age <= 6'd0;
-			packet_tx.type <= PT_ACK;
+			packet_tx.typ <= PT_ACK;
 			packet_tx.ack <= TRUE;
 			packet_tx.dat <= m_dat_i;
 			state <= ST_XMIT;
@@ -186,6 +191,7 @@ begin
 		// Wait for the slave cycle to finish.
 		if (~(s_cyc_i & s_stb_i)) begin
 			s_ack_o <= FALSE;
+			s_dat_o <= 8'h00;
 			state <= ST_IDLE;
 		end
 		
@@ -194,29 +200,36 @@ begin
 	endcase
 end
 
-task tPrepWrite;
+task tPrepReadWrite;
 begin
-	if (cyc_i & stb_i & we_i & adr_i[23] & ~ack_o) begin
-		if (adr_i[23:20]==4'hE)
-			packet_tx.did <= 6'd62;
-		// Global broadcast
-		else if (adr_i[23:12]==12'hDFF)
-			packet_tx.did <= 6'd63;
-		else if (adr_i[23:20]==4'hC)
-			packet_tx.did <= adr_i[19:15];
-		else
-			packet_tx.did <= 6'd0;
+	if (s_cyc_i & s_stb_i & s_adr_i[23] & ~s_ack_o) begin
 		packet_tx.sid <= id;
 		packet_tx.age <= 6'd0;
 		packet_tx.ack <= 1'b0;
-		packet_tx.type <= PT_WRITE;
+		packet_tx.typ <= s_we_i ? PT_WRITE : PT_READ;
 		packet_tx.pad2 <= 2'b0;
-		packet_tx.we <= TRUE;
+		packet_tx.we <= s_we_i;
 		packet_tx.pad1 <= 4'h0;
-		packet_tx.adr <= adr_i;
-		packet_tx.dat <= dat_i;
-		ack_o <= TRUE;
+		packet_tx.adr <= s_adr_i;
+		packet_tx.dat <= s_dat_i;
+		s_ack_o <= TRUE;
 		state <= ST_XMIT;
+		// Read global ROM?
+		if (!s_we_i && s_adr_i[23:20]==4'hF) begin
+			packet_tx.did <= 6'd62;
+		end
+		else if (s_adr_i[23:20]==4'hE)
+			packet_tx.did <= 6'd62;
+		// Global broadcast
+		else if (s_adr_i[23:12]==12'hDFF)
+			packet_tx.did <= 6'd63;
+		else if (s_adr_i[23:20]==4'hC)
+			packet_tx.did <= s_adr_i[19:15]+2'd1;
+		else begin
+			packet_tx.did <= 6'd0;
+			packet_tx.sid <= 6'd0;
+			state <= ST_IDLE;
+		end
 	end
 end
 endtask

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -144,7 +144,7 @@ input         s_we_i,	// write
 input  [ 3:0] s_sel_i,	// byte select
 input  [ 9:0] s_adr_i,	// address
 input  [31:0] s_dat_i,	// data input
-output reg [31:0] s_dat_o,	// data output
+output reg [7:0] s_dat_o,	// data output
 //------------------------------
 // Bus Master Signals
 input m_clk_i,				// clock
@@ -443,32 +443,42 @@ end
 //--------------------------------------------------------------------
 //--------------------------------------------------------------------
 
-reg [31:0] reg_shadow [0:255];
-reg [7:0] radr;
+reg [7:0] reg_shadow [0:1023];
+reg [9:0] radr;
 always_ff @(posedge s_clk_i)
 begin
-    if (cs_regs & we_i & sel_i[0])  reg_shadow[adr_i[9:2]][7:0] <= dat_i[7:0];
-    if (cs_regs & we_i & sel_i[1])  reg_shadow[adr_i[9:2]][15:8] <= dat_i[15:8];
-    if (cs_regs & we_i & sel_i[2])  reg_shadow[adr_i[9:2]][23:16] <= dat_i[23:16];
-    if (cs_regs & we_i & sel_i[3])  reg_shadow[adr_i[9:2]][31:24] <= dat_i[31:24];
+    if (cs_regs & we_i)  reg_shadow[adr_i[9:0]] <= dat_i;
 end
 always @(posedge s_clk_i)
-    radr <= adr_i[9:2];
-wire [31:0] reg_shadow_o = reg_shadow[radr];
+    radr <= adr_i[9:0];
+wire [7:0] reg_shadow_o = reg_shadow[radr];
 
 // register/sprite memory output mux
 always_ff @(posedge s_clk_i)
 	if (cs_regs)
-		case (adr_i[9:2])		// synopsys full_case parallel_case
-		8'b11110000:	s_dat_o <= sprEn;
-		8'b11110001:	s_dat_o <= {sprBkIRQPending|sprSprIRQPending,5'b0,sprBkIRQPending,sprSprIRQPending,6'b0,sprBkIe,sprSprIe};
-		8'b11110010:	s_dat_o <= sprSprCollision;
-		8'b11110011:	s_dat_o <= sprBkCollision;
-		8'b11110100:	s_dat_o <= sprDt;
+		case (adr_i[9:0])		// synopsys full_case parallel_case
+		10'b1111000000:	s_dat_o <= sprEn[31:24];
+		10'b1111000001:	s_dat_o <= sprEn[23:16];
+		10'b1111000010:	s_dat_o <= sprEn[15: 8];
+		10'b1111000011:	s_dat_o <= sprEn[ 7: 0];
+		10'b1111000100:	s_dat_o <= {6'b0,sprBkIe,sprSprIe};
+		10'b1111000101:	s_dat_o <= {sprBkIRQPending|sprSprIRQPending,5'b0,sprBkIRQPending,sprSprIRQPending};
+		10'b1111001000:	s_dat_o <= sprSprCollision[31:24];
+		10'b1111001001:	s_dat_o <= sprSprCollision[23:16];
+		10'b1111001010:	s_dat_o <= sprSprCollision[15: 8];
+		10'b1111001011:	s_dat_o <= sprSprCollision[ 7: 0];
+		10'b1111001100:	s_dat_o <= sprBkCollision[31:24];
+		10'b1111001101:	s_dat_o <= sprBkCollision[23:16];
+		10'b1111001110:	s_dat_o <= sprBkCollision[15: 8];
+		10'b1111001111:	s_dat_o <= sprBkCollision[ 7: 0];
+		10'b1111010000:	s_dat_o <= sprDt[31:24];
+		10'b1111010001:	s_dat_o <= sprDt[23:16];
+		10'b1111010010:	s_dat_o <= sprDt[15: 8];
+		10'b1111010011:	s_dat_o <= sprDt[ 7: 0];
 		default:	s_dat_o <= reg_shadow_o;
 		endcase
 	else
-		s_dat_o <= 32'h0;
+		s_dat_o <= 8'h0;
 
 
 // vclk -> clk_i

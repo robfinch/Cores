@@ -131,7 +131,7 @@ wire res12z = res12[`LOBYTE]==12'h000;
 wire res12c = res12[bitsPerByte];
 wire res24n = res[BPBX2M1];
 wire res24z = res[`DBLBYTE]==24'h000000;
-wire res24c = res[24];
+wire res24c = res[BPB*2];
 reg [`TRPBYTE] ia;
 reg ic_invalidate;
 reg first_ifetch;
@@ -256,9 +256,6 @@ always_comb
 		2'b11:	ndxreg <= ssp;
 		endcase
 	
-reg [`DBLBYTE] a,b;
-wire [`LOBYTE] b12 = b[`LOBYTE];
-
 reg [`DBLBYTE] NdxAddr;
 always_comb
 	if (bitsPerByte==8)
@@ -1958,11 +1955,13 @@ CALC:
 		`DEC_DP,`DEC_NDX,`DEC_EXT:	begin res12 <= b12 - 2'd1; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`INC_DP,`INC_NDX,`INC_EXT:	begin res12 <= b12 + 2'd1; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`TST_DP,`TST_NDX,`TST_EXT:	res12 <= b12;
-		
+		/*
 		`AIM_DP,`AIM_NDX,`AIM_EXT:	begin res12 <= ir[`HIBYTE] & b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`OIM_DP,`OIM_NDX,`OIM_EXT:	begin res12 <= ir[`HIBYTE] | b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`EIM_DP,`EIM_NDX,`OIM_EXT:  begin res12 <= ir[`HIBYTE] ^ b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`TIM_DP,`TIM_NDX,`TIM_EXT:	begin res12 <= ir[`HIBYTE] & b12; end
+		*/
+		default:	;
 		endcase
 	end
 
@@ -2933,21 +2932,21 @@ module rf6809_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
 input wclk;
 input wce;
 input wr;
-input [`DBLBYTE] wa;
+input [`TRPBYTE] wa;
 input invalidate;
 input rclk;
 input rce;
-input [`DBLBYTE] pc;
+input [`TRPBYTE] pc;
 output hit0;
 output hit1;
 
-reg [`HIBYTE] mem [0:255];
+reg [BPB*3-1:12] mem [0:255];
 reg [0:255] tvalid;
-reg [`DBLBYTE] rpc,rpcp16;
-wire [`LOBYTEP1] tag0,tag1;
+reg [`TRPBYTE] rpc,rpcp16;
+wire [BPB*3-1:11] tag0,tag1;
 
 always_ff @(posedge wclk)
-	if (wce & wr) mem[wa[11:4]] <= wa[`HIBYTE];
+	if (wce & wr) mem[wa[11:4]] <= wa[BPB*3-1:12];
 always_ff @(posedge wclk)
 	if (invalidate) tvalid <= 256'd0;
 	else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
@@ -2958,8 +2957,8 @@ always_ff @(posedge rclk)
 assign tag0 = {mem[rpc[11:4]],tvalid[rpc[11:4]]};
 assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
 
-assign hit0 = tag0 == {rpc[`HIBYTE],1'b1};
-assign hit1 = tag1 == {rpcp16[`HIBYTE],1'b1};
+assign hit0 = tag0 == {rpc[BPB*3-1:12],1'b1};
+assign hit1 = tag1 == {rpcp16[BPB*3-1:12],1'b1};
 
 endmodule
 

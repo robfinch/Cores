@@ -47,6 +47,7 @@
 //`define SDC_CONTROLLER 1'b1
 //`define GPU_GRID	1'b1
 //`define RANDOM_GEN	1'b1
+import nic_pkg::*;
 
 module rf6809_test_soc(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
   kclk, kd, uart_txd, uart_rxd,
@@ -170,18 +171,18 @@ reg ack;
 wire we;
 wire [15:0] sel;
 (* mark_debug = "true" *)
-wire [31:0] adr;
-reg [127:0] dati = 128'd0;
-wire [127:0] dato;
+wire [23:0] adr;
+reg [7:0] dati = 8'd0;
+wire [7:0] dato;
 wire sr,cr,rb;
 
 wire [31:0] tc1_rgb;
 wire tc1_ack;
-wire [63:0] tc1_dato;
+wire [7:0] tc1_dato;
 wire ack_scr;
 (* mark_debug = "true" *)
 wire ack_br = 1'b0;
-wire [127:0] scr_dato;
+wire [7:0] scr_dato;
 wire [127:0] br_dato = 128'd0;
 wire br_bok, scr_bok;
 wire rnd_ack;
@@ -468,7 +469,7 @@ OLED uoled1
 	.rst(rst),
 	.clk(clk100), //xclk_bufg
 	.adr_i(adr),
-	.dat_i(dati[31:0]),
+	.dat_i(dati[7:0]),
 	.SDIN(oled_sdin),
 	.SCLK(oled_sclk),
 	.DC(oled_dc),
@@ -508,15 +509,15 @@ always_comb
 				|| adr[31:16]==16'hFFFE;
 */
 reg cs_scr;
-always_comb cs_scr = adr[31:20]==12'b1111_1111_1111;	// Scratchpad memory 256k
+always_comb cs_scr = adr[23:16]==8'b1111_1111;	// Scratchpad memory 8k
 // No need to check for the $FFD in the top 12 address bits as these are 
 // detected in the I/O bridges.
 reg cs_tc1;
 always_comb cs_tc1 = br1_adr[23:16]==8'hE0;	// E0xxxx Text Controller 64k
 reg cs_spr;
-always_comb cs_spr = br1_adr[23:16]==8'h8B;	// FF8Bxxxx	Sprite Controller
+always_comb cs_spr = br1_adr[23:16]==8'hE1;	// FF8Bxxxx	Sprite Controller
 reg cs_bmp;
-always_comb cs_bmp = br1_adr[23:16]==8'h98;	//          Bitmap Controller
+always_comb cs_bmp = br1_adr[23:16]==8'hE2;	//          Bitmap Controller
 //wire cs_bmp = 1'b0;
 //wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_avic = 1'b0;									// defunct: audio / video controller
@@ -543,7 +544,7 @@ always_comb cs_imem = br2_adr[23:12]==12'h9C8 		// instruction memory for grid c
 						|| br2_adr[23:12]==12'h9CB
 						;
 reg cs_sema;						
-always_comb cs_sema = br3_adr[23:16]==8'h8D;     // 256 counting semaphores
+always_comb cs_sema = br3_adr[23:16]==8'hFE;     // 256 counting semaphores
 reg cs_rtc;
 always_comb cs_rtc = br3_adr[23:16]==8'h90;		// real-time clock chip
 reg cs_spi;
@@ -1325,6 +1326,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 
 semamem usema1
 (
+	.rst_i(rst),
   .clk_i(cpu_clk),
   .cs_i(cs_sema),
   .cyc_i(br3_cyc),
@@ -1336,7 +1338,7 @@ semamem usema1
   .dat_o(sema_dato)
 );
 
-scratchmem128 uscr1
+scratchmem uscr1
 (
   .rst_i(rst),
   .clk_i(cpu_clk),
@@ -1347,14 +1349,13 @@ scratchmem128 uscr1
   .stb_i(stb),
   .ack_o(ack_scr),
   .we_i(we),
-  .sel_i(sel),
-  .adr_i(adr[17:0]),
+  .adr_i(adr[12:0]),
   .dat_i(dato),
   .dat_o(scr_dato)
 `ifdef SIM
-  ,.sp(32'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
 `else
-	,.sp(32'h0)
+	,.sp(24'h0)
 `endif
 );
 
@@ -1565,6 +1566,34 @@ xbusBridge uxbb1
 );
 */
 
+Packet packet_i, packet_o;
+
+node_ring(rst, clk40, packet_i, packet_o);
+
+nic unic1
+(
+	.id(6'd62),
+	.rst_i(rst),
+	.clk_i(clk40),
+	.s_cyc_i(1'b0),
+	.s_stb_i(1'b0),
+	.s_ack_o(),
+	.s_we_i(1'b0),
+	.s_adr_i(24'h0),
+	.s_dat_i(8'h00),
+	.s_dat_o(),
+	.m_cyc_o(cyc),
+	.m_stb_o(stb),
+	.m_ack_i(ack1),
+	.m_we_o(we),
+	.m_adr_o(adr),
+	.m_dat_o(dato),
+	.m_dat_i(dati),
+	.packet_i(packet_o),
+	.packet_o(packet_i)
+);
+
+/*
 rf6809 ucpu1
 (
 	.rst_i(rst),
@@ -1592,6 +1621,7 @@ rf6809 ucpu1
 	.dat_o(dato),
 	.state()
 );
+*/
 
 /*
 ila_0 uila1 (
@@ -1686,7 +1716,7 @@ ila_0 uila1 (
 	.probe6(ucpu1.ucpu1.wcause),
 	.probe7(ucpu1.ucpu1.ubiu.state),
 //	.probe7({ucpu1.ucpu1.advance_w,ucpu1.ucpu1.xJxz,ucpu1.ucpu1.takb,cs_rnd,ack_bridge2}),
-/*
+
 	.probe7(
 	{
 		ucpu1.ucpu1.rob[7].ui,

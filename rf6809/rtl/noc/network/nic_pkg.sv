@@ -5,9 +5,6 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	nic_ager.sv
-//
-//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -36,26 +33,29 @@
 //                                                                          
 // ============================================================================
 
-import nic_pkg::*;
+package nic_pkg;
 
-module nic_ager(clk_i, packet_i, packet_o);
-input clk_i;
-input Packet packet_i;
-output Packet packet_o;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 
-always_ff @(posedge clk_i)
-begin
-	packet_o <= packet_i;
-	// Age only valid packets packet
-	if ((packet_i.sid|packet_i.did) != 6'd0)
-		packet_o.age <= packet_i.age + 2'd1;
-	// If the packet is too old, flag as available.
-	if (packet_i.age == 6'd7) begin
-		packet_o.sid <= 6'd0;
-		packet_o.did <= 6'd0;
-		packet_o.type <= 6'0;
-		packet_o.age <= 6'd0;
-	end
-end
+// Packet types
+parameter PT_NULL = 6'd0;
+parameter PT_READ = 6'd1;
+parameter PT_WRITE = 6'd2;
+parameter PT_ACK = 6'd3;
 
-endmodule
+typedef struct packed
+{
+	logic [5:0] did;
+	logic [5:0] sid;
+	logic [5:0] age;
+	logic ack;
+	logic [5:0] typ;
+	logic [1:0] pad2;
+	logic we;
+	logic [3:0] pad1;
+	logic [23:0] adr;
+	logic [7:0] dat;
+} Packet;
+
+endpackage

@@ -1,9 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2021  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
+//
+//	semamem.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -30,32 +32,65 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                          
+//
+// Address
+// 0b0nnnnnnaaaa		read: decrement by aaaaaa, write increment by aaaaaa
+// 0b1nnnnnn----	  read: peek value, write absolute data
 // ============================================================================
 
-package nic_pkg;
+module semamem(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o);
+input rst_i;
+input clk_i;
+input cs_i;
+input cyc_i;
+input stb_i;
+output ack_o;
+input we_i;
+input [12:0] adr_i;
+input [7:0] dat_i;
+output reg [7:0] dat_o;
 
-parameter TRUE = 1'b1;
-parameter FALSE = 1'b0;
+wire cs = cs_i & cyc_i & stb_i;
+reg ack;
+always_ff @(posedge clk_i)
+  ack <= cs;
+assign ack_o = ack & cs;
 
-// Packet types
-parameter PT_NULL = 6'd0;
-parameter PT_READ = 6'd1;
-parameter PT_WRITE = 6'd2;
-parameter PT_ACK = 6'd3;
+reg [7:0] mem [0:255];
+reg [7:0] memi;
+reg [7:0] memo;
+reg [8:0] memopi,memomi;
+always_comb
+	memo <= mem[adr_i[11:4]];
+always_comb
+	memopi <= memo + adr_i[3:0];
+always_comb
+	memomi <= memo - adr_i[3:0];
+assign o = memo;
 
-typedef struct packed
-{
-	logic [5:0] did;
-	logic [5:0] sid;
-	logic [5:0] age;
-	logic ack;
-	logic [5:0] type;
-	logic [1:0] pad2;
-	logic we;
-	logic [3:0] pad1;
-	logic [23:0] adr;
-	logic [7:0] dat;
-} Packet;
+wire pe_cs;
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee());
 
-endpackage
+always_ff @(posedge clk_i)
+if (pe_cs)
+	mem[adr_i[11:4]] <= memi;
+
+always_comb
+begin
+	casez({adr_i,we_i})
+	14'b0????????????0:	memi <= memomi[8] ? 8'h00 : memomi[7:0];
+	14'b0????????????1:	memi <= memopi[8] ? 8'hFF : memopi[7:0];
+	14'b1????????????0:	memi <= memo;
+	14'b1????????????1:	memi <= dat_i;
+	endcase
+end
+
+always_ff @(posedge clk_i)
+if (cs) begin
+  if (pe_cs)
+    dat_o <= mem[adr_i[11:4]];
+end
+else
+	dat_o <= 8'h00;
+
+endmodule

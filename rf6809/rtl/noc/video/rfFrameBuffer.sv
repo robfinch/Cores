@@ -353,13 +353,13 @@ syncRam512x64_1rw1r upal1	// Actually 1024x64
   .clka(s_clk_i),    // input wire clka
   .ena(cs & adri[13]),      // input wire ena
   .wea(we),      // input wire [3 : 0] wea
-  .addra(adri[12:0]),  // input wire [8 : 0] addra
-  .dina(dat),    			// input wire [31 : 0] dina
+  .addra(adri[11:0]),  // input wire [8 : 0] addra
+  .dina(dat[7:0]),    			// input wire [31 : 0] dina
   .douta(pal_wo),  // output wire [31 : 0] douta
   .clkb(vclk),    // input wire clkb
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [3 : 0] web
-  .addrb({pals,rgbo4[5:0]}),  // input wire [8 : 0] addrb
+  .addrb({pals[2:0],rgbo4[5:0]}),  // input wire [8 : 0] addrb
   .dinb(64'h0),    // input wire [31 : 0] dinb
   .doutb(pal_o)  // output wire [31 : 0] doutb
 );
@@ -403,35 +403,58 @@ else begin
 		if (we) begin
 			casez(adri[13:3])
 			REG_CTRL:
-				begin
-					if (adri[2:0]==3'd0) onoff <= dat[0];
-					if (sel[1]) begin
-					color_depth <= dat[11:8];
-					greyscale <= dat[12];
+				case(adri[2:0])
+				3'd0:	onoff <= dat[0];
+				3'd1:	
+					begin
+						color_depth <= dat[3:0];
+						greyscale <= dat[4];
 					end
-					if (sel[2]) begin
-					hres <= dat[18:16];
-					vres <= dat[22:20];
+				3'd2:
+					begin
+						hres <= dat[2:0];
+						vres <= dat[6:4];
 					end
-					if (sel[3]) begin
-					page <= dat[24];
-					pals <= dat[28:25];
+				3'd3:
+					begin
+						page <= dat[0];
+						pals <= dat[3:1];
 					end
-					if (|sel[7:6]) map <= dat[59:48];
-				end
+				3'd6:	map[7:0] <= dat;
+				3'd7:	map[11:8] <= dat[3:0];
+				default:	;
+				endcase
 			REG_REFDELAY:
-				begin
-					if (|sel[1:0])	hrefdelay <= dat[15:0];
-					if (|sel[3:2])  vrefdelay <= dat[32:16];
-				end
-			REG_PAGE1ADDR:	bm_base_addr1 <= dat;
-			REG_PAGE2ADDR:	bm_base_addr2 <= dat;
+				case(adri[2:0])
+				3'd0:	hrefdelay[15:8] <= dat;
+				3'd1:	hrefdelay[ 7:0] <= dat;
+				3'd2:	vrefdelay[15:8] <= dat;
+				3'd3:	vrefdelay[ 7:0] <= dat;				
+				default:	;
+				endcase
+			REG_PAGE1ADDR:
+				case(adri[2:0])
+				3'd1:	bm_base_addr1[23:16] <= dat;
+				3'd2: bm_base_addr1[15: 8] <= dat;
+				3'd3:	bm_base_addr1[ 7: 0] <= dat;
+				default:	;
+				endcase
+			REG_PAGE2ADDR:
+				case(adri[2:0])
+				3'd1:	bm_base_addr2[23:16] <= dat;
+				3'd2: bm_base_addr2[15: 8] <= dat;
+				3'd3:	bm_base_addr2[ 7: 0] <= dat;
+				default:	;
+				endcase
 			REG_PXYZ:
-				begin
-					if (|sel[1:0])	px <= dat[15:0];
-					if (|sel[3:2])	py <= dat[31:16];
-					if (|sel[  4])	pz <= dat[39:32];
-				end
+				case(adri[2:0])
+				3'd0:	px[15:8] <= dat;
+				3'd1:	px[ 7:0] <= dat;
+				3'd2:	py[15:8] <= dat;
+				3'd3:	py[ 7:0] <= dat;
+				3'd5:	pz[ 7:0] <= dat;
+				default:	;
+				endcase
 			REG_PCOLCMD:
 				begin
 					if (sel[0]) pcmd <= dat[1:0];
@@ -703,7 +726,7 @@ wire [MDW-1:0] mem_strip_o;
 wire [31:0] mem_color;
 
 // Compute fetch address
-gfx_CalcAddress6 #(MDW) u1
+gfx_calc_address64 #(MDW) u1
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
@@ -718,7 +741,7 @@ gfx_CalcAddress6 #(MDW) u1
 );
 
 // Compute address for get/set pixel
-gfx_CalcAddress6 #(MDW) u2
+gfx_calc_address64  #(MDW) u2
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
