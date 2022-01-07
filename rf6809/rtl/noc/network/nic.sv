@@ -85,6 +85,18 @@ parameter ST_WRITE_ACK = 6'd6;
 parameter ST_XMIT = 6'd7;
 
 Packet packet_rx, packet_tx;
+Packet [7:0] gbl_packets;
+reg seen_gbl;
+integer n,n1,n2;
+
+always_comb
+begin
+	seen_gbl = FALSE;
+	for (n = 0; n < 8; n = n + 1)
+		if (gbl_packets[n]==packet_i)
+			seen_gbl <= TRUE;
+end
+
 reg rcv;
 reg [5:0] xmit;
 reg wait_ack;
@@ -97,6 +109,8 @@ if (rst_i) begin
 	ipacket_o <= {$bits(IPacket){1'b0}};
 	packet_rx <= {$bits(Packet){1'b0}};
 	packet_tx <= {$bits(Packet){1'b0}};
+	for (n2 = 0; n2 < 8; n2 = n2 + 1)
+		gbl_packets[n] <= {$bits(Packet){1'b0}};
 	rcv <= 1'b0;
 	xmit <= 6'd0;
 	wait_ack <= 1'b0;
@@ -105,6 +119,7 @@ if (rst_i) begin
 	m_we_o <= 1'b0;
 	m_adr_o <= 24'h0;
 	m_dat_o <= 8'h00;
+	state <= ST_IDLE;
 end
 else begin
 	// Transfer the packet around the ring on every clock cycle.
@@ -139,14 +154,30 @@ else begin
 			if (packet_i.did==id || packet_i.did==6'd63) begin
 				packet_rx <= packet_i;
 				// Remove packet
-				packet_o <= {$bits(Packet){1'b0}};
-				xmit <= 6'd0;
-				case (packet_rx.typ)
-				PT_ACK:		state <= ST_ACK;
-				PT_READ:	state <= ST_READ;
-				PT_WRITE:	state <= ST_WRITE;
-				default:	;
-				endcase
+				if (packet_i.did!=6'd63) begin
+					packet_o <= {$bits(Packet){1'b0}};
+					xmit <= 6'd0;
+					case (packet_i.typ)
+					PT_ACK:		state <= ST_ACK;
+					PT_READ:	state <= ST_READ;
+					PT_WRITE:	state <= ST_WRITE;
+					default:	;
+					endcase
+				end
+				// Have we seen packet already?
+				// If not, add to seen list and process, otherwise ignore
+				else if (!seen_gbl) begin
+					for (n1 = 0; n1 < 7; n1 = n1 + 1)
+						gbl_packets[n1+1] <= gbl_packets[n1];
+					gbl_packets[0] <= packet_i;
+					xmit <= 6'd0;
+					case (packet_rx.typ)
+					//PT_ACK:		state <= ST_ACK;
+					//PT_READ:	state <= ST_READ;
+					PT_WRITE:	state <= ST_WRITE;
+					default:	;
+					endcase
+				end
 			end
 			else begin
 				tPrepReadWrite();
@@ -199,14 +230,6 @@ else begin
 	ST_XMIT:
 		if ((packet_i.sid|packet_i.did)==6'd0) begin
 			packet_o <= packet_tx;
-			packet_o.sid <= packet_tx.sid;
-			packet_o.did <= packet_tx.did;
-			packet_o.age <= 6'd0;
-			packet_o.typ <= packet_tx.typ;
-			packet_o.ack <= packet_tx.ack;
-			packet_o.we  <= packet_tx.we;
-			packet_o.adr <= packet_tx.adr;
-			packet_o.dat <= packet_tx.dat;
 			packet_tx <= {$bits(Packet){1'b0}};
 			state <= ST_IDLE;
 		end
@@ -244,11 +267,11 @@ end
 
 task tPrepReadWrite;
 begin
-	if (s_cyc_i && s_stb_i && s_adr_i[23] && s_we_i) begin
+	if (s_cyc_i && s_stb_i && s_we_i) begin
 		if (xmit != 6'd0)
 			xmit <= xmit - 2'd1;
 	end
-	if ((s_cyc_i && s_stb_i && s_adr_i[23] && xmit==6'd0)/* &&
+	if ((s_cyc_i && s_stb_i && xmit==6'd0)/* &&
 		!(packet_i.did==id || packet_i.did==6'd63)*/) begin
 		xmit <= 6'd5;
 		packet_tx.sid <= id;
@@ -260,24 +283,47 @@ begin
 		packet_tx.pad1 <= 4'h0;
 		packet_tx.adr <= s_adr_i;
 		packet_tx.dat <= s_dat_i;
-		s_ack_o <= s_we_i;
 		state <= ST_XMIT;
+		casez(s_adr_i[23:16])
 		// Read global ROM?
-		if (!s_we_i && s_adr_i[23:20]==4'hF) begin
-			packet_tx.did <= 6'd62;
-		end
-		else if (s_adr_i[23:20]==4'hE)
-			packet_tx.did <= 6'd62;
+		8'hF?:	
+			begin
+				if (!s_we_i)
+					packet_tx.did <= 6'd62;
+				else begin
+					packet_tx <= {$bits(Packet){1'b0}};
+					state <= ST_IDLE;
+					s_ack_o <= TRUE;
+				end
+			end
+		8'hE?:
+			begin
+				packet_tx.did <= 6'd62;
+				s_ack_o <= s_we_i;
+			end
 		// Global broadcast
-		else if (s_adr_i[23:16]==8'hDF)
-			packet_tx.did <= 6'd63;
-		else if (s_adr_i[23:20]==4'hC)
-			packet_tx.did <= s_adr_i[19:15]+2'd1;
-		else begin
-			packet_tx.did <= 6'd0;
-			packet_tx.sid <= 6'd0;
-			state <= ST_IDLE;
-		end
+		8'hDF:
+			begin
+				packet_tx.did <= 6'd63;
+				packet_tx.age <= 6'd30;
+				s_ack_o <= s_we_i;
+			end
+		8'hC?:
+			begin
+				packet_tx.did <= {2'd0,s_adr_i[19:16]}+2'd2;
+				s_ack_o <= s_we_i;
+			end
+		8'h4?,8'h5?,8'h6?,8'h7?,8'h8?,8'h9?,8'hA?,8'hB?:
+			begin
+				packet_tx.did <= 6'd62;
+				s_ack_o <= s_we_i;
+			end
+		default:
+			begin
+				packet_tx <= {$bits(Packet){1'b0}};
+				state <= ST_IDLE;
+			end
+		endcase
 	end
 end
 endtask

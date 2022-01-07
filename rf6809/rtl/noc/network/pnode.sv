@@ -107,8 +107,8 @@ wire [23:0] m2_adr;
 reg [7:0] m2_dati;
 wire [7:0] m2_dato;
 
-Packet packet_x;
-IPacket ipacket_x;
+Packet packet_x, packet_y;
+IPacket ipacket_x, ipacket_y;
 
 nic unic1
 (
@@ -175,6 +175,18 @@ nic unic2
 	.firq_o(c2_firq),
 	.cause_o(c2_cause)
 );
+
+/*
+nic_prop uprp1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.packet_i(packet_y),
+	.packet_o(packet_o),
+	.ipacket_i(ipacket_y),
+	.ipacket_o(ipacket_o)
+);
+*/
 
 reg [5:0] state1, state2;
 parameter ST_IDLE = 6'd0;

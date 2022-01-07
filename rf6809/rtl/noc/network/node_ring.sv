@@ -55,6 +55,7 @@ assign ipackets[0] = ipacket_i;
 genvar g;
 generate begin : gNodes
 
+
 for (g = 0; g < 8; g = g + 1)
  	pnode upn (g[3:0]+1, rst_i, clk_i, packets[g], packets[g+1], ipackets[g], ipackets[g+1]);
 

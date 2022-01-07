@@ -1585,10 +1585,10 @@ xbusBridge uxbb1
   .xb_de_i(xb_dei)
 );
 */
-
+/*
 rf6809 ucpu1
 (
-	.id({id,1'b0}),
+	.id(6'd2),
 	.rst_i(rst),
 	.clk_i(clk40),
 	.halt_i(1'b0),
@@ -1614,12 +1614,12 @@ rf6809 ucpu1
 	.dat_o(dato),
 	.state()
 );
-
+*/
 Packet packet_i, packet_o;
 IPacket ipacket_i, ipacket_o;
 wire [3:0] irqo;
 
-/*
+
 node_ring unr1 (rst, clk40, packet_i, packet_o, ipacket_i, ipacket_o);
 
 nic unic1
@@ -1654,7 +1654,7 @@ nic unic1
 	.firq_o(),
 	.cause_o()
 );
-*/
+
 
 rf6809_pic upic1
 (
@@ -1711,8 +1711,8 @@ assign firq = irqo[1];
 
 ila_0 uila1 (
 	.clk(clk40), // input wire clk
-//	.probe0(packet_o) // input wire [63:0]  probe0  
-	.probe0({cyc,stb,ack1,we,ucpu1.pc,adr,dati}) // input wire [63:0]  probe0  
+	.probe0(packet_o) // input wire [63:0]  probe0  
+//	.probe0({cyc,stb,ack1,we,ucpu1.pc,adr,dati}) // input wire [63:0]  probe0  
 );
 
 /*

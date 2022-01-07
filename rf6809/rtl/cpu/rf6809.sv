@@ -567,6 +567,18 @@ rf6809_itagmem u2
 	.hit1(hit1)
 );
 
+reg [15:0] ns_count;
+reg [31:0] ms_count;
+
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	ns_count <= 16'd0;
+	ms_count <= 32'd0;
+end
+else begin
+	if (ns_count==16'd40000)
+		ms_count <= ms_count + 2'd1;
+end
 
 always_ff @(posedge clk_i)
 	tsc_latched <= tsc_i;
@@ -1986,6 +1998,13 @@ LOAD1:
 `ifdef SUPPORT_DCACHE
 	if (unCachedData)
 `endif
+	case(radr)
+	24'hFFFFE0:	load_tsk({2'b0,id});
+	24'hFFFFE4:	load_tsk(ms_count[31:24]);
+	24'hFFFFE5:	load_tsk(ms_count[23:16]);
+	24'hFFFFE6:	load_tsk(ms_count[15: 8]);
+	24'hFFFFE7:	load_tsk(ms_count[ 7: 0]);
+	default:
 	if (~ack_i) begin
 		lock_o <= lock_bus;
 		wb_read(radr);

@@ -51,17 +51,15 @@ begin
 	ipacket_o <= ipacket_i;
 	// Age only valid packets packet
 //	if ((packet_i.sid|packet_i.did) != 6'd0)
-//		packet_o.age <= packet_i.age + 2'd1;
+	// An age of zero makes the packet immortal.
+	if (packet_i.age != 6'd0)
+		packet_o.age <= packet_i.age + 2'd1;
 //	ipacket_o.age <= ipacket_i.age + 2'd1;
 	// If the packet is too old, flag as available.
-	if (packet_i.age == 6'd7) begin
-		packet_o.did <= packet_i.sid;
-		packet_o.typ <= PT_RETRY;
-	end
-	else if (packet_i.age == 6'd14)
+	if (packet_i.age == 6'd63)
 		packet_o <= {$bits(Packet){1'b0}};
-	if (ipacket_i.age == 6'd7)
-		ipacket_o <= {$bits(IPacket){1'b0}};
+//	if (ipacket_i.age == 6'd7)
+//		ipacket_o <= {$bits(IPacket){1'b0}};
 end
 
 endmodule
