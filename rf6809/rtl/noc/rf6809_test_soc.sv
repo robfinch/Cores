@@ -242,7 +242,7 @@ wire [31:0] br1_adr32;
 wire [7:0] br1_cdato;
 wire br1_s2_ack;
 wire [7:0] br1_s2_cdato;
-wire [63:0] br1_dato;
+wire [7:0] br1_dato;
 wire [31:0] br1_dat32;
 wire [7:0] br1_dat8;
 reg [7:0] br1_dati = 8'd0;
@@ -276,6 +276,10 @@ wire [7:0] br3_dato;
 wire [31:0] br3_dat32;
 wire [7:0] br3_dat8;
 reg [7:0] br3_dati = 8'd0;
+
+reg cs_pic;
+wire pic_ack;
+wire [7:0] pic_dat;
 
 wire gpio_ack;
 wire [15:0] aud0, aud1, aud2, aud3;
@@ -376,6 +380,11 @@ wire [31:0] xb_adr;
 wire [127:0] xb_dato;
 wire [127:0] xb_dati;
 
+wire irq;
+wire firq;
+wire [7:0] cause;
+wire [5:0] iserver;
+
 // -----------------------------------------------------------------------------
 // Input debouncing
 // -----------------------------------------------------------------------------
@@ -469,7 +478,7 @@ OLED uoled1
 	.rst(rst),
 	.clk(clk100), //xclk_bufg
 	.adr_i(adr),
-	.dat_i(dati[7:0]),
+	.dat_i(dato[7:0]),
 	.SDIN(oled_sdin),
 	.SCLK(oled_sclk),
 	.DC(oled_dc),
@@ -509,8 +518,10 @@ always_comb
 				|| adr[31:16]==16'hFFFE;
 */
 reg cs_scr;
-always_comb cs_scr = adr[23:16]==8'b1111_1111;	// Scratchpad memory 8k
-// No need to check for the $FFD in the top 12 address bits as these are 
+always_comb cs_scr = adr[23:16]==8'hFF;	// Scratchpad memory 8k
+always_comb cs_pic = adr[23:8]==16'hE3F0;
+
+// No need to check for the $E in the top 4 address bits as these are 
 // detected in the I/O bridges.
 reg cs_tc1;
 always_comb cs_tc1 = br1_adr[23:16]==8'hE0;	// E0xxxx Text Controller 64k
@@ -521,48 +532,50 @@ always_comb cs_bmp = br1_adr[23:16]==8'hE2;	//          Bitmap Controller
 //wire cs_bmp = 1'b0;
 //wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_avic = 1'b0;									// defunct: audio / video controller
-reg cs_gfx00;
-always_comb cs_gfx00 = br1_adr[23:12]==12'h8C0;		// orsoc graphics accelerator
-reg cs_rnd;
-always_comb cs_rnd = br2_adr[23:16]==8'h94;		// PRNG random number generator
+reg cs_gfx00 = 1'b0;
+//always_comb cs_gfx00 = br1_adr[23:12]==12'h8C0;		// orsoc graphics accelerator
+reg cs_rnd = 1'b0;
+//always_comb cs_rnd = br2_adr[23:16]==8'h94;		// PRNG random number generator
 reg cs_led;
-always_comb cs_led = br2_cyc && br2_stb && (br2_adr[23:16]==8'h91);	// LEDS,buttons,switches
+always_comb cs_led = br2_cyc && br2_stb && (br2_adr[23:8]==16'hE600);	// LEDS,buttons,switches
 reg cs_kbd;
-always_comb cs_kbd  = br2_adr[23:16]==8'h8E;		// keyboard controller
-reg cs_aud;
-always_comb cs_aud  = br2_adr[23:16]==8'h85;		// audio controller
-reg cs_1761;
-always_comb cs_1761 = br2_adr[23:12]==12'h854;		// AC97 controller
-reg cs_cmdc;
-always_comb cs_cmdc = br2_adr[23:16]==8'h9B;
-reg cs_grid;
-always_comb cs_grid = br2_adr[23:16]==8'h9C;		// graphics grid computer
-reg cs_imem;
+always_comb cs_kbd  = br2_adr[23:8]==16'hE304;		// keyboard controller
+reg cs_aud=1'b0;
+//always_comb cs_aud  = br2_adr[23:16]==8'h85;		// audio controller
+reg cs_1761 = 1'b0;
+//always_comb cs_1761 = br2_adr[23:12]==12'h854;		// AC97 controller
+reg cs_cmdc = 1'b0;
+//always_comb cs_cmdc = br2_adr[23:16]==8'h9B;
+reg cs_grid = 1'b0;
+//always_comb cs_grid = br2_adr[23:16]==8'h9C;		// graphics grid computer
+reg cs_imem = 1'b0;
+/*
 always_comb cs_imem = br2_adr[23:12]==12'h9C8 		// instruction memory for grid computer
 						|| br2_adr[23:12]==12'h9C9
 						|| br2_adr[23:12]==12'h9CA
 						|| br2_adr[23:12]==12'h9CB
 						;
-reg cs_sema;						
-always_comb cs_sema = br3_adr[23:16]==8'hFE;     // 256 counting semaphores
-reg cs_rtc;
-always_comb cs_rtc = br3_adr[23:16]==8'h90;		// real-time clock chip
-reg cs_spi;
-always_comb cs_spi = br3_adr[23:16]==8'h9D;			// spi controller
-reg cs_sdc;
-always_comb cs_sdc = br3_adr[23:16]==8'h9E;			// sdc controller
-reg cs_pti;
-always_comb cs_pti = br3_adr[23:16]==8'h97;			// parallel transfer interface
+*/
+reg cs_sema;					// EF0000 to EF1FFF
+always_comb cs_sema = br3_adr[23:13]==11'b1110_1111_000;     // 256 counting semaphores
+reg cs_rtc = 1'b0;
+//always_comb cs_rtc = br3_adr[23:16]==8'h90;		// real-time clock chip
+reg cs_spi = 1'b0;
+//always_comb cs_spi = br3_adr[23:16]==8'h9D;			// spi controller
+reg cs_sdc = 1'b0;
+//always_comb cs_sdc = br3_adr[23:16]==8'h9E;			// sdc controller
+reg cs_pti = 1'b0;
+//always_comb cs_pti = br3_adr[23:16]==8'h97;			// parallel transfer interface
 reg cs_uart;
-always_comb cs_uart = br3_adr[23:16]==8'h93;
+always_comb cs_uart = br3_adr[23:8]==16'hE301;
 
 //always_comb cs_gfx00 = gbr1_adr[31:12]==20'hFFDD8 && gbr1_cyc && gbr1_stb;
-reg cs_gfx01;
-always_comb cs_gfx01 = gbr1_adr[23:12]==12'h8C4 && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
-reg cs_gfx10;
-always_comb cs_gfx10 = gbr1_adr[23:12]==12'h8C8 && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
-reg cs_gfx11;
-always_comb cs_gfx11 = gbr1_adr[23:12]==12'h8CC && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
+reg cs_gfx01 = 1'b0;
+//always_comb cs_gfx01 = gbr1_adr[23:12]==12'h8C4 && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
+reg cs_gfx10 = 1'b0;
+//always_comb cs_gfx10 = gbr1_adr[23:12]==12'h8C8 && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
+reg cs_gfx11 = 1'b0;
+//always_comb cs_gfx11 = gbr1_adr[23:12]==12'h8CC && gbr1_cyc && gbr1_stb;	// orsoc graphics accelerator
 
 reg cs_bridge1, cs_bridge2, cs_bridge3;
 always_comb cs_bridge1 = (cs_gfx00 | cs_avic | cs_tc1 | cs_spr | cs_bmp) & (br1_cyc & br1_stb);
@@ -817,25 +830,32 @@ assign avic_ack = 1'b0;
 
 wire ack_led = cs_led;
 always_ff @(posedge cpu_clk)
-begin
+if (rst)
+	led[7:0] <= 8'h00;
+else begin
 //led[0] <= cs_br;
 //led[1] <= cs_scr;
 //led[2] <= rst;
 //led[7:4] <= adr[6:3];
 if (cs_led & br2_we)
-  led[7:0] <= br2_dato[7:0];
+  led[7:0] <= br2_dato;
 end
-reg [31:0] led_dato;
-always_comb led_dato <= {11'h0,btnc,btnu,btnd,btnl,btnr,8'h00,sw};
+reg [7:0] led_dato;
+always_comb
+case(br2_adr[1:0])
+2'd0:	led_dato <= sw;
+2'd1:	led_dato <= {3'd0,btnc,btnu,btnd,btnl,btnr};
+default:	;
+endcase
 
 reg ack1 = 1'b0;
 always_ff @(posedge cpu_clk)
-	ack1 <= ack_scr|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xb_ack;
+	ack1 <= ack_scr|pic_ack|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xb_ack;
 //assign ack = ack_br;
-wire cs_any = cs_br|cs_scr|cs_dram|ack_bridge1|ack_bridge2|ack_bridge3;
+wire cs_any = cs_br|cs_scr|cs_pic|cs_dram|ack_bridge1|ack_bridge2|ack_bridge3;
 always_ff @(posedge cpu_clk)
 	if (cs_any)
-		dati <= br_dato|scr_dato|br1_cdato|br2_cdato|dram_dato|br3_cdato;
+		dati <= br_dato|scr_dato|pic_dat|br1_cdato|br2_cdato|dram_dato|br3_cdato;
 	else
 		dati <= dati;
 /*
@@ -969,8 +989,8 @@ random	uprg1
 	.stb_i(br2_stb),
 	.ack_o(rnd_ack),
 	.we_i(br2_we),
-	.adr_i(br2_adr32[3:0]),
-	.dat_i(br2_dat32),
+	.adr_i(br2_adr[3:0]),
+	.dat_i(br2_dato),
 	.dat_o(rnd_dato)
 );
 `else
@@ -1333,8 +1353,8 @@ semamem usema1
   .stb_i(br3_stb),
   .ack_o(sema_ack),
   .we_i(br3_we),
-  .adr_i(br3_adr[10:0]),
-  .dat_i(br3_dato8),
+  .adr_i(br3_adr[12:0]),
+  .dat_i(br3_dato),
   .dat_o(sema_dato)
 );
 
@@ -1342,14 +1362,14 @@ scratchmem uscr1
 (
   .rst_i(rst),
   .clk_i(cpu_clk),
-  .cti_i(cti),
+  .cti_i(3'b000),
   .bok_o(scr_bok),
   .cs_i(cs_scr),
   .cyc_i(cyc),
   .stb_i(stb),
   .ack_o(ack_scr),
   .we_i(we),
-  .adr_i(adr[12:0]),
+  .adr_i(adr[13:0]),
   .dat_i(dato),
   .dat_o(scr_dato)
 `ifdef SIM
@@ -1566,9 +1586,41 @@ xbusBridge uxbb1
 );
 */
 
-Packet packet_i, packet_o;
+rf6809 ucpu1
+(
+	.id({id,1'b0}),
+	.rst_i(rst),
+	.clk_i(clk40),
+	.halt_i(1'b0),
+	.nmi_i(1'b0),
+	.irq_i(irq),
+	.firq_i(firq),
+	.vec_i(24'h0),
+	.ba_o(),
+	.bs_o(),
+	.lic_o(),
+	.tsc_i(1'b0),
+	.rty_i(1'b0),
+	.bte_o(),
+	.cti_o(),
+	.bl_o(),
+	.lock_o(),
+	.cyc_o(cyc),
+	.stb_o(stb),
+	.we_o(we),
+	.ack_i(ack1),
+	.adr_o(adr),
+	.dat_i(dati),
+	.dat_o(dato),
+	.state()
+);
 
-node_ring(rst, clk40, packet_i, packet_o);
+Packet packet_i, packet_o;
+IPacket ipacket_i, ipacket_o;
+wire [3:0] irqo;
+
+/*
+node_ring unr1 (rst, clk40, packet_i, packet_o, ipacket_i, ipacket_o);
 
 nic unic1
 (
@@ -1578,6 +1630,7 @@ nic unic1
 	.s_cyc_i(1'b0),
 	.s_stb_i(1'b0),
 	.s_ack_o(),
+	.s_rty_o(),
 	.s_we_i(1'b0),
 	.s_adr_i(24'h0),
 	.s_dat_i(8'h00),
@@ -1590,7 +1643,76 @@ nic unic1
 	.m_dat_o(dato),
 	.m_dat_i(dati),
 	.packet_i(packet_o),
-	.packet_o(packet_i)
+	.packet_o(packet_i),
+	.ipacket_i(ipacket_o),
+	.ipacket_o(ipacket_i),
+	.irq_i(irq),
+	.firq_i(firq),
+	.cause_i(cause),
+	.iserver_i(iserver),
+	.irq_o(),
+	.firq_o(),
+	.cause_o()
+);
+*/
+
+rf6809_pic upic1
+(
+	.rst_i(rst),		// reset
+	.clk_i(clk40),		// system clock
+	.cs_i(cs_pic),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(pic_ack),       // controller is ready
+	.wr_i(we),			// write
+	.adr_i(adr[7:0]),	// address
+	.dat_i(dato),
+	.dat_o(pic_dat),
+	.vol_o(),		// volatile register selected
+	.i1(1'b0),
+	.i2(1'b0),
+	.i3(1'b0),
+	.i4(1'b0),
+	.i5(1'b0),
+	.i6(1'b0),
+	.i7(1'b0),
+	.i8(1'b0),
+	.i9(1'b0),
+	.i10(1'b0),
+	.i11(1'b0),
+	.i12(1'b0),
+	.i13(1'b0),
+	.i14(1'b0),
+	.i15(1'b0),
+	.i16(1'b0),
+	.i17(1'b0),
+	.i18(1'b0),
+	.i19(1'b0),
+	.i20(1'b0),
+	.i21(1'b0),
+	.i22(1'b0),
+	.i23(1'b0),
+	.i24(1'b0),
+	.i25(1'b0),
+	.i26(1'b0),
+	.i27(1'b0),
+	.i28(1'b0),
+	.i29(1'b0),
+	.i30(1'b0),
+	.i31(1'b0),
+	.irqo(irqo),	// normally connected to the processor irq
+	.nmii(1'b0),		// nmi input connected to nmi requester
+	.nmio(),	// normally connected to the nmi of cpu
+	.causeo(cause),
+	.server_o(iserver)
+);
+assign irq = irqo[0];
+assign firq = irqo[1];
+
+ila_0 uila1 (
+	.clk(clk40), // input wire clk
+//	.probe0(packet_o) // input wire [63:0]  probe0  
+	.probe0({cyc,stb,ack1,we,ucpu1.pc,adr,dati}) // input wire [63:0]  probe0  
 );
 
 /*
@@ -1648,9 +1770,8 @@ uart6551 uuart1
 	.stb_i(br3_stb),
 	.ack_o(uart_ack),
 	.we_i(br3_we),
-	.sel_i(br3_sel32),
-	.adr_i(br3_adr[3:2]),
-	.dat_i(br3_dat32),
+	.adr_i(br3_adr[3:0]),
+	.dat_i(br3_dat),
 	.dat_o(uart_dato),
 	.cts_ni(1'b0),
 	.rts_no(),

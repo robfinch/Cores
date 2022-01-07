@@ -39,15 +39,17 @@
 import nic_pkg::*;
 
 module nic(id, rst_i, clk_i,
-	s_cyc_i, s_stb_i, s_ack_o, s_we_i, s_adr_i, s_dat_i, s_dat_o,
+	s_cyc_i, s_stb_i, s_ack_o, s_rty_o, s_we_i, s_adr_i, s_dat_i, s_dat_o,
 	m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_adr_o, m_dat_o, m_dat_i,
-	packet_i, packet_o);
+	packet_i, packet_o, ipacket_i, ipacket_o,
+	irq_i, firq_i, cause_i, iserver_i, irq_o, firq_o, cause_o);
 input [5:0] id;
 input rst_i;
 input clk_i;
 input s_cyc_i;
 input s_stb_i;
 output reg s_ack_o;
+output reg s_rty_o;
 input s_we_i;
 input [23:0] s_adr_i;
 input [7:0] s_dat_i;
@@ -62,6 +64,16 @@ input [7:0] m_dat_i;
 input Packet packet_i;
 output Packet packet_o;
 
+input IPacket ipacket_i;
+output IPacket ipacket_o;
+input irq_i;
+input firq_i;
+input [7:0] cause_i;
+input [5:0] iserver_i;
+output reg irq_o;
+output reg firq_o;
+output reg [7:0] cause_o;
+
 reg [5:0] state;
 parameter ST_IDLE = 6'd0;
 parameter ST_READ = 6'd1;
@@ -73,19 +85,52 @@ parameter ST_WRITE_ACK = 6'd6;
 parameter ST_XMIT = 6'd7;
 
 Packet packet_rx, packet_tx;
+reg rcv;
+reg [5:0] xmit;
+reg wait_ack;
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	s_ack_o <= FALSE;
 	s_dat_o <= 8'h00;
+	packet_o <= {$bits(Packet){1'b0}};
+	ipacket_o <= {$bits(IPacket){1'b0}};
+	packet_rx <= {$bits(Packet){1'b0}};
+	packet_tx <= {$bits(Packet){1'b0}};
+	rcv <= 1'b0;
+	xmit <= 6'd0;
+	wait_ack <= 1'b0;
+	m_cyc_o <= 1'b0;
+	m_stb_o <= 1'b0;
+	m_we_o <= 1'b0;
+	m_adr_o <= 24'h0;
+	m_dat_o <= 8'h00;
 end
 else begin
 	// Transfer the packet around the ring on every clock cycle.
 	packet_o <= packet_i;
+	ipacket_o <= ipacket_i;
 	
 	// Look for slave cycle termination.
-	if (~(s_cyc_i & s_stb_i))
+	if (~(s_cyc_i & s_stb_i)) begin
 		s_ack_o <= FALSE;
+		s_rty_o <= FALSE;
+	end
+
+	if (firq_i|irq_i) begin
+		ipacket_o.sid = id;
+		ipacket_o.did <= iserver_i;
+		ipacket_o.age <= 6'd0;
+		ipacket_o.firq <= firq_i;
+		ipacket_o.irq <= irq_i;
+		ipacket_o.cause <= cause_i;
+	end
+	if (ipacket_i.did==id || ipacket_i.did==6'd63) begin
+		ipacket_o <= {$bits(IPacket){1'b0}};
+		irq_o <= ipacket_i.irq;
+		firq_o <= ipacket_i.firq;
+		cause_o <= ipacket_i.cause;
+	end
 
 	case(state)
 	ST_IDLE:
@@ -93,33 +138,13 @@ else begin
 			// Was this packet for us?
 			if (packet_i.did==id || packet_i.did==6'd63) begin
 				packet_rx <= packet_i;
-				case (packet_i.typ)
-				PT_ACK:
-					begin
-						state <= ST_ACK;
-						packet_o.did <= 6'd0;
-						packet_o.sid <= 6'd0;
-						packet_o.age <= 6'd0;
-						packet_o.typ <= PT_NULL;
-						// If we got an ACK packet the slot can be used for a read/write.
-						tPrepReadWrite();
-					end
-				PT_READ:
-					begin
-						state <= ST_READ;
-						packet_o.did <= 6'd0;
-						packet_o.sid <= 6'd0;
-						packet_o.age <= 6'd0;
-						packet_o.typ <= PT_NULL;
-					end
-				PT_WRITE:
-					begin
-						state <= ST_WRITE;
-						packet_o.did <= 6'd0;
-						packet_o.sid <= 6'd0;
-						packet_o.age <= 6'd0;
-						packet_o.typ <= PT_NULL;
-					end
+				// Remove packet
+				packet_o <= {$bits(Packet){1'b0}};
+				xmit <= 6'd0;
+				case (packet_rx.typ)
+				PT_ACK:		state <= ST_ACK;
+				PT_READ:	state <= ST_READ;
+				PT_WRITE:	state <= ST_WRITE;
 				default:	;
 				endcase
 			end
@@ -141,11 +166,13 @@ else begin
 			m_cyc_o <= FALSE;
 			m_stb_o <= FALSE;
 			m_we_o <= FALSE;
+			packet_tx <= {$bits(Packet){1'b0}};
 			packet_tx.sid <= id;
 			packet_tx.did <= packet_rx.sid;
 			packet_tx.age <= 6'd0;
 			packet_tx.typ <= PT_ACK;
 			packet_tx.ack <= TRUE;
+			packet_tx.adr <= m_adr_o;
 			packet_tx.dat <= m_dat_i;
 			state <= ST_XMIT;
 		end
@@ -170,9 +197,17 @@ else begin
 
 	// Wait	for an opening then transmit the packet.
 	ST_XMIT:
-		begin
-			if ((packet_i.sid|packet_i.did)==6'd0)
-				packet_o <= packet_tx;
+		if ((packet_i.sid|packet_i.did)==6'd0) begin
+			packet_o <= packet_tx;
+			packet_o.sid <= packet_tx.sid;
+			packet_o.did <= packet_tx.did;
+			packet_o.age <= 6'd0;
+			packet_o.typ <= packet_tx.typ;
+			packet_o.ack <= packet_tx.ack;
+			packet_o.we  <= packet_tx.we;
+			packet_o.adr <= packet_tx.adr;
+			packet_o.dat <= packet_tx.dat;
+			packet_tx <= {$bits(Packet){1'b0}};
 			state <= ST_IDLE;
 		end
 
@@ -180,9 +215,15 @@ else begin
 		begin
 			// If there is an active read cycle
 			if (s_cyc_i & s_stb_i & ~s_we_i) begin
-				s_dat_o <= packet_rx.dat;
-				s_ack_o <= TRUE;
-				state <= ST_ACK_ACK;
+				if (s_adr_i == packet_rx.adr) begin
+					s_dat_o <= packet_rx.dat;
+					s_ack_o <= TRUE;
+					state <= ST_ACK_ACK;
+				end
+				else begin
+					s_rty_o <= TRUE;
+					state <= ST_IDLE;
+				end
 			end
 			else
 				state <= ST_IDLE;
@@ -198,11 +239,18 @@ else begin
 	default:
 		state <= ST_IDLE;
 	endcase
+
 end
 
 task tPrepReadWrite;
 begin
-	if (s_cyc_i & s_stb_i & s_adr_i[23] & ~s_ack_o) begin
+	if (s_cyc_i && s_stb_i && s_adr_i[23] && s_we_i) begin
+		if (xmit != 6'd0)
+			xmit <= xmit - 2'd1;
+	end
+	if ((s_cyc_i && s_stb_i && s_adr_i[23] && xmit==6'd0)/* &&
+		!(packet_i.did==id || packet_i.did==6'd63)*/) begin
+		xmit <= 6'd5;
 		packet_tx.sid <= id;
 		packet_tx.age <= 6'd0;
 		packet_tx.ack <= 1'b0;
@@ -212,7 +260,7 @@ begin
 		packet_tx.pad1 <= 4'h0;
 		packet_tx.adr <= s_adr_i;
 		packet_tx.dat <= s_dat_i;
-		s_ack_o <= TRUE;
+		s_ack_o <= s_we_i;
 		state <= ST_XMIT;
 		// Read global ROM?
 		if (!s_we_i && s_adr_i[23:20]==4'hF) begin
@@ -221,7 +269,7 @@ begin
 		else if (s_adr_i[23:20]==4'hE)
 			packet_tx.did <= 6'd62;
 		// Global broadcast
-		else if (s_adr_i[23:12]==12'hDFF)
+		else if (s_adr_i[23:16]==8'hDF)
 			packet_tx.did <= 6'd63;
 		else if (s_adr_i[23:20]==4'hC)
 			packet_tx.did <= s_adr_i[19:15]+2'd1;

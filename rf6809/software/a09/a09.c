@@ -3057,7 +3057,7 @@ switch (toupper(c))
       if (opsize == 0)
         {
 		if ((unsigned)operand >= 65536)
-			opsize = 5;
+			opsize = 4;
 		else
         if (unknown || !certain || dpsetting == -1 ||
           (unsigned)(operand - dpsetting * 256) >= 256)
@@ -3079,8 +3079,8 @@ switch (toupper(c))
 		  switch(opsize) {
 		case 2: mode = ADRMODE_DIR; break;
 		case 3: mode = ADRMODE_EXT; break;
-		case 4:
-		case 5: mode = ADRMODE_EXT; isFar = 1; break;
+//		case 4:
+		case 4: mode = ADRMODE_EXT; isFar = 1; break;
 		default: mode = opsize - 1;
 		  }
 	  }
@@ -3246,20 +3246,20 @@ else                                    /* if writing Absolute data,         */
 
 if (wcommon)                            /* if writing common data            */
   {                                     /* write size of data                */
-  fputc((unsigned char)((commonsym->value >> 24) & 0xff), objfile);
+//  fputc((unsigned char)((commonsym->value >> 24) & 0xff), objfile);
   fputc((unsigned char)((commonsym->value >> 16) & 0xff), objfile);
   fputc((unsigned char)((commonsym->value >> 8) & 0xff), objfile);
   fputc((unsigned char)(commonsym->value & 0xFF), objfile);
   }
 else                                    /* otherwise                         */
   {                                     /* write size of binary data         */
-  fputc((unsigned char)((loccounter >> 24) & 0xff), objfile);
+//  fputc((unsigned char)((loccounter >> 24) & 0xff), objfile);
   fputc((unsigned char)((loccounter >> 16) & 0xff), objfile);
   fputc((unsigned char)((loccounter >> 8) & 0xff), objfile);
   fputc((unsigned char)(loccounter & 0xFF), objfile);
   }
 
-fputc(0, objfile);                      /* unknown data                      */
+//fputc(0, objfile);                      /* unknown data                      */
 fputc(0, objfile);
 fputc(0, objfile);
 fputc(0, objfile);
@@ -3287,14 +3287,14 @@ else
 if (wcommon ||                          /* if writing common data            */
     (!tfradrset))                       /* or no transfer address given      */
   {                                     /* start address is empty            */
-  fputc(0, objfile);
+//  fputc(0, objfile);
   fputc(0, objfile);
   fputc(0, objfile);
   fputc(0, objfile);
   }
 else                                    /* write transfer address            */
   {
-  fputc((unsigned char)((tfradr >> 24) & 0xff), objfile);
+//  fputc((unsigned char)((tfradr >> 24) & 0xff), objfile);
   fputc((unsigned char)((tfradr >> 16) & 0xff), objfile);
   fputc((unsigned char)((tfradr >> 8) & 0xff), objfile);
   fputc((unsigned char)(tfradr & 0xFF), objfile);
@@ -3376,7 +3376,7 @@ for (i = 0; i < symcounter; i++)
 		fputc(2, objfile);                  /* unknown data                      */
 	else
 		fputc(1, objfile);                  /* unknown data                      */
-    fputc((unsigned char)(symtable[i].value >> 24), objfile);
+//    fputc((unsigned char)(symtable[i].value >> 24), objfile);
     fputc((unsigned char)(symtable[i].value >> 16), objfile);
     fputc((unsigned char)(symtable[i].value >> 8), objfile);
     fputc((unsigned char)(symtable[i].value & 0xFF), objfile);
@@ -3411,7 +3411,7 @@ unsigned char flags;
 
 for (i = 0; i < relcounter; i++)        /* write out the external data       */
   {
-  fputc((unsigned char)(reltable[i].addr >> 24), objfile);
+//  fputc((unsigned char)(reltable[i].addr >> 24), objfile);
   fputc((unsigned char)(reltable[i].addr >> 16), objfile);
   fputc((unsigned char)(reltable[i].addr >> 8), objfile);
   fputc((unsigned char)(reltable[i].addr & 0xFF), objfile);
@@ -3451,7 +3451,7 @@ for (i = 0; i < symcounter; i++)        /* write out the global data         */
 
     fputc(0, objfile);                  /* unknown data                      */
 
-    fputc((unsigned char)(symtable[i].value >> 24), objfile);
+//    fputc((unsigned char)(symtable[i].value >> 24), objfile);
     fputc((unsigned char)(symtable[i].value >> 16), objfile);
     fputc((unsigned char)(symtable[i].value >> 8), objfile);
     fputc((unsigned char)(symtable[i].value & 0xFF), objfile);
@@ -3499,19 +3499,13 @@ void flushver()
 {
 int i;
 int chk;
-int wd;
-int par;
 
 if (hexcount)
  {
   if (objfile)
     {
-	wd = (hexbuffer[3] << 24) +
-		 (hexbuffer[2] << 16) +
-		 (hexbuffer[1] << 8) +
-		 hexbuffer[0]
-		 ;
-    fprintf(objfile, "mem[%4d] <= 33'h%d%08X;\r\n", (hexaddr & 0x3fff) / 4, calcParity(wd), wd);
+		 for (i = 0; i < hexcount; i++)
+    	fprintf(objfile, "rommem[%4d] <= 8'h%02X;\r\n", (hexaddr+i) & 0x3fff, hexbuffer[i]);
   hexaddr += hexcount;
   hexcount = 0;
   chksum = 0;
@@ -4056,7 +4050,7 @@ switch (mode)
         addrelocation = 1;
 		break;
       case 4:
-        putword((unsigned short)(operand>>16)); 
+        putbyte((unsigned short)(operand>>16)); 
         putword((unsigned short)operand); 
         addrelocation = 1;
 		break;

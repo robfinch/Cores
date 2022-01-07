@@ -1,13 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2003-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	nic_ager.sv
-//
-//
+//		
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -33,35 +31,35 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                          
+//
 // ============================================================================
+//
+module uart6551Fifo(clk, rst, wr, rd, din, dout, ctr, full, empty);
+parameter WID=8;
+parameter DEP=16;
+localparam pCtrBits = $clog2(DEP)-1;
+input clk;
+input rst;
+input wr;
+input rd;
+input [WID-1:0] din;
+output [WID-1:0] dout;
+output [pCtrBits:0] ctr;
+reg [pCtrBits:0] ctr;
+output full;
+output empty;
 
-import nic_pkg::*;
+assign full = ctr=={pCtrBits{1'b1}}-1;
+assign empty = ctr=={pCtrBits{1'b1}};
+wire rdok = rd & ~empty;
+wire wrok = wr & ~full;
 
-module nic_ager(clk_i, packet_i, packet_o, ipacket_i, ipacket_o);
-input clk_i;
-input Packet packet_i;
-output Packet packet_o;
-input IPacket ipacket_i;
-output IPacket ipacket_o;
+vtdl #(WID,DEP) u1 (.clk(clk), .ce(1'b1), .a(ctr), .d(din), .q(dout));
 
-always_ff @(posedge clk_i)
-begin
-	packet_o <= packet_i;
-	ipacket_o <= ipacket_i;
-	// Age only valid packets packet
-//	if ((packet_i.sid|packet_i.did) != 6'd0)
-//		packet_o.age <= packet_i.age + 2'd1;
-//	ipacket_o.age <= ipacket_i.age + 2'd1;
-	// If the packet is too old, flag as available.
-	if (packet_i.age == 6'd7) begin
-		packet_o.did <= packet_i.sid;
-		packet_o.typ <= PT_RETRY;
-	end
-	else if (packet_i.age == 6'd14)
-		packet_o <= {$bits(Packet){1'b0}};
-	if (ipacket_i.age == 6'd7)
-		ipacket_o <= {$bits(IPacket){1'b0}};
-end
+always_ff @(posedge clk)
+if (rst)
+	ctr <= {pCtrBits{1'b1}};
+else
+	ctr <= ctr + {rdok&~wrok,rdok&~wrok,rdok&~wrok,rdok^wrok};
 
 endmodule

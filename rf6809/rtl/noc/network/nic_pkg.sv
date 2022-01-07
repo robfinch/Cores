@@ -43,6 +43,7 @@ parameter PT_NULL = 6'd0;
 parameter PT_READ = 6'd1;
 parameter PT_WRITE = 6'd2;
 parameter PT_ACK = 6'd3;
+parameter PT_RETRY = 6'd4;
 
 typedef struct packed
 {
@@ -57,5 +58,15 @@ typedef struct packed
 	logic [23:0] adr;
 	logic [7:0] dat;
 } Packet;
+
+typedef struct packed
+{
+	logic [5:0] did;
+	logic [5:0] sid;
+	logic [5:0] age;
+	logic irq;
+	logic firq;
+	logic [7:0] cause;
+} IPacket;
 
 endpackage

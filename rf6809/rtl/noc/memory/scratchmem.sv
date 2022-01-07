@@ -44,28 +44,30 @@ input cyc_i;
 input stb_i;
 output ack_o;
 input we_i;
-input [12:0] adr_i;
+input [13:0] adr_i;
 input [7:0] dat_i;
 output reg [7:0] dat_o;
 input [23:0] sp;
 
 integer n;
 
-reg [7:0] rommem [8191:0];
-reg [12:0] radr;
+reg [7:0] rommem [16383:0];
+reg [13:0] radr;
 
 
 initial begin
-//`include "d:/cores2022/rf6809/software/boot/rom.ver";
+	for (n = 0; n < 16384; n = n + 1)
+		rommem[n] <= 8'h00;
+`include "d:/cores2022/rf6809/software/a09/a09/debug/boot_rom.ver";
 end
 
 wire cs = cs_i && cyc_i && stb_i;
 assign bok_o = cs_i;
-reg csd;
-reg wed;
-reg [12:0] adrd;
-reg [7:0] datid;
-reg [7:0] datod;
+reg csd = 1'b0;
+reg wed = 1'b0;
+reg [13:0] adrd = 14'h00;
+reg [7:0] datid = 8'h00;
+reg [7:0] datod = 8'h00;
 
 reg [2:0] cnt;
 /*
@@ -82,7 +84,7 @@ end
 assign ack_o = cs ? (we_i ? 1'b1 : rdy) : 1'b0;
 */
 ack_gen #(
-	.READ_STAGES(1),
+	.READ_STAGES(2),
 	.WRITE_STAGES(1),
 	.REGISTER_OUTPUT(1)
 ) ag1
@@ -124,7 +126,7 @@ generate begin : gRom
 for (g = 0; g < 1; g = g + 1)
 always @(posedge clk_i)
 	if (csd & wed)
-		rommem[adrd[12:0]][g*8+7:g*8] <= datid[g*8+7:g*8];
+		rommem[adrd[13:0]][g*8+7:g*8] <= datid[g*8+7:g*8];
 end
 endgenerate
 
@@ -133,14 +135,16 @@ edge_det u1(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee(
 
 reg [14:0] ctr;
 always @(posedge clk_i)
-if (rst_i)
+if (rst_i) begin
 	cnt <= 3'd0;
+	ctr <= 14'd0;
+end
 else begin
 	if (pe_cs) begin
 		if (cti_i==3'b000)
-			ctr <= adr_i[12:0];
+			ctr <= adr_i[13:0];
 		else
-			ctr <= adr_i[12:0] + 12'd1;
+			ctr <= adr_i[13:0] + 12'd1;
 		cnt <= 3'b000;
 	end
 	else if (cs && cnt[2:0]!=3'b100 && cti_i!=3'b000) begin
@@ -150,16 +154,18 @@ else begin
 end
 
 always @(posedge clk_i)
-	radr <= pe_cs ? adr_i[12:0] : ctr;
+	radr <= pe_cs ? adr_i[13:0] : ctr;
 
 //assign dat_o = cs ? {smemH[radr],smemG[radr],smemF[radr],smemE[radr],
 //				smemD[radr],smemC[radr],smemB[radr],smemA[radr]} : 64'd0;
-reg [11:0] spr;
+reg [13:0] spr;
 always @(posedge clk_i)
-	spr <= sp[12:0];
+	spr <= sp[13:0];
 
 always @(posedge clk_i)
-begin
+if (rst_i)
+	datod <= 8'h00;
+else begin
 	datod <= rommem[radr];
 	if (!we_i & cs)
 		$display("read from scratchmem: %h=%h", radr, rommem[radr]);
@@ -170,9 +176,14 @@ begin
 end
 
 always @(posedge clk_i)
-if (cs_i)
-	dat_o <= datod;
-else
-	dat_o <= 8'd0;
+if (rst_i)
+	dat_o <= 8'h00;
+else begin
+	if (cs_i)
+		dat_o <= datod;
+	else
+		dat_o <= 8'd0;
+end
 
 endmodule
+ 

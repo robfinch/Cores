@@ -1,27 +1,74 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2022  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	pnode.sv
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                                          
+// ============================================================================
 
 import nic_pkg::*;
 
-module pnode(id, rst_i, clk_i, packet_i, packet_o);
-input [3:0] id;
+module pnode(id, rst_i, clk_i, packet_i, packet_o, ipacket_i, ipacket_o);
+input [4:0] id;
 input rst_i;
 input clk_i;
 input Packet packet_i;
 output Packet packet_o;
+input IPacket ipacket_i;
+output IPacket ipacket_o;
 
 wire c1_cyc;
 wire c1_stb;
 wire c1_we;
 reg c1_ack;
+wire c1_rty;
 wire [23:0] c1_adr;
 wire [7:0] c1_dato;
 reg [7:0] c1_dati;
+wire c1_irq;
+wire c1_firq;
+wire [7:0] c1_cause;
 wire c2_cyc;
 wire c2_stb;
 wire c2_we;
 reg c2_ack;
+wire c2_rty;
 wire [23:0] c2_adr;
 wire [7:0] c2_dato;
 reg [7:0] c2_dati;
+wire c2_irq;
+wire c2_firq;
+wire [7:0] c2_cause;
 
 wire nic1_ack;
 wire [7:0] nic1_dato;
@@ -61,6 +108,7 @@ reg [7:0] m2_dati;
 wire [7:0] m2_dato;
 
 Packet packet_x;
+IPacket ipacket_x;
 
 nic unic1
 (
@@ -70,6 +118,7 @@ nic unic1
 	.s_cyc_i(c1_cyc),
 	.s_stb_i(c1_stb),
 	.s_ack_o(nic1_ack),
+	.s_rty_o(c1_rty),
 	.s_we_i(c1_we),
 	.s_adr_i(c1_adr),
 	.s_dat_i(c1_dato),
@@ -82,7 +131,16 @@ nic unic1
 	.m_dat_o(m1_dato),
 	.m_dat_i(m1_dati),
 	.packet_i(packet_i),
-	.packet_o(packet_x)
+	.packet_o(packet_x),
+	.ipacket_i(ipacket_i),
+	.ipacket_o(ipacket_x),
+	.irq_i(1'b0),
+	.firq_i(1'b0),
+	.cause_i(1'b0),
+	.iserver_i(6'd0),
+	.irq_o(c1_irq),
+	.firq_o(c1_firq),
+	.cause_o(c1_cause)
 );
 
 nic unic2
@@ -93,6 +151,7 @@ nic unic2
 	.s_cyc_i(c2_cyc),
 	.s_stb_i(c2_stb),
 	.s_ack_o(nic2_ack),
+	.s_rty_o(c2_rty),
 	.s_we_i(c2_we),
 	.s_adr_i(c2_adr),
 	.s_dat_i(c2_dato),
@@ -105,7 +164,16 @@ nic unic2
 	.m_dat_o(m2_dato),
 	.m_dat_i(m2_dati),
 	.packet_i(packet_x),
-	.packet_o(packet_o)
+	.packet_o(packet_o),
+	.ipacket_i(ipacket_x),
+	.ipacket_o(ipacket_o),
+	.irq_i(1'b0),
+	.firq_i(1'b0),
+	.cause_i(1'b0),
+	.iserver_i(6'd0),
+	.irq_o(c2_irq),
+	.firq_o(c2_firq),
+	.cause_o(c2_cause)
 );
 
 reg [5:0] state1, state2;
@@ -116,8 +184,12 @@ parameter ST_RD2 = 6'd3;
 parameter ST_RD3 = 6'd4;
 
 always_ff @(posedge clk_i)
-begin
-	r1_en <= FALSE;
+if (rst_i) begin
+	r1_ack <= 1'b0;
+	r1_cdat <= 8'h00;
+end
+else begin
+	r1_en <= TRUE;
 	r1_we <= FALSE;
 	case(state1)
 	ST_IDLE:
@@ -128,14 +200,6 @@ begin
 				r1_dati <= m1_dato;
 				r1_we <= m1_we;
 				if (m1_adr[23]) begin
-					if (m1_adr[23:20]==4'hC) begin
-						if (m1_adr[19:15]=={id-2'd1,1'b0}) begin
-							r1_en <= TRUE;
-						end
-					end
-					else if (m1_adr[23:17]==7'b1101111) begin
-						r1_en <= TRUE;
-					end
 					state1 <= ST_ACK;
 				end
 			end
@@ -143,11 +207,10 @@ begin
 				w1 <= 1'b1;
 				r1_adr <= c1_adr;
 				r1_dati <= c1_dato;
-				r1_we <= c1_we;
 				if (~c1_adr[23]) begin
-					r1_en <= TRUE;
+					state1 <= ST_ACK;
+					r1_we <= c1_we;
 				end
-				state1 <= ST_ACK;
 			end
 		end
 	ST_ACK:
@@ -202,8 +265,12 @@ begin
 end
 
 always_ff @(posedge clk_i)
-begin
-	r2_en <= FALSE;
+if (rst_i) begin
+	r2_ack <= 1'b0;
+	r2_cdat <= 8'h00;
+end
+else begin
+	r2_en <= TRUE;
 	r2_we <= FALSE;
 	case(state2)
 	ST_IDLE:
@@ -214,14 +281,6 @@ begin
 				r2_dati <= m2_dato;
 				r2_we <= m2_we;
 				if (m2_adr[23]) begin
-					if (m2_adr[23:20]==4'hC) begin
-						if (m2_adr[19:15]=={id-2'd1,1'b0}) begin
-							r2_en <= TRUE;
-						end
-					end
-					else if (m2_adr[23:17]==7'b1101111) begin
-						r2_en <= TRUE;
-					end
 					state2 <= ST_ACK;
 				end
 			end
@@ -229,11 +288,10 @@ begin
 				w2 <= 1'b1;
 				r2_adr <= c2_adr;
 				r2_dati <= c2_dato;
-				r2_we <= c2_we;
 				if (~c2_adr[23]) begin
-					r2_en <= TRUE;
+					state2 <= ST_ACK;
+					r2_we <= c2_we;
 				end
-				state2 <= ST_ACK;
 			end
 		end
 	ST_ACK:
@@ -310,12 +368,13 @@ assign c2_dati = r2_cdat|nic2_dato;
 
 rf6809 ucpu1
 (
+	.id({id,1'b0}),
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.halt_i(1'b0),
 	.nmi_i(1'b0),
-	.irq_i(1'b0),
-	.firq_i(1'b0),
+	.irq_i(c1_irq),
+	.firq_i(c1_firq),
 	.vec_i(24'h0),
 	.ba_o(),
 	.bs_o(),
@@ -338,12 +397,13 @@ rf6809 ucpu1
 
 rf6809 ucpu2
 (
+	.id({id,1'b1}),
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.halt_i(1'b0),
 	.nmi_i(1'b0),
-	.irq_i(1'b0),
-	.firq_i(1'b0),
+	.irq_i(c2_irq),
+	.firq_i(c2_firq),
 	.vec_i(24'h0),
 	.ba_o(),
 	.bs_o(),

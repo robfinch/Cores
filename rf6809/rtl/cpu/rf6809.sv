@@ -38,7 +38,7 @@
 
 import rf6809_pkg::*;
 
-module rf6809(rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, vec_i, ba_o, bs_o, lic_o, tsc_i,
+module rf6809(id, rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, vec_i, ba_o, bs_o, lic_o, tsc_i,
 	rty_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, we_o, ack_i, adr_o, dat_i, dat_o, state);
 parameter RESET = 6'd0;
 parameter IFETCH = 6'd1;
@@ -53,15 +53,17 @@ parameter STORE1 = 6'd9;
 parameter STORE2 = 6'd10;
 parameter OUTER_INDEXING = 6'd11;
 parameter OUTER_INDEXING2 = 6'd12;
-parameter ICACHE1 = 6'd32;
-parameter ICACHE2 = 6'd33;
-parameter ICACHE3 = 6'd34;
+parameter ICACHE1 = 6'd31;
+parameter ICACHE2 = 6'd32;
+parameter ICACHE3 = 6'd33;
+parameter ICACHE4 = 6'd34;
 parameter IBUF1 = 6'd35;
 parameter IBUF2 = 6'd36;
 parameter IBUF3 = 6'd37;
 parameter IBUF4 = 6'd38;
 parameter IBUF5 = 6'd39;
 parameter IBUF6 = 6'd40;
+input [5:0] id;
 input rst_i;
 input clk_i;
 input halt_i;
@@ -154,7 +156,7 @@ reg isLEA;
 reg isRMW;
 
 // Data input path multiplexing
-reg [7:0] dati;
+reg [BPB-1:0] dati;
 always_comb
 	dati = dat_i;
 
@@ -368,11 +370,11 @@ always_comb
 		8'b1xx00110:	insnsz <= 4'h2;
 		8'b1xx01000:	insnsz <= 4'h3;
 		8'b1xx01001:	insnsz <= 4'h4;
-		8'b1xx01010:	insnsz <= 4'h6;
+		8'b1xx01010:	insnsz <= 4'h5;
 		8'b1xx01011:	insnsz <= 4'h2;
 		8'b1xx01100:	insnsz <= 4'h3;
 		8'b1xx01101:	insnsz <= 4'h4;
-		8'b1xx01110:	insnsz <= 4'h6;
+		8'b1xx01110:	insnsz <= 4'h5;
 		8'b1xx01111:	insnsz <= isFar ? 4'h5 : 4'h4;
 		8'b1xx11111:	insnsz <= 4'h4;
 		default:	insnsz <= 4'h2;
@@ -389,11 +391,11 @@ always_comb
 		12'b1xxx00000110:	insnsz <= 4'h2;
 		12'b1xxx00001000:	insnsz <= 4'h3;
 		12'b1xxx00001001:	insnsz <= 4'h4;
-		12'b1xxx00001010:	insnsz <= 4'h6;
+		12'b1xxx00001010:	insnsz <= 4'h5;
 		12'b1xxx00001011:	insnsz <= 4'h2;
 		12'b1xxx00001100:	insnsz <= 4'h3;
 		12'b1xxx00001101:	insnsz <= 4'h4;
-		12'b1xxx00001110:	insnsz <= 4'h6;
+		12'b1xxx00001110:	insnsz <= 4'h5;
 		12'b1xx000001111:	insnsz <= isFar ? 4'h5 : 4'h4;
 		12'b1xx000011111:	insnsz <= 4'h4;
 		default:	insnsz <= 4'h2;
@@ -556,7 +558,7 @@ rf6809_itagmem u2
 	.wclk(clk_i),
 	.wce(1'b1),
 	.wr(ack_i && state==ICACHE2),
-	.wa(adr_o[`DBLBYTE]),
+	.wa(adr_o[`TRPBYTE]),
 	.invalidate(ic_invalidate),
 	.rclk(~clk_i),
 	.rce(1'b1),
@@ -577,9 +579,12 @@ always_ff @(posedge clk_i)
 	else if (state==DECODE && ir12==`INT)
 		nmi_edge <= 1'b0;
 
+reg [9:0] rst_cnt;
+
 always @(posedge clk_i)
 if (rst_i) begin
 	wb_nack();
+	rst_cnt <= {id,4'd0};
 	next_state(RESET);
 	sync_state <= `FALSE;
 	wait_state <= `FALSE;
@@ -597,6 +602,13 @@ if (rst_i) begin
 	nmi_armed <= `FALSE;
 	ic_invalidate <= `TRUE;
 	first_ifetch <= `TRUE;
+	acca <= 12'h0;
+	accb <= 12'h0;
+	accd <= 24'h0;
+	xr <= 24'h0;
+	yr <= 24'h0;
+	usp <= 24'h0;
+	ssp <= 24'h0;
 	if (halt_i) begin
 		ba_o <= 1'b1;
 		bs_o <= 1'b1;
@@ -614,7 +626,7 @@ if (lic_o && ack_i && (state==STORE2 || state==LOAD2))
 
 case(state)
 RESET:
-	begin
+	if (rst_cnt==10'd0) begin
 		ic_invalidate <= `FALSE;
 		ba_o <= 1'b0;
 		bs_o <= 1'b0;
@@ -623,6 +635,8 @@ RESET:
 		load_what <= `LW_PCH;
 		next_state(LOAD1);
 	end
+	else
+		rst_cnt <= rst_cnt - 2'd1;
 
 // ============================================================================
 // IFETCH
@@ -1972,7 +1986,7 @@ LOAD1:
 `ifdef SUPPORT_DCACHE
 	if (unCachedData)
 `endif
-	begin
+	if (~ack_i) begin
 		lock_o <= lock_bus;
 		wb_read(radr);
 		if (!tsc)
@@ -2051,7 +2065,7 @@ STORE2:
 	else if (ack_i) begin
 		wb_nack();
 		wdat <= dat_o;
-		wadr <= wadr + 32'd1;
+		wadr <= wadr + 2'd1;
 		next_state(IFETCH);
 		case(store_what)
 		`SW_CCR:
@@ -2138,7 +2152,7 @@ STORE2:
 				`BSR:		pc <= pc + {{24{ir[BPBX2M1]}},ir[`HIBYTE]};
 				`LBSR:	pc <= pc + {{12{ir[BPB*3-1]}},ir[`HIBYTE],ir[`BYTE3]};
 				`JSR_DP:	pc <= {dpr,ir[`HIBYTE]};
-				`JSR_EXT:	pc <= address;
+				`JSR_EXT:	pc <= {pc[`BYTE3],address[`DBLBYTE]};
 				`JSR_FAR:	
 					begin
 						pc <= far_address;
@@ -2378,7 +2392,7 @@ ICACHE1:
 	begin
 		if (hit0 & hit1)
 			next_state(IFETCH);
-		else if (!tsc) begin
+		else if (!tsc && !ack_i) begin
 			rhit0 <= hit0;
 			bte_o <= 2'b00;
 			cti_o <= 3'b001;
@@ -2386,7 +2400,7 @@ ICACHE1:
 			bl_o <= 6'd15;
 			stb_o <= 1'b1;
 			we_o <= 1'b0;
-			adr_o <= !hit0 ? {pc[bitsPerByte*2-1:4],4'b00} : {pcp16[bitsPerByte*2-1:4],4'b0000};
+			adr_o <= !hit0 ? {pc[bitsPerByte*3-1:4],4'b00} : {pcp16[bitsPerByte*3-1:4],4'b0000};
 			dat_o <= 12'd0;
 			next_state(ICACHE2);
 		end
@@ -2399,7 +2413,8 @@ ICACHE2:
 		next_state(ICACHE3);
 	end
 	else if (ack_i) begin
-		adr_o[3:0] <= adr_o[3:0] + 2'd1;
+		stb_o <= 1'b0;
+		next_state(ICACHE4);
 		if (adr_o[3:0]==4'b1110)
 			cti_o <= 3'b111;
 		if (adr_o[3:0]==4'b1111) begin
@@ -2407,6 +2422,15 @@ ICACHE2:
 			next_state(ICACHE1);
 		end
 	end
+ICACHE4:
+	begin
+		if (~ack_i) begin
+			adr_o[3:0] <= adr_o[3:0] + 2'd1;
+			stb_o <= 1'b1;
+			next_state(ICACHE2);
+		end
+	end
+
 // Restart a cache load aborted by the TSC signal. A registered version of the
 // hit signal must be used as the cache may be partially updated.
 ICACHE3:
@@ -2417,7 +2441,7 @@ ICACHE3:
 		bl_o <= 6'd15;
 		stb_o <= 1'b1;
 		we_o <= 1'b0;
-		adr_o <= !rhit0 ? {pc[bitsPerByte*2-1:4],4'b00} : {pcp16[bitsPerByte*2-1:4],4'b0000};
+		adr_o <= !rhit0 ? {pc[bitsPerByte*3-1:4],4'b00} : {pcp16[bitsPerByte*3-1:4],4'b0000};
 		dat_o <= 12'd0;
 		next_state(ICACHE2);
 	end
@@ -2552,7 +2576,7 @@ end
 endtask
 
 task wb_read;
-input [`DBLBYTE] adr;
+input [`TRPBYTE] adr;
 begin
 	if (!tsc) begin
 		cyc_o <= 1'b1;
@@ -2563,7 +2587,7 @@ end
 endtask
 
 task wb_write;
-input [`DBLBYTE] adr;
+input [`TRPBYTE] adr;
 input [`LOBYTE] dat;
 begin
 	if (!tsc) begin
@@ -2906,8 +2930,13 @@ input [11:0] pc;
 output [`HEXBYTE] insn;
 reg [`HEXBYTE] insn;
 
-reg [191:0] mem [0:255];
+integer n;
+reg [127:0] mem [0:255];
 reg [11:0] rpc,rpcp16;
+initial begin
+	for (n = 0; n < 256; n = n + 1)
+		mem[n] = {16{`NOP}};
+end
 
 genvar g;
 generate begin : gMem
@@ -2924,6 +2953,9 @@ always_ff @(posedge rclk)
 wire [191:0] insn0 = mem[rpc[11:4]];
 wire [191:0] insn1 = mem[rpcp16[11:4]];
 always_comb
+if (BPB==8)
+	insn = {insn1,insn0} >> {rpc[3:0],3'b0};
+else
 	insn = {insn1,insn0} >> ({rpc[3:0],3'b0} + {rpc[3:0],2'b0});
 
 endmodule
@@ -2940,10 +2972,15 @@ input [`TRPBYTE] pc;
 output hit0;
 output hit1;
 
+integer n;
 reg [BPB*3-1:12] mem [0:255];
-reg [0:255] tvalid;
+reg [0:255] tvalid = 256'd0;
 reg [`TRPBYTE] rpc,rpcp16;
 wire [BPB*3-1:11] tag0,tag1;
+initial begin
+	for (n = 0; n < 256; n = n + 1)
+		mem[n] = {BPB*2{1'b0}};
+end
 
 always_ff @(posedge wclk)
 	if (wce & wr) mem[wa[11:4]] <= wa[BPB*3-1:12];
