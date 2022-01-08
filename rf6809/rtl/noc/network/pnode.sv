@@ -36,6 +36,7 @@
 //                                                                          
 // ============================================================================
 
+import rf6809_pkg::*;
 import nic_pkg::*;
 
 module pnode(id, rst_i, clk_i, packet_i, packet_o, ipacket_i, ipacket_o);
@@ -52,28 +53,28 @@ wire c1_stb;
 wire c1_we;
 reg c1_ack;
 wire c1_rty;
-wire [23:0] c1_adr;
-wire [7:0] c1_dato;
-reg [7:0] c1_dati;
+wire [35:0] c1_adr;
+wire [`BYTE1] c1_dato;
+reg [`BYTE1] c1_dati;
 wire c1_irq;
 wire c1_firq;
-wire [7:0] c1_cause;
+wire [`BYTE1] c1_cause;
 wire c2_cyc;
 wire c2_stb;
 wire c2_we;
 reg c2_ack;
 wire c2_rty;
-wire [23:0] c2_adr;
-wire [7:0] c2_dato;
-reg [7:0] c2_dati;
+wire [35:0] c2_adr;
+wire [`BYTE1] c2_dato;
+reg [`BYTE1] c2_dati;
 wire c2_irq;
 wire c2_firq;
-wire [7:0] c2_cause;
+wire [`BYTE1] c2_cause;
 
 wire nic1_ack;
-wire [7:0] nic1_dato;
+wire [`BYTE1] nic1_dato;
 wire nic2_ack;
-wire [7:0] nic2_dato;
+wire [`BYTE1] nic2_dato;
 
 reg w1, w2;
 
@@ -81,31 +82,31 @@ reg r1_en;
 reg r1_we;
 reg r1_ack;
 reg [16:0] r1_adr;
-reg [7:0] r1_dati;
-wire [7:0] r1_dato;
-reg [7:0] r1_cdat;
+reg [`BYTE1] r1_dati;
+wire [`BYTE1] r1_dato;
+reg [`BYTE1] r1_cdat;
 reg r2_en;
 reg r2_we;
 reg r2_ack;
 reg [16:0] r2_adr;
-reg [7:0] r2_dati;
-wire [7:0] r2_dato;
-reg [7:0] r2_cdat;
+reg [`BYTE1] r2_dati;
+wire [`BYTE1] r2_dato;
+reg [`BYTE1] r2_cdat;
 
 wire m1_cyc;
 wire m1_stb;
 reg m1_ack;
 wire m1_we;
 wire [23:0] m1_adr;
-reg [7:0] m1_dati;
-wire [7:0] m1_dato;
+reg [`BYTE1] m1_dati;
+wire [`BYTE1] m1_dato;
 wire m2_cyc;
 wire m2_stb;
 reg m2_ack;
 wire m2_we;
 wire [23:0] m2_adr;
-reg [7:0] m2_dati;
-wire [7:0] m2_dato;
+reg [`BYTE1] m2_dati;
+wire [`BYTE1] m2_dato;
 
 Packet packet_x, packet_y;
 IPacket ipacket_x, ipacket_y;
@@ -198,7 +199,7 @@ parameter ST_RD3 = 6'd4;
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	r1_ack <= 1'b0;
-	r1_cdat <= 8'h00;
+	r1_cdat <= 12'h00;
 end
 else begin
 	r1_en <= TRUE;
@@ -219,7 +220,7 @@ else begin
 				w1 <= 1'b1;
 				r1_adr <= c1_adr;
 				r1_dati <= c1_dato;
-				if (~c1_adr[23]) begin
+				if (c1_adr[23:22]==2'b00) begin
 					state1 <= ST_ACK;
 					r1_we <= c1_we;
 				end
@@ -256,7 +257,7 @@ else begin
 				r1_cdat <= r1_dato;
 				r1_ack <= 1'b1;
 				if (~c1_cyc) begin
-					r1_cdat <= 8'h00;
+					r1_cdat <= 12'h00;
 					r1_ack <= 1'b0;
 					state1 <= ST_IDLE;
 				end
@@ -265,7 +266,7 @@ else begin
 				m1_dati <= r1_dato;
 				m1_ack <= 1'b1;
 				if (~m1_cyc) begin
-					m1_dati <= 8'h00;
+					m1_dati <= 12'h00;
 					m1_ack <= 1'b0;
 					state1 <= ST_IDLE;
 				end
@@ -279,7 +280,7 @@ end
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	r2_ack <= 1'b0;
-	r2_cdat <= 8'h00;
+	r2_cdat <= 12'h00;
 end
 else begin
 	r2_en <= TRUE;
@@ -300,7 +301,7 @@ else begin
 				w2 <= 1'b1;
 				r2_adr <= c2_adr;
 				r2_dati <= c2_dato;
-				if (~c2_adr[23]) begin
+				if (c2_adr[23:22]==2'b00) begin
 					state2 <= ST_ACK;
 					r2_we <= c2_we;
 				end
@@ -337,7 +338,7 @@ else begin
 				r2_cdat <= r2_dato;
 				r2_ack <= 1'b1;
 				if (~c2_cyc) begin
-					r2_cdat <= 8'h00;
+					r2_cdat <= 12'h00;
 					r2_ack <= 1'b0;
 					state2 <= ST_IDLE;
 				end
@@ -346,7 +347,7 @@ else begin
 				m2_dati <= r2_dato;
 				m2_ack <= 1'b1;
 				if (~m2_cyc) begin
-					m2_dati <= 8'h00;
+					m2_dati <= 12'h00;
 					m2_ack <= 1'b0;
 					state2 <= ST_IDLE;
 				end
@@ -387,7 +388,7 @@ rf6809 ucpu1
 	.nmi_i(1'b0),
 	.irq_i(c1_irq),
 	.firq_i(c1_firq),
-	.vec_i(24'h0),
+	.vec_i(36'h0),
 	.ba_o(),
 	.bs_o(),
 	.lic_o(),
@@ -416,7 +417,7 @@ rf6809 ucpu2
 	.nmi_i(1'b0),
 	.irq_i(c2_irq),
 	.firq_i(c2_firq),
-	.vec_i(24'h0),
+	.vec_i(36'h0),
 	.ba_o(),
 	.bs_o(),
 	.lic_o(),

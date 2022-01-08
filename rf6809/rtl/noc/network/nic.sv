@@ -36,6 +36,7 @@
 //                                                                          
 // ============================================================================
 
+import rf6809_pkg::*;
 import nic_pkg::*;
 
 module nic(id, rst_i, clk_i,
@@ -52,15 +53,15 @@ output reg s_ack_o;
 output reg s_rty_o;
 input s_we_i;
 input [23:0] s_adr_i;
-input [7:0] s_dat_i;
-output reg [7:0] s_dat_o;
+input [`BYTE1] s_dat_i;
+output reg [`BYTE1] s_dat_o;
 output reg m_cyc_o;
 output reg m_stb_o;
 input m_ack_i;
 output reg m_we_o;
 output reg [23:0] m_adr_o;
-output reg [7:0] m_dat_o;
-input [7:0] m_dat_i;
+output reg [`BYTE1] m_dat_o;
+input [`BYTE1] m_dat_i;
 input Packet packet_i;
 output Packet packet_o;
 
@@ -68,11 +69,11 @@ input IPacket ipacket_i;
 output IPacket ipacket_o;
 input irq_i;
 input firq_i;
-input [7:0] cause_i;
+input [`BYTE1] cause_i;
 input [5:0] iserver_i;
 output reg irq_o;
 output reg firq_o;
-output reg [7:0] cause_o;
+output reg [`BYTE1] cause_o;
 
 reg [5:0] state;
 parameter ST_IDLE = 6'd0;
@@ -104,7 +105,7 @@ reg wait_ack;
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	s_ack_o <= FALSE;
-	s_dat_o <= 8'h00;
+	s_dat_o <= 12'h00;
 	packet_o <= {$bits(Packet){1'b0}};
 	ipacket_o <= {$bits(IPacket){1'b0}};
 	packet_rx <= {$bits(Packet){1'b0}};
@@ -118,7 +119,7 @@ if (rst_i) begin
 	m_stb_o <= 1'b0;
 	m_we_o <= 1'b0;
 	m_adr_o <= 24'h0;
-	m_dat_o <= 8'h00;
+	m_dat_o <= 12'h00;
 	state <= ST_IDLE;
 end
 else begin
@@ -171,7 +172,7 @@ else begin
 						gbl_packets[n1+1] <= gbl_packets[n1];
 					gbl_packets[0] <= packet_i;
 					xmit <= 6'd0;
-					case (packet_rx.typ)
+					case (packet_i.typ)
 					//PT_ACK:		state <= ST_ACK;
 					//PT_READ:	state <= ST_READ;
 					PT_WRITE:	state <= ST_WRITE;
@@ -185,7 +186,7 @@ else begin
 		end
 
 	ST_READ:
-		begin
+		if (!m_ack_i) begin
 			m_cyc_o <= TRUE;
 			m_stb_o <= TRUE;
 			m_we_o <= FALSE;
@@ -280,7 +281,6 @@ begin
 		packet_tx.typ <= s_we_i ? PT_WRITE : PT_READ;
 		packet_tx.pad2 <= 2'b0;
 		packet_tx.we <= s_we_i;
-		packet_tx.pad1 <= 4'h0;
 		packet_tx.adr <= s_adr_i;
 		packet_tx.dat <= s_dat_i;
 		state <= ST_XMIT;

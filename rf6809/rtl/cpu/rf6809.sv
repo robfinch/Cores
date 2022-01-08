@@ -57,12 +57,13 @@ parameter ICACHE1 = 6'd31;
 parameter ICACHE2 = 6'd32;
 parameter ICACHE3 = 6'd33;
 parameter ICACHE4 = 6'd34;
-parameter IBUF1 = 6'd35;
-parameter IBUF2 = 6'd36;
-parameter IBUF3 = 6'd37;
-parameter IBUF4 = 6'd38;
-parameter IBUF5 = 6'd39;
-parameter IBUF6 = 6'd40;
+parameter ICACHE5 = 6'd35;
+parameter IBUF1 = 6'd36;
+parameter IBUF2 = 6'd37;
+parameter IBUF3 = 6'd38;
+parameter IBUF4 = 6'd39;
+parameter IBUF5 = 6'd40;
+parameter IBUF6 = 6'd42;
 input [5:0] id;
 input rst_i;
 input clk_i;
@@ -96,8 +97,8 @@ wire [`TRPBYTE] pcp2 = pc + 4'd2;
 wire [`TRPBYTE] pcp16 = pc + 5'd16;
 wire [`HEXBYTE] insn;
 wire icacheOn = 1'b1;
-reg [`TRPBYTE] ibufadr;
-reg [`HEXBYTE] ibuf;
+reg [`TRPBYTE] ibufadr, icwa;
+reg [191:0] ibuf;
 wire ibufhit = ibufadr==pc;
 reg natMd,firqMd;
 reg md32;
@@ -544,9 +545,9 @@ rf6809_icachemem u1
 (
 	.wclk(clk_i),
 	.wce(1'b1),
-	.wr(ack_i && state==ICACHE2),
-	.wa(adr_o[11:0]),
-	.i(dat_i),
+	.wr(state==ICACHE5),
+	.wa(icwa[11:0]),
+	.i(ibuf),
 	.rclk(~clk_i),
 	.rce(1'b1),
 	.pc(pc[11:0]),
@@ -557,8 +558,8 @@ rf6809_itagmem u2
 (
 	.wclk(clk_i),
 	.wce(1'b1),
-	.wr(ack_i && state==ICACHE2),
-	.wa(adr_o[`TRPBYTE]),
+	.wr(state==ICACHE5),
+	.wa(icwa[`TRPBYTE]),
 	.invalidate(ic_invalidate),
 	.rclk(~clk_i),
 	.rce(1'b1),
@@ -2019,6 +2020,7 @@ LOAD1:
 		state <= DCACHE1;
 	end
 `endif
+	endcase
 LOAD2:
 	// On a tri-state condition abort the bus cycle and retry the load.
 	if (tsc|rty_i) begin
@@ -2432,13 +2434,15 @@ ICACHE2:
 		next_state(ICACHE3);
 	end
 	else if (ack_i) begin
+		ibuf <= {dati[11:0],ibuf[191:12]};
 		stb_o <= 1'b0;
 		next_state(ICACHE4);
 		if (adr_o[3:0]==4'b1110)
 			cti_o <= 3'b111;
 		if (adr_o[3:0]==4'b1111) begin
+			icwa <= adr_o;
 			wb_nack();
-			next_state(ICACHE1);
+			next_state(ICACHE5);
 		end
 	end
 ICACHE4:
@@ -2449,6 +2453,8 @@ ICACHE4:
 			next_state(ICACHE2);
 		end
 	end
+ICACHE5:
+	next_state(ICACHE1);
 
 // Restart a cache load aborted by the TSC signal. A registered version of the
 // hit signal must be used as the cache may be partially updated.
@@ -2942,7 +2948,7 @@ input wclk;
 input wce;
 input wr;
 input [11:0] wa;
-input [`LOBYTE] i;
+input [BPB*16-1:0] i;
 input rclk;
 input rce;
 input [11:0] pc;
@@ -2950,32 +2956,24 @@ output [`HEXBYTE] insn;
 reg [`HEXBYTE] insn;
 
 integer n;
-reg [127:0] mem [0:255];
+reg [BPB*16-1:0] mem [0:255];
 reg [11:0] rpc,rpcp16;
 initial begin
 	for (n = 0; n < 256; n = n + 1)
 		mem[n] = {16{`NOP}};
 end
 
-genvar g;
-generate begin : gMem
-	for (g = 0; g < 16; g = g + 1)
-		always_ff @(posedge wclk)
-			if (wce & wr & wa[3:0]==g) mem[wa[11:4]][g*bitsPerByte+BPBM1:g*bitsPerByte] <= i;
-end
-endgenerate
+always_ff @(posedge wclk)
+	if (wce & wr) mem[wa[11:4]] <= i;
 
 always_ff @(posedge rclk)
 	if (rce) rpc <= pc;
 always_ff @(posedge rclk)
 	if (rce) rpcp16 <= pc + 5'd16;
-wire [191:0] insn0 = mem[rpc[11:4]];
-wire [191:0] insn1 = mem[rpcp16[11:4]];
+wire [BPB*16-1:0] insn0 = mem[rpc[11:4]];
+wire [BPB*16-1:0] insn1 = mem[rpcp16[11:4]];
 always_comb
-if (BPB==8)
-	insn = {insn1,insn0} >> {rpc[3:0],3'b0};
-else
-	insn = {insn1,insn0} >> ({rpc[3:0],3'b0} + {rpc[3:0],2'b0});
+	insn = {insn1,insn0} >> ({4'h0,rpc[3:0]} * BPB);
 
 endmodule
 

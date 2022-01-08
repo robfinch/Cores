@@ -1,18 +1,24 @@
 
 package rf6809_pkg;
 
-`define EIGHTBIT	1
-//`define TWELVEBIT	2
+typedef logic [23:0] Address;
+typedef logic [11:0] Data;
+
+parameter bitsPerByte =	$bits(Data);
+parameter BPB = bitsPerByte;
+parameter BPBM1 =	BPB-1;
+parameter BPBX2M1 =	BPB*2-1;
+
+//`define EIGHTBIT	1
+`define TWELVEBIT	2
 
 `ifdef EIGHTBIT
-parameter bitsPerByte =	8;
-parameter BPB = 8;
-parameter BPBM1 =	7;
-parameter BPBX2M1 =	15;
 `define LOBYTE	7:0
 `define HIBYTE	15:8
 `define DBLBYTE	15:0
 `define TRPBYTE		23:0
+`define BYTE1		7:0
+`define BYTE2		15:8
 `define BYTE3		23:16
 `define BYTE4		31:24
 `define BYTE5		39:32
@@ -24,14 +30,12 @@ parameter BPBX2M1 =	15;
 `endif
 
 `ifdef TWELVEBIT
-parameter bitsPerByte =	12;
-parameter BPB = 12;
-parameter BPBM1 =	11;
-parameter BPBX2M1	= 23;
 `define LOBYTE	11:0
 `define HIBYTE	23:12
 `define DBLBYTE	23:0
 `define TRPBYTE		35:0
+`define BYTE1		11:0
+`define BYTE2		23:12
 `define BYTE3		35:24
 `define BYTE4		47:36
 `define BYTE5		59:48

@@ -2,6 +2,7 @@
 
 rf6809 is a 6809 instruction set and programming model compatible core. The addressable memory range has been increased to 24-bits.
 There are minimal changes to the programming model and instruction set to support 24-bit addressing.
+The core is configurable for either eight or twelve bit bytes. When configured for 12-bit bytes addressing is increased to 36-bits.
 
 # Differences from the 6809
 There is an additional 16-bit register USPPG that allows the user stack pointer to be placed at any page of memory. The system stack pointer must remain within the lowest 16-bits of the address range.
@@ -37,8 +38,14 @@ Opcode: 0x15
 **OUTER**
 The OUTER prefix indicates that the index register is applied after retrieving an indirect address. Normally the index register is used in the calculation of the indirect address.
 Opcode: 0x1B
+For the twelve-bit byte version of the core the OUTER prefix is not used as there is room in the index postbyte to indicate outer indexing.
 
 # Size
 The core is approximately 4200 LUTs or 2100 slices and uses 4 block rams for the instruction cache.
+
+# Software
+Software is in the works along with hardware.
+There is a modified version of the A09 assembler which supports twelve-bit bytes.
+There is a modified version of the hc12 VBCC compiler which also is for twelve bit-bytes.
 
 

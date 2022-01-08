@@ -45,6 +45,9 @@ parameter PT_WRITE = 6'd2;
 parameter PT_ACK = 6'd3;
 parameter PT_RETRY = 6'd4;
 
+typedef logic [23:0] Address;
+typedef logic [11:0] Data;
+
 typedef struct packed
 {
 	logic [5:0] did;
@@ -54,9 +57,8 @@ typedef struct packed
 	logic [5:0] typ;
 	logic [1:0] pad2;
 	logic we;
-	logic [3:0] pad1;
-	logic [23:0] adr;
-	logic [7:0] dat;
+	Address adr;
+	Data dat;
 } Packet;
 
 typedef struct packed
@@ -66,7 +68,7 @@ typedef struct packed
 	logic [5:0] age;
 	logic irq;
 	logic firq;
-	logic [7:0] cause;
+	Data cause;
 } IPacket;
 
 endpackage

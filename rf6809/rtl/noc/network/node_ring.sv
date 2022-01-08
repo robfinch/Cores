@@ -45,9 +45,10 @@ input Packet packet_i;
 output Packet packet_o;
 input IPacket ipacket_i;
 output IPacket ipacket_o;
+parameter N=7;
 
-Packet [8:0] packets;
-IPacket [8:0] ipackets;
+Packet [N:0] packets;
+IPacket [N:0] ipackets;
 
 assign packets[0] = packet_i;
 assign ipackets[0] = ipacket_i;
@@ -56,13 +57,13 @@ genvar g;
 generate begin : gNodes
 
 
-for (g = 0; g < 8; g = g + 1)
+for (g = 0; g < N; g = g + 1)
  	pnode upn (g[3:0]+1, rst_i, clk_i, packets[g], packets[g+1], ipackets[g], ipackets[g+1]);
 
 end
 endgenerate
 
-nic_ager uage1(clk_i, packets[8], packet_o, ipackets[8], ipacket_o);
+nic_ager uage1(clk_i, packets[N], packet_o, ipackets[N], ipacket_o);
 
 endmodule
 

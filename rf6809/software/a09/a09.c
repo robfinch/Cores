@@ -282,7 +282,7 @@ struct oprecord
   {
   char * name;                          /* opcode mnemonic                   */
   unsigned char cat;                    /* opcode category                   */
-  unsigned long code;                   /* category-dependent additional code*/
+  unsigned __int64 code;                /* category-dependent additional code*/
   unsigned char tgtNdx;
   };
 
@@ -366,15 +366,15 @@ struct oprecord
 
 struct oprecord optable09[]=
   {
-  { "ABA",     OPCAT_FOURBYTE,    0x3404abe0, 0 },
+  { "ABA",     OPCAT_FOURBYTE,    0x0340040ab0e0LL, 0 },
   { "ABS",     OPCAT_PSEUDO,      PSEUDO_ABS, 0 },
   { "ABX",     OPCAT_ONEBYTE,     0x3a, 0 },
-  { "ABY",     OPCAT_TWOBYTE,     0x31a5, 0 },
+  { "ABY",     OPCAT_TWOBYTE,     0x0310a5, 0 },
   { "ADC",     OPCAT_ACCARITH,    0x89, 0 },
   { "ADCA",    OPCAT_ARITH,       0x89, 0 },
   { "ADCB",    OPCAT_ARITH,       0xc9, 0 },
   { "ADCD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x1089, 0 },
+               OPCAT_DBLREG1BYTE, 0x189, 0 },
   { "ADCR",    OPCAT_6309 |
                OPCAT_IREG,        0x1031, 0 },
   { "ADD",     OPCAT_ACCARITH,    0x8b, 0 },
@@ -396,19 +396,19 @@ struct oprecord optable09[]=
   { "ANDB",    OPCAT_ARITH,       0xc4, 0 },
   { "ANDCC",   OPCAT_IMMBYTE,     0x1c, 0 },
   { "ANDD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x1084, 0 },
+               OPCAT_DBLREG1BYTE, 0x184, 0 },
   { "ANDR",    OPCAT_6309 |
                OPCAT_IREG,        0x1034, 0 },
   { "ASL",     OPCAT_SINGLEADDR,  0x08, 0 },
   { "ASLA",    OPCAT_ONEBYTE,     0x48, 0 },
   { "ASLB",    OPCAT_ONEBYTE,     0x58, 0 },
-  { "ASLD",    OPCAT_TWOBYTE,     0x5849, 0 },
+  { "ASLD",    OPCAT_TWOBYTE,     0x058049, 0 },
   { "ASLD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1048, 0 },
   { "ASR",     OPCAT_SINGLEADDR,  0x07, 0 },
   { "ASRA",    OPCAT_ONEBYTE,     0x47, 0 },
   { "ASRB",    OPCAT_ONEBYTE,     0x57, 0 },
-  { "ASRD",    OPCAT_TWOBYTE,     0x4756, 0 },
+  { "ASRD",    OPCAT_TWOBYTE,     0x047056, 0 },
   { "ASRD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1047, 0 },
   { "BAND",    OPCAT_6309 |
@@ -436,7 +436,7 @@ struct oprecord optable09[]=
   { "BITA",    OPCAT_ARITH,       0x85, 0 },
   { "BITB",    OPCAT_ARITH,       0xc5, 0 },
   { "BITD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x1085, 0 },
+               OPCAT_DBLREG1BYTE, 0x185, 0 },
   { "BITMD",   OPCAT_6309 |
                OPCAT_2IMMBYTE,    0x113c, 0 },
   { "BLE",     OPCAT_SBRANCH,     0x2f, 0 },
@@ -453,15 +453,15 @@ struct oprecord optable09[]=
   { "BSR",     OPCAT_SBRANCH,     0x8d, 0 },
   { "BVC",     OPCAT_SBRANCH,     0x28, 0 },
   { "BVS",     OPCAT_SBRANCH,     0x29, 0 },
-  { "CBA",     OPCAT_FOURBYTE,    0x3404a1e0, 0 },
-  { "CLC",     OPCAT_TWOBYTE,     0x1cfe, 0 },
-  { "CLF",     OPCAT_TWOBYTE,     0x1cbf, 0 },
-  { "CLI",     OPCAT_TWOBYTE,     0x1cef, 0 },
-  { "CLIF",    OPCAT_TWOBYTE,     0x1caf, 0 },
+  { "CBA",     OPCAT_FOURBYTE,    0x0340040a10e0LL, 0 },
+  { "CLC",     OPCAT_TWOBYTE,     0x1c0fe, 0 },
+  { "CLF",     OPCAT_TWOBYTE,     0x1c0bf, 0 },
+  { "CLI",     OPCAT_TWOBYTE,     0x1c0ef, 0 },
+  { "CLIF",    OPCAT_TWOBYTE,     0x1c0af, 0 },
   { "CLR",     OPCAT_SINGLEADDR,  0x0f, 0 },
   { "CLRA",    OPCAT_ONEBYTE,     0x4f, 0 },
   { "CLRB",    OPCAT_ONEBYTE,     0x5f, 0 },
-  { "CLRD",    OPCAT_TWOBYTE,     0x4f5f, 0 },
+  { "CLRD",    OPCAT_TWOBYTE,     0x4f05f, 0 },
   { "CLRD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x104f, 0 },
   { "CLRE",    OPCAT_6309 |
@@ -470,29 +470,29 @@ struct oprecord optable09[]=
                OPCAT_TWOBYTE,     0x115f, 0 },
   { "CLRW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x105f, 0 },
-  { "CLV",     OPCAT_TWOBYTE,     0x1cfd, 0 },
-  { "CLZ",     OPCAT_TWOBYTE,     0x1cfb, 0 },
+  { "CLV",     OPCAT_TWOBYTE,     0x1c0fd, 0 },
+  { "CLZ",     OPCAT_TWOBYTE,     0x1c0fb, 0 },
   { "CMP",     OPCAT_ACCARITH,    0x81, 0 },
   { "CMPA",    OPCAT_ARITH,       0x81, 0 },
   { "CMPB",    OPCAT_ARITH,       0xc1, 0 },
-  { "CMPD",    OPCAT_DBLREG2BYTE, 0x1083, 0 },
+  { "CMPD",    OPCAT_DBLREG1BYTE, 0x183, 0 },
   { "CMPE",    OPCAT_6309 |
                OPCAT_2ARITH,      0x1181, 0 },
   { "CMPF",    OPCAT_6309 |
                OPCAT_2ARITH,      0x11c1, 0 },
   { "CMPR",    OPCAT_6309 |
                OPCAT_IREG,        0x1037, 0 },
-  { "CMPS",    OPCAT_DBLREG2BYTE, 0x118c, 4 },
-  { "CMPU",    OPCAT_DBLREG2BYTE, 0x1183, 3 },
+  { "CMPS",    OPCAT_DBLREG1BYTE, 0x28c, 4 },
+  { "CMPU",    OPCAT_DBLREG1BYTE, 0x283, 3 },
   { "CMPW",    OPCAT_6309 |
                OPCAT_DBLREG2BYTE, 0x1081, 0 },
   { "CMPX",    OPCAT_DBLREG1BYTE, 0x8c, 1 },
-  { "CMPY",    OPCAT_DBLREG2BYTE, 0x108c, 2 },
+  { "CMPY",    OPCAT_DBLREG1BYTE, 0x18c, 2 },
   { "COM",     OPCAT_SINGLEADDR,  0x03, 0 },
   { "COMA",    OPCAT_ONEBYTE,     0x43, 0 },
   { "COMB",    OPCAT_ONEBYTE,     0x53, 0 },
   { "COMD",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x1043, 0 },
+               OPCAT_ONEBYTE,     0x143, 0 },
   { "COME",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1143, 0  },
   { "COMF",    OPCAT_6309 |
@@ -500,15 +500,15 @@ struct oprecord optable09[]=
   { "COMW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1053, 0 },
   { "COMMON",  OPCAT_PSEUDO,      PSEUDO_COMMON, 0 },
-  { "CPD",     OPCAT_DBLREG2BYTE, 0x1083, 0 },
+  { "CPD",     OPCAT_DBLREG1BYTE, 0x183, 0 },
   { "CPX",     OPCAT_DBLREG1BYTE, 0x8c, 1 },
-  { "CPY",     OPCAT_DBLREG2BYTE, 0x108c, 2 },
+  { "CPY",     OPCAT_DBLREG1BYTE, 0x18c, 2 },
   { "CWAI",    OPCAT_IMMBYTE,     0x3c, 0 },
   { "DAA",     OPCAT_ONEBYTE,     0x19, 0 },
   { "DEC",     OPCAT_SINGLEADDR,  0x0a, 0 },
   { "DECA",    OPCAT_ONEBYTE,     0x4a, 0 },
   { "DECB",    OPCAT_ONEBYTE,     0x5a, 0 },
-  { "DECD",    OPCAT_THREEBYTE,   0x830001, 0 },
+  { "DECD",    OPCAT_THREEBYTE,   0x083000001LL, 0 },
   { "DECD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x104a, 0 },
   { "DECE",    OPCAT_6309 |
@@ -519,10 +519,10 @@ struct oprecord optable09[]=
                OPCAT_TWOBYTE,     0x105a, 0 },
   { "DEF",     OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
   { "DEFINE",  OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
-  { "DES",     OPCAT_TWOBYTE,     0x327f, 4 },
-  { "DEU",     OPCAT_TWOBYTE,     0x335f, 3 },
-  { "DEX",     OPCAT_TWOBYTE,     0x301f, 1 },
-  { "DEY",     OPCAT_TWOBYTE,     0x313f, 2 },
+  { "DES",     OPCAT_TWOBYTE,     0x3207f, 4 },
+  { "DEU",     OPCAT_TWOBYTE,     0x3305f, 3 },
+  { "DEX",     OPCAT_TWOBYTE,     0x3001f, 1 },
+  { "DEY",     OPCAT_TWOBYTE,     0x3103f, 2 },
   { "DIVD",    OPCAT_6309 |
                OPCAT_2ARITH,      0x118d, 0 },
   { "DIVQ",    OPCAT_6309 |
@@ -541,7 +541,7 @@ struct oprecord optable09[]=
   { "EORA",    OPCAT_ARITH,       0x88, 0 },
   { "EORB",    OPCAT_ARITH,       0xc8, 0 },
   { "EORD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x1088, 0 },
+               OPCAT_DBLREG1BYTE, 0x188, 0 },
   { "EORR",    OPCAT_6309 |
                OPCAT_IREG,        0x1036, 0 },
   { "EQU",     OPCAT_PSEUDO,      PSEUDO_EQU, 0 },
@@ -565,7 +565,7 @@ struct oprecord optable09[]=
   { "INC",     OPCAT_SINGLEADDR,  0x0c, 0 },
   { "INCA",    OPCAT_ONEBYTE,     0x4c, 0 },
   { "INCB",    OPCAT_ONEBYTE,     0x5c, 0 },
-  { "INCD",    OPCAT_THREEBYTE,   0xc30001, 0 },
+  { "INCD",    OPCAT_THREEBYTE,   0x0c3000001LL, 0 },
   { "INCD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x104c, 0 },
   { "INCE",    OPCAT_6309 |
@@ -575,33 +575,33 @@ struct oprecord optable09[]=
   { "INCLUDE", OPCAT_PSEUDO,      PSEUDO_INCLUDE, 0 },
   { "INCW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x105c, 0 },
-  { "INS",     OPCAT_TWOBYTE,     0x3261, 4 },
-  { "INU",     OPCAT_TWOBYTE,     0x3341, 3 },
-  { "INX",     OPCAT_TWOBYTE,     0x3001, 1 },
-  { "INY",     OPCAT_TWOBYTE,     0x3121, 2 },
+  { "INS",     OPCAT_TWOBYTE,     0x32061, 4 },
+  { "INU",     OPCAT_TWOBYTE,     0x33041, 3 },
+  { "INX",     OPCAT_TWOBYTE,     0x30001, 1 },
+  { "INY",     OPCAT_TWOBYTE,     0x31021, 2 },
   { "JMP",     OPCAT_SINGLEADDR,  0x0e, 0 },
   { "JSR",     OPCAT_DBLREG1BYTE, 0x8d, 0 },
-  { "LBCC",    OPCAT_LBR2BYTE,    0x1024, 0 },
-  { "LBCS",    OPCAT_LBR2BYTE,    0x1025, 0 },
-  { "LBEC",    OPCAT_LBR2BYTE,    0x1024, 0 },
-  { "LBEQ",    OPCAT_LBR2BYTE,    0x1027, 0 },
-  { "LBES",    OPCAT_LBR2BYTE,    0x1025, 0 },
-  { "LBGE",    OPCAT_LBR2BYTE,    0x102c, 0 },
-  { "LBGT",    OPCAT_LBR2BYTE,    0x102e, 0 },
-  { "LBHI",    OPCAT_LBR2BYTE,    0x1022, 0 },
-  { "LBHS",    OPCAT_LBR2BYTE,    0x1024, 0 },
-  { "LBLE",    OPCAT_LBR2BYTE,    0x102f, 0 },
-  { "LBLO",    OPCAT_LBR2BYTE,    0x1025, 0 },
-  { "LBLS",    OPCAT_LBR2BYTE,    0x1023, 0 },
-  { "LBLT",    OPCAT_LBR2BYTE,    0x102d, 0 },
-  { "LBMI",    OPCAT_LBR2BYTE,    0x102b, 0 },
-  { "LBNE",    OPCAT_LBR2BYTE,    0x1026, 0 },
-  { "LBPL",    OPCAT_LBR2BYTE,    0x102a, 0 },
+  { "LBCC",    OPCAT_LBR1BYTE,    0x124, 0 },
+  { "LBCS",    OPCAT_LBR1BYTE,    0x125, 0 },
+  { "LBEC",    OPCAT_LBR1BYTE,    0x124, 0 },
+  { "LBEQ",    OPCAT_LBR1BYTE,    0x127, 0 },
+  { "LBES",    OPCAT_LBR1BYTE,    0x125, 0 },
+  { "LBGE",    OPCAT_LBR1BYTE,    0x12c, 0 },
+  { "LBGT",    OPCAT_LBR1BYTE,    0x12e, 0 },
+  { "LBHI",    OPCAT_LBR1BYTE,    0x122, 0 },
+  { "LBHS",    OPCAT_LBR1BYTE,    0x124, 0 },
+  { "LBLE",    OPCAT_LBR1BYTE,    0x12f, 0 },
+  { "LBLO",    OPCAT_LBR1BYTE,    0x125, 0 },
+  { "LBLS",    OPCAT_LBR1BYTE,    0x123, 0 },
+  { "LBLT",    OPCAT_LBR1BYTE,    0x12d, 0 },
+  { "LBMI",    OPCAT_LBR1BYTE,    0x12b, 0 },
+  { "LBNE",    OPCAT_LBR1BYTE,    0x126, 0 },
+  { "LBPL",    OPCAT_LBR1BYTE,    0x12a, 0 },
   { "LBRA",    OPCAT_LBR1BYTE,    0x16, 0 },
-  { "LBRN",    OPCAT_LBR2BYTE,    0x1021, 0 },
+  { "LBRN",    OPCAT_LBR1BYTE,    0x121, 0 },
   { "LBSR",    OPCAT_LBR1BYTE,    0x17, 0 },
-  { "LBVC",    OPCAT_LBR2BYTE,    0x1028, 0 },
-  { "LBVS",    OPCAT_LBR2BYTE,    0x1029, 0 },
+  { "LBVC",    OPCAT_LBR1BYTE,    0x128, 0 },
+  { "LBVS",    OPCAT_LBR1BYTE,    0x129, 0 },
   { "LD",      OPCAT_ACCARITH,    0x86, 0 },
   { "LDA",     OPCAT_ARITH,       0x86, 0 },
   { "LDAA",    OPCAT_ARITH,       0x86, 0 },
@@ -619,12 +619,12 @@ struct oprecord optable09[]=
                OPCAT_2IMMBYTE,    0x113d, 0 },
   { "LDQ",     OPCAT_6309 |
                OPCAT_QUADREG1BYTE,0x10cc, 0 },
-  { "LDS",     OPCAT_DBLREG2BYTE, 0x10ce, 4 },
+  { "LDS",     OPCAT_DBLREG1BYTE, 0x1ce, 4 },
   { "LDU",     OPCAT_DBLREG1BYTE, 0xce, 3 },
   { "LDW",     OPCAT_6309 |
                OPCAT_DBLREG2BYTE, 0x1086, 0 },
   { "LDX",     OPCAT_DBLREG1BYTE, 0x8e, 1 },
-  { "LDY",     OPCAT_DBLREG2BYTE, 0x108e, 2 },
+  { "LDY",     OPCAT_DBLREG1BYTE, 0x18e, 2 },
   { "LEAS",    OPCAT_LEA,         0x32, 4 },
   { "LEAU",    OPCAT_LEA,         0x33, 3 },
   { "LEAX",    OPCAT_LEA,         0x30, 1 },
@@ -634,13 +634,13 @@ struct oprecord optable09[]=
   { "LSL",     OPCAT_SINGLEADDR,  0x08, 0 },
   { "LSLA",    OPCAT_ONEBYTE,     0x48, 0 },
   { "LSLB",    OPCAT_ONEBYTE,     0x58, 0 },
-  { "LSLD",    OPCAT_TWOBYTE,     0x5849, 0 },
+  { "LSLD",    OPCAT_TWOBYTE,     0x58049, 0 },
   { "LSLD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1048, 0 },
   { "LSR",     OPCAT_SINGLEADDR,  0x04, 0 },
   { "LSRA",    OPCAT_ONEBYTE,     0x44, 0 },
   { "LSRB",    OPCAT_ONEBYTE,     0x54, 0 },
-  { "LSRD",    OPCAT_TWOBYTE,     0x4456, 0 },
+  { "LSRD",    OPCAT_TWOBYTE,     0x44056, 0 },
   { "LSRD63",  OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1044, 0 },
   { "LSRW",    OPCAT_6309 |
@@ -655,7 +655,7 @@ struct oprecord optable09[]=
   { "NEGA",    OPCAT_ONEBYTE,     0x40, 0 },
   { "NEGB",    OPCAT_ONEBYTE,     0x50, 0 },
   { "NEGD",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x1040, 0 },
+               OPCAT_ONEBYTE,     0x140, 0 },
   { "NOP",     OPCAT_ONEBYTE,     0x12, 0 },
   { "OIM",     OPCAT_6309 |
                OPCAT_BITDIRECT,   0x01, 0 }, 
@@ -667,38 +667,38 @@ struct oprecord optable09[]=
   { "ORB",     OPCAT_ARITH,       0xca, 0 },
   { "ORCC",    OPCAT_IMMBYTE,     0x1a, 0 },
   { "ORD",     OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x108a, 0 },
+               OPCAT_DBLREG1BYTE, 0x18a, 0 },
   { "ORG",     OPCAT_PSEUDO,      PSEUDO_ORG, 0 },
   { "ORR",     OPCAT_6309 |
                OPCAT_IREG,        0x1035, 0 },
   { "PAG",     OPCAT_PSEUDO,      PSEUDO_PAG, 0 },
   { "PAGE",    OPCAT_PSEUDO,      PSEUDO_PAG, 0 },
   { "PSH",     OPCAT_STACK,       0x34, 0 },
-  { "PSHA",    OPCAT_TWOBYTE,     0x3402, 0 },
-  { "PSHB",    OPCAT_TWOBYTE,     0x3404, 0 },
-  { "PSHD",    OPCAT_TWOBYTE,     0x3406, 0 },
+  { "PSHA",    OPCAT_TWOBYTE,     0x34002, 0 },
+  { "PSHB",    OPCAT_TWOBYTE,     0x34004, 0 },
+  { "PSHD",    OPCAT_TWOBYTE,     0x34006, 0 },
   { "PSHS",    OPCAT_STACK,       0x34, 4 },
   { "PSHSW",   OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1038, 0 },
   { "PSHU",    OPCAT_STACK,       0x36, 3 },
   { "PSHUW",   OPCAT_6309 |
                OPCAT_TWOBYTE,     0x103a, 0 },
-  { "PSHX",    OPCAT_TWOBYTE,     0x3410, 1 },
-  { "PSHY",    OPCAT_TWOBYTE,     0x3420, 2 },
+  { "PSHX",    OPCAT_TWOBYTE,     0x34010, 1 },
+  { "PSHY",    OPCAT_TWOBYTE,     0x34020, 2 },
   { "PUB",     OPCAT_PSEUDO,      PSEUDO_PUB, 0 },
   { "PUBLIC",  OPCAT_PSEUDO,      PSEUDO_PUB, 0 },
   { "PUL",     OPCAT_STACK,       0x35, 0 },
-  { "PULA",    OPCAT_TWOBYTE,     0x3502, 0 },
-  { "PULB",    OPCAT_TWOBYTE,     0x3504, 0 },
-  { "PULD",    OPCAT_TWOBYTE,     0x3506, 0 },
+  { "PULA",    OPCAT_TWOBYTE,     0x35002, 0 },
+  { "PULB",    OPCAT_TWOBYTE,     0x35004, 0 },
+  { "PULD",    OPCAT_TWOBYTE,     0x35006, 0 },
   { "PULS",    OPCAT_STACK,       0x35, 4 },
   { "PULSW",   OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1039, 0 },
   { "PULU",    OPCAT_STACK,       0x37, 3 },
   { "PULUW",   OPCAT_6309 |
                OPCAT_TWOBYTE,     0x103b, 0 },
-  { "PULX",    OPCAT_TWOBYTE,     0x3510, 1 },
-  { "PULY",    OPCAT_TWOBYTE,     0x3520, 2 },
+  { "PULX",    OPCAT_TWOBYTE,     0x35010, 1 },
+  { "PULY",    OPCAT_TWOBYTE,     0x35020, 2 },
   { "REG",     OPCAT_PSEUDO,      PSEUDO_REG, 0 },
   { "REP",     OPCAT_PSEUDO,      PSEUDO_REP, 0 },
   { "REPEAT",  OPCAT_PSEUDO,      PSEUDO_REP, 0 },
@@ -708,14 +708,14 @@ struct oprecord optable09[]=
   { "ROLA",    OPCAT_ONEBYTE,     0x49, 0 },
   { "ROLB",    OPCAT_ONEBYTE,     0x59, 0 },
   { "ROLD",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x1049, 0 },
+               OPCAT_ONEBYTE,     0x149, 0 },
   { "ROLW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1059, 0 },
   { "ROR",     OPCAT_SINGLEADDR,  0x06, 0 },
   { "RORA",    OPCAT_ONEBYTE,     0x46, 0 },
   { "RORB",    OPCAT_ONEBYTE,     0x56, 0 },
   { "RORD",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x1046, 0 },
+               OPCAT_ONEBYTE,     0x146, 0 },
   { "RORW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x1056, 0 },
   { "RPT",     OPCAT_PSEUDO,      PSEUDO_REP, 0 },
@@ -723,27 +723,27 @@ struct oprecord optable09[]=
   { "RTI",     OPCAT_ONEBYTE,     0x3b, 0 },
   { "RTS",     OPCAT_ONEBYTE,     0x39, 0 },
   { "RZB",     OPCAT_PSEUDO,      PSEUDO_RZB, 0 },
-  { "SBA",     OPCAT_FOURBYTE,    0x3404a0e0, 0 },
+  { "SBA",     OPCAT_FOURBYTE,    0x0340040a00e0LL, 0 },
   { "SBC",     OPCAT_ACCARITH,    0x82, 0 },
   { "SBCA",    OPCAT_ARITH,       0x82, 0 },
   { "SBCB",    OPCAT_ARITH,       0xc2, 0 },
   { "SBCD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x1082, 0 },
+               OPCAT_DBLREG1BYTE, 0x182, 0 },
   { "SBCR",    OPCAT_6309 |
                OPCAT_IREG,        0x1033, 0 },
-  { "SEC",     OPCAT_TWOBYTE,     0x1a01, 0 },
-  { "SEF",     OPCAT_TWOBYTE,     0x1a40, 0 },
-  { "SEI",     OPCAT_TWOBYTE,     0x1a10, 0 },
-  { "SEIF",    OPCAT_TWOBYTE,     0x1a50, 0 },
+  { "SEC",     OPCAT_TWOBYTE,     0x1a001, 0 },
+  { "SEF",     OPCAT_TWOBYTE,     0x1a040, 0 },
+  { "SEI",     OPCAT_TWOBYTE,     0x1a010, 0 },
+  { "SEIF",    OPCAT_TWOBYTE,     0x1a050, 0 },
   { "SET",     OPCAT_PSEUDO,      PSEUDO_SET, 0 },
   { "SETDP",   OPCAT_PSEUDO,      PSEUDO_SETDP, 0 },
   { "SETLI",   OPCAT_PSEUDO,      PSEUDO_SETLI, 0 },
   { "SETPG",   OPCAT_PSEUDO,      PSEUDO_SETPG, 0 },
-  { "SEV",     OPCAT_TWOBYTE,     0x1a02, 0 },
+  { "SEV",     OPCAT_TWOBYTE,     0x1a002, 0 },
   { "SEX",     OPCAT_ONEBYTE,     0x1d, 0 },
   { "SEXW",    OPCAT_6309 |
                OPCAT_ONEBYTE,     0x14, 0 },
-  { "SEZ",     OPCAT_TWOBYTE,     0x1a04, 0 },
+  { "SEZ",     OPCAT_TWOBYTE,     0x1a004, 0 },
   { "SPC",     OPCAT_PSEUDO,      PSEUDO_SPC, 0 },
   { "STA",     OPCAT_NOIMM |
                OPCAT_ARITH,       0x87, 0 },
@@ -769,7 +769,7 @@ struct oprecord optable09[]=
                OPCAT_6309 |
                OPCAT_QUADREG1BYTE,0x10cd, 0 },
   { "STS",     OPCAT_NOIMM |
-               OPCAT_DBLREG2BYTE, 0x10cf, 4 },
+               OPCAT_DBLREG1BYTE, 0x1cf, 4 },
   { "STTL",    OPCAT_PSEUDO,      PSEUDO_STTL, 0 },
   { "STU",     OPCAT_NOIMM |
                OPCAT_DBLREG1BYTE, 0xcf, 3 },
@@ -779,7 +779,7 @@ struct oprecord optable09[]=
   { "STX",     OPCAT_NOIMM |
                OPCAT_DBLREG1BYTE, 0x8f, 1 },
   { "STY",     OPCAT_NOIMM |
-               OPCAT_DBLREG2BYTE, 0x108f, 2 },
+               OPCAT_DBLREG1BYTE, 0x18f, 2 },
   { "SUB",     OPCAT_ACCARITH,    0x80, 0 },
   { "SUBA",    OPCAT_ARITH,       0x80, 0 },
   { "SUBB",    OPCAT_ARITH,       0xc0, 0 },
@@ -793,13 +793,13 @@ struct oprecord optable09[]=
   { "SUBR",    OPCAT_6309 |
                OPCAT_IREG,        0x1032, 0 },
   { "SWI",     OPCAT_ONEBYTE,     0x3f, 0 },
-  { "SWI2",    OPCAT_TWOBYTE,     0x103f, 0 },
-  { "SWI3",    OPCAT_TWOBYTE,     0x113f, 0 },
+  { "SWI2",    OPCAT_ONEBYTE,     0x13f, 0 },
+  { "SWI3",    OPCAT_ONEBYTE,     0x23f, 0 },
   { "SYMLEN",  OPCAT_PSEUDO,      PSEUDO_SYMLEN, 0 },
   { "SYNC",    OPCAT_ONEBYTE,     0x13, 0 },
-  { "TAB",     OPCAT_THREEBYTE,   0x1f894d, 0 },
-  { "TAP",     OPCAT_TWOBYTE,     0x1f8a, 0 },
-  { "TBA",     OPCAT_THREEBYTE,   0x1f984d, 0 },
+  { "TAB",     OPCAT_THREEBYTE,   0x1f08904d, 0 },
+  { "TAP",     OPCAT_TWOBYTE,     0x1f08a, 0 },
+  { "TBA",     OPCAT_THREEBYTE,   0x1f09804dLL, 0 },
   { "TEXT",    OPCAT_PSEUDO,      PSEUDO_TEXT, 0 },
   { "TFM",     OPCAT_6309 |
                OPCAT_BLOCKTRANS,  0x1138, 0 }, 
@@ -807,24 +807,24 @@ struct oprecord optable09[]=
   { "TIM",     OPCAT_6309 |
                OPCAT_BITDIRECT,   0x0b, 0 }, 
   { "TITLE",   OPCAT_PSEUDO,      PSEUDO_NAM, 0 },
-  { "TPA",     OPCAT_TWOBYTE,     0x1fa8, 0 },
+  { "TPA",     OPCAT_TWOBYTE,     0x1f0a8, 0 },
   { "TST",     OPCAT_SINGLEADDR,  0x0d, 0 },
   { "TSTA",    OPCAT_ONEBYTE,     0x4d, 0 },
   { "TSTB",    OPCAT_ONEBYTE,     0x5d, 0 },
   { "TSTD",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x104d, 0 },
+               OPCAT_ONEBYTE,     0x14d, 0 },
   { "TSTE",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x114d, 0 },
   { "TSTF",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x115d, 0 },
   { "TSTW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x105d, 0 },
-  { "TSX",     OPCAT_TWOBYTE,     0x1f41, 1 },
-  { "TSY",     OPCAT_FOURBYTE,    0x34403520, 2 },  /* PSHS S/PULS Y */
+  { "TSX",     OPCAT_TWOBYTE,     0x1f041, 1 },
+  { "TSY",     OPCAT_FOURBYTE,    0x034040035020LL, 2 },  /* PSHS S/PULS Y */
   { "TTL",     OPCAT_PSEUDO,      PSEUDO_NAM, 0 },
-  { "TXS",     OPCAT_TWOBYTE,     0x1f14, 4 },
-  { "TYS",     OPCAT_FOURBYTE,    0x34203540, 4 },  /* PSHS Y/PULS S */
-  { "WAI",     OPCAT_TWOBYTE,     0x3cff, 0 },
+  { "TXS",     OPCAT_TWOBYTE,     0x1f014, 4 },
+  { "TYS",     OPCAT_FOURBYTE,    0x034020035040LL, 4 },  /* PSHS Y/PULS S */
+  { "WAI",     OPCAT_TWOBYTE,     0x3c0ff, 0 },
   { "WORD",    OPCAT_PSEUDO,      PSEUDO_FCW, 0 },
 };
 
@@ -1427,11 +1427,11 @@ char isPostIndexed;
 char opsize;                            /* desired operand size :            */
                                         /* 0=dunno,1=5, 2=8, 3=16, 4=32      */
 long operand;
-unsigned char postbyte;
+unsigned short postbyte;
 
 long dpsetting = 0;                     /* Direct Page Default = 0           */
 
-unsigned char codebuf[256];
+unsigned short codebuf[256];
 int codeptr;                            /* byte offset within instruction    */
 int suppress;                           /* 0=no suppress                     */
                                         /* 1=until ENDIF                     */
@@ -1453,7 +1453,7 @@ int outmode = OUT_BIN;                  /* default to binary output          */
 
 unsigned hexaddr;
 int hexcount;
-unsigned char hexbuffer[256];
+unsigned short hexbuffer[256];
 unsigned int chksum;
 unsigned vslide;
 
@@ -1852,7 +1852,7 @@ return symtable + i;                    /* return the found or inserted sym  */
 /* findsymat : finds 1st symbol fo a given address                           */
 /*****************************************************************************/
 
-char *findsymat(unsigned short addr)
+char *findsymat(unsigned addr)
 {
 /* since the symbol table is sorted by name, this needs a sequential search  */
 int i;
@@ -2743,13 +2743,13 @@ switch (toupper(*srcptr))
   case 'X':
     return 1;
   case 'Y':
-    postbyte |= 0x20;
+    postbyte |= 0x200;
     return 1;
   case 'U':
-    postbyte |= 0x40;
+    postbyte |= 0x400;
     return 1;
   case 'S':
-    postbyte |= 0x60;
+    postbyte |= 0x600;
     return 1;
   }  
 return 0;
@@ -2780,16 +2780,16 @@ if (*srcptr == '-')
   if (*srcptr == '-')
     {
     srcptr++;
-    postbyte = 0x83;
+    postbyte = 0x803;
     }
   else
-    postbyte = 0x82;
+    postbyte = 0x802;
 
   if ((dwOptions & OPTION_H63) &&       /* special for ,--W and [,--W]       */
-      (postbyte == 0x83) &&
+      (postbyte == 0x803) &&
       (toupper(*srcptr) == 'W'))
     {
-    postbyte = (mode == ADRMODE_IND) ? 0x90 : 0x8f;
+    postbyte = (mode == ADRMODE_IND) ? 0x900 : 0x80f;
     srcptr++;
     }
   else if (!scanindexreg())
@@ -2799,7 +2799,7 @@ if (*srcptr == '-')
   }
 else
   {
-  postbyte = 0x80;
+  postbyte = 0x800;
   if ((dwOptions & OPTION_H63) &&       /* special for ,W, [,W], ,W++, [,W++]*/
       (toupper(*srcptr) == 'W'))
     {
@@ -2809,14 +2809,14 @@ else
       srcptr++;
       if (*srcptr == '+')               /* ,W++ and [,W++]                   */
         {
-        postbyte = (mode == ADRMODE_IND) ? 0xB0 : 0xAF;
+        postbyte = (mode == ADRMODE_IND) ? 0xB00 : 0xA0F;
         srcptr++;
         }
       else
         error |= ERR_ILLEGAL_ADDR;
       }
     else                                /* ,W and [,W]                       */
-      postbyte = (mode == ADRMODE_IND) ? 0x90 : 0x8F;
+      postbyte = (mode == ADRMODE_IND) ? 0x900 : 0x80F;
     }
   else                                  /* normal index register addressing  */
     {
@@ -2851,7 +2851,7 @@ if ((dwOptions & OPTION_H63) &&         /* special for W as index register   */
     (toupper(*srcptr) == 'W'))
   {
   srcptr++;
-  postbyte = (mode == ADRMODE_IND) ? 0xb0 : 0xaf;
+  postbyte = (mode == ADRMODE_IND) ? 0xb00 : 0xa0f;
   opsize = 3;
   }
 else if (scanindexreg())
@@ -2861,11 +2861,11 @@ else if (scanindexreg())
     {
     if (unknown || !certain)
       opsize = 3;
-    else if (operand >= -16 && operand < 16 && mode == ADRMODE_POST)
+    else if (operand >= -256 && operand < 256 && mode == ADRMODE_POST)
       opsize = 1;
-    else if (operand >= -128 && operand < 128)
+    else if (operand >= -2048 && operand < 2048)
       opsize = 2;
-    else if (operand >=-32768 && operand < 32768)
+    else if (operand >=-8388608 && operand < 8388608)
 		opsize = 3;
 	else
       opsize = 4;
@@ -2873,17 +2873,17 @@ else if (scanindexreg())
   switch (opsize)
     {
     case 1:
-      postbyte += (operand & 31);
+      postbyte += (operand & 511);
       opsize = 0;
       break;
     case 2:
-      postbyte += 0x88;
+      postbyte += 0x808;
       break;
     case 3:
-      postbyte += 0x89;
+      postbyte += 0x809;
       break;
 	case 4:
-	  postbyte += 0x8A;
+	  postbyte += 0x80A;
 	  break;
     }                 
   }
@@ -2904,7 +2904,7 @@ else
       } 
     }    
   mode++;
-  postbyte += 0x8c;
+  postbyte += 0x80c;
   if (opsize == 1)
     opsize = 2;    
   }
@@ -2919,8 +2919,8 @@ else
 void scanoperands09(struct relocrecord *pp)
 {
 char c, *oldsrcptr, *ptr;
-unsigned char accpost, h63 = 0;
-unsigned char isIndexed = 0;
+unsigned short accpost, h63 = 0;
+unsigned short isIndexed = 0;
 
 isFar = 0;
 isPostIndexed = 0;
@@ -2937,7 +2937,7 @@ if (c == '[')
   if (c=='[') {
 	  c = *++srcptr;
 	  mode = ADRMODE_DBL_IND;
-	  postbyte = 0x8F;
+	  postbyte = 0x80F;
   }
   else
 	  mode = ADRMODE_IND;
@@ -2945,7 +2945,7 @@ if (c == '[')
 switch (toupper(c))
   {
   case 'D':
-    accpost = 0x8b;
+    accpost = 0x80b;
   accoffset:
     oldsrcptr = srcptr;
     srcptr++;
@@ -2970,13 +2970,13 @@ switch (toupper(c))
       }
     break;    
   case 'A':
-    accpost = 0x86;
+    accpost = 0x806;
     goto accoffset;
   case 'B':
-    accpost = 0x85;
+    accpost = 0x805;
     goto accoffset;
   case 'E':
-    accpost = 0x87;
+    accpost = 0x807;
     h63 = 1;
     goto accoffset;
   case 'F':
@@ -2986,11 +2986,11 @@ switch (toupper(c))
 		  srcptr += 3;
 		  goto scano1;
 	  }
-    accpost = 0x8a;
+    accpost = 0x80a;
     h63 = 1;
     goto accoffset;
   case 'W' :
-    accpost = 0x8e;
+    accpost = 0x80e;
     h63 = 1;
     goto accoffset;
   case ',':
@@ -3005,13 +3005,13 @@ switch (toupper(c))
     srcptr++;
 	if (*srcptr=='>') {
 		srcptr++;
-	    operand = (scanexpr(0, pp) >> 16) & 0xffff;
+	    operand = (scanexpr(0, pp) >> 24LL) & 0xffffffLL;
 		isFar = 0;
 		opsize = 3;
 	}
 	else if (*srcptr=='<') {
 		srcptr++;
-	    operand = scanexpr(0, pp) & 0xffff;
+	    operand = scanexpr(0, pp) & 0xffffffLL;
 		isFar = 0;
 		opsize = 3;
 	}
@@ -3056,11 +3056,11 @@ switch (toupper(c))
       {
       if (opsize == 0)
         {
-		if ((unsigned)operand >= 65536)
+		if ((unsigned)operand >= 16777216)
 			opsize = 4;
 		else
         if (unknown || !certain || dpsetting == -1 ||
-          (unsigned)(operand - dpsetting * 256) >= 256)
+          (unsigned)(operand - dpsetting * 4096) >= 4096)
           opsize = 3;
         else
           opsize = 2;
@@ -3069,7 +3069,7 @@ switch (toupper(c))
         opsize = 2;         
       if (mode == ADRMODE_IND)
         {
-        postbyte = 0x8f;
+        postbyte = 0x80f;
 		// Why is the following set ?
 //        opsize = 3;
         }
@@ -3092,7 +3092,7 @@ if (mode >= ADRMODE_IND)
   if (!(dwOptions & OPTION_TSC))
     skipspace();
   if (mode != ADRMODE_DBL_IND)
-	postbyte |= 0x10;
+	postbyte |= 0x100;
   if (*srcptr != ']')
     error |= ERR_ILLEGAL_ADDR;
   srcptr++;
@@ -3107,10 +3107,10 @@ if (mode >= ADRMODE_IND)
 	  srcptr++;
 	  isPostIndexed = 1;
       scanindexed();	// scanindexed will reset the postbyte
-	  postbyte |= 0x10;
+	  postbyte |= 0x100;
   }
   else {
-	  if (postbyte==0x9F || postbyte==0x8F)
+	  if (postbyte==0x90F || postbyte==0x80F)
 		  opsize = 3;
       if (mode == ADRMODE_IND || mode==ADRMODE_DBL_IND)
         {
@@ -3505,7 +3505,7 @@ if (hexcount)
   if (objfile)
     {
 		 for (i = 0; i < hexcount; i++)
-    	fprintf(objfile, "rommem[%4d] <= 8'h%02X;\r\n", (hexaddr+i) & 0x3fff, hexbuffer[i]);
+    	fprintf(objfile, "rommem[%4d] <= 12'h%03X;\r\n", (hexaddr+i) & 0x3fff, hexbuffer[i] & 0xfff);
   hexaddr += hexcount;
   hexcount = 0;
   chksum = 0;
@@ -3602,7 +3602,7 @@ if (hexcount)
 /* outver : add a byte to verilog output                           */
 /*****************************************************************************/
 
-void outver (unsigned char x) 
+void outver (unsigned short x) 
 {
 	if (hexcount==4)
 		flushver();
@@ -3650,10 +3650,10 @@ hexbuffer[hexcount++] = x;              /* then put byte into buffer         */
 /* outbyte : writes one byte to the output in the selected format            */
 /*****************************************************************************/
 
-void outbyte(unsigned char uc, int off)
+void outbyte(unsigned short uc, int off)
 {
 int nByte = (loccounter + off) / 8;
-unsigned char nBitMask = (unsigned char) (1 << ((loccounter + off) % 8));
+unsigned short nBitMask = (unsigned short) (1 << ((loccounter + off) % 12));
 
 //if (bUsedBytes[nByte] & nBitMask)       /* if address already used           */
 //  warning |= WRN_AREA;                  /* set warning code                  */
@@ -3839,16 +3839,16 @@ else
 for (i = 0; i < codeptr && i < MAXLISTBYTES; i++)
   {
   if (dwOptions & OPTION_LPA)
-    putlist("%02X ", codebuf[i]);
+    putlist("%03X ", codebuf[i]&0xfff);
   else
-    putlist("%02X", codebuf[i]);
+    putlist("%03X", codebuf[i]&0xfff);
   }
 for (; i <= MAXLISTBYTES; i++)
   {
   if (dwOptions & OPTION_LPA)
-    putlist("   ");
+    putlist("    ");
   else
-    putlist("  ");
+    putlist("   ");
   }
 
 if ((dwOptions & OPTION_LPA) &&
@@ -3881,9 +3881,9 @@ if (codeptr > MAXLISTBYTES &&           /* if there are additional bytes,    */
       putlist(" %08X ", oldlc + i);
       }
     if (dwOptions & OPTION_LPA)         /* if in patch mode                  */
-      putlist("%02X ", codebuf[i]);
+      putlist("%03X ", codebuf[i]&0xfff);
     else
-      putlist("%02X", codebuf[i]);
+      putlist("%03X", codebuf[i]&0xfff);
     }
   putlist("\n");
   }
@@ -3941,7 +3941,7 @@ if (lp)
 /* putbyte : adds a byte to the instruction code buffer                      */
 /*****************************************************************************/
 
-void putbyte(unsigned char b)
+void putbyte(unsigned short b)
 {
 codebuf[codeptr++] = b;                 /* and finally put the byte there.   */
 }
@@ -3950,22 +3950,22 @@ codebuf[codeptr++] = b;                 /* and finally put the byte there.   */
 /* putword : adds a word to the instruction code buffer                      */
 /*****************************************************************************/
 
-void putword(unsigned short w)
+void putword(unsigned w)
 {
-putbyte((unsigned char)(w >> 8));
-putbyte((unsigned char)(w & 0xff));
+putbyte((unsigned short)((w >> 12L) & 0xfffL));
+putbyte((unsigned short)(w & 0xfff));
 }
 
 /*****************************************************************************/
 /* putdword : adds a doubleword to the instruction code buffer               */
 /*****************************************************************************/
 
-void putdword(unsigned long d)
+void putdword(unsigned __int64 d)
 {
-putbyte((unsigned char)((d >> 24) & 0xff));
-putbyte((unsigned char)((d >> 16) & 0xff));
-putbyte((unsigned char)((d >>  8) & 0xff));
-putbyte((unsigned char)(d & 0xff));
+putbyte((unsigned short)((d >> 36LL) & 0xfffLL));
+putbyte((unsigned short)((d >> 24LL) & 0xfffLL));
+putbyte((unsigned short)((d >> 12LL) & 0xfffLL));
+putbyte((unsigned short)(d & 0xfffLL));
 }
 
 /*****************************************************************************/
@@ -3984,57 +3984,57 @@ switch (mode)
   {
   case ADRMODE_IMM :
     if (opsize == 2)
-      putbyte((unsigned char)operand);
+      putbyte((unsigned short)operand);
     else if (opsize == 5)               /* LDQ special                       */
       putdword(operand);
     else
       {
-      putword((unsigned short)operand);
+      putword((unsigned)operand);
       addrelocation = 1;
       }
     break; 
   case ADRMODE_DIR :
-    putbyte((unsigned char)operand);
+    putbyte((unsigned short)operand);
     break;
   case ADRMODE_EXT :
-    if (((codebuf[0] == 0x7e) ||        /* special for JMP                   */
-         (codebuf[0] == 0xbd) ||
-		 (codebuf[0] == 0x15 && (codebuf[1]==0x7E || codebuf[1]==0xbd))
+    if (((codebuf[0] == 0x07e) ||        /* special for JMP                   */
+         (codebuf[0] == 0x0bd) ||
+		 (codebuf[0] == 0x015 && (codebuf[1]==0x07E || codebuf[1]==0x0bd))
 		 ) &&       /* and JSR                           */
         pass > 1)
       {
-      int nDiff = (int)(short)operand - (int)(short)loccounter - 3;
-	  isNear = (operand & 0xFFFF0000L) == (loccounter & 0xffff0000L);
+      int nDiff = (int)operand - (int)loccounter - 3;
+	  isNear = (operand & 0xFF0000L) == (loccounter & 0xff0000L);
       if (((nDiff & 0xff80) == 0x0000) ||
            ((nDiff & 0xff80) == 0xff80))
            warning |= (certain) ? WRN_OPT : 0;
       }
-	  if (codebuf[0]==0x15 && codebuf[1]==0xbd && isFar) {
+	  if (codebuf[0]==0x015 && codebuf[1]==0x0bd && isFar) {
 		  if (isNear && !isFarkw) {
-			  codebuf[0]=0xbd;
+			  codebuf[0]=0x0bd;
 			  isFar = 0;
 		  }
 		  else
-			  codebuf[0]=0xcf;
+			  codebuf[0]=0x0cf;
 		  codeptr--;
 	  }
-	  if (codebuf[0]==0x15 && codebuf[1]==0x7E && isFar) {
+	  if (codebuf[0]==0x015 && codebuf[1]==0x07E && isFar) {
 		  if (isNear && !isFarkw) {
-			codebuf[0]=0x7E;
+			codebuf[0]=0x07E;
 			isFar = 0;
 		  }
 		  else
-			codebuf[0]=0x8f;
+			codebuf[0]=0x08f;
 		  codeptr--;
 	  }
 	  if (isFar) {
-		  putbyte((unsigned short)(operand >> 16));
+		  putbyte((unsigned short)(operand >> 24));
 	  }
-    putword((unsigned short)operand);
+    putword((unsigned)operand);
     addrelocation = 1;
     break;
   case ADRMODE_IDX :
-    putbyte((unsigned char)operand);
+    putbyte((unsigned short)operand);
     break;
   case ADRMODE_POST :
   case ADRMODE_IND :
@@ -4043,20 +4043,20 @@ switch (mode)
     switch (opsize)
       {
       case 2:
-        putbyte((unsigned char)operand);
+        putbyte((unsigned short)operand);
         break;
       case 3:
-        putword((unsigned short)operand); 
+        putword((unsigned)operand); 
         addrelocation = 1;
 		break;
       case 4:
-        putbyte((unsigned short)(operand>>16)); 
-        putword((unsigned short)operand); 
+        putbyte((unsigned short)(operand>>24)); 
+        putword((unsigned)operand); 
         addrelocation = 1;
 		break;
       case 5:
-        putword((unsigned short)(operand>>16)); 
-        putword((unsigned short)operand); 
+        putword((unsigned short)(operand>>24)); 
+        putword((unsigned)operand); 
         addrelocation = 1;
 		break;
       }
@@ -4064,7 +4064,7 @@ switch (mode)
   case ADRMODE_PCR :
   case ADRMODE_PIN :
     offs = (unsigned)operand - loccounter - codeptr - 2;
-    if (offs < -128 || offs >= 128 || opsize == 3 || unknown || !certain)
+    if (offs < -2048 || offs >= 2048 || opsize == 3 || unknown || !certain)
       {
       if ((!unknown) && opsize == 2)
         error |= ERR_RANGE;
@@ -4075,11 +4075,11 @@ switch (mode)
     putbyte(postbyte);
     if (opsize == 3)
       {
-      putword((unsigned short)offs); 
+      putword((unsigned)offs); 
       addrelocation = 1;
       }
     else
-      putbyte((unsigned char)offs);   
+      putbyte((unsigned short)offs);   
   }     
 
 if (addrelocation)
@@ -4092,7 +4092,7 @@ if (addrelocation)
 
 void onebyte(int co)
 {
-putbyte((unsigned char)co);
+putbyte((unsigned short)co);
 }
 
 /*****************************************************************************/
@@ -4101,30 +4101,30 @@ putbyte((unsigned char)co);
 
 void twobyte(int co)
 {
-putword((unsigned short)co);
+putword((unsigned)co);
 }
 
 /*****************************************************************************/
 /* threebyte : saves long integer as three instruction bytes                 */
 /*****************************************************************************/
 
-void threebyte(unsigned long co)
+void threebyte(unsigned __int64 co)
 {
-putbyte((unsigned char)((co >> 16) & 0xff));
-putbyte((unsigned char)((co >> 8) & 0xff));
-putbyte((unsigned char)(co & 0xff));
+putbyte((unsigned short)((co >> 24LL) & 0xfffLL));
+putbyte((unsigned short)((co >> 12LL) & 0xfffLL));
+putbyte((unsigned short)(co & 0xfffL));
 }
 
 /*****************************************************************************/
 /* fourbyte : saves long integer as four instruction bytes                   */
 /*****************************************************************************/
 
-void fourbyte(unsigned long co)
+void fourbyte(unsigned __int64 co)
 {
-putbyte((unsigned char)((co >> 24) & 0xff));
-putbyte((unsigned char)((co >> 16) & 0xff));
-putbyte((unsigned char)((co >> 8) & 0xff));
-putbyte((unsigned char)(co & 0xff));
+  putbyte((unsigned short)((co >> 36LL) & 0xfffLL));
+  putbyte((unsigned short)((co >> 24LL) & 0xfffLL));
+  putbyte((unsigned short)((co >> 12LL) & 0xfffLL));
+  putbyte((unsigned short)(co & 0xfffL));
 }
 
 /*****************************************************************************/
@@ -4138,11 +4138,11 @@ struct relocrecord p = {0};
 scanoperands(&p);
 if (mode >= ADRMODE_POST)
   error |= ERR_ILLEGAL_ADDR;
-putbyte((unsigned char)co);
+putbyte((unsigned short)co);
 
 /* addreloc(0, 2, p); */                /* no relocation for immediate op's  */
 
-putbyte((unsigned char)operand);
+putbyte((unsigned short)operand);
 }
 
 /*****************************************************************************/
@@ -4155,8 +4155,8 @@ struct relocrecord p = {0};
 
 scanoperands(&p);
 if (isFar)
-	onebyte(0x15);
-onebyte((unsigned char)co);
+	onebyte(0x015);
+onebyte((unsigned short)co);
 if (mode == ADRMODE_IMM)
   error |= ERR_ILLEGAL_ADDR;
 if (mode < ADRMODE_POST)
@@ -4165,7 +4165,7 @@ if (mode < ADRMODE_POST)
 		  opsize = 4;
 	  else
 		opsize = 3;
-  postbyte = 0x8f;
+  postbyte = 0x80f;
   mode = ADRMODE_POST;
   }
 doaddress(&p);
@@ -4184,12 +4184,12 @@ scanoperands(&p);
 if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
   error |= ERR_ILLEGAL_ADDR;
 offs = operand - loccounter - 2;
-if (!unknown && (offs < -128 || offs >= 128))
+if (!unknown && (offs < -2048 || offs >= 2048))
   error |= ERR_RANGE;
 if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF;
-putbyte((unsigned char)co);
-putbyte((unsigned char)offs);
+putbyte((unsigned short)co);
+putbyte((unsigned short)offs);
 }
 
 /*****************************************************************************/
@@ -4204,12 +4204,12 @@ int nDiff;
 scanoperands(&p);
 if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
   error |= ERR_ILLEGAL_ADDR;
-putbyte((unsigned char)co);
+putbyte((unsigned short)co);
 
 nDiff = operand - loccounter - 3;
 putword((unsigned short)nDiff);
-if (((nDiff & 0xff80) == 0x0000) ||
-    ((nDiff & 0xff80) == 0xff80))
+if (((nDiff & 0xff8000) == 0x000000) ||
+    ((nDiff & 0xff8000) == 0xff8000))
   warning |= (certain) ? WRN_OPT : 0;
 }
 
@@ -4225,11 +4225,11 @@ int nDiff;
 scanoperands(&p);
 if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
   error |= ERR_ILLEGAL_ADDR;
-putword((unsigned short)co);
+putword((unsigned)co);
 nDiff = operand - loccounter - 4;
-putword((unsigned short)nDiff);
-if (((nDiff & 0xff80) == 0x0000) ||
-    ((nDiff & 0xff80) == 0xff80))
+putword((unsigned)nDiff);
+if (((nDiff & 0xff8000) == 0x000000) ||
+    ((nDiff & 0xff8000) == 0xff8000))
   warning |= (certain) ? WRN_OPT : 0;
 }
 
@@ -4248,22 +4248,22 @@ switch (mode)
     if (noimm)
       error |= ERR_ILLEGAL_ADDR;
     opsize = 2;
-    putbyte((unsigned char)co);
+    putbyte((unsigned short)co);
     break;
   case ADRMODE_DIR :
-    putbyte((unsigned char)(co + 0x010));
+    putbyte((unsigned short)(co + 0x010));
     break;
   case ADRMODE_EXT :
 	  if (isFar)
-		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x030));
+		  putbyte(0x015);
+    putbyte((unsigned short)(co + 0x030));
     break;
   default:
 	  if (isFar)
-		  putbyte(0x15);
+		  putbyte(0x015);
 		if (isPostIndexed)
-			putbyte(0x1B);
-    putbyte((unsigned char)(co + 0x020));
+			putbyte(0x01B);
+    putbyte((unsigned short)(co + 0x020));
   }
 doaddress(&p);
 }
@@ -4320,23 +4320,23 @@ switch (mode)
   case ADRMODE_IMM :
     error |= ERR_ILLEGAL_ADDR;
     opsize = 3;
-    putbyte((unsigned char)co);
+    putbyte((unsigned short)co);
     break;
   case ADRMODE_DIR :
     mode = ADRMODE_EXT;                 /* implicitly convert to extended    */
-    putbyte((unsigned char)(co + 0x030));
+    putbyte((unsigned short)(co + 0x030));
     break;
   case ADRMODE_EXT :
 	if (isFar)
-		putbyte(0x15);
-    putbyte((unsigned char)(co + 0x030));
+		putbyte(0x015);
+    putbyte((unsigned short)(co + 0x030));
     break;
   default:
 	if (isFar)
-		putbyte(0x15);
+		putbyte(0x015);
 	if (isPostIndexed)
-		putbyte(0x1B);
-    putbyte((unsigned char)(co + 0x020));
+		putbyte(0x01B);
+    putbyte((unsigned short)(co + 0x020));
     break;
  }
 doaddress(&p);
@@ -4360,22 +4360,22 @@ switch (mode)
 		opsize = 5;
 	else
 		opsize = 3;
-    putbyte((unsigned char)co);
+    putbyte((unsigned short)co);
     break;
   case ADRMODE_DIR :
-    putbyte((unsigned char)(co + 0x010));
+    putbyte((unsigned short)(co + 0x010));
     break;
   case ADRMODE_EXT :
 	  if (isFar)
-		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x030));
+		  putbyte(0x015);
+    putbyte((unsigned short)(co + 0x030));
     break;
   default:
 	  if (isFar)
-		  putbyte(0x15);
+		  putbyte(0x015);
 	  if (isPostIndexed)
-		  putbyte(0x1B);
-    putbyte((unsigned char)(co + 0x020));
+		  putbyte(0x01B);
+    putbyte((unsigned short)(co + 0x020));
     break;
  }
 doaddress(&p);
@@ -4399,23 +4399,23 @@ switch (mode)
 		opsize = 5;
 	else
 		opsize = 3;
-    putword((unsigned short)co);
+    putword((unsigned)co);
     break;
   case ADRMODE_DIR :
-    putword((unsigned short)(co + 0x010));
+    putword((unsigned)(co + 0x010));
     break;
   case ADRMODE_EXT :
 	  if (isFar) {
-		  putbyte(0x15);
+		  putbyte(0x015);
 	  }
-    putword((unsigned short)(co + 0x030));
+    putword((unsigned)(co + 0x030));
     break;
   default:
 	  if (isFar)
-		  putbyte(0x15);
+		  putbyte(0x015);
 	  if (isPostIndexed)
-		  putbyte(0x1B);
-    putword((unsigned short)(co + 0x020));
+		  putbyte(0x01B);
+    putword((unsigned)(co + 0x020));
  }
 doaddress(&p);
 }
@@ -4435,16 +4435,16 @@ switch (mode)
     if (noimm)
       error |= ERR_ILLEGAL_ADDR;
     opsize = 5;
-    putbyte((unsigned char)0xcd);       /* this can ONLY be LDQ!             */
+    putbyte((unsigned short)0xcd);       /* this can ONLY be LDQ!             */
     break;
   case ADRMODE_DIR :
-    putword((unsigned short)(co + 0x010));
+    putword((unsigned)(co + 0x010));
     break;
   case ADRMODE_EXT :
-    putword((unsigned short)(co + 0x030));
+    putword((unsigned)(co + 0x030));
     break;
   default:
-    putword((unsigned short)(co + 0x020));
+    putword((unsigned)(co + 0x020));
     break;
  }
 doaddress(&p);
@@ -4487,19 +4487,19 @@ switch (mode)
         (co == 0x0e))
       error |= ERR_ILLEGAL_ADDR;
     else
-      putbyte((unsigned char)co);
+      putbyte((unsigned short)co);
     break;
   case ADRMODE_EXT :
 	  if (isFar)
-		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x70));
+		  putbyte(0x015);
+    putbyte((unsigned short)(co + 0x70));
     break;
   default:
 	  if (isFar)
-		  putbyte(0x15);
+		  putbyte(0x015);
 	  if (isPostIndexed)
-		  putbyte(0x1B);
-    putbyte((unsigned char)(co + 0x60));
+		  putbyte(0x01B);
+    putbyte((unsigned short)(co + 0x60));
     break;
   }
 doaddress(&p);
@@ -4537,19 +4537,19 @@ switch (mode)
     break;
   case ADRMODE_DIR :
     mode = ADRMODE_EXT;                 /* silently convert to extended      */
-    putbyte((unsigned char)(co + 0x70));
+    putbyte((unsigned short)(co + 0x70));
     break;
   case ADRMODE_EXT :
 	  if (isFar)
 		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x70));
+    putbyte((unsigned short)(co + 0x70));
     break;
   default:
 	  if (isFar)
 		  putbyte(0x15);
 		if (isPostIndexed)
 			putbyte(0x1B);
-    putbyte((unsigned char)(co + 0x60));
+    putbyte((unsigned short)(co + 0x60));
     break;
   }
 doaddress(&p);
@@ -4606,7 +4606,7 @@ if (*srcptr == '#')
   srcptr++;
   if (!(dwOptions & OPTION_TSC))
     skipspace();
-  postbyte = (unsigned char)scanexpr(0, &sp);
+  postbyte = (unsigned short)scanexpr(0, &sp);
   }
 else do
   {
@@ -4633,8 +4633,8 @@ else do
     skipspace();
   } while (*srcptr == ',');
 if (isFar)
-	putbyte((unsigned char)0x15);
-putbyte((unsigned char)co);
+	putbyte((unsigned short)0x15);
+putbyte((unsigned short)co);
 putbyte(postbyte);
 }
 
@@ -4650,8 +4650,8 @@ unsigned short dir;
 skipspace();
 if (*srcptr++ != '#')
   error |= ERR_EXPR;
-dir = (unsigned short)scanexpr(0, &p);
-if (dir & 0xff00)
+dir = (unsigned)scanexpr(0, &p);
+if (dir & 0xfff000)
   error |= ERR_EXPR;
 if (!(dwOptions & OPTION_TSC))
   skipspace();
@@ -4664,20 +4664,20 @@ switch (mode)
     error |= ERR_ILLEGAL_ADDR;
     break;
   case ADRMODE_DIR :
-    putbyte((unsigned char)co);
+    putbyte((unsigned short)co);
     break;
   case ADRMODE_EXT :
 	  if (isFar)
 		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x70));
+    putbyte((unsigned short)(co + 0x70));
     break;
   default:
 	  if (isFar)
 		  putbyte(0x15);
-    putbyte((unsigned char)(co + 0x60));
+    putbyte((unsigned short)(co + 0x60));
     break;
   }
-putbyte((unsigned char)dir);
+putbyte((unsigned short)dir);
 doaddress(&p);
 }
 
@@ -4691,7 +4691,7 @@ struct regrecord *p;
 struct relocrecord rp = {0};
 long t;
 
-putword((unsigned short)co);
+putword((unsigned)co);
 
 skipspace();
 scanname();
@@ -4708,7 +4708,7 @@ else
 if (!(dwOptions & OPTION_TSC))
   skipspace();
 t = scanfactor(&rp);
-if (t & 0xfff8)
+if (t & 0xfffff8)
   error |= ERR_ILLEGAL_ADDR;
 else
   postbyte |= (t << 3);
@@ -4719,11 +4719,11 @@ if (*srcptr == ',')
 else
  error |= ERR_ILLEGAL_ADDR;
 t = scanfactor(&rp);
-if (t & 0xfff8)
+if (t & 0xfffff8)
   error |= ERR_ILLEGAL_ADDR;
 else
   postbyte |= t;
-putbyte((unsigned char)postbyte);
+putbyte((unsigned short)postbyte);
 if (!(dwOptions & OPTION_TSC))
   skipspace();
 if (*srcptr == ',')
@@ -4734,7 +4734,7 @@ scanoperands(&rp);
 switch (mode)
   {
   case ADRMODE_DIR :
-    putbyte((unsigned char)operand);
+    putbyte((unsigned short)operand);
     break;
   default:
     error |= ERR_ILLEGAL_ADDR;
@@ -4810,8 +4810,8 @@ if (i >= (sizeof(modes) / sizeof(modes[0])))
 else
   co |= i;
 
-putword((unsigned short)co);
-putbyte((unsigned char)((reg1 << 4) | reg2));
+putword((unsigned)co);
+putbyte((unsigned short)((reg1 << 4) | reg2));
 }
 
 /*****************************************************************************/
@@ -5287,7 +5287,7 @@ switch (co)
         }
       else
         {
-        putbyte((unsigned char)scanexpr(0, &p));
+        putbyte((unsigned short)scanexpr(0, &p));
         if (unknown && pass == MAX_PASSNO)
           error |= ERR_LABEL_UNDEF;
         }
@@ -5318,7 +5318,7 @@ switch (co)
         c = *srcptr;
         if ((c == '$') || isalnum(c))
           {
-          putbyte((unsigned char)scanexpr(0, &p));
+          putbyte((unsigned short)scanexpr(0, &p));
           if (unknown && pass == MAX_PASSNO)
             error |= ERR_LABEL_UNDEF;
           }
@@ -5344,7 +5344,7 @@ switch (co)
         srcptr++;
       if (!(dwOptions & OPTION_TSC))
         skipspace();
-      putword((unsigned short)scanexpr(0, &p));
+      putword((unsigned)scanexpr(0, &p));
       if (unknown && pass == MAX_PASSNO)
         error |= ERR_LABEL_UNDEF; 
       if (!(dwOptions & OPTION_TSC))
@@ -5360,7 +5360,7 @@ switch (co)
         srcptr++;
       if (!(dwOptions & OPTION_TSC))
         skipspace();
-      putdword((unsigned)scanexpr(0, &p));
+      putdword((unsigned __int64)scanexpr(0, &p));
       if (unknown && pass == MAX_PASSNO)
         error |= ERR_LABEL_UNDEF; 
       if (!(dwOptions & OPTION_TSC))
@@ -5487,7 +5487,7 @@ switch (co)
       switch (outmode)
         {
         case OUT_BIN :                  /* binary output file                */
-          j = (int)(unsigned short)operand - (int)loccounter;
+          j = (int)(unsigned)operand - (int)loccounter;
           if (j > 0)                    /* if forward gap                    */
             {
             for (i = 0; i < j; i++)     /* seek forward that many bytes      */
@@ -5526,9 +5526,9 @@ switch (co)
       operand = scanexpr(0, &p);
     if (unknown)
       error |= ERR_LABEL_UNDEF;
-    if (!(operand & 255))
-      operand = (unsigned short)operand >> 8;
-    if ((unsigned)operand > 255)
+    if (!(operand & 4095))
+      operand = (unsigned)operand >> 12;
+    if ((unsigned)operand > 4095)
       operand = -1;
     if (absmode)
       dpsetting = operand;              
@@ -5549,7 +5549,7 @@ switch (co)
           lp->cat = SYMCAT_VARADDR;
         else
           lp->cat = SYMCAT_VARIABLE;
-        lp->value = (unsigned short)operand;
+        lp->value = (unsigned)operand;
         }
       else
         error |= ERR_LABEL_MULT;
@@ -5562,7 +5562,7 @@ switch (co)
       skipspace();                      /* skip blanks                       */
       if (isfactorstart(*srcptr))       /* if possible transfer address      */
         {
-        tfradr = (unsigned short)       /* get transfer address              */
+        tfradr = (unsigned)       /* get transfer address              */
             scanexpr(0, &p);
         if (error)                      /* if error in here                  */
           tfradr = 0;                   /* reset to zero                     */
@@ -6217,9 +6217,9 @@ void processline()
 {
 struct symrecord *lp, *lpmac;
 struct oprecord *op = NULL;
-int co;
-char cat;
-char c;
+__int64 co;
+short cat;
+short c;
 char noimm;
 
 #if 0
@@ -6311,7 +6311,7 @@ if ((isalnum(*srcptr)) ||
         fourbyte(co);
         break;
       case OPCAT_2IMMBYTE :             /* 6309 only                         */
-        putbyte((unsigned char)(co >> 8));
+        putbyte((unsigned short)(co >> 12LL));
         /* fall thru on purpose! */
       case OPCAT_IMMBYTE :
         oneimm(co);
@@ -6329,7 +6329,7 @@ if ((isalnum(*srcptr)) ||
         lbra(co);
         break;
       case OPCAT_2ARITH :               /* 6309 only                         */
-        putbyte((unsigned char)(co >> 8));
+        putbyte((unsigned short)(co >> 12));
         /* fall thru on purpose! */
       case OPCAT_ARITH :
         arith(co, noimm);
@@ -6347,7 +6347,7 @@ if ((isalnum(*srcptr)) ||
         oneaddr(co);
         break;
       case OPCAT_IREG :                 /* 6309 only                         */
-        putbyte((unsigned char)(co >> 8));
+        putbyte((unsigned short)(co >> 12));
         /* fall thru on purpose! */
       case OPCAT_2REG :
         tfrexg(co);

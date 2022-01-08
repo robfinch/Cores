@@ -172,8 +172,8 @@ wire we;
 wire [15:0] sel;
 (* mark_debug = "true" *)
 wire [23:0] adr;
-reg [7:0] dati = 8'd0;
-wire [7:0] dato;
+reg [11:0] dati = 12'd0;
+wire [11:0] dato;
 wire sr,cr,rb;
 
 wire [31:0] tc1_rgb;
@@ -182,7 +182,7 @@ wire [7:0] tc1_dato;
 wire ack_scr;
 (* mark_debug = "true" *)
 wire ack_br = 1'b0;
-wire [7:0] scr_dato;
+wire [11:0] scr_dato;
 wire [127:0] br_dato = 128'd0;
 wire br_bok, scr_bok;
 wire rnd_ack;
@@ -838,13 +838,13 @@ else begin
 //led[2] <= rst;
 //led[7:4] <= adr[6:3];
 if (cs_led & br2_we)
-  led[7:0] <= br2_dato;
+  led[7:0] <= br2_dato[7:0];
 end
 reg [7:0] led_dato;
 always_comb
 case(br2_adr[1:0])
-2'd0:	led_dato <= sw;
-2'd1:	led_dato <= {3'd0,btnc,btnu,btnd,btnl,btnr};
+2'd0:	led_dato <= {4'd0,sw};
+2'd1:	led_dato <= {7'd0,btnc,btnu,btnd,btnl,btnr};
 default:	;
 endcase
 
@@ -1633,7 +1633,7 @@ nic unic1
 	.s_rty_o(),
 	.s_we_i(1'b0),
 	.s_adr_i(24'h0),
-	.s_dat_i(8'h00),
+	.s_dat_i(12'h00),
 	.s_dat_o(),
 	.m_cyc_o(cyc),
 	.m_stb_o(stb),
