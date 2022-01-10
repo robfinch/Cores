@@ -39,7 +39,8 @@
 import rf6809_pkg::*;
 import nic_pkg::*;
 
-module pnode(id, rst_i, clk_i, packet_i, packet_o, ipacket_i, ipacket_o);
+module pnode(id, rst_i, clk_i, packet_i, packet_o, ipacket_i, ipacket_o,
+	pc1, pc2);
 input [4:0] id;
 input rst_i;
 input clk_i;
@@ -47,6 +48,8 @@ input Packet packet_i;
 output Packet packet_o;
 input IPacket ipacket_i;
 output IPacket ipacket_o;
+output [`TRPBYTE] pc1;
+output [`TRPBYTE] pc2;
 
 wire c1_cyc;
 wire c1_stb;
@@ -195,82 +198,75 @@ parameter ST_ACK = 6'd1;
 parameter ST_RD1 = 6'd2;
 parameter ST_RD2 = 6'd3;
 parameter ST_RD3 = 6'd4;
+parameter ST_RD4 = 6'd5;
+parameter ST_ACKC = 6'd6;
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	r1_ack <= 1'b0;
 	r1_cdat <= 12'h00;
+	r1_en <= FALSE;
+	r1_we <= FALSE;
+	state1 <= ST_IDLE;
 end
 else begin
-	r1_en <= TRUE;
-	r1_we <= FALSE;
+	// If the cycle is over, clear the ack and reset the data bus.
+	if (!(c1_cyc & c1_stb)) begin
+		r1_ack <= 1'b0;
+		r1_cdat <= 12'h00;
+	end
+	if (!(m1_cyc & m1_stb)) begin
+		m1_ack <= 1'b0;
+		m1_dati <= 12'h00;
+	end
 	case(state1)
 	ST_IDLE:
-		begin
-			if (m1_cyc) begin
-				w1 <= 1'b0;
+		if (m1_cyc) begin
+			w1 <= 1'b0;
+			if (m1_adr[23:20]==4'hC || m1_adr[23:20]==4'hD) begin
 				r1_adr <= m1_adr;
 				r1_dati <= m1_dato;
 				r1_we <= m1_we;
-				if (m1_adr[23]) begin
-					state1 <= ST_ACK;
-				end
+				r1_en <= TRUE;
+				state1 <= ST_RD1;
 			end
-			else if (c1_cyc) begin
-				w1 <= 1'b1;
+			else
+				m1_ack <= 1'b1;
+		end
+		else if (c1_cyc) begin
+			w1 <= 1'b1;
+			if (c1_adr[23:22]==2'b00) begin
+				state1 <= ST_RD1;
+				r1_we <= c1_we;
+				r1_en <= TRUE;
 				r1_adr <= c1_adr;
 				r1_dati <= c1_dato;
-				if (c1_adr[23:22]==2'b00) begin
-					state1 <= ST_ACK;
-					r1_we <= c1_we;
-				end
 			end
 		end
-	ST_ACK:
-		begin
-			if (w1) begin
-				if (c1_we)
-					r1_ack <= 1'b1;
-				else
-					state1 <= ST_RD1;
-				if (~c1_cyc) begin
-					r1_ack <= 1'b0;
-					state1 <= ST_IDLE;
-				end
-			end
-			else begin
-				if (m1_we)
-					m1_ack <= 1'b1;
-				else
-					state1 <= ST_RD1;
-				if (~m1_cyc) begin
-					m1_ack <= 1'b0;
-					state1 <= ST_IDLE;
-				end
-			end
-		end
+	// Three cycle read latency.
 	ST_RD1:	state1 <= ST_RD2;
 	ST_RD2:	state1 <= ST_RD3;
-	ST_RD3:
+	ST_RD3:	state1 <= ST_RD4;
+	ST_RD4:
 		begin
+			state1 <= ST_ACK;
+			r1_we <= FALSE;
 			if (w1) begin
 				r1_cdat <= r1_dato;
 				r1_ack <= 1'b1;
-				if (~c1_cyc) begin
-					r1_cdat <= 12'h00;
-					r1_ack <= 1'b0;
-					state1 <= ST_IDLE;
-				end
 			end
 			else begin
 				m1_dati <= r1_dato;
 				m1_ack <= 1'b1;
-				if (~m1_cyc) begin
-					m1_dati <= 12'h00;
-					m1_ack <= 1'b0;
-					state1 <= ST_IDLE;
-				end
 			end
+		end
+	ST_ACK:
+		begin
+			r1_en <= FALSE;
+			if ((m1_ack & m1_cyc & m1_stb) || (r1_ack & c1_cyc & c1_stb))
+				;
+			else
+				state1 <= ST_IDLE;
 		end
 	default:
 		state1 <= ST_IDLE;
@@ -281,78 +277,67 @@ always_ff @(posedge clk_i)
 if (rst_i) begin
 	r2_ack <= 1'b0;
 	r2_cdat <= 12'h00;
+	r2_en <= FALSE;
+	r2_we <= FALSE;
+	state2 <= ST_IDLE;
 end
 else begin
-	r2_en <= TRUE;
-	r2_we <= FALSE;
+	if (!(c2_cyc & c2_stb)) begin
+		r2_ack <= 1'b0;
+		r2_cdat <= 12'h00;
+	end
+	if (!(m2_cyc & m2_stb)) begin
+		m2_ack <= 1'b0;
+		m2_dati <= 12'h00;
+	end
 	case(state2)
 	ST_IDLE:
 		begin
 			if (m2_cyc) begin
 				w2 <= 1'b0;
-				r2_adr <= m2_adr;
-				r2_dati <= m2_dato;
-				r2_we <= m2_we;
-				if (m2_adr[23]) begin
-					state2 <= ST_ACK;
+				if (m2_adr[23:20]==4'hC || m2_adr[23:20]==4'hD) begin
+					r2_adr <= m2_adr;
+					r2_dati <= m2_dato;
+					r2_we <= m2_we;
+					r2_en <= TRUE;
+					state2 <= ST_RD1;
 				end
+				else
+					m2_ack <= 1'b1;
 			end
 			else if (c2_cyc) begin
 				w2 <= 1'b1;
-				r2_adr <= c2_adr;
-				r2_dati <= c2_dato;
 				if (c2_adr[23:22]==2'b00) begin
-					state2 <= ST_ACK;
+					r2_adr <= c2_adr;
+					r2_dati <= c2_dato;
+					state2 <= ST_RD1;
 					r2_we <= c2_we;
-				end
-			end
-		end
-	ST_ACK:
-		begin
-			if (w2) begin
-				if (c2_we)
-					r2_ack <= 1'b1;
-				else
-					state2 <= ST_RD1;
-				if (~c2_cyc) begin
-					r2_ack <= 1'b0;
-					state2 <= ST_IDLE;
-				end
-			end
-			else begin
-				if (m2_we)
-					m2_ack <= 1'b1;
-				else
-					state2 <= ST_RD1;
-				if (~m2_cyc) begin
-					m2_ack <= 1'b0;
-					state2 <= ST_IDLE;
+					r2_en <= TRUE;
 				end
 			end
 		end
 	ST_RD1:	state2 <= ST_RD2;
 	ST_RD2:	state2 <= ST_RD3;
-	ST_RD3:
+	ST_RD3:	state2 <= ST_RD4;
+	ST_RD4:
 		begin
+			state2 <= ST_ACK;
+			r2_we <= FALSE;
+			r2_en <= FALSE;
 			if (w2) begin
 				r2_cdat <= r2_dato;
 				r2_ack <= 1'b1;
-				if (~c2_cyc) begin
-					r2_cdat <= 12'h00;
-					r2_ack <= 1'b0;
-					state2 <= ST_IDLE;
-				end
 			end
 			else begin
 				m2_dati <= r2_dato;
 				m2_ack <= 1'b1;
-				if (~m2_cyc) begin
-					m2_dati <= 12'h00;
-					m2_ack <= 1'b0;
-					state2 <= ST_IDLE;
-				end
 			end
 		end
+	ST_ACK:
+		if ((m2_ack & m2_cyc & m2_stb) || (r2_ack & c2_cyc & c2_stb))
+			;
+		else
+			state2 <= ST_IDLE;
 	default:
 		state2 <= ST_IDLE;
 	endcase
@@ -437,6 +422,7 @@ rf6809 ucpu2
 	.state()
 );
 
-
+assign pc1 = ucpu1.pc;
+assign pc2 = ucpu2.pc;
 
 endmodule

@@ -45,10 +45,12 @@ input Packet packet_i;
 output Packet packet_o;
 input IPacket ipacket_i;
 output IPacket ipacket_o;
-parameter N=7;
+parameter N=2;
 
 Packet [N:0] packets;
 IPacket [N:0] ipackets;
+reg [35:0] pc1 [0:N];
+reg [35:0] pc2 [0:N];
 
 assign packets[0] = packet_i;
 assign ipackets[0] = ipacket_i;
@@ -58,7 +60,7 @@ generate begin : gNodes
 
 
 for (g = 0; g < N; g = g + 1)
- 	pnode upn (g[3:0]+1, rst_i, clk_i, packets[g], packets[g+1], ipackets[g], ipackets[g+1]);
+ 	pnode upn (g[3:0]+1, rst_i, clk_i, packets[g], packets[g+1], ipackets[g], ipackets[g+1], pc1[g], pc2[g]);
 
 end
 endgenerate

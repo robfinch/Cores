@@ -1,0 +1,1980 @@
+0 error(s), 110 warning(s) unlisted in pass 1
+                              ; ============================================================================
+                              ;        __
+                              ;   \\__/ o\    (C) 2013-2022  Robert Finch, Stratford
+                              ;    \  __ /    All rights reserved.
+                              ;     \/_//     robfinch<remove>@opencores.org
+                              ;       ||
+                              ;  
+                              ;
+                              ; This source file is free software: you can redistribute it and/or modify 
+                              ; it under the terms of the GNU Lesser General Public License as published 
+                              ; by the Free Software Foundation, either version 3 of the License, or     
+                              ; (at your option) any later version.                                      
+                              ;                                                                          
+                              ; This source file is distributed in the hope that it will be useful,      
+                              ; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+                              ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+                              ; GNU General Public License for more details.                             
+                              ;                                                                          
+                              ; You should have received a copy of the GNU General Public License        
+                              ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+                              ;                                                                          
+                              ; ============================================================================
+                              ;
+                              CR      EQU     $0D             ;ASCII equates
+                              LF      EQU     $0A
+                              TAB     EQU     $09
+                              CTRLC   EQU     $03
+                              CTRLH   EQU     $08
+                              CTRLI   EQU     $09
+                              CTRLJ   EQU     $0A
+                              CTRLK   EQU     $0B
+                              CTRLM   EQU $0D
+                              CTRLS   EQU     $13
+                              CTRLX   EQU     $18
+                              XON             EQU     $11
+                              XOFF    EQU     $13
+ 
+                              MAX_TASKNO      EQU 63
+                              DRAM_BASE       EQU $10000000
+ 
+                              ScreenLocation          EQU             $10
+                              ColorCodeLocation       EQU             $14
+                              ScreenLocation2         EQU             $18
+                              BlkcpySrc                       EQU             $1C
+                              BlkcpyDst                       EQU             $20
+                              Strptr                          EQU             $24
+                              PICptr                          EQU             $28
+                              ; Forth Area
+                              ; 0x30-0x60
+ 
+                              RunningTCB              EQU             $64
+ 
+                              ; Task control blocks, room for 256 tasks
+                              TCB_NxtRdy              EQU             $00     ; next task on ready / timeout list
+                              TCB_PrvRdy              EQU             $04     ; previous task on ready / timeout list
+                              TCB_NxtTCB              EQU             $08
+                              TCB_Timeout             EQU             $0C
+                              TCB_Priority    EQU             $10
+                              TCB_MSGPTR_D1   EQU             $14
+                              TCB_MSGPTR_D2   EQU             $18
+                              TCB_hJCB                        EQU             $1C
+                              TCB_Status              EQU             $1E
+                              TCB_CursorRow   EQU             $20
+                              TCB_CursorCol   EQU             $21
+                              TCB_hWaitMbx    EQU             $22     ; handle of mailbox task is waiting at
+                              TCB_mbq_next    EQU             $24     ; mailbox queue next
+                              TCB_mbq_prev    EQU             $28     ; mailbox queue previous
+                              TCB_iof_next    EQU             $2C
+                              TCB_iof_prev    EQU             $30
+                              TCB_SPSave              EQU             $34     ; TCB_SPSave area
+                              TCB_mmu_map             EQU             $38
+ 
+                              KeybdHead               EQU             $FFFFFC800
+                              KeybdTail               EQU             $FFFFFC900
+                              KeybdEcho               EQU             $FFFFFCA00
+                              KeybdBad                EQU             $FFFFFCB00
+                              KeybdAck                EQU             $FFFFFCC00
+                              KeybdLocks              EQU             $FFFFFCD00
+                              KeybdBuffer             EQU             $FFFFFC000      ; buffer is 16 chars
+ 
+                              COREID  EQU             $FFFFFFFE0
+                              MSCOUNT EQU             $FFFFFFFE4
+                              LEDS            EQU             $FFFE60000
+                              TEXTSCR         EQU             $FFFE00000
+                              TEXTREG         EQU             $FFFE0DF00
+                              TEXT_COLS       EQU             0
+                              TEXT_ROWS       EQU             1
+                              TEXT_CURPOS     EQU             34
+                              KEYBD           EQU             $FFFE30400
+                              KEYBDCLR        EQU             $FFFE30402
+                              PIC                     EQU             $FFFE3F000
+ 
+                              BIOS_SCREENS    EQU     $17000000       ; $17000000 to $171FFFFF
+ 
+                              ; EhBASIC vars:
+                              ;
+                              NmiBase         EQU             $DC
+                              IrqBase         EQU             $DF
+ 
+                              ; The IO focus list is a doubly linked list formed into a ring.
+                              ;
+                              IOFocusNdx      EQU             $100
+                              IOFocusID               EQU             $100
+ 
+                              ; These variables use direct page access
+                              ; There are two sets one at $1xxx and a second at $2xxx
+                              ; There is one set for each core
+                              CursorRow       EQU             $1000
+                              CursorCol       EQU             $1001
+                              CharColor       EQU             $1002
+                              ScreenColor     EQU             $1003
+                              CursorFlash     EQU             $1004
+                              Dsave           EQU             $1006
+                              Xsave           EQU             $1008
+                              Ysave           EQU             $100A
+                              Usave           EQU             $100C
+                              Ssave           EQU             $100E
+                              DPsave  EQU             $1010
+ 
+                              QNdx0           EQU             $780
+                              QNdx1           EQU             QNdx0+2
+                              QNdx2           EQU             QNdx1+2
+                              QNdx3           EQU             QNdx2+2
+                              QNdx4           EQU             QNdx3+2
+                              FreeTCB         EQU             QNdx4+2
+                              TimeoutList     EQU             FreeTCB+2
+                              FreeMbx         EQU             RunningTCB + 2
+                              nMailbox        EQU             FreeMbx + 2
+                              FreeMsg         EQU             nMailbox + 2
+                              nMsgBlk         EQU             FreeMsg + 2
+ 
+                              IrqSource       EQU             $79A
+ 
+                              IRQFlag         EQU             $7C6
+ 
+                              CharOutVec      EQU             $800
+                              CharInVec       EQU             $804
+ 
+                              ; Register save area for monitor
+                              mon_DSAVE       EQU             $900
+                              mon_XSAVE       EQU             $902
+                              mon_YSAVE       EQU             $904
+                              mon_USAVE       EQU             $906
+                              mon_SSAVE       EQU             $908
+                              mon_PCSAVE      EQU             $90A
+                              mon_DPRSAVE     EQU             $90E
+                              mon_CCRSAVE     EQU             $90F
+ 
+                              mon_numwka      EQU             $910
+                              mon_r1          EQU             $904
+                              mon_r2          EQU             $908
+ 
+                                      org             $FFC000
+ 00FFC000 012                             nop
+ 00FFC001 012                             nop
+ 00FFC002 012                             nop
+ 
+                              ; The ORG directive must set an address a multiple of 4 in order for the Verilog
+                              ; output to work correctly.
+ 
+                                      org             $FFD0AC
+ 00FFD0AC 012                             nop
+ 00FFD0AD 012                             nop
+ 00FFD0AE 012                             nop
+                              XBLANK
+ 00FFD0AF 086020                          lda             #' '
+ 00FFD0B1 0BDFFF815                       jsr             OUTCH
+ 00FFD0B4 039                             rts
+ 
+                                      org             $FFD0D0
+ 00FFD0D0 012                             nop
+ 00FFD0D1 012                             nop
+                              CRLF
+                              CRLF1:
+ 00FFD0D2 08600D                          lda             #CR
+ 00FFD0D4 0BDFFF815                       jsr             OUTCH
+ 00FFD0D7 08600A                          lda             #LF
+ 00FFD0D9 0BDFFF815                       jsr             OUTCH
+ 00FFD0DC 039                             rts
+ 
+                                      org             $FFD0F0
+ 00FFD0F0 012                             nop
+ 00FFD0F1 07EFFD0D2                       jmp             CRLF1
+*** warning 1: Long branch within short branch range could be optimized
+ 
+                                      org             $FFD1DC
+                              ONEKEY
+ 00FFD1DC 06E90F000804                    jmp             [CharInVec]
+ 
+                                      org             $FFD2C0
+ 00FFD2C0 012                             nop
+                              LETTER
+ 00FFD2C1 0BDFFF815                       jsr             OUTCH
+ 00FFD2C4 039                             rts
+ 
+                                      org             $FFD2CC
+ 00FFD2CC 012                             nop
+ 00FFD2CD 012                             nop
+                              HEX2
+ 00FFD2CE 0BDFFF400                       jsr             DispByteAsHex
+ 00FFD2D1 039                             rts
+                              HEX4
+ 00FFD2D2 0BDFFF3F7                       jsr             DispWordAsHex
+ 00FFD2D5 039                             rts
+ 
+                                      org             $FFD300
+                              ClearScreenJmp
+ 00FFD300 07EFFF1DA                       jmp             ClearScreen
+                                      org             $FFD308
+                              HomeCursorJmp
+ 00FFD308 0BDFFF266                       jsr             HomeCursor
+ 00FFD30B 039                             rts
+ 
+                                      org             $FFE000
+ 
+                              ; Local RAM test routine
+                              ; Checkerboard testing.
+                              ; There is 70kB of local RAM
+                              ; Does not use any RAM including no stack
+ 
+                              ramtest:
+ 00FFE000 18E000000                       ldy             #0
+ 00FFE003 086001                          lda             #1
+ 00FFE005 0150B7FFFE60000                 sta             LEDS
+                              ramtest1:
+ 00FFE00A 0CCAAA555                       ldd             #$AAA555
+ 00FFE00D 0EDA01                          std             ,y++
+ 00FFE00F 0CC555AAA                       ldd             #$555AAA
+ 00FFE012 0EDA01                          std             ,y++
+ 00FFE014 18C011800                       cmpy    #71680
+ 00FFE017 025FF1                          blo             ramtest1
+                                      ; now readback values and compare
+ 00FFE019 18E000000                       ldy             #0
+                              ramtest3:
+ 00FFE01C 0ECA01                          ldd             ,y++
+ 00FFE01E 183AAA555                       cmpd    #$AAA555
+ 00FFE021 026015                          bne             ramerr
+ 00FFE023 0ECA01                          ldd             ,y++
+ 00FFE025 183555AAA                       cmpd    #$555AAA
+ 00FFE028 02600E                          bne             ramerr
+ 00FFE02A 18C011800                       cmpy    #71680
+ 00FFE02D 025FED                          blo             ramtest3
+ 00FFE02F 086002                          lda             #2
+ 00FFE031 0150B7FFFE60000                 sta             LEDS
+ 00FFE036 06EC04                          jmp             ,u
+                              ramerr:
+ 00FFE038 086080                          lda             #$80
+ 00FFE03A 0150B7FFFE60000                 sta             LEDS
+ 00FFE03F 08EE00000                       ldx             #TEXTSCR
+ 00FFE042 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFE047 03A                             abx
+ 00FFE048 086046                          lda             #'F'
+ 00FFE04A 0A7804                          sta             ,x
+ 00FFE04C 013                             sync
+ 00FFE04D 06EC04                          jmp             ,u
+ 
+                                      org             $FFF000
+ 00FFF000 FFF850                          FDB MonitorNear
+ 00FFF002 FFF13F                          FDB DumRts      ;       NEXTCMD
+ 00FFF004 FFF7E5                          FDB INCH
+ 00FFF006 FFF7FC                          FDB INCHE
+ 00FFF008 FFF800                          FDB INCHEK
+ 00FFF00A FFF815                          FDB OUTCH
+ 00FFF00C FFF3E4                          FDB PDATA
+ 00FFF00E FFF3D7                          FDB PCRLF
+ 00FFF010 FFF3D3                          FDB PSTRNG
+ 00FFF012 FFF13F                          FDB DumRts                      ; LRA
+ 00FFF014 FFF13F                          FDB DumRts
+ 00FFF016 FFF13F                          FDB DumRts
+ 00FFF018 FFF13F                          FDB DumRts
+ 00FFF01A FFF13F                          FDB DumRts                      ; VINIZ
+ 00FFF01C FFF2DC                          FDB DisplayChar ;       VOUTCH
+ 00FFF01E FFF13F                          FDB DumRts                      ; ACINIZ
+ 00FFF020 FFF13F                          FDB DumRts                      ; AOUTCH
+ 
+                              start:
+ 00FFF022 086055                          lda             #$55
+ 00FFF024 0150B7FFFE60000                 sta             LEDS
+ 00FFF029 0CEFFF02F                       ldu             #st6                    ; U = return address
+ 00FFF02C 07EFFE000                       jmp             ramtest         ; JMP dont JSR
+                              st6:
+ 00FFF02F 1CE003BFF                       lds             #$3BFF          ; boot up stack area
+ 00FFF032 0150B6FFFFFFFE0                 lda             COREID
+                              ;       cmpa    #2
+                              ;       bne             skip_init
+ 00FFF037 044                             lsra
+ 00FFF038 024003                          bcc             st4
+ 00FFF03A 032E08400                       leas    $400,s          ; adjust stack for second core
+                              st4:
+ 00FFF03D 08D09B                          bsr             romToRam
+ 00FFF03F 0CC00F046                       ldd             #st7 & $FFFF
+ 00FFF042 01F001                          tfr             d,x
+ 00FFF044 06E804                          jmp             ,x                              ; jump to the BIOS now in local RAM
+                              st7:
+                              ;       pshs    a                                       ; Test local RAM writability
+                              ;       clra
+                              ;       puls    a
+                              ;       cmpa    #$55
+                              ;       bne             st3     
+ 00FFF046 08D0D4                          bsr             Delay3s         ; give some time for devices to reset
+ 00FFF048 0860AA                          lda             #$AA
+ 00FFF04A 0150B7FFFE60000                 sta             LEDS
+                              ;       sync
+ 00FFF04F 086002                          lda             #2
+ 00FFF051 097100                          sta             IOFocusID       ; core #2 has focus
+ 00FFF053 0860CE                          lda             #$0CE
+ 00FFF055 0B7001003                       sta             ScreenColor
+ 00FFF058 0B7001002                       sta             CharColor
+ 00FFF05B 08D17D                          bsr             ClearScreen
+ 00FFF05D 0CCFFF2DC                       ldd             #DisplayChar
+ 00FFF060 0DD800                          std             CharOutVec
+ 00FFF062 0CCFFF842                       ldd             #KeybdGetCharDirectFar
+ 00FFF065 0DD804                          std             CharInVec
+ 00FFF067 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF06C 0C1002                          cmpb    #2
+ 00FFF06E 02700D                          beq             init
+ 00FFF070 02002B                          bra             skip_init
+ 00FFF072 020076                          bra             multi_sieve
+                              st3:
+ 00FFF074 0860FF                          lda             #$FF
+ 00FFF076 0150B7FFFE60000                 sta             LEDS
+ 00FFF07B 020FF7                          bra             st3
+ 
+                                      ; initialize interrupt controller
+                                      ; first, zero out all the vectors
+                              init:
+ 00FFF07D 08E000080                       ldx             #128
+ 00FFF080 086001                          lda             #1                      ; set irq(bit0), clear firq (bit1), disable int (bit 6), clear edge sense(bit 7)
+ 00FFF082 0C6002                          ldb             #2                      ; serving core id
+                              st1:
+ 00FFF084 06F809E3F000                    clr             PIC,x           ; cause code
+ 00FFF088 0A7809E3F001                    sta             PIC+1,x
+ 00FFF08C 0E7809E3F002                    stb             PIC+2,x
+ 00FFF090 030004                          leax    4,x
+ 00FFF092 08C000100                       cmpx    #256
+ 00FFF095 025FED                          blo             st1
+                              ;       lda             #4                              ; make the timer interrupt edge sensitive
+                              ;       sta             PIC+4                   ; reg #4 is the edge sensitivity setting
+                              ;       sta             PIC                             ; reg #0 is interrupt enable
+ 
+ 00FFF097 086800                          lda             #$800                   ; high byte of $800000
+ 00FFF099 097064                          sta             RunningTCB
+ 00FFF09B 00F065                          clr             RunningTCB+1
+                              skip_init:
+ 00FFF09D 01C0EF                          andcc   #$EF                    ; unmask irq
+ 00FFF09F 086038                          lda             #56
+ 00FFF0A1 0150B7FFFE0DF00                 sta             TEXTREG+TEXT_COLS
+ 00FFF0A6 08601F                          lda             #31
+ 00FFF0A8 0150B7FFFE0DF01                 sta             TEXTREG+TEXT_ROWS
+ 00FFF0AD 08D12B                          bsr             ClearScreen
+ 00FFF0AF 08D1B5                          bsr             HomeCursor
+ 00FFF0B1 086005                          lda             #5
+ 00FFF0B3 0150B7FFFE60000                 sta             LEDS
+ 00FFF0B8 0CCFFF0C0                       ldd             #msgStartup
+ 00FFF0BB 08D308                          bsr             DisplayString
+ 00FFF0BD 07EFFF854                       jmp             Monitor
+ 
+                              msgStartup
+ 00FFF0C0 072066036038030039020           fcb             "rf6809 System Starting.",CR,LF,0
+ 00FFF0C7 05307907307406506D020
+ 00FFF0CE 05307406107207406906E
+ 00FFF0D5 06702E00D00A000
+ 
+                              ; Copy the system ROM to local RAM
+                              ; Running the code from local RAM is probably an order of magnitude faster
+                              ; then running from the global ROM. It also reduces the network traffic to
+                              ; run from local RAM.
+                              ;
+                              romToRam:
+ 00FFF0DA 08EFFC000                       ldx             #$FFC000
+ 00FFF0DD 18E00C000                       ldy             #$00C000
+                              romToRam1:
+ 00FFF0E0 0EC801                          ldd             ,x++
+ 00FFF0E2 0EDA01                          std             ,y++
+ 00FFF0E4 08C000000                       cmpx    #0
+ 00FFF0E7 026FF7                          bne             romToRam1
+ 00FFF0E9 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Multi-core sieve program.
+                              ;------------------------------------------------------------------------------
+ 
+                              ; First fill screen chars with 'P' indicating prime positions
+                              ; Each core is responsible for the Nth position where N is the
+                              ; core number minus two.
+                              ;
+                              multi_sieve:
+ 00FFF0EA 086050                          lda             #'P'                                    ; indicate prime
+ 00FFF0EC 0150F6FFFFFFFE0                 ldb             COREID                          ; find out which core we are
+ 00FFF0F1 0C0002                          subb    #2
+ 00FFF0F3 08E000000                       ldx             #0                                              ; start at first char of screen
+ 00FFF0F6 03A                             abx
+                              multi_sieve3:
+ 00FFF0F7 0A7809E00000                    sta             TEXTSCR,x                       ; store 'P'
+ 00FFF0FB 030008                          leax    8,x                                             ; advance to next position
+ 00FFF0FD 08C000FFF                       cmpx    #4095
+ 00FFF100 025FF5                          blo             multi_sieve3
+ 00FFF102 0CB002                          addb    #2                                              ; start sieve at 2 (core id)
+ 00FFF104 08604E                          lda             #'N'                                    ; flag position value of 'N' for non-prime
+                              multi_sieve2:
+ 00FFF106 08E000000                       ldx             #0
+ 00FFF109 03A                             abx                                                                     ; skip the first position - might be prime
+                              multi_sieve1:
+ 00FFF10A 03A                             abx                                                                     ; increment
+ 00FFF10B 0A7809E00000                    sta             TEXTSCR,x
+ 00FFF10F 08C000FFF                       cmpx    #4095
+ 00FFF112 025FF6                          blo             multi_sieve1
+ 00FFF114 0CB008                          addb    #8                                              ; number of cores working on it
+ 00FFF116 0C1FF0                          cmpb    #4080
+ 00FFF118 025FEC                          blo             multi_sieve2
+                              multi_sieve4:                                   ; hang machine
+ 00FFF11A 020FFE                          bra             multi_sieve4    
+                                      
+                              ;------------------------------------------------------------------------------
+                              ; Three second delay for user convenience and to allow some devices time to
+                              ; reset.
+                              ;------------------------------------------------------------------------------
+ 
+                              Delay3s:
+ 00FFF11C 0CC895440                       ldd             #9000000
+                              dly3s1:
+ 00FFF11F 0150B7FFFE60000                 sta             LEDS
+ 00FFF124 083000001                       subd    #1
+ 00FFF127 026FF6                          bne             dly3s1
+ 00FFF129 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Convert ASCII character to screen display character.
+                              ; Parameter
+                              ;       acca = ascii character
+                              ; Returns:
+                              ;       d = screen character
+                              ;------------------------------------------------------------------------------
+                              ;
+                              AsciiToScreen:
+ 00FFF12A 05F                             clrb
+ 00FFF12B 081041                          cmpa    #'A'
+ 00FFF12D 02500E                          blo             atoscr1
+ 00FFF12F 08105A                          cmpa    #'Z'
+ 00FFF131 02300A                          bls             atoscr1
+ 00FFF133 08107A                          cmpa    #'z'
+ 00FFF135 022006                          bhi             atoscr1
+ 00FFF137 081061                          cmpa    #'a'
+ 00FFF139 025002                          blo             atoscr1
+ 00FFF13B 080060                          suba    #$60
+                              atoscr1:
+ 00FFF13D 0CA001                          orb             #$1
+                              DumRts:
+ 00FFF13F 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Convert screen character to ascii character
+                              ;------------------------------------------------------------------------------
+                              ;
+                              ScreenToAscii:
+ 00FFF140 08101A                          cmpa    #26
+ 00FFF142 022002                          bhi             stasc1
+ 00FFF144 08B060                          adda    #$60
+                              stasc1:
+ 00FFF146 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              ShiftLeft5:
+ 00FFF147 058                             aslb
+ 00FFF148 049                             rola
+ 00FFF149 058                             aslb
+ 00FFF14A 049                             rola
+ 00FFF14B 058                             aslb
+ 00FFF14C 049                             rola
+ 00FFF14D 058                             aslb
+ 00FFF14E 049                             rola
+ 00FFF14F 058                             aslb
+ 00FFF150 049                             rola
+ 00FFF151 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              ;
+                              BlockCopyWords:
+ 00FFF152 18E000000                       ldy             #0
+                              bcw1:
+ 00FFF155 01B0ECB0801C                    ldd             [BlkcpySrc],y
+ 00FFF159 01B0EDB08020                    std             [BlkcpyDst],y
+ 00FFF15D 031202                          leay    2,y
+ 00FFF15F 0301FF                          leax    -1,x
+ 00FFF161 026FF2                          bne             bcw1
+ 00FFF163 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              ;
+                              CopyVirtualScreenToScreen:
+ 00FFF164 034076                          pshs    d,x,y,u
+ 00FFF166 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF16B 054                             lsrb
+ 00FFF16C 024005                          bcc             cv2s2
+ 00FFF16E 0CC00B800                       ldd             #$B800
+ 00FFF171 020003                          bra             cv2s3
+                              cv2s2:
+ 00FFF173 0CC00B000                       ldd             #$B000
+                              cv2s3:
+ 00FFF176 01F001                          tfr             d,x
+ 00FFF178 18EE00000                       ldy             #TEXTSCR
+ 00FFF17B 0CE000364                       ldu             #56*31/2
+                              cv2s1:
+ 00FFF17E 0EC801                          ldd             ,x++
+ 00FFF180 0EDA01                          std             ,y++
+ 00FFF182 0335FF                          leau    -1,u
+ 00FFF184 283000000                       cmpu    #0
+ 00FFF187 026FF5                          bne             cv2s1
+                                      ; reset the cursor position in the text controller
+ 00FFF189 0F6001000                       ldb             CursorRow
+ 00FFF18C 086038                          lda             #56
+ 00FFF18E 03D                             mul
+ 00FFF18F 01F001                          tfr             d,x
+ 00FFF191 0F6001001                       ldb             CursorCol
+ 00FFF194 03A                             abx
+ 00FFF195 0150BFFFFE0DF22                 stx             TEXTREG+TEXT_CURPOS
+ 00FFF19A 0350F6                          puls    d,x,y,u,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              ;
+                              CopyScreenToVirtualScreen:
+ 00FFF19C 034076                          pshs    d,x,y,u
+ 00FFF19E 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF1A3 054                             lsrb
+ 00FFF1A4 024005                          bcc             cs2v2
+ 00FFF1A6 0CC00B800                       ldd             #$B800
+ 00FFF1A9 020003                          bra             cs2v3
+                              cs2v2:
+ 00FFF1AB 0CC00B000                       ldd             #$B000
+                              cs2v3:
+ 00FFF1AE 01F002                          tfr             d,y
+ 00FFF1B0 08EE00000                       ldx             #TEXTSCR
+ 00FFF1B3 0CE000364                       ldu             #56*31/2
+                              cs2v1:
+ 00FFF1B6 0EC801                          ldd             ,x++
+ 00FFF1B8 0EDA01                          std             ,y++
+ 00FFF1BA 0335FF                          leau    -1,u
+ 00FFF1BC 283000000                       cmpu    #0
+ 00FFF1BF 026FF5                          bne             cs2v1
+ 00FFF1C1 0350F6                          puls    d,x,y,u,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+ 00FFF1C3 054045058054053043052           fcb             "TEXTSCR "
+ 00FFF1CA 020
+ 00FFF1CB FFF1D5                          fcw             TextOpen
+ 00FFF1CD FFF1D6                          fcw             TextClose
+ 00FFF1CF FFF1D7                          fcw             TextRead
+ 00FFF1D1 FFF1D8                          fcw             TextWrite
+ 00FFF1D3 FFF1D9                          fcw             TextSeek
+ 
+                              TextOpen:
+ 00FFF1D5 039                             rts
+                              TextClose:
+ 00FFF1D6 039                             rts
+                              TextRead:
+ 00FFF1D7 039                             rts
+                              TextWrite:
+ 00FFF1D8 039                             rts
+                              TextSeek:
+ 00FFF1D9 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Clear the screen and the screen color memory
+                              ; We clear the screen to give a visual indication that the system
+                              ; is working at all.
+                              ;------------------------------------------------------------------------------
+ 
+                              ClearScreen:
+ 00FFF1DA 034076                          pshs    d,x,y,u
+ 00FFF1DC 08E0006C8                       ldx             #56*31
+ 00FFF1DF 01F013                          tfr             x,u
+ 00FFF1E1 08D06B                          bsr             GetScreenLocation
+ 00FFF1E3 01F002                          tfr             d,y
+ 00FFF1E5 0C6020                          ldb             #' '                            ; space char
+                              cs1
+ 00FFF1E7 0E7A00                          stb             ,y+                                     ; set text to space
+ 00FFF1E9 0301FF                          leax    -1,x                            ; decrement x
+ 00FFF1EB 026FFA                          bne             cs1
+ 00FFF1ED 0150F6FFFFFFFE0                 ldb             COREID                  ; update colors only if we have focus
+ 00FFF1F2 0D1100                          cmpb    IOFocusID
+ 00FFF1F4 02000D                          bra             cs3
+ 00FFF1F6 18EE02000                       ldy             #TEXTSCR+$2000
+                              ;       lda             CharColor
+ 00FFF1F9 0860CE                          lda             #$0CE
+ 00FFF1FB 01F031                          tfr             u,x                                     ; get back count
+                              cs2:
+ 00FFF1FD 0A7A00                          sta             ,y+
+ 00FFF1FF 0301FF                          leax    -1,x                            ; decrement x
+ 00FFF201 026FFA                          bne             cs2
+                              cs3:
+ 00FFF203 0350F6                          puls    d,x,y,u,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Scroll text on the screen upwards
+                              ;------------------------------------------------------------------------------
+                              ;
+                              ScrollUp:
+ 00FFF205 034076                          pshs    d,x,y,u
+ 00FFF207 0150B6FFFE0DF00                 lda             TEXTREG+TEXT_COLS       ; acc = # text columns
+ 00FFF20C 0150F6FFFE0DF01                 ldb             TEXTREG+TEXT_ROWS
+ 00FFF211 05A                             decb                                            ; one less row
+ 00FFF212 03D                             mul                                                     ; calc number of chars to scroll
+ 00FFF213 01F002                          tfr             d,y                                     ; y = count of chars to move
+ 00FFF215 08D037                          bsr             GetScreenLocation
+ 00FFF217 01F001                          tfr             d,x
+ 00FFF219 01F003                          tfr             d,u
+ 00FFF21B 0150F6FFFE0DF00                 ldb             TEXTREG+TEXT_COLS
+ 00FFF220 03A                             abx                                                     ; x = index to source row
+                              scrup1:
+ 00FFF221 0EC801                          ldd             ,x++                    ; move 2 characters
+ 00FFF223 0EDC01                          std             ,u++
+ 00FFF225 0313FF                          leay    -1,y
+ 00FFF227 026FF8                          bne             scrup1
+ 00FFF229 0150B6FFFE0DF01                 lda             TEXTREG+TEXT_ROWS
+ 00FFF22E 04A                             deca
+ 00FFF22F 08D002                          bsr             BlankLine
+ 00FFF231 0350F6                          puls    d,x,y,u,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Blank out a line on the display
+                              ; line number to blank is in acca
+                              ;------------------------------------------------------------------------------
+ 
+                              BlankLine:
+ 00FFF233 034016                          pshs    d,x
+ 00FFF235 08D017                          bsr             GetScreenLocation
+ 00FFF237 01F001                          tfr             d,x
+ 00FFF239 0150F6FFFE0DF00                 ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+ 00FFF23E 03D                             mul                                                     ; d = screen index (row# * #cols)
+ 00FFF23F 03A                             abx
+ 00FFF240 086020                          lda             #' '
+ 00FFF242 0150F6FFFE0DF00                 ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+                              blnkln1:
+ 00FFF247 0A7800                          sta             ,x+
+ 00FFF249 05A                             decb
+ 00FFF24A 026FFB                          bne             blnkln1
+ 00FFF24C 035096                          puls    d,x,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Get the location of the screen memory. The location
+                              ; depends on whether or not the task has the output focus.
+                              ;------------------------------------------------------------------------------
+ 
+                              GetScreenLocation:
+ 00FFF24E 0150B6FFFFFFFE0                 lda             COREID                  ; which core are we?
+ 00FFF253 091100                          cmpa    IOFocusID               ; do we have the IO focus
+ 00FFF255 026004                          bne             gsl1                            ; no, go pick virtual screen address
+ 00FFF257 0CCE00000                       ldd             #TEXTSCR                ; yes, we update the real screen
+ 00FFF25A 039                             rts
+                              gsl1:
+ 00FFF25B 044                             lsra                                                    ; two cores share memory
+ 00FFF25C 024004                          bcc             gsl2
+ 00FFF25E 0CC00B800                       ldd             #$B800                  ; odd core's virtual screen
+ 00FFF261 039                             rts
+                              gsl2:
+ 00FFF262 0CC00B000                       ldd             #$B000                  ; even core's virtual screen
+ 00FFF265 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; HomeCursor
+                              ; Set the cursor location to the top left of the screen.
+                              ;------------------------------------------------------------------------------
+ 
+                              HomeCursor:
+                                      setdp   1
+ 00FFF266 034016                          pshs    d,x
+ 00FFF268 00F000                          clr             CursorRow
+ 00FFF26A 00F001                          clr             CursorCol
+ 00FFF26C 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF271 0F1000100                       cmpb    IOFocusID
+ 00FFF274 026006                          bne             hc1
+ 00FFF276 04F                             clra
+ 00FFF277 0150B7FFFE0DF22                 sta             TEXTREG+TEXT_CURPOS
+                              hc1:
+ 00FFF27C 035096                          puls    d,x,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Update the cursor position in the text controller based on the
+                              ;  CursorRow,CursorCol.
+                              ;------------------------------------------------------------------------------
+                              ;
+                              UpdateCursorPos:
+                                      setdp   1
+ 00FFF27E 034016                          pshs    d,x
+ 00FFF280 0150F6FFFFFFFE0                 ldb             COREID                          ; update cursor position in text controller
+ 00FFF285 0F1000100                       cmpb    IOFocusID                       ; only for the task with the output focus
+ 00FFF288 026014                          bne             ucp1                                    
+ 00FFF28A 096000                          lda             CursorRow
+ 00FFF28C 08403F                          anda    #$3F                                    ; limit of 63 rows
+ 00FFF28E 0150F6FFFE0DF00                 ldb             TEXTREG+TEXT_COLS
+ 00FFF293 03D                             mul
+ 00FFF294 01F001                          tfr             d,x
+ 00FFF296 0D6001                          ldb             CursorCol
+ 00FFF298 03A                             abx
+ 00FFF299 0150BFFFFE0DF22                 stx             TEXTREG+TEXT_CURPOS
+                              ucp1:
+ 00FFF29E 035096                          puls    d,x,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Calculate screen memory location from CursorRow,CursorCol.
+                              ; Also refreshes the cursor location.
+                              ; Returns:
+                              ; r1 = screen location
+                              ;------------------------------------------------------------------------------
+                              ;
+                              CalcScreenLoc:
+                                      setdp   1
+ 00FFF2A0 03403E                          pshs    d,x,y,dp
+ 00FFF2A2 0150B6FFFFFFFE0                 lda             COREID
+ 00FFF2A7 044                             lsra
+ 00FFF2A8 024006                          bcc             csl2
+ 00FFF2AA 086002                          lda             #2
+ 00FFF2AC 01F08B                          tfr             a,dp
+ 00FFF2AE 020004                          bra             csl4
+                              csl2:
+ 00FFF2B0 086001                          lda             #1
+ 00FFF2B2 01F08B                          tfr             a,dp
+                              csl4:
+ 00FFF2B4 096000                          lda             CursorRow
+ 00FFF2B6 08403F                          anda    #$3F                                    ; limit to 63 rows
+ 00FFF2B8 0150F6FFFE0DF00                 ldb             TEXTREG+TEXT_COLS
+ 00FFF2BD 03D                             mul
+ 00FFF2BE 01F001                          tfr             d,x
+ 00FFF2C0 0D6001                          ldb             CursorCol
+ 00FFF2C2 03A                             abx
+ 00FFF2C3 0150F6FFFFFFFE0                 ldb             COREID                          ; update cursor position in text controller
+ 00FFF2C8 0F1000100                       cmpb    IOFocusID                       ; only for the task with the output focus
+ 00FFF2CB 026005                          bne             csl1                                    
+ 00FFF2CD 0150BFFFFE0DF22                 stx             TEXTREG+TEXT_CURPOS
+                              csl1:
+ 00FFF2D2 08DF7A                          bsr             GetScreenLocation
+ 00FFF2D4 034010                          pshs    x
+ 00FFF2D6 0E3E04                          addd    ,s
+ 00FFF2D8 032602                          leas    2,s
+ 00FFF2DA 0350BE                          puls    d,x,y,dp,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Display a character on the screen.
+                              ; If the task doesn't have the I/O focus then the character is written to
+                              ; the virtual screen.
+                              ; a = char to display
+                              ;------------------------------------------------------------------------------
+                              ;
+                              DisplayChar:
+                                      setdp   1
+ 00FFF2DC 03401E                          pshs    d,x,dp
+ 00FFF2DE 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF2E3 054                             lsrb
+ 00FFF2E4 024006                          bcc             dcx16
+ 00FFF2E6 0C6002                          ldb             #2
+ 00FFF2E8 01F09B                          tfr             b,dp
+ 00FFF2EA 020004                          bra             dcx15
+                              dcx16:
+ 00FFF2EC 0C6001                          ldb             #1
+ 00FFF2EE 01F09B                          tfr             b,dp
+                              dcx15:
+ 00FFF2F0 08100D                          cmpa    #CR                                     ; carriage return ?
+ 00FFF2F2 026006                          bne             dccr
+ 00FFF2F4 00F001                          clr             CursorCol               ; just set cursor column to zero on a CR
+ 00FFF2F6 08DF86                          bsr             UpdateCursorPos
+                              dcx14:
+ 00FFF2F8 03509E                          puls    d,x,dp,pc
+                              dccr:
+ 00FFF2FA 081091                          cmpa    #$91                            ; cursor right ?
+ 00FFF2FC 02600D                          bne             dcx6
+ 00FFF2FE 096001                          lda             CursorCol
+ 00FFF300 081037                          cmpa    #55
+ 00FFF302 024003                          bhs             dcx7
+ 00FFF304 04C                             inca
+ 00FFF305 097001                          sta             CursorCol
+                              dcx7:
+ 00FFF307 08DF75                          bsr             UpdateCursorPos
+ 00FFF309 03509E                          puls    d,x,dp,pc
+                              dcx6:
+ 00FFF30B 081090                          cmpa    #$90                            ; cursor up ?
+ 00FFF30D 026009                          bne             dcx8            
+ 00FFF30F 096000                          lda             CursorRow
+ 00FFF311 027FF4                          beq             dcx7
+ 00FFF313 04A                             deca
+ 00FFF314 097000                          sta             CursorRow
+ 00FFF316 020FEF                          bra             dcx7
+                              dcx8:
+ 00FFF318 081093                          cmpa    #$93                            ; cursor left ?
+ 00FFF31A 026009                          bne             dcx9
+ 00FFF31C 096001                          lda             CursorCol
+ 00FFF31E 027FE7                          beq             dcx7
+ 00FFF320 04A                             deca
+ 00FFF321 097001                          sta             CursorCol
+ 00FFF323 020FE2                          bra             dcx7
+                              dcx9:
+ 00FFF325 081092                          cmpa    #$92                            ; cursor down ?
+ 00FFF327 02600B                          bne             dcx10
+ 00FFF329 096000                          lda             CursorRow
+ 00FFF32B 08101F                          cmpa    #31
+ 00FFF32D 027FD8                          beq             dcx7
+ 00FFF32F 04C                             inca
+ 00FFF330 097000                          sta             CursorRow
+ 00FFF332 020FD3                          bra             dcx7
+                              dcx10:
+ 00FFF334 081094                          cmpa    #$94                            ; cursor home ?
+ 00FFF336 02600C                          bne             dcx11
+ 00FFF338 096001                          lda             CursorCol
+ 00FFF33A 027004                          beq             dcx12
+ 00FFF33C 00F001                          clr             CursorCol
+ 00FFF33E 020FC7                          bra             dcx7
+                              dcx12:
+ 00FFF340 00F000                          clr             CursorRow
+ 00FFF342 020FC3                          bra             dcx7
+                              dcx11:
+ 00FFF344 034060                          pshs    y,u
+ 00FFF346 081099                          cmpa    #$99                            ; delete ?
+ 00FFF348 026008                          bne             dcx13
+ 00FFF34A 08DF54                          bsr             CalcScreenLoc
+ 00FFF34C 01F001                          tfr             d,x
+ 00FFF34E 096001                          lda             CursorCol               ; acc = cursor column
+ 00FFF350 02000D                          bra             dcx5
+                              dcx13
+ 00FFF352 081008                          cmpa    #CTRLH                  ; backspace ?
+ 00FFF354 02601A                          bne             dcx3
+ 00FFF356 096001                          lda             CursorCol
+ 00FFF358 027030                          beq             dcx4
+ 00FFF35A 04A                             deca
+ 00FFF35B 097001                          sta             CursorCol
+ 00FFF35D 08DF41                          bsr             CalcScreenLoc
+                              dcx5:
+ 00FFF35F 0E6001                          ldb             1,x
+ 00FFF361 0E7801                          stb             ,x++
+ 00FFF363 04C                             inca
+ 00FFF364 081037                          cmpa    #55
+ 00FFF366 025FF7                          blo             dcx5
+ 00FFF368 0C6020                          ldb             #' '
+ 00FFF36A 0301FF                          leax    -1,x
+ 00FFF36C 0ED804                          std             ,x
+ 00FFF36E 02001A                          bra             dcx4
+                              dcx3:
+ 00FFF370 08100A                          cmpa    #LF                             ; linefeed ?
+ 00FFF372 027014                          beq             dclf
+ 00FFF374 034002                          pshs    a
+ 00FFF376 08DF28                          bsr     CalcScreenLoc
+ 00FFF378 01F001                          tfr             d,x
+ 00FFF37A 035004                          puls    b
+ 00FFF37C 0E7804                          stb             ,x
+ 00FFF37E 096002                          lda             CharColor
+ 00FFF380 0A7809002000                    sta             $2000,x
+ 00FFF384 08D006                          bsr             IncCursorPos
+ 00FFF386 020002                          bra             dcx4
+                              dclf:
+ 00FFF388 08D01C                          bsr             IncCursorRow
+                              dcx4:
+ 00FFF38A 03509E                          puls    d,x,dp,pc
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Increment the cursor position, scroll the screen if needed.
+                              ;------------------------------------------------------------------------------
+                              ;
+                              IncCursorPos:
+                                      setdp   1
+ 00FFF38C 03401E                          pshs    d,x,dp
+ 00FFF38E 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF393 04F                             clra
+ 00FFF394 054                             lsrb
+ 00FFF395 089001                          adca    #1
+ 00FFF397 01F08B                          tfr             a,dp
+ 00FFF399 096001                          lda             CursorCol
+ 00FFF39B 04C                             inca
+ 00FFF39C 097001                          sta             CursorCol
+ 00FFF39E 081037                          cmpa    #55
+ 00FFF3A0 02501F                          blo             icc1
+ 00FFF3A2 00F001                          clr             CursorCol               ; column = 0
+ 00FFF3A4 02000D                          bra             icr1
+                              IncCursorRow:
+ 00FFF3A6 03401E                          pshs    d,x,dp
+ 00FFF3A8 0150F6FFFFFFFE0                 ldb             COREID
+ 00FFF3AD 04F                             clra
+ 00FFF3AE 054                             lsrb
+ 00FFF3AF 089001                          adca    #1
+ 00FFF3B1 01F08B                          tfr             a,dp
+                              icr1:
+ 00FFF3B3 096000                          lda             CursorRow
+ 00FFF3B5 04C                             inca
+ 00FFF3B6 097000                          sta             CursorRow
+ 00FFF3B8 08101F                          cmpa    #31
+ 00FFF3BA 025005                          blo             icc1
+ 00FFF3BC 04A                             deca                                                    ; backup the cursor row, we are scrolling up
+ 00FFF3BD 097000                          sta             CursorRow
+ 00FFF3BF 08DE44                          bsr             ScrollUp
+                              icc1:
+ 00FFF3C1 08DEBB                          bsr             UpdateCursorPos
+                              icc2:
+ 00FFF3C3 03509E                          puls    d,x,dp,pc       
+                                      setdp   0
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Display a string on the screen.
+                              ; Parameters:
+                              ;       d = pointer to string
+                              ;------------------------------------------------------------------------------
+                              ;
+                              DisplayString:
+ 00FFF3C5 034016                          pshs    d,x
+ 00FFF3C7 01F001                          tfr             d,x
+                              dspj1B:
+ 00FFF3C9 0A6800                          lda             ,x+                             ; move string char into acc
+ 00FFF3CB 027004                          beq             dsretB          ; is it end of string ?
+ 00FFF3CD 08D446                          bsr             OUTCH                   ; display character
+ 00FFF3CF 020FF8                          bra             dspj1B
+                              dsretB:
+ 00FFF3D1 035096                          puls    d,x,pc
+ 
+                              ;
+                              ; PRINT CR, LF, STRING
+                              ;
+                              PSTRNG
+ 00FFF3D3 08D002                          BSR             PCRLF
+ 00FFF3D5 02000D                          BRA             PDATA
+                              PCRLF
+ 00FFF3D7 034010                          PSHS    X
+ 00FFF3D9 08EFFF3EB                       LDX             #CRLFST
+ 00FFF3DC 08D006                          BSR             PDATA
+ 00FFF3DE 035010                          PULS    X
+ 00FFF3E0 039                             RTS
+ 
+                              PRINT
+ 00FFF3E1 0BDFFF815                       JSR             OUTCH
+                              PDATA
+ 00FFF3E4 0A6800                          LDA             ,X+
+ 00FFF3E6 081004                          CMPA    #$04
+ 00FFF3E8 026FF7                          BNE             PRINT
+ 00FFF3EA 039                             RTS
+ 
+                              CRLFST
+ 00FFF3EB 00D00A004                       fcb     CR,LF,4
+ 
+                              DispDWordAsHex:
+ 00FFF3EE 08D007                          bsr             DispWordAsHex
+ 00FFF3F0 01E001                          exg             d,x
+ 00FFF3F2 08D003                          bsr             DispWordAsHex
+ 00FFF3F4 01E001                          exg             d,x
+ 00FFF3F6 039                             rts
+ 
+                              DispWordAsHex:
+ 00FFF3F7 08D007                          bsr             DispByteAsHex
+ 00FFF3F9 01E089                          exg             a,b
+ 00FFF3FB 08D003                          bsr             DispByteAsHex
+ 00FFF3FD 01E089                          exg             a,b
+ 00FFF3FF 039                             rts
+ 
+                              DispByteAsHex:
+ 00FFF400 034002                    pshs  a
+ 00FFF402 044                             lsra
+ 00FFF403 044                             lsra
+ 00FFF404 044                             lsra
+ 00FFF405 044                             lsra
+ 00FFF406 044                             lsra
+ 00FFF407 044                             lsra
+ 00FFF408 044                             lsra
+ 00FFF409 044                             lsra
+ 00FFF40A 08D00C                          bsr             DispNyb
+ 00FFF40C 035002                          puls    a
+ 00FFF40E 034002                          pshs    a
+ 00FFF410 044                             lsra
+ 00FFF411 044                             lsra
+ 00FFF412 044                             lsra
+ 00FFF413 044                             lsra
+ 00FFF414 08D002                          bsr             DispNyb
+ 00FFF416 035002                          puls    a
+ 
+                              DispNyb
+ 00FFF418 034002                          pshs    a
+ 00FFF41A 08400F                          anda    #$0F
+ 00FFF41C 08100A                          cmpa    #10
+ 00FFF41E 025006                          blo             DispNyb1
+ 00FFF420 08B037                          adda    #'A'-10
+ 00FFF422 08D3F1                          bsr             OUTCH
+ 00FFF424 035082                          puls    a,pc
+                              DispNyb1
+ 00FFF426 08B030                          adda    #'0'
+ 00FFF428 08D3EB                          bsr             OUTCH
+ 00FFF42A 035082                          puls    a,pc
+ 
+                              ;==============================================================================
+                              ; Keyboard I/O
+                              ;==============================================================================
+ 
+                                      ;--------------------------------------------------------------------------
+                                      ; PS2 scan codes to ascii conversion tables.
+                                      ;--------------------------------------------------------------------------
+                                      ;
+                                      org     (* + 127) & $FFFFFF80
+ 
+                              _unshiftedScanCodes:
+ 00FFF480 02E0A902E0A50A30A10A2           fcb     $2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
+ 00FFF487 0AC
+ 00FFF488 02E0AA0A80A60A4009060           fcb     $2e,$aa,$a8,$a6,$a4,$09,$60,$2e
+ 00FFF48F 02E
+ 00FFF490 02E02E02E02E02E071031           fcb     $2e,$2e,$2e,$2e,$2e,$71,$31,$2e
+ 00FFF497 02E
+ 00FFF498 02E02E07A073061077032           fcb     $2e,$2e,$7a,$73,$61,$77,$32,$2e
+ 00FFF49F 02E
+ 00FFF4A0 02E063078064065034033           fcb     $2e,$63,$78,$64,$65,$34,$33,$2e
+ 00FFF4A7 02E
+ 00FFF4A8 02E020076066074072035           fcb     $2e,$20,$76,$66,$74,$72,$35,$2e
+ 00FFF4AF 02E
+ 00FFF4B0 02E06E062068067079036           fcb     $2e,$6e,$62,$68,$67,$79,$36,$2e
+ 00FFF4B7 02E
+ 00FFF4B8 02E02E06D06A075037038           fcb     $2e,$2e,$6d,$6a,$75,$37,$38,$2e
+ 00FFF4BF 02E
+ 00FFF4C0 02E02C06B06906F030039           fcb     $2e,$2c,$6b,$69,$6f,$30,$39,$2e
+ 00FFF4C7 02E
+ 00FFF4C8 02E02E02F06C03B07002D           fcb     $2e,$2e,$2f,$6c,$3b,$70,$2d,$2e
+ 00FFF4CF 02E
+ 00FFF4D0 02E02E02702E05B03D02E           fcb     $2e,$2e,$27,$2e,$5b,$3d,$2e,$2e
+ 00FFF4D7 02E
+ 00FFF4D8 0AD02E00D05D02E05C02E           fcb     $ad,$2e,$0d,$5d,$2e,$5c,$2e,$2e
+ 00FFF4DF 02E
+ 00FFF4E0 02E02E02E02E02E02E008           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+ 00FFF4E7 02E
+ 00FFF4E8 02E09502E09309402E02E           fcb     $2e,$95,$2e,$93,$94,$2e,$2e,$2e
+ 00FFF4EF 02E
+ 00FFF4F0 09807F09202E09109001B           fcb     $98,$7f,$92,$2e,$91,$90,$1b,$af
+ 00FFF4F7 0AF
+ 00FFF4F8 0AB02E09702E02E0960AE           fcb     $ab,$2e,$97,$2e,$2e,$96,$ae,$2e
+ 00FFF4FF 02E
+ 
+ 00FFF500 02E02E02E0A702E02E02E           fcb     $2e,$2e,$2e,$a7,$2e,$2e,$2e,$2e
+ 00FFF507 02E
+ 00FFF508 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF50F 02E
+ 00FFF510 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF517 02E
+ 00FFF518 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF51F 02E
+ 00FFF520 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF527 02E
+ 00FFF528 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF52F 02E
+ 00FFF530 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF537 02E
+ 00FFF538 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF53F 02E
+ 00FFF540 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF547 02E
+ 00FFF548 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF54F 02E
+ 00FFF550 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF557 02E
+ 00FFF558 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF55F 02E
+ 00FFF560 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF567 02E
+ 00FFF568 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF56F 02E
+ 00FFF570 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF577 02E
+ 00FFF578 02E02E0FA02E02E02E02E           fcb     $2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
+ 00FFF57F 02E
+ 
+                              _shiftedScanCodes:
+ 00FFF580 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF587 02E
+ 00FFF588 02E02E02E02E02E00907E           fcb     $2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+ 00FFF58F 02E
+ 00FFF590 02E02E02E02E02E051021           fcb     $2e,$2e,$2e,$2e,$2e,$51,$21,$2e
+ 00FFF597 02E
+ 00FFF598 02E02E05A053041057040           fcb     $2e,$2e,$5a,$53,$41,$57,$40,$2e
+ 00FFF59F 02E
+ 00FFF5A0 02E043058044045024023           fcb     $2e,$43,$58,$44,$45,$24,$23,$2e
+ 00FFF5A7 02E
+ 00FFF5A8 02E020056046054052025           fcb     $2e,$20,$56,$46,$54,$52,$25,$2e
+ 00FFF5AF 02E
+ 00FFF5B0 02E04E04204804705905E           fcb     $2e,$4e,$42,$48,$47,$59,$5e,$2e
+ 00FFF5B7 02E
+ 00FFF5B8 02E02E04D04A05502602A           fcb     $2e,$2e,$4d,$4a,$55,$26,$2a,$2e
+ 00FFF5BF 02E
+ 00FFF5C0 02E03C04B04904F029028           fcb     $2e,$3c,$4b,$49,$4f,$29,$28,$2e
+ 00FFF5C7 02E
+ 00FFF5C8 02E03E03F04C03A05005F           fcb     $2e,$3e,$3f,$4c,$3a,$50,$5f,$2e
+ 00FFF5CF 02E
+ 00FFF5D0 02E02E02202E07B02B02E           fcb     $2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+ 00FFF5D7 02E
+ 00FFF5D8 02E02E00D07D02E07C02E           fcb     $2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+ 00FFF5DF 02E
+ 00FFF5E0 02E02E02E02E02E02E008           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+ 00FFF5E7 02E
+ 00FFF5E8 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF5EF 02E
+ 00FFF5F0 02E07F02E02E02E02E01B           fcb     $2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+ 00FFF5F7 02E
+ 00FFF5F8 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF5FF 02E
+ 
+ 00FFF600 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF607 02E
+ 00FFF608 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF60F 02E
+ 00FFF610 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF617 02E
+ 00FFF618 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF61F 02E
+ 00FFF620 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF627 02E
+ 00FFF628 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF62F 02E
+ 00FFF630 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF637 02E
+ 00FFF638 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF63F 02E
+ 00FFF640 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF647 02E
+ 00FFF648 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF64F 02E
+ 00FFF650 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF657 02E
+ 00FFF658 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF65F 02E
+ 00FFF660 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF667 02E
+ 00FFF668 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF66F 02E
+ 00FFF670 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF677 02E
+ 00FFF678 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF67F 02E
+ 
+                              ; control
+                              _keybdControlCodes:
+ 00FFF680 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF687 02E
+ 00FFF688 02E02E02E02E02E00907E           fcb     $2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+ 00FFF68F 02E
+ 00FFF690 02E02E02E02E02E011021           fcb     $2e,$2e,$2e,$2e,$2e,$11,$21,$2e
+ 00FFF697 02E
+ 00FFF698 02E02E01A013001017040           fcb     $2e,$2e,$1a,$13,$01,$17,$40,$2e
+ 00FFF69F 02E
+ 00FFF6A0 02E003018004005024023           fcb     $2e,$03,$18,$04,$05,$24,$23,$2e
+ 00FFF6A7 02E
+ 00FFF6A8 02E020016006014012025           fcb     $2e,$20,$16,$06,$14,$12,$25,$2e
+ 00FFF6AF 02E
+ 00FFF6B0 02E00E00200800701905E           fcb     $2e,$0e,$02,$08,$07,$19,$5e,$2e
+ 00FFF6B7 02E
+ 00FFF6B8 02E02E00D00A01502602A           fcb     $2e,$2e,$0d,$0a,$15,$26,$2a,$2e
+ 00FFF6BF 02E
+ 00FFF6C0 02E03C00B00900F029028           fcb     $2e,$3c,$0b,$09,$0f,$29,$28,$2e
+ 00FFF6C7 02E
+ 00FFF6C8 02E03E03F00C03A01005F           fcb     $2e,$3e,$3f,$0c,$3a,$10,$5f,$2e
+ 00FFF6CF 02E
+ 00FFF6D0 02E02E02202E07B02B02E           fcb     $2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+ 00FFF6D7 02E
+ 00FFF6D8 02E02E00D07D02E07C02E           fcb     $2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+ 00FFF6DF 02E
+ 00FFF6E0 02E02E02E02E02E02E008           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+ 00FFF6E7 02E
+ 00FFF6E8 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF6EF 02E
+ 00FFF6F0 02E07F02E02E02E02E01B           fcb     $2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+ 00FFF6F7 02E
+ 00FFF6F8 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF6FF 02E
+ 
+                              _keybdExtendedCodes:
+ 00FFF700 02E02E02E02E0A30A10A2           fcb     $2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
+ 00FFF707 02E
+ 00FFF708 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF70F 02E
+ 00FFF710 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF717 02E
+ 00FFF718 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF71F 02E
+ 00FFF720 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF727 02E
+ 00FFF728 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF72F 02E
+ 00FFF730 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF737 02E
+ 00FFF738 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF73F 02E
+ 00FFF740 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF747 02E
+ 00FFF748 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF74F 02E
+ 00FFF750 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF757 02E
+ 00FFF758 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF75F 02E
+ 00FFF760 02E02E02E02E02E02E02E           fcb     $2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+ 00FFF767 02E
+ 00FFF768 02E09502E09309402E02E           fcb     $2e,$95,$2e,$93,$94,$2e,$2e,$2e
+ 00FFF76F 02E
+ 00FFF770 09809909202E09109002E           fcb     $98,$99,$92,$2e,$91,$90,$2e,$2e
+ 00FFF777 02E
+ 00FFF778 02E02E09702E02E09602E           fcb     $2e,$2e,$97,$2e,$2e,$96,$2e,$2e
+ 00FFF77F 02E
+ 
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                              ; Send a byte to the keyboard.
+                              ;
+                              ; Parameters: acca byte to send
+                              ; Returns: none
+                              ; Modifies: none
+                              ; Stack Space: 0 words
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 
+                              _KeybdSendByte:
+ 00FFF780 0150B7FFFE30400                 sta             KEYBD
+ 00FFF785 039                             rts
+ 
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                              ; Wait for 10 ms
+                              ;
+                              ; Parameters: none
+                              ; Returns: none
+                              ; Modifies: none
+                              ; Stack Space: 2 words
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 
+                              _Wait10ms:
+ 00FFF786 036006                          pshu    d
+ 00FFF788 0150B6FFFFFFFE7                 lda             MSCOUNT+3
+                              W10_0001:
+ 00FFF78D 01F089                          tfr             a,b
+ 00FFF78F 0150F0FFFFFFFE7                 subb    MSCOUNT+3
+ 00FFF794 0C10FA                          cmpb    #$FA
+ 00FFF796 022FF5                          bhi             W10_0001
+ 00FFF798 037006                          pulu    d
+ 00FFF79A 039                             rts
+ 
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                              ; Wait for 300 ms (256 ms)
+                              ;
+                              ; Parameters: none
+                              ; Returns: none
+                              ; Modifies: none
+                              ; Stack Space: 2 words
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 
+                              _Wait300ms:
+ 00FFF79B 036006                          pshu    d
+ 00FFF79D 0150B6FFFFFFFE7                 lda             MSCOUNT+3
+                              W300_0001:
+ 00FFF7A2 01F089                          tfr             a,b
+ 00FFF7A4 0150F0FFFFFFFE7                 subb    MSCOUNT+3
+ 00FFF7A9 0C1001                          cmpb    #1
+ 00FFF7AB 026FF5                          bne     W300_0001
+ 00FFF7AD 037006                          pulu    d
+ 00FFF7AF 039                             rts
+ 
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                              ; Get the keyboard status
+                              ;
+                              ; Parameters: none
+                              ; Returns: acca = status
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 
+                              _KeybdGetStatus:
+ 00FFF7B0 0150B6FFFE30401                 lda             KEYBD+1
+ 00FFF7B5 039                             rts
+ 
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                              ; Get the scancode from the keyboard port
+                              ;
+                              ; Parameters: none
+                              ; Returns: acca = scancode
+                              ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ 
+                              _KeybdGetScancode:
+ 00FFF7B6 0150B6FFFE30400                 lda             KEYBD                           ; get the scan code
+ 00FFF7BB 01507FFFFE30401                 clr             KEYBD+1                 ; clear receive register
+ 00FFF7C0 039                             rts
+ 
+ 00FFF7C1 04B04505904204F041052           fcb             "KEYBOARD"
+ 00FFF7C8 044
+ 00FFF7C9 FFF7D3                          fcw             KeybdOpen
+ 00FFF7CB FFF7D4                          fcw             KeybdClose
+ 00FFF7CD FFF7D5                          fcw             KeybdRead
+ 00FFF7CF FFF7D6                          fcw             KeybdWrite
+ 00FFF7D1 FFF7D7                          fcw             KeybdSeek
+ 
+                              ; Keyboard Open:
+                              ; Initialize the keyboard buffer head and tail indexes
+                              ;
+                              KeybdOpen:
+ 00FFF7D3 039                             rts
+ 
+                              ; Keyboard Close:
+                              ; Nothing to do except maybe clear the keyboard buffer
+                              ;
+                              KeybdClose:
+ 00FFF7D4 039                             rts
+                              ;
+                              KeybdRead:
+ 00FFF7D5 039                             rts
+                              ;
+                              KeybdWrite:
+ 00FFF7D6 039                             rts
+ 
+                              KeybdSeek:
+ 00FFF7D7 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Check if there is a keyboard character available. If so return true (1)
+                              ; otherwise return false (0) in acca.
+                              ;------------------------------------------------------------------------------
+                              ;
+                              KeybdCheckForKeyDirect:
+ 00FFF7D8 0150FCFFFE30400                 ldd             KEYBD
+ 00FFF7DD 05F                             clrb
+ 00FFF7DE 084080                          anda    #$80
+ 00FFF7E0 027002                          beq             kcfkd1
+ 00FFF7E2 086001                          lda             #1
+                              kcfkd1
+ 00FFF7E4 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              INCH:
+ 00FFF7E5 034014                          pshs    b,x
+                              inch1:
+ 00FFF7E7 0150FCFFFE30400                 ldd             KEYBD
+ 00FFF7EC 0C5080                          bitb    #$80                    ; is there a char available ?
+ 00FFF7EE 027FF7                          beq             inch1                   ; no, check again
+ 00FFF7F0 0150FDFFFE30402                 std             KEYBD+2                 ; clear keyboard strobe
+ 00FFF7F5 0C5008                          bitb    #$8                             ; is it a keydown event ?
+ 00FFF7F7 026FEE                          bne             inch1                   ; no, go back check for another char
+ 00FFF7F9 035014                          puls    b,x
+ 00FFF7FB 039                             rts
+ 
+                              INCHE:
+ 00FFF7FC 08DFE7                          bsr             INCH
+ 00FFF7FE 020009                          bra             INCHEK3
+ 
+                              INCHEK:
+ 00FFF800 08DFE3                          bsr             INCH
+ 00FFF802 01507DFFFFFCA00                 tst             KeybdEcho
+ 00FFF807 02700B                          beq             INCHEK1
+                              INCHEK3:
+ 00FFF809 08100D                          cmpa    #CR
+ 00FFF80B 026005                          bne             INCHEK2
+ 00FFF80D 01700D8C2                       lbsr            CRLF
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF810 020002                          bra             INCHEK1
+                              INCHEK2:
+ 00FFF812 08DAC8                          bsr             DisplayChar
+                              INCHEK1:
+ 00FFF814 039                             rts
+ 
+                              OUTCH:
+ 00FFF815 06E90F000800                    jmp             [CharOutVec]
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Get character directly from keyboard. This routine blocks until a key is
+                              ; available.
+                              ;------------------------------------------------------------------------------
+                              ;
+                              KeybdGetCharDirect:
+ 00FFF819 034010                          pshs    x
+                              kgc1:
+ 00FFF81B 0150FCFFFE30400                 ldd             KEYBD
+ 00FFF820 0C5080                          bitb    #$80                    ; is there a char available ?
+ 00FFF822 027FF7                          beq             kgc1                    ; no, check again
+ 00FFF824 0150FDFFFE30402                 std             KEYBD+2                 ; clear keyboard strobe
+ 00FFF829 0C5008                          bitb    #$8                             ; is it a keydown event ?
+ 00FFF82B 026FEE                          bne             kgc1                    ; no, go back check for another char
+ 00FFF82D 0150F6FFFFFCA00                 ldb             KeybdEcho               ; is keyboard echo on ?
+ 00FFF832 02700B                          beq             gk1                             ; no keyboard echo, just return char
+ 00FFF834 08100D                          cmpa    #CR
+ 00FFF836 026005                          bne             gk2                             ; convert CR keystroke into CRLF
+ 00FFF838 0BDFFD0D2                       jsr             CRLF
+ 00FFF83B 020002                          bra             gk1
+                              gk2:
+ 00FFF83D 08DFD6                          bsr             OUTCH
+                              gk1:
+ 00FFF83F 035010                          puls    x
+ 00FFF841 039                             rts
+ 
+                              KeybdGetCharDirectFar:
+ 00FFF842 08DFD5                          bsr             KeybdGetCharDirect
+ 00FFF844 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; r1 0=echo off, non-zero = echo on
+                              ;------------------------------------------------------------------------------
+                              ;
+                              SetKeyboardEcho:
+ 00FFF845 034010                          pshs    x
+ 00FFF847 09E064                          ldx             RunningTCB
+ 00FFF849 0A7809FFCA00                    sta             KeybdEcho,x
+ 00FFF84D 035010                          puls    x
+ 00FFF84F 039                             rts
+ 
+                              ;==============================================================================
+                              ; System Monitor
+                              ;==============================================================================
+                              ;
+                              MonitorNear:
+ 00FFF850 0BDFFF854                       jsr             Monitor
+ 00FFF853 039                             rts
+ 
+                              Monitor:
+ 00FFF854 03280F003FFF                    leas    $3FFF
+ 00FFF858 086000                          lda             #0                                      ; turn off keyboard echo
+ 00FFF85A 0BDFFF845                       jsr             SetKeyboardEcho
+*** warning 1: Long branch within short branch range could be optimized
+                              ;       jsr             RequestIOFocus
+                              PromptLn:
+ 00FFF85D 0BDFFD0D2                       jsr             CRLF
+ 00FFF860 086024                          lda             #'$'
+ 00FFF862 0BDFFF815                       jsr             OUTCH
+*** warning 1: Long branch within short branch range could be optimized
+ 
+                              ; Get characters until a CR is keyed
+                              ;
+                              Prompt3:
+ 00FFF865 0BDFFF819                       jsr             KeybdGetCharDirect
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF868 08100D                          cmpa    #CR
+ 00FFF86A 027005                          beq             Prompt1
+ 00FFF86C 0BDFFF815                       jsr             OUTCH
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF86F 020FF4                          bra             Prompt3
+ 
+                              ; Process the screen line that the CR was keyed on
+                              ;
+                              Prompt1:
+ 00FFF871 18E000000                       ldy             #0                              ; index to start of line
+ 00FFF874 0CC005050                       ldd             #$5050
+ 00FFF877 0150FDFFFE60000                 std             LEDS
+ 00FFF87C 09E064                          ldx             RunningTCB
+ 00FFF87E 08C00003F                       cmpx    #MAX_TASKNO
+ 00FFF881 022FE2                          bhi             Prompt3
+ 00FFF883 0CC005151                       ldd             #$5151
+ 00FFF886 0150FDFFFE60000                 std             LEDS
+ 00FFF88B 06F021                          clr             TCB_CursorCol,x ; go back to the start of the line
+ 00FFF88D 0BDFFF2A0                       jsr             CalcScreenLoc   ; calc screen memory location
+ 00FFF890 0CC005252                       ldd             #$5252
+ 00FFF893 0150FDFFFE60000                 std             LEDS
+ 00FFF898 0BDFFF90B                       jsr             MonGetNonSpace
+ 00FFF89B 081024                          cmpa    #'$'
+ 00FFF89D 02600A                          bne             Prompt2                 ; skip over '$' prompt character
+ 00FFF89F 086353                          lda             #$5353
+ 00FFF8A1 0150FDFFFE60000                 std             LEDS
+ 00FFF8A6 0BDFFF90B                       jsr             MonGetNonSpace
+ 
+                              ; Dispatch based on command character
+                              ;
+                              Prompt2:
+ 00FFF8A9 08103F                          cmpa    #'?'                    ; $? - display help
+ 00FFF8AB 026010                          bne             PromptC
+ 00FFF8AD 0CCFFF9D0                       ldd             #<HelpMsg
+ 00FFF8B0 0DD026                          std             Strptr+2
+ 00FFF8B2 0CC000000                       ldd             #>HelpMsg
+ 00FFF8B5 0DD024                          std             Strptr
+ 00FFF8B7 0BDFFF3C5                       jsr             DisplayString
+ 00FFF8BA 07EFFF854                       jmp             Monitor
+*** warning 1: Long branch within short branch range could be optimized
+                              PromptC:
+ 00FFF8BD 081043                          cmpa    #'C'
+ 00FFF8BF 026009                          bne             PromptD
+ 00FFF8C1 0BDFFF1DA                       jsr             ClearScreen
+ 00FFF8C4 0BDFFF266                       jsr             HomeCursor
+ 00FFF8C7 07EFFF854                       jmp             Monitor
+*** warning 1: Long branch within short branch range could be optimized
+                              PromptD:
+ 00FFF8CA 081044                          cmpa    #'D'
+ 00FFF8CC 02600A                          bne             PromptF
+ 00FFF8CE 0BDFFF900                       jsr             MonGetch
+ 00FFF8D1 081052                          cmpa    #'R'
+ 00FFF8D3 026F90                          bne             Prompt3
+ 00FFF8D5 07EFFFA7D                       jmp             DumpRegs
+                              PromptF:
+ 00FFF8D8 081046                          cmpa    #'F'
+ 00FFF8DA 026014                          bne             PromptJ
+ 00FFF8DC 0BDFFF900                       jsr             MonGetch
+ 00FFF8DF 081049                          cmpa    #'I'
+ 00FFF8E1 12600FF70                       lbne    Monitor
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF8E4 0BDFFF900                       jsr             MonGetch
+ 00FFF8E7 081047                          cmpa    #'G'
+ 00FFF8E9 12600FF68                       lbne    Monitor
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF8EC 08F000020000                    jmp             far $20000
+                              PromptJ:
+ 00FFF8F0 08104A                          cmpa    #'J'
+ 00FFF8F2 1270001CC                       lbeq    jump_to_code
+                              PromptR:
+ 00FFF8F5 081052                          cmpa    #'R'
+ 00FFF8F7 12600FF5A                       lbne    Monitor
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF8FA 0BDFFE000                       jsr             ramtest
+ 00FFF8FD 07EFFF854                       jmp             Monitor
+ 
+                              MonGetch:
+ 00FFF900 01501B0ECB08010                 ldd             far [ScreenLocation],y
+ 00FFF905 031202                          leay    2,y
+ 00FFF907 0BDFFF140                       jsr             ScreenToAscii
+ 00FFF90A 039                             rts
+ 
+                              MonGetNonSpace:
+ 00FFF90B 08DFF3                          bsr             MonGetCh
+ 00FFF90D 081020                          cmpa    #' '
+ 00FFF90F 027FFA                          beq             MonGetNonSpace
+ 00FFF911 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Ignore blanks in the input
+                              ; Y = text pointer
+                              ; D destroyed
+                              ;------------------------------------------------------------------------------
+                              ;
+                              ignBlanks:
+                              ignBlanks1:
+ 00FFF912 08DFEC                          bsr             MonGetch
+ 00FFF914 081020                          cmpa    #' '
+ 00FFF916 027FFA                          beq             ignBlanks1
+ 00FFF918 0313FE                          leay    -2,y
+ 00FFF91A 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              GetTwoParams:
+ 00FFF91B 0BDFFF912                       jsr             ignBlanks
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF91E 0BDFFF951                       jsr             GetHexNumber    ; get start address of dump
+ 00FFF921 0DC910                          ldd             mon_numwka
+ 00FFF923 0DD904                          std             mon_r1
+ 00FFF925 0DC912                          ldd             mon_numwka+2
+ 00FFF927 0DD906                          std             mon_r1+2
+ 00FFF929 0BDFFF912                       jsr             ignBlanks
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF92C 0BDFFF951                       jsr             GetHexNumber    ; get end address of dump
+ 00FFF92F 0DC910                          ldd             mon_numwka
+ 00FFF931 0DD908                          std             mon_r2
+ 00FFF933 0DC912                          ldd             mon_numwka+2
+ 00FFF935 0DD90A                          std             mon_r2+2
+ 00FFF937 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Get a range, the end must be greater or equal to the start.
+                              ;------------------------------------------------------------------------------
+                              GetRange:
+ 00FFF938 08DFE1                          bsr             GetTwoParams
+ 00FFF93A 0DC90A                          ldd             mon_r2+2
+ 00FFF93C 093906                          subd    mon_r1+2
+ 00FFF93E 0DC908                          ldd             mon_r2
+ 00FFF940 0D2905                          sbcb    mon_r1+1
+ 00FFF942 092904                          sbca    mon_r1
+ 00FFF944 12500006F                       lbcs    DisplayErr
+ 00FFF947 039                             rts
+ 
+                              shl_numwka:
+ 00FFF948 008913                          asl             mon_numwka+3
+ 00FFF94A 009912                          rol             mon_numwka+2
+ 00FFF94C 009911                          rol             mon_numwka+1
+ 00FFF94E 009910                          rol             mon_numwka
+ 00FFF950 039                             rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Get a hexidecimal number. Maximum of eight digits.
+                              ; Y = text pointer (updated)
+                              ; D = number of digits
+                              ; mon_numwka contains number
+                              ;------------------------------------------------------------------------------
+                              ;
+                              GetHexNumber:
+ 00FFF951 04F05F                          clrd
+ 00FFF953 0DD910                          std             mon_numwka
+ 00FFF955 0DD912                          std             mon_numwka+2
+ 00FFF957 034010                          pshs    x
+ 00FFF959 08E000000                       ldx             #0                                      ; max 8 eight digits
+                              gthxn2:
+ 00FFF95C 0BDFFF900                       jsr             MonGetch
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFF95F 0BDFFF980                       jsr             AsciiToHexNybble
+ 00FFF962 081FFF                          cmpa    #-1
+ 00FFF964 027015                          beq             gthxn1
+ 00FFF966 08DFE0                          bsr             shl_numwka
+ 00FFF968 08DFDE                          bsr             shl_numwka
+ 00FFF96A 08DFDC                          bsr             shl_numwka
+ 00FFF96C 08DFDA                          bsr             shl_numwka
+ 00FFF96E 08400F                          anda    #$0f
+ 00FFF970 09A913                          ora             mon_numwka+3
+ 00FFF972 097913                          sta             mon_numwka+3
+ 00FFF974 030001                          inx
+ 00FFF976 08C000008                       cmpx    #8
+ 00FFF979 025FE1                          blo             gthxn2
+                              gthxn1:
+ 00FFF97B 01F010                          tfr             x,d
+ 00FFF97D 035010                          puls    x
+ 00FFF97F 039                             rts
+ 
+                              ;GetDecNumber:
+                              ;       phx
+                              ;       push    r4
+                              ;       push    r5
+                              ;       ldx             #0
+                              ;       ld              r4,#10
+                              ;       ld              r5,#10
+                              ;gtdcn2:
+                              ;       jsr             MonGetch
+                              ;       jsr             AsciiToDecNybble
+                              ;       cmp             #-1
+                              ;       beq             gtdcn1
+                              ;       mul             r2,r2,r5
+                              ;       add             r2,r1
+                              ;       dec             r4
+                              ;       bne             gtdcn2
+                              ;gtdcn1:
+                              ;       txa
+                              ;       pop             r5
+                              ;       pop             r4
+                              ;       plx
+                              ;       rts
+ 
+                              ;------------------------------------------------------------------------------
+                              ; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
+                              ; to a hex nybble.
+                              ;------------------------------------------------------------------------------
+                              ;
+                              AsciiToHexNybble:
+ 00FFF980 081030                          cmpa    #'0'
+ 00FFF982 024021                          bcc             gthx3
+ 00FFF984 08103A                          cmpa    #'9'+1
+ 00FFF986 025003                          bcs             gthx5
+ 00FFF988 080030                          suba    #'0'
+ 00FFF98A 039                             rts
+                              gthx5:
+ 00FFF98B 081041                          cmpa    #'A'
+ 00FFF98D 024016                          bcc             gthx3
+ 00FFF98F 081047                          cmpa    #'F'+1
+ 00FFF991 025005                          bcs             gthx6
+ 00FFF993 080041                          suba    #'A'
+ 00FFF995 08B00A                          adda    #10
+ 00FFF997 039                             rts
+                              gthx6:
+ 00FFF998 081061                          cmpa    #'a'
+ 00FFF99A 024009                          bcc             gthx3
+ 00FFF99C 08107B                          cmpa    #'z'+1
+ 00FFF99E 025005                          bcs             gthx3
+ 00FFF9A0 080061                          suba    #'a'
+ 00FFF9A2 08B00A                          adda    #10
+ 00FFF9A4 039                             rts
+                              gthx3:
+ 00FFF9A5 086FFF                          lda             #-1             ; not a hex number
+ 00FFF9A7 039                             rts
+ 
+                              AsciiToDecNybble:
+ 00FFF9A8 081030                          cmpa    #'0'
+ 00FFF9AA 024007                          bcc             gtdc3
+ 00FFF9AC 08103A                          cmpa    #'9'+1
+ 00FFF9AE 025003                          bcs             gtdc3
+ 00FFF9B0 080030                          suba    #'0'
+ 00FFF9B2 039                             rts
+                              gtdc3:
+ 00FFF9B3 086FFF                          lda             #-1
+ 00FFF9B5 039                             rts
+ 
+                              DisplayErr:
+ 00FFF9B6 08EFFF9C8                       ldx             #msgErr
+ 00FFF9B9 04F05F                          clrd
+ 00FFF9BB 08D003                          bsr             DisplayStringDX
+ 00FFF9BD 07EFFF854                       jmp             Monitor
+ 
+                              DisplayStringDX
+ 00FFF9C0 0DD024                          std             Strptr
+ 00FFF9C2 09F026                          stx             Strptr+2
+ 00FFF9C4 0BDFFF3C5                       jsr             DisplayString
+ 00FFF9C7 039                             rts
+ 
+                              msgErr:
+ 00FFF9C8 02A02A04507207200D00A           fcb     "**Err",CR,LF,0
+ 00FFF9CF 000
+ 
+                              HelpMsg:
+ 00FFF9D0 03F02003D020044069073           fcb             "? = Display help",CR,LF
+ 00FFF9D7 07006C061079020068065
+ 00FFF9DE 06C07000D00A
+ 00FFF9E2 04304C05302003D020063           fcb     "CLS = clear screen",CR,LF
+ 00FFF9E9 06C065061072020073063
+ 00FFF9F0 07206506506E00D00A
+                              ;       db      "S = Boot from SD Card",CR,LF
+                              ;       db      ": = Edit memory bytes",CR,LF
+                              ;       db      "L = Load sector",CR,LF
+                              ;       db      "W = Write sector",CR,LF
+ 00FFF9F6 04405202003D020044075           fcb "DR = Dump registers",CR,LF
+ 00FFF9FD 06D070020072065067069
+ 00FFFA04 07307406507207300D00A
+                              ;       db      "D = Dump memory",CR,LF
+                              ;       db      "F = Fill memory",CR,LF
+                              ;       db  "FL = Dump I/O Focus List",CR,LF
+ 00FFFA0B 04604904702003D020073           fcb "FIG = start FIG Forth",CR,LF
+ 00FFFA12 074061072074020046049
+ 00FFFA19 04702004606F072074068
+ 00FFFA20 00D00A
+                              ;       db      "KILL n = kill task #n",CR,LF
+                              ;       db      "B = start tiny basic",CR,LF
+                              ;       db      "b = start EhBasic 6502",CR,LF
+ 00FFFA22 04A02003D02004A07506D           fcb     "J = Jump to code",CR,LF
+ 00FFFA29 07002007406F02006306F
+ 00FFFA30 06406500D00A
+ 00FFFA34 05204104D02003D020074           fcb "RAM = test RAM",CR,LF
+ 00FFFA3B 06507307402005204104D
+ 00FFFA42 00D00A
+                              ;       db      "R[n] = Set register value",CR,LF
+                              ;       db      "r = random lines - test bitmap",CR,LF
+                              ;       db      "e = ethernet test",CR,LF
+                              ;       db      "T = Dump task list",CR,LF
+                              ;       db      "TO = Dump timeout list",CR,LF
+                              ;       db      "TI = display date/time",CR,LF
+                              ;       db      "TEMP = display temperature",CR,LF
+                              ;       db      "P = Piano",CR,LF,0
+ 00FFFA44 000                             fcb             0
+ 
+                              msgRegHeadings
+ 00FFFA45 00D00A02004402F041042           fcb     CR,LF," D/AB   X    Y    U    S     PC    DP CCR",CR,LF,0
+ 00FFFA4C 020020020058020020020
+ 00FFFA53 020059020020020020055
+ 00FFFA5A 020020020020053020020
+ 00FFFA61 020020020050043020020
+ 00FFFA68 020020044050020043043
+ 00FFFA6F 05200D00A000
+ 
+                              nHEX4:
+ 00FFFA73 0BDFFD2D2                       jsr             HEX4
+ 00FFFA76 039                             rts
+ 
+                              nXBLANK:
+ 00FFFA77 086020                          lda             #' '
+ 00FFFA79 0BDFFF815                       jsr             OUTCH
+ 00FFFA7C 039                             rts
+ 
+                              DumpRegs
+ 00FFFA7D 08EFFFA45                       ldx             #msgRegHeadings
+ 00FFFA80 0CC0000FF                       ldd             #msgRegHeadings>>16
+ 00FFFA83 0BDFFF9C0                       jsr             DisplayStringDX
+ 00FFFA86 08DFEF                          bsr             nXBLANK
+ 00FFFA88 0DC900                          ldd             mon_DSAVE
+ 00FFFA8A 08DFE7                          bsr             nHEX4
+ 00FFFA8C 08DFE9                          bsr             nXBLANK
+ 00FFFA8E 0DC902                          ldd             mon_XSAVE
+ 00FFFA90 08DFE1                          bsr             nHEX4
+ 00FFFA92 08DFE3                          bsr             nXBLANK
+ 00FFFA94 0DC904                          ldd             mon_YSAVE
+ 00FFFA96 08DFDB                          bsr             nHEX4
+ 00FFFA98 08DFDD                          bsr             nXBLANK
+ 00FFFA9A 0DC906                          ldd             mon_USAVE
+ 00FFFA9C 08DFD5                          bsr             nHEX4
+ 00FFFA9E 08DFD7                          bsr             nXBLANK
+ 00FFFAA0 0DC908                          ldd             mon_SSAVE
+ 00FFFAA2 08DFCF                          bsr             nHEX4
+ 00FFFAA4 08DFD1                          bsr             nXBLANK
+ 00FFFAA6 0DC90A                          ldd             mon_PCSAVE
+ 00FFFAA8 08DFC9                          bsr             nHEX4
+ 00FFFAAA 0DC90C                          ldd             mon_PCSAVE+2
+ 00FFFAAC 08DFC5                          bsr             nHEX4
+ 00FFFAAE 08DFC7                          bsr             nXBLANK
+ 00FFFAB0 0DC90E                          ldd             mon_DPRSAVE
+ 00FFFAB2 0BDFFD2CE                       jsr             HEX2
+ 00FFFAB5 08DFC0                          bsr             nXBLANK
+ 00FFFAB7 09690F                          lda             mon_CCRSAVE
+ 00FFFAB9 0BDFFD2CE                       jsr             HEX2
+ 00FFFABC 08DFB9                          bsr             nXBLANK
+ 00FFFABE 07EFFF854                       jmp             Monitor
+ 
+                              ; Jump to code
+                              jump_to_code:
+ 00FFFAC1 0BDFFF951                       jsr             GetHexNumber
+ 00FFFAC4 01A010                          sei
+ 00FFFAC6 1DE908                          lds             mon_SSAVE
+ 00FFFAC8 0CCFFFAF5                       ldd             #<jtc_exit
+ 00FFFACB 034006                          pshs    d
+ 00FFFACD 0CC000000                       ldd             #>jtc_exit
+ 00FFFAD0 034006                          pshs    d
+ 00FFFAD2 0DC912                          ldd             mon_numwka+2
+ 00FFFAD4 034006                          pshs    d
+ 00FFFAD6 0DC910                          ldd             mon_numwka
+ 00FFFAD8 034006                          pshs    d
+ 00FFFADA 0DC906                          ldd             mon_USAVE
+ 00FFFADC 034006                          pshs    d
+ 00FFFADE 0DC904                          ldd             mon_YSAVE
+ 00FFFAE0 034006                          pshs    d
+ 00FFFAE2 0DC902                          ldd             mon_XSAVE
+ 00FFFAE4 034006                          pshs    d
+ 00FFFAE6 09690E                          lda             mon_DPRSave
+ 00FFFAE8 034002                          pshs    a
+ 00FFFAEA 0DC900                          ldd             mon_DSAVE
+ 00FFFAEC 034006                          pshs    d
+ 00FFFAEE 09690F                          lda             mon_CCRSAVE
+ 00FFFAF0 034002                          pshs    a
+ 00FFFAF2 0150350FF                       puls    far ccr,d,dpr,x,y,u,pc
+                              jtc_exit:
+ 00FFFAF5 034001                          pshs    ccr
+ 00FFFAF7 0DD900                          std             mon_DSAVE
+ 00FFFAF9 09F902                          stx             mon_XSAVE
+ 00FFFAFB 19F904                          sty             mon_YSAVE
+ 00FFFAFD 0DF906                          stu             mon_USAVE
+ 00FFFAFF 01F0B8                          tfr             dpr,a
+ 00FFFB01 09790E                          sta             mon_DPRSAVE
+ 00FFFB03 035002                          puls    a
+ 00FFFB05 09790F                          sta             mon_CCRSAVE
+ 00FFFB07 1DF908                          sts             mon_SSAVE
+ 00FFFB09 1CE003FFF                       lds             #$3FFF
+ 00FFFB0C 07EFFFA7D                       jmp             DumpRegs
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              swi3_rout:
+ 00FFFB0F 01A010                          sei
+ 00FFFB11 035002                          puls    a
+ 00FFFB13 09790F                          sta             mon_CCRSAVE
+ 00FFFB15 03507E                          puls    D,DPR,X,Y,U
+ 00FFFB17 0DD900                          std             mon_DSAVE
+ 00FFFB19 09F902                          stx             mon_XSAVE
+ 00FFFB1B 19F904                          sty             mon_YSAVE
+ 00FFFB1D 0DF906                          stu             mon_USAVE
+ 00FFFB1F 01F0B8                          tfr             dpr,a
+ 00FFFB21 09790E                          sta             mon_DPRSAVE
+ 00FFFB23 035006                          puls    D
+ 00FFFB25 0DD90A                          std             mon_PCSAVE
+ 00FFFB27 035006                          puls    D
+ 00FFFB29 0DD90C                          std             mon_PCSAVE+2
+ 00FFFB2B 1DF908                          sts             mon_SSAVE
+ 00FFFB2D 1CE003FFF                       lds             #$3FFF
+ 00FFFB30 01C0EF                          cli
+ 00FFFB32 07EFFFA7D                       jmp             DumpRegs
+                              swi3_exit:
+ 00FFFB35 01A010                          sei
+ 00FFFB37 1DE908                          lds             mon_SSAVE
+ 00FFFB39 0DC90C                          ldd             mon_PCSAVE+2
+ 00FFFB3B 034006                          pshs    d
+ 00FFFB3D 0DC90A                          ldd             mon_PCSAVE
+ 00FFFB3F 034006                          pshs    d
+ 00FFFB41 0DE906                          ldu             mon_USAVE
+ 00FFFB43 19E904                          ldy             mon_YSAVE
+ 00FFFB45 09E902                          ldx             mon_XSAVE
+ 00FFFB47 034070                          pshs    x,y,u
+ 00FFFB49 09690E                          lda             mon_DPRSAVE
+ 00FFFB4B 034002                          pshs    a
+ 00FFFB4D 0DC900                          ldd             mon_DSAVE
+ 00FFFB4F 034006                          pshs    d
+ 00FFFB51 09690F                          lda             mon_CCRSAVE
+ 00FFFB53 034002                          pshs    a
+ 00FFFB55 01F08A                          tfr             a,ccr
+ 00FFFB57 01C0EF                          cli
+ 00FFFB59 03B                             rti
+ 
+                              ;------------------------------------------------------------------------------
+                              ;------------------------------------------------------------------------------
+                              irq_rout:
+                                      ; Reset the edge sense circuit in the PIC
+ 00FFFB5A 086002                          lda             #2                              ; Timer is IRQ #2
+ 00FFFB5C 0150B7FFFE3F006                 sta             PIC+6                   ; register 6 is edge sense reset reg    
+ 
+ 00FFFB61 09779A                          sta             IrqSource               ; stuff a byte indicating the IRQ source for PEEK()
+ 00FFFB63 0960DF                          lda             IrqBase                 ; get the IRQ flag byte
+ 00FFFB65 044                             lsra
+ 00FFFB66 09A0DF                          ora             IrqBase
+ 00FFFB68 0840E0                          anda    #$E0
+ 00FFFB6A 0970DF                          sta             IrqBase
+ 
+ 00FFFB6C 01507CFFFE0006E                 inc             TEXTSCR+110             ; update IRQ live indicator on screen
+                                      
+                                      ; flash the cursor
+                                      ; only bother to flash the cursor for the task with the IO focus.
+ 00FFFB71 0150B6FFFFFFFE0                 lda             COREID
+ 00FFFB76 091100                          cmpa    IOFocusID
+ 00FFFB78 026023                          bne             tr1a
+ 00FFFB7A 0B6001004                       lda             CursorFlash             ; test if we want a flashing cursor
+ 00FFFB7D 02701E                          beq             tr1a
+ 00FFFB7F 01700F71E                       lbsr    CalcScreenLoc   ; compute cursor location in memory
+*** warning 1: Long branch within short branch range could be optimized
+ 00FFFB82 19E012                          ldy             ScreenLocation+2
+ 00FFFB84 0A6A0A000E02000                 lda             $E02000,y               ; get color code $2000 higher in memory
+ 00FFFB89 0D67C6                          ldb             IRQFlag                 ; get counter
+ 00FFFB8B 054                             lsrb
+ 00FFFB8C 044                             lsra
+ 00FFFB8D 044                             lsra
+ 00FFFB8E 044                             lsra
+ 00FFFB8F 044                             lsra
+ 00FFFB90 054                             lsrb
+ 00FFFB91 049                             rola
+ 00FFFB92 054                             lsrb
+ 00FFFB93 049                             rola
+ 00FFFB94 054                             lsrb
+ 00FFFB95 049                             rola
+ 00FFFB96 054                             lsrb
+ 00FFFB97 049                             rola
+ 00FFFB98 0A7A0A000E00000                 sta             $E00000,y               ; store the color code back to memory
+                              tr1a
+ 00FFFB9D 03B                             rti
+ 
+                                      org             $FFFFF0
+ 00FFFFF0 012                             nop
+ 00FFFFF1 012                             nop
+ 00FFFFF2 FFFB0F                          fcw             swi3_rout
+ 
+                                      org             $FFFFF8
+ 00FFFFF8 FFFB5A                          fcw             irq_rout
+ 00FFFFFA FFF022                          fcw             start           ; SWI
+ 00FFFFFC FFF022                          fcw             start           ; NMI
+ 00FFFFFE FFF022                          fcw             start           ; RST
+
+15 warning(s) in pass 2.
+
+SYMBOL TABLE
+ ASCIITODECNYBBLE 02 00FFF9A8 ASCIITOHEXNYBBLE 02 00FFF980 ASCIITOSCREEN 02 00FFF12A   ATOSCR1 02 00FFF13D
+      BCW1 02 00FFF155 BIOS_SCREENS 00 17000000 BLANKLINE 02 00FFF233 BLKCPYDST 00 00000020
+ BLKCPYSRC 00 0000001C   BLNKLN1 02 00FFF247 BLOCKCOPYWORDS 02 00FFF152 CALCSCREENLOC 02 00FFF2A0
+ CHARCOLOR 00 00001002 CHARINVEC 00 00000804 CHAROUTVEC 00 00000800 CLEARSCREEN 02 00FFF1DA
+ CLEARSCREENJMP 02 00FFD300 COLORCODELOCATION 00 00000014 COPYSCREENTOVIRTUALSCREEN 02 00FFF19C COPYVIRTUALSCREENTOSCREEN 02 00FFF164
+    COREID 00 FFFFFFE0        CR 00 0000000D      CRLF 02 00FFD0D2     CRLF1 02 00FFD0D2
+    CRLFST 02 00FFF3EB       CS1 02 00FFF1E7       CS2 02 00FFF1FD     CS2V1 02 00FFF1B6
+     CS2V2 02 00FFF1AB     CS2V3 02 00FFF1AE       CS3 02 00FFF203      CSL1 02 00FFF2D2
+      CSL2 02 00FFF2B0      CSL4 02 00FFF2B4     CTRLC 00 00000003     CTRLH 00 00000008
+     CTRLI 00 00000009     CTRLJ 00 0000000A     CTRLK 00 0000000B     CTRLM 00 0000000D
+     CTRLS 00 00000013     CTRLX 00 00000018 CURSORCOL 00 00001001 CURSORFLASH 00 00001004
+ CURSORROW 00 00001000     CV2S1 02 00FFF17E     CV2S2 02 00FFF173     CV2S3 02 00FFF176
+      DCCR 02 00FFF2FA      DCLF 02 00FFF388     DCX10 02 00FFF334     DCX11 02 00FFF344
+     DCX12 02 00FFF340     DCX13 02 00FFF352     DCX14 02 00FFF2F8     DCX15 02 00FFF2F0
+     DCX16 02 00FFF2EC      DCX3 02 00FFF370      DCX4 02 00FFF38A      DCX5 02 00FFF35F
+      DCX6 02 00FFF30B      DCX7 02 00FFF307      DCX8 02 00FFF318      DCX9 02 00FFF325
+   DELAY3S 02 00FFF11C DISPBYTEASHEX 02 00FFF400 DISPDWORDASHEX 02 00FFF3EE DISPLAYCHAR 02 00FFF2DC
+ DISPLAYERR 02 00FFF9B6 DISPLAYSTRING 02 00FFF3C5 DISPLAYSTRINGDX 02 00FFF9C0   DISPNYB 02 00FFF418
+  DISPNYB1 02 00FFF426 DISPWORDASHEX 02 00FFF3F7    DLY3S1 02 00FFF11F    DPSAVE 00 00001010
+ DRAM_BASE 00 10000000     DSAVE 00 00001006    DSPJ1B 02 00FFF3C9    DSRETB 02 00FFF3D1
+  DUMPREGS 02 00FFFA7D    DUMRTS 02 00FFF13F   FREEMBX 00 00000066   FREEMSG 00 0000006A
+   FREETCB 00 0000078A GETHEXNUMBER 02 00FFF951  GETRANGE 02 00FFF938 GETSCREENLOCATION 02 00FFF24E
+ GETTWOPARAMS 02 00FFF91B       GK1 02 00FFF83F       GK2 02 00FFF83D      GSL1 02 00FFF25B
+      GSL2 02 00FFF262     GTDC3 02 00FFF9B3     GTHX3 02 00FFF9A5     GTHX5 02 00FFF98B
+     GTHX6 02 00FFF998    GTHXN1 02 00FFF97B    GTHXN2 02 00FFF95C       HC1 02 00FFF27C
+   HELPMSG 02 00FFF9D0      HEX2 02 00FFD2CE      HEX4 02 00FFD2D2 HOMECURSOR 02 00FFF266
+ HOMECURSORJMP 02 00FFD308      ICC1 02 00FFF3C1      ICC2 02 00FFF3C3      ICR1 02 00FFF3B3
+ IGNBLANKS 02 00FFF912 IGNBLANKS1 02 00FFF912 INCCURSORPOS 02 00FFF38C INCCURSORROW 02 00FFF3A6
+      INCH 02 00FFF7E5     INCH1 02 00FFF7E7     INCHE 02 00FFF7FC    INCHEK 02 00FFF800
+   INCHEK1 02 00FFF814   INCHEK2 02 00FFF812   INCHEK3 02 00FFF809      INIT 02 00FFF07D
+ IOFOCUSID 00 00000100 IOFOCUSNDX 00 00000100   IRQBASE 00 000000DF   IRQFLAG 00 000007C6
+ IRQSOURCE 00 0000079A  IRQ_ROUT 02 00FFFB5A  JTC_EXIT 02 00FFFAF5 JUMP_TO_CODE 02 00FFFAC1
+    KCFKD1 02 00FFF7E4     KEYBD 00 FFE30400  KEYBDACK 00 FFFFCC00  KEYBDBAD 00 FFFFCB00
+ KEYBDBUFFER 00 FFFFC000 KEYBDCHECKFORKEYDIRECT 02 00FFF7D8 KEYBDCLOSE 02 00FFF7D4  KEYBDCLR 00 FFE30402
+ KEYBDECHO 00 FFFFCA00 KEYBDGETCHARDIRECT 02 00FFF819 KEYBDGETCHARDIRECTFAR 02 00FFF842 KEYBDHEAD 00 FFFFC800
+ KEYBDLOCKS 00 FFFFCD00 KEYBDOPEN 02 00FFF7D3 KEYBDREAD 02 00FFF7D5 KEYBDSEEK 02 00FFF7D7
+ KEYBDTAIL 00 FFFFC900 KEYBDWRITE 02 00FFF7D6      KGC1 02 00FFF81B      LEDS 00 FFE60000
+    LETTER 02 00FFD2C1        LF 00 0000000A MAX_TASKNO 00 0000003F  MONGETCH 02 00FFF900
+ MONGETNONSPACE 02 00FFF90B   MONITOR 02 00FFF854 MONITORNEAR 02 00FFF850 MON_CCRSAVE 00 0000090F
+ MON_DPRSAVE 00 0000090E MON_DSAVE 00 00000900 MON_NUMWKA 00 00000910 MON_PCSAVE 00 0000090A
+    MON_R1 00 00000904    MON_R2 00 00000908 MON_SSAVE 00 00000908 MON_USAVE 00 00000906
+ MON_XSAVE 00 00000902 MON_YSAVE 00 00000904   MSCOUNT 00 FFFFFFE4    MSGERR 02 00FFF9C8
+ MSGREGHEADINGS 02 00FFFA45 MSGSTARTUP 02 00FFF0C0 MULTI_SIEVE 02 00FFF0EA MULTI_SIEVE1 02 00FFF10A
+ MULTI_SIEVE2 02 00FFF106 MULTI_SIEVE3 02 00FFF0F7 MULTI_SIEVE4 02 00FFF11A     NHEX4 02 00FFFA73
+  NMAILBOX 00 00000068   NMIBASE 00 000000DC   NMSGBLK 00 0000006C   NXBLANK 02 00FFFA77
+    ONEKEY 02 00FFD1DC     OUTCH 02 00FFF815     PCRLF 02 00FFF3D7     PDATA 02 00FFF3E4
+       PIC 00 FFE3F000    PICPTR 00 00000028     PRINT 02 00FFF3E1   PROMPT1 02 00FFF871
+   PROMPT2 02 00FFF8A9   PROMPT3 02 00FFF865   PROMPTC 02 00FFF8BD   PROMPTD 02 00FFF8CA
+   PROMPTF 02 00FFF8D8   PROMPTJ 02 00FFF8F0  PROMPTLN 02 00FFF85D   PROMPTR 02 00FFF8F5
+    PSTRNG 02 00FFF3D3     QNDX0 00 00000780     QNDX1 00 00000782     QNDX2 00 00000784
+     QNDX3 00 00000786     QNDX4 00 00000788    RAMERR 02 00FFE038   RAMTEST 02 00FFE000
+  RAMTEST1 02 00FFE00A  RAMTEST3 02 00FFE01C  ROMTORAM 02 00FFF0DA ROMTORAM1 02 00FFF0E0
+ RUNNINGTCB 00 00000064 SCREENCOLOR 00 00001003 SCREENLOCATION 00 00000010 SCREENLOCATION2 00 00000018
+ SCREENTOASCII 02 00FFF140  SCROLLUP 02 00FFF205    SCRUP1 02 00FFF221 SETKEYBOARDECHO 02 00FFF845
+ SHIFTLEFT5 02 00FFF147 SHL_NUMWKA 02 00FFF948 SKIP_INIT 02 00FFF09D     SSAVE 00 0000100E
+       ST1 02 00FFF084       ST3 02 00FFF074       ST4 02 00FFF03D       ST6 02 00FFF02F
+       ST7 02 00FFF046     START 02 00FFF022    STASC1 02 00FFF146    STRPTR 00 00000024
+ SWI3_EXIT 02 00FFFB35 SWI3_ROUT 02 00FFFB0F       TAB 00 00000009 TCB_CURSORCOL 00 00000021
+ TCB_CURSORROW 00 00000020  TCB_HJCB 00 0000001C TCB_HWAITMBX 00 00000022 TCB_IOF_NEXT 00 0000002C
+ TCB_IOF_PREV 00 00000030 TCB_MBQ_NEXT 00 00000024 TCB_MBQ_PREV 00 00000028 TCB_MMU_MAP 00 00000038
+ TCB_MSGPTR_D1 00 00000014 TCB_MSGPTR_D2 00 00000018 TCB_NXTRDY 00 00000000 TCB_NXTTCB 00 00000008
+ TCB_PRIORITY 00 00000010 TCB_PRVRDY 00 00000004 TCB_SPSAVE 00 00000034 TCB_STATUS 00 0000001E
+ TCB_TIMEOUT 00 0000000C TEXTCLOSE 02 00FFF1D6  TEXTOPEN 02 00FFF1D5  TEXTREAD 02 00FFF1D7
+   TEXTREG 00 FFE0DF00   TEXTSCR 00 FFE00000  TEXTSEEK 02 00FFF1D9 TEXTWRITE 02 00FFF1D8
+ TEXT_COLS 00 00000000 TEXT_CURPOS 00 00000022 TEXT_ROWS 00 00000001 TIMEOUTLIST 00 0000078C
+      TR1A 02 00FFFB9D      UCP1 02 00FFF29E UPDATECURSORPOS 02 00FFF27E     USAVE 00 0000100C
+  W10_0001 02 00FFF78D W300_0001 02 00FFF7A2    XBLANK 02 00FFD0AF      XOFF 00 00000013
+       XON 00 00000011     XSAVE 00 00001008     YSAVE 00 0000100A
+271 SYMBOLS
+
+0 error(s), 125 warning(s)

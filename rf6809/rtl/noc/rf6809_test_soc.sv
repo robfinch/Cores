@@ -47,6 +47,7 @@
 //`define SDC_CONTROLLER 1'b1
 //`define GPU_GRID	1'b1
 //`define RANDOM_GEN	1'b1
+import rf6809_pkg::*;
 import nic_pkg::*;
 
 module rf6809_test_soc(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
@@ -172,17 +173,17 @@ wire we;
 wire [15:0] sel;
 (* mark_debug = "true" *)
 wire [23:0] adr;
-reg [11:0] dati = 12'd0;
-wire [11:0] dato;
+reg [BPB-1:0] dati = {BPB{1'b0}};
+wire [BPB-1:0] dato;
 wire sr,cr,rb;
 
 wire [31:0] tc1_rgb;
 wire tc1_ack;
-wire [7:0] tc1_dato;
+wire [11:0] tc1_dato;
 wire ack_scr;
 (* mark_debug = "true" *)
 wire ack_br = 1'b0;
-wire [11:0] scr_dato;
+wire [BPB-1:0] scr_dato;
 wire [127:0] br_dato = 128'd0;
 wire br_bok, scr_bok;
 wire rnd_ack;
@@ -200,10 +201,9 @@ wire kbd_irq;
 
 wire spr_ack;
 wire [63:0] spr_dato;
-(* mark_debug = "true" *)
+
 wire spr_cyc;
 wire spr_stb;
-(* mark_debug = "true" *)
 wire spr_acki;
 wire spr_we;
 wire [7:0] spr_sel;
@@ -239,10 +239,10 @@ wire [7:0] br1_sel;
 wire [3:0] br1_sel32;
 wire [23:0] br1_adr;
 wire [31:0] br1_adr32;
-wire [7:0] br1_cdato;
+wire [BPB-1:0] br1_cdato;
 wire br1_s2_ack;
-wire [7:0] br1_s2_cdato;
-wire [7:0] br1_dato;
+wire [BPB-1:0] br1_s2_cdato;
+wire [BPB-1:0] br1_dato;
 wire [31:0] br1_dat32;
 wire [7:0] br1_dat8;
 reg [7:0] br1_dati = 8'd0;
@@ -256,8 +256,8 @@ wire [7:0] br2_sel;
 wire [3:0] br2_sel32;
 wire [23:0] br2_adr;
 wire [31:0] br2_adr32;
-wire [7:0] br2_cdato;
-wire [7:0] br2_dato;
+wire [BPB-1:0] br2_cdato;
+wire [BPB-1:0] br2_dato;
 wire [31:0] br2_dat32;
 wire [7:0] br2_dat8;
 reg [7:0] br2_dati = 8'd0;
@@ -271,8 +271,8 @@ wire [7:0] br3_sel;
 wire [3:0] br3_sel32;
 wire [23:0] br3_adr;
 wire [31:0] br3_adr32;
-wire [7:0] br3_cdato;
-wire [7:0] br3_dato;
+wire [BPB-1:0] br3_cdato;
+wire [BPB-1:0] br3_dato;
 wire [31:0] br3_dat32;
 wire [7:0] br3_dat8;
 reg [7:0] br3_dati = 8'd0;
@@ -382,7 +382,7 @@ wire [127:0] xb_dati;
 
 wire irq;
 wire firq;
-wire [7:0] cause;
+wire [BPB-1:0] cause;
 wire [5:0] iserver;
 
 // -----------------------------------------------------------------------------
@@ -656,7 +656,7 @@ assign gfx00_cdato = 64'd0;
 `endif
 
 `ifdef TEXT_CONTROLLER
-rfTextController #(.num(1)) tc1
+rfTextController_x12 #(.num(1)) tc1
 (
 	.rst_i(rst),
 	.clk_i(cpu_clk),
@@ -840,7 +840,7 @@ else begin
 if (cs_led & br2_we)
   led[7:0] <= br2_dato[7:0];
 end
-reg [7:0] led_dato;
+reg [BPB-1:0] led_dato;
 always_comb
 case(br2_adr[1:0])
 2'd0:	led_dato <= {4'd0,sw};
@@ -881,7 +881,7 @@ always_ff @(posedge cpu_clk)
 	if (cs_br1)
 		br1_dati <= tc1_dato|spr_dato|bmp_cdato|gfx00_cdato;
 	else
-		br1_dati <= 8'h0;
+		br1_dati <= 12'h0;
 /*
 always_ff @(posedge cpu_clk)
 casez({tc1_ack,spr_ack,bmp_ack,avic_ack,gfx00_cack})
@@ -1711,8 +1711,11 @@ assign firq = irqo[1];
 
 ila_0 uila1 (
 	.clk(clk40), // input wire clk
-	.probe0(packet_o) // input wire [63:0]  probe0  
-//	.probe0({cyc,stb,ack1,we,ucpu1.pc,adr,dati}) // input wire [63:0]  probe0  
+	.probe0(packet_o), // input wire [63:0]  probe0  
+	.probe1({unr1.pc1[0][23:0]}), // input wire [63:0]  probe0  
+	.probe2({unr1.pc2[0][23:0]}), // input wire [63:0]  probe0  
+	.probe3({unr1.pc1[1][23:0]}), // input wire [63:0]  probe0  
+	.probe4({unr1.pc2[1][23:0]}) // input wire [63:0]  probe0  
 );
 
 /*

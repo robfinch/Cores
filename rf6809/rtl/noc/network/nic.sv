@@ -99,8 +99,8 @@ begin
 end
 
 reg rcv;
-reg [5:0] xmit;
 reg wait_ack;
+reg rw_done;
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -113,7 +113,7 @@ if (rst_i) begin
 	for (n2 = 0; n2 < 8; n2 = n2 + 1)
 		gbl_packets[n] <= {$bits(Packet){1'b0}};
 	rcv <= 1'b0;
-	xmit <= 6'd0;
+	rw_done <= TRUE;
 	wait_ack <= 1'b0;
 	m_cyc_o <= 1'b0;
 	m_stb_o <= 1'b0;
@@ -126,9 +126,15 @@ else begin
 	// Transfer the packet around the ring on every clock cycle.
 	packet_o <= packet_i;
 	ipacket_o <= ipacket_i;
+
+	if ((packet_i.sid|packet_i.did)==6'd0) begin
+		packet_o <= packet_tx;
+		packet_tx <= {$bits(Packet){1'b0}};
+	end
 	
 	// Look for slave cycle termination.
 	if (~(s_cyc_i & s_stb_i)) begin
+		rw_done <= TRUE;
 		s_ack_o <= FALSE;
 		s_rty_o <= FALSE;
 	end
@@ -154,10 +160,9 @@ else begin
 			// Was this packet for us?
 			if (packet_i.did==id || packet_i.did==6'd63) begin
 				packet_rx <= packet_i;
-				// Remove packet
+				// Remove packet only if not a broadcast packet
 				if (packet_i.did!=6'd63) begin
 					packet_o <= {$bits(Packet){1'b0}};
-					xmit <= 6'd0;
 					case (packet_i.typ)
 					PT_ACK:		state <= ST_ACK;
 					PT_READ:	state <= ST_READ;
@@ -171,7 +176,6 @@ else begin
 					for (n1 = 0; n1 < 7; n1 = n1 + 1)
 						gbl_packets[n1+1] <= gbl_packets[n1];
 					gbl_packets[0] <= packet_i;
-					xmit <= 6'd0;
 					case (packet_i.typ)
 					//PT_ACK:		state <= ST_ACK;
 					//PT_READ:	state <= ST_READ;
@@ -180,7 +184,8 @@ else begin
 					endcase
 				end
 			end
-			else begin
+			// If previous op is complete, and theres nothing in the transmit buffer.
+			else if (rw_done && ~|packet_tx) begin
 				tPrepReadWrite();
 			end
 		end
@@ -206,11 +211,11 @@ else begin
 			packet_tx.ack <= TRUE;
 			packet_tx.adr <= m_adr_o;
 			packet_tx.dat <= m_dat_i;
-			state <= ST_XMIT;
+			state <= ST_IDLE;
 		end
 
 	ST_WRITE:
-		begin
+		if (!m_ack_i) begin
 			m_cyc_o <= TRUE;
 			m_stb_o <= TRUE;
 			m_we_o <= TRUE;
@@ -223,15 +228,6 @@ else begin
 			m_cyc_o <= FALSE;
 			m_stb_o <= FALSE;
 			m_we_o <= FALSE;
-			state <= ST_IDLE;
-		end
-
-
-	// Wait	for an opening then transmit the packet.
-	ST_XMIT:
-		if ((packet_i.sid|packet_i.did)==6'd0) begin
-			packet_o <= packet_tx;
-			packet_tx <= {$bits(Packet){1'b0}};
 			state <= ST_IDLE;
 		end
 
@@ -268,13 +264,9 @@ end
 
 task tPrepReadWrite;
 begin
-	if (s_cyc_i && s_stb_i && s_we_i) begin
-		if (xmit != 6'd0)
-			xmit <= xmit - 2'd1;
-	end
-	if ((s_cyc_i && s_stb_i && xmit==6'd0)/* &&
+	if ((s_cyc_i && s_stb_i)/* &&
 		!(packet_i.did==id || packet_i.did==6'd63)*/) begin
-		xmit <= 6'd5;
+		rw_done <= FALSE;
 		packet_tx.sid <= id;
 		packet_tx.age <= 6'd0;
 		packet_tx.ack <= 1'b0;
@@ -283,7 +275,6 @@ begin
 		packet_tx.we <= s_we_i;
 		packet_tx.adr <= s_adr_i;
 		packet_tx.dat <= s_dat_i;
-		state <= ST_XMIT;
 		casez(s_adr_i[23:16])
 		// Read global ROM?
 		8'hF?:	
@@ -292,7 +283,7 @@ begin
 					packet_tx.did <= 6'd62;
 				else begin
 					packet_tx <= {$bits(Packet){1'b0}};
-					state <= ST_IDLE;
+					rw_done <= TRUE;
 					s_ack_o <= TRUE;
 				end
 			end
@@ -321,7 +312,7 @@ begin
 		default:
 			begin
 				packet_tx <= {$bits(Packet){1'b0}};
-				state <= ST_IDLE;
+				rw_done <= TRUE;
 			end
 		endcase
 	end
