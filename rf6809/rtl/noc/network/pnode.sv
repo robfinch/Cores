@@ -51,10 +51,13 @@ output IPacket ipacket_o;
 output [`TRPBYTE] pc1;
 output [`TRPBYTE] pc2;
 
+wire [2:0] c1_cti;
 wire c1_cyc;
 wire c1_stb;
 wire c1_we;
 reg c1_ack;
+reg c1_aack;
+wire [3:0] c1_atag;
 wire c1_rty;
 wire [35:0] c1_adr;
 wire [`BYTE1] c1_dato;
@@ -62,10 +65,13 @@ reg [`BYTE1] c1_dati;
 wire c1_irq;
 wire c1_firq;
 wire [`BYTE1] c1_cause;
+wire [2:0] c2_cti;
 wire c2_cyc;
 wire c2_stb;
 wire c2_we;
 reg c2_ack;
+reg c2_aack;
+wire [3:0] c2_atag;
 wire c2_rty;
 wire [35:0] c2_adr;
 wire [`BYTE1] c2_dato;
@@ -83,14 +89,14 @@ reg w1, w2;
 
 reg r1_en;
 reg r1_we;
-reg r1_ack;
+reg r1_ack, r1_aack;
 reg [16:0] r1_adr;
 reg [`BYTE1] r1_dati;
 wire [`BYTE1] r1_dato;
 reg [`BYTE1] r1_cdat;
 reg r2_en;
 reg r2_we;
-reg r2_ack;
+reg r2_ack, r2_aack;
 reg [16:0] r2_adr;
 reg [`BYTE1] r2_dati;
 wire [`BYTE1] r2_dato;
@@ -119,9 +125,12 @@ nic unic1
 	.id({id,1'b0}),
 	.rst_i(rst_i),
 	.clk_i(clk_i),
+	.s_cti_i(c1_cti),
 	.s_cyc_i(c1_cyc),
 	.s_stb_i(c1_stb),
 	.s_ack_o(nic1_ack),
+	.s_aack_o(c1_aack),
+	.s_atag_o(c1_atag),
 	.s_rty_o(c1_rty),
 	.s_we_i(c1_we),
 	.s_adr_i(c1_adr),
@@ -152,9 +161,12 @@ nic unic2
 	.id({id,1'b1}),
 	.rst_i(rst_i),
 	.clk_i(clk_i),
+	.s_cti_i(c2_cti),
 	.s_cyc_i(c2_cyc),
 	.s_stb_i(c2_stb),
 	.s_ack_o(nic2_ack),
+	.s_atag_o(c2_atag),
+	.s_aack_o(c2_aack),
 	.s_rty_o(c2_rty),
 	.s_we_i(c2_we),
 	.s_adr_i(c2_adr),
@@ -204,6 +216,7 @@ parameter ST_ACKC = 6'd6;
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	r1_ack <= 1'b0;
+	r1_aack <= 1'b0;
 	r1_cdat <= 12'h00;
 	r1_en <= FALSE;
 	r1_we <= FALSE;
@@ -213,6 +226,7 @@ else begin
 	// If the cycle is over, clear the ack and reset the data bus.
 	if (!(c1_cyc & c1_stb)) begin
 		r1_ack <= 1'b0;
+		r1_aack <= 1'b0;
 		r1_cdat <= 12'h00;
 	end
 	if (!(m1_cyc & m1_stb)) begin
@@ -236,7 +250,7 @@ else begin
 		else if (c1_cyc) begin
 			w1 <= 1'b1;
 			if (c1_adr[23:22]==2'b00) begin
-				state1 <= ST_RD1;
+				state1 <= c1_we ? ST_RD3 : ST_RD1;
 				r1_we <= c1_we;
 				r1_en <= TRUE;
 				r1_adr <= c1_adr;
@@ -246,14 +260,14 @@ else begin
 	// Three cycle read latency.
 	ST_RD1:	state1 <= ST_RD2;
 	ST_RD2:	state1 <= ST_RD3;
-	ST_RD3:	state1 <= ST_RD4;
-	ST_RD4:
+	ST_RD3:
 		begin
 			state1 <= ST_ACK;
 			r1_we <= FALSE;
 			if (w1) begin
 				r1_cdat <= r1_dato;
 				r1_ack <= 1'b1;
+				r1_aack <= 1'b1;
 			end
 			else begin
 				m1_dati <= r1_dato;
@@ -276,6 +290,7 @@ end
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	r2_ack <= 1'b0;
+	r2_aack <= 1'b0;
 	r2_cdat <= 12'h00;
 	r2_en <= FALSE;
 	r2_we <= FALSE;
@@ -284,6 +299,7 @@ end
 else begin
 	if (!(c2_cyc & c2_stb)) begin
 		r2_ack <= 1'b0;
+		r2_aack <= 1'b0;
 		r2_cdat <= 12'h00;
 	end
 	if (!(m2_cyc & m2_stb)) begin
@@ -310,7 +326,7 @@ else begin
 				if (c2_adr[23:22]==2'b00) begin
 					r2_adr <= c2_adr;
 					r2_dati <= c2_dato;
-					state2 <= ST_RD1;
+					state2 <= c2_we ? ST_RD3 : ST_RD1;
 					r2_we <= c2_we;
 					r2_en <= TRUE;
 				end
@@ -318,8 +334,7 @@ else begin
 		end
 	ST_RD1:	state2 <= ST_RD2;
 	ST_RD2:	state2 <= ST_RD3;
-	ST_RD3:	state2 <= ST_RD4;
-	ST_RD4:
+	ST_RD3:
 		begin
 			state2 <= ST_ACK;
 			r2_we <= FALSE;
@@ -327,6 +342,7 @@ else begin
 			if (w2) begin
 				r2_cdat <= r2_dato;
 				r2_ack <= 1'b1;
+				r2_aack <= 1'b1;
 			end
 			else begin
 				m2_dati <= r2_dato;
@@ -378,15 +394,17 @@ rf6809 ucpu1
 	.bs_o(),
 	.lic_o(),
 	.tsc_i(1'b0),
-	.rty_i(1'b0),
+	.rty_i(c1_rty),
 	.bte_o(),
-	.cti_o(),
+	.cti_o(c1_cti),
 	.bl_o(),
 	.lock_o(),
 	.cyc_o(c1_cyc),
 	.stb_o(c1_stb),
 	.we_o(c1_we),
 	.ack_i(c1_ack),
+	.aack_i(c1_aack|r1_aack),
+	.atag_i(r1_aack?r1_adr[3:0]:c1_atag),
 	.adr_o(c1_adr),
 	.dat_i(c1_dati),
 	.dat_o(c1_dato),
@@ -407,15 +425,17 @@ rf6809 ucpu2
 	.bs_o(),
 	.lic_o(),
 	.tsc_i(1'b0),
-	.rty_i(1'b0),
+	.rty_i(c2_rty),
 	.bte_o(),
-	.cti_o(),
+	.cti_o(c2_cti),
 	.bl_o(),
 	.lock_o(),
 	.cyc_o(c2_cyc),
 	.stb_o(c2_stb),
 	.we_o(c2_we),
 	.ack_i(c2_ack),
+	.aack_i(c2_aack|r2_aack),
+	.atag_i(r2_aack?r2_adr[3:0]:c2_atag),
 	.adr_o(c2_adr),
 	.dat_i(c2_dati),
 	.dat_o(c2_dato),

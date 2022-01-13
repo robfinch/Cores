@@ -80,6 +80,8 @@
 //            bit 17 = edge sensitivity
 //=============================================================================
 
+import rf6809_pkg::*;
+
 module rf6809_pic
 (
 	input rst_i,		// reset
@@ -90,15 +92,9 @@ module rf6809_pic
 	output ack_o,       // controller is ready
 	input wr_i,			// write
 	input [7:0] adr_i,	// address
-	input [7:0] dat_i,
-	output reg [7:0] dat_o,
+	input [BPB:0] dat_i,
+	output reg [BPB:0] dat_o,
 	output vol_o,		// volatile register selected
-	output reg m_cyc_o,
-	output reg m_stb_o,
-	input m_ack_i,
-	output reg m_we_o,
-	output reg [23:0] m_adr_o,
-	output reg [7:0] m_dat_o,
 	input i1, i2, i3, i4, i5, i6, i7,
 		i8, i9, i10, i11, i12, i13, i14, i15,
 		i16, i17, i18, i19, i20, i21, i22, i23,
@@ -106,10 +102,9 @@ module rf6809_pic
 	output reg [3:0] irqo,	// normally connected to the processor irq
 	input nmii,		// nmi input connected to nmi requester
 	output reg nmio,	// normally connected to the nmi of cpu
-	output reg [7:0] causeo,
+	output reg [BPB:0] causeo,
 	output reg [5:0] server_o
 );
-parameter pIOAddress = 32'hFF95_0000;
 
 wire clk;
 reg [31:0] trig;
@@ -123,7 +118,7 @@ reg [31:0] iedge;
 reg [31:0] rste;
 reg [31:0] es;
 reg [3:0] irq [0:31];
-reg [7:0] cause [0:31];
+reg [BPB:0] cause [0:31];
 reg [5:0] server [0:31];
 integer n;
 
@@ -132,7 +127,7 @@ initial begin
 	es <= 32'hFFFFFFFF;
 	rste <= 32'h0;
 	for (n = 0; n < 32; n = n + 1) begin
-		cause[n] <= 8'h00;
+		cause[n] <= {BPB{1'b0}};
 		irq[n] <= 4'h8;
 		server[n] <= 6'd2;
 	end
@@ -203,38 +198,10 @@ begin
 		8'b1?????00: dat_o <= cause[adr_i[6:2]];
 		8'b1?????01: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],2'b0,irq[adr_i[6:2]]};
 		8'b1?????10:	dat_o <= {2'b0,server[adr_i[6:2]]};
-		default:	dat_o <= 8'h00;
+		default:	dat_o <= 12'h00;
 		endcase
 	else
-		dat_o <= 8'h00;
-end
-
-// Master cycle
-reg [5:0] state;
-parameter ST_IDLE = 6'd0;
-parameter ST_ACK = 6'd1;
-always @(posedge clk)
-begin
-	case(state)
-	ST_IDLE:
-		if (irqo) begin
-			m_cyc_o <= 1'b1;
-			m_stb_o <= 1'b1;
-			m_we_o <= 1'b1;
-			m_adr_o <= {4'hC,server[irqenc]-2'd1,20'hFFF00+irqenc};
-			m_dat_o <= 8'h01;
-			state <= ST_ACK;
-		end
-	ST_ACK:
-		if (m_ack_i) begin
-			m_cyc_o <= 1'b0;
-			m_stb_o <= 1'b0;
-			m_we_o <= 1'b0;
-			state <= ST_IDLE;
-		end
-	default:
-		state <= ST_IDLE;
-	endcase
+		dat_o <= 12'h00;
 end
 
 always @(posedge clk)

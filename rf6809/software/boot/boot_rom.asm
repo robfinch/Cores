@@ -89,6 +89,8 @@ TEXT_CURPOS	EQU		34
 KEYBD		EQU		$FFFE30400
 KEYBDCLR	EQU		$FFFE30402
 PIC			EQU		$FFFE3F000
+SPRITE_CTRL		EQU		$FFFE10000
+SPRITE_EN			EQU		$3C0
 
 BIOS_SCREENS	EQU	$17000000	; $17000000 to $171FFFFF
 
@@ -103,19 +105,15 @@ IOFocusNdx	EQU		$100
 IOFocusID		EQU		$100
 
 ; These variables use direct page access
-; There are two sets one at $1xxx and a second at $2xxx
-; There is one set for each core
-CursorRow	EQU		$1000
-CursorCol	EQU		$1001
-CharColor	EQU		$1002
-ScreenColor	EQU		$1003
-CursorFlash	EQU		$1004
-Dsave		EQU		$1006
-Xsave		EQU		$1008
-Ysave		EQU		$100A
-Usave		EQU		$100C
-Ssave		EQU		$100E
-DPsave	EQU		$1010
+CursorRow	EQU		$110
+CursorCol	EQU		$111
+CharColor	EQU		$112
+ScreenColor	EQU		$113
+CursorFlash	EQU		$114
+KeyState1	EQU	$120
+KeyState2	EQU	$121
+KeyLED		EQU	$122
+KeybdID		EQU	$124
 
 QNdx0		EQU		$780
 QNdx1		EQU		QNdx0+2
@@ -147,13 +145,8 @@ mon_DPRSAVE	EQU		$90E
 mon_CCRSAVE	EQU		$90F
 
 mon_numwka	EQU		$910
-mon_r1		EQU		$904
-mon_r2		EQU		$908
-
-	org		$FFC000
-	nop
-	nop
-	nop
+mon_r1		EQU		$920
+mon_r2		EQU		$922
 
 ; The ORG directive must set an address a multiple of 4 in order for the Verilog
 ; output to work correctly.
@@ -163,8 +156,8 @@ mon_r2		EQU		$908
 	nop
 	nop
 XBLANK
-	lda		#' '
-	jsr		OUTCH
+	ldb		#' '
+	lbsr	OUTCH
 	rts
 
 	org		$FFD0D0
@@ -172,15 +165,15 @@ XBLANK
 	nop
 CRLF
 CRLF1:
-	lda		#CR
-	jsr		OUTCH
-	lda		#LF
-	jsr		OUTCH
+	ldb		#CR
+	lbsr	OUTCH
+	ldb		#LF
+	lbsr	OUTCH
 	rts
 
 	org		$FFD0F0
 	nop
-	jmp		CRLF1
+	bra		CRLF1
 
 	org		$FFD1DC
 ONEKEY
@@ -189,26 +182,25 @@ ONEKEY
 	org		$FFD2C0
 	nop
 LETTER
-	jsr		OUTCH
+	lbsr	OUTCH
 	rts
 
 	org		$FFD2CC
 	nop
 	nop
 HEX2
-	jsr		DispByteAsHex
+	lbsr	DispByteAsHex
 	rts
 HEX4
-	jsr		DispWordAsHex
+	lbsr	DispWordAsHex
 	rts
 
 	org		$FFD300
 ClearScreenJmp
-	jmp		ClearScreen
+	lbra	ClearScreen
 	org		$FFD308
 HomeCursorJmp
-	jsr		HomeCursor
-	rts
+	lbra	HomeCursor
 
 	org		$FFE000
 
@@ -221,12 +213,10 @@ ramtest:
 	ldy		#0
 	lda		#1
 	sta		LEDS
-ramtest1:
 	ldd		#$AAA555
+ramtest1:
 	std		,y++
-	ldd		#$555AAA
-	std		,y++
-	cmpy	#71680
+	cmpy	#32768
 	blo		ramtest1
 	; now readback values and compare
 	ldy		#0
@@ -234,10 +224,7 @@ ramtest3:
 	ldd		,y++
 	cmpd	#$AAA555
 	bne		ramerr
-	ldd		,y++
-	cmpd	#$555AAA
-	bne		ramerr
-	cmpy	#71680
+	cmpy	#32768
 	blo		ramtest3
 	lda		#2
 	sta		LEDS
@@ -254,7 +241,7 @@ ramerr:
 	jmp		,u
 
 	org		$FFF000
-	FDB MonitorNear
+	FDB Monitor
 	FDB DumRts	;	NEXTCMD
 	FDB INCH
 	FDB INCHE
@@ -272,38 +259,43 @@ ramerr:
 	FDB DumRts			; ACINIZ
 	FDB DumRts			; AOUTCH
 
+DumRts:
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
 start:
-	lda		#$55
+	lda		#$55			; see if we can at least set LEDs
 	sta		LEDS
 	ldu		#st6			; U = return address
 	jmp		ramtest		; JMP dont JSR
 st6:
-	lds		#$3BFF		; boot up stack area
+	lds		#$3FFF		; boot up stack area
 	lda		COREID
-;	cmpa	#2
+	cmpa	#2
+;	beq		st8
+;	sync						; halt cores other than 2
+st8:
 ;	bne		skip_init
-	lsra
-	bcc		st4
-	leas	$400,s		; adjust stack for second core
-st4:
-	bsr		romToRam
-	ldd		#st7 & $FFFF
-	tfr		d,x
-	jmp		,x				; jump to the BIOS now in local RAM
+;	bsr		romToRam
+;	ldd		#st7 & $FFFF
+;	tfr		d,x
+;	jmp		,x				; jump to the BIOS now in local RAM
 st7:
 	bsr		Delay3s		; give some time for devices to reset
 	lda		#$AA
 	sta		LEDS
-;	sync
 	lda		#2
 	sta		IOFocusID	; core #2 has focus
+	sta		RunningID
 	lda		#$0CE
 	sta		ScreenColor
 	sta		CharColor
 	bsr		ClearScreen
 	ldd		#DisplayChar
 	std		CharOutVec
-	ldd		#_DBGGetKey
+	ldd		#DBGGetKey
 	std		CharInVec
 	ldb		COREID
 	cmpb	#2
@@ -332,8 +324,6 @@ st1:
 ;	sta		PIC+4			; reg #4 is the edge sensitivity setting
 ;	sta		PIC				; reg #0 is interrupt enable
 
-	lda		#2				; high byte of $800000
-	sta		RunningID
 skip_init:
 	andcc	#$EF			; unmask irq
 	lda		#56
@@ -346,16 +336,38 @@ skip_init:
 	sta		LEDS
 	ldd		#msgStartup
 	bsr		DisplayString
-	jmp		Monitor
+	ldx		#0
+	ldd		#0
+	lbsr	ShowSprites
+	lbsr	KeybdInit
+	jmp		MonitorStart
 
 msgStartup
-	fcb		"rf6809 System Starting.",CR,LF,0
+	fcb		"rf6809 12-bit System Starting.",CR,LF,0
 
+;------------------------------------------------------------------------------
+; The checkpoint register must be cleared within 1 second or a NMI interrupt
+; will occur. checkpoint should be called with a JSR so that the global ROM
+; routine is called.
+;
+; Modifies:
+;		none
+;------------------------------------------------------------------------------
+
+checkpoint:
+	clr		$FFFFFFFE1	; writing any value will do
+	rts
+
+;------------------------------------------------------------------------------
 ; Copy the system ROM to local RAM
 ; Running the code from local RAM is probably an order of magnitude faster
 ; then running from the global ROM. It also reduces the network traffic to
 ; run from local RAM.
 ;
+; Modifies:
+;		d,x,y
+;------------------------------------------------------------------------------
+
 romToRam:
 	ldx		#$FFC000
 	ldy		#$00C000
@@ -385,6 +397,7 @@ multi_sieve3:
 	leax	8,x						; advance to next position
 	cmpx	#4095
 	blo		multi_sieve3
+	jsr		checkpoint
 	addb	#2						; start sieve at 2 (core id)
 	lda		#'N'					; flag position value of 'N' for non-prime
 multi_sieve2:
@@ -395,12 +408,39 @@ multi_sieve1:
 	sta		TEXTSCR,x
 	cmpx	#4095
 	blo		multi_sieve1
+	jsr		checkpoint
 	addb	#8						; number of cores working on it
 	cmpb	#4080
 	blo		multi_sieve2
 multi_sieve4:					; hang machine
-	bra		multi_sieve4	
-	
+	sync
+	lbra	Monitor
+
+sieve:
+	lda		#'P'					; indicate prime
+	ldx		#0						; start at first char of screen
+sieve3:
+	sta		TEXTSCR,x			; store 'P'
+	leax	1,x						; advance to next position
+	cmpx	#4095
+	blo		sieve3
+	ldb		#2						; start sieve at 2
+	lda		#'N'					; flag position value of 'N' for non-prime
+sieve2:
+	ldx		#0
+	abx									; skip the first position - might be prime
+sieve1:
+	abx									; increment
+	sta		TEXTSCR,x
+	cmpx	#4095
+	blo		multi_sieve1
+	addb	#1						; number of cores working on it
+	cmpb	#4080
+	blo		sieve2
+sieve4:								; hang machine
+	sync
+	lbra	MonitorStart
+
 ;------------------------------------------------------------------------------
 ; Three second delay for user convenience and to allow some devices time to
 ; reset.
@@ -409,44 +449,12 @@ multi_sieve4:					; hang machine
 Delay3s:
 	ldd		#9000000
 dly3s1:
+	cmpb	#$FF
+	bne		dly3s2
+dly3s2:
 	sta		LEDS
 	subd	#1
 	bne		dly3s1
-	rts
-
-;------------------------------------------------------------------------------
-; Convert ASCII character to screen display character.
-; Parameter
-;	acca = ascii character
-; Returns:
-;	d = screen character
-;------------------------------------------------------------------------------
-;
-AsciiToScreen:
-	clrb
-	cmpa	#'A'
-	blo		atoscr1
-	cmpa	#'Z'
-	bls		atoscr1
-	cmpa	#'z'
-	bhi		atoscr1
-	cmpa	#'a'
-	blo		atoscr1
-	suba	#$60
-atoscr1:
-	orb		#$1
-DumRts:
-	rts
-
-;------------------------------------------------------------------------------
-; Convert screen character to ascii character
-;------------------------------------------------------------------------------
-;
-ScreenToAscii:
-	cmpa	#26
-	bhi		stasc1
-	adda	#$60
-stasc1:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -467,29 +475,9 @@ ShiftLeft5:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ;
-BlockCopyWords:
-	ldy		#0
-bcw1:
-	ldd		[BlkcpySrc],y
-	std		[BlkcpyDst],y
-	leay	2,y
-	leax	-1,x
-	bne		bcw1
-	rts
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-;
 CopyVirtualScreenToScreen:
 	pshs	d,x,y,u
-	ldb		COREID
-	lsrb
-	bcc		cv2s2
-	ldd		#$B800
-	bra		cv2s3
-cv2s2:
-	ldd		#$B000
-cv2s3:
+	bsr		GetScreenLocation
 	tfr		d,x
 	ldy		#TEXTSCR
 	ldu		#56*31/2
@@ -514,14 +502,7 @@ cv2s1:
 ;
 CopyScreenToVirtualScreen:
 	pshs	d,x,y,u
-	ldb		COREID
-	lsrb
-	bcc		cs2v2
-	ldd		#$B800
-	bra		cs2v3
-cs2v2:
-	ldd		#$B000
-cs2v3:
+	bsr		GetScreenLocation
 	tfr		d,y
 	ldx		#TEXTSCR
 	ldu		#56*31/2
@@ -557,6 +538,9 @@ TextSeek:
 ; Clear the screen and the screen color memory
 ; We clear the screen to give a visual indication that the system
 ; is working at all.
+;
+; Modifies:
+;		none
 ;------------------------------------------------------------------------------
 
 ClearScreen:
@@ -566,7 +550,7 @@ ClearScreen:
 	bsr		GetScreenLocation
 	tfr		d,y
 	ldb		#' '				; space char
-cs1
+cs1:
 	stb		,y+					; set text to space
 	leax	-1,x				; decrement x
 	bne		cs1
@@ -586,44 +570,48 @@ cs3:
 
 ;------------------------------------------------------------------------------
 ; Scroll text on the screen upwards
-;------------------------------------------------------------------------------
 ;
+; Modifies:
+;		none
+;------------------------------------------------------------------------------
+
 ScrollUp:
 	pshs	d,x,y,u
-	lda		TEXTREG+TEXT_COLS	; acc = # text columns
-	ldb		TEXTREG+TEXT_ROWS
-	decb						; one less row
-	mul							; calc number of chars to scroll
-	tfr		d,y					; y = count of chars to move
+	ldy		#(56*31-1)/2	; y = num chars/2 to move
 	bsr		GetScreenLocation
 	tfr		d,x
 	tfr		d,u
-	ldb		TEXTREG+TEXT_COLS
-	abx							; x = index to source row
+	leax	56,x			; x = index to source row
 scrup1:
 	ldd		,x++			; move 2 characters
 	std		,u++
 	leay	-1,y
 	bne		scrup1
-	lda		TEXTREG+TEXT_ROWS
-	deca
+	lda		#30
 	bsr		BlankLine
 	puls	d,x,y,u,pc
 
 ;------------------------------------------------------------------------------
 ; Blank out a line on the display
-; line number to blank is in acca
+;
+; Modifies:
+;		none
+; Parameters:
+; 	acca = line number to blank
 ;------------------------------------------------------------------------------
 
 BlankLine:
 	pshs	d,x
+	pshs	a
 	bsr		GetScreenLocation
 	tfr		d,x
-	ldb		TEXTREG+TEXT_COLS	; b = # chars to blank out from video controller
-	mul							; d = screen index (row# * #cols)
-	abx
+	puls	a
+	ldb		#56		; b = # chars to blank out from video controller
+	mul					; d = screen index (row# * #cols)
+	leax	d,x
+	tfr		d,x
 	lda		#' '
-	ldb		TEXTREG+TEXT_COLS	; b = # chars to blank out from video controller
+	ldb		#56		; b = # chars to blank out from video controller
 blnkln1:
 	sta		,x+
 	decb
@@ -633,6 +621,11 @@ blnkln1:
 ;------------------------------------------------------------------------------
 ; Get the location of the screen memory. The location
 ; depends on whether or not the task has the output focus.
+;
+; Modifies:
+;		d
+; Retuns:
+;		d = screen location
 ;------------------------------------------------------------------------------
 
 GetScreenLocation:
@@ -642,21 +635,18 @@ GetScreenLocation:
 	ldd		#TEXTSCR		; yes, we update the real screen
 	rts
 gsl1:
-	lsra							; two cores share memory
-	bcc		gsl2
-	ldd		#$B800			; odd core's virtual screen
-	rts
-gsl2:
-	ldd		#$B000			; even core's virtual screen
+	ldd		#$7800
 	rts
 
 ;------------------------------------------------------------------------------
 ; HomeCursor
 ; Set the cursor location to the top left of the screen.
+;
+; Modifies:
+;		none
 ;------------------------------------------------------------------------------
 
 HomeCursor:
-	setdp	1
 	pshs	d,x
 	clr		CursorRow
 	clr		CursorCol
@@ -671,10 +661,12 @@ hc1:
 ;------------------------------------------------------------------------------
 ; Update the cursor position in the text controller based on the
 ;  CursorRow,CursorCol.
+;
+; Modifies:
+;		none
 ;------------------------------------------------------------------------------
 ;
 UpdateCursorPos:
-	setdp	1
 	pshs	d,x
 	ldb		COREID				; update cursor position in text controller
 	cmpb	IOFocusID			; only for the task with the output focus
@@ -693,26 +685,17 @@ ucp1:
 ;------------------------------------------------------------------------------
 ; Calculate screen memory location from CursorRow,CursorCol.
 ; Also refreshes the cursor location.
+;
+; Modifies:
+;		d
 ; Returns:
-; r1 = screen location
+; 	d = screen location
 ;------------------------------------------------------------------------------
 ;
 CalcScreenLoc:
-	setdp	1
-	pshs	d,x,y,dp
-	lda		COREID
-	lsra
-	bcc		csl2
-	lda		#2
-	tfr		a,dp
-	bra		csl4
-csl2:
-	lda		#1
-	tfr		a,dp
-csl4:
+	pshs	x
 	lda		CursorRow
-	anda	#$3F					; limit to 63 rows
-	ldb		TEXTREG+TEXT_COLS
+	ldb		#56
 	mul
 	tfr		d,x
 	ldb		CursorCol
@@ -723,39 +706,31 @@ csl4:
 	stx		TEXTREG+TEXT_CURPOS
 csl1:
 	bsr		GetScreenLocation
-	pshs	x
-	addd	,s
-	leas	2,s
-	puls	d,x,y,dp,pc
+	leax	d,x
+	tfr		x,d
+	puls	x,pc
 
 ;------------------------------------------------------------------------------
 ; Display a character on the screen.
 ; If the task doesn't have the I/O focus then the character is written to
 ; the virtual screen.
-; a = char to display
+;
+; Modifies:
+;		none
+; Parameters:
+; 	accb = char to display
 ;------------------------------------------------------------------------------
 ;
 DisplayChar:
-	setdp	1
-	pshs	d,x,dp
-	ldb		COREID
-	lsrb
-	bcc		dcx16
-	ldb		#2
-	tfr		b,dp
-	bra		dcx15
-dcx16:
-	ldb		#1
-	tfr		b,dp
-dcx15:
-	cmpa	#CR					; carriage return ?
+	pshs	d,x
+	cmpb	#CR					; carriage return ?
 	bne		dccr
 	clr		CursorCol		; just set cursor column to zero on a CR
 	bsr		UpdateCursorPos
 dcx14:
-	puls	d,x,dp,pc
+	puls	d,x,pc
 dccr:
-	cmpa	#$91				; cursor right ?
+	cmpb	#$91				; cursor right ?
 	bne		dcx6
 	lda		CursorCol
 	cmpa	#55
@@ -764,9 +739,9 @@ dccr:
 	sta		CursorCol
 dcx7:
 	bsr		UpdateCursorPos
-	puls	d,x,dp,pc
+	puls	d,x,pc
 dcx6:
-	cmpa	#$90				; cursor up ?
+	cmpb	#$90				; cursor up ?
 	bne		dcx8		
 	lda		CursorRow
 	beq		dcx7
@@ -774,7 +749,7 @@ dcx6:
 	sta		CursorRow
 	bra		dcx7
 dcx8:
-	cmpa	#$93				; cursor left ?
+	cmpb	#$93				; cursor left ?
 	bne		dcx9
 	lda		CursorCol
 	beq		dcx7
@@ -782,7 +757,7 @@ dcx8:
 	sta		CursorCol
 	bra		dcx7
 dcx9:
-	cmpa	#$92				; cursor down ?
+	cmpb	#$92				; cursor down ?
 	bne		dcx10
 	lda		CursorRow
 	cmpa	#31
@@ -791,7 +766,7 @@ dcx9:
 	sta		CursorRow
 	bra		dcx7
 dcx10:
-	cmpa	#$94				; cursor home ?
+	cmpb	#$94				; cursor home ?
 	bne		dcx11
 	lda		CursorCol
 	beq		dcx12
@@ -801,15 +776,14 @@ dcx12:
 	clr		CursorRow
 	bra		dcx7
 dcx11:
-	pshs	y,u
-	cmpa	#$99				; delete ?
+	cmpb	#$99				; delete ?
 	bne		dcx13
 	bsr		CalcScreenLoc
 	tfr		d,x
 	lda		CursorCol		; acc = cursor column
 	bra		dcx5
 dcx13
-	cmpa	#CTRLH			; backspace ?
+	cmpb	#CTRLH			; backspace ?
 	bne		dcx3
 	lda		CursorCol
 	beq		dcx4
@@ -824,37 +798,35 @@ dcx5:
 	blo		dcx5
 	ldb		#' '
 	leax	-1,x
-	std		,x
-	bra		dcx4
+	stb		,x
+	puls	d,x,dp,pc
 dcx3:
-	cmpa	#LF				; linefeed ?
+	cmpb	#LF				; linefeed ?
 	beq		dclf
-	pshs	a
+	pshs	b
 	bsr 	CalcScreenLoc
 	tfr		d,x
 	puls	b
 	stb		,x
-	lda		CharColor
-	sta		$2000,x
+	; ToDo character color
+;	lda		CharColor
+;	sta		$2000,x
 	bsr		IncCursorPos
-	bra		dcx4
+	puls	d,x,pc
 dclf:
 	bsr		IncCursorRow
 dcx4:
-	puls	d,x,dp,pc
+	puls	d,x,pc
 
 ;------------------------------------------------------------------------------
 ; Increment the cursor position, scroll the screen if needed.
-;------------------------------------------------------------------------------
 ;
+; Modifies:
+;		none
+;------------------------------------------------------------------------------
+
 IncCursorPos:
-	setdp	1
-	pshs	d,x,dp
-	ldb		COREID
-	clra
-	lsrb
-	adca	#1
-	tfr		a,dp
+	pshs	d,x
 	lda		CursorCol
 	inca
 	sta		CursorCol
@@ -863,12 +835,7 @@ IncCursorPos:
 	clr		CursorCol		; column = 0
 	bra		icr1
 IncCursorRow:
-	pshs	d,x,dp
-	ldb		COREID
-	clra
-	lsrb
-	adca	#1
-	tfr		a,dp
+	pshs	d,x
 icr1:
 	lda		CursorRow
 	inca
@@ -881,26 +848,37 @@ icr1:
 icc1:
 	bsr		UpdateCursorPos
 icc2:
-	puls	d,x,dp,pc	
-	setdp	0
+	puls	d,x,pc	
 
 ;------------------------------------------------------------------------------
 ; Display a string on the screen.
+;
+; Modifies:
+;		none
 ; Parameters:
-;	d = pointer to string
+;		d = pointer to string
 ;------------------------------------------------------------------------------
 ;
 DisplayString:
 	pshs	d,x
 	tfr		d,x
 dspj1B:
-	lda		,x+				; move string char into acc
+	ldb		,x+				; move string char into acc
 	beq		dsretB		; is it end of string ?
 	bsr		OUTCH			; display character
 	bra		dspj1B
 dsretB:
 	puls	d,x,pc
 
+DisplayStringCRLF
+	pshs	d
+	bsr		DisplayString
+	ldb		#CR
+	bsr		OUTCH
+	ldb		#LF
+	bsr		OUTCH
+	puls	d,pc
+	
 ;
 ; PRINT CR, LF, STRING
 ;
@@ -917,8 +895,8 @@ PCRLF
 PRINT
 	JSR		OUTCH
 PDATA
-	LDA		,X+
-	CMPA	#$04
+	LDB		,X+
+	CMPB	#$04
 	BNE		PRINT
 	RTS
 
@@ -933,44 +911,44 @@ DispDWordAsHex:
 	rts
 
 DispWordAsHex:
-	bsr		DispByteAsHex
 	exg		a,b
 	bsr		DispByteAsHex
 	exg		a,b
+	bsr		DispByteAsHex
 	rts
 
 DispByteAsHex:
-  pshs	a
-	lsra
-	lsra
-	lsra
-	lsra
-	lsra
-	lsra
-	lsra
-	lsra
+  pshs	b
+	lsrb
+	lsrb
+	lsrb
+	lsrb
+	lsrb
+	lsrb
+	lsrb
+	lsrb
 	bsr		DispNyb
-	puls	a
-	pshs	a
-	lsra
-	lsra
-	lsra
-	lsra
+	puls	b
+	pshs	b
+	lsrb
+	lsrb
+	lsrb
+	lsrb
 	bsr		DispNyb
-	puls	a
+	puls	b
 
 DispNyb
-	pshs	a
-	anda	#$0F
-	cmpa	#10
+	pshs	b
+	andb	#$0F
+	cmpb	#10
 	blo		DispNyb1
-	adda	#'A'-10
+	addb	#'A'-10
 	bsr		OUTCH
-	puls	a,pc
+	puls	b,pc
 DispNyb1
-	adda	#'0'
+	addb	#'0'
 	bsr		OUTCH
-	puls	a,pc
+	puls	b,pc
 
 ;==============================================================================
 ; Keyboard I/O
@@ -1013,13 +991,13 @@ KeybdSeek:
 ;------------------------------------------------------------------------------
 ;
 KeybdCheckForKeyDirect:
-	bra		_DBGCheckForKey
+	bra		DBGCheckForKey
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 INCH:
 	ldd		#-1				; block if no key available
-	bra		_DBGGetKey
+	bra		DBGGetKey
 
 INCHE:
 	bsr		INCH
@@ -1047,30 +1025,42 @@ OUTCH:
 ;------------------------------------------------------------------------------
 ;
 SetKeyboardEcho:
-	pshs	x
-	ldx		RunningTCB
-	sta		KeybdEcho,x
-	puls	x
+	stb		KeybdEcho
+	rts
+
+
+;------------------------------------------------------------------------------
+; Parameters:
+;		x,d	bitmap of sprites to enable
+;------------------------------------------------------------------------------
+
+ShowSprites:
+	stx		SPRITE_CTRL+SPRITE_EN
+	std		SPRITE_CTRL+SPRITE_EN+2
 	rts
 
 ;==============================================================================
 ; System Monitor
 ;==============================================================================
 ;
+MonitorStart:
+	ldd		#HelpMsg
+	bsr		DisplayString
 Monitor:
-	leas	$3FFF
-	lda		#0					; turn off keyboard echo
-	jsr		SetKeyboardEcho
+	leas	$3FFF				; reset stack pointer
+	clrb							; turn off keyboard echo
+	bsr		SetKeyboardEcho
 ;	jsr		RequestIOFocus
 PromptLn:
-	jsr		CRLF
-	lda		#'$'
+	lbsr	CRLF
+	ldb		#'$'
 	bsr		OUTCH
 
 ; Get characters until a CR is keyed
-;
+	
 Prompt3:
-	bsr		_DBGGetKey
+	ldd		#-1					; block until key present
+	bsr		DBGGetKey
 	cmpb	#CR
 	beq		Prompt1
 	bsr		OUTCH
@@ -1079,77 +1069,75 @@ Prompt3:
 ; Process the screen line that the CR was keyed on
 ;
 Prompt1:
-	ldy		#0				; index to start of line
 	ldd		#$5050
 	std		LEDS
-	ldx		RunningTCB
-	cmpx	#MAX_TASKNO
+	ldb		RunningID
+	cmpb	#61
 	bhi		Prompt3
 	ldd		#$5151
 	std		LEDS
-	clr		TCB_CursorCol,x	; go back to the start of the line
-	jsr		CalcScreenLoc	; calc screen memory location
+	clr		CursorCol			; go back to the start of the line
+	bsr		CalcScreenLoc	; calc screen memory location
+	tfr		d,y
 	ldd		#$5252
 	std		LEDS
-	jsr		MonGetNonSpace
-	cmpa	#'$'
+	bsr		MonGetNonSpace
+	cmpb	#'$'
 	bne		Prompt2			; skip over '$' prompt character
 	lda		#$5353
 	std		LEDS
-	jsr		MonGetNonSpace
+	bsr		MonGetNonSpace
 
 ; Dispatch based on command character
 ;
 Prompt2:
-	cmpa	#'?'			; $? - display help
+	cmpb	#'?'			; $? - display help
 	bne		PromptC
-	ldd		#<HelpMsg
-	std		Strptr+2
-	ldd		#>HelpMsg
-	std		Strptr
-	jsr		DisplayString
-	jmp		Monitor
+	ldd		#HelpMsg
+	bsr		DisplayString
+	bra		Monitor
 PromptC:
-	cmpa	#'C'
+	cmpb	#'C'
 	bne		PromptD
-	jsr		ClearScreen
-	jsr		HomeCursor
-	jmp		Monitor
+	lbsr		ClearScreen
+	bsr		HomeCursor
+	bra		Monitor
 PromptD:
-	cmpa	#'D'
+	cmpb	#'D'
 	bne		PromptF
-	jsr		MonGetch
-	cmpa	#'R'
+	bsr		MonGetch
+	cmpb	#'R'
 	bne		Prompt3
-	jmp		DumpRegs
+	bra		DumpRegs
 PromptF:
-	cmpa	#'F'
+	cmpb	#'F'
 	bne		PromptJ
-	jsr		MonGetch
-	cmpa	#'I'
-	lbne	Monitor
-	jsr		MonGetch
-	cmpa	#'G'
-	lbne	Monitor
-	jmp		far $20000
+	bsr		MonGetch
+	cmpb	#'I'
+	bne		Monitor
+	bsr		MonGetch
+	cmpb	#'G'
+	bne		Monitor
+	jmp		$FE0000
 PromptJ:
-	cmpa	#'J'
+	cmpb	#'J'
 	lbeq	jump_to_code
 PromptR:
-	cmpa	#'R'
-	lbne	Monitor
-	jsr		ramtest
-	jmp		Monitor
+	cmpb	#'R'
+	bne		Monitor
+	lbsr	ramtest
+	bra		Monitor
 
 MonGetch:
-	ldd		far [ScreenLocation],y
-	leay	2,y
-	jsr		ScreenToAscii
+	ldb		,y
+	leay	1,y
 	rts
 
 MonGetNonSpace:
 	bsr		MonGetCh
-	cmpa	#' '
+	cmpb	#' '
+	beq		MonGetNonSpace
+	cmpb	#9		; tab
 	beq		MonGetNonSpace
 	rts
 
@@ -1162,22 +1150,22 @@ MonGetNonSpace:
 ignBlanks:
 ignBlanks1:
 	bsr		MonGetch
-	cmpa	#' '
+	cmpb	#' '
 	beq		ignBlanks1
-	leay	-2,y
+	leay	-1,y
 	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 GetTwoParams:
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get start address of dump
+	bsr		ignBlanks
+	bsr		GetHexNumber	; get start address of dump
 	ldd		mon_numwka
 	std		mon_r1
 	ldd		mon_numwka+2
 	std		mon_r1+2
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get end address of dump
+	bsr		ignBlanks
+	bsr		GetHexNumber	; get end address of dump
 	ldd		mon_numwka
 	std		mon_r2
 	ldd		mon_numwka+2
@@ -1205,7 +1193,7 @@ shl_numwka:
 	rts
 
 ;------------------------------------------------------------------------------
-; Get a hexidecimal number. Maximum of eight digits.
+; Get a hexidecimal number. Maximum of nine digits.
 ; Y = text pointer (updated)
 ; D = number of digits
 ; mon_numwka contains number
@@ -1216,26 +1204,25 @@ GetHexNumber:
 	std		mon_numwka
 	std		mon_numwka+2
 	pshs	x
-	ldx		#0					; max 8 eight digits
+	ldx		#0					; max 9 eight digits
 gthxn2:
-	jsr		MonGetch
-	jsr		AsciiToHexNybble
-	cmpa	#-1
+	bsr		MonGetch
+	bsr		AsciiToHexNybble
+	cmpb	#-1
 	beq		gthxn1
 	bsr		shl_numwka
 	bsr		shl_numwka
 	bsr		shl_numwka
 	bsr		shl_numwka
-	anda	#$0f
-	ora		mon_numwka+3
-	sta		mon_numwka+3
+	andb	#$0f
+	orb		mon_numwka+3
+	stb		mon_numwka+3
 	inx
-	cmpx	#8
+	cmpx	#9
 	blo		gthxn2
 gthxn1:
 	tfr		x,d
-	puls	x
-	rts
+	puls	x,pc
 
 ;GetDecNumber:
 ;	phx
@@ -1266,41 +1253,41 @@ gthxn1:
 ;------------------------------------------------------------------------------
 ;
 AsciiToHexNybble:
-	cmpa	#'0'
+	cmpb	#'0'
 	bcc		gthx3
-	cmpa	#'9'+1
+	cmpb	#'9'+1
 	bcs		gthx5
-	suba	#'0'
+	subb	#'0'
 	rts
 gthx5:
-	cmpa	#'A'
+	cmpb	#'A'
 	bcc		gthx3
-	cmpa	#'F'+1
+	cmpb	#'F'+1
 	bcs		gthx6
-	suba	#'A'
-	adda	#10
+	subb	#'A'
+	addb	#10
 	rts
 gthx6:
-	cmpa	#'a'
+	cmpb	#'a'
 	bcc		gthx3
-	cmpa	#'z'+1
+	cmpb	#'z'+1
 	bcs		gthx3
-	suba	#'a'
-	adda	#10
+	subb	#'a'
+	addb	#10
 	rts
 gthx3:
-	lda		#-1		; not a hex number
+	ldb		#-1		; not a hex number
 	rts
 
 AsciiToDecNybble:
-	cmpa	#'0'
+	cmpb	#'0'
 	bcc		gtdc3
-	cmpa	#'9'+1
+	cmpb	#'9'+1
 	bcs		gtdc3
-	suba	#'0'
+	subb	#'0'
 	rts
 gtdc3:
-	lda		#-1
+	ldb		#-1
 	rts
 
 DisplayErr:
@@ -1391,13 +1378,13 @@ DumpRegs
 
 ; Jump to code
 jump_to_code:
-	jsr		GetHexNumber
+	bsr		GetHexNumber
 	sei
 	lds		mon_SSAVE
 	ldd		#<jtc_exit
 	pshs	d
 	ldd		#>jtc_exit
-	pshs	d
+	pshs	b
 	ldd		mon_numwka+2
 	pshs	d
 	ldd		mon_numwka
@@ -1427,6 +1414,7 @@ jtc_exit:
 	sta		mon_CCRSAVE
 	sts		mon_SSAVE
 	lds		#$3FFF
+	; todo set according to coreid
 	jmp		DumpRegs
 
 ;------------------------------------------------------------------------------
@@ -1495,8 +1483,8 @@ irq_rout:
 	lda		CursorFlash		; test if we want a flashing cursor
 	beq		tr1a
 	lbsr	CalcScreenLoc	; compute cursor location in memory
-	ldy		ScreenLocation+2
-	lda		$E02000,y		; get color code $2000 higher in memory
+	tfr		d,y
+	lda		$2000,y			; get color code $2000 higher in memory
 	ldb		IRQFlag			; get counter
 	lsrb
 	lsra
@@ -1515,6 +1503,16 @@ irq_rout:
 tr1a
 	rti
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+nmi_rout:
+	ldb		COREID
+	lda		#'I'
+	ldx		#TEXTSCR+40
+	abx
+	sta		,x
+	rti
+
 	org		$FFFFF0
 	nop
 	nop
@@ -1522,6 +1520,6 @@ tr1a
 
 	org		$FFFFF8
 	fcw		irq_rout
-	fcw		start		; SWI
-	fcw		start		; NMI
-	fcw		start		; RST
+	fcw		start				; SWI
+	fcw		nmi_rout		; NMI
+	fcw		start				; RST

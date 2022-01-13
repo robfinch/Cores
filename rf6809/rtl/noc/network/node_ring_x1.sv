@@ -5,6 +5,9 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//	node_ring_x1.sv
+//
+//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -33,44 +36,58 @@
 //                                                                          
 // ============================================================================
 
-package nic_pkg;
+import nic_pkg::*;
 
-parameter TRUE = 1'b1;
-parameter FALSE = 1'b0;
+module node_ring_x1(rst_i, clk_i, packet_i, packet_o, rpacket_i, rpacket_o,
+	ipacket_i, ipacket_o);
+input rst_i;
+input clk_i;
+input Packet packet_i;
+output Packet packet_o;
+input Packet rpacket_i;
+output Packet rpacket_o;
+input IPacket ipacket_i;
+output IPacket ipacket_o;
+parameter N=8;
 
-// Packet types
-parameter PT_NULL = 6'd0;
-parameter PT_READ = 6'd1;
-parameter PT_WRITE = 6'd2;
-parameter PT_ACK = 6'd3;
-parameter PT_RETRY = 6'd4;
-parameter PT_AREAD = 6'd5;	// asynchronous read
-parameter PT_AACK = 6'd6;
+Packet [N:0] packets;
+Packet [N:0] rpackets;
+IPacket [N:0] ipackets;
+reg [35:0] pc [0:N];
 
-typedef logic [23:0] Address;
-typedef logic [11:0] Data;
+assign packets[0] = packet_i;
+assign rpackets[0] = rpacket_i;
+assign ipackets[0] = ipacket_i;
 
-typedef struct packed
-{
-	logic [5:0] did;
-	logic [5:0] sid;
-	logic [5:0] age;
-	logic ack;
-	logic [5:0] typ;
-	logic [1:0] pad2;
-	logic we;
-	Address adr;
-	Data dat;
-} Packet;
+genvar g;
+generate begin : gNodes
 
-typedef struct packed
-{
-	logic [5:0] did;
-	logic [5:0] sid;
-	logic [5:0] age;
-	logic irq;
-	logic firq;
-	Data cause;
-} IPacket;
 
-endpackage
+for (g = 0; g < N; g = g + 1)
+ 	pnode_x1 upn (
+ 		.id(g[5:0]+1),
+ 		.rst_i(rst_i),
+ 		.clk_i(clk_i),
+ 		.packet_i(packets[g]),
+ 		.packet_o(packets[g+1]),
+ 		.rpacket_i(rpackets[g]),
+ 		.rpacket_o(rpackets[g+1]),
+ 		.ipacket_i(ipackets[g]),
+ 		.ipacket_o(ipackets[g+1]),
+ 		.pc(pc[g])
+ 	);
+
+end
+endgenerate
+
+nic_ager uage1(
+	.clk_i(clk_i),
+	.packet_i(packets[N]),
+	.packet_o(packet_o),
+	.rpacket_i(rpackets[N]),
+	.rpacket_o(rpacket_o),
+	.ipacket_i(ipackets[N]),
+	.ipacket_o(ipacket_o)
+);
+
+endmodule

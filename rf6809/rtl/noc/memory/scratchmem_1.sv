@@ -34,7 +34,7 @@
 //                                                                          
 // ============================================================================
 //
-module scratchmem(rst_i, clk_i, cti_i, bok_o, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, sp);
+module scratchmem_1(rst_i, clk_i, cti_i, bok_o, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, sp);
 input rst_i;
 input clk_i;
 input [2:0] cti_i;
@@ -44,14 +44,14 @@ input cyc_i;
 input stb_i;
 output ack_o;
 input we_i;
-input [13:0] adr_i;
+input [16:0] adr_i;
 input [11:0] dat_i;
 output reg [11:0] dat_o;
 input [23:0] sp;
 
 integer n;
 
-reg [11:0] rommem [16383:0];
+reg [11:0] rommem [131071:0];
 reg [13:0] radr;
 
 
@@ -65,7 +65,7 @@ wire cs = cs_i && cyc_i && stb_i;
 assign bok_o = cs_i;
 reg csd = 1'b0;
 reg wed = 1'b0;
-reg [13:0] adrd = 16'h00;
+reg [13:0] adrd = 14'h00;
 reg [11:0] datid = 8'h00;
 reg [11:0] datod = 8'h00;
 
@@ -126,14 +126,14 @@ generate begin : gRom
 for (g = 0; g < 1; g = g + 1)
 always @(posedge clk_i)
 	if (csd & wed)
-		rommem[adrd[13:0]][g*12+11:g*12] <= datid[g*12+11:g*12];
+		rommem[adrd[13:0]][g*8+7:g*8] <= datid[g*8+7:g*8];
 end
 endgenerate
 
 wire pe_cs;
 edge_det u1(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee() );
 
-reg [13:0] ctr;
+reg [14:0] ctr;
 always @(posedge clk_i)
 if (rst_i) begin
 	cnt <= 3'd0;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,6 +47,8 @@
 //`define SDC_CONTROLLER 1'b1
 //`define GPU_GRID	1'b1
 //`define RANDOM_GEN	1'b1
+//`define NOC_RING	1'b1
+
 import rf6809_pkg::*;
 import nic_pkg::*;
 
@@ -181,10 +183,18 @@ wire [31:0] tc1_rgb;
 wire tc1_ack;
 wire [11:0] tc1_dato;
 wire ack_scr;
+wire ack_scr0;
+wire ack_scr1;
+wire ack_scr2;
+wire ack_scr3;
 (* mark_debug = "true" *)
-wire ack_br = 1'b0;
-wire [BPB-1:0] scr_dato;
-wire [127:0] br_dato = 128'd0;
+wire ack_br;
+wire [11:0] scr_dato;
+wire [11:0] scr0_dato;
+wire [11:0] scr1_dato;
+wire [11:0] scr2_dato;
+wire [11:0] scr3_dato;
+wire [11:0] br_dato;
 wire br_bok, scr_bok;
 wire rnd_ack;
 wire [31:0] rnd_dato;
@@ -195,8 +205,8 @@ wire avic_ack;
 wire [63:0] avic_dato;
 wire [31:0] avic_rgb;
 wire kbd_rst;
-wire kbd_ack;
-wire [7:0] kbd_dato;
+reg kbd_ack;
+reg [11:0] kbd_dato;
 wire kbd_irq;
 
 wire spr_ack;
@@ -279,7 +289,7 @@ reg [7:0] br3_dati = 8'd0;
 
 reg cs_pic;
 wire pic_ack;
-wire [7:0] pic_dat;
+wire [11:0] pic_dat;
 
 wire gpio_ack;
 wire [15:0] aud0, aud1, aud2, aud3;
@@ -295,7 +305,7 @@ wire [31:0] aud_adr;
 wire [15:0] aud_dati;
 wire [15:0] aud_dato;
 wire aud_ack;
-wire [63:0] aud_cdato;
+wire [11:0] aud_cdato;
 
 wire rtc_ack;
 wire [7:0] rtc_cdato;
@@ -405,7 +415,7 @@ NexysVideoClkgen ucg1
   // Clock out ports
   .clk200(clk200),	// display / ddr3
   .clk100(clk100),
-  .clk80(clk80),		// cpu 4x
+  .clk60(clk60),		// cpu 4x
   .clk40(clk40),		// cpu 2x / display
   .clk20(clk20),		// cpu
   .clk10(clk10),
@@ -509,8 +519,24 @@ OLED uoled1
 // Address Decoding
 // -----------------------------------------------------------------------------
 (* mark_debug="true" *)
-wire cs_dram = adr[23:20] < 4'hE;		// Main memory 14MB
+wire cs_dram = adr[23:20] < 4'hE && adr[23:16]!=8'h00;		// Main memory 14MB
 reg cs_br = 1'b0;
+`ifndef NOC_RING
+always_comb cs_br = adr[23:16]==8'hFF;	// Scratchpad memory 8k
+assign ack_scr = 1'b0;
+assign scr_dato = 12'h0;
+`else
+assign ack_br = 1'b0;
+assign br_dato = 12'h0;
+assign ack_scr0 = 1'b0;
+assign ack_scr1 = 1'b0;
+assign ack_scr2 = 1'b0;
+assign ack_scr3 = 1'b0;
+assign scr0_dato = 12'h0;
+assign scr1_dato = 12'h0;
+assign scr2_dato = 12'h0;
+assign scr3_dato = 12'h0;
+`endif
 /*
 always_comb
 	cs_br <= adr[31:16]==16'hFFFC		// Boot rom 192k
@@ -518,7 +544,18 @@ always_comb
 				|| adr[31:16]==16'hFFFE;
 */
 reg cs_scr;
+reg cs_scr0;
+reg cs_scr1;
+reg cs_scr2;
+reg cs_scr3;
+`ifdef NOC_RING
 always_comb cs_scr = adr[23:16]==8'hFF;	// Scratchpad memory 8k
+`else
+always_comb cs_scr0 = adr[23:14]==10'h00;	// Scratchpad memory 8k
+always_comb cs_scr1 = adr[23:14]==10'h01;	// Scratchpad memory 8k
+always_comb cs_scr2 = adr[23:14]==10'h02;	// Scratchpad memory 8k
+always_comb cs_scr3 = adr[23:14]==10'h03;	// Scratchpad memory 8k
+`endif
 always_comb cs_pic = adr[23:8]==16'hE3F0;
 
 // No need to check for the $E in the top 4 address bits as these are 
@@ -732,7 +769,7 @@ assign bmp_dato = 64'h0;
 `endif
 
 `ifdef SPRITE_CONTROLLER
-rfSpriteController usc2
+rfSpriteController_x12 usc2
 (
 	.rst_i(rst),
 	.s_clk_i(cpu_clk),
@@ -741,7 +778,6 @@ rfSpriteController usc2
 	.s_stb_i(br1_stb),
 	.s_ack_o(spr_ack),
 	.s_we_i(br1_we),
-	.s_sel_i(br1_sel),
 	.s_adr_i(br1_adr[11:0]),
 	.s_dat_i(br1_dato),
 	.s_dat_o(spr_dato),
@@ -850,12 +886,12 @@ endcase
 
 reg ack1 = 1'b0;
 always_ff @(posedge cpu_clk)
-	ack1 <= ack_scr|pic_ack|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xb_ack;
+	ack1 <= ack_scr|ack_scr0|ack_scr1|ack_scr2|ack_scr3|pic_ack|ack_bridge1|ack_bridge2|ack_bridge3|ack_br|dram_ack|xb_ack;
 //assign ack = ack_br;
-wire cs_any = cs_br|cs_scr|cs_pic|cs_dram|ack_bridge1|ack_bridge2|ack_bridge3;
+wire cs_any = cs_br|cs_scr|cs_scr0|cs_scr1|cs_scr2|cs_scr3|cs_pic|cs_dram|ack_bridge1|ack_bridge2|ack_bridge3;
 always_ff @(posedge cpu_clk)
 	if (cs_any)
-		dati <= br_dato|scr_dato|pic_dat|br1_cdato|br2_cdato|dram_dato|br3_cdato;
+		dati <= br_dato|scr_dato|scr0_dato|scr1_dato|scr2_dato|scr3_dato|pic_dat|br1_cdato|br2_cdato|dram_dato|br3_cdato;
 	else
 		dati <= dati;
 /*
@@ -901,7 +937,7 @@ always_ff @(posedge cpu_clk)
 	if (cs_br2)
 		br2_dati <= rnd_dato|led_dato|kbd_dato|aud_cdato;
 	else
-		br2_dati <= 8'h0;
+		br2_dati <= 12'h0;
 /*
 always_ff @(posedge cpu_clk)
 casez({rnd_ack,ack_led,kbd_ack,aud_ack})
@@ -1081,25 +1117,96 @@ assign ac_lrclk = 1'bz;
 assign ac_dac_sdata = 1'b0;
 `endif
 
+wire kclk_en, kdat_en;
+wire kdo, kdt;
+wire kclko, kclkt;
+/*
 PS2kbd u_kybd1
 (
 	// WISHBONE/SoC bus interface 
 	.rst_i(rst),
-	.clk_i(cpu_clk),	// system clock
+	.clk_i(clk40),	// system clock
 	.cs_i(cs_kbd),
   .cyc_i(br2_cyc),
   .stb_i(br2_stb),
   .ack_o(kbd_ack),
   .we_i(br2_we),
-  .adr_i(br2_adr32[3:0]),
-  .dat_i(br2_dat8),
+  .adr_i(br2_adr[3:0]),
+  .dat_i(br2_dato),
   .dat_o(kbd_dato),
-  .kclk(kclk),
-  .kd(kd),
+  .kclk_i(kclk),
+  .kdat_i(kd),
+  .kclk_en(kclk_en),
+  .kdat_en(kdat_en),
 	.db(),
 	//-------------
   .irq(kbd_irq)
 );
+*/
+assign kclk = kclkt ? 1'bz : kclko;
+assign kd = kdt ? 1'bz : kdo;
+wire [7:0] kbd_dat;
+reg [11:0] kbd_buf;
+reg [11:0] kbd_stat;
+wire kbd_we, kbd_rd;
+wire kbd_busy;
+wire kbd_par;
+edge_det uedkbd (
+	.rst(rst),
+	.clk(clk100),
+	.ce(1'b1),
+	.i(cs_kbd && br2_adr[3:0]==4'h0 && br2_we && br2_cyc && br2_stb),
+	.pe(kbd_we),
+	.ne(),
+	.ee()
+);
+
+Ps2Interface ups21
+(
+ .PS2_Data_I(kd),
+ .PS2_Data_O(kdo),
+ .PS2_Data_T(kdt),
+ .PS2_Clk_I(kclk),
+ .PS2_Clk_O(kclko),
+ .PS2_Clk_T(kclkt),
+ .clk(clk100),
+ .rst(rst),
+ .tx_data(br2_dato[7:0]),
+ .write_data(kbd_we),
+ .rx_data(kbd_dat),
+ .read_data(kbd_rd),
+ .ack(),
+ .busy(kbd_busy),
+ .err_par(kbd_par),
+ .err_nack()
+);
+
+always_ff @(posedge clk100)
+begin
+	if (kbd_rd) begin
+		kbd_buf <= {4'h0,kbd_dat};
+		kbd_stat <= {4'h0,1'b1,kbd_busy,5'h0,kbd_par};
+	end
+	kbd_stat[6] <= kbd_busy;
+	if (cs_kbd && br2_cyc && br2_stb) begin
+		kbd_ack <= 1'b1;
+		case(br2_adr[3:0])
+		4'd0:	kbd_dato <= kbd_buf;
+		4'd1:
+			begin
+				kbd_dato <= {4'd0,kbd_stat};
+				if (br2_we && br2_dato[7:0]==8'h00)
+					kbd_stat[7] <= 1'b0;
+			end
+		default:	;
+		endcase
+	end
+	else begin
+		kbd_ack <= 1'b0;
+		kbd_dato <= 12'h0;
+	end
+end
+
 /*
 Ps2Keyboard u_ps2kbd
 (
@@ -1347,7 +1454,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 semamem usema1
 (
 	.rst_i(rst),
-  .clk_i(cpu_clk),
+  .clk_i(clk60),
   .cs_i(cs_sema),
   .cyc_i(br3_cyc),
   .stb_i(br3_stb),
@@ -1358,10 +1465,11 @@ semamem usema1
   .dat_o(sema_dato)
 );
 
+`ifdef NOC_RING
 scratchmem uscr1
 (
   .rst_i(rst),
-  .clk_i(cpu_clk),
+  .clk_i(clk60),
   .cti_i(3'b000),
   .bok_o(scr_bok),
   .cs_i(cs_scr),
@@ -1378,6 +1486,108 @@ scratchmem uscr1
 	,.sp(24'h0)
 `endif
 );
+`else
+scratchmem uscr2
+(
+  .rst_i(rst),
+  .clk_i(clk40),
+  .cti_i(3'b000),
+  .bok_o(scr_bok),
+  .cs_i(cs_br),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_br),
+  .we_i(we),
+  .adr_i(adr[13:0]),
+  .dat_i(dato),
+  .dat_o(br_dato)
+`ifdef SIM
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+`else
+	,.sp(24'h0)
+`endif
+);
+scratchmem uscr1a
+(
+  .rst_i(rst),
+  .clk_i(clk40),
+  .cti_i(3'b000),
+  .bok_o(),
+  .cs_i(cs_scr0),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_scr0),
+  .we_i(we),
+  .adr_i(adr[13:0]),
+  .dat_i(dato),
+  .dat_o(scr0_dato)
+`ifdef SIM
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+`else
+	,.sp(24'h0)
+`endif
+);
+scratchmem uscr1b
+(
+  .rst_i(rst),
+  .clk_i(clk40),
+  .cti_i(3'b000),
+  .bok_o(),
+  .cs_i(cs_scr1),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_scr1),
+  .we_i(we),
+  .adr_i(adr[13:0]),
+  .dat_i(dato),
+  .dat_o(scr1_dato)
+`ifdef SIM
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+`else
+	,.sp(24'h0)
+`endif
+);
+scratchmem uscr1c
+(
+  .rst_i(rst),
+  .clk_i(clk40),
+  .cti_i(3'b000),
+  .bok_o(),
+  .cs_i(cs_scr2),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_scr2),
+  .we_i(we),
+  .adr_i(adr[13:0]),
+  .dat_i(dato),
+  .dat_o(scr2_dato)
+`ifdef SIM
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+`else
+	,.sp(24'h0)
+`endif
+);
+scratchmem uscr1d
+(
+  .rst_i(rst),
+  .clk_i(clk40),
+  .cti_i(3'b000),
+  .bok_o(),
+  .cs_i(cs_scr3),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_scr3),
+  .we_i(we),
+  .adr_i(adr[13:0]),
+  .dat_i(dato),
+  .dat_o(scr3_dato)
+`ifdef SIM
+  ,.sp(24'h0)//ucpu1.ucpu1.urf1.mem[{4'd0,6'd63}][35:4])
+`else
+	,.sp(24'h0)
+`endif
+);
+`endif
 
 //assign ack_scr = 1'b0;
 //assign scr_dato = 64'd0;
@@ -1406,7 +1616,7 @@ wire err;
 BusError ube1
 (
 	.rst_i(rst),
-	.clk_i(cpu_clk),
+	.clk_i(clk60),
 	.cyc_i(cyc),
 	.ack_i(ack1),
 	.stb_i(stb),
@@ -1585,42 +1795,23 @@ xbusBridge uxbb1
   .xb_de_i(xb_dei)
 );
 */
-/*
-rf6809 ucpu1
-(
-	.id(6'd2),
-	.rst_i(rst),
-	.clk_i(clk40),
-	.halt_i(1'b0),
-	.nmi_i(1'b0),
-	.irq_i(irq),
-	.firq_i(firq),
-	.vec_i(24'h0),
-	.ba_o(),
-	.bs_o(),
-	.lic_o(),
-	.tsc_i(1'b0),
-	.rty_i(1'b0),
-	.bte_o(),
-	.cti_o(),
-	.bl_o(),
-	.lock_o(),
-	.cyc_o(cyc),
-	.stb_o(stb),
-	.we_o(we),
-	.ack_i(ack1),
-	.adr_o(adr),
-	.dat_i(dati),
-	.dat_o(dato),
-	.state()
-);
-*/
+
 Packet packet_i, packet_o;
+Packet rpacket_i, rpacket_o;
 IPacket ipacket_i, ipacket_o;
 wire [3:0] irqo;
 
-
-node_ring unr1 (rst, clk40, packet_i, packet_o, ipacket_i, ipacket_o);
+`ifdef NOC_RING
+node_ring_x1 unr1 (
+	.rst_i(rst),
+	.clk_i(clk40),
+	.packet_i(packet_i),
+	.packet_o(packet_o),
+	.rpacket_i(rpacket_i),
+	.rpacket_o(rpacket_o),
+	.ipacket_i(ipacket_i),
+	.ipacket_o(ipacket_o)
+);
 
 nic unic1
 (
@@ -1644,6 +1835,8 @@ nic unic1
 	.m_dat_i(dati),
 	.packet_i(packet_o),
 	.packet_o(packet_i),
+	.rpacket_i(rpacket_o),
+	.rpacket_o(rpacket_i),
 	.ipacket_i(ipacket_o),
 	.ipacket_o(ipacket_i),
 	.irq_i(irq),
@@ -1654,7 +1847,38 @@ nic unic1
 	.firq_o(),
 	.cause_o()
 );
-
+`else
+rf6809 ucpu1
+(
+	.id(6'd2),
+	.rst_i(rst),
+	.clk_i(clk40),
+	.halt_i(1'b0),
+	.nmi_i(1'b0),
+	.irq_i(irq),
+	.firq_i(firq),
+	.vec_i(24'h0),
+	.ba_o(),
+	.bs_o(),
+	.lic_o(),
+	.tsc_i(1'b0),
+	.rty_i(1'b0),
+	.bte_o(),
+	.cti_o(cti),
+	.bl_o(),
+	.lock_o(),
+	.cyc_o(cyc),
+	.stb_o(stb),
+	.we_o(we),
+	.ack_i(ack1),
+	.aack_i(1'b0),
+	.atag_i(4'h0),
+	.adr_o(adr),
+	.dat_i(dati),
+	.dat_o(dato),
+	.state()
+);
+`endif
 
 rf6809_pic upic1
 (
@@ -1709,14 +1933,25 @@ rf6809_pic upic1
 assign irq = irqo[0];
 assign firq = irqo[1];
 
+`ifdef NOC_RING
 ila_0 uila1 (
 	.clk(clk40), // input wire clk
 	.probe0(packet_o), // input wire [63:0]  probe0  
-	.probe1({unr1.pc1[0][23:0]}), // input wire [63:0]  probe0  
-	.probe2({unr1.pc2[0][23:0]}), // input wire [63:0]  probe0  
-	.probe3({unr1.pc1[1][23:0]}), // input wire [63:0]  probe0  
-	.probe4({unr1.pc2[1][23:0]}) // input wire [63:0]  probe0  
+	.probe1({unr1.pc[0][23:0]}), // input wire [63:0]  probe0  
+	.probe2({unr1.pc[0][23:0]}), // input wire [63:0]  probe0  
+	.probe3({unr1.pc[1][23:0]}), // input wire [63:0]  probe0  
+	.probe4({unr1.pc[1][23:0]}) // input wire [63:0]  probe0  
 );
+`else
+ila_0 uila1 (
+	.clk(clk40), // input wire clk
+	.probe0(packet_o), // input wire [63:0]  probe0  
+	.probe1({ucpu1.pc[23:0]}), // input wire [63:0]  probe0  
+	.probe2({adr[23:0]}), // input wire [63:0]  probe0  
+	.probe3({cyc,stb,ack1}), // input wire [63:0]  probe0  
+	.probe4({dato,dati}) // input wire [63:0]  probe0  
+);
+`endif
 
 /*
 rf6809 ucpu1
@@ -1766,7 +2001,7 @@ ila_0 uila1 (
 uart6551 uuart1
 (
 	.rst_i(rst),
-	.clk_i(cpu_clk),
+	.clk_i(clk40),
 	.cs_i(cs_uart),
 	.irq_o(uart_irq),
 	.cyc_i(br3_cyc),

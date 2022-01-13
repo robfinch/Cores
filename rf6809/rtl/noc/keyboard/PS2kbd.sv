@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -121,7 +121,7 @@
 //
 //==================================================================
 
-`define KBD_TX		// include transmitter
+`define KBD_TX	1	// include transmitter
 
 `define S_KBDRX_WAIT_CLK		0
 `define S_KBDRX_CHK_CLK_LOW		1
@@ -137,15 +137,17 @@ module PS2kbd(
 	output reg ack_o,	// bus transfer acknowledged
 	input we_i,	// I/O write taking place (active high)
 	input [3:0] adr_i,	// address
-	input [7:0] dat_i,	// data in
-	output reg [7:0] dat_o,	// data out
-	inout tri [7:0] db,
+	input [11:0] dat_i,	// data in
+	output reg [11:0] dat_o,	// data out
+	inout tri [11:0] db,
 	//-------------
 	output irq,	// interrupt request (active high)
-	inout tri kclk,	// keyboard clock from keyboard
-	inout tri kd	// keyboard data
+	input kclk_i,	// keyboard clock from keyboard
+	output kclk_en,	// 1 = drive clock low
+	input kdat_i,	// keyboard data
+	output kdat_en	// 1 = drive data low
 );
-parameter pClkFreq = 20000000;
+parameter pClkFreq = 40000000;
 parameter pAckStyle = 1'b0;
 parameter p5us = pClkFreq / 200000;		// number of clocks for 5us
 parameter p100us = pClkFreq / 10000;	// number of clocks for 100us
@@ -186,7 +188,7 @@ wire rx_inh = 0;
 wire cs = cyc_i & stb_i & cs_i;
 //reg ack,ack1;
 //always @(posedge clk_i) begin ack <= cs; ack1 <= ack & cs; end
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	ack_o <= cs ? 1'b1 : pAckStyle;// ? (we_i ? 1'b1 : ack) : 1'b0;
 
 wire pe_cs;
@@ -195,33 +197,35 @@ edge_det ed1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .e
 // register read path
 // Latches data on positive edge of the circuit select, as reading the keyboard
 // register triggers a clear of it.
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (cs_i)
 	case(adr_i[1:0])
-	2'd0:	dat_o <= q[8:1];
-	2'd1:	dat_o <= {~q[0],tc,~kack,4'b0,~^q[9:1]};
-	2'd2:	dat_o <= q[8:1];
-	2'd3:	dat_o <= {~q[0],tc,~kack,4'b0,~^q[9:1]};
+	2'd0:	dat_o <= {4'h0,q[8:1]};
+	2'd1:	dat_o <= {4'h0,~q[0],tc,~kack,4'b0,~^q[9:1]};
+	2'd2:	dat_o <= {4'h0,q[8:1]};
+	2'd3:	dat_o <= {4'h0,~q[0],tc,~kack,4'b0,~^q[9:1]};
 	endcase
 else
-	dat_o <= 8'h00;
+	dat_o <= 12'h00;
 
-assign db = (cs & ~we_i) ? dat_o : {8{1'bz}};
+assign db = (cs & ~we_i) ? dat_o : {12{1'bz}};
 
 // Prohibit keyboard device from further transmits until
 // this character has been processed.
 // Holding the clock line low does this.
-assign kclk = irq ? 1'b0 : 1'bz;
+//assign kclk = irq ? 1'b0 : 1'bz;
 `ifdef KBD_TX
 // Force clock and data low during transmits
-assign kclk = klow ? 1'b0 : 1'bz;
-assign kd = tx_oe & ~t[0] ? 1'b0 : 1'bz;
+assign kclk_en = klow | irq;
+assign kdat_en = tx_oe & ~t[0];// ? 1'b0 : 1'bz;
+`else
+assign kclk_en = irq;
 `endif
 
 // stabilize clock and data
-always @(posedge clk_i) begin
-	kq <= {kq[6:0],kd};
-	kqc <= {kqc[14:0],kclk};
+always_ff @(posedge clk_i) begin
+	kq <= {kq[6:0],kdat_i};
+	kqc <= {kqc[14:0],kclk_i};
 end
 
 edge_det ed0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(kqc[10]), .pe(kqcpe), .ne(kqcne), .ee() );
@@ -245,7 +249,7 @@ always @(posedge clk_i)
 
 
 // Receive state machine
-always @(posedge clk_i) begin
+always_ff @(posedge clk_i) begin
 	if (rst_i) begin
 		q <= 11'h7FF;
 		s_rx <= `S_KBDRX_WAIT_CLK;
@@ -253,7 +257,7 @@ always @(posedge clk_i) begin
 	else begin
 
 		// clear rx on write to status reg
-		if (cs && we_i && adr_i[1:0]==2'd1 && dat_i==8'h00)
+		if (cs && we_i && adr_i[1:0]==2'd1 && dat_i[7:0]==8'h00)
 			q <= 11'h7FF;
 
 		// Receive state machine
@@ -281,7 +285,7 @@ always @(posedge clk_i) begin
 		// keyboard transmits LSB first
 		`S_KBDRX_CAPTURE_BIT:
 			begin
-			q <= {kqs[2],q[10:1]};
+			q <= {kq[2],q[10:1]};
 			s_rx <= `S_KBDRX_WAIT_CLK;
 			end
 
@@ -299,7 +303,7 @@ end
 reg adv_tx_state;			// advance transmitter state
 reg start_tx;				// start the transmitter
 reg clear_tx;				// clear the transmit state
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	if (rst_i)
 		tx_state <= 0;
 	else begin
@@ -318,7 +322,7 @@ always @(posedge clk_i)
 
 
 // detect when to advance the transmit state
-always @*
+always_comb
 	case (1'b1)		// synopsys parallel_case
 	tx_state[0]:	adv_tx_state <= 1;
 	tx_state[1]:	adv_tx_state <= os_100us_done;
@@ -344,7 +348,7 @@ wire shift_tx = (tx_state[7] & kqcpe)|tx_state[4];
 
 // It can take up to 20ms for the keyboard to accept data
 // from the host.
-always @(posedge clk_i) begin
+always_ff @(posedge clk_i) begin
 	if (rst_i) begin
 		klow <= 0;
 		tc <= 1;
@@ -362,7 +366,7 @@ always @(posedge clk_i) begin
 			tc <= 0;
 		end
 		// write to status register clears transmit state
-		else if (cs && we_i && adr_i[1:0]==2'd1 && dat_i==8'hFF) begin
+		else if (cs && we_i && adr_i[1:0]==2'd1 && dat_i[7:0]==8'hFF) begin
 			tc <= 1;
 			tx_oe <= 0;
 			klow <= 1'b0;
@@ -406,19 +410,19 @@ end
 
 
 // transmitter shift register
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	if (rst_i)
 		t <= 11'd0;
 	else begin
 		if (load_tx)
-			t <= {~(^dat_i),dat_i,2'b0};
+			t <= {~(^dat_i[7:0]),dat_i[7:0],2'b0};
 		else if (shift_tx)
 			t <= {1'b1,t[10:1]};
 	end
 
 
 // transmitter bit counter
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	if (rst_i)
 		bitcnt <= 4'd0;
 	else begin

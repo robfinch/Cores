@@ -9,6 +9,17 @@ parameter BPB = bitsPerByte;
 parameter BPBM1 =	BPB-1;
 parameter BPBX2M1 =	BPB*2-1;
 
+// The following allows asynchronous reads for icache updating.
+// It increases the size of the core.
+//`define SUPPORT_AREAD	1
+
+// The following includes an instruction buffer when icache is
+// not used.
+//`define SUPPORT_IBUF	1
+
+// The following enables support for the checkpoint interrupt.
+//`define SUPPORT_CHECKPOINT
+
 //`define EIGHTBIT	1
 `define TWELVEBIT	2
 
@@ -337,6 +348,7 @@ parameter BPBX2M1 =	BPB*2-1;
 
 `define SWI2		12'h13F
 `define ASLD		12'h148
+`define TSTD		12'h14D
 `define SBCD_IMM	12'h182
 `define CMPD_IMM	12'h183
 `define ANDD_IMM	12'h184

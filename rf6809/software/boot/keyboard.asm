@@ -49,25 +49,25 @@ SC_TAB	EQU     $0D
 ; keyboard in order to wait for a response.
 ;
 ; Parameters: none
-; Returns: accb = recieved byte ($00 to $FF), -1 on timeout
+; Returns: accd = recieved byte ($00 to $FF), -1 on timeout
 ; Modifies: acc
 ; Stack Space: 2 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdRecvByte:
+KeybdRecvByte:
 		pshs	x
 		ldx		#100						; wait up to 1s
 krb3:
-		bsr		_KeybdGetStatus	; wait for response from keyboard
+		bsr		KeybdGetStatus	; wait for response from keyboard
 		tstb
 		bmi		krb4						; is input buffer full ? yes, branch
-		bsr		_Wait10ms				; wait a bit
+		bsr		Wait10ms				; wait a bit
 		leax	-1,x
 		bne		krb3						; go back and try again
 		ldd		#-1							; return -1
 		puls	x,pc
 krb4:
-		bsr		_KeybdGetScancode
+		bsr		KeybdGetScancode
 		puls	x,pc
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -79,7 +79,7 @@ krb4:
 ; Stack Space: 0 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdSendByte:
+KeybdSendByte:
 	stb		KEYBD
 	rts
 
@@ -92,14 +92,14 @@ _KeybdSendByte:
 ; Stack Space: 3 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdWaitTx:
+KeybdWaitTx:
 		pshs	x
 		ldx		#100				; wait a max of 1s
 kwt1:
-		bsr		_KeybdGetStatus
+		bsr		KeybdGetStatus
 		andb	#$40				; check for transmit complete bit; branch if bit set
 		bne		kwt2
-		bsr		_Wait10ms		; delay a little bit
+		bsr		Wait10ms		; delay a little bit
 		leax	-1,x
 		bne		kwt1				; go back and try again
 		ldd		#-1					; timed out, return -1
@@ -118,13 +118,13 @@ kwt2:
 ; Stack Space: 2 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_Wait10ms:
+Wait10ms:
 	pshs	d
 	lda		MSCOUNT+3
 W10_0001:
 	tfr		a,b
 	subb	MSCOUNT+3
-	cmpb	#$FA
+	cmpb	#$FFA
 	bhi		W10_0001
 	puls	d,pc
 
@@ -137,14 +137,14 @@ W10_0001:
 ; Stack Space: 2 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_Wait300ms:
+Wait300ms:
 	pshs	d
 	lda		MSCOUNT+3
 W300_0001:
 	tfr		a,b
 	subb	MSCOUNT+3
-	cmpb	#1
-	bne 	W300_0001
+	cmpb	#$F00
+	bhi 	W300_0001
 	puls	d,pc
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -154,9 +154,15 @@ W300_0001:
 ; Returns: d = status
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdGetStatus:
+KeybdGetStatus:
 	ldb		KEYBD+1
-	sex
+	bitb	#$80
+	bne		kbgs1
+	clra
+	rts
+kbgs1:					; return negative status
+	orb		#$F00
+	lda		#-1
 	rts
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -166,7 +172,7 @@ _KeybdGetStatus:
 ; Returns: acca = scancode
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdGetScancode:
+KeybdGetScancode:
 	clra
 	ldb		KEYBD				; get the scan code
 	clr		KEYBD+1			; clear receive register
@@ -181,23 +187,127 @@ _KeybdGetScancode:
 ; Stack Space: 2 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_KeybdSetLED:
-		pshs	b
-		ldb		#$ED						; set LEDs command
-		bsr		_KeybdSendByte
-		bsr		_KeybdWaitTx
-		bsr		_KeybdRecvByte	; should be an ack
-		puls	b
-		bsr		_KeybdSendByte
-		bsr		_KeybdWaitTx
-		bsr		_KeybdRecvByte	; should be an ack
-		rts
+KeybdSetLED:
+	pshs	b
+	ldb		#$ED						; set LEDs command
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bsr		KeybdRecvByte	; should be an ack
+	puls	b
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bsr		KeybdRecvByte	; should be an ack
+	rts
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Get ID - get the keyboards identifier code.
+;
+; Parameters: none
+; Returns: d = $AB83, $00 on fail
+; Modifies: d, KeybdID updated
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+KeybdGetID:
+	ldb		#$F2
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bsr		KeybdRecvByte
+	bitb	#$80
+	bne		kgnotKbd
+	cmpb	#$AB
+	bne		kgnotKbd
+	bsr		KeybdRecvByte
+	bitb	#$80
+	bne		kgnotKbd
+	cmpb	#$83
+	bne		kgnotKbd
+	ldd		#$AB83
+kgid1:
+	std		KeybdID
+	rts
+kgnotKbd:
+	clra
+	clrb
+	bra		kgid1
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Initialize the keyboard.
+;
+; Parameters:
+;		none
+;	Modifies:
+;		none
+; Returns:
+;		none
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+KeybdInit:
+	pshs	d,y
+	ldy		#5
+kbdi0002:
+	bsr		Wait10ms
+	ldb		#-1					; send reset code to keyboard
+	stb		KEYBD+1			; write $FF to status reg to clear TX state
+	bsr		KeybdSendByte	; now write to transmit register
+	bsr		KeybdWaitTx		; wait until no longer busy
+	bsr		KeybdRecvByte	; look for an ACK ($FA)
+	cmpb	#$FA
+	bne		kbdiTryAgain
+	bsr		KeybdRecvByte	; look for BAT completion code ($AA)
+	cmpb	#$FC				; reset error ?
+	beq		kbdiTryAgain
+	cmpb	#$AA				; reset complete okay ?
+	bne		kbdiTryAgain
+
+	; After a reset, scan code set #2 should be active
+.config:
+	ldb		#$F0			; send scan code select
+	stb		LEDS
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	tstb
+	bmi		kbdiTryAgain
+	bsr		KeybdRecvByte	; wait for response from keyboard
+	tsta
+	bmi		kbdiTryAgain
+	cmpb	#$FA
+	beq		kbdi0004
+kbdiTryAgain:
+	dey
+	bne	  kbdi0002
+.keybdErr:
+	ldd		#msgBadKeybd
+	lbsr	DisplayStringCRLF
+	bra		ledxit
+kbdi0004:
+	ldb		#2			; select scan code set #2
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	tsta
+	bmi		kbdiTryAgain
+	bsr		KeybdRecvByte	; wait for response from keyboard
+	tsta
+	bmi		kbdiTryAgain
+	cmpb	#$FA
+	bne		kbdiTryAgain
+	bsr		KeybdGetID
+ledxit:
+	ldb		#$07
+	bsr		KeybdSetLED
+	bsr		Wait300ms
+	ldb		#$00
+	bsr		KeybdSetLED
+	puls	d,y,pc
+
+msgBadKeybd:
+	fcb		"Keyboard error",0
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_DBGCheckForKey:
-	bra		_KeybdGetStatus
+DBGCheckForKey:
+	bra		KeybdGetStatus
 
 
 ; KeyState2_
@@ -217,20 +327,20 @@ _DBGCheckForKey:
 ;		b:	0 = non blocking, otherwise blocking
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_DBGGetKey:
+DBGGetKey:
 	pshs	x
 dbgk2:
 	pshs	b
-	bsr		_KeybdGetStatus
-	andb	#$80
-	bne		dbgk1
-	tst		,s								; block?
-	leas	1,s
+	bsr		KeybdGetStatus
+	andb	#$80							; is key available?
+	puls	b
+	bne		dbgk1							; branch if key
+	tstb										; block?
 	beq		dbgk2							; If no key and blocking - loop
 	ldd		#-1								; return -1 if no block and no key
-	puls	b,pc
+	puls	x,pc
 dbgk1:
-	bsr		_KeybdGetScancode
+	bsr		KeybdGetScancode
 	; Make sure there is a small delay between scancode reads
 	ldx		#20
 dbgk3:
@@ -241,7 +351,6 @@ dbgk3:
 	bne		dbgk4
 	clr		KeyState1					; make KeyState1 = -1
 	neg		KeyState1
-	puls	b
 	bra		dbgk2							; loop back
 dbgk4:
 	cmpb	#SC_EXTEND
@@ -249,7 +358,6 @@ dbgk4:
 	lda		KeyState2
 	ora		#$80
 	sta		KeyState2
-	puls	b
 	bra		dbgk2
 dbgk5:
 	cmpb	#SC_CTRL
@@ -262,11 +370,10 @@ dbgk5:
 	bra		dbgk8
 dbgk7:
 	lda		KeyState2
-	and		#~4
+	anda	#~4
 	sta		KeyState2
 dbgk8:
 	clr		KeyState1
-	puls	b
 	bra		dbgk2
 dbgkNotCtrl:
 	cmpb	#SC_RSHIFT
@@ -279,11 +386,10 @@ dbgkNotCtrl:
 	bra		dbgk10
 dbgk9:
 	lda		KeyState2
-	and		#~1
+	anda	#~1
 	sta		KeyState2
 dbgk10:
 	clr		KeyState1
-	puls	b
 	bra		dbgk2
 dbgkNotRshift:
 	cmpb	#SC_NUMLOCK
@@ -296,8 +402,7 @@ dbgkNotRshift:
 	sta		KeyLED
 	tfr		a,b
 	clra
-	bsr		_KeybdSetLED
-	puls	b
+	bsr		KeybdSetLED
 	bra		dbgk2
 dbgkNotNumlock:
 	cmpb	#SC_CAPSLOCK
@@ -310,8 +415,7 @@ dbgkNotNumlock:
 	sta		KeyLED
 	tfr		a,b
 	clra
-	bsr		_KeybdSetLED
-	puls	b
+	bsr		KeybdSetLED
 	bra		dbgk2
 dbgkNotCapslock:
 	cmpb	#SC_SCROLLLOCK
@@ -324,8 +428,7 @@ dbgkNotCapslock:
 	sta		KeyLED
 	tfr		a,b
 	clra
-	bsr		_KeybdSetLED
-	puls	b
+	bsr		KeybdSetLED
 	bra		dbgk2
 dbgkNotScrolllock:
 	cmpb	#SC_ALT
@@ -338,21 +441,19 @@ dbgkNotScrolllock:
 	bra		dbgk12
 dbgk11:
 	lda		KeyState2
-	and		#~2
+	anda	#~2
 	sta		KeyState2
 dbgk12:
 	clr		KeyState1
-	puls	b
 	bra		dbgk2
 dbgkNotAlt:
 	tst		KeyState1
 	beq		dbgk13
 	clr		KeyState1
-	puls	b
 	bra		dbgk2
 dbgk13:
 	lda		KeyState2		; Check for CTRL-ALT-DEL
-	anda	#6+
+	anda	#6
 	cmpa	#6
 	bne		dbgk14
 	cmpb	#SC_DEL	
@@ -364,37 +465,25 @@ dbgk14:
 	lda		KeyState2
 	anda	#$7F
 	sta		KeyState2
-	ldx		#_keybdExtendedCodes
-	abx
-	ldb		,x
-	clra
-	leas	1,s					; pop b
-	puls	x,pc				; and return
+	ldx		#keybdExtendedCodes
+	bra		dbgk18
 dbgk15:
 	lda		KeyState2		; Is CTRL down?
 	anda	#4
 	beq		dbgk16
-	ldx		#_keybdControlCodes
-	abx
-	ldb		,x
-	clra
-	leas	1,s					; pop b
-	puls	x,pc				; and return
+	ldx		#keybdControlCodes
+	bra		dbgk18
 dbgk16:
 	lda		KeyState2		; Is shift down?
 	anda	#1
 	beq		dbgk17
-	ldx		#_shiftedScanCodes
-	abx
-	ldb		,x
-	clra
-	leas	1,s					; pop b
-	puls	x,pc				; and return
+	ldx		#shiftedScanCodes
+	bra		dbgk18
 dbgk17:
-	ldx		#_unshiftedScanCodes
+	ldx		#unshiftedScanCodes
+dbgk18:
 	abx
 	ldb		,x
 	clra
-	leas	1,s					; pop b
 	puls	x,pc				; and return
 	

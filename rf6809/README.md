@@ -1,17 +1,34 @@
-# rf6809
+# rf6809 Overview
 
-rf6809 is a 6809 instruction set and programming model compatible core. The addressable memory range has been increased to 24-bits.
+rf6809 is a 6809 instruction set and programming model compatible core. The addressable memory range has been increased to 24-bits or three bytes.
 There are minimal changes to the programming model and instruction set to support 24-bit addressing.
 The core is configurable for either eight or twelve bit bytes. When configured for 12-bit bytes addressing is increased to 36-bits.
 
+# Unusual Features
+## 12-bit Bytes
+The core may be configured to use 12-bit bytes. This increases the effective address range of the core.
+
+## Instruction cache
+There is a 4kB instruction cache. The cache can supply all the bytes of an instruction in one clock cycle improving performance.
+
+## Asynchronous Readback Cycles
+The core may be configured for asynchronous readback for instruction cache read cycles. With async. readback there may be multiple outstanding read requests made by the processor before any read data is returned to it. The read data may return out-of-order with respect to the read requests. Re-ordering is handled using a four-bit address tag returned along with the read data. Async readback offers higher performance than synchronous readback.
+
 # Differences from the 6809
+## Registers
 There is an additional 16-bit register USPPG that allows the user stack pointer to be placed at any page of memory. The system stack pointer must remain within the lowest 16-bits of the address range.
 The program counter is a full 24-bit register. The JMP and JSR instructions modify only the low order 16 bits of the program counter. To modify the full 24-bits use the JMP FAR and JSR FAR instructions. A return from a far subroutine may be done using the RTF instruction.
+
+## Operations
 During interrupt processing the entire 24-bit program counter is stacked. The RTI instruction also loads the entire 24-bit program counter.
 Far addressing makes use of two previously unused codes in the indexing byte of an instruction.
-No attempt was made to mimic the 6809 bus cycle activity. Some instructions execute in fewer clock cycles than they would for a 6809.
+No attempt was made to mimic the 6809 bus cycle activity. Some instructions execute in fewer clock cycles than they would for a 6809. For example branches only require two clock cycles.
 Indirect addresses must reside within the first 64k bank of memory.
-The core includes a small instruction cache to improve performance.
+## Exception Vectors
+The vectors are located beginning at $FFFFF0. It is possible to keep a set of vectors at the original address then perform an indirect jump to through the originally placed vectors from one of the vector processing routines.
+## For the 12-bit Version
+The PG2 and PG3 prefix bytes are not needed. The prefix is incorporated in extra bits available in the 12-bit opcode.
+Prefix 10h becomes opcode 1xxh, prefix 11h becomes opcode 2xxh.
 
 # Additional Instructions
 
@@ -42,10 +59,13 @@ For the twelve-bit byte version of the core the OUTER prefix is not used as ther
 
 # Size
 The core is approximately 4200 LUTs or 2100 slices and uses 4 block rams for the instruction cache.
+Core size is approximately 6500 LUTs / 5 block rams for the 12-bit version.
 
 # Software
 Software is in the works along with hardware.
-There is a modified version of the A09 assembler which supports twelve-bit bytes.
+There is a modified version of the A09 assembler which supports twelve-bit bytes and far addressing.
 There is a modified version of the hc12 VBCC compiler which also is for twelve bit-bytes.
 
 
+# Test Project
+The rf6809 is used in a test project. Multiple rf6809 cores are networked together in a ring topology using a parallel bus.

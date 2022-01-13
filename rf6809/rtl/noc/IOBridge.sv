@@ -45,6 +45,7 @@
 // ============================================================================
 //
 //`define ACK_WR	1'b1
+import rf6809_pkg::*;
 
 module IOBridge(rst_i, clk_i,
 	s1_cyc_i, s1_stb_i, s1_ack_o, s1_we_i, s1_adr_i, s1_dat_i, s1_dat_o,
@@ -63,24 +64,24 @@ input s1_stb_i;
 output reg s1_ack_o;
 input s1_we_i;
 input [23:0] s1_adr_i;
-input [7:0] s1_dat_i;
-output reg [7:0] s1_dat_o;
+input [BPB-1:0] s1_dat_i;
+output reg [BPB-1:0] s1_dat_o;
 
 input s2_cyc_i;
 input s2_stb_i;
 output reg s2_ack_o;
 input s2_we_i;
 input [23:0] s2_adr_i;
-input [7:0] s2_dat_i;
-output reg [7:0] s2_dat_o;
+input [BPB-1:0] s2_dat_i;
+output reg [BPB-1:0] s2_dat_o;
 
 output reg m_cyc_o;
 output reg m_stb_o;
 input m_ack_i;
 output reg m_we_o;
 output reg [23:0] m_adr_o;
-input [7:0] m_dat_i;
-output reg [7:0] m_dat_o;
+input [BPB-1:0] m_dat_i;
+output reg [BPB-1:0] m_dat_o;
 
 reg which;
 reg [2:0] state;
@@ -101,8 +102,8 @@ if (rst_i) begin
 	m_cyc_o <= 1'b0;
 	m_stb_o <= 1'b0;
 	m_we_o <= 1'b0;
-	m_adr_o <= 24'd0;
-	m_dat_o <= 8'd0;
+	m_adr_o <= {24{1'b0}};
+	m_dat_o <= {BPB{1'b0}};
 	s_ack <= 1'b0;
 	s1_dat_o <= 8'd0;
 	s2_dat_o <= 8'd0;

@@ -45,7 +45,7 @@ input Packet packet_i;
 output Packet packet_o;
 input IPacket ipacket_i;
 output IPacket ipacket_o;
-parameter N=2;
+parameter N=3;
 
 Packet [N:0] packets;
 IPacket [N:0] ipackets;

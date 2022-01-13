@@ -102,7 +102,7 @@
 //`define USE_CLOCK_GATE
 `define INTERNAL_RAMS	1'b1
 
-module rfTextController(
+module rfTextController_x12(
 	rst_i, clk_i, cs_i,
 	cti_i, cyc_i, stb_i, ack_o, wr_i, adr_i, dat_i, dat_o,
 	txt_clk_o, txt_cyc_o, txt_stb_o, txt_ack_i, txt_we_o, txt_sel_o, txt_adr_o, txt_dat_o, txt_dat_i,
@@ -126,8 +126,8 @@ input  stb_i;           // data strobe
 output ack_o;			// data acknowledge
 input  wr_i;			// write
 input  [15:0] adr_i;	// address
-input  [7:0] dat_i;	// data input
-output reg [7:0] dat_o;	// data output
+input  [11:0] dat_i;	// data input
+output reg [11:0] dat_o;	// data output
 
 // Master Signals
 output txt_clk_o;
@@ -220,7 +220,7 @@ wire ld_shft = nxt_col & nhp;
 // display and timing signals
 reg [15:0] txtAddr;		// index into memory
 reg [15:0] penAddr;
-wire [15:0] screen_ram_out;		// character code
+wire [23:0] screen_ram_out;		// character code
 wire [23:0] txtBkColor;	// background color code
 wire [23:0] txtFgColor;	// foreground color code
 wire [5:0] txtZorder;
@@ -232,7 +232,7 @@ wire [23:0] tileColor1;
 wire [23:0] tileColor2;
 reg  bgt, bgtd;
 
-wire [7:0] tdat_o;
+wire [11:0] tdat_o;
 wire [8:0] chdat_o;
 
 wire [2:0] scanindex = rowscan[2:0];
@@ -245,7 +245,7 @@ wire [2:0] scanindex = rowscan[2:0];
 // Register the inputs
 reg cs_rom, cs_reg, cs_text, cs_any;
 reg [15:0] radr_i;
-reg [7:0] rdat_i;
+reg [11:0] rdat_i;
 reg rwr_i;
 always_ff @(posedge clk_i)
 	cs_rom <= cs_i && cyc_i && stb_i && (adr_i[15:8] > 8'hDF);
@@ -265,10 +265,10 @@ always_ff @(posedge clk_i)
 // Register outputs
 always @(posedge clk_i)
 	casez({cs_rom,cs_reg,cs_text})
-	3'b1??:	dat_o <= chdat_o;
+	3'b1??:	dat_o <= {3'b0,chdat_o};
 	3'b01?:	dat_o <= rego;
 	3'b001:	dat_o <= tdat_o;
-	default:	dat_o <= 8'h0;
+	default:	dat_o <= 12'h0;
 	endcase
 
 //always @(posedge clk_i)
@@ -323,16 +323,16 @@ always_ff @(posedge vclk)
 // Allows reading back of register values by shadowing them with ram
 
 wire [5:0] rrm_adr = radr_i[5:0];
-wire [7:0] rrm_o;
+wire [11:0] rrm_o;
 
-regReadbackMem #(.WID(8)) rrm0L
+regReadbackMem #(.WID(12)) rrm0L
 (
   .wclk(clk_i),
   .adr(rrm_adr),
   .wce(cs_reg),
   .we(rwr_i),
-  .i(rdat_i[7:0]),
-  .o(rrm_o[7:0])
+  .i(rdat_i[11:0]),
+  .o(rrm_o[11:0])
 );
 
 wire [23:0] lfsr_o;
@@ -365,7 +365,7 @@ always @(posedge clk_i)
 wire [13:0] bram_adr = radr_i[13:0];
 
 `ifdef INTERNAL_RAMS
-rfTextControllerRam screen_ram1
+rfTextControllerRam_x12 screen_ram1
 (
   .clka(clk_i),
   .ena(cs_text),
@@ -377,7 +377,7 @@ rfTextControllerRam screen_ram1
   .enb(ld_shft|por),
   .web(por),
   .addrb(txtAddr[12:0]),
-  .dinb({8'hEC,lfsr_o[7:0]}),
+  .dinb({12'hE6,lfsr_o[11:0]}),
   .doutb(screen_ram_out)
 );
 
@@ -396,7 +396,7 @@ char_ram charRam0
 	.dat_o(chdat_o),
 	.dot_clk_i(vclk),
 	.ce_i(ld_shft),
-	.char_code_i(screen_ram_out[7:0]),
+	.char_code_i(screen_ram_out[8:0]),
 	.maxscanline_i(maxScanlinePlusOne),
 	.scanline_i(rowscan[4:0]),
 	.bmp_o(char_bmp[8:0])
@@ -461,8 +461,8 @@ syncRam4kx9 charRam0
 // pipeline delay - sync color with character bitmap output
 reg [5:0] txtZorder1;
 
-wire [3:0] txtBkCode1 = screen_ram_out[11: 8];
-wire [3:0] txtFgCode1 = screen_ram_out[15:12];
+wire [3:0] txtBkCode1 = screen_ram_out[15:12];
+wire [3:0] txtFgCode1 = screen_ram_out[19:16];
 rfColorROM ucr1(vclk, ld_shft, {1'b0,txtBkCode1}, txtBkColor);
 rfColorROM ucr2(vclk, ld_shft, {1'b0,txtFgCode1}, txtFgColor);
 rfColorROM ucr3(vclk, 1'b1, {1'b0,txtTcCode}, txtTcColor);
@@ -494,13 +494,13 @@ always @(posedge clk_i)
 always @*
 	if (cs_reg) begin
 		case(radr_i[5:0])
-		6'd56:	  rego <= penAddr[15:8];
-		6'd57:	  rego <= penAddr[ 7:0];
+		6'd56:	  rego <= {8'h00,penAddr[15:12]};
+		6'd57:	  rego <= penAddr[11:0];
 		default:	rego <= rrm_o;
 		endcase
 	end
 	else
-		rego <= 64'h0000;
+		rego <= 12'h000;
 
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -539,7 +539,7 @@ always @(posedge clk_i)
 		// 48x29
 		if (num==4'd1) begin
       windowTop    <= 12'd4058;//12'd16;
-      windowLeft   <= 12'd3930;//12'd86;
+      windowLeft   <= 12'd3956;//12'd3930;//12'd86;
       pixelWidth   <= 4'd1;		// 800 pixels
       pixelHeight  <= 4'd1;		// 600 pixels
       numCols      <= COLS;
@@ -547,7 +547,7 @@ always @(posedge clk_i)
       maxRowScan  <= 5'd9;
       maxScanpix   <= 5'd6;
       rBlink       <= 3'b111;		// 01 = non display
-      charOutDelay <= 8'd4;
+      charOutDelay <= 8'd5;
 		end
 		else if (num==4'd2) begin
       windowTop    <= 12'd4032;//12'd16;
@@ -570,13 +570,13 @@ always @(posedge clk_i)
 		if (cs_reg & rwr_i) begin	// register write ?
 			$display("TC Write: r%d=%h", rrm_adr, rdat_i);
 			case(radr_i[5:0])
-			6'd0:	numCols <= rdat_i;
-			6'd1:	numRows <= rdat_i;
+			6'd0:	numCols <= rdat_i[7:0];
+			6'd1:	numRows <= rdat_i[7:0];
 			6'd2:	charOutDelay <= rdat_i;
-			6'd4:	windowLeft[11:8] <= rdat_i[3:0];
-			6'd5:	windowLeft[7:0] <= rdat_i;
-			6'd6:	windowTop[11:8] <= rdat_i[3:0];
-			6'd7:	windowTop[7:0] <= rdat_i;
+			6'd4:	;
+			6'd5:	windowLeft[11:0] <= rdat_i;
+			6'd6:	;
+			6'd7:	windowTop[11:0] <= rdat_i;
 			6'd8:	maxRowScan <= rdat_i[4:0];
 			6'd9:
 				begin
@@ -588,10 +588,10 @@ always @(posedge clk_i)
 			6'd13:	mcm <= rdat_i[0];
 			6'd14:	yscroll <= rdat_i[4:0];
 			6'd15:	xscroll <= rdat_i[4:0];
-			6'd16:	txtTcCode <= rdat_i;
-			6'd20:	bdrCode <= rdat_i;
-			6'd24:	tileCode1 <= rdat_i;
-			6'd28:	tileCode2 <= rdat_i;
+			6'd16:	txtTcCode <= rdat_i[7:0];
+			6'd20:	bdrCode <= rdat_i[7:0];
+			6'd24:	tileCode1 <= rdat_i[7:0];
+			6'd28:	tileCode2 <= rdat_i[7:0];
 			6'd32:	
 				begin
 						cursorEnd <= rdat_i[4:0];	// scan line sursor starts on
@@ -602,10 +602,10 @@ always @(posedge clk_i)
 						cursorStart <= rdat_i[4:0];	// scan line cursor ends on
 						cursorType  <= rdat_i[7:6];
 					end
-			6'd34:	cursorPos[15:8] <= rdat_i;
-			6'd35:	cursorPos[ 7:0] <= rdat_i;
-			6'd40:	startAddress[15:8] <= rdat_i;
-			6'd41:	startAddress[ 7:0] <= rdat_i;
+			6'd34:	cursorPos[15:12] <= rdat_i[3:0];
+			6'd35:	cursorPos[11: 0] <= rdat_i;
+			6'd40:	startAddress[15:12] <= rdat_i[3:0];
+			6'd41:	startAddress[11: 0] <= rdat_i;
 			default: ;
 			endcase
 		end
