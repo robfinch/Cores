@@ -31,10 +31,12 @@ CTRLJ	EQU	$0A
 CTRLK	EQU	$0B
 CTRLM   EQU $0D
 CTRLS	EQU	$13
+CTRLT EQU $14
 CTRLX	EQU	$18
 XON		EQU	$11
 XOFF	EQU	$13
 
+FIRST_CORE	EQU	1
 MAX_TASKNO	EQU 63
 DRAM_BASE	EQU $10000000
 
@@ -86,6 +88,13 @@ TEXTREG		EQU		$FFFE0DF00
 TEXT_COLS	EQU		0
 TEXT_ROWS	EQU		1
 TEXT_CURPOS	EQU		34
+ACIA		EQU		$FFFE30100
+ACIA_TX		EQU		0
+ACIA_RX		EQU		0
+ACIA_STAT	EQU		1
+ACIA_CMD	EQU		2
+ACIA_CTRL	EQU		3
+
 KEYBD		EQU		$FFFE30400
 KEYBDCLR	EQU		$FFFE30402
 PIC			EQU		$FFFE3F000
@@ -114,6 +123,16 @@ KeyState1	EQU	$120
 KeyState2	EQU	$121
 KeyLED		EQU	$122
 KeybdID		EQU	$124
+KeybdBlock	EQU	$126
+SerhZero		EQU	$130
+SerHeadRcv	EQU	$131
+SertZero		EQU	$132
+SerTailRcv	EQU	$133
+SerHeadXmit	EQU	$136
+SerTailXmit	EQU	$138
+SerRcvXon		EQU	$139
+SerRcvXoff	EQU	$140
+SerRcvBuf		EQU	$BFF000	; 4kB serial recieve buffer
 
 QNdx0		EQU		$780
 QNdx1		EQU		QNdx0+2
@@ -146,7 +165,7 @@ mon_CCRSAVE	EQU		$90F
 
 mon_numwka	EQU		$910
 mon_r1		EQU		$920
-mon_r2		EQU		$922
+mon_r2		EQU		$924
 
 ; The ORG directive must set an address a multiple of 4 in order for the Verilog
 ; output to work correctly.
@@ -216,7 +235,7 @@ ramtest:
 	ldd		#$AAA555
 ramtest1:
 	std		,y++
-	cmpy	#32768
+	cmpy	#$C00000
 	blo		ramtest1
 	; now readback values and compare
 	ldy		#0
@@ -224,7 +243,7 @@ ramtest3:
 	ldd		,y++
 	cmpd	#$AAA555
 	bne		ramerr
-	cmpy	#32768
+	cmpy	#$10000
 	blo		ramtest3
 	lda		#2
 	sta		LEDS
@@ -273,7 +292,7 @@ start:
 st6:
 	lds		#$3FFF		; boot up stack area
 	lda		COREID
-	cmpa	#2
+	cmpa	#FIRST_CORE
 ;	beq		st8
 ;	sync						; halt cores other than 2
 st8:
@@ -286,7 +305,7 @@ st7:
 	bsr		Delay3s		; give some time for devices to reset
 	lda		#$AA
 	sta		LEDS
-	lda		#2
+	lda		#FIRST_CORE
 	sta		IOFocusID	; core #2 has focus
 	sta		RunningID
 	lda		#$0CE
@@ -298,7 +317,7 @@ st7:
 	ldd		#DBGGetKey
 	std		CharInVec
 	ldb		COREID
-	cmpb	#2
+	cmpb	#FIRST_CORE
 	beq		init
 	bra		skip_init
 	bra		multi_sieve
@@ -310,9 +329,10 @@ st3:
 	; initialize interrupt controller
 	; first, zero out all the vectors
 init:
+	lbsr	InitSerial
 	ldx		#128
 	lda		#1			; set irq(bit0), clear firq (bit1), disable int (bit 6), clear edge sense(bit 7)
-	ldb		#2			; serving core id
+	ldb		#FIRST_CORE			; serving core id
 st1:
 	clr		PIC,x		; cause code
 	sta		PIC+1,x
@@ -328,7 +348,7 @@ skip_init:
 	andcc	#$EF			; unmask irq
 	lda		#56
 	sta		TEXTREG+TEXT_COLS
-	lda		#31
+	lda		#29
 	sta		TEXTREG+TEXT_ROWS
 	bsr		ClearScreen
 	bsr		HomeCursor
@@ -340,6 +360,8 @@ skip_init:
 	ldd		#0
 	lbsr	ShowSprites
 	lbsr	KeybdInit
+	ldd		KeybdID
+	bsr		DispWordAsHex
 	jmp		MonitorStart
 
 msgStartup
@@ -389,7 +411,7 @@ romToRam1:
 multi_sieve:
 	lda		#'P'					; indicate prime
 	ldb		COREID				; find out which core we are
-	subb	#2
+	subb	#FIRST_CORE
 	ldx		#0						; start at first char of screen
 	abx
 multi_sieve3:
@@ -421,7 +443,7 @@ sieve:
 	ldx		#0						; start at first char of screen
 sieve3:
 	sta		TEXTSCR,x			; store 'P'
-	leax	1,x						; advance to next position
+	inx									; advance to next position
 	cmpx	#4095
 	blo		sieve3
 	ldb		#2						; start sieve at 2
@@ -434,7 +456,7 @@ sieve1:
 	sta		TEXTSCR,x
 	cmpx	#4095
 	blo		multi_sieve1
-	addb	#1						; number of cores working on it
+	incb								; number of cores working on it
 	cmpb	#4080
 	blo		sieve2
 sieve4:								; hang machine
@@ -480,7 +502,7 @@ CopyVirtualScreenToScreen:
 	bsr		GetScreenLocation
 	tfr		d,x
 	ldy		#TEXTSCR
-	ldu		#56*31/2
+	ldu		#56*29/2
 cv2s1:
 	ldd		,x++
 	std		,y++
@@ -505,7 +527,7 @@ CopyScreenToVirtualScreen:
 	bsr		GetScreenLocation
 	tfr		d,y
 	ldx		#TEXTSCR
-	ldu		#56*31/2
+	ldu		#56*29/2
 cs2v1:
 	ldd		,x++
 	std		,y++
@@ -545,7 +567,7 @@ TextSeek:
 
 ClearScreen:
 	pshs	d,x,y,u
-	ldx		#56*31
+	ldx		#56*29
 	tfr		x,u
 	bsr		GetScreenLocation
 	tfr		d,y
@@ -563,7 +585,7 @@ cs1:
 	tfr		u,x					; get back count
 cs2:
 	sta		,y+
-	leax	-1,x				; decrement x
+	dex								; decrement x
 	bne		cs2
 cs3:
 	puls	d,x,y,u,pc
@@ -577,7 +599,7 @@ cs3:
 
 ScrollUp:
 	pshs	d,x,y,u
-	ldy		#(56*31-1)/2	; y = num chars/2 to move
+	ldy		#(56*29-1)/2	; y = num chars/2 to move
 	bsr		GetScreenLocation
 	tfr		d,x
 	tfr		d,u
@@ -585,9 +607,9 @@ ScrollUp:
 scrup1:
 	ldd		,x++			; move 2 characters
 	std		,u++
-	leay	-1,y
+	dey
 	bne		scrup1
-	lda		#30
+	lda		#29
 	bsr		BlankLine
 	puls	d,x,y,u,pc
 
@@ -609,7 +631,6 @@ BlankLine:
 	ldb		#56		; b = # chars to blank out from video controller
 	mul					; d = screen index (row# * #cols)
 	leax	d,x
-	tfr		d,x
 	lda		#' '
 	ldb		#56		; b = # chars to blank out from video controller
 blnkln1:
@@ -722,6 +743,7 @@ csl1:
 ;------------------------------------------------------------------------------
 ;
 DisplayChar:
+;	lbsr	SerialPutChar
 	pshs	d,x
 	cmpb	#CR					; carriage return ?
 	bne		dccr
@@ -733,7 +755,7 @@ dccr:
 	cmpb	#$91				; cursor right ?
 	bne		dcx6
 	lda		CursorCol
-	cmpa	#55
+	cmpa	#56
 	bhs		dcx7
 	inca
 	sta		CursorCol
@@ -760,7 +782,7 @@ dcx9:
 	cmpb	#$92				; cursor down ?
 	bne		dcx10
 	lda		CursorRow
-	cmpa	#31
+	cmpa	#29
 	beq		dcx7
 	inca
 	sta		CursorRow
@@ -790,16 +812,18 @@ dcx13
 	deca
 	sta		CursorCol
 	bsr		CalcScreenLoc
+	tfr		d,x
+	lda		CursorCol
 dcx5:
 	ldb		1,x
 	stb		,x++
 	inca
-	cmpa	#55
+	cmpa	#56
 	blo		dcx5
 	ldb		#' '
-	leax	-1,x
+	dex
 	stb		,x
-	puls	d,x,dp,pc
+	puls	d,x,pc
 dcx3:
 	cmpb	#LF				; linefeed ?
 	beq		dclf
@@ -830,7 +854,7 @@ IncCursorPos:
 	lda		CursorCol
 	inca
 	sta		CursorCol
-	cmpa	#55
+	cmpa	#56
 	blo		icc1
 	clr		CursorCol		; column = 0
 	bra		icr1
@@ -840,7 +864,7 @@ icr1:
 	lda		CursorRow
 	inca
 	sta		CursorRow
-	cmpa	#31
+	cmpa	#29
 	blo		icc1
 	deca							; backup the cursor row, we are scrolling up
 	sta		CursorRow
@@ -870,7 +894,7 @@ dspj1B:
 dsretB:
 	puls	d,x,pc
 
-DisplayStringCRLF
+DisplayStringCRLF:
 	pshs	d
 	bsr		DisplayString
 	ldb		#CR
@@ -985,6 +1009,12 @@ KeybdWrite:
 KeybdSeek:
 	rts
 
+;==============================================================================
+; Serial I/O
+;==============================================================================
+
+OPT INCLUDE "d:\cores2022\rf6809\software\boot\serial.asm"
+
 ;------------------------------------------------------------------------------
 ; Check if there is a keyboard character available. If so return true (<0)
 ; otherwise return false (0) in accb.
@@ -998,6 +1028,11 @@ KeybdCheckForKeyDirect:
 INCH:
 	ldd		#-1				; block if no key available
 	bra		DBGGetKey
+	lbsr	SerialPeekCharDirect
+	tsta
+	bmi		INCH			; block if no key available
+	rts
+
 
 INCHE:
 	bsr		INCH
@@ -1060,7 +1095,7 @@ PromptLn:
 	
 Prompt3:
 	ldd		#-1					; block until key present
-	bsr		DBGGetKey
+	bsr		INCH
 	cmpb	#CR
 	beq		Prompt1
 	bsr		OUTCH
@@ -1077,7 +1112,7 @@ Prompt1:
 	ldd		#$5151
 	std		LEDS
 	clr		CursorCol			; go back to the start of the line
-	bsr		CalcScreenLoc	; calc screen memory location
+	lbsr	CalcScreenLoc	; calc screen memory location
 	tfr		d,y
 	ldd		#$5252
 	std		LEDS
@@ -1099,15 +1134,15 @@ Prompt2:
 PromptC:
 	cmpb	#'C'
 	bne		PromptD
-	lbsr		ClearScreen
-	bsr		HomeCursor
+	lbsr	ClearScreen
+	lbsr	HomeCursor
 	bra		Monitor
 PromptD:
 	cmpb	#'D'
 	bne		PromptF
 	bsr		MonGetch
 	cmpb	#'R'
-	bne		Prompt3
+	bne		DumpMemory
 	bra		DumpRegs
 PromptF:
 	cmpb	#'F'
@@ -1130,7 +1165,7 @@ PromptR:
 
 MonGetch:
 	ldb		,y
-	leay	1,y
+	iny
 	rts
 
 MonGetNonSpace:
@@ -1152,7 +1187,7 @@ ignBlanks1:
 	bsr		MonGetch
 	cmpb	#' '
 	beq		ignBlanks1
-	leay	-1,y
+	dey
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1193,18 +1228,20 @@ shl_numwka:
 	rts
 
 ;------------------------------------------------------------------------------
-; Get a hexidecimal number. Maximum of nine digits.
-; Y = text pointer (updated)
-; D = number of digits
-; mon_numwka contains number
+; Get a hexidecimal number. Maximum of twelve digits.
+;
+; Modifies:
+; 	Y = text pointer (updated)
+; 	D = number of digits
+; 	mon_numwka contains number
 ;------------------------------------------------------------------------------
 ;
 GetHexNumber:
 	clrd
-	std		mon_numwka
+	std		mon_numwka	; zero out work area
 	std		mon_numwka+2
 	pshs	x
-	ldx		#0					; max 9 eight digits
+	ldx		#0					; max 12 eight digits
 gthxn2:
 	bsr		MonGetch
 	bsr		AsciiToHexNybble
@@ -1218,7 +1255,7 @@ gthxn2:
 	orb		mon_numwka+3
 	stb		mon_numwka+3
 	inx
-	cmpx	#9
+	cmpx	#12
 	blo		gthxn2
 gthxn1:
 	tfr		x,d
@@ -1254,24 +1291,24 @@ gthxn1:
 ;
 AsciiToHexNybble:
 	cmpb	#'0'
-	bcc		gthx3
-	cmpb	#'9'+1
-	bcs		gthx5
+	blo		gthx3
+	cmpb	#'9'
+	bhi		gthx5
 	subb	#'0'
 	rts
 gthx5:
 	cmpb	#'A'
-	bcc		gthx3
-	cmpb	#'F'+1
-	bcs		gthx6
+	blo		gthx3
+	cmpb	#'F'
+	bhi		gthx6
 	subb	#'A'
 	addb	#10
 	rts
 gthx6:
 	cmpb	#'a'
-	bcc		gthx3
-	cmpb	#'z'+1
-	bcs		gthx3
+	blo		gthx3
+	cmpb	#'z'
+	bhi		gthx3
 	subb	#'a'
 	addb	#10
 	rts
@@ -1313,7 +1350,7 @@ HelpMsg:
 ;	db	"L = Load sector",CR,LF
 ;	db	"W = Write sector",CR,LF
 	fcb "DR = Dump registers",CR,LF
-;	db	"D = Dump memory",CR,LF
+	fcb	"D = Dump memory",CR,LF
 ;	db	"F = Fill memory",CR,LF
 ;	db  "FL = Dump I/O Focus List",CR,LF
 	fcb "FIG = start FIG Forth",CR,LF
@@ -1343,10 +1380,52 @@ nXBLANK:
 	ldb		#' '
 	bra		OUTCH
 
-DumpRegs
-	ldx		#msgRegHeadings
-	ldd		#msgRegHeadings>>16
-	jsr		DisplayStringDX
+;------------------------------------------------------------------------------
+; Dump Memory
+;
+; Usage:
+; 	$D FFFC12 8
+;
+; Dump formatted to look like:
+;		:FFFC12 012 012 012 012 555 666 777 888
+;
+;------------------------------------------------------------------------------
+
+DumpMemory:
+	bsr		GetTwoParams
+	ldy		#0
+dmpm2:
+	lbsr	CRLF
+	ldb		#':'
+	lbsr	OUTCH
+	ldd		mon_r1+2					; output the address
+	lbsr	DispWordAsHex
+	ldb		#' '
+	lbsr	OUTCH
+	ldx		#8								; number of bytes to display
+dmpm1:
+	ldb		far [mon_r1+1],y
+	iny
+	lbsr	DispByteAsHex			; display byte
+	ldb		#' '							; followed by a space
+	lbsr	OUTCH
+	dex
+	bne		dmpm1
+	cmpy	mon_r2+2
+	blo		dmpm2
+	lbsr	CRLF
+	lbra	Monitor
+
+;------------------------------------------------------------------------------
+; Dump Registers
+;
+;	Usage:
+;		$DR
+;------------------------------------------------------------------------------
+
+DumpRegs:
+	ldd		#msgRegHeadings
+	lbsr	DisplayString
 	bsr		nXBLANK
 	ldd		mon_DSAVE
 	bsr		nHEX4
@@ -1363,8 +1442,8 @@ DumpRegs
 	ldd		mon_SSAVE
 	bsr		nHEX4
 	bsr		nXBLANK
-	ldd		mon_PCSAVE
-	bsr		nHEX4
+	ldb		mon_PCSAVE+1
+	bsr		DispByteAsHex
 	ldd		mon_PCSAVE+2
 	bsr		nHEX4
 	bsr		nXBLANK
@@ -1372,9 +1451,9 @@ DumpRegs
 	jsr		HEX2
 	bsr		nXBLANK
 	lda		mon_CCRSAVE
-	jsr		HEX2
+	lbsr	HEX2
 	bsr		nXBLANK
-	jmp		Monitor
+	lbra	Monitor
 
 ; Jump to code
 jump_to_code:
@@ -1462,6 +1541,8 @@ swi3_exit:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 irq_rout:
+	lbsr	SerialIRQ	; check for recieved character
+
 	; Reset the edge sense circuit in the PIC
 	lda		#2				; Timer is IRQ #2
 	sta		PIC+6			; register 6 is edge sense reset reg	

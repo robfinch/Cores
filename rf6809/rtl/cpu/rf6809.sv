@@ -2935,7 +2935,7 @@ begin
 				accb <= dat;
 				radr <= radr + 2'd1;
 				if (isRTI) begin
-					$display("loaded accb=%h from ", dat, radr);
+					$display("loaded accb=%h from %h", dat, radr);
 					ssp <= ssp + 2'd1;
 					next_state(PULL1);
 				end
@@ -3097,6 +3097,9 @@ begin
 	`LW_PCL:	begin
 				pc[`LOBYTE] <= dat;
 				radr <= radr + 2'd1;
+				// If loading from the vector table in bank zero, force pc[23:16]=0
+				if (radr[`BYTE3]=={BPB{1'b0}} && radr[`BYTE2]=={BPB{1'b1}} && radr[7:4]==4'hF)
+					pc[`BYTE3] <= {BPB{1'b0}};
 				if (isRTI|isRTS|isPULS) begin
 					$display("loadded PCL=%h", dat);
 					ssp <= ssp + 2'd1;

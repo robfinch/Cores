@@ -54,9 +54,9 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module rfFrameBuffer(
+module rfFrameBuffer_x12 (
 	rst_i, irq_o,
-	s_clk_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_we_i, s_sel_i, s_adr_i, s_dat_i, s_dat_o,
+	s_clk_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_we_i, s_adr_i, s_dat_i, s_dat_o,
 	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_sel_o, m_adr_o, m_dat_i, m_dat_o,
 	dot_clk_i, zrgb_o, xonoff_i, xal_o,
 `ifdef INTERNAL_SYNC_GEN
@@ -65,7 +65,7 @@ module rfFrameBuffer(
 	, hsync_i, vsync_i, blank_i
 `endif
 );
-parameter MDW = 128;		// Bus master data width
+parameter MDW = 96;		// Bus master data width
 parameter MAP = 12'd0;
 parameter BM_BASE_ADDR1 = 32'h0020_0000;
 parameter BM_BASE_ADDR2 = 32'h0028_0000;
@@ -151,7 +151,7 @@ input m_clk_i;				// system bus interface clock
 output reg m_cyc_o;		// video burst request
 output reg m_stb_o;
 output reg m_we_o;
-output reg [MDW/8-1:0] m_sel_o;
+output reg [MDW/12-1:0] m_sel_o;
 input  m_ack_i;			// vid_acknowledge from memory
 output reg [`ABITS] m_adr_o;	// address for memory access
 input  [MDW-1:0] m_dat_i;	// memory data input
@@ -189,16 +189,13 @@ reg irq_o;
 wire vclk;
 reg cs;
 reg we;
-reg [7:0] sel;
 reg [13:0] adri;
-reg [63:0] dat;
+reg [11:0] dat;
 
 always @(posedge s_clk_i)
 	cs <= s_cyc_i & s_stb_i & s_cs_i;
 always @(posedge s_clk_i)
 	we <= s_we_i;
-always @(posedge s_clk_i)
-	sel <= s_sel_i;
 always @(posedge s_clk_i)
 	adri <= s_adr_i;
 always @(posedge s_clk_i)
@@ -210,6 +207,7 @@ ack_gen #(
 	.REGISTER_OUTPUT(1)
 ) uag1
 (
+	.rst_i(rst_i),
 	.clk_i(s_clk_i),
 	.ce_i(1'b1),
 	.i(cs),
@@ -244,13 +242,15 @@ reg [15:0] bmpWidth;		// scan line increment (pixels)
 reg [15:0] bmpHeight;
 reg [`ABITS] baseAddr;	// base address register
 wire [MDW-1:0] rgbo1, rgbo1e, rgbo1o, rgbo1m;
+reg [31:0] rgbo2,rgbo4;
+reg [MDW-1:0] rgbo3;
 reg [15:0] pixelRow;
 reg [15:0] pixelCol;
-wire [7:0] pal_wo;
-wire [63:0] pal_o;
+wire [11:0] pal_wo;
+wire [47:0] pal_o;
 reg [15:0] px;
 reg [15:0] py;
-reg [7:0] pz;
+reg [11:0] pz;
 reg [1:0] pcmd,pcmd_o;
 reg [3:0] raster_op;
 reg [32:0] oob_color;
@@ -347,19 +347,19 @@ always @(page or bm_base_addr1 or bm_base_addr2)
 	baseAddr = page ? bm_base_addr2 : bm_base_addr1;
 
 // Color palette RAM for 8bpp modes
-syncRam512x64_1rw1r upal1	// Actually 1024x64
+syncRam512x48_1rw1r upal1	// Actually 1024x48
 (
   .clka(s_clk_i),    // input wire clka
   .ena(cs & adri[13]),      // input wire ena
   .wea(we),      // input wire [3 : 0] wea
   .addra(adri[11:0]),  // input wire [8 : 0] addra
-  .dina(dat[7:0]),    			// input wire [31 : 0] dina
+  .dina(dat),    			// input wire [31 : 0] dina
   .douta(pal_wo),  // output wire [31 : 0] douta
   .clkb(vclk),    // input wire clkb
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [3 : 0] web
   .addrb({pals[2:0],rgbo4[5:0]}),  // input wire [8 : 0] addrb
-  .dinb(64'h0),    // input wire [31 : 0] dinb
+  .dinb(48'h0),    // input wire [31 : 0] dinb
   .doutb(pal_o)  // output wire [31 : 0] doutb
 );
 
@@ -419,103 +419,118 @@ else begin
 						page <= dat[0];
 						pals <= dat[3:1];
 					end
-				3'd6:	map[7:0] <= dat;
-				3'd7:	map[11:8] <= dat[3:0];
+				3'd6: ;
+				3'd7:	map[11:0] <= dat;
 				default:	;
 				endcase
 			REG_REFDELAY:
 				case(adri[2:0])
-				3'd0:	hrefdelay[15:8] <= dat;
-				3'd1:	hrefdelay[ 7:0] <= dat;
-				3'd2:	vrefdelay[15:8] <= dat;
-				3'd3:	vrefdelay[ 7:0] <= dat;				
+				3'd0:	hrefdelay[15:12] <= dat[3:0];
+				3'd1:	hrefdelay[11: 0] <= dat;
+				3'd2:	vrefdelay[15:12] <= dat[3:0];
+				3'd3:	vrefdelay[11: 0] <= dat;				
 				default:	;
 				endcase
 			REG_PAGE1ADDR:
 				case(adri[2:0])
-				3'd1:	bm_base_addr1[23:16] <= dat;
-				3'd2: bm_base_addr1[15: 8] <= dat;
-				3'd3:	bm_base_addr1[ 7: 0] <= dat;
+				3'd1:	bm_base_addr1[31:24] <= dat[7:0];
+				3'd2: bm_base_addr1[23:12] <= dat;
+				3'd3:	bm_base_addr1[11: 0] <= dat;
 				default:	;
 				endcase
 			REG_PAGE2ADDR:
 				case(adri[2:0])
-				3'd1:	bm_base_addr2[23:16] <= dat;
-				3'd2: bm_base_addr2[15: 8] <= dat;
-				3'd3:	bm_base_addr2[ 7: 0] <= dat;
+				3'd1:	bm_base_addr2[31:24] <= dat[7:0];
+				3'd2: bm_base_addr2[23:12] <= dat;
+				3'd3:	bm_base_addr2[11: 0] <= dat;
 				default:	;
 				endcase
 			REG_PXYZ:
 				case(adri[2:0])
-				3'd0:	px[15:8] <= dat;
-				3'd1:	px[ 7:0] <= dat;
-				3'd2:	py[15:8] <= dat;
-				3'd3:	py[ 7:0] <= dat;
-				3'd5:	pz[ 7:0] <= dat;
+				3'd0:	px[15:12] <= dat[3:0];
+				3'd1:	px[11: 0] <= dat;
+				3'd2:	py[15:12] <= dat[3:0];
+				3'd3:	py[11: 0] <= dat;
+				3'd5:	pz[11: 0] <= dat;
 				default:	;
 				endcase
 			REG_PCOLCMD:
-				begin
-					if (sel[0]) pcmd <= dat[1:0];
-			    if (sel[2]) raster_op <= dat[19:16];
-			    if (|sel[7:4]) color <= dat[63:32];
-			  end
+				case(adri[2:0])
+				3'd0:	pcmd <= dat[1:0];
+				3'd2:	raster_op <= dat[3:0];
+				3'd4:	;
+				3'd5:	color[31:24] <= dat[7:0];
+				3'd6:	color[23:12] <= dat;
+				3'd7:	color[11: 0] <= dat;
+				default:	;
+				endcase
 			REG_RASTCMP:	
-				begin
-					if (sel[0]) rastcmp[7:0] <= dat[7:0];
-					if (sel[1]) rastcmp[11:8] <= dat[11:8];
-					if (sel[7]) rst_irq <= dat[63];
-				end
+				case(adri[2:0])
+				3'd0:	;
+				3'd1:	rastcmp[11: 0] <= dat;
+				3'd7:	rst_irq <= dat[11];
+				default:	;
+				endcase
 			REG_BMPSIZE:
-				begin
-					if (|sel[1:0]) bmpWidth <= dat[15:0];
-					if (|sel[5:4]) bmpHeight <= dat[47:32];
-				end
+				case(adri[2:0])
+				3'd2: bmpWidth[15:12] <= dat[3:0];
+				3'd3:	bmpWidth[11:0] <= dat;
+				3'd6: bmpHeight[15:12] <= dat[3:0];
+				3'd7: bmpHeight[11:0] <= dat;
+				default:	;
+				endcase
 			REG_OOB_COLOR:
-				if (|sel[3:0]) oob_color <= dat[31:0];
+				case(adri[2:0])
+				3'd1:	oob_color[31:24] <= dat[7:0];
+				3'd2:	oob_color[23:12] <= dat;
+				3'd3:	oob_color[11: 0] <= dat;
+				default:	;
+				endcase
 			REG_WINDOW:
-				begin
-					if (|sel[1:0])	windowWidth <= dat[11:0];
-					if (|sel[3:2])  windowHeight <= dat[27:16];
-					if (|sel[5:4])	windowLeft <= dat[47:32];
-					if (|sel[7:6])  windowTop <= dat[63:48];
-				end
+				case(adri[2:0])
+				3'd0:	windowWidth <= dat;
+				3'd1:	windowHeight <= dat;
+				3'd4:	windowLeft[15:12] <= dat[3:0];
+				3'd5:	windowLeft[11: 0] <= dat;
+				3'd6:	windowTop[15:12] <= dat[3:0];
+				3'd7:	windowTop[11: 0] <= dat;
+				endcase
 
 `ifdef INTERNAL_SYNC_GEN
 			REG_TOTAL:
-				begin
-					if (!sgLock) begin
-						if (|sel[1:0]) hTotal <= dat[11:0];
-						if (|sel[3:2]) vTotal <= dat[27:16];
-					end
-					if (|sel[7:4]) begin
-						if (dat[63:32]==32'hA1234567)
-							sgLock <= 1'b0;
-						else if (dat[63:32]==32'h7654321A)
-							sgLock <= 1'b1;
-					end
-				end
+				case(adri[2:0])
+				3'd0:	if (!sgLock) hTotal <= dat;
+				3'd1: if (!sgLock) vTotal <= dat;
+				3'd7:	if (dat==12'hA12)
+								sgLock <= 1'b1;
+							else if (dat==12'h21A)
+								sgLock <= 1'b0;
+				default:	;
+				endcase
 			REG_SYNC_ONOFF:
-				if (!sgLock) begin
-					if (|sel[1:0]) hSyncOff <= dat[11:0];
-					if (|sel[3:2]) hSyncOn <= dat[27:16];
-					if (|sel[5:4]) vSyncOff <= dat[43:32];
-					if (|sel[7:6]) vSyncOn <= dat[59:48];
-				end
+				case(adri[2:0])
+				3'd0:	if (!sgLock) hSyncOff <= dat;
+				3'd1:	if (!sgLock) hSyncOn <= dat;
+				3'd2: if (!sgLock) vSyncOff <= dat;
+				3'd3: if (!sgLock) vSyncOn <= dat;
+				default:	;
+				endcase
 			REG_BLANK_ONOFF:
-				if (!sgLock) begin
-					if (|sel[1:0]) hBlankOff <= dat[11:0];
-					if (|sel[3:2]) hBlankOn <= dat[27:16];
-					if (|sel[5:4]) vBlankOff <= dat[43:32];
-					if (|sel[7:6]) vBlankOn <= dat[59:48];
-				end
+				case(adri[2:0])
+				3'd0:	if (!sgLock) hBlankOff <= dat;
+				3'd1:	if (!sgLock) hBlankOn <= dat;
+				3'd2: if (!sgLock) vBlankOff <= dat;
+				3'd3: if (!sgLock) vBlankOn <= dat;
+				default:	;
+				endcase
 			REG_BORDER_ONOFF:
-				begin
-					if (|sel[1:0]) hBorderOff <= dat[11:0];
-					if (|sel[3:2]) hBorderOn <= dat[27:16];
-					if (|sel[5:4]) vBorderOff <= dat[43:32];
-					if (|sel[7:6]) vBorderOn <= dat[59:48];
-				end
+				case(adri[2:0])
+				3'd0:	if (!sgLock) hBorderOff <= dat;
+				3'd1:	if (!sgLock) hBorderOn <= dat;
+				3'd2: if (!sgLock) vBorderOff <= dat;
+				3'd3: if (!sgLock) vBorderOn <= dat;
+				default:	;
+				endcase
 `endif
       default:  ;
 			endcase
@@ -537,18 +552,68 @@ else begin
 	          s_dat_o[59:48] <= map;
 	      end
 	  */
-	  REG_REFDELAY:		s_dat_o <= {32'h0,vrefdelay,hrefdelay};
-	  REG_PAGE1ADDR:	s_dat_o <= bm_base_addr1;
-	  REG_PAGE2ADDR:	s_dat_o <= bm_base_addr2;
-	  REG_PXYZ:		    s_dat_o <= {20'h0,pz,py,px};
-	  REG_PCOLCMD:    s_dat_o <= {color_o,12'd0,raster_op,14'd0,pcmd};
-	  REG_OOB_COLOR:	s_dat_o <= {32'h0,oob_color};
-	  REG_WINDOW:			s_dat_o <= {windowTop,windowLeft,4'h0,windowHeight,4'h0,windowWidth};
+	  REG_REFDELAY:		
+			case(adri[2:0])
+			3'd0:	s_dat_o <= {8'h00,hrefdelay[15:12]};
+			3'd1:	s_dat_o <= hrefdelay[11: 0];
+			3'd2:	s_dat_o <= {8'h00,vrefdelay[15:12]};
+			3'd3:	s_dat_o <= vrefdelay[11: 0];				
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_PAGE1ADDR:
+			case(adri[2:0])
+			3'd1:	s_dat_o <= {4'h0,bm_base_addr1[31:24]};
+			3'd2: s_dat_o <= bm_base_addr1[23:12];
+			3'd3:	s_dat_o <= bm_base_addr1[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_PAGE2ADDR:
+			case(adri[2:0])
+			3'd1:	s_dat_o <= {4'h0,bm_base_addr2[31:24]};
+			3'd2: s_dat_o <= bm_base_addr2[23:12];
+			3'd3:	s_dat_o <= bm_base_addr2[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_PXYZ:
+			case(adri[2:0])
+			3'd0:	s_dat_o <= {8'h00,px[15:12]};
+			3'd1:	s_dat_o <= px[11: 0];
+			3'd2:	s_dat_o <= {8'h00,py[15:12]};
+			3'd3:	s_dat_o <= py[11: 0];
+			3'd5:	s_dat_o <= pz[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_PCOLCMD:
+			case(adri[2:0])
+			3'd0:	s_dat_o <= {10'h0,pcmd};
+			3'd2:	s_dat_o <= {8'h0,raster_op};
+			3'd5:	s_dat_o <= {4'h0,color[31:24]};
+			3'd6:	s_dat_o <= color[23:12];
+			3'd7:	s_dat_o <= color[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_OOB_COLOR:
+			case(adri[2:0])
+			3'd1:	s_dat_o <= {4'h0,oob_color[31:24]};
+			3'd2:	s_dat_o <= oob_color[23:12];
+			3'd3:	s_dat_o <= oob_color[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
+	  REG_WINDOW:
+			case(adri[2:0])
+			3'd0:	s_dat_o <= windowWidth <= dat;
+			3'd1:	s_dat_o <= windowHeight <= dat;
+			3'd4:	s_dat_o <= {8'h00,windowLeft[15:12]};
+			3'd5:	s_dat_o <= windowLeft[11: 0];
+			3'd6:	s_dat_o <= {8'h00,windowTop[15:12]};
+			3'd7:	s_dat_o <= windowTop[11: 0];
+			default:	s_dat_o <= 12'h0;
+			endcase
 	  11'b1?_????_????_?:	s_dat_o <= pal_wo;
-	  default:        s_dat_o <= 64'd0;
+	  default:        s_dat_o <= 12'd0;
 	  endcase
 	else
-		s_dat_o <= 64'h0;
+		s_dat_o <= 12'h0;
 end
 
 //`ifdef USE_CLOCK_GATE
@@ -661,51 +726,23 @@ endcase
 reg [5:0] shifts;
 always_comb
 case(MDW)
-128:
+96:
 	case(color_depth)
-	BPP6:   shifts = 6'd21;
-	BPP8: 	shifts = 6'd16;
-	BPP12:	shifts = 6'd10;
-	BPP16:	shifts = 6'd8;
-	BPP18:	shifts = 6'd7;
-	BPP21:	shifts = 6'd6;
-	BPP24:	shifts = 6'd5;
-	BPP27:	shifts = 6'd4;
-	BPP32:	shifts = 6'd4;
-	BPP33:	shifts = 6'd3;
+	BPP6:   shifts = 6'd16;
+	BPP8: 	shifts = 6'd12;
+	BPP12:	shifts = 6'd8;
+	BPP16:	shifts = 6'd6;
+	BPP18:	shifts = 6'd5;
+	BPP21:	shifts = 6'd4;
+	BPP24:	shifts = 6'd4;
+	BPP27:	shifts = 6'd3;
+	BPP32:	shifts = 6'd3;
+	BPP33:	shifts = 6'd2;
 	default:  shifts = 6'd8;
-	endcase
-64:
-	case(color_depth)
-	BPP6:   shifts = 6'd10;
-	BPP8: 	shifts = 6'd8;
-	BPP12:	shifts = 6'd5;
-	BPP16:	shifts = 6'd4;
-	BPP18:	shifts = 6'd3;
-	BPP21:	shifts = 6'd3;
-	BPP24:	shifts = 6'd2;
-	BPP27:	shifts = 6'd2;
-	BPP32:	shifts = 6'd2;
-	BPP33:	shifts = 6'd1;
-	default:  shifts = 6'd4;
-	endcase
-32:
-	case(color_depth)
-	BPP6:   shifts = 6'd5;
-	BPP8: 	shifts = 6'd4;
-	BPP12:	shifts = 6'd2;
-	BPP16:	shifts = 6'd2;
-	BPP18:	shifts = 6'd1;
-	BPP21:	shifts = 6'd1;
-	BPP24:	shifts = 6'd1;
-	BPP27:	shifts = 6'd1;
-	BPP32:	shifts = 6'd1;
-	BPP33:	shifts = 6'd1;
-	default:  shifts = 6'd2;
 	endcase
 default:
 	begin
-	$display("rtfBitmapController5: Bad master bus width");
+	$display("rfFrameBuffer_x12: Bad master bus width");
 	$finish;
 	end
 endcase
@@ -725,7 +762,7 @@ wire [MDW-1:0] mem_strip_o;
 wire [31:0] mem_color;
 
 // Compute fetch address
-gfx_calc_address64 #(MDW) u1
+gfx_calc_address #(MDW) u1
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
@@ -740,7 +777,7 @@ gfx_calc_address64 #(MDW) u1
 );
 
 // Compute address for get/set pixel
-gfx_calc_address64  #(MDW) u2
+gfx_calc_address  #(MDW) u2
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
@@ -781,17 +818,17 @@ always_ff @(posedge m_clk_i)
 reg [11:0] hCmp;
 always_comb
 case(color_depth)
-BPP6: hCmp = 12'd2688;    // must be 12 bits
-BPP8:	hCmp = 12'd2048;
-BPP12: hCmp = 12'd1536;
-BPP16:	hCmp = 12'd1024;
-BPP18:	hCmp = 12'd896;
-BPP21:	hCmp = 12'd768;
-BPP24:	hCmp = 12'd640;
-BPP27:	hCmp = 12'd512;
-BPP32:	hCmp = 12'd512;
-BPP33:	hCmp = 12'd384;
-default:	hCmp = 12'd1024;
+BPP6: hCmp = 128 * $floor(MDW/6);    // must fit in 12 bits
+BPP8:	hCmp = 128 * $floor(MDW/8);
+BPP12: hCmp = 128 * $floor(MDW/12);
+BPP16:	hCmp = 128 * $floor(MDW/16);
+BPP18:	hCmp = 128 * $floor(MDW/18);
+BPP21:	hCmp = 128 * $floor(MDW/21);
+BPP24:	hCmp = 128 * $floor(MDW/24);
+BPP27:	hCmp = 128 * $floor(MDW/27);
+BPP32:	hCmp = 128 * $floor(MDW/32);
+BPP33:	hCmp = 128 * $floor(MDW/33);
+default:	hCmp = 128 * $floor(MDW/16);
 endcase
 /*
 always @(posedge m_clk_i)
@@ -987,8 +1024,6 @@ begin
 end
 endtask
 
-reg [31:0] rgbo2,rgbo4;
-reg [MDW-1:0] rgbo3;
 always_ff @(posedge vclk)
 case(color_depth)
 BPP6:	rgbo4 <= {rgbo3[5:3],5'h00,21'd0,rgbo3[2:0]};	// feeds into palette

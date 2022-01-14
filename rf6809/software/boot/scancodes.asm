@@ -4,7 +4,7 @@
 	;
 	org	(* + 127) & $FFFFFF80
 
-_unshiftedScanCodes:
+unshiftedScanCodes:
 	fcb	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
 	fcb	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$71,$31,$2e
@@ -39,7 +39,7 @@ _unshiftedScanCodes:
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	fcb	$2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
 
-_shiftedScanCodes:
+shiftedScanCodes:
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$51,$21,$2e
@@ -75,7 +75,7 @@ _shiftedScanCodes:
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 
 ; control
-_keybdControlCodes:
+keybdControlCodes:
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$11,$21,$2e
@@ -93,7 +93,7 @@ _keybdControlCodes:
 	fcb	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 
-_keybdExtendedCodes:
+keybdExtendedCodes:
 	fcb	$2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	fcb	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e

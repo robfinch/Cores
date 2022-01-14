@@ -29,7 +29,7 @@ SC_C    EQU 		$21
 SC_T    EQU	    $2C
 SC_Z 		EQU     $1A
 SC_DEL	EQU			$71	; extend
-SC_KEYUP	EQU		$F0
+SC_KEYUP	EQU		$F0	; should be $f0
 SC_EXTEND EQU	  $E0
 SC_CTRL	EQU			$14
 SC_RSHIFT		EQU	$59
@@ -55,20 +55,20 @@ SC_TAB	EQU     $0D
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 KeybdRecvByte:
-		pshs	x
-		ldx		#100						; wait up to 1s
+	pshs	x
+	ldx		#100						; wait up to 1s
 krb3:
-		bsr		KeybdGetStatus	; wait for response from keyboard
-		tstb
-		bmi		krb4						; is input buffer full ? yes, branch
-		bsr		Wait10ms				; wait a bit
-		leax	-1,x
-		bne		krb3						; go back and try again
-		ldd		#-1							; return -1
-		puls	x,pc
+	bsr		KeybdGetStatus	; wait for response from keyboard
+	tstb
+	bmi		krb4						; is input buffer full ? yes, branch
+	bsr		Wait10ms				; wait a bit
+	leax	-1,x
+	bne		krb3						; go back and try again
+	ldd		#-1							; return -1
+	puls	x,pc
 krb4:
-		bsr		KeybdGetScancode
-		puls	x,pc
+	bsr		KeybdGetScancode
+	puls	x,pc
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Send a byte to the keyboard.
@@ -93,21 +93,21 @@ KeybdSendByte:
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 KeybdWaitTx:
-		pshs	x
-		ldx		#100				; wait a max of 1s
+	pshs	x
+	ldx		#100				; wait a max of 1s
 kwt1:
-		bsr		KeybdGetStatus
-		andb	#$40				; check for transmit complete bit; branch if bit set
-		bne		kwt2
-		bsr		Wait10ms		; delay a little bit
-		leax	-1,x
-		bne		kwt1				; go back and try again
-		ldd		#-1					; timed out, return -1
-		puls	x,pc
+	bsr		KeybdGetStatus
+	andb	#$40				; check for transmit complete bit; branch if bit set
+	bne		kwt2
+	bsr		Wait10ms		; delay a little bit
+	leax	-1,x
+	bne		kwt1				; go back and try again
+	ldd		#-1					; timed out, return -1
+	puls	x,pc
 kwt2:
-		clra							; wait complete, return 0
-		clrb							
-		puls	x,pc				
+	clra							; wait complete, return 0
+	clrb							
+	puls	x,pc				
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Wait for 10 ms
@@ -155,11 +155,19 @@ W300_0001:
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 KeybdGetStatus:
+kbgs3:
 	ldb		KEYBD+1
 	bitb	#$80
 	bne		kbgs1
+	bitb	#$01		; check parity error flag
+	bne		kbgs2
 	clra
 	rts
+kbgs2:
+	ldb		#$FE		; request resend
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bra		kbgs3
 kbgs1:					; return negative status
 	orb		#$F00
 	lda		#-1
@@ -175,7 +183,7 @@ kbgs1:					; return negative status
 KeybdGetScancode:
 	clra
 	ldb		KEYBD				; get the scan code
-	clr		KEYBD+1			; clear receive register
+	clr		KEYBD+1			; clear receive register (write $00 to status reg)
 	rts
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -247,6 +255,7 @@ KeybdInit:
 	ldy		#5
 kbdi0002:
 	bsr		Wait10ms
+	clr		KEYBD+1			; clear receive register (write $00 to status reg)
 	ldb		#-1					; send reset code to keyboard
 	stb		KEYBD+1			; write $FF to status reg to clear TX state
 	bsr		KeybdSendByte	; now write to transmit register
@@ -271,7 +280,7 @@ kbdi0002:
 	bsr		KeybdRecvByte	; wait for response from keyboard
 	tsta
 	bmi		kbdiTryAgain
-	cmpb	#$FA
+	cmpb	#$FA					; ACK
 	beq		kbdi0004
 kbdiTryAgain:
 	dey
@@ -284,7 +293,7 @@ kbdi0004:
 	ldb		#2			; select scan code set #2
 	bsr		KeybdSendByte
 	bsr		KeybdWaitTx
-	tsta
+	tstb
 	bmi		kbdiTryAgain
 	bsr		KeybdRecvByte	; wait for response from keyboard
 	tsta
@@ -310,60 +319,67 @@ DBGCheckForKey:
 	bra		KeybdGetStatus
 
 
-; KeyState2_
-; 876543210
+; KeyState2 variable bit meanings
+;1176543210
 ; ||||||||+ = shift
 ; |||||||+- = alt
 ; ||||||+-- = control
 ; |||||+--- = numlock
 ; ||||+---- = capslock
 ; |||+----- = scrolllock
-; ||+------ =
-; |+------- = 
+; ||+------ = <empty>
+; |+------- =    "
+; |         =    "
+; |         =    "
+; |         =    "
 ; +-------- = extended
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Debug versison of keyboard get routine.
+;
 ; Parameters:
 ;		b:	0 = non blocking, otherwise blocking
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 DBGGetKey:
 	pshs	x
+	stb		KeybdBlock				; save off blocking status
 dbgk2:
+	ldb		KeybdBlock
 	pshs	b
 	bsr		KeybdGetStatus
 	andb	#$80							; is key available?
 	puls	b
 	bne		dbgk1							; branch if key
 	tstb										; block?
-	beq		dbgk2							; If no key and blocking - loop
+	bne		dbgk2							; If no key and blocking - loop
 	ldd		#-1								; return -1 if no block and no key
 	puls	x,pc
 dbgk1:
 	bsr		KeybdGetScancode
+;	lbsr	DispByteAsHex
 	; Make sure there is a small delay between scancode reads
 	ldx		#20
 dbgk3:
-	leax	-1,x
+	dex
 	bne		dbgk3
 	; switch on scan code
 	cmpb	#SC_KEYUP
 	bne		dbgk4
-	clr		KeyState1					; make KeyState1 = -1
-	neg		KeyState1
+	stb		KeyState1					; make KeyState1 <> 0
 	bra		dbgk2							; loop back
 dbgk4:
 	cmpb	#SC_EXTEND
 	bne		dbgk5
 	lda		KeyState2
-	ora		#$80
+	ora		#$800
 	sta		KeyState2
 	bra		dbgk2
 dbgk5:
 	cmpb	#SC_CTRL
 	bne		dbgkNotCtrl
 	tst		KeyState1
-	bmi		dbgk7
+	bne		dbgk7
 	lda		KeyState2
 	ora		#4
 	sta		KeyState2
@@ -379,7 +395,7 @@ dbgkNotCtrl:
 	cmpb	#SC_RSHIFT
 	bne		dbgkNotRshift
 	tst		KeyState1
-	bmi		dbgk9
+	bne		dbgk9
 	lda		KeyState2
 	ora		#1
 	sta		KeyState2
@@ -434,7 +450,7 @@ dbgkNotScrolllock:
 	cmpb	#SC_ALT
 	bne		dbgkNotAlt
 	tst		KeyState1
-	bmi		dbgk11
+	bne		dbgk11
 	lda		KeyState2
 	ora		#2
 	sta		KeyState2
@@ -458,32 +474,31 @@ dbgk13:
 	bne		dbgk14
 	cmpb	#SC_DEL	
 	bne		dbgk14
-	jmp		[$FFFFFE]		; jump to reset vector
+	jmp		[$FFFFFC]		; jump to NMI vector
 dbgk14:
 	tst		KeyState2		; extended code?
 	bpl		dbgk15
 	lda		KeyState2
-	anda	#$7F
+	anda	#$7FF
 	sta		KeyState2
 	ldx		#keybdExtendedCodes
 	bra		dbgk18
 dbgk15:
 	lda		KeyState2		; Is CTRL down?
-	anda	#4
+	bita	#4
 	beq		dbgk16
 	ldx		#keybdControlCodes
 	bra		dbgk18
 dbgk16:
-	lda		KeyState2		; Is shift down?
-	anda	#1
+	bita	#1					; Is shift down?
 	beq		dbgk17
 	ldx		#shiftedScanCodes
 	bra		dbgk18
 dbgk17:
 	ldx		#unshiftedScanCodes
 dbgk18:
-	abx
-	ldb		,x
+	abx								; index into table is scancode in accb
+	ldb		,x					; load accb with ascii from table
 	clra
 	puls	x,pc				; and return
 	
