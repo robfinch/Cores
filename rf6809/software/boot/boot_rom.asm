@@ -94,6 +94,7 @@ ACIA_RX		EQU		0
 ACIA_STAT	EQU		1
 ACIA_CMD	EQU		2
 ACIA_CTRL	EQU		3
+ACIA_CTRL2	EQU		11
 
 KEYBD		EQU		$FFFE30400
 KEYBDCLR	EQU		$FFFE30402
@@ -743,7 +744,7 @@ csl1:
 ;------------------------------------------------------------------------------
 ;
 DisplayChar:
-;	lbsr	SerialPutChar
+	lbsr	SerialPutChar
 	pshs	d,x
 	cmpb	#CR					; carriage return ?
 	bne		dccr
@@ -1026,8 +1027,8 @@ KeybdCheckForKeyDirect:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 INCH:
-	ldd		#-1				; block if no key available
-	bra		DBGGetKey
+;	ldd		#-1				; block if no key available
+;	bra		DBGGetKey
 	lbsr	SerialPeekCharDirect
 	tsta
 	bmi		INCH			; block if no key available
@@ -1048,7 +1049,7 @@ INCHEK3:
 	lbsr		CRLF
 	bra		INCHEK1
 INCHEK2:
-	bsr		DisplayChar
+	lbsr	DisplayChar
 INCHEK1:
 	rts
 
@@ -1159,8 +1160,13 @@ PromptJ:
 	lbeq	jump_to_code
 PromptR:
 	cmpb	#'R'
+	bne		Prompt_s
+	ldu		#Monitor
+	lbra	ramtest
+Prompt_s:
+	cmpb	#'s'
 	bne		Monitor
-	lbsr	ramtest
+	lbsr	SerialOutputTest
 	bra		Monitor
 
 MonGetch:
@@ -1244,6 +1250,7 @@ GetHexNumber:
 	ldx		#0					; max 12 eight digits
 gthxn2:
 	bsr		MonGetch
+	lbsr	DispByteAsHex
 	bsr		AsciiToHexNybble
 	cmpb	#-1
 	beq		gthxn1
@@ -1362,6 +1369,7 @@ HelpMsg:
 ;	db	"R[n] = Set register value",CR,LF
 ;	db	"r = random lines - test bitmap",CR,LF
 ;	db	"e = ethernet test",CR,LF
+	fcb	"s = serial output test",CR,LF
 ;	db	"T = Dump task list",CR,LF
 ;	db	"TO = Dump timeout list",CR,LF
 ;	db	"TI = display date/time",CR,LF
@@ -1370,7 +1378,7 @@ HelpMsg:
 	fcb		0
 
 msgRegHeadings
-	fcb	CR,LF," D/AB   X    Y    U    S     PC    DP CCR",CR,LF,0
+	fcb	CR,LF,"  D/AB      X       Y       U       S        PC       DP  CCR",CR,LF,0
 
 nHEX4:
 	jsr		HEX4
@@ -1409,10 +1417,15 @@ dmpm1:
 	lbsr	DispByteAsHex			; display byte
 	ldb		#' '							; followed by a space
 	lbsr	OUTCH
+	clrb
+	lbsr	DBGGetKey
+	cmpb	#CTRLC
+	beq		dmpm3
 	dex
 	bne		dmpm1
 	cmpy	mon_r2+2
 	blo		dmpm2
+dmpm3:
 	lbsr	CRLF
 	lbra	Monitor
 
@@ -1443,7 +1456,7 @@ DumpRegs:
 	bsr		nHEX4
 	bsr		nXBLANK
 	ldb		mon_PCSAVE+1
-	bsr		DispByteAsHex
+	lbsr	DispByteAsHex	
 	ldd		mon_PCSAVE+2
 	bsr		nHEX4
 	bsr		nXBLANK

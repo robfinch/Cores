@@ -1,30 +1,43 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 //		
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // ============================================================================
 //
 `define IDLE	0
 `define CNT		1
 
-module uart6551Rx(rst, clk,
+module uart6551Rx_x12(rst, clk,
 	cyc, cs, wr, dout, ack,
 	fifoEnable, fifoClear, clearGErr,
 	parityCtrl, frameSize, stop_bits, wordLength, baud16x_ce, clear, rxd,
@@ -34,13 +47,13 @@ input clk;
 input cyc;				// valid bus cycle
 input cs;				// core select
 input wr;				// read reciever
-output [7:0] dout;		// fifo data out
+output [11:0] dout;		// fifo data out
 output ack;
 input fifoEnable;		// enable the fifo
 input fifoClear;
 input clearGErr;		// clear global error
 input [2:0] parityCtrl;
-input [7:0] frameSize;	// frame count
+input [8:0] frameSize;	// frame count
 input [2:0] stop_bits;
 input [3:0] wordLength;
 input baud16x_ce;		// baud rate clock enable
@@ -54,7 +67,7 @@ output parityErr;		// parity error
 output break_o;			// break detected
 output gerr;			// global error indicator
 output [3:0] qcnt;		// count of number of words queued
-output [9:0] cnt;		// receiver counter
+output [10:0] cnt;		// receiver counter
 output bitStream;		// received bit stream
 
 //0 - simple sampling at middle of symbol period
@@ -63,11 +76,12 @@ parameter SamplerStyle = 0;
 
 
 reg overrun;
-reg [9:0] cnt;			// sample bit rate counter / timeout counter
-reg [10:0] rx_data;		// working receive data register
-reg [9:0] t2;			// data minus stop bit(s)
-reg [7:0] t3,t4;		// data minus parity bit and start bit
-reg [7:0] t5;
+reg [10:0] cnt;			// sample bit rate counter / timeout counter
+reg [14:0] rx_data;		// working receive data register
+reg [13:0] t4;			// data minus stop bit(s)
+reg [11:0] t3;			// data minus parity bit and start bit
+reg [11:0] t5;
+reg [3:0] shft_amt;
 reg p1;
 reg gerr;				// global error status
 reg perr;				// parity error
@@ -77,25 +91,26 @@ reg state;				// state machine
 reg wf;					// fifo write
 wire empty;
 reg didRd;
-wire [7:0] dout1;
+wire [11:0] dout1;
 reg full1;
 wire fifoFull, fifoEmpty;
 
 assign ack = cyc & cs;
-wire pe_rd;
+wire pe_rd, pe_wf;
 edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(ack & ~wr), .pe(pe_rd), .ne(), .ee());
+edge_det ued2 (.rst(rst), .clk(clk), .ce(1'b1), .i(wf), .pe(pe_wf), .ne(), .ee());
 
-assign bitStream = rx_data[10];
-assign bz = t4==8'd0;
-wire rdf = fifoEnable ? pe_rd : wf;
+assign bitStream = rx_data[14];
+assign bz = t3==12'd0;
+wire rdf = fifoEnable ? pe_rd : pe_wf;
 
-uart6551Fifo #(.WID(11)) uf1
+uart6551Fifo #(.WID(15)) uf1
 (
 	.clk(clk),
 	.rst(rst|clear|fifoClear),
 	.wr(wf),
 	.rd(rdf),
-	.din({bz,perr,ferr,t4}),
+	.din({bz,perr,ferr,t3}),
 	.dout({break_o,parityErr,frameErr,dout1}),
 	.ctr(qcnt),
 	.full(fifoFull),
@@ -108,15 +123,19 @@ assign full = fifoEnable ? fifoFull : full1;
 
 // compute 1/2 the length of the last bit
 // needed for framing error detection
-reg [7:0] halfLastBit;
-always @(stop_bits)
+reg [8:0] halfLastBit;
+always_ff @(posedge clk)
 if (stop_bits==3'd3)	// 1.5 stop bits ?
-	halfLastBit <= 8'd4;
+	halfLastBit <= 9'd8;
 else
-	halfLastBit <= 8'd8;
+	halfLastBit <= 9'd16;
+
+reg [8:0] fhb;
+always_ff @(posedge clk)
+  fhb <= frameSize-halfLastBit;
 
 // record a global error status
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	gerr <= 0;
 else begin
@@ -127,37 +146,35 @@ else begin
 end
 
 
-// strip off stop bits	
-always @(stop_bits or rx_data)
-if (stop_bits==3'd2)
-	t2 <= rx_data[9:0];
-else
-	t2 <= {rx_data[8:0],1'b0};
-
-// grab the parity bit
-always @(t2)
-	p1 <= t2[9];
-
-// strip off parity and start bit
-always @(parityCtrl or t2)
-if (parityCtrl[0])
-	t3 <= t2[8:1];
-else
-	t3 <= t2[9:2];
-
-// mask receive data for word length
+// right align data for word length, strip start bit
 // depending on the word length, the first few bits in the
 // recieve shift register will be invalid because the shift
 // register shifts from MSB to LSB and shorter frames
 // won't shift as far towards the LSB.
-always @(wordLength or t3)
-	t4 <= t3 >> (4'd8 - wordLength);
+always_ff @(posedge clk)
+	shft_amt <= (5'd16 - (wordLength + ({stop_bits[3],~stop_bits[3]}) + parityCtrl[0]));
+always_comb
+	t4 <= rx_data >> shft_amt;
+
+// grab the parity bit
+// Note the data is right aligned
+always_comb
+	p1 <= t4[wordLength];
+
+// strip off parity, stop
+integer n2;
+always_comb
+	for (n2 = 0; n2 < 12; n2 = n2 + 1)
+		if (n2 < wordLength)
+			t3[n2] <= t4[n2];
+		else
+			t3[n2] <= 1'b0;
 
 // detect a parity err
-always @(parityCtrl or t4 or p1) begin
+always_comb begin
 	case (parityCtrl)
-	3'b001:	perr <= p1 != ~^t4;	// odd parity
-	3'b011:	perr <= p1 != ^t4;	// even parity
+	3'b001:	perr <= p1 != ~^t3;	// odd parity
+	3'b011:	perr <= p1 != ^t3;	// even parity
 	default: perr <= 0;
 	endcase
 end
@@ -170,7 +187,7 @@ reg [5:0] rxdd          /* synthesis ramstyle = "logic" */; // synchronizer flop
 reg rxdsmp;             // majority samples
 reg rdxstart;           // for majority style sample solid 3tik-wide sample
 reg [1:0] rxdsum [0:1];
-always @(posedge clk)
+always_ff @(posedge clk)
 if (baud16x_ce) begin
 	rxdd <= {rxdd[4:0],rxd};
   if (SamplerStyle == 0) begin
@@ -186,7 +203,7 @@ if (baud16x_ce) begin
 end
 
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	state <= `IDLE;
 else begin
@@ -203,58 +220,55 @@ else begin
 			begin
 				// Switch back to the idle state a little
 				// bit too soon.
-				if (cnt[7:2]==frameSize[7:2])
+				if (cnt[8:2]==frameSize[8:2])
 					state <= `IDLE;
 				// On start bit check make sure the start
 				// bit is low, otherwise go back to the
 				// idle state because it's a false start.
-				if (cnt[7:0]==8'h07) begin
+				if (cnt[8:0]==8'h07) begin
 					if (rxdsmp)
 						state <= `IDLE;
 				end
 			end
-		default:	;
 		endcase
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
-	cnt <= 8'h00;
+	cnt <= 9'h00;
 else begin
 	if (clear)
-		cnt <= 8'h00;
+		cnt <= 9'h00;
 	else if (baud16x_ce) begin
-		cnt <= cnt + 8'h1;
+		cnt <= cnt + 2'h1;
 		case (state)
 		`IDLE:
 			begin
 				// reset counter on read of reciever
 				// (resets timeout count).
 				if (didRd)
-					cnt <= 8'h0;
+					cnt <= 9'h0;
 				if (rdxstart)
-					cnt <= 8'h0;
+					cnt <= 9'h0;
 			end
 		default:	;
 		endcase
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	wf <= 1'b0;
 else begin
 	// Clear write flag
 	wf <= 1'b0;
-	if (clear)
-		wf <= 1'b0;
-	else if (baud16x_ce) begin
+	if (baud16x_ce) begin
 		case (state)
 		`CNT:
 			// End of the frame ?
 			// - write data to fifo
-			if (cnt[7:0]==frameSize-halfLastBit) begin
+			if (cnt[8:0]==fhb) begin
 				if (!full)
 					wf <= 1'b1;
 			end
@@ -263,25 +277,25 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	t5 <= 1'b0;
 else begin
-	if (wf)
-		t5 <= t4;
+	if (pe_wf)
+		t5 <= t3;
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	full1 <= 1'b0;
 else begin
-	if (wf)
+	if (pe_wf)
 		full1 <= 1'b1;
 	else if (pe_rd)
 		full1 <= 1'b0;
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	didRd <= 1'b0;
 else begin
@@ -304,12 +318,12 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
-	rx_data <= 11'h0;
+	rx_data <= 15'h0;
 else begin
 	if (clear)
-		rx_data <= 11'h0;
+		rx_data <= 15'h0;
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
@@ -317,7 +331,7 @@ else begin
 				//if (cnt[7:2]==frameSize[7:2])
 				//	rx_data <= 11'h0;
 				if (cnt[3:0]==4'h7)
-					rx_data <= {rxdsmp,rx_data[10:1]};
+					rx_data <= {rxdsmp,rx_data[14:1]};
 			end
 		default:	;
 		endcase
@@ -325,7 +339,7 @@ else begin
 end
 
 // Overrun: trying to recieve data when recieve buffer is already full.
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	overrun <= 1'b0;
 else begin
@@ -336,7 +350,7 @@ else begin
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
-			if (cnt[7:0]==frameSize-halfLastBit) begin
+			if (cnt[8:0]==fhb) begin
 				if (full)
 					overrun <= 1'b1;
 			end
@@ -345,7 +359,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	ferr <= 1'b0;
 else begin
@@ -354,7 +368,7 @@ else begin
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
-			if (cnt[7:0]==frameSize-halfLastBit)
+			if (cnt[8:0]==fhb)
 				ferr <= ~rxdsmp;
 		default:	;
 		endcase

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2020  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,13 +47,13 @@ input clk;
 input cyc;				// valid bus cycle
 input cs;				// core select
 input wr;				// read reciever
-output [7:0] dout;		// fifo data out
+output [11:0] dout;		// fifo data out
 output ack;
 input fifoEnable;		// enable the fifo
 input fifoClear;
 input clearGErr;		// clear global error
 input [2:0] parityCtrl;
-input [7:0] frameSize;	// frame count
+input [8:0] frameSize;	// frame count
 input [2:0] stop_bits;
 input [3:0] wordLength;
 input baud16x_ce;		// baud rate clock enable
@@ -67,7 +67,7 @@ output parityErr;		// parity error
 output break_o;			// break detected
 output gerr;			// global error indicator
 output [3:0] qcnt;		// count of number of words queued
-output [9:0] cnt;		// receiver counter
+output [10:0] cnt;		// receiver counter
 output bitStream;		// received bit stream
 
 //0 - simple sampling at middle of symbol period
@@ -76,11 +76,11 @@ parameter SamplerStyle = 0;
 
 
 reg overrun;
-reg [9:0] cnt;			// sample bit rate counter / timeout counter
-reg [10:0] rx_data;		// working receive data register
-reg [9:0] t2;			// data minus stop bit(s)
-reg [7:0] t3,t4;		// data minus parity bit and start bit
-reg [7:0] t5;
+reg [10:0] cnt;			// sample bit rate counter / timeout counter
+reg [14:0] rx_data;		// working receive data register
+reg [13:0] t2;			// data minus stop bit(s)
+reg [11:0] t3,t4;		// data minus parity bit and start bit
+reg [11:0] t5;
 reg p1;
 reg gerr;				// global error status
 reg perr;				// parity error
@@ -99,11 +99,11 @@ wire pe_rd, pe_wf;
 edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(ack & ~wr), .pe(pe_rd), .ne(), .ee());
 edge_det ued2 (.rst(rst), .clk(clk), .ce(1'b1), .i(wf), .pe(pe_wf), .ne(), .ee());
 
-assign bitStream = rx_data[10];
-assign bz = t4==8'd0;
+assign bitStream = rx_data[14];
+assign bz = t4==12'd0;
 wire rdf = fifoEnable ? pe_rd : pe_wf;
 
-uart6551Fifo #(.WID(11)) uf1
+uart6551Fifo #(.WID(15)) uf1
 (
 	.clk(clk),
 	.rst(rst|clear|fifoClear),
@@ -122,14 +122,14 @@ assign full = fifoEnable ? fifoFull : full1;
 
 // compute 1/2 the length of the last bit
 // needed for framing error detection
-reg [7:0] halfLastBit;
+reg [8:0] halfLastBit;
 always_ff @(posedge clk)
 if (stop_bits==3'd3)	// 1.5 stop bits ?
-	halfLastBit <= 8'd4;
+	halfLastBit <= 9'd8;
 else
-	halfLastBit <= 8'd8;
+	halfLastBit <= 9'd16;
 
-reg [7:0] fhb;
+reg [8:0] fhb;
 always_ff @(posedge clk)
   fhb <= frameSize-halfLastBit;
 
@@ -146,22 +146,56 @@ end
 
 
 // strip off stop bits	
+integer n1;
 always_comb
-if (stop_bits==3'd2)
-	t2 <= rx_data[9:0];
-else
-	t2 <= {rx_data[8:0],1'b0};
+if (stop_bits==3'd2) begin
+	for (n1 = 0; n1 < 14; n1 = n1 + 1)
+		if (n1 <= wordLength + 1)
+			t2[n1] <= rx_data[n1];
+		else
+			t2[n1] <= 1'b0;
+end
+else begin
+	t2[0] <= 1'b0;
+	for (n1 = 0; n1 < 14; n1 = n1 + 1)
+		if (n1 <= wordLength)
+			t2[n1+1] <= rx_data[n1];
+		else
+			t2[n1+1] <= 1'b0;
+end
 
 // grab the parity bit
 always_comb
-	p1 <= t2[9];
+case(wordLength)
+4'd4:	p1 <= t2[5];
+4'd5: p1 <= t2[6];
+4'd6: p1 <= t2[7];
+4'd7: p1 <= t2[8];
+4'd8:	p1 <= t2[9];
+4'd9:	p1 <= t2[10];
+4'd10:	p1 <= t2[11];
+4'd11:	p1 <= t2[12];
+4'd12:	p1 <= t2[13];
+default:	p1 <= t2[9];
+endcase
 
 // strip off parity and start bit
+integer n2;
 always_comb
-if (parityCtrl[0])
-	t3 <= t2[8:1];
-else
-	t3 <= t2[9:2];
+if (parityCtrl[0]) begin
+	for (n2 = 0; n2 < 14; n2 = n2 + 1)
+		if (n2 < wordLength)
+			t3[n2] <= t2[n2+1];
+		else
+			t3[n2] <= 1'b0;
+end
+else begin
+	for (n2 = 0; n2 < 14; n2 = n2 + 1)
+		if (n2 < wordLength)
+			t3[n2] <= t2[n2+2];
+		else
+			t3[n2] <= 1'b0;
+end
 
 // mask receive data for word length
 // depending on the word length, the first few bits in the
@@ -169,7 +203,7 @@ else
 // register shifts from MSB to LSB and shorter frames
 // won't shift as far towards the LSB.
 always_comb
-	t4 <= t3 >> (4'd8 - wordLength);
+	t4 <= t3 >> (4'd12 - wordLength);
 
 // detect a parity err
 always_comb begin
@@ -221,12 +255,12 @@ else begin
 			begin
 				// Switch back to the idle state a little
 				// bit too soon.
-				if (cnt[7:2]==frameSize[7:2])
+				if (cnt[8:2]==frameSize[8:2])
 					state <= `IDLE;
 				// On start bit check make sure the start
 				// bit is low, otherwise go back to the
 				// idle state because it's a false start.
-				if (cnt[7:0]==8'h07) begin
+				if (cnt[8:0]==8'h07) begin
 					if (rxdsmp)
 						state <= `IDLE;
 				end
@@ -237,21 +271,21 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	cnt <= 8'h00;
+	cnt <= 9'h00;
 else begin
 	if (clear)
-		cnt <= 8'h00;
+		cnt <= 9'h00;
 	else if (baud16x_ce) begin
-		cnt <= cnt + 8'h1;
+		cnt <= cnt + 2'h1;
 		case (state)
 		`IDLE:
 			begin
 				// reset counter on read of reciever
 				// (resets timeout count).
 				if (didRd)
-					cnt <= 8'h0;
+					cnt <= 9'h0;
 				if (rdxstart)
-					cnt <= 8'h0;
+					cnt <= 9'h0;
 			end
 		default:	;
 		endcase
@@ -269,7 +303,7 @@ else begin
 		`CNT:
 			// End of the frame ?
 			// - write data to fifo
-			if (cnt[7:0]==fhb) begin
+			if (cnt[8:0]==fhb) begin
 				if (!full)
 					wf <= 1'b1;
 			end
@@ -321,10 +355,10 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	rx_data <= 11'h0;
+	rx_data <= 15'h0;
 else begin
 	if (clear)
-		rx_data <= 11'h0;
+		rx_data <= 15'h0;
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
@@ -332,7 +366,7 @@ else begin
 				//if (cnt[7:2]==frameSize[7:2])
 				//	rx_data <= 11'h0;
 				if (cnt[3:0]==4'h7)
-					rx_data <= {rxdsmp,rx_data[10:1]};
+					rx_data <= {rxdsmp,rx_data[14:1]};
 			end
 		default:	;
 		endcase
@@ -351,7 +385,7 @@ else begin
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
-			if (cnt[7:0]==fhb) begin
+			if (cnt[8:0]==fhb) begin
 				if (full)
 					overrun <= 1'b1;
 			end
@@ -369,7 +403,7 @@ else begin
 	else if (baud16x_ce) begin
 		case (state)
 		`CNT:
-			if (cnt[7:0]==fhb)
+			if (cnt[8:0]==fhb)
 				ferr <= ~rxdsmp;
 		default:	;
 		endcase

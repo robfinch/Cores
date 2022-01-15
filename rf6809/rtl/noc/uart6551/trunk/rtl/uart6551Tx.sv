@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2004-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2004-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -39,7 +39,7 @@
 
 //`define UART_NO_TX_FIFO	1'b1
 
-module uart6551Tx(rst, clk, cyc, cs, wr, din, ack,
+module uart6551Tx (rst, clk, cyc, cs, wr, din, ack,
 	fifoEnable, fifoClear, txBreak,
 	frameSize, wordLength, parityCtrl, baud16x_ce,
 	cts, clear, txd, full, empty, qcnt);
@@ -49,13 +49,13 @@ input clk;
 input cyc;			// bus cycle valid
 input cs;			// core select
 input wr;			// write transmitter
-input [7:0] din;		// fifo data in
+input [11:0] din;		// fifo data in
 output ack;
 
 input fifoEnable;
 input fifoClear;
 input txBreak;
-input [7:0] frameSize;
+input [8:0] frameSize;
 input [3:0] wordLength;
 input [2:0] parityCtrl;
 input baud16x_ce;	// baud rate clock enable
@@ -66,11 +66,11 @@ output full;		// fifo is full
 output empty;		// fifo is empty
 output [3:0] qcnt;	// number of characters queued
 
-reg [7:0] t1;
-reg [11:0] t2;
-reg [11:0] tx_data;	// transmit data working reg (raw)
+reg [11:0] t1;
+reg [15:0] t2;
+reg [15:0] tx_data;	// transmit data working reg (raw)
 reg state;			// state machine state
-reg [7:0] cnt;		// baud clock counter
+reg [8:0] cnt;		// baud clock counter
 reg rd;
 reg p1, p2;			// parity bit
 
@@ -78,7 +78,7 @@ assign ack = cyc & cs;
 edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(ack & wr), .pe(awr), .ne(), .ee());
 
 `ifdef UART_NO_TX_FIFO
-reg [7:0] fdo2;
+reg [11:0] fdo2;
 reg empty;
 
 always_ff @(posedge clk)
@@ -91,9 +91,9 @@ always_ff @(posedge clk)
 	end
 
 assign full = ~empty;
-wire [7:0] fdo = fdo2;
+wire [11:0] fdo = fdo2;
 `else
-reg [7:0] fdo2;
+reg [11:0] fdo2;
 always_ff @(posedge clk)
 	if (awr) fdo2 <= {3'd0,din};
 // generate an empty signal for when the fifo is disabled
@@ -107,11 +107,11 @@ always_ff @(posedge clk)
 	end
 
 
-wire [7:0] fdo1;		// fifo data output
+wire [11:0] fdo1;		// fifo data output
 wire rdf = fifoEnable ? rd : awr;
 wire fempty;
 wire ffull;
-uart6551Fifo #(.WID(8)) fifo0
+uart6551Fifo #(.WID(12)) fifo0
 (
   .clk(clk),
   .rst(rst|clear|fifoClear),
@@ -125,15 +125,15 @@ uart6551Fifo #(.WID(8)) fifo0
 );
 assign empty = fifoEnable ? fempty : fempty2;
 assign full = fifoEnable ? ffull : ~fempty2;
-wire [7:0] fdo = fifoEnable ? fdo1 : fdo2;
+wire [11:0] fdo = fifoEnable ? fdo1 : fdo2;
 `endif
 
 // mask transmit data for word length
 // this mask is needed for proper parity generation
 integer n;
-reg [7:0] mask;
+reg [11:0] mask;
 always @*
-	for (n = 0; n < 8; n = n + 1)
+	for (n = 0; n < 12; n = n + 1)
 		mask[n] = n < wordLength ? 1'b1 : 1'b0;
 
 always_comb
@@ -166,10 +166,16 @@ always @(posedge clk)
 // Insert start, parity bit and stop
 always_comb
 case(wordLength)
-4'd5:	t2 <= {5'b11111,p1,t1[4:0],1'b0};
-4'd6:	t2 <= {4'b1111,p1,t1[5:0],1'b0};
-4'd7:	t2 <= {3'b111,p1,t1[6:0],1'b0};
-default:	t2 <= {2'b11,p1,t1[7:0],1'b0};
+4'd4:	t2 <= {10'h3FF,p1,t1[3:0],1'b0};
+4'd5:	t2 <= {9'h1FF,p1,t1[4:0],1'b0};
+4'd6:	t2 <= {8'hFF,p1,t1[5:0],1'b0};
+4'd7:	t2 <= {7'h7F,p1,t1[6:0],1'b0};
+4'd8:	t2 <= {6'h3F,p1,t1[7:0],1'b0};
+4'd9:	t2 <= {5'b11111,p1,t1[8:0],1'b0};
+4'd10:	t2 <= {4'b1111,p1,t1[9:0],1'b0};
+4'd11:	t2 <= {3'b111,p1,t1[10:0],1'b0};
+4'd12:	t2 <= {2'b11,p1,t1[11:0],1'b0};
+default:	t2 <= {6'h3F,p1,t1[7:0],1'b0};
 endcase
 
 always_ff @(posedge clk)
@@ -192,16 +198,16 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	cnt <= 8'h00;
+	cnt <= 9'h00;
 else begin
 	if (clear)
-		cnt <= 8'h00;
+		cnt <= 9'h00;
 	if (baud16x_ce) begin
 		case(state)
 		`IDLE:
-			cnt <= 8'h00;
+			cnt <= 9'h00;
 		`CNT:
-			cnt <= cnt + 8'd1;
+			cnt <= cnt + 2'd1;
 		endcase
 	end
 end
@@ -224,7 +230,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	tx_data <= 12'hFFF;
+	tx_data <= 16'hFFFF;
 else begin
 	if (baud16x_ce) begin
 		case(state)
@@ -234,7 +240,7 @@ else begin
 		`CNT:
 			// Shift the data out. LSB first.
 			if (cnt[3:0]==4'hF)
-				tx_data <= {1'b1,tx_data[11:1]};
+				tx_data <= {1'b1,tx_data[15:1]};
 		endcase
 	end
 end

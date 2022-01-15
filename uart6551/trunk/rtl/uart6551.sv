@@ -110,7 +110,7 @@ reg rxToutIe;		// receiver timeout interrupt enable
 reg [3:0] rxThres;	// receiver threshold for interrupt
 reg [3:0] txThres;	// transmitter threshold for interrupt
 reg rxTout;			// receiver timeout
-wire [11:0] rxCnt;	// reciever counter value
+wire [9:0] rxCnt;	// reciever counter value
 reg [7:0] rxToutMax;
 reg [2:0] irqenc;	// encoded irq cause
 wire rxITrig;		// receiver interrupt trigger level
@@ -147,8 +147,8 @@ assign rxITrig = rxQued >= rxThres;
 assign txITrig = txQued <= txThres;
 wire rxDRQ1 = (fifoEnable ? rxITrig : ~rxEmpty);
 wire txDRQ1 = (fifoEnable ? txITrig : txEmpty);
-assign rxDRQ = dmaEnable & rxDRQ1;
-assign txDRQ = dmaEnable & txDRQ1;
+assign rxDRQ_o = dmaEnable & rxDRQ1;
+assign txDRQ_o = dmaEnable & txDRQ1;
 wire rxIRQ = rxIe & rxDRQ1;
 wire txIRQ = txIe & txDRQ1;
 
@@ -583,12 +583,12 @@ assign frameSize = {wordLength + 4'd1 + stopBits[2:1] + parityCtrl[0], stopBits[
 
 //-----------------------------------------------------
 // encode IRQ mailbox
-always @(rxDRQ or rxTout or txDRQ or lineStatusChange or modemStatusChange)
+always @(rxDRQ_o or rxTout or txDRQ_o or lineStatusChange or modemStatusChange)
 	irqenc <= 
 		lineStatusChange ? 3'd0 :
-		~rxDRQ ? 3'd1 :
+		~rxDRQ_o ? 3'd1 :
 		rxTout ? 3'd2 :
-		~txDRQ ? 3'd3 :
+		~txDRQ_o ? 3'd3 :
 		modemStatusChange ? 3'd4 :
 		3'd0;
 

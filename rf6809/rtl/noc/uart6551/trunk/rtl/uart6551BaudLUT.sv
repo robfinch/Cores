@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2022 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -73,7 +73,8 @@ always_comb
 
 // table for a 40.000MHz reference clock
 // value = 40,000,000 / (baud * 16)
-always @(a)
+
+always_comb
 	case (a)	// synopsys full_case parallel_case
 	5'd0:	o <= 0;
 	5'd1:	o <= 24'd50000;	// 50 baud
@@ -101,6 +102,38 @@ always @(a)
 	default:	o <= 24'd260;	// 9600 baud
 	endcase
 
+
+// table for a 40.000MHz reference clock
+// value = 40,000,000 / (baud * 16)
+/*
+always_comb
+	case (a)	// synopsys full_case parallel_case
+	5'd0:	o <= 0;
+	5'd1:	o <= 24'd800000;	// 50 baud
+	5'd2:	o <= 24'd533333;	// 75 baud
+	5'd3:	o <= 24'd363901;	// 109.92 baud
+	5'd4:	o <= 24'd297221;	// 134.58 baud
+	5'd5:	o <= 24'd266667;	// 150 baud
+	5'd6:	o <= 24'd133333;	// 300 baud
+	5'd7:	o <= 24'd66667;	// 600 baud
+	5'd8:	o <= 24'd33333;	// 1200 baud
+	5'd9:	o <= 24'd22222;	// 1800 baud
+	5'd10:	o <= 24'd16667;	// 2400 baud
+	5'd11:	o <= 24'd11111;	// 3600 baud
+	5'd12:	o <= 24'd8333;	// 4800 baud
+	5'd13:	o <= 24'd5556;	// 7200 baud
+	5'd14:	o <= 24'd4167;	// 9600 baud
+	5'd15:	o <= 24'd2083;	// 19200 baud
+
+	5'd16:	o <= 24'd1041;	// 38400 baud
+	5'd17:	o <= 24'd694;	// 57600 baud
+	5'd18:	o <= 24'd347;	// 115200 baud
+	5'd19:	o <= 24'd174;	// 230400 baud
+	5'd20:	o <= 24'd87;	// 460800 baud
+	5'd21:	o <= 24'd43;	// 921600 baud
+	default:	o <= 24'd4167;	// 9600 baud
+	endcase
+*/
 
 endmodule
 

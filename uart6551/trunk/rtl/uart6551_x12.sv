@@ -47,11 +47,10 @@
 `define UART_CTRL1	4'd10
 `define UART_CTRL2	4'd11
 `define UART_CTRL3	4'd12
-`define UART_CLK3		4'd13
+`define UART_CLK1		4'd13
 `define UART_CLK2		4'd14
-`define UART_CLK1		4'd15
 
-module uart6551(rst_i, clk_i, cs_i, irq_o,
+module uart6551_x12 (rst_i, clk_i, cs_i, irq_o,
 	cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o,
 	cts_ni, rts_no, dsr_ni, dcd_ni, dtr_no, ri_ni,
 	rxd_i, txd_o, data_present,
@@ -111,7 +110,7 @@ reg [3:0] wordLength;
 reg stopBit;
 reg [2:0] stopBits;
 reg [2:0] parityCtrl;
-wire [7:0] frameSize;
+reg [8:0] frameSize;
 
 reg txBreak;		// transmit a break
 
@@ -120,9 +119,9 @@ wire rxEmpty;
 wire txFull;
 wire txEmpty;
 reg hwfc;			// hardware flow control enable
-wire [7:0] lineStatusReg;
-wire [7:0] modemStatusReg;
-wire [7:0] irqStatusReg;
+wire [11:0] lineStatusReg;
+wire [11:0] modemStatusReg;
+wire [11:0] irqStatusReg;
 // interrupt
 reg rxIe;
 reg txIe;
@@ -200,7 +199,7 @@ reg we;
 always_ff @(posedge clk_i)
 	we <= we_i;
 
-wire [7:0] rx_do;
+wire [11:0] rx_do;
 wire rdrx = ack_o && adr_h==`UART_TRB && ~we;
 wire txrx = ack_o && adr_h==`UART_TRB;
 
@@ -216,7 +215,7 @@ ack_gen #(
 	.clk_i(clk_i),
 	.ce_i(1'b1),
 	.i(cs),
-	.we_i(cs & we_i),
+	.we_i(cs & we),
 	.o(ack_o),
 	.rid_i(0),
 	.wid_i(0),
@@ -224,7 +223,7 @@ ack_gen #(
 	.wid_o()
 );
 
-uart6551Rx uart_rx0
+uart6551Rx_x12 uart_rx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -254,14 +253,14 @@ uart6551Rx uart_rx0
 	.cnt(rxCnt)
 );
 
-uart6551Tx uart_tx0
+uart6551Tx_x12 uart_tx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.cyc(cyc_i),
 	.cs(txrx),
 	.wr(we),
-	.din(dati[7:0]),
+	.din(dati),
 	.ack(),
 	.fifoEnable(fifoEnable),
 	.fifoClear(txFifoClear),
@@ -352,7 +351,7 @@ else begin
 	ctrl2[1] <= 1'b0;
 	ctrl2[2] <= 1'b0;
 
-	if (ack_o & we) begin
+	if (cs & we) begin
 		case (adr_h)	// synopsys full_case parallel_case
 
 	 	`UART_TRB:	;
@@ -397,15 +396,19 @@ else begin
 
     `UART_CTRL:
   		begin
-  			ctrl0 <= dati[7:0];
+  			ctrl0 <= dati;
     		baudRateSel[3:0] <= dati[3:0];
 	 			rxClkSrc <= dati[4];				// 1 = baud rate generator, 0 = external
         //11=5,10=6,01=7,00=8
-        case(dati[6:5])
-        2'd0:	wordLength <= 6'd8;
-        2'd1:	wordLength <= 6'd7;
-        2'd2:	wordLength <= 6'd6;
-        2'd3:	wordLength <= 6'd5;
+        case({dati[8],dati[6:5]})
+        3'd0:	wordLength <= 4'd8;
+        3'd1:	wordLength <= 4'd7;
+        3'd2:	wordLength <= 4'd6;
+        3'd3:	wordLength <= 4'd5;
+        3'd4:	wordLength <= 4'd12;
+        3'd5:	wordLength <= 4'd11;
+        3'd6:	wordLength <= 4'd10;
+        3'd7:	wordLength <= 4'd9;
       	endcase
         stopBit    <= dati[7];      //0=1,1=1.5 or 2
     	end
@@ -603,9 +606,9 @@ end
 always_comb
 if (stopBit==1'b0)          // one stop bit
 	stopBits <= 3'd2;
-else if (wordLength==6'd8 && parityCtrl != 3'd0)
+else if (wordLength==4'd8 && parityCtrl != 3'd0)
 	stopBits <= 3'd2;
-else if (wordLength==6'd5 && parityCtrl == 3'd0)	// 5 bits - 1 1/2 stop bit
+else if (wordLength==4'd5 && parityCtrl == 3'd0)	// 5 bits - 1 1/2 stop bit
 	stopBits <= 3'd3;
 else
 	stopBits <= 3'd4;          // two stop bits
@@ -613,7 +616,8 @@ else
 
 // compute frame size
 // frame size is one less
-assign frameSize = {wordLength + 4'd1 + stopBits[2:1] + parityCtrl[0], stopBits[0],3'b0} - 1;
+always_ff @(posedge clk_i)
+	frameSize <= {wordLength + 4'd1 + stopBits[2:1] + parityCtrl[0], stopBits[0],3'b0} - 2'd1;
 
 //-----------------------------------------------------
 // encode IRQ mailbox
