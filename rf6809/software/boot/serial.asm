@@ -51,9 +51,13 @@ SerialInit:
 	std		SerTailXmit-1
 	clr		SerRcvXon
 	clr		SerRcvXoff
+	lda		COREID
+sini1:
+	cmpa	IOFocusID
+	bne		sini1
 	ldb		#$09						; dtr,rts active, rxint enabled, no parity
 	stb		ACIA+ACIA_CMD
-	ldb		#$1E						; baud 9600, 1 stop bit, 8 bit, internal baud gen
+	ldb		#$1F						; baud 9600, 1 stop bit, 8 bit, internal baud gen
 	stb		ACIA+ACIA_CTRL
 	ldb		#$0A6						; diable fifos, reset fifos
 	stb		ACIA+ACIA_CTRL2	
@@ -77,7 +81,8 @@ SerialInit:
 ;------------------------------------------------------------------------------
 
 SerialGetChar:
-		pshs	x
+		pshs	x,y
+		ldy		#0
 		sei										; disable interrupts
 		bsr		SerialRcvCount			; check number of chars in receive buffer
 		cmpb	#8							; less than 8?
@@ -87,22 +92,21 @@ SerialGetChar:
 		ldb		#XON						; if <8 send an XON
 		clr		SerRcvXoff			; clear XOFF status
 		stb		SerRcvXon				; flag so we don't send it multiple times
-		stb		ACIA+ACIA_TX
+		bsr		SerialPutChar
 sgc2:
 		ldb		SerHeadRcv			; check if anything is in buffer
 		cmpb	SerTailRcv
 		beq		sgcNoChars			; no?
 		ldx		#SerRcvBuf
-		abx
 		clra
-		ldb		,x							; get byte from buffer
+		ldb		b,x							; get byte from buffer
 		inc		SerHeadRcv			; 4k wrap around
 		bra		sgcXit
 sgcNoChars:
 		ldd		#-1
 sgcXit:
 		cli
-		puls	x,pc
+		puls	x,y,pc
 
 ;------------------------------------------------------------------------------
 ; SerialPeekChar
@@ -122,21 +126,19 @@ sgcXit:
 ;------------------------------------------------------------------------------
 
 SerialPeekChar:
-	pshs	x
+	pshs	x,ccr
 	sei
 	ldb		SerHeadRcv				; check if anything is in buffer
 	cmpb	SerTailRcv
 	beq		spcNoChars				; no?
 	ldx		#SerRcvBuf
-	abx
 	clra
-	ldb		,x								; get byte from buffer
+	ldb		b,x								; get byte from buffer
 	bra		spcXit
 spcNoChars:
 	ldd		#-1
 spcXit:
-	cli
-	puls	x,pc
+	puls	x,ccr,pc
 
 ;------------------------------------------------------------------------------
 ; SerialPeekChar
@@ -154,6 +156,9 @@ spcXit:
 ;------------------------------------------------------------------------------
 
 SerialPeekCharDirect:
+	lda		COREID							; Ensure we have the IO Focus
+	cmpa	IOFocusID
+	bne		spcd0001
 	; Disallow interrupts between status read and rx read.
 	sei
 	ldb		ACIA+ACIA_STAT
@@ -182,8 +187,11 @@ spcd0001:
 ;------------------------------------------------------------------------------
 
 SerialPutChar:
-	pshs	a
+	pshs	a,ccr
 spc0001:
+	lda		COREID					; Ensure we have the IO Focus
+	cmpa	IOFocusID
+	bne		spc0001
 	cli										; provide a window for an interrupt to occur
 	sei
 	; Between the status read and the transmit do not allow an
@@ -192,25 +200,25 @@ spc0001:
 	bita	#16							; bit #4 of the status reg
 	beq		spc0001			    ; branch if transmitter is not empty
 	stb		ACIA+ACIA_TX		; send the byte
-	cli
-	puls	a
-	rts
+	puls	a,ccr,pc
 
 ;------------------------------------------------------------------------------
 ; Calculate number of character in input buffer
 ;
+; Parameters:
+;		y = 0 if current core, otherwise reference to core memory area $Cyxxxx
 ; Returns:
 ;		d = number of bytes in buffer.
 ;------------------------------------------------------------------------------
 
 SerialRcvCount:
 	clra
-	ldb		SerTailRcv
-	subb	SerHeadRcv
+	ldb		SerTailRcv,y
+	subb	SerHeadRcv,y
 	bge		srcXit
 	ldd		#$1000
-	subd	SerHeadRcv
-	addd	SerTailRcv
+	subd	SerHeadRcv,y
+	addd	SerTailRcv,y
 srcXit:
 	rts
 
@@ -239,24 +247,34 @@ sirqNxtByte:
 	bne  	sirq0001
 ;	bsr 	DumpTraceQueue
 sirq0001:
-	lda		SerTailRcv			; check if recieve buffer full
+	pshs	b
+	; Compute receive buffer address
+	lda		IOFocusID
+	asla
+	asla
+	asla
+	asla
+	ora		#$C00
+	clrb	
+	tfr		d,y
+	puls	b
+	lda		SerTailRcv,y			; check if recieve buffer full
 	inca
-	cmpa	SerHeadRcv
+	cmpa	SerHeadRcv,y
 	beq		sirqRxFull
-	sta		SerTailRcv			; update tail pointer
+	sta		SerTailRcv,y		; update tail pointer
 	deca									; backup
 	exg		a,b
-	ldx		#SerRcvBuf			; x = buffer address
-	abx
-	sta		,x							; store recieved byte in buffer
-	tst		SerRcvXoff			; check if xoff already sent
+	leax	SerRcvBuf,y			; x = buffer address
+	sta		b,x							; store recieved byte in buffer
+	tst		SerRcvXoff,y		; check if xoff already sent
 	bne		sirqNxtByte
 	bsr		SerialRcvCount	; if more than 4080 chars in buffer
 	cmpb	#4080
 	blo		sirqNxtByte
 	ldb		#XOFF						; send an XOFF
-	clr		SerRcvXon				; clear XON status
-	stb		SerRcvXoff			; set XOFF status
+	clr		SerRcvXon,y			; clear XON status
+	stb		SerRcvXoff,y		; set XOFF status
 	stb		ACIA+ACIA_TX
 	bra		sirqNxtByte     ; check the status for another byte
 sirqRxFull:

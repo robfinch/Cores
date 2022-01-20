@@ -1,23 +1,36 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2013-2022  Robert Finch, Stratford
+;   \\__/ o\    (C) 2013-2022  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@opencores.org
 ;       ||
 ;  
 ;
-; This source file is free software: you can redistribute it and/or modify 
-; it under the terms of the GNU Lesser General Public License as published 
-; by the Free Software Foundation, either version 3 of the License, or     
-; (at your option) any later version.                                      
-;                                                                          
-; This source file is distributed in the hope that it will be useful,      
-; but WITHOUT ANY WARRANTY; without even the implied warranty of           
-; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-; GNU General Public License for more details.                             
-;                                                                          
-; You should have received a copy of the GNU General Public License        
-; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;                                                                          
 ; ============================================================================
 ;
@@ -82,7 +95,17 @@ KeybdBuffer		EQU		$FFFFFC000	; buffer is 16 chars
 
 COREID	EQU		$FFFFFFFE0
 MSCOUNT	EQU		$FFFFFFFE4
-LEDS		EQU		$FFFE60000
+LEDS		EQU		$FFFE60001
+VIA			EQU		$FFFE60000
+VIA_PA		EQU		1
+VIA_DDRA	EQU		3
+VIA_ACR			EQU		11
+VIA_IFR			EQU		13
+VIA_IER			EQU		14
+VIA_T3LL		EQU		18
+VIA_T3LH		EQU		19
+VIA_T3CMPL	EQU		20
+VIA_T3CMPH	EQU		21
 TEXTSCR		EQU		$FFFE00000
 TEXTREG		EQU		$FFFE0DF00
 TEXT_COLS	EQU		0
@@ -95,6 +118,8 @@ ACIA_STAT	EQU		1
 ACIA_CMD	EQU		2
 ACIA_CTRL	EQU		3
 ACIA_CTRL2	EQU		11
+RTC				EQU		$FFFE30500	; I2C
+RTCBuf		EQU		$7FC0
 
 KEYBD		EQU		$FFFE30400
 KEYBDCLR	EQU		$FFFE30402
@@ -102,17 +127,25 @@ PIC			EQU		$FFFE3F000
 SPRITE_CTRL		EQU		$FFFE10000
 SPRITE_EN			EQU		$3C0
 
+OUTSEMA	EQU	$EF0000
+SEMAABS	EQU	$1000
+OSSEMA	EQU	$EF0010
+
 BIOS_SCREENS	EQU	$17000000	; $17000000 to $171FFFFF
 
 ; EhBASIC vars:
 ;
-NmiBase		EQU		$DC
-IrqBase		EQU		$DF
+NmiBase		EQU		$FF0013
+IrqBase		EQU		$FF0014
 
-; The IO focus list is a doubly linked list formed into a ring.
-;
 IOFocusNdx	EQU		$100
-IOFocusID		EQU		$100
+
+; These variables in global OS storage area
+
+IOFocusList	EQU		$FF0000	; to $FF000F
+IOFocusID		EQU		$FF0010
+IrqSource		EQU		$FF0011
+IRQFlag			EQU		$FF0012
 
 ; These variables use direct page access
 CursorRow	EQU		$110
@@ -125,6 +158,10 @@ KeyState2	EQU	$121
 KeyLED		EQU	$122
 KeybdID		EQU	$124
 KeybdBlock	EQU	$126
+kbdHeadRcv	EQU	$127
+kbdTailRcv	EQU	$128
+kbdFifo			EQU	$40				; in local RAM
+kbdFifoAlias	EQU	$C00040	; to $C0007F	; alias for $40 to $7F
 SerhZero		EQU	$130
 SerHeadRcv	EQU	$131
 SertZero		EQU	$132
@@ -134,6 +171,9 @@ SerTailXmit	EQU	$138
 SerRcvXon		EQU	$139
 SerRcvXoff	EQU	$140
 SerRcvBuf		EQU	$BFF000	; 4kB serial recieve buffer
+
+farflag	EQU		$15F
+asmbuf	EQU		$160	; to $17F
 
 QNdx0		EQU		$780
 QNdx1		EQU		QNdx0+2
@@ -147,12 +187,11 @@ nMailbox	EQU		FreeMbx + 2
 FreeMsg		EQU		nMailbox + 2
 nMsgBlk		EQU		FreeMsg + 2
 
-IrqSource	EQU		$79A
-
-IRQFlag		EQU		$7C6
 
 CharOutVec	EQU		$800
 CharInVec	EQU		$804
+CmdPromptJI	EQU	$808
+MonErrVec	EQU		$80C
 
 ; Register save area for monitor
 mon_DSAVE	EQU		$900
@@ -222,7 +261,7 @@ ClearScreenJmp
 HomeCursorJmp
 	lbra	HomeCursor
 
-	org		$FFE000
+	org		$FFD400
 
 ; Local RAM test routine
 ; Checkerboard testing.
@@ -236,7 +275,7 @@ ramtest:
 	ldd		#$AAA555
 ramtest1:
 	std		,y++
-	cmpy	#$C00000
+	cmpy	#$8000
 	blo		ramtest1
 	; now readback values and compare
 	ldy		#0
@@ -244,7 +283,7 @@ ramtest3:
 	ldd		,y++
 	cmpd	#$AAA555
 	bne		ramerr
-	cmpy	#$10000
+	cmpy	#$8000
 	blo		ramtest3
 	lda		#2
 	sta		LEDS
@@ -260,7 +299,7 @@ ramerr:
 	sync
 	jmp		,u
 
-	org		$FFF000
+	org		$FFE000
 	FDB Monitor
 	FDB DumRts	;	NEXTCMD
 	FDB INCH
@@ -286,12 +325,16 @@ DumRts:
 ;------------------------------------------------------------------------------
 
 start:
+	lda		#$FFF			; all cores can do this
+	sta		VIA+VIA_DDRA
 	lda		#$55			; see if we can at least set LEDs
 	sta		LEDS
+	lda		#1				; prime OS semaphore
+	sta		OSSEMA+$1000
 	ldu		#st6			; U = return address
 	jmp		ramtest		; JMP dont JSR
 st6:
-	lds		#$3FFF		; boot up stack area
+	lds		#$6FFF		; boot up stack area
 	lda		COREID
 	cmpa	#FIRST_CORE
 ;	beq		st8
@@ -309,14 +352,26 @@ st7:
 	lda		#FIRST_CORE
 	sta		IOFocusID	; core #2 has focus
 	sta		RunningID
+	; Clear IO focus list
+	ldx		#0
+st9:
+	clr		IOFocusList,x
+	inx
+	cmpx	#16
+	blo		st9
+	lda		#24
+	sta		IOFocusList+FIRST_CORE
+
 	lda		#$0CE
 	sta		ScreenColor
 	sta		CharColor
 	bsr		ClearScreen
 	ldd		#DisplayChar
 	std		CharOutVec
-	ldd		#DBGGetKey
+	ldd		#SerialPeekCharDirect
 	std		CharInVec
+	ldb		#24				; request IO focus
+	lbsr	OSCall
 	ldb		COREID
 	cmpb	#FIRST_CORE
 	beq		init
@@ -330,12 +385,20 @@ st3:
 	; initialize interrupt controller
 	; first, zero out all the vectors
 init:
+	lbsr	rtc_read	; get clock values
+	ldx		#kbdHeadRcv
+	ldb		#32				; number of bytes to zero out
+init1:
+	clr		,x+
+	decb
+	bne		init1
+	lbsr	TimerInit
 	lbsr	InitSerial
 	ldx		#128
 	lda		#1			; set irq(bit0), clear firq (bit1), disable int (bit 6), clear edge sense(bit 7)
 	ldb		#FIRST_CORE			; serving core id
 st1:
-	clr		PIC,x		; cause code
+	clr		PIC,x			; cause code
 	sta		PIC+1,x
 	stb		PIC+2,x
 	leax	4,x
@@ -344,7 +407,12 @@ st1:
 ;	lda		#4				; make the timer interrupt edge sensitive
 ;	sta		PIC+4			; reg #4 is the edge sensitivity setting
 ;	sta		PIC				; reg #0 is interrupt enable
-
+	lda		#$81			; make irq edge sensitive
+	sta		PIC+$FD
+	lda		#31				; enable timer interrupt
+;	sta		PIC+9
+	ldb		#1
+	stb		OUTSEMA+SEMAABS	; set semaphore to 1 available slot
 skip_init:
 	andcc	#$EF			; unmask irq
 	lda		#56
@@ -439,6 +507,10 @@ multi_sieve4:					; hang machine
 	sync
 	lbra	Monitor
 
+;------------------------------------------------------------------------------
+; Single core sieve.
+;------------------------------------------------------------------------------
+
 sieve:
 	lda		#'P'					; indicate prime
 	ldx		#0						; start at first char of screen
@@ -461,8 +533,7 @@ sieve1:
 	cmpb	#4080
 	blo		sieve2
 sieve4:								; hang machine
-	sync
-	lbra	MonitorStart
+	rts
 
 ;------------------------------------------------------------------------------
 ; Three second delay for user convenience and to allow some devices time to
@@ -496,12 +567,22 @@ ShiftLeft5:
 	rts
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;		b = core id of core to copy
 ;------------------------------------------------------------------------------
 ;
 CopyVirtualScreenToScreen:
 	pshs	d,x,y,u
-	bsr		GetScreenLocation
+	; Compute virtual screen location for core passed in accb.
+	tfr		b,a
+	asla
+	asla
+	asla
+	asla
+	ora		#$C00
+	clrb
 	tfr		d,x
+	pshs	d
 	ldy		#TEXTSCR
 	ldu		#56*29/2
 cv2s1:
@@ -511,11 +592,13 @@ cv2s1:
 	cmpu	#0
 	bne		cv2s1
 	; reset the cursor position in the text controller
-	ldb		CursorRow
+	puls	x
+	ldb		CursorRow,x
 	lda		#56
 	mul
-	tfr		d,x
-	ldb		CursorCol
+	tfr		d,y
+	ldb		CursorCol,x
+	tfr		y,x
 	abx
 	stx		TEXTREG+TEXT_CURPOS
 	puls	d,x,y,u,pc
@@ -751,7 +834,7 @@ DisplayChar:
 	clr		CursorCol		; just set cursor column to zero on a CR
 	bsr		UpdateCursorPos
 dcx14:
-	puls	d,x,pc
+	lbra		dcx4
 dccr:
 	cmpb	#$91				; cursor right ?
 	bne		dcx6
@@ -824,7 +907,7 @@ dcx5:
 	ldb		#' '
 	dex
 	stb		,x
-	puls	d,x,pc
+	bra		dcx4
 dcx3:
 	cmpb	#LF				; linefeed ?
 	beq		dclf
@@ -837,7 +920,7 @@ dcx3:
 ;	lda		CharColor
 ;	sta		$2000,x
 	bsr		IncCursorPos
-	puls	d,x,pc
+	bra		dcx4
 dclf:
 	bsr		IncCursorRow
 dcx4:
@@ -887,21 +970,25 @@ icc2:
 DisplayString:
 	pshs	d,x
 	tfr		d,x
+dspj2:						; lock semaphore for access
+	lda		OUTSEMA+1
+	beq		dspj2
 dspj1B:
 	ldb		,x+				; move string char into acc
 	beq		dsretB		; is it end of string ?
-	bsr		OUTCH			; display character
+	lbsr	OUTCH			; display character
 	bra		dspj1B
 dsretB:
+	clr		OUTSEMA+1	; unlock semaphore
 	puls	d,x,pc
 
 DisplayStringCRLF:
 	pshs	d
 	bsr		DisplayString
 	ldb		#CR
-	bsr		OUTCH
+	lbsr	OUTCH
 	ldb		#LF
-	bsr		OUTCH
+	lbsr	OUTCH
 	puls	d,pc
 	
 ;
@@ -968,12 +1055,20 @@ DispNyb
 	cmpb	#10
 	blo		DispNyb1
 	addb	#'A'-10
-	bsr		OUTCH
+	lbsr	OUTCH
 	puls	b,pc
 DispNyb1
 	addb	#'0'
-	bsr		OUTCH
+	lbsr	OUTCH
 	puls	b,pc
+
+;==============================================================================
+; Timer
+;==============================================================================
+
+OPT INCLUDE "d:\cores2022\rf6809\software\boot\timer.asm"
+OPT INCLUDE "d:\cores2022\rf6809\software\boot\i2c.asm"
+OPT INCLUDE "d:\cores2022\rf6809\software\boot\rtc_driver.asm"
 
 ;==============================================================================
 ; Keyboard I/O
@@ -1027,13 +1122,25 @@ KeybdCheckForKeyDirect:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 INCH:
-;	ldd		#-1				; block if no key available
-;	bra		DBGGetKey
+	pshs	b
+INCH2:
+	ldb		COREID
+	cmpb	IOFocusID	; if we do not have focus, block
+	bne		INCH2			
+;	ldb		#$800			; block if no key available, get scancode directly
+;	bra		GetKey
+;	jsr		[CharInVec]	; vector is being overwritten somehow
 	lbsr	SerialPeekCharDirect
 	tsta
-	bmi		INCH			; block if no key available
+	bmi		INCH1			; block if no key available
+	leas	1,s				; get rid of blocking status
 	rts
-
+INCH1:
+	puls	b					; check blocking status
+	tstb
+	bmi 	INCH			; if blocking, loop
+	ldd		#-1				; return -1 if no char available
+	rts
 
 INCHE:
 	bsr		INCH
@@ -1076,30 +1183,144 @@ ShowSprites:
 	rts
 
 ;==============================================================================
+; Femtiki Operating System.
+;==============================================================================
+
+OSCallTbl:
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		0
+	fcw		ReleaseIOFocus
+	fcw		0
+	fcw		RequestIOFocus
+
+OSCall:
+	; wait for availability
+osc1:
+	tst		OSSEMA+1
+	beq		osc1
+	aslb
+	ldx		#OSCallTbl
+	abx
+	tst		,x
+	beq		oscx
+	jmp		[,x]
+oscx:
+	clr		OSSEMA+1
+	rts
+
+RequestIOFocus:
+	ldb		COREID
+	ldx		#IOFocusList
+	abx
+	sta		,x
+	tst		IOFocusID
+	lbne	oscx
+	stb		IOFocusID
+	lbra	oscx
+
+ReleaseIOFocus:
+	ldb		COREID
+	ldx		#IOFocusList
+	abx
+	clr		,x						; clear the request indicator
+	lbsr	CopyScreenToVirtualScreen
+	cmpb	IOFocusID			; are we the one with the focus?
+	lbne	oscx
+	; We had the focus, so now a new core needs the focus.
+	; Search the focus list for a requestor. If no requester
+	; is found, give focus to core #1.
+	lda		#15
+riof2:
+	incb
+	andb	#15
+	abx
+	tst		,x
+	bne		riof1
+	deca
+	bne		riof2
+	; If no focus is requested by anyone, give to core #1
+	ldb		#1
+	lda		#24
+	sta		,x
+riof1:
+	stb		IOFocusID
+	lbsr	CopyVirtualScreenToScreen
+	lbra	oscx
+		
+	
+;==============================================================================
+; Disassembler
+;==============================================================================
+
+OPT	include "d:\cores2022\rf6809\software\boot\disassem.asm"
+	
+;==============================================================================
 ; System Monitor
 ;==============================================================================
-;
-MonitorStart:
-	ldd		#HelpMsg
-	bsr		DisplayString
-Monitor:
-	leas	$3FFF				; reset stack pointer
-	clrb							; turn off keyboard echo
-	bsr		SetKeyboardEcho
-;	jsr		RequestIOFocus
-PromptLn:
+
+CmdPrompt:
 	lbsr	CRLF
 	ldb		#'$'
-	bsr		OUTCH
+	lbsr	OUTCH
+	lbra	OUTCH
+
+msgF09Starting:
+	fcb		"Femtiki F09 Multi-core OS Starting",CR,LF,0
+
+MonitorStart:
+	ldd		#msgF09Starting
+	lbsr	DisplayString
+	ldd		#HelpMsg
+	lbsr	DisplayString
+	ldd		#CmdPrompt
+	std		CmdPromptJI
+	ldd		#DisplayErr
+	std		MonErrVec
+	ldd		#$63FF			; default app stack
+	std		mon_SSAVE
+Monitor:
+	leas	$6FFF				; reset stack pointer
+	clrb							; turn off keyboard echo
+	lbsr	SetKeyboardEcho
+	; Reset IO vectors
+	ldd		#SerialPeekCharDirect
+	std		CharInVec
+	ldd		#DisplayChar
+	std		CharOutVec
+	ldd		#CmdPrompt
+	std		CmdPromptJI
+;	jsr		RequestIOFocus
+PromptLn:
+	jsr		[CmdPromptJI]
 
 ; Get characters until a CR is keyed
 	
 Prompt3:
 	ldd		#-1					; block until key present
-	bsr		INCH
+	lbsr	INCH
 	cmpb	#CR
 	beq		Prompt1
-	bsr		OUTCH
+	lbsr	OUTCH
 	bra		Prompt3
 
 ; Process the screen line that the CR was keyed on
@@ -1107,9 +1328,9 @@ Prompt3:
 Prompt1:
 	ldd		#$5050
 	std		LEDS
-	ldb		RunningID
-	cmpb	#61
-	bhi		Prompt3
+;	ldb		RunningID
+;	cmpb	#61
+;	bhi		Prompt3
 	ldd		#$5151
 	std		LEDS
 	clr		CursorCol			; go back to the start of the line
@@ -1117,20 +1338,42 @@ Prompt1:
 	tfr		d,y
 	ldd		#$5252
 	std		LEDS
+skipDollar:
 	bsr		MonGetNonSpace
 	cmpb	#'$'
-	bne		Prompt2			; skip over '$' prompt character
+	beq		skipDollar		; skip over '$' prompt character
 	lda		#$5353
 	std		LEDS
-	bsr		MonGetNonSpace
 
 ; Dispatch based on command character
 ;
 Prompt2:
+	cmpb	#'<'
+	bne		PromptHelp
+	bsr		MonGetch
+	cmpb	#'>'
+	bne		Monitor
+	bsr		MonGetch
+	cmpb	#'s'
+	bne		Prompt2a
+	ldd		#SerialPeekCharDirect
+	std		CharInVec
+	ldd		#SerialPutChar
+	std		CharOutVec
+	bra		Monitor
+Prompt2a:
+	cmpb	#'c'
+	bne		Monitor
+	ldd		#GetKey
+	std		CharInVec
+	ldd		#DisplayChar
+	std		CharOutVec
+	bra		Monitor
+PromptHelp:
 	cmpb	#'?'			; $? - display help
 	bne		PromptC
 	ldd		#HelpMsg
-	bsr		DisplayString
+	lbsr	DisplayString
 	bra		Monitor
 PromptC:
 	cmpb	#'C'
@@ -1140,21 +1383,29 @@ PromptC:
 	bra		Monitor
 PromptD:
 	cmpb	#'D'
-	bne		PromptF
+	bne		PromptColon
 	bsr		MonGetch
 	cmpb	#'R'
 	bne		DumpMemory
 	bra		DumpRegs
+PromptColon:
+	cmpb	#':'
+	bne		PromptF
+	lbra	EditMemory
 PromptF:
 	cmpb	#'F'
 	bne		PromptJ
 	bsr		MonGetch
 	cmpb	#'I'
-	bne		Monitor
+	bne		PromptFL
 	bsr		MonGetch
 	cmpb	#'G'
 	bne		Monitor
 	jmp		$FE0000
+PromptFL:
+	cmpb	#'L'
+	bne		Monitor
+	lbra	DumpIOFocusList
 PromptJ:
 	cmpb	#'J'
 	lbeq	jump_to_code
@@ -1165,9 +1416,24 @@ PromptR:
 	lbra	ramtest
 Prompt_s:
 	cmpb	#'s'
-	bne		Monitor
+	bne		PromptT
 	lbsr	SerialOutputTest
 	bra		Monitor
+PromptT:
+	cmpb	#'T'
+	bne		PromptU
+	bsr		MonGetch
+	cmpb	#'I'
+	bne		Monitor
+	bsr		MonGetch
+	cmpb	#'R'
+	bne		Monitor
+	lbsr	rtc_read
+	bra		Monitor
+PromptU:
+	cmpb	#'U'
+	bne		Monitor
+	lbra	disassem
 
 MonGetch:
 	ldb		,y
@@ -1177,8 +1443,6 @@ MonGetch:
 MonGetNonSpace:
 	bsr		MonGetCh
 	cmpb	#' '
-	beq		MonGetNonSpace
-	cmpb	#9		; tab
 	beq		MonGetNonSpace
 	rts
 
@@ -1223,7 +1487,10 @@ GetRange:
 	ldd		mon_r2
 	sbcb	mon_r1+1
 	sbca	mon_r1
-	lbcs	DisplayErr
+	lbcc	grng1
+	jsr		[MonErrVec]
+	lbra	Monitor
+grng1:
 	rts
 
 shl_numwka:
@@ -1250,7 +1517,6 @@ GetHexNumber:
 	ldx		#0					; max 12 eight digits
 gthxn2:
 	bsr		MonGetch
-	lbsr	DispByteAsHex
 	bsr		AsciiToHexNybble
 	cmpb	#-1
 	beq		gthxn1
@@ -1335,9 +1601,8 @@ gtdc3:
 	rts
 
 DisplayErr:
-	ldx		#msgErr
-	clrd
-	bsr		DisplayStringDX
+	ldd		#msgErr
+	lbsr	DisplayString
 	jmp		Monitor
 
 DisplayStringDX
@@ -1353,13 +1618,13 @@ HelpMsg:
 	fcb		"? = Display help",CR,LF
 	fcb	"CLS = clear screen",CR,LF
 ;	db	"S = Boot from SD Card",CR,LF
-;	db	": = Edit memory bytes",CR,LF
+	fcb	": = Edit memory bytes",CR,LF
 ;	db	"L = Load sector",CR,LF
 ;	db	"W = Write sector",CR,LF
 	fcb "DR = Dump registers",CR,LF
 	fcb	"D = Dump memory",CR,LF
 ;	db	"F = Fill memory",CR,LF
-;	db  "FL = Dump I/O Focus List",CR,LF
+	fcb "FL = Dump I/O Focus List",CR,LF
 	fcb "FIG = start FIG Forth",CR,LF
 ;	db	"KILL n = kill task #n",CR,LF
 ;	db	"B = start tiny basic",CR,LF
@@ -1372,13 +1637,14 @@ HelpMsg:
 	fcb	"s = serial output test",CR,LF
 ;	db	"T = Dump task list",CR,LF
 ;	db	"TO = Dump timeout list",CR,LF
-;	db	"TI = display date/time",CR,LF
+	fcb	"TI = display date/time",CR,LF
 ;	db	"TEMP = display temperature",CR,LF
+	fcb	"U = unassemble",CR,LF
 ;	db	"P = Piano",CR,LF,0
 	fcb		0
 
 msgRegHeadings
-	fcb	CR,LF,"  D/AB      X       Y       U       S        PC       DP  CCR",CR,LF,0
+	fcb	CR,LF,"  D/AB     X      Y      U      S       PC    DP  CCR",CR,LF,0
 
 nHEX4:
 	jsr		HEX4
@@ -1386,13 +1652,13 @@ nHEX4:
 
 nXBLANK:
 	ldb		#' '
-	bra		OUTCH
+	lbra	OUTCH
 
 ;------------------------------------------------------------------------------
 ; Dump Memory
 ;
 ; Usage:
-; 	$D FFFC12 8
+; 	$D FFFC12 FFFC20
 ;
 ; Dump formatted to look like:
 ;		:FFFC12 012 012 012 012 555 666 777 888
@@ -1400,34 +1666,101 @@ nXBLANK:
 ;------------------------------------------------------------------------------
 
 DumpMemory:
-	bsr		GetTwoParams
+	bsr		GetRange
 	ldy		#0
+	ldy		mon_r1+2
 dmpm2:
 	lbsr	CRLF
 	ldb		#':'
 	lbsr	OUTCH
-	ldd		mon_r1+2					; output the address
+	tfr		y,d
+	;addd	mon_r1+2					; output the address
 	lbsr	DispWordAsHex
 	ldb		#' '
 	lbsr	OUTCH
 	ldx		#8								; number of bytes to display
 dmpm1:
-	ldb		far [mon_r1+1],y
+;	ldb		far [mon_r1+1],y
+	;ldb		[mon_r1+2],y
+	ldb		,y
 	iny
 	lbsr	DispByteAsHex			; display byte
 	ldb		#' '							; followed by a space
 	lbsr	OUTCH
 	clrb
-	lbsr	DBGGetKey
+	clra
+	lbsr	INCH
 	cmpb	#CTRLC
 	beq		dmpm3
 	dex
 	bne		dmpm1
+	; Now output ascii
+	ldb		#' '
+	lbsr	OUTCH
+	ldx		#8								; 8 chars to output
+	leay	-8,y							; backup pointer
+dmpm5:
+;	ldb		far [mon_r1+1],y	; get the char
+;	ldb		[mon_r1+2],y			; get the char
+	ldb		,y
+	cmpb	#$20							; is it a control char?
+	bhs		dmpm4
+	ldb		#'.'
+dmpm4:
+	lbsr	OUTCH
+	iny
+	dex
+	bne		dmpm5
 	cmpy	mon_r2+2
 	blo		dmpm2
 dmpm3:
 	lbsr	CRLF
 	lbra	Monitor
+
+;------------------------------------------------------------------------------
+; Edit Memory
+;
+; Usage:
+; 	$$:FFFC12 8 "Hello World!" 0
+;
+; Dump formatted to look like:
+;		:FFFC12 012 012 012 012 555 666 777 888
+;
+;------------------------------------------------------------------------------
+
+EditMemory:
+	ldu		#8						; set max byte count
+	lbsr	GetHexNumber	; get the start address
+	ldx		mon_numwka+2
+EditMem2:
+	lbsr	ignBlanks			; skip over blanks
+	lbsr	GetHexNumber	; get the byte value
+	tstb								; check for valid value
+	bmi		EditMem1			; if invalid, quit
+	ldb		mon_numwka+3	; get value
+	stb		,x+						; update memory at address
+	leau	-1,u					; decremeent byte count
+	cmpu	#0
+	bne		EditMem2			; go back for annother byte
+EditMem1:
+	lbsr	MonGetch			; see if a string is being entered
+	cmpb	#'"'
+	bne		EditMem3			; no string, we're done
+	ldu		#40						; string must be less than 40 chars
+EditMem4:
+	lbsr	MonGetch			; look for close quote
+	cmpb	#'"'
+	bne		EditMem6			; end of string?
+	ldu		#8						; reset the byte count
+	bra		EditMem2
+EditMem6:			
+	stb		,x+						; store the character in memory
+	leau	-1,u					; decrement byte count
+	cmpu	#0
+	bhi		EditMem4			; max 40 chars
+EditMem3:
+	lbra	Monitor
+	
 
 ;------------------------------------------------------------------------------
 ; Dump Registers
@@ -1468,19 +1801,27 @@ DumpRegs:
 	bsr		nXBLANK
 	lbra	Monitor
 
+;------------------------------------------------------------------------------
 ; Jump to code
+;
+; Registers are loaded with values from the monitor register save area before
+; the code is jumped to.
+;
+; J <address>
+;------------------------------------------------------------------------------
+
 jump_to_code:
 	bsr		GetHexNumber
 	sei
 	lds		mon_SSAVE
-	ldd		#<jtc_exit
+	ldd		#<jtc_exit		; setup stack for RTS back to monitor
 	pshs	d
-	ldd		#>jtc_exit
+	ldb		#>jtc_exit
 	pshs	b
-	ldd		mon_numwka+2
+	ldd		mon_numwka+2	; get the address parameter
 	pshs	d
-	ldd		mon_numwka
-	pshs	d
+	ldb		mon_numwka+1
+	pshs	b
 	ldd		mon_USAVE
 	pshs	d
 	ldd		mon_YSAVE
@@ -1495,19 +1836,51 @@ jump_to_code:
 	pshs	a
 	puls	far ccr,d,dpr,x,y,u,pc
 jtc_exit:
-	pshs	ccr
-	std		mon_DSAVE
+	sts		>mon_SSAVE		; need to use extended addressing, no direct page setting
+	leas	$6FFF					; reset stack to system area, dont modify flags register!
+	pshs	ccr						; now the stack can be used
+	pshs	a							; save acca register so we can use it
+	tfr		dpr,a					; a = outgoing dpr value
+	sta		>mon_DPRSAVE	; force extended addressing mode usage here dpr is not set
+	clra								; dpg register must be set to zero before values are 
+	tfr		a,dpr					; saved in the monitor register save area.
+	puls	a							; get back acca
+	std		mon_DSAVE			; save regsters, can use direct addressing now
 	stx		mon_XSAVE
 	sty		mon_YSAVE
 	stu		mon_USAVE
-	tfr		dpr,a
-	sta		mon_DPRSAVE
-	puls	a
-	sta		mon_CCRSAVE
-	sts		mon_SSAVE
-	lds		#$3FFF
+	puls	a							; get back ccr
+	sta		mon_CCRSAVE		; and save it too
+	; Reset vectors in case they got toasted.
+	ldd		#SerialPeekCharDirect
+	std		CharInVec
+	ldd		#DisplayChar
+	std		CharOutVec
+	ldd		DisplayErr
+	std		MonErrVec
 	; todo set according to coreid
-	jmp		DumpRegs
+	lbra	DumpRegs			; now go do a register dump
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DumpIOFocusList:
+	ldx		#0
+dfl2:
+	ldb		IOFocusList,x
+	cmpb	#24
+	bne		dfl1
+	tfr		x,d
+	lbsr	DispByteAsHex
+	ldb		#' '
+	lbsr	OUTCH
+dfl1:
+	inx
+	cmpx	#16
+	blo		dfl2
+	lbsr	CRLF
+	lbra	Monitor
+	
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1522,10 +1895,10 @@ swi3_rout:
 	stu		mon_USAVE
 	tfr		dpr,a
 	sta		mon_DPRSAVE
+	puls	a
+	sta		mon_PCSAVE
 	puls	D
-	std		mon_PCSAVE
-	puls	D
-	std		mon_PCSAVE+2
+	std		mon_PCSAVE+1
 	sts		mon_SSAVE
 	lds		#$3FFF
 	cli
@@ -1533,10 +1906,10 @@ swi3_rout:
 swi3_exit:
 	sei
 	lds		mon_SSAVE
-	ldd		mon_PCSAVE+2
+	ldd		mon_PCSAVE+1
 	pshs	d
-	ldd		mon_PCSAVE
-	pshs	d
+	lda		mon_PCSAVE
+	pshs	a
 	ldu		mon_USAVE
 	ldy		mon_YSAVE
 	ldx		mon_XSAVE
@@ -1553,48 +1926,60 @@ swi3_exit:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+firq_rout:
+	rti
+
 irq_rout:
-	lbsr	SerialIRQ	; check for recieved character
+;	lbsr	SerialIRQ	; check for recieved character
+;	lbsr	TimerIRQ
 
 	; Reset the edge sense circuit in the PIC
-	lda		#2				; Timer is IRQ #2
-	sta		PIC+6			; register 6 is edge sense reset reg	
-
+	lda		#31							; Timer is IRQ #31
 	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
+	sta		PIC+16					; register 16 is edge sense reset reg	
+	lda		VIA+VIA_IFR
+	bpl		notTimerIRQ2
+	bita	#$800
+	beq		notTimerIRQ2
+	clr		VIA+VIA_T3LL
+	clr		VIA+VIA_T3LH
+	inc		$E00037					; update timer IRQ screen flag
+notTimerIRQ2:
+
 	lda		IrqBase			; get the IRQ flag byte
 	lsra
 	ora		IrqBase
 	anda	#$E0
 	sta		IrqBase
 
-	inc		TEXTSCR+110		; update IRQ live indicator on screen
+;	inc		TEXTSCR+54		; update IRQ live indicator on screen
 	
 	; flash the cursor
 	; only bother to flash the cursor for the task with the IO focus.
-	lda		COREID
-	cmpa	IOFocusID
-	bne		tr1a
-	lda		CursorFlash		; test if we want a flashing cursor
-	beq		tr1a
-	lbsr	CalcScreenLoc	; compute cursor location in memory
-	tfr		d,y
-	lda		$2000,y			; get color code $2000 higher in memory
-	ldb		IRQFlag			; get counter
-	lsrb
-	lsra
-	lsra
-	lsra
-	lsra
-	lsrb
-	rola
-	lsrb
-	rola
-	lsrb
-	rola
-	lsrb
-	rola
-	sta		$E00000,y		; store the color code back to memory
-tr1a
+;	lda		COREID
+;	cmpa	IOFocusID
+;	bne		tr1a
+;	lda		CursorFlash		; test if we want a flashing cursor
+;	beq		tr1a
+;	lbsr	CalcScreenLoc	; compute cursor location in memory
+;	tfr		d,y
+;	lda		$2000,y			; get color code $2000 higher in memory
+;	ldb		IRQFlag			; get counter
+;	lsrb
+;	lsra
+;	lsra
+;	lsra
+;	lsra
+;	lsrb
+;	rola
+;	lsrb
+;	rola
+;	lsrb
+;	rola
+;	lsrb
+;	rola
+;	sta		$E00000,y		; store the color code back to memory
+tr1a:
 	rti
 
 ;------------------------------------------------------------------------------
@@ -1603,17 +1988,21 @@ nmi_rout:
 	ldb		COREID
 	lda		#'I'
 	ldx		#TEXTSCR+40
-	abx
-	sta		,x
+	sta		b,x
+rti_insn:
 	rti
 
-	org		$FFFFF0
-	nop
-	nop
-	fcw		swi3_rout
+; Special Register Area
+	org		$FFFFE0
 
-	org		$FFFFF8
-	fcw		irq_rout
+; Interrupt vector table
+
+	org		$FFFFF0
+	fcw		rti_insn		; reserved
+	fcw		swi3_rout		; SWI3
+	fcw		rti_insn		; SWI2
+	fcw		firq_rout		; FIRQ
+	fcw		irq_rout		; IRQ
 	fcw		start				; SWI
 	fcw		nmi_rout		; NMI
 	fcw		start				; RST

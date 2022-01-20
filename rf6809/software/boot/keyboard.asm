@@ -62,7 +62,7 @@ krb3:
 	tstb
 	bmi		krb4						; is input buffer full ? yes, branch
 	bsr		Wait10ms				; wait a bit
-	leax	-1,x
+	dex
 	bne		krb3						; go back and try again
 	ldd		#-1							; return -1
 	puls	x,pc
@@ -100,7 +100,7 @@ kwt1:
 	andb	#$40				; check for transmit complete bit; branch if bit set
 	bne		kwt2
 	bsr		Wait10ms		; delay a little bit
-	leax	-1,x
+	dex
 	bne		kwt1				; go back and try again
 	ldd		#-1					; timed out, return -1
 	puls	x,pc
@@ -253,6 +253,8 @@ kgnotKbd:
 KeybdInit:
 	pshs	d,y
 	ldy		#5
+	clr		KeyState1		; records key up/down state
+	clr		KeyState2		; records shift,ctrl,alt state
 kbdi0002:
 	bsr		Wait10ms
 	clr		KEYBD+1			; clear receive register (write $00 to status reg)
@@ -312,6 +314,64 @@ ledxit:
 msgBadKeybd:
 	fcb		"Keyboard error",0
 
+;------------------------------------------------------------------------------
+; Calculate number of character in input buffer
+;
+; Parameters:
+;		y = $Cn00000 where n is core id
+; Returns:
+;		d = number of bytes in buffer.
+;------------------------------------------------------------------------------
+
+kbdRcvCount:
+	clra
+	ldb		kbdTailRcv,y
+	subb	kbdHeadRcv,y
+	bge		krcXit
+	ldb		#$40
+	subb	kbdHeadRcv,y
+	addb	kbdTailRcv,y
+krcXit:
+	rts
+
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+KeybdIRQ:
+	lda		KEYBD+1						; check status
+	bita	#$80							; was key pressed?
+	beq		notKbdIRQ					; if not, exit
+	ldb		KEYBD							; get the scan code
+	clr		KEYBD+1						; clear receive register (write $00 to status reg)
+	pshs	b									; save it off
+	lda		IOFocusID					; compute core memory address $Cn0000
+	clrb
+	asla
+	asla
+	asla
+	asla
+	ora		#$C00							; address $Cn0000	
+	tfr		d,y								; y =
+	bsr		kbdRcvCount				; get count of scan codes in buffer
+	cmpb	#64								; check if buffer full?
+	bhs		kbdBufFull				; if buffer full, ignore new keystroke
+	tfr		y,x								; compute fifo address
+	ldb		kbdTailRcv,y			; b = buffer index
+	puls	a									; get back scancode
+	leax	kbdFifo,x					; x = base address for fifo
+	sta		b,x								; store in buffer
+	incb										; increment buffer index
+	andb	#$3f							; wrap around at 64 chars
+	stb		kbdTailRcv,y			; update it
+	lda		#28								; Keyboard is IRQ #28
+	sta		IrqSource					; stuff a byte indicating the IRQ source for PEEK()
+notKbdIRQ:
+	rts	
+kbdBufFull:
+	leas	1,s								; get rid of saved scancode
+	rts
+
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -335,28 +395,64 @@ DBGCheckForKey:
 ; +-------- = extended
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Debug versison of keyboard get routine.
+; Keyboard get routine.
+;
+; The routine may get characters directly from the scancode input or less
+; directly from the scancode buffer, if things are interrupt driven.
 ;
 ; Parameters:
-;		b:	0 = non blocking, otherwise blocking
+;		b:  bit 11 = blocking status 1=blocking, 0=non blocking
+;		b:	bit 1  = scancode source 1=scancode buffer, 0=direct
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-DBGGetKey:
-	pshs	x
+GetKey:
+	pshs	x,y
 	stb		KeybdBlock				; save off blocking status
 dbgk2:
 	ldb		KeybdBlock
 	pshs	b
+	bitb	#1								; what is the scancode source
+	beq		dbgk20						; branch if direct read
+	lda		COREID						; compute core memory address
+	clrb
+	asla
+	asla
+	asla
+	asla
+	ora		#$C00
+	tfr		d,y								; y = $Cn0000
+	bsr		kbdRcvCount
+	tstb										; anything in buffer?
+	puls	b
+	bne		dbgk1							; branch if something in buffer
+	tstb
+	bmi		dbgk2							; if no key and blocking - loop
+dbgk20:
+	ldy		#0
 	bsr		KeybdGetStatus
 	andb	#$80							; is key available?
 	puls	b
 	bne		dbgk1							; branch if key
 	tstb										; block?
-	bne		dbgk2							; If no key and blocking - loop
+	bmi		dbgk2							; If no key and blocking - loop
 	ldd		#-1								; return -1 if no block and no key
 	puls	x,pc
 dbgk1:
-	bsr		KeybdGetScancode
+	cmpy	#0
+	bne		dbgk22
+	bsr		KeybdGetScancode	; get scancode directly
+	bra		dbgk23
+dbgk22:
+	; Retrieve value from scancode buffer
+	tfr		y,x
+	leax	kbdFifo,x					; x = fifo address
+	ldb		kbdHeadRcv,y			; b = buffer index
+	lda		b,x								; get the scancode
+	incb										; increment fifo index
+	andb	#$3f							; and wrap around
+	stb		kbdHeadRcv,y			; save it back
+	tfr		a,b								; the scancode is needed in accb
+dbgk23:
 ;	lbsr	DispByteAsHex
 	; Make sure there is a small delay between scancode reads
 	ldx		#20
@@ -497,8 +593,7 @@ dbgk16:
 dbgk17:
 	ldx		#unshiftedScanCodes
 dbgk18:
-	abx								; index into table is scancode in accb
-	ldb		,x					; load accb with ascii from table
+	ldb		b,x					; load accb with ascii from table
 	clra
-	puls	x,pc				; and return
+	puls	x,y,pc			; and return
 	

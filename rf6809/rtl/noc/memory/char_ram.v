@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,47 +34,82 @@
 //                                                                          
 // ============================================================================
 //
-module char_ram(clk_i, cs_i, we_i, adr_i, dat_i, dat_o, dot_clk_i, ce_i, char_code_i, maxscanline_i, scanline_i, bmp_o);
+module char_ram(clk_i, cs_i, we_i, adr_i, dat_i, dat_o, dot_clk_i, ce_i,
+  fontAddress_i, char_code_i, maxScanpix_i, maxscanline_i, scanline_i, bmp_o);
 input clk_i;
 input cs_i;
 input we_i;
-input [12:0] adr_i;
-input [8:0] dat_i;
-output reg [8:0] dat_o;
+input [14:0] adr_i;
+input [7:0] dat_i;
+output reg [31:0] dat_o = 32'd0;
 input dot_clk_i;
 input ce_i;
-input [8:0] char_code_i;
-input [4:0] maxscanline_i;
-input [4:0] scanline_i;
-output reg [8:0] bmp_o;
+input [15:0] fontAddress_i;
+input [19:0] char_code_i;
+input [5:0] maxScanpix_i;
+input [5:0] maxscanline_i;
+input [5:0] scanline_i;
+output reg [63:0] bmp_o;
 
 (* ram_style="block" *)
-reg [8:0] mem [0:8191];
-reg [12:0] radr;
-reg [12:0] rcc;
-reg [8:0] dat1;
-reg [8:0] bmp;
+reg [7:0] mem [0:32767];
+reg [14:0] radr;
+reg [14:0] rcc, rcc0, rcc1;
+reg [2:0] rcc200, rcc201, rcc202;
+reg [63:0] dat1;
+reg [63:0] bmp1;
+reg [3:0] bndx, b2ndx;
+reg [7:0] bmp [0:7];
+reg [63:0] buf2;
 
 initial begin
-`include "d:\\cores2022\\rf6809\\rtl\\noc\\memory\\char_bitmaps.v";
+`include "d:\\cores2022\\rf6809\\rtl\\noc\\memory\\char_bitmaps_12x18.v";
 end
 
-always @(posedge clk_i)
-	if (cs_i & we_i)
-		mem[adr_i] <= dat_i;
-always @(posedge clk_i)
-	radr <= adr_i;
-always @(posedge clk_i)
-	dat1 <= mem[radr];
-always @(posedge clk_i)
-	dat_o <= dat1;
+wire pe_cs;
+edge_det ued1 (.rst(1'b0), .clk(clk_i), .ce(1'b1), .i(cs_i), .pe(pe_cs), .ne(), .ee());
 
+always @(posedge clk_i)
+  if (cs_i & we_i)
+	  mem[adr_i] <= dat_i;
+
+// Char code is already delated two clocks relative to ce
+// Assume that characters are always going to be at least four clocks wide.
+// Clock #0
 always @(posedge dot_clk_i)
-	if (ce_i)
-		rcc <= char_code_i*maxscanline_i+scanline_i;
+  if (ce_i)
+    rcc <= char_code_i*maxscanline_i+scanline_i;
+// Clock #1
 always @(posedge dot_clk_i)
-	bmp <= mem[rcc];
+  casez(maxScanpix_i[5:3])
+  3'b1??: rcc0 <= {rcc,3'b0};
+//  3'b110: rcc0 <= {rcc,2'b0} + {rcc,1'b0};
+//  3'b101: rcc0 <= {rcc,2'b0} + rcc;
+  3'b01?: rcc0 <= {rcc,2'b0};
+//  3'b010: rcc0 <= {rcc,1'b0} + rcc;
+  3'b001: rcc0 <= {rcc,1'b0};
+  3'b000: rcc0 <=  rcc;
+  endcase
+// Clock #2
 always @(posedge dot_clk_i)
-	bmp_o <= bmp;
+  if (ce_i) begin
+    rcc1 <= {fontAddress_i[15:3],3'b0}+rcc0;
+    casez(maxScanpix_i[5:3])
+    3'b1??: bndx <= 4'd7;
+    3'b01?: bndx <= 4'd3;
+    3'b001: bndx <= 4'd1;
+    3'b000: bndx <= 4'd0;
+    endcase
+  end
+  else begin
+    if (~bndx[3]) begin
+      bmp[bndx[2:0]] <= mem[rcc1];
+      rcc1 <= rcc1 + 1'd1;
+      bndx <= bndx - 1'd1;
+    end
+  end
+always @(posedge dot_clk_i)
+  if (ce_i)
+ 	  bmp_o <= {bmp[7],bmp[6],bmp[5],bmp[4],bmp[3],bmp[2],bmp[1],bmp[0]};
 
 endmodule

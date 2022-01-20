@@ -168,7 +168,7 @@ reg isLEA;
 reg isRMW;
 
 // Data input path multiplexing
-reg [BPB-1:0] dati;
+reg [bitsPerByte-1:0] dati;
 always_comb
 	dati = dat_i;
 
@@ -208,7 +208,7 @@ begin
 			(ir[bitsPerByte+4] ? 5'd2 : 5'd0) +
 			(ir[bitsPerByte+5] ? 5'd2 : 5'd0) +
 			(ir[bitsPerByte+6] ? 5'd2 : 5'd0) +
-			(ir[bitsPerByte+7] ? 5'd2 : 5'd0)
+			(ir[bitsPerByte+7] ? (isFar ? 5'd3 : 5'd2) : 5'd0)
 			;
 //  cnt = 0;
 //	if (ir[8]) cnt = cnt + 5'd1;	// CC
@@ -231,7 +231,12 @@ wire isIndexed =
 	ir12==`LEAX_NDX || ir12==`LEAY_NDX || ir12==`LEAS_NDX || ir12==`LEAU_NDX
 	;
 reg isDblIndirect;
-wire isIndirect = ndxbyte[BPBM1-3] & ndxbyte[BPBM1];
+wire isIndirect = ndxbyte[bitsPerByte-4] & ndxbyte[bitsPerByte-1];
+`ifdef TWELVEBIT
+always_comb
+	isOuterIndexed = ndxbyte[bitsPerByte-5] & ndxbyte[bitsPerByte-1];
+`endif
+
 assign ndxbyte = ir[`HIBYTE];
 
 // Detect type of interrupt
@@ -699,7 +704,9 @@ if (rst_i) begin
 	md32 <= `FALSE;
 	ipg <= 2'b00;
 	isFar <= `FALSE;
+`ifdef EIGHTBIT
 	isOuterIndexed <= `FALSE;
+`endif
 	dpr <= 12'h000;
 	ibufadr <= {BPB*3{1'b0}};
 //	pc <= 24'hFFFFFE;
@@ -879,9 +886,9 @@ PULL1:
 OUTER_INDEXING:
 	begin
 		if (bitsPerByte==8) begin
-			casex(ndxbyte)
-			8'b0xxxxxxx:	radr <= radr + ndxreg;
-			8'b1xxx0000:
+			casez(ndxbyte)
+			8'b0???????:	radr <= radr + ndxreg;
+			8'b1???0000:
 							begin
 								radr <= radr + ndxreg;
 								case(ndxbyte[6:5])
@@ -891,7 +898,7 @@ OUTER_INDEXING:
 								2'b11:	ssp <= (ssp + 2'd1);
 								endcase
 							end
-			8'b1xxx0001:	begin
+			8'b1???0001:	begin
 								radr <= radr + ndxreg;
 								case(ndxbyte[6:5])
 								2'b00:	xr <= (xr + 2'd2);
@@ -900,22 +907,22 @@ OUTER_INDEXING:
 								2'b11:	ssp <= (ssp + 2'd2);
 								endcase
 							end
-			8'b1xxx0010:	radr <= radr + ndxreg;
-			8'b1xxx0011:	radr <= radr + ndxreg;
-			8'b1xxx0100:	radr <= radr + ndxreg;
-			8'b1xxx0101:	radr <= radr + ndxreg;
-			8'b1xxx0110:	radr <= radr + ndxreg;
-			8'b1xxx1000:	radr <= radr + ndxreg;
-			8'b1xxx1001:	radr <= radr + ndxreg;
-			8'b1xxx1010:	radr <= radr + ndxreg;
-			8'b1xxx1011:	radr <= radr + ndxreg;
+			8'b1???0010:	radr <= radr + ndxreg;
+			8'b1???0011:	radr <= radr + ndxreg;
+			8'b1???0100:	radr <= radr + ndxreg;
+			8'b1???0101:	radr <= radr + ndxreg;
+			8'b1???0110:	radr <= radr + ndxreg;
+			8'b1???1000:	radr <= radr + ndxreg;
+			8'b1???1001:	radr <= radr + ndxreg;
+			8'b1???1010:	radr <= radr + ndxreg;
+			8'b1???1011:	radr <= radr + ndxreg;
 			default:	radr <= radr;
 			endcase
 		end
 		else if (bitsPerByte==12) begin
-			casex(ndxbyte)
-			12'b0xxxxxxxxxxx:	radr <= radr + ndxreg;
-			12'b1xxxx0000000:
+			casez(ndxbyte)
+			12'b0???????????:	radr <= radr + ndxreg;
+			12'b1????0000000:
 							begin
 								radr <= radr + ndxreg;
 								case(ndxbyte[10:9])
@@ -925,7 +932,7 @@ OUTER_INDEXING:
 								2'b11:	ssp <= (ssp + 2'd1);
 								endcase
 							end
-			12'b1xxxx0000001:	begin
+			12'b1????0000001:	begin
 								radr <= radr + ndxreg;
 								case(ndxbyte[10:9])
 								2'b00:	xr <= (xr + 2'd2);
@@ -934,15 +941,15 @@ OUTER_INDEXING:
 								2'b11:	ssp <= (ssp + 2'd2);
 								endcase
 							end
-			12'b1xxxx0000010:	radr <= radr + ndxreg;
-			12'b1xxxx0000011:	radr <= radr + ndxreg;
-			12'b1xxxx0000100:	radr <= radr + ndxreg;
-			12'b1xxxx0000101:	radr <= radr + ndxreg;
-			12'b1xxxx0000110:	radr <= radr + ndxreg;
-			12'b1xxxx0001000:	radr <= radr + ndxreg;
-			12'b1xxxx0001001:	radr <= radr + ndxreg;
-			12'b1xxxx0001010:	radr <= radr + ndxreg;
-			12'b1xxxx0001011:	radr <= radr + ndxreg;
+			12'b1????0000010:	radr <= radr + ndxreg;
+			12'b1????0000011:	radr <= radr + ndxreg;
+			12'b1????0000100:	radr <= radr + ndxreg;
+			12'b1????0000101:	radr <= radr + ndxreg;
+			12'b1????0000110:	radr <= radr + ndxreg;
+			12'b1????0001000:	radr <= radr + ndxreg;
+			12'b1????0001001:	radr <= radr + ndxreg;
+			12'b1????0001010:	radr <= radr + ndxreg;
+			12'b1????0001011:	radr <= radr + ndxreg;
 			default:	radr <= radr;
 			endcase
 		end
@@ -1048,13 +1055,13 @@ ICACHE5:
 	end
 ICACHE7:
 	if (waitcnt==6'd0) begin
-		next_state(ICACHE6);
+		next_state(ICACHE5);
 		adr_o <= icwa;
 		for (n4 = 15; n4 >= 0; n4 = n4 - 1)
-			if (~icgot[n4] & ~outstanding[n4]) begin
+			if (~icgot[n4]) begin// & ~outstanding[n4]) begin
 				cti_o <= 3'b001;
-				cyc_o <= TRUE;
-				stb_o <= TRUE;
+				cyc_o <= `TRUE;
+				stb_o <= `TRUE;
 				adr_o[3:0] <= n4[3:0];
 				outstanding[n4[3:0]] <= 1'b1;
 				next_state(ICACHE9);
@@ -1067,7 +1074,7 @@ ICACHE9:
 		if (bto)
 			outstanding <= 16'h0;
 		if (aack_i)
-			outstanding[adr_o[3:0]] <= 1'b0;
+			outstanding[atag_i] <= 1'b0;
 		if (ack_i|rty_i|bto) begin
 			wb_nack();
 			waitcnt <= 6'd20;
@@ -1184,9 +1191,11 @@ begin
 		bs_o <= 1'b0;
 		next_state(DECODE);
 		isFar <= `FALSE;
+`ifdef EIGHTBIT
 		isOuterIndexed <= `FALSE;
+`endif
 		ipg <= 2'b00;
-		ia <= 24'd0;
+		ia <= {bitsPerByte*3{1'b0}};
 		res <= 24'd0;
 		load_what <= `LW_NOTHING;
 		store_what <= `SW_NOTHING;
@@ -1225,7 +1234,9 @@ begin
 				else begin
 					ipg <= ipg;
 					isFar <= isFar;
+`ifdef EIGHTBIT					
 					isOuterIndexed <= isOuterIndexed;
+`endif					
 					next_state(ICACHE1);
 				end
 			end
@@ -1236,7 +1247,9 @@ begin
 				else begin
 					ipg <= ipg;
 					isFar <= isFar;
+`ifdef EIGHTBIT					
 					isOuterIndexed <= isOuterIndexed;
+`endif					
 					next_state(IBUF1);
 				end
 			end
@@ -1259,7 +1272,7 @@ begin
 	pc <= pc + 2'd1;		// default: increment PC by one
 	a <= 24'd0;
 	b <= 24'd0;
-	ia <= 24'd0;
+	ia <= {bitsPerByte * 3{1'b0}};
 	isDblIndirect <= `FALSE;//ndxbyte[11:4]==8'h8F;
 	if (isIndexed) begin
 		if (bitsPerByte==8) begin
@@ -1299,7 +1312,7 @@ begin
 		else if (bitsPerByte==12) begin
 			casez(ndxbyte)
 			12'b1??000000000:	
-				if (!isOuterIndexed && ndxbyte[7]==1'b0)
+				if (!isOuterIndexed && ndxbyte[bitsPerByte-5]==1'b0)
 					case(ndxbyte[10:9])
 					2'b00:	xr <= (xr + 4'd1);
 					2'b01:	yr <= (yr + 4'd1);
@@ -1307,7 +1320,7 @@ begin
 					2'b11:	ssp <= (ssp + 4'd1);
 					endcase
 			12'b1??000000001:
-				if (!isOuterIndexed && ndxbyte[7]==1'b0)
+				if (!isOuterIndexed && ndxbyte[bitsPerByte-5]==1'b0)
 					case(ndxbyte[10:9])
 					2'b00:	xr <= (xr + 4'd2);
 					2'b01:	yr <= (yr + 4'd2);
@@ -1392,8 +1405,9 @@ begin
 	`PG2:	begin ipg <= 2'b01; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
 	`PG3:	begin ipg <= 2'b10; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
 	`FAR:	begin isFar <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+`ifdef EIGHTBIT
 	`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
-
+`endif
 	`NEGA,`NEGB:	begin res12 <= -acc[`LOBYTE]; a <= 24'h00; b <= acc; end
 	`COMA,`COMB:	begin res12 <= ~acc[`LOBYTE]; end
 	`LSRA,`LSRB:	begin res12 <= {acc[0],1'b0,acc[BPBM1:1]}; end
@@ -2831,6 +2845,7 @@ begin
 		bl_o <= len;
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
+		we_o <= 1'b0;
 		adr_o <= adr;
 	end
 end
@@ -2842,6 +2857,7 @@ begin
 	if (!tsc) begin
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
+		we_o <= 1'b0;
 		adr_o <= adr;
 	end
 end
@@ -3251,7 +3267,8 @@ assign tag0 = {mem[rpc[11:4]],tvalid[rpc[11:4]]};
 assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
 
 assign hit0 = tag0 == {rpc[BPB*3-1:12],1'b1};
-assign hit1 = tag1 == {rpcp16[BPB*3-1:12],1'b1};
+// Consider a hit on port 1 if the instruction will not span onto it.
+assign hit1 = tag1 == {rpcp16[BPB*3-1:12],1'b1} || rpc[3:0] < 4'h9;
 
 endmodule
 

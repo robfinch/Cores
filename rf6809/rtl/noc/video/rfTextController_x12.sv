@@ -111,8 +111,8 @@ module rfTextController_x12(
 	dot_clk_i, hsync_i, vsync_i, blank_i, border_i, zrgb_i, zrgb_o, xonoff_i
 );
 parameter num = 4'd1;
-parameter COLS = 8'd56;
-parameter ROWS = 8'd29;
+parameter COLS = 8'd64;
+parameter ROWS = 8'd32;
 
 // Syscon
 input  rst_i;			// reset
@@ -166,7 +166,7 @@ reg controller_enable;
 reg [31:0] bkColor32, bkColor32d;	// background color
 reg [31:0] fgColor32, fgColor32d;	// foreground color
 
-reg [63:0] pix;				// pixel value from character generator 1=on,0=off
+wire [1:0] pix;				// pixel value from character generator 1=on,0=off
 
 reg por;
 wire vclk;
@@ -179,7 +179,7 @@ assign cbm_sel_o = 8'hFF;
 
 reg [63:0] rego;
 reg [4:0] yscroll;
-reg [4:0] xscroll;
+reg [5:0] xscroll;
 reg [11:0] windowTop;
 reg [11:0] windowLeft;
 reg [ 7:0] numCols;
@@ -187,7 +187,7 @@ reg [ 7:0] numRows;
 reg [ 7:0] charOutDelay;
 reg [ 1:0] mode;
 reg [ 4:0] maxRowScan;
-reg [ 4:0] maxScanpix;
+reg [ 5:0] maxScanpix;
 reg [1:0] tileWidth;		// width of tile in bytes (0=1,1=2,2=4,3=8)
 reg [ 4:0] cursorStart, cursorEnd;
 reg [15:0] cursorPos;
@@ -205,7 +205,7 @@ wire [11:0] scanline;	// scan line
 reg [ 7:0] row;		// vertical reference counter (counts rows since vSync)
 reg [ 7:0] col;		// horizontal column
 reg [ 4:0] rowscan;	// scan line within row
-reg [ 4:0] colscan;	// pixel column number within cell
+reg [ 5:0] colscan;	// pixel column number within cell
 wire nxt_row;			// when to increment the row counter
 wire nxt_col;			// when to increment the column counter
 reg [ 5:0] bcnt;		// blink timing counter
@@ -264,12 +264,15 @@ always_ff @(posedge clk_i)
 
 // Register outputs
 always @(posedge clk_i)
+if (cs_i)
 	casez({cs_rom,cs_reg,cs_text})
 	3'b1??:	dat_o <= {3'b0,chdat_o};
 	3'b01?:	dat_o <= rego;
 	3'b001:	dat_o <= tdat_o;
 	default:	dat_o <= 12'h0;
 	endcase
+else
+	dat_o <= 12'h0;
 
 //always @(posedge clk_i)
 //	if (cs_text) begin
@@ -287,6 +290,7 @@ ack_gen #(
 	.REGISTER_OUTPUT(1)
 )
 uag1 (
+	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.ce_i(1'b1),
 	.i(cs_any),
@@ -391,7 +395,7 @@ char_ram charRam0
 	.clk_i(clk_i),
 	.cs_i(cs_rom),
 	.we_i(1'b0),
-	.adr_i(radr_i[12:0]),
+	.adr_i(radr_i[14:0]),
 	.dat_i(rdat_i),
 	.dat_o(chdat_o),
 	.dot_clk_i(vclk),
@@ -399,9 +403,9 @@ char_ram charRam0
 	.char_code_i(screen_ram_out[8:0]),
 	.maxscanline_i(maxScanlinePlusOne),
 	.scanline_i(rowscan[4:0]),
-	.bmp_o(char_bmp[8:0])
+	.bmp_o(char_bmp)
 );
-assign char_bmp[63:9] = 55'h0;
+//assign char_bmp[63:9] = 55'h0;
 `else
 reg [63:0] char_bmp;		// character ROM output
 `endif
@@ -512,7 +516,7 @@ always @(posedge clk_i)
 	  por <= 1'b1;
 	  mcm <= 1'b0;
 	  controller_enable <= 1'b1;
-    xscroll 		 <= 5'd0;
+    xscroll 		 <= 6'd0;
     yscroll 		 <= 5'd0;
     txtTcCode    <= 4'hE;
     bdrCode      <= 4'hE;
@@ -540,12 +544,12 @@ always @(posedge clk_i)
 		if (num==4'd1) begin
       windowTop    <= 12'd4058;//12'd16;
       windowLeft   <= 12'd3956;//12'd3930;//12'd86;
-      pixelWidth   <= 4'd1;		// 800 pixels
-      pixelHeight  <= 4'd1;		// 600 pixels
+      pixelWidth   <= 4'd0;		// 800 pixels
+      pixelHeight  <= 4'd0;		// 600 pixels
       numCols      <= COLS;
       numRows      <= ROWS;
-      maxRowScan  <= 5'd9;
-      maxScanpix   <= 5'd6;
+      maxRowScan  <= 5'd17;
+      maxScanpix   <= 6'd11;
       rBlink       <= 3'b111;		// 01 = non display
       charOutDelay <= 8'd5;
 		end
@@ -557,7 +561,7 @@ always @(posedge clk_i)
       numCols      <= 40;
       numRows      <= 25;
       maxRowScan  <= 5'd7;
-      maxScanpix   <= 5'd7;
+      maxScanpix   <= 6'd7;
       rBlink       <= 3'b111;        // 01 = non display
       charOutDelay <= 8'd6;
 		end
@@ -587,11 +591,12 @@ always @(posedge clk_i)
 			6'd12:	controller_enable <= rdat_i[0];
 			6'd13:	mcm <= rdat_i[0];
 			6'd14:	yscroll <= rdat_i[4:0];
-			6'd15:	xscroll <= rdat_i[4:0];
+			6'd15:	xscroll <= rdat_i[5:0];
 			6'd16:	txtTcCode <= rdat_i[7:0];
 			6'd20:	bdrCode <= rdat_i[7:0];
 			6'd24:	tileCode1 <= rdat_i[7:0];
 			6'd28:	tileCode2 <= rdat_i[7:0];
+			6'd31:	maxScanpix <= rdat_i[5:0];
 			6'd32:	
 				begin
 						cursorEnd <= rdat_i[4:0];	// scan line sursor starts on
@@ -786,15 +791,15 @@ end
 assign nxt_col = colscan==maxScanpix;
 always @(posedge vclk)
 if (sym_rst)
-	colscan <= 5'd0;
+	colscan <= 6'd0;
 else begin
 	if (nhp) begin
 		if (hctr==12'd0)
 			colscan <= xscroll;
 		else if (nxt_col)
-			colscan <= 5'd0;
+			colscan <= 6'd0;
 		else
-			colscan <= colscan + 5'd1;
+			colscan <= colscan + 2'd1;
 	end
 end
 
@@ -860,7 +865,7 @@ end
 
 reg blink_en;
 always @(posedge vclk)
-	blink_en <= (cursorPos+3==txtAddr) && (rowscan[4:0] >= cursorStart) && (rowscan[4:0] <= cursorEnd);
+	blink_en <= (cursorPos+4==txtAddr) && (rowscan[4:0] >= cursorStart) && (rowscan[4:0] <= cursorEnd);
 
 VT151 ub2
 (
@@ -898,6 +903,19 @@ always @(posedge vclk)
 	charout1 <= blink ? (char_bmp ^ curout) : char_bmp;
 
 // Convert parallel to serial
+ParallelToSerial ups1
+(
+	.rst(rst_i),
+	.clk(vclk),
+	.mcm(mcm),
+	.ce(nhp),
+	.ld(ld_shft),
+	.a(maxScanpix[5:3]),
+	.qin(2'b0),
+	.d(charout1),
+	.qh(pix)
+);
+/*
 always_ff @(posedge vclk)
 if (rst_i) begin
 	pix <= 64'd0;
@@ -914,7 +932,7 @@ else begin
 		end
 	end
 end
-
+*/
 reg [1:0] pix1;
 always_ff @(posedge vclk)
 	if (nhp)	
@@ -942,9 +960,9 @@ always_ff @(posedge dot_clk_i)
 	8'b1001????:	zrgb_o <= bdrColor;
 	//6'b10010?:	zrgb_o <= 32'hFFBF2020;
 	//6'b10011?:	zrgb_o <= 32'hFFDFDFDF;
-	8'b1000?0?0:	zrgb_o <= (zrgb_i[31:24] > bkColor32d[31:24]) ? zrgb_i : bkColor32d;
+	8'b1000?00?:	zrgb_o <= (zrgb_i[31:24] > bkColor32d[31:24]) ? zrgb_i : bkColor32d;
 //	8'b1000?0?0:	zrgb_o <= bkColor32d;
-	8'b1000?0?1:	zrgb_o <= fgColor32d; // ToDo: compare z-order
+	8'b1000?01?:	zrgb_o <= fgColor32d; // ToDo: compare z-order
 	8'b1000?100:	zrgb_o <= (zrgb_i[31:24] > bkColor32d[31:24]) ? zrgb_i : bkColor32d;
 	8'b1000?101:	zrgb_o <= fgColor32d;
 	8'b1000?110:	zrgb_o <= {8'hFF,tileColor1};

@@ -2,6 +2,8 @@
    
    (C) Copyright 1993,1994 L.C. Benschop. 
    Parts (C) Copyright 2001-2010 H. Seib.
+   Mods for 12-bit FPGA core 6809 by R. Finch
+
    This version of the program is distributed under the terms and conditions 
    of the GNU General Public License version 2. See file the COPYING for details.   
    THERE IS NO WARRANTY ON THIS PROGRAM. 
@@ -18,6 +20,7 @@
      a09 [-{b|r|s|x|f}filename]|[-c] [-lfilename] [-ooption] [-dsym=value]* sourcefile.
                   
    Options
+   -Vfilename    Verilog rommem declaration output
    -c suppresses code output
    -bfilename    binary output file name (default name minus a09 suffix plus .bin)
    -rfilename    Flex9 RELASMB-compatible output file name (relocatable)
@@ -519,10 +522,10 @@ struct oprecord optable09[]=
                OPCAT_TWOBYTE,     0x105a, 0 },
   { "DEF",     OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
   { "DEFINE",  OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
-  { "DES",     OPCAT_TWOBYTE,     0x3207f, 4 },
-  { "DEU",     OPCAT_TWOBYTE,     0x3305f, 3 },
-  { "DEX",     OPCAT_TWOBYTE,     0x3001f, 1 },
-  { "DEY",     OPCAT_TWOBYTE,     0x3103f, 2 },
+  { "DES",     OPCAT_TWOBYTE,     0x327ff, 4 },
+  { "DEU",     OPCAT_TWOBYTE,     0x335ff, 3 },
+  { "DEX",     OPCAT_TWOBYTE,     0x301ff, 1 },
+  { "DEY",     OPCAT_TWOBYTE,     0x313ff, 2 },
   { "DIVD",    OPCAT_6309 |
                OPCAT_2ARITH,      0x118d, 0 },
   { "DIVQ",    OPCAT_6309 |
@@ -575,10 +578,10 @@ struct oprecord optable09[]=
   { "INCLUDE", OPCAT_PSEUDO,      PSEUDO_INCLUDE, 0 },
   { "INCW",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x105c, 0 },
-  { "INS",     OPCAT_TWOBYTE,     0x32061, 4 },
-  { "INU",     OPCAT_TWOBYTE,     0x33041, 3 },
+  { "INS",     OPCAT_TWOBYTE,     0x32601, 4 },
+  { "INU",     OPCAT_TWOBYTE,     0x33401, 3 },
   { "INX",     OPCAT_TWOBYTE,     0x30001, 1 },
-  { "INY",     OPCAT_TWOBYTE,     0x31021, 2 },
+  { "INY",     OPCAT_TWOBYTE,     0x31201, 2 },
   { "JMP",     OPCAT_SINGLEADDR,  0x0e, 0 },
   { "JSR",     OPCAT_DBLREG1BYTE, 0x8d, 0 },
   { "LBCC",    OPCAT_LBR1BYTE,    0x124, 0 },
@@ -2873,17 +2876,17 @@ else if (scanindexreg())
   switch (opsize)
     {
     case 1:
-      postbyte += (operand & 511);
+      postbyte |= (operand & 511);
       opsize = 0;
       break;
     case 2:
-      postbyte += 0x808;
+      postbyte |= 0x808;
       break;
     case 3:
-      postbyte += 0x809;
+      postbyte |= 0x809;
       break;
 	case 4:
-	  postbyte += 0x80A;
+	  postbyte |= 0x80A;
 	  break;
     }                 
   }
@@ -2904,7 +2907,7 @@ else
       } 
     }    
   mode++;
-  postbyte += 0x80c;
+  postbyte |= 0x80c;
   if (opsize == 1)
     opsize = 2;    
   }
@@ -2921,7 +2924,7 @@ void scanoperands09(struct relocrecord *pp)
 char c, *oldsrcptr, *ptr;
 unsigned short accpost, h63 = 0;
 unsigned short isIndexed = 0;
-
+unsigned short indirect_byte = 0;
 isFar = 0;
 isPostIndexed = 0;
 unknown = 0;
@@ -2941,6 +2944,7 @@ if (c == '[')
   }
   else
 	  mode = ADRMODE_IND;
+    indirect_byte = 0x100;
   }
 switch (toupper(c))
   {
@@ -2958,7 +2962,7 @@ switch (toupper(c))
 		  isIndexed = 1;
       if ((h63) && (!(dwOptions & OPTION_H63)))
         error |= ERR_ILLEGAL_ADDR;
-      postbyte = accpost;
+      postbyte |= accpost;
       srcptr++;
       if (!scanindexreg())
         RESTORE
@@ -3056,15 +3060,24 @@ switch (toupper(c))
       {
       if (opsize == 0)
         {
-		if ((unsigned)operand >= 16777216)
-			opsize = 4;
-		else
+        if ((unsigned)operand >= 16777216)
+		      opsize = 4;
+	      else
         if (unknown || !certain || dpsetting == -1 ||
-          (unsigned)(operand - dpsetting * 4096) >= 4096)
+          (signed)(operand - dpsetting * 4096) >= 2048 ||
+          (signed)(operand - dpsetting * 4096) < -2048)
           opsize = 3;
         else
           opsize = 2;
         }  
+      /*
+      if (opsize == 4) {
+        if ((operand & 0xff800000) == 0xff800000)
+          opsize = 3;
+        else if ((operand & 0xff800000) == 0x0)
+          opsize = 3;
+      }
+      */
       if (opsize == 1)
         opsize = 2;         
       if (mode == ADRMODE_IND)
@@ -3106,8 +3119,8 @@ if (mode >= ADRMODE_IND)
   if (*srcptr==',') {
 	  srcptr++;
 	  isPostIndexed = 1;
-      scanindexed();	// scanindexed will reset the postbyte
-	  postbyte |= 0x100;
+    scanindexed();	// scanindexed will reset the postbyte
+	  postbyte |= indirect_byte | 0x80;
   }
   else {
 	  if (postbyte==0x90F || postbyte==0x80F)
@@ -3505,7 +3518,7 @@ if (hexcount)
   if (objfile)
     {
 		 for (i = 0; i < hexcount; i++)
-    	fprintf(objfile, "rommem[%4d] <= 12'h%03X;\r\n", (hexaddr+i) & 0x3fff, hexbuffer[i] & 0xfff);
+    	fprintf(objfile, "rommem[%5d] <= 12'h%03X;\r\n", (hexaddr+i) & 0x3fff, hexbuffer[i] & 0xfff);
   hexaddr += hexcount;
   hexcount = 0;
   chksum = 0;
@@ -3515,7 +3528,8 @@ if (hexcount)
 }
 
 /*****************************************************************************/
-/* flushhex : write Motorola s-records                                       */
+/* flushhex : write Motorola s-records  */
+/* Flushes using 12-bit bytes */
 /*****************************************************************************/
 
 void flushhex()
@@ -3526,11 +3540,11 @@ if (hexcount)
   {
   if (objfile)
     {
-    fprintf(objfile, "S1%02X%04X", (hexcount + 3) & 0xff, hexaddr & 0xffff);
+    fprintf(objfile, "S1%03X%06X", (hexcount + 3) & 0xfff, hexaddr & 0xffffff);
     for (i = 0; i < hexcount; i++)
-      fprintf(objfile, "%02X", hexbuffer[i]);
-    chksum += (hexaddr & 0xff) + ((hexaddr >> 8) & 0xff) + hexcount + 3;
-    fprintf(objfile, "%02X\n", 0xff - (chksum & 0xff));
+      fprintf(objfile, "%03X", hexbuffer[i] & 0xfff);
+    chksum += (hexaddr & 0xfff) + ((hexaddr >> 12) & 0xfff) + hexcount + 3;
+    fprintf(objfile, "%03X\n", 0xfff - (chksum & 0xfff));
     }
   hexaddr += hexcount;
   hexcount = 0;
@@ -3552,14 +3566,14 @@ if (hexcount)
   if (objfile)
     {
     j = &hexbuffer[0];
-    fprintf(objfile, ":%02X%04X00", hexcount, hexaddr & 0xffff);
-    chksum = hexcount + ((hexaddr >> 8) & 0xff) + (hexaddr & 0xff);
+    fprintf(objfile, ":%03X%06X00", hexcount, hexaddr & 0xffffff);
+    chksum = hexcount + ((hexaddr >> 12) & 0xfff) + (hexaddr & 0xfff);
     for (i = 0; i < hexcount; i++, j++)
       {
-      chksum += *j;
-      fprintf(objfile, "%02X", *j);
+      chksum += (*j) & 0xfff;
+      fprintf(objfile, "%03X", (*j) & 0xfff);
       }
-    fprintf(objfile, "%02X\n", (-(signed)chksum) & 0xff);
+    fprintf(objfile, "%03X\n", (-(signed)chksum) & 0xfff);
     }
   hexaddr += hexcount;
   hexcount = 0;
@@ -3574,7 +3588,7 @@ if (hexcount)
 void flushflex()
 {
 int i;
-unsigned char *j;
+unsigned short *j;
 
 if (hexcount)
   {
@@ -3582,16 +3596,22 @@ if (hexcount)
   if (objfile)
     {
     fputc(0x02, objfile);               /* start of record indicator         */
+    fputc((hexaddr >> 32) & 0xf,        /* load address high part            */
+      objfile);
     fputc((hexaddr >> 24) & 0xff,        /* load address high part            */
           objfile);
-    fputc((hexaddr >> 16) & 0xff,        /* load address high part            */
+    fputc((hexaddr >> 20) & 0xf,        /* load address high part            */
+      objfile);
+    fputc((hexaddr >> 12) & 0xff,        /* load address high part            */
           objfile);
-    fputc((hexaddr >> 8) & 0xff,        /* load address high part            */
-          objfile);
+    fputc((hexaddr >> 8) & 0xf, objfile);     /* load address low part             */
     fputc(hexaddr & 0xff, objfile);     /* load address low part             */
+    fputc((hexcount >> 8) & 0xf, objfile);    /* # following data bytes            */
     fputc(hexcount & 0xff, objfile);    /* # following data bytes            */
-    for (i = 0; i < hexcount; i++, j++) /* then put all data bytes           */
+    for (i = 0; i < hexcount; i++, j++) { /* then put all data bytes           */
+      fputc(((*j)>>8)&0xff, objfile);
       fputc(*j, objfile);
+    }
     }
   hexaddr += hexcount;                  /* set new address                   */
   hexcount = 0;                         /* reset counter                     */
@@ -3615,7 +3635,7 @@ chksum += x;
 /* outhex : add a byte to motorola s-record output                           */
 /*****************************************************************************/
 
-void outhex (unsigned char x) 
+void outhex (unsigned short x) 
 {
 if (hexcount == 16)
   flushhex();
@@ -3627,7 +3647,7 @@ chksum += x;
 /* outihex : add a byte to intel hex output                                  */
 /*****************************************************************************/
 
-void outihex (unsigned char x) 
+void outihex (unsigned short x) 
 {
 if (hexcount == 32)
   flushihex();
@@ -3639,7 +3659,7 @@ chksum += x;
 /* outflex : adds a byte to FLEX output                                      */
 /*****************************************************************************/
 
-void outflex(unsigned char x)
+void outflex(unsigned short x)
 {
 if (hexcount == 255)                    /* if buffer full                    */
   flushflex();                          /* flush it                          */
@@ -3663,7 +3683,11 @@ unsigned short nBitMask = (unsigned short) (1 << ((loccounter + off) % 12));
 switch (outmode)
   {
   case OUT_BIN :                        /* binary file                       */
+    fputc((uc >> 8) & 0xf, objfile);
+    fputc(uc, objfile);
+    break;
   case OUT_REL :                        /* FLEX Relocatable                  */
+    fputc((uc >> 8) & 0xf, objfile);
     fputc(uc, objfile);
     break;
   case OUT_SREC :                       /* Motorola S-records                */
@@ -4207,7 +4231,7 @@ if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
 putbyte((unsigned short)co);
 
 nDiff = operand - loccounter - 3;
-putword((unsigned short)nDiff);
+putword((unsigned)nDiff);
 if (((nDiff & 0xff8000) == 0x000000) ||
     ((nDiff & 0xff8000) == 0xff8000))
   warning |= (certain) ? WRN_OPT : 0;
@@ -4261,8 +4285,10 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x015);
-		if (isPostIndexed)
-			putbyte(0x01B);
+    if (isPostIndexed) {
+      //putbyte(0x01B);
+      postbyte |= 0x80;
+    }
     putbyte((unsigned short)(co + 0x020));
   }
 doaddress(&p);
@@ -4335,7 +4361,7 @@ switch (mode)
 	if (isFar)
 		putbyte(0x015);
 	if (isPostIndexed)
-		putbyte(0x01B);
+		//putbyte(0x01B);
     putbyte((unsigned short)(co + 0x020));
     break;
  }
@@ -4373,8 +4399,10 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x015);
-	  if (isPostIndexed)
-		  putbyte(0x01B);
+    if (isPostIndexed) {
+      //putbyte(0x01B);
+      postbyte |= 0x80;
+    }
     putbyte((unsigned short)(co + 0x020));
     break;
  }
@@ -4413,8 +4441,10 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x015);
-	  if (isPostIndexed)
-		  putbyte(0x01B);
+    if (isPostIndexed) {
+      //putbyte(0x01B);
+      postbyte |= 0x80;
+    }
     putword((unsigned)(co + 0x020));
  }
 doaddress(&p);
@@ -4497,8 +4527,10 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x015);
-	  if (isPostIndexed)
-		  putbyte(0x01B);
+    if (isPostIndexed) {
+      //putbyte(0x01B);
+      postbyte |= 0x80;
+    }
     putbyte((unsigned short)(co + 0x60));
     break;
   }
@@ -4547,8 +4579,10 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
-		if (isPostIndexed)
-			putbyte(0x1B);
+    if (isPostIndexed) {
+      //putbyte(0x1B);
+      postbyte |= 0x80;
+    }
     putbyte((unsigned short)(co + 0x60));
     break;
   }
@@ -6516,6 +6550,7 @@ printf("-R[objname] ........ output to FLEX relocatable object file\n");
 printf("-S[objname] ........ output to Motorola S51-09 file\n");
 printf("-X[objname] ........ output to Intel Hex file\n");
 printf("-L[listname] ....... create listing file \n");
+printf("-V[objname]......... output Verilog rommem declarations \n");
 printf("-C ................. suppress code output\n");
 printf("-Dsymbol[=value] ... predefines a symbol\n");
 printf("                     for TSC 6809 Assembler compatibility,\n");
