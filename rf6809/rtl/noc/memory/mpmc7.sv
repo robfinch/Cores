@@ -35,7 +35,6 @@
 // ============================================================================
 //
 //`define RED_SCREEN	1'b1
-`define CROSS0
 
 module mpmc7(
 rst_i, clk100MHz,
@@ -48,8 +47,8 @@ clk5, cyc5, stb5, ack5, sel5, adr5, dato5, spriteno,
 clk6, cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
 clk7, cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 mem_ui_rst, mem_ui_clk, calib_complete,
-rstn, mem_addr, mem_cmd, mem_en, mem_wdf_data, mem_wdf_end, mem_wdf_mask, mem_wdf_wren,
-mem_rd_data, mem_rd_data_valid, mem_rd_data_end, mem_rdy, mem_wdf_rdy,
+rstn, app_addr, app_cmd, app_en, app_wdf_data, app_wdf_end, app_wdf_mask, app_wdf_wren,
+app_rd_data, app_rd_data_valid, app_rd_data_end, app_rdy, app_wdf_rdy,
 ch, state
 );
 parameter RMW = 0;
@@ -63,13 +62,17 @@ parameter CMD_WRITE = 3'b000;
 parameter IDLE = 4'd0;
 parameter PRESET1 = 4'd1;
 parameter PRESET2 = 4'd2;
-parameter SEND_DATA = 4'd3;
-parameter SET_CMD_RD = 4'd4;
-parameter SET_CMD_WR = 4'd5;
-parameter WAIT_NACK = 4'd6;
-parameter WAIT_RD = 4'd7;
-parameter WRITE_TRAMP = 4'd8;	// write trampoline
-parameter WRITE_TRAMP1 = 4'd9;
+parameter WRITE_DATA0 = 4'd3;
+parameter WRITE_DATA1 = 4'd4;
+parameter WRITE_DATA2 = 4'd5;
+parameter WRITE_DATA3 = 4'd7;
+parameter READ_DATA0 = 4'd8;
+parameter READ_DATA1 = 4'd9;
+parameter READ_DATA2 = 4'd10;
+parameter WAIT_NACK = 4'd11;
+parameter WRITE_TRAMP = 4'd12;	// write trampoline
+parameter WRITE_TRAMP1 = 4'd13;
+parameter PRESET3 = 4'd14;
 
 input rst_i;
 input clk100MHz;
@@ -185,18 +188,18 @@ input mem_ui_rst;
 input mem_ui_clk;
 input calib_complete;
 output rstn;
-output [AMSB:0] mem_addr;
-output reg [2:0] mem_cmd;
-output reg mem_en;
-output reg [127:0] mem_wdf_data;
-output reg [15:0] mem_wdf_mask;
-output reg mem_wdf_end;
-output reg mem_wdf_wren;
-input [127:0] mem_rd_data;
-input mem_rd_data_valid;
-input mem_rd_data_end;
-input mem_rdy;
-input mem_wdf_rdy;
+output [AMSB:0] app_addr;
+output reg [2:0] app_cmd;
+output reg app_en;
+output reg [127:0] app_wdf_data;
+output reg [15:0] app_wdf_mask;
+output reg app_wdf_end;
+output reg app_wdf_wren;
+input [127:0] app_rd_data;
+input app_rd_data_valid;
+input app_rd_data_end;
+input app_rdy;
+input app_wdf_rdy;
 
 // Debugging
 output reg [3:0] ch;
@@ -205,6 +208,7 @@ reg [3:0] next_state;
 
 integer n;
 integer n1;
+integer n2;
 
 reg [31:0] adr;
 reg [127:0] dat128;
@@ -213,12 +217,8 @@ reg [127:0] rmw_data;
 
 reg [3:0] nch;
 reg do_wr;
-reg [1:0] sreg;
+reg [5:0] sreg;
 reg rstn;
-reg fast_read0, fast_read1, fast_read2, fast_read3;
-reg fast_read4, fast_read5, fast_read6, fast_read7;
-reg read0,read1,read2,read3;
-reg read4,read5,read6,read7;
 reg elevate = 1'b0;
 reg [5:0] elevate_cnt = 6'h00;
 reg [5:0] nack_to = 6'd0;
@@ -235,31 +235,10 @@ wire ics7 = cyc7 & stb7 & cs7;
 
 reg acki0,acki1,acki2,acki3,acki4,acki5,acki6,acki7;
 
-// Record of the last read address for each channel.
-// Cache address tag
-reg [31:0] ch0_tag;
-reg [31:0] ch1_tag;
-reg [31:0] ch2_tag;
-reg [31:0] ch3_tag;
-reg [31:0] ch4_tag;
-reg [31:0] ch5_tag [0:63];	// separate address for each sprite
-reg [31:0] ch6_tag;
-reg [31:0] ch7_tag;
-
-// Read data caches
-reg [127:0] ch0_rd_data [0:7];
-reg [127:0] ch1_rd_data;
-reg [127:0] ch2_rd_data;
-reg [127:0] ch3_rd_data;
-reg [127:0] ch4_rd_data;
-reg [127:0] ch5_rd_data [0:255];
-reg [127:0] ch6_rd_data;
-reg [127:0] ch7_rd_data;
-
 reg [2:0] num_strips;
 reg [2:0] req_strip_cnt;		// count of requested strips
 reg [2:0] resp_strip_cnt;		// count of response strips
-reg [AMSB:0] mem_addr;
+reg [AMSB:0] app_addr;
 
 reg [15:0] refcnt;				// refreshing not used, its automnatic
 reg refreq;
@@ -366,8 +345,131 @@ edge_det ed_acki5 (.rst(rst_i), .clk(mem_ui_clk), .ce(1'b1), .i(acki5), .pe(), .
 edge_det ed_acki6 (.rst(rst_i), .clk(mem_ui_clk), .ce(1'b1), .i(acki6), .pe(), .ne(ne_acki6), .ee());
 edge_det ed_acki7 (.rst(rst_i), .clk(mem_ui_clk), .ce(1'b1), .i(acki7), .pe(), .ne(ne_acki7), .ee());
 
+wire [127:0] ch0_rdat;
+wire [127:0] ch1_rdat;
+wire [127:0] ch2_rdat;
+wire [127:0] ch3_rdat;
+wire [127:0] ch4_rdat;
+wire [127:0] ch5_rdat;
+wire [127:0] ch6_rdat;
+wire [127:0] ch7_rdat;
+wire ch0_hit, ch1_hit, ch2_hit, ch3_hit;
+wire ch4_hit, ch5_hit, ch6_hit, ch7_hit;
+
+mpmc7_read_cache rc0 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd0 && app_rd_data_valid),
+	.wadr({adr0xx[31:7],resp_strip_cnt[2:0],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk0),
+	.radr({adr0xx[31:4],4'h0}),
+	.rdat(ch0_rdat),
+	.hit(ch0_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc1 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd1 && app_rd_data_valid),
+	.wadr({adr1xx[31:5],resp_strip_cnt[0],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk1),
+	.radr({adr1xx[31:4],4'h0}),
+	.rdat(ch1_rdat),
+	.hit(ch1_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc2 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd2 && app_rd_data_valid),
+	.wadr({adr2xx[31:4],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk2),
+	.radr({adr2xx[31:4],4'h0}),
+	.rdat(ch2_rdat),
+	.hit(ch2_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc3 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd3 && app_rd_data_valid),
+	.wadr({adr3xx[31:4],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk3),
+	.radr({adr3xx[31:4],4'h0}),
+	.rdat(ch3_rdat),
+	.hit(ch3_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc4 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd4 && app_rd_data_valid),
+	.wadr({adr4xx[31:4],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk4),
+	.radr({adr4xx[31:4],4'h0}),
+	.rdat(ch4_rdat),
+	.hit(ch4_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc5 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd5 && app_rd_data_valid),
+	.wadr({adr5xx[31:6],resp_strip_cnt[1:0],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk5),
+	.radr({adr5xx[31:4],4'h0}),
+	.rdat(ch5_rdat),
+	.hit(ch5_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc6 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd6 && app_rd_data_valid),
+	.wadr({adr6xx[31:4],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk6),
+	.radr({adr6xx[31:4],4'h0}),
+	.rdat(ch6_rdat),
+	.hit(ch6_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
+mpmc7_read_cache rc7 (
+	.rst(rst_i),
+	.wclk(mem_ui_clk),
+	.wr(ch==4'd7 && app_rd_data_valid),
+	.wadr({adr7xx[31:4],4'h0}),
+	.wdat(app_rd_data),
+	.rclk(clk7),
+	.radr({adr7xx[31:4],4'h0}),
+	.rdat(ch7_rdat),
+	.hit(ch7_hit),
+	.inv(app_cmd==CMD_WRITE),
+	.iadr({3'b0,app_addr[28:4],4'h0})
+);
+
 // Register signals onto mem_ui_clk domain
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs0xx <= cs0;
 	we0xx <= we0;
@@ -376,7 +478,7 @@ begin
 	dati0xx <= dati0;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs1xx <= ics1;
 	we1xx <= we1;
@@ -387,7 +489,7 @@ begin
 	cr1xx <= cr1;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs2xx <= cs2;
 	we2xx <= we2;
@@ -396,7 +498,7 @@ begin
 	dati2xx <= dati2;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs3xx <= cs3;
 	we3xx <= we3;
@@ -405,7 +507,7 @@ begin
 	dati3xx <= dati3;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs4xx <= cs4;
 	we4xx <= we4;
@@ -414,7 +516,7 @@ begin
 	dati4xx <= dati4;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs5xx <= cs5;
 	sel5xx <= sel5;
@@ -422,7 +524,7 @@ begin
 	spritenoxx <= spriteno;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs6xx <= cs6;
 	we6xx <= we6;
@@ -431,7 +533,7 @@ begin
 	dati6xx <= dati6;
 end
 
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 begin
 	cs7xx <= ics7;
 	we7xx <= we7;
@@ -442,10 +544,14 @@ begin
 	cr7xx <= cr7;
 end
 
+reg [23:0] rst_ctr;
 always @(posedge clk100MHz)
-begin
-	sreg <= {sreg[0],rst_i};
-	rstn <= ~sreg[1];
+if (rst_i)
+	rst_ctr <= 24'd0;
+else begin
+	if (!rst_ctr[15])
+		rst_ctr <= rst_ctr + 2'd1;
+	rstn <= rst_ctr[15];
 end
 
 reg toggle;	// CPU1 / CPU0 priority toggle
@@ -455,42 +561,30 @@ reg sr1x,sr7x;
 reg [127:0] dati128;
 
 // Detect cache hits on read caches
-wire ch1_read = ics1 && !we1xx && cs1xx && (adr1xx[31:5]==ch1_tag[31:5]);
-wire ch7_read = cs7xx && !we7xx && (adr7xx[31:4]==ch7_tag[31:4]);
-
-always_comb
-	fast_read0 = (cs0xx && !we0xx && adr0xx[31:7]==ch0_tag[31:7]);
-always_comb
-	fast_read1 = ch1_read;
-always_comb
-	fast_read2 = (!we2xx && cs2xx && adr2xx[31:4]==ch2_tag[31:4]);
-always_comb
-	fast_read3 = (!we3xx && cs3xx && adr3xx[31:4]==ch3_tag[31:4]);
-always_comb
-	fast_read4 = (!we4xx && cs4xx && adr4xx[31:4]==ch4_tag[31:4]);
-
 // For the sprite channel, reading the 64-bits of a strip not beginning at
 // a 64-byte aligned paragraph only checks for the 64 bit address adr[5:3].
 // It's assumed that a 4x128-bit strips were read the by the previous access.
 // It's also assumed that the strip address won't match because there's more
 // than one sprite and sprite accesses are essentially random.
-always_comb
-	fast_read5 = (cs5xx && adr5xx[31:6] == ch5_tag[spriteno][31:6]);
-always_comb
-	fast_read6 = (!we6xx && cs6xx && adr6xx[31:4]==ch6_tag[31:4]);
-always_comb
-  fast_read7 = ch7_read;
+wire ch0_taghit = cs0xx && !we0xx && ch0_hit;
+wire ch1_taghit = ics1 && !we1xx && cs1xx && ch1_hit;
+wire ch2_taghit = !we2xx && cs2xx && ch2_hit;
+wire ch3_taghit = !we3xx && cs3xx && ch3_hit;
+wire ch4_taghit = !we4xx && cs4xx && ch4_hit;
+wire ch5_taghit = cs5xx && ch5_hit;
+wire ch6_taghit = !we6xx && cs6xx && ch6_hit;
+wire ch7_taghit = cs7xx && !we7xx && ch7_hit;
 
 always_comb
 begin
 	sr1x = FALSE;
-    if (ch1_read)
+    if (ch1_taghit)
         sr1x = sr1xx;
 end
 always_comb
 begin
 	sr7x = FALSE;
-    if (ch7_read)
+    if (ch7_taghit)
         sr7x = sr7xx;
 end
 
@@ -500,21 +594,37 @@ end
 always_ff @(posedge mem_ui_clk)
 begin
 	if (elevate) begin
-		if (cs7xx)
+		if (cs7xx & we7xx)
 			nch <= 3'd7;
-		else if (cs6xx)
+		else if (cs6xx & we6xx)
 			nch <= 3'd6;
-		else if (cs5xx)
+		else if (cs5xx & we5xx)
 			nch <= 3'd5;
-		else if (cs4xx)
+		else if (cs4xx & we4xx)
 			nch <= 3'd4;
-		else if (cs3xx)
+		else if (cs3xx & we3xx)
 			nch <= 3'd3;
-		else if (cs2xx)
+		else if (cs2xx & we2xx)
 			nch <= 3'd2;
-		else if (cs1xx)
+		else if (cs1xx & we1xx)
 			nch <= 3'd1;
-		else if (cs0xx)
+		else if (cs0xx & we0xx)
+			nch <= 3'd0;
+		else if (cs7xx & ~ch7_taghit)
+			nch <= 3'd7;
+		else if (cs6xx & ~ch6_taghit)
+			nch <= 3'd6;
+		else if (cs5xx & ~ch5_taghit)
+			nch <= 3'd5;
+		else if (cs4xx & ~ch4_taghit)
+			nch <= 3'd4;
+		else if (cs3xx & ~ch3_taghit)
+			nch <= 3'd3;
+		else if (cs2xx & ~ch2_taghit)
+			nch <= 3'd2;
+		else if (cs1xx & ~ch1_taghit)
+			nch <= 3'd1;
+		else if (cs0xx & ~ch0_taghit)
 			nch <= 3'd0;
 		else
 			nch <= 4'hF;
@@ -522,7 +632,7 @@ begin
 	// Channel 0 read or write takes precedence
 	else if (cs0xx & we0xx)
 		nch <= 3'd0;
-	else if (cs0xx & ~fast_read0)
+	else if (cs0xx & ~ch0_taghit)
 		nch <= 3'd0;
 	else if (cs1xx & we1xx)
 		nch <= 3'd1;
@@ -537,19 +647,19 @@ begin
 	else if (cs7xx & we7xx)
 		nch <= 3'd7;
 	// Reads, writes detected above
-	else if (cs1xx & ~fast_read1)
+	else if (cs1xx & ~ch1_taghit)
 		nch <= 3'd1;
-	else if (cs2xx & ~fast_read2)
+	else if (cs2xx & ~ch2_taghit)
 		nch <= 3'd2;
-	else if (cs3xx & ~fast_read3)
+	else if (cs3xx & ~ch3_taghit)
 		nch <= 3'd3;
-	else if (cs4xx & ~fast_read4)
+	else if (cs4xx & ~ch4_taghit)
 		nch <= 3'd4;
-	else if (cs5xx & ~fast_read5)
+	else if (cs5xx & ~ch5_taghit)
 		nch <= 3'd5;
-	else if (cs6xx & ~fast_read6)
+	else if (cs6xx & ~ch6_taghit)
 		nch <= 3'd6;
-	else if (cs7xx & ~fast_read7)
+	else if (cs7xx & ~ch7_taghit)
 		nch <= 3'd7;
 	// Nothing selected
 	else
@@ -577,19 +687,19 @@ if (state==IDLE) begin
 	3'd0:	if (we0xx)
 				adrx <= {adr0xx[AMSB:4],4'h0};
 			else
-				adrx <= {adr0xx[AMSB:4],4'h0};
+				adrx <= {adr0xx[AMSB:7],7'h0};
 	3'd1:	if (we1xx)
 				adrx <= {adr1xx[AMSB:4],4'h0};
 			else
-				adrx <= {adr1xx[AMSB:4],4'h0};
+				adrx <= {adr1xx[AMSB:5],5'h0};
 	3'd2:	adrx <= {adr2xx[AMSB:4],4'h0};
 	3'd3:	adrx <= {adr3xx[AMSB:4],4'h0};
 	3'd4:	adrx <= {adr4xx[AMSB:4],4'h0};
-	3'd5:	adrx <= {adr5xx[AMSB:4],4'h0};
+	3'd5:	adrx <= {adr5xx[AMSB:6],6'h0};
 	3'd6:	adrx <= {adr6xx[AMSB:4],4'h0};
 	3'd7:
 		if (we7xx) 
-			adrx <= {adr7xx[AMSB:1],1'h0};
+			adrx <= {adr7xx[AMSB:4],4'h0};
 		else
 			adrx <= {adr7xx[AMSB:4],4'h0};
 	default:	adrx <= 29'h1FFFFFF0;
@@ -600,6 +710,18 @@ if (mem_ui_rst)
 	adr <= 29'h1FFFFFF0;
 else if (state==PRESET1)
 	adr <= adrx;
+
+always_ff @(posedge mem_ui_clk)
+if (mem_ui_rst)
+	app_addr <= 29'h1FFFFFFF;
+else begin
+	if (state==PRESET2)
+		app_addr <= adr[28:0];
+	// Increment the address if we had to start a new burst.
+	else if (state==WRITE_DATA3 && req_strip_cnt!=num_strips)
+		app_addr <= app_addr + {req_strip_cnt,4'h0};	// works for only 1 missed burst
+end
+
 
 // Setting the write mask
 reg [15:0] wmask0;
@@ -612,129 +734,46 @@ reg [15:0] wmask6;
 reg [15:0] wmask7;
 
 always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
+	tMask(C0W,we0xx,{15'd0,sel0xx},adr0xx[3:0],wmask0);
+always_ff @(posedge mem_ui_clk)
+	tMask(C1W,we1xx,{15'd0,sel1xx},adr1xx[3:0],wmask1);
+always_ff @(posedge mem_ui_clk)
+	tMask(C2W,we2xx,{15'd0,sel2xx},adr2xx[3:0],wmask2);
+always_ff @(posedge mem_ui_clk)
+	tMask(C3W,we3xx,{15'd0,sel3xx},adr3xx[3:0],wmask3);
+always_ff @(posedge mem_ui_clk)
+	tMask(C4W,we4xx,{15'd0,sel4xx},adr4xx[3:0],wmask4);
+always_ff @(posedge mem_ui_clk)
+	tMask(C5W,1'b0,16'd0,4'h0,wmask5);
+always_ff @(posedge mem_ui_clk)
+	tMask(C6W,we6xx,{15'd0,sel6xx},adr6xx[3:0],wmask6);
+always_ff @(posedge mem_ui_clk)
+	tMask(C7W,we7xx,{15'd0,sel7xx},adr7xx[3:0],wmask7);
+
+task tMask;
+input [7:0] widi;
+input wei;
+input [15:0] seli;
+input [3:0] adri;
+output [15:0] masko;
 begin
-	if (we0xx) begin
-		if (C0W==128)
-			wmask0 <= ~sel0xx;
-		else if (C0W==64)
-			wmask0 <= ~({8'd0,sel0xx} << {adr0xx[2],3'b0});
-		else if (C0W==32)
-			wmask0 <= ~({12'd0,sel0xx} << {adr0xx[2:2],2'b0});
-		else if (C0W==16)
-			wmask0 <= ~({14'd0,sel0xx} << {adr0xx[2:1],1'b0});
+if (state==IDLE)
+	if (wei) begin
+		if (widi==8'd128)
+			masko <= ~seli;
+		else if (widi==8'd64)
+			masko <= ~({8'd0,seli[7:0]} << {adri[3],3'b0});
+		else if (widi==8'd32)
+			masko <= ~({12'd0,seli[3:0]} << {adri[3:2],2'b0});
+		else if (widi==8'd16)
+			masko <= ~({14'd0,seli[1:0]} << {adri[3:1],1'b0});
 		else
-			wmask0 <= ~({15'd0,sel0xx} << adr0xx[2:0]);
+			masko <= ~({15'd0,seli[0]} << adri[3:0]);
 	end
 	else
-		wmask0 <= 16'h0000;
+		masko <= 16'h0000;	// read all bytes
 end
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we1xx) begin
-		if (C1W==128)
-			wmask1 <= ~sel1xx;
-		else if (C1W==64)
-			wmask1 <= ~({8'd0,sel1xx} << {adr1xx[2],3'b0});
-		else if (C1W==32)
-			wmask1 <= ~({12'd0,sel1xx} << {adr1xx[2:2],2'b0});
-		else if (C1W==16)
-			wmask1 <= ~({14'd0,sel1xx} << {adr1xx[2:1],1'b0});
-		else
-			wmask1 <= ~({15'd0,sel1xx} << adr1xx[2:0]);
-	end
-	else
-		wmask1 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we2xx) begin
-		if (C2W==128)
-			wmask2 <= ~sel2xx;
-		else if (C2W==64)
-			wmask2 <= ~({8'd0,sel2xx} << {adr2xx[2],3'b0});
-		else if (C2W==32)
-			wmask2 <= ~({12'd0,sel2xx} << {adr2xx[2:2],2'b0});
-		else if (C2W==16)
-			wmask2 <= ~({14'd0,sel2xx} << {adr2xx[2:1],1'b0});
-		else
-			wmask2 <= ~({15'd0,sel2xx} << adr2xx[2:0]);
-	end
-	else
-		wmask2 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we3xx) begin
-		if (C3W==128)
-			wmask3 <= ~sel3xx;
-		else if (C3W==64)
-			wmask3 <= ~({8'd0,sel3xx} << {adr3xx[3],3'b0});
-		else if (C3W==32)
-			wmask3 <= ~({12'd0,sel3xx} << {adr3xx[3:2],2'b0});
-		else if (C3W==16)
-			wmask3 <= ~({14'd0,sel3xx} << {adr3xx[3:1],1'b0});
-		else
-			wmask3 <= ~({15'd0,sel3xx} << adr3xx[3:0]);
-	end
-	else
-		wmask3 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we4xx) begin
-		if (C4W==128)
-			wmask4 <= ~sel4xx;
-		else if (C4W==64)
-			wmask4 <= ~({8'd0,sel4xx} << {adr4xx[3],3'b0});
-		else if (C4W==32)
-			wmask4 <= ~({12'd0,sel4xx} << {adr4xx[3:2],2'b0});
-		else if (C4W==16)
-			wmask4 <= ~({14'd0,sel4xx} << {adr4xx[3:1],1'b0});
-		else
-			wmask4 <= ~({15'd0,sel4xx} << adr4xx[3:0]);
-	end
-	else
-		wmask4 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	wmask5 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we6xx) begin
-		if (C6W==128)
-			wmask6 <= ~sel6xx;
-		else if (C6W==64)
-			wmask6 <= ~({8'd0,sel6xx} << {adr6xx[3],3'b0});
-		else if (C6W==32)
-			wmask6 <= ~({12'd0,sel6xx} << {adr6xx[3:2],2'b0});
-		else if (C6W==16)
-			wmask6 <= ~({14'd0,sel6xx} << {adr6xx[3:1],1'b0});
-		else
-			wmask6 <= ~({15'd0,sel6xx} << adr6xx[3:0]);
-  end
-  else
-  	wmask6 <= 16'hFFFF;
-
-always_ff @(posedge mem_ui_clk)
-if (state==IDLE)
-	if (we7xx) begin
-		if (C7W==128)
-			wmask7 <= ~sel7xx;
-		else if (C7W==64)
-			wmask7 <= ~({8'd0,sel7xx} << {adr7xx[3],3'b0});
-		else if (C7W==32)
-			wmask7 <= ~({12'd0,sel7xx} << {adr7xx[3:2],2'b0});
-		else if (C7W==16)
-			wmask7 <= ~({14'd0,sel7xx} << {adr7xx[3:1],1'b0});
-		else
-			wmask7 <= ~({15'd0,sel7xx} << adr7xx[3:0]);
-	end
-	else
-		wmask7 <= 16'hFFFF;	// read all bytes
+endtask
 
 // Setting the write data
 // Repeat the data across lanes when less than 128-bit.
@@ -770,12 +809,12 @@ endgenerate
 
 always_ff @(posedge mem_ui_clk)
 if (mem_ui_rst)
-  mem_wdf_data <= 128'd0;
+  app_wdf_data <= 128'd0;
 else begin
 	if (state==PRESET2)
-		mem_wdf_data <= dat128x;
+		app_wdf_data <= dat128x;
 	else if (state==WRITE_TRAMP1)
-		mem_wdf_data <= rmw_data;
+		app_wdf_data <= rmw_data;
 end
 
 generate begin : gRMW
@@ -783,66 +822,15 @@ for (g = 0; g < 16; g = g + 1) begin
 	always_ff @(posedge mem_ui_clk)
 	begin
 		if (state==WRITE_TRAMP) begin
-			if (mem_wdf_mask[g])
-				rmw_data[g*8+7:g*8] <= mem_wdf_data[g*8+7:g*8];
+			if (app_wdf_mask[g])
+				rmw_data[g*8+7:g*8] <= app_wdf_data[g*8+7:g*8];
 			else
-				rmw_data[g*8+7:g*8] <= mem_rd_data[g*8+7:g*8];
+				rmw_data[g*8+7:g*8] <= app_rd_data[g*8+7:g*8];
 		end
 	end
 end
 end
 endgenerate
-
-// Managing read cache addresses
-// When to load cache address tag
-reg ld_addr;
-always_ff @(posedge mem_ui_clk)
-	ld_addr <= (state==WAIT_RD) && mem_rd_data_valid && mem_rd_data_end
-							&& resp_strip_cnt==num_strips && !do_wr;
-// Check for cache clear
-reg cc0,cc1,cc2,cc3,cc4,cc5,cc6,cc7;
-always_ff @(posedge mem_ui_clk) cc0 <= state==IDLE && cs0xx && we0xx;
-always_ff @(posedge mem_ui_clk) cc1 <= state==IDLE && cs1xx && we1xx;
-always_ff @(posedge mem_ui_clk) cc2 <= state==IDLE && cs2xx && we2xx;
-always_ff @(posedge mem_ui_clk) cc3 <= state==IDLE && cs3xx && we3xx;
-always_ff @(posedge mem_ui_clk) cc4 <= state==IDLE && cs4xx && we4xx;
-always_ff @(posedge mem_ui_clk) cc6 <= state==IDLE && cs6xx && we6xx;
-always_ff @(posedge mem_ui_clk) cc7 <= state==IDLE && cs7xx && we7xx;
-
-always_ff @(posedge mem_ui_clk)
-if (mem_ui_rst) begin
-	ch0_tag <= 32'hFFFFFFFF;
-	ch1_tag <= 32'hFFFFFFFF;
-	ch2_tag <= 32'hFFFFFFFF;
-	ch3_tag <= 32'hFFFFFFFF;
-	ch4_tag <= 32'hFFFFFFFF;
-	for (n = 0; n < 64; n = n + 1)
-		ch5_tag[n] <= 32'hFFFFFFFF;
-	ch6_tag <= 32'hFFFFFFFF;
-	ch7_tag <= 32'hFFFFFFFF;
-end
-else begin
-	if (cc0) clear_tag(adr0xx);
-	if (cc1) clear_tag(adr1xx);
-	if (cc2) clear_tag(adr2xx);
-	if (cc3) clear_tag(adr3xx);
-	if (cc4) clear_tag(adr4xx);
-	if (cc6) clear_tag(adr6xx);
-	if (cc7) clear_tag(adr7xx);
-	if (ld_addr) begin
-		case(ch)
-		3'd0:	ch0_tag <= {adr0xx[31:4],4'h0};
-		3'd1: ch1_tag <= {adr1xx[31:4],4'h0};
-		3'd2: ch2_tag <= {adr2xx[31:4],4'h0};
-		3'd3: ch3_tag <= {adr3xx[31:4],4'h0};
-		3'd4: ch4_tag <= {adr4xx[31:4],4'h0};
-		3'd5: ch5_tag[spritenoxx] <= {adr5xx[31:4],4'h0};
-		3'd6: ch6_tag <= {adr6xx[31:4],4'h0};
-		3'd7: ch7_tag <= {adr7xx[31:4],4'h0};
-		default:	;
-		endcase
-	end
-end
 
 always_ff @(posedge mem_ui_clk)
 if (state==IDLE)
@@ -865,27 +853,10 @@ if (state==IDLE) begin
 	endcase
 end
 
-// Auto-increment the request address during a read burst until the desired
-// number of strips are requested.
-always_ff @(posedge mem_ui_clk)
-if (mem_ui_rst)
-	mem_addr <= 29'h1FFFFFFF;
-else begin
-	if (state==PRESET2)
-		mem_addr <= adr[28:0];
-	else begin
-		if (state==SET_CMD_RD)
-		  if (mem_rdy == TRUE) begin
-		    if (req_strip_cnt!=num_strips)
-		      mem_addr <= mem_addr + 5'd16;
-		  end
-	end
-end
-
 // Setting the data mask. Values are enabled when the data mask is zero.
 always_ff @(posedge mem_ui_clk)
 if (mem_ui_rst)
-  mem_wdf_mask2 <= 16'hFFFF;
+  mem_wdf_mask2 <= 16'h0000;
 else begin
 	if (state==PRESET1)
 		case(ch)
@@ -897,7 +868,7 @@ else begin
 		3'd5:	mem_wdf_mask2 <= wmask5;
 		3'd6:	mem_wdf_mask2 <= wmask6;
 		3'd7:	mem_wdf_mask2 <= wmask7;
-		default:	mem_wdf_mask2 <= 16'hFFFF;
+		default:	mem_wdf_mask2 <= 16'h0000;
 		endcase
 	// For RMW cycle all bytes are writtten.
 	else if (state==WRITE_TRAMP1)
@@ -905,160 +876,77 @@ else begin
 end
 always_ff @(posedge mem_ui_clk)
 if (mem_ui_rst)
-  mem_wdf_mask <= 16'hFFFF;
-else if (state==PRESET2)
-	mem_wdf_mask <= mem_wdf_mask2;
+  app_wdf_mask <= 16'h0000;
+else begin
+	if (state==PRESET2)
+		app_wdf_mask <= mem_wdf_mask2;
+end
 
 // Setting output data. Force output data to zero when not selected to allow
 // wire-oring the data.
 always_ff @(posedge clk0)
-if (cs0) begin
 `ifdef RED_SCREEN
+if (cs0) begin
 	if (C0W==128)
 		dato0 <= 128'h7C007C007C007C007C007C007C007C00;
 	else if (C0W==64)
 		dato0 <= 64'h7C007C007C007C00;
-	else
+	else if (C0W==32)
 		dato0 <= 32'h7C007C00;
-`else
-	if (C0W==128)
-		dato0 <= ch0_rd_data[adr0xx[5:4]];
-	else if (C0W==64)
-		case(adr0xx[3])
-		1'd0:	dato0 <= ch0_rd_data[adr0xx[5:4]][63:0];
-		1'd1:	dato0 <= ch0_rd_data[adr0xx[5:4]][127:64];
-		endcase
+	else if (C0W==16)
+		dato0 <= 16'h7C00;
 	else
-		case(adr0xx[3:2])
-		2'd0:	dato0 <= ch0_rd_data[adr0xx[5:4]][31:0];
-		2'd1:	dato0 <= ch0_rd_data[adr0xx[5:4]][63:32];
-		2'd2:	dato0 <= ch0_rd_data[adr0xx[5:4]][95:64];
-		2'd3:	dato0 <= ch0_rd_data[adr0xx[5:4]][127:96];
-		endcase
-`endif
+		dato0 <= 8'hE0;
 end
 else
 	dato0 <= {C0W{1'b0}};
+`else
+	tDato(C0W,cs0,adr0xx[3:0],ch0_rdat,dato0);
+`endif
 
 always_ff @(posedge clk1)
-if (cs1) begin
-	if (C1W==128)
-		dato1 <= ch1_rd_data[adr1xx[4]];
-	else if (C1W==64)
-		case(adr1xx[3])
-		1'd0:	dato1 <= ch1_rd_data[adr1xx[4]][63:0];
-		1'd1:	dato1 <= ch1_rd_data[adr1xx[4]][127:64];
-		endcase
-	else
-		case(adr1xx[3:2])
-		2'd0:	dato1 <= ch1_rd_data[adr1xx[4]][31:0];
-		2'd1:	dato1 <= ch1_rd_data[adr1xx[4]][63:32];
-		2'd2:	dato1 <= ch1_rd_data[adr1xx[4]][95:64];
-		2'd3:	dato1 <= ch1_rd_data[adr1xx[4]][127:96];
-		endcase
-end
-else
-	dato1 <= {C1W{1'b0}};
-
+	tDato(C1W,cs1,adr1xx[3:0],ch1_rdat,dato1);
 always_ff @(posedge clk2)
-if (cs2) begin
-	if (C2W==128)
-		dato2 <= ch2_rd_data;
-	else if (C2W==64)
-		case(adr2xx[3])
-    1'd0:    dato2 <= ch2_rd_data[ 63:0];
-    1'd1:    dato2 <= ch2_rd_data[127:64];
-    endcase
-	else
-		case(adr2xx[3:2])
-    2'd0:    dato2 <= ch2_rd_data[31:0];
-    2'd1:    dato2 <= ch2_rd_data[63:32];
-    2'd2:    dato2 <= ch2_rd_data[95:64];
-    2'd3:    dato2 <= ch2_rd_data[127:96];
-    endcase
-end
-else
-	dato2 <= {C2W{1'b0}};
-
+	tDato(C2W,cs2,adr2xx[3:0],ch2_rdat,dato2);
 always_ff @(posedge clk3)
-if (cs3)
-	dato3 <= ch3_rd_data >> {adr3xx[3:1],4'd0};
-else
-	dato3 <= 16'h0;
-
+	tDato(C3W,cs3,adr3xx[3:0],ch3_rdat,dato3);
 always_ff @(posedge clk4)
-if (cs4) begin
-	if (C4W==128)
-		dato4 <= ch4_rd_data;
-	else
-		case(adr4xx[3])
-		1'b0:	dato4 <= ch4_rd_data[63:0];
-		1'b1:	dato4 <= ch4_rd_data[127:64];
-		endcase
-end
-else
-	dato4 <= {C4W{1'b0}};
-
+	tDato(C4W,cs4,adr4xx[3:0],ch4_rdat,dato4);
 always_ff @(posedge clk5)
-if (cs5) begin
-	if (C5W==128)
-		dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][127: 0];
-	else if (C5W==64)
-		case(adr5xx[3])
-		1'b0:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][ 63: 0];
-		1'b1:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][127:64];
-	  endcase
-	else if (C5W==32)
-		case(adr5xx[3:2])
-		2'd0:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][ 31: 0];
-		2'd1:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][ 63:32];
-		2'd2:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][ 95:64];
-		2'd3:	dato5 <= ch5_rd_data[{spriteno_r,adr5xx[5:4]}][127:96];
-	  endcase
-end
-else
-	dato5 <= {C5W{1'b0}};
-
+	tDato(C5W,cs5,adr5xx[3:0],ch5_rdat,dato5);
 always_ff @(posedge clk6)
-if (cs6) begin
-	if (C6W==128)
-		dato6 <= ch6_rd_data;
-	else if (C6W==64)
-		case(adr6xx[3])
-    1'd0:    dato6 <= ch6_rd_data[ 63:0];
-    1'd1:    dato6 <= ch6_rd_data[127:64];
-    endcase
-	else
-		case(adr6xx[3:2])
-    2'd0:    dato6 <= ch6_rd_data[31:0];
-    2'd1:    dato6 <= ch6_rd_data[63:32];
-    2'd2:    dato6 <= ch6_rd_data[95:64];
-    2'd3:    dato6 <= ch6_rd_data[127:96];
-    endcase
-end
-else
-	dato6 <= {C6W{1'b0}};
-
+	tDato(C6W,cs6,adr6xx[3:0],ch6_rdat,dato6);
 always_ff @(posedge clk7)
-if (cs7) begin
-	if (C7R==128)
-		dato7 <= ch7_rd_data;
-	else if (C7R==64)
-		dato7 <= ch7_rd_data >> {adr7xx[3],6'h0};
-	else if (C7R==32)
-		dato7 <= ch7_rd_data >> {adr7xx[3:2],5'h0};
-	else if (C7R==16)
-		dato7 <= ch7_rd_data >> {adr7xx[3:1],4'h0};
+	tDato(C7R,cs7,adr7xx[3:0],ch7_rdat,dato7);
+
+task tDato;
+input [7:0] widi;
+input csi;
+input [3:0] adri;
+input [127:0] dati;
+output [127:0] dato;
+begin
+if (csi) begin
+	if (widi==8'd128)
+		dato <= dati;
+	else if (widi==8'd64)
+		dato <= dati >> {adri[3],6'h0};
+	else if (widi==8'd32)
+		dato <= dati >> {adri[3:2],5'h0};
+	else if (widi==8'd16)
+		dato <= dati >> {adri[3:1],4'h0};
 	else
-		dato7 <= ch7_rd_data >> {adr7xx[3:0],3'h0};
+		dato <= dati >> {adri[3:0],3'h0};
 end
 else
-	dato7 <= {C7W{1'b0}};
+	dato <= 'b0;
+end
+endtask
 
 // Setting ack output
 // Ack takes place outside of a state so that reads from different read caches
 // may occur at the same time.
-always @(posedge mem_ui_clk)
+always_ff @(posedge mem_ui_clk)
 if (rst_i|mem_ui_rst) begin
 	acki0 <= FALSE;
 	acki1 <= FALSE;
@@ -1070,37 +958,38 @@ if (rst_i|mem_ui_rst) begin
 	acki7 <= FALSE;
 end
 else begin
-	// Reads: the ack doesn't happen until the data's been cached.
-	if (fast_read0)
+	// Reads: the ack doesn't happen until the data's been cached. If there is
+	// cached data we give an ack right away.
+	if (ch0_taghit && state==PRESET3)
 		acki0 <= TRUE;
-	if (ch1_read)
+	if (ch1_taghit && state==PRESET3)
 		acki1 <= TRUE;
-	if (!we2xx && cs2xx && adr2xx[31:4]==ch2_tag[31:4])
+	if (ch2_taghit && state==PRESET3)
 		acki2 <= TRUE;
-	if (!we3xx && cs3xx && adr3xx[31:4]==ch3_tag[31:4])
+	if (ch3_taghit && state==PRESET3)
 		acki3 <= TRUE;
-	if (!we4xx && cs4xx && adr4xx[31:4]==ch4_tag[31:4])
+	if (ch4_taghit && state==PRESET3)
 		acki4 <= TRUE;
-	if (cs5xx && adr5xx[31:4]==ch5_tag[spritenoxx][31:4])
+	if (ch5_taghit && state==PRESET3)
     acki5 <= TRUE;
-	if (!we6xx && cs6xx && adr6xx[31:4]==ch6_tag[31:4])
+	if (ch6_taghit && state==PRESET3)
 		acki6 <= TRUE;
-  if (fast_read7)
+  if (ch7_taghit && state==PRESET3)
     acki7 <= TRUE;
 
 	if (state==IDLE) begin
     if (cr1xx) begin
       acki1 <= TRUE;
-    	for (n = 0; n < NAR; n = n + 1)
-      	if ((resv_ch[n]==4'd1) && (resv_adr[n][31:4]==adr1xx[31:4]))
+    	for (n2 = 0; n2 < NAR; n2 = n2 + 1)
+      	if ((resv_ch[n2]==4'd1) && (resv_adr[n2][31:4]==adr1xx[31:4]))
         	acki1 <= FALSE;
     end
 //    else
 //        acki1 <= FALSE;
     if (cr7xx) begin
       acki7 <= TRUE;
-    	for (n = 0; n < NAR; n = n + 1)
-	      if ((resv_ch[n]==4'd7) && (resv_adr[n][31:4]==adr7xx[31:4]))
+    	for (n2 = 0; n2 < NAR; n2 = n2 + 1)
+	      if ((resv_ch[n2]==4'd7) && (resv_adr[n2][31:4]==adr7xx[31:4]))
 	        acki7 <= FALSE;
     end
 //    else
@@ -1108,7 +997,7 @@ else begin
 	end
 
 	// Write: an ack can be sent back as soon as the write state is reached..
-	if (state==SET_CMD_WR && mem_rdy == TRUE)
+	if ((state==PRESET1 && do_wr) || tocnt[9])
     case(ch)
     3'd0:   acki0 <= TRUE;
     3'd1:   acki1 <= TRUE;
@@ -1134,12 +1023,27 @@ else begin
 end
 
 wire ne_data_valid;
-edge_det ued1 (.rst(rst_i), .clk(mem_ui_clk), .ce(1'b1), .i(mem_rd_data_valid), .pe(), .ne(ne_data_valid), .ee());
+edge_det ued1 (.rst(rst_i), .clk(mem_ui_clk), .ce(1'b1), .i(app_rd_data_valid), .pe(), .ne(ne_data_valid), .ee());
 
+// State machine
 always_ff @(posedge mem_ui_clk)
 	state <= next_state;
 
-// State machine
+reg xit_rd_cmd;
+always_comb
+begin
+	xit_rd_cmd = FALSE;
+	if (app_rdy == TRUE) begin
+		if (req_strip_cnt==num_strips)
+			xit_rd_cmd = TRUE;
+	end
+  if (app_rd_data_valid) begin
+  	if (resp_strip_cnt==num_strips)
+  		xit_rd_cmd = TRUE;
+	end
+end
+
+integer n3;
 always_comb
 if (rst_i|mem_ui_rst)
 	next_state <= IDLE;
@@ -1155,8 +1059,8 @@ IDLE:
 	3'd1:
 	    if (cr1xx) begin
         next_state <= IDLE;
-	    	for (n = 0; n < NAR; n = n + 1)
-        	if ((resv_ch[n]==4'd1) && (resv_adr[n][31:4]==adr1xx[31:4]))
+	    	for (n3 = 0; n3 < NAR; n3 = n3 + 1)
+        	if ((resv_ch[n3]==4'd1) && (resv_adr[n3][31:4]==adr1xx[31:4]))
           	next_state <= PRESET1;
 	    end
 	    else
@@ -1169,8 +1073,8 @@ IDLE:
 	3'd7:
 	    if (cr7xx) begin
         next_state <= IDLE;
-	    	for (n = 0; n < NAR; n = n + 1)
-	        if ((resv_ch[n]==4'd7) && (resv_adr[n][31:4]==adr7xx[31:4]))
+	    	for (n3 = 0; n3 < NAR; n3 = n3 + 1)
+	        if ((resv_ch[n3]==4'd7) && (resv_adr[n3][31:4]==adr7xx[31:4]))
             next_state <= PRESET1;
 	    end
 	    else
@@ -1179,62 +1083,57 @@ IDLE:
 	endcase
 PRESET1:
 	next_state <= PRESET2;
+// The valid data, data mask and address are placed in app_wdf_data, app_wdf_mask,
+// and memm_addr ahead of time.
 PRESET2:
+	next_state <= PRESET3;
+// PRESET3 determines the read or write command
+PRESET3:
 	if (do_wr && !RMW)
-		next_state <= SEND_DATA;
+		next_state <= WRITE_DATA0;
 	else
-		next_state <= SET_CMD_RD;
-SEND_DATA:
-  if (mem_wdf_rdy == TRUE)
-    next_state <= SET_CMD_WR;
-SET_CMD_WR:
- 	if (mem_rdy == TRUE)
-   	next_state <= WAIT_NACK;
+		next_state <= READ_DATA0;
+
+// Write data to the data fifo
+// Write occurs when app_wdf_wren is true and app_wdf_rdy is true
+WRITE_DATA0:
+	// Issue a write command if the fifo is full.
+	if (!app_wdf_rdy)
+		next_state <= WRITE_DATA1;
+	else if (app_wdf_rdy && req_strip_cnt==num_strips)
+		next_state <= WRITE_DATA1;
+WRITE_DATA1:
+	next_state <= WRITE_DATA2;
+WRITE_DATA2:
+	if (app_rdy)
+		next_state <= WRITE_DATA3;
+WRITE_DATA3:
+	if (req_strip_cnt==num_strips)
+		next_state <= IDLE;
+	else
+		next_state <= WRITE_DATA0;
 
 // There could be multiple read requests submitted before any response occurs.
 // Stay in the SET_CMD_RD until all requested strips have been processed.
-SET_CMD_RD:
-	begin
-	  if (mem_rdy == TRUE) begin
-	  	if (req_strip_cnt==num_strips)
-				next_state <= WAIT_RD;
-		end
-	  if (mem_rd_data_valid & mem_rd_data_end) begin
-	  	if (resp_strip_cnt==num_strips) begin
-		  	if (do_wr)
-		  		next_state <= WRITE_TRAMP;
-				else
-					next_state <= WAIT_NACK;
-			end
-		end
-	end
-// Wait for incoming responses.
-WAIT_RD:
-	begin
-		if (tocnt==16'd4000) begin
-	  	if (do_wr)
-	  		next_state <= WRITE_TRAMP;
-			else
-				next_state <= WAIT_NACK;
-		end
-	  if (mem_rd_data_valid & mem_rd_data_end) begin
-	  	if (resp_strip_cnt==num_strips) begin
-		  	if (do_wr)
-		  		next_state <= WRITE_TRAMP;
-				else
-					next_state <= WAIT_NACK;
-			end
-		end
-	end
-WAIT_NACK:	;
-WRITE_TRAMP:
-	next_state <= WRITE_TRAMP1;
-WRITE_TRAMP1:
-	next_state <= SEND_DATA;
+READ_DATA0:
+	next_state <= READ_DATA1;
+// Could it take so long to do the request that we start getting responses
+// back?
+READ_DATA1:
+	if (app_rdy)
+		next_state <= READ_DATA2;
+// Wait for incoming responses, but only for so long to prevent a hang.
+READ_DATA2:
+	if (app_rd_data_valid && resp_strip_cnt==num_strips)
+		next_state <= WAIT_NACK;
 
+WAIT_NACK:	;
 default:	next_state <= IDLE;
 endcase
 
+	// If we're not seeing a nack and there is a channel selected, then the
+	// cache tag must not have updated correctly.
+	// For writes, assume a nack by now.
 	case(ch)
 	3'd0:	if (ne_acki0) next_state <= IDLE;
 	3'd1:	if (ne_acki1) next_state <= IDLE;
@@ -1246,87 +1145,87 @@ endcase
 	3'd7:	if (ne_acki7) next_state <= IDLE;
 	default:	next_state <= IDLE;
 	endcase
+
+// Is the state machine hung?
+if (tocnt[9])
+	next_state <= IDLE;
+end
+
+reg [3:0] prev_state;
+always_ff @(posedge mem_ui_clk)
+if (state==IDLE) begin	// We can stay in the idle state as long as we like
+	tocnt <= 16'h0;
+	prev_state <= IDLE;
+end
+else begin
+	if (state==prev_state) begin
+		tocnt <= tocnt+2'd1;
+		if (tocnt[9])
+			tocnt <= 16'd0;
+	end
+	else
+		prev_state <= state;
 end
 
 always_ff @(posedge mem_ui_clk)
 begin
-	if (state==SET_CMD_RD)
-		tocnt <= 16'd0;
-	else if (state==WAIT_RD)
-		tocnt <= tocnt + 2'd1;
-end
-
-always_ff @(posedge mem_ui_clk)
-begin
-	mem_en <= FALSE;
-	if (state==SEND_DATA && mem_wdf_rdy)
-		mem_en <= TRUE;
-	if (state==PRESET2 && !(do_wr && !RMW))
-		mem_en <= TRUE;
-end
-
-always_ff @(posedge mem_ui_clk)
-begin
-	mem_wdf_wren <= FALSE;
-	if (state==PRESET2 && (do_wr && !RMW))
-		mem_wdf_wren <= TRUE;
-end
-
-always_ff @(posedge mem_ui_clk)
-begin
-	mem_wdf_end <= FALSE;
-	if (state==PRESET2 && (do_wr && !RMW))
-		mem_wdf_end <= TRUE;
+	app_en <= FALSE;
+	if (state==WRITE_DATA1)
+		app_en <= TRUE;
+	else if (state==WRITE_DATA2 && !app_rdy)
+		app_en <= TRUE;
+	else if (state==READ_DATA0)
+		app_en <= TRUE;
+	else if (state==READ_DATA1 && !app_rdy)
+		app_en <= TRUE;
 end
 
 // Strangely, for the DDR3 the default is to have a write command value,
 // overridden when a read is needed. The command is processed by the 
-// SET_CMD_xx states.
+// WRITE_DATAx states.
+
 always_ff @(posedge mem_ui_clk)
 begin
-	mem_cmd <= CMD_WRITE;
-	if (state==PRESET2 && !(do_wr && !RMW))
-		mem_cmd <= CMD_READ;
+	if (state==IDLE)
+		app_cmd <= CMD_WRITE;
+	else if (state==WRITE_DATA1)
+		app_cmd <= CMD_WRITE;
+	else if (state==WRITE_DATA2 && !app_rdy)
+		app_cmd <= CMD_WRITE;
+	else if (state==READ_DATA0)
+		app_cmd <= CMD_READ;
+	else if (state==READ_DATA1)
+		app_cmd <= CMD_READ;
+end
+always_ff @(posedge mem_ui_clk)
+begin
+	app_wdf_wren <= FALSE;
+	app_wdf_end <= FALSE;
+	if (state==WRITE_DATA0 && app_wdf_rdy) begin
+		app_wdf_wren <= TRUE;
+		app_wdf_end <= req_strip_cnt==num_strips;
+	end
 end
 
 // Manage memory strip counters.
 always_ff @(posedge mem_ui_clk)
 if (state==IDLE)
 	req_strip_cnt <= 3'd0;
-else if (state==SET_CMD_RD)
-  if (mem_rdy == TRUE) begin
-    if (req_strip_cnt != num_strips)
-      req_strip_cnt <= req_strip_cnt + 3'd1;
-  end
+else begin
+	if (state==WRITE_DATA0 && app_wdf_rdy)
+  	if (req_strip_cnt != num_strips)
+    	req_strip_cnt <= req_strip_cnt + 3'd1;
+end
 
 always_ff @(posedge mem_ui_clk)
 if (state==IDLE)
 	resp_strip_cnt <= 3'd0;
-else if (state==WAIT_RD || state==SET_CMD_RD)
-	if (mem_rd_data_valid & mem_rd_data_end)
-		if (resp_strip_cnt != num_strips)
-    	resp_strip_cnt <= resp_strip_cnt + 3'd1;
-
-// Update data caches with read data.
-always_ff @(posedge mem_ui_clk)
-begin
-	if (state==WAIT_RD || state==WAIT_NACK || state==SET_CMD_RD)
-		if (mem_rd_data_valid && mem_rd_data_end) begin
-	    case(ch)
-	    3'd0:	ch0_rd_data[resp_strip_cnt[2:0]] <= mem_rd_data;
-	    3'd1:	ch1_rd_data[resp_strip_cnt[0]] <= mem_rd_data;
-	    3'd2:	ch2_rd_data <= mem_rd_data;
-	    3'd3:	ch3_rd_data <= mem_rd_data;
-	    3'd4:	ch4_rd_data <= mem_rd_data;
-	    3'd5:	ch5_rd_data[{spriteno_r,resp_strip_cnt[1:0]}] <= mem_rd_data;
-	    3'd6:	ch6_rd_data <= mem_rd_data;
-	    3'd7:	ch7_rd_data <= mem_rd_data;
-	    default:	;
-	    endcase
-		end
-end
+else if (app_rd_data_valid)
+	if (resp_strip_cnt != num_strips)
+  	resp_strip_cnt <= resp_strip_cnt + 3'd1;
 
 // Write operation indicator
+integer n4;
 always_ff @(posedge mem_ui_clk)
 begin
 	if (state==IDLE) begin
@@ -1336,8 +1235,8 @@ begin
 		3'd1:
 			if (we1xx) begin
 			    if (cr1xx) begin
-			    	for (n = 0; n < NAR; n = n + 1)
-			        if ((resv_ch[n]==4'd1) && (resv_adr[n][31:4]==adr1xx[31:4]))
+			    	for (n4 = 0; n4 < NAR; n4 = n4 + 1)
+			        if ((resv_ch[n4]==4'd1) && (resv_adr[n4][31:4]==adr1xx[31:4]))
 		            do_wr <= TRUE;
 			    end
 			    else
@@ -1350,8 +1249,8 @@ begin
 		3'd7:
 			if (we7xx) begin
 			    if (cr7xx) begin
-			    	for (n = 0; n < NAR; n = n + 1)
-			        if ((resv_ch[n]==4'd7) && (resv_adr[n][31:4]==adr7xx[31:4]))
+			    	for (n4 = 0; n4 < NAR; n4 = n4 + 1)
+			        if ((resv_ch[n4]==4'd7) && (resv_adr[n4][31:4]==adr7xx[31:4]))
 		            do_wr <= TRUE;
 			    end
 			    else
@@ -1363,38 +1262,41 @@ begin
 end
 
 // Reservation status bit
+integer n5;
 always_ff @(posedge mem_ui_clk)
 if (state==IDLE) begin
   if (cs1xx & we1xx & ~acki1) begin
     if (cr1xx) begin
       rb1 <= FALSE;
-    	for (n = 0; n < NAR; n = n + 1)
-	      if ((resv_ch[n]==4'd1) && (resv_adr[n][31:4]==adr1xx[31:4]))
+    	for (n5 = 0; n5 < NAR; n5 = n5 + 1)
+	      if ((resv_ch[n5]==4'd1) && (resv_adr[n5][31:4]==adr1xx[31:4]))
   	      rb1 <= TRUE;
     end
   end
 end
 
+integer n6;
 always_ff @(posedge mem_ui_clk)
 if (state==IDLE) begin
   if (cs7xx & we7xx & ~acki7) begin
     if (cr7xx) begin
       rb7 <= FALSE;
-    	for (n = 0; n < NAR; n = n + 1)
-	      if ((resv_ch[n]==4'd7) && (resv_adr[n][31:4]==adr7xx[31:4]))
+    	for (n6 = 0; n6 < NAR; n6 = n6 + 1)
+	      if ((resv_ch[n6]==4'd7) && (resv_adr[n6][31:4]==adr7xx[31:4]))
   	      rb7 <= TRUE;
     end
   end
 end
 
 // Managing address reservations
+integer n7;
 always_ff @(posedge mem_ui_clk)
 if (mem_ui_rst) begin
 	resv_to_cnt <= 20'd0;
 	toggle <= FALSE;
 	toggle_sr <= FALSE;
- 	for (n = 0; n < NAR; n = n + 1)
-		resv_ch[n] <= 4'hF;
+ 	for (n7 = 0; n7 < NAR; n7 = n7 + 1)
+		resv_ch[n7] <= 4'hF;
 end
 else begin
 	resv_to_cnt <= resv_to_cnt + 20'd1;
@@ -1420,72 +1322,47 @@ else begin
 		if (cs1xx & we1xx & ~acki1) begin
 		    toggle <= 1'b1;
 		    if (cr1xx) begin
-		    	for (n = 0; n < NAR; n = n + 1)
-		        if ((resv_ch[n]==4'd1) && (resv_adr[n][31:4]==adr1xx[31:4]))
-		            resv_ch[n] <= 4'hF;
+		    	for (n7 = 0; n7 < NAR; n7 = n7 + 1)
+		        if ((resv_ch[n7]==4'd1) && (resv_adr[n7][31:4]==adr1xx[31:4]))
+		            resv_ch[n7] <= 4'hF;
 		    end
 		end
 		else if (cs7xx & we7xx & ~acki7) begin
 		    toggle <= 1'b1;
 		    if (cr7xx) begin
-		    	for (n = 0; n < NAR; n = n + 1)
-		        if ((resv_ch[n]==4'd7) && (resv_adr[n][31:4]==adr7xx[31:4]))
-		            resv_ch[n] <= 4'hF;
+		    	for (n7 = 0; n7 < NAR; n7 = n7 + 1)
+		        if ((resv_ch[n7]==4'd7) && (resv_adr[n7][31:4]==adr7xx[31:4]))
+		            resv_ch[n7] <= 4'hF;
 		    end
 		end
-		else if (!we1xx & cs1xx & ~fast_read1 & (cs7xx ? toggle : 1'b1))
+		else if (!we1xx & cs1xx & ~ch1_taghit & (cs7xx ? toggle : 1'b1))
 			toggle <= 1'b0;
-		else if (!we7xx & cs7xx & ~fast_read7)
+		else if (!we7xx & cs7xx & ~ch7_taghit)
 			toggle <= 1'b1;
 	end
 end
-
-// Clear the read cache tag where the cache address matches the given address.
-// This is to prevent reading stale data from a cache.
-task clear_tag;
-input [31:0] ccadr;
-begin
-	if (ch0_tag[31:6]==ccadr[31:6])
-		ch0_tag <= 32'hFFFFFFFF;
-	if (ch1_tag[31:5]==ccadr[31:5])
-		ch1_tag <= 32'hFFFFFFFF;
-	if (ch2_tag[31:4]==ccadr[31:4])
-		ch2_tag <= 32'hFFFFFFFF;
-	if (ch3_tag[31:4]==ccadr[31:4])
-		ch3_tag <= 32'hFFFFFFFF;
-	if (ch4_tag[31:4]==ccadr[31:4])
-		ch4_tag <= 32'hFFFFFFFF;
-	// For channel5 we don't care.
-	// It's possible that stale data would be read, but it's only for one video
-	// frame. It's a lot of extra hardware to clear channel5 so we don't do it.
-	// It is also unlikely that the sprite image data would be changing during
-	// the display period.
-	if (ch6_tag[31:4]==ccadr[31:4])
-		ch6_tag <= 32'hFFFFFFFF;
-	if (ch7_tag[31:4]==ccadr[31:4])
-		ch7_tag <= 32'hFFFFFFFF;
-end
-endtask
 
 integer empty_resv;
 function resv_held;
 input [3:0] ch;
 input [31:0] adr;
+integer n8;
 begin
 	resv_held = FALSE;
- 	for (n = 0; n < NAR; n = n + 1)
- 		if (resv_ch[n]==ch && resv_adr[n]==adr)
+ 	for (n8 = 0; n8 < NAR; n8 = n8 + 1)
+ 		if (resv_ch[n8]==ch && resv_adr[n8]==adr)
  			resv_held = TRUE;
 end
 endfunction
 
 // Find an empty reservation bucket
+integer n9;
 always_comb
 begin
 	empty_resv <= -1;
- 	for (n = 0; n < NAR; n = n + 1)
-		if (resv_ch[n]==4'hF)
-			empty_resv <= n;
+ 	for (n9 = 0; n9 < NAR; n9 = n9 + 1)
+		if (resv_ch[n9]==4'hF)
+			empty_resv <= n9;
 end
 
 // Two reservation buckets are allowed for. There are two (or more) CPU's in the
@@ -1517,4 +1394,46 @@ endtask
 
 endmodule
 
+module mpmc7_read_cache(rst, wclk, wr, wadr, wdat, rclk, radr, rdat, hit, inv, iadr);
+input rst;
+input wclk;
+input wr;
+input [31:0] wadr;
+input [127:0] wdat;
+input rclk;
+input [31:0] radr;
+output reg [127:0] rdat;
+output reg hit;
+input inv;
+input [31:0] iadr;
+
+(* ram_style="block" *)
+reg [127:0] lines [0:255];
+(* ram_style="distributed" *)
+reg [27:0] tags [0:255];
+(* ram_style="distributed" *)
+reg [255:0] vbit;
+reg [31:0] radrr;
+
+always_ff @(posedge rclk)
+	radrr <= radr;
+always_ff @(posedge wclk)
+	if (wr) lines[wadr[11:4]] <= wdat;
+always_ff @(posedge rclk)
+	rdat <= lines[radrr[11:4]];
+always_ff @(posedge wclk)
+	if (wr) tags[wadr[11:4]] <= wadr[31:4];
+always_ff @(posedge wclk)
+if (rst)
+	vbit <= 256'b0;
+else begin
+	if (wr)
+		vbit[wadr[11:4]] <= 1'b1;
+	else if (inv)
+		vbit[iadr[11:4]] <= 1'b0;
+end
+always_comb
+	hit <= tags[radr[11:4]]==radr[31:4] && vbit[radr[11:4]];
+
+endmodule
 
