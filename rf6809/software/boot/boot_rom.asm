@@ -34,25 +34,10 @@
 ;                                                                          
 ; ============================================================================
 ;
-CR	EQU	$0D		;ASCII equates
-LF	EQU	$0A
-TAB	EQU	$09
-CTRLC	EQU	$03
-CTRLH	EQU	$08
-CTRLI	EQU	$09
-CTRLJ	EQU	$0A
-CTRLK	EQU	$0B
-CTRLM   EQU $0D
-CTRLS	EQU	$13
-CTRLT EQU $14
-CTRLX	EQU	$18
-XON		EQU	$11
-XOFF	EQU	$13
+OPT include "d:\cores2022\rf6809\software\boot\mon_equates.asm"
+OPT include "d:\cores2022\rf6809\software\boot\io_equates.asm"
 
-FIRST_CORE	EQU	1
-MAX_TASKNO	EQU 63
-DRAM_BASE	EQU $10000000
-
+OPC_SWI				EQU		$03F
 ScreenLocation		EQU		$10
 ColorCodeLocation	EQU		$14
 ScreenLocation2		EQU		$18
@@ -62,8 +47,6 @@ Strptr				EQU		$24
 PICptr				EQU		$28
 ; Forth Area
 ; 0x30-0x60
-
-RunningID			EQU		$800000
 
 ; Task control blocks, room for 256 tasks
 TCB_NxtRdy		EQU		$00	; next task on ready / timeout list
@@ -93,59 +76,23 @@ KeybdAck		EQU		$FFFFFCC00
 KeybdLocks		EQU		$FFFFFCD00
 KeybdBuffer		EQU		$FFFFFC000	; buffer is 16 chars
 
-COREID	EQU		$FFFFFFFE0
-MSCOUNT	EQU		$FFFFFFFE4
-LEDS		EQU		$FFFE60001
-VIA			EQU		$FFFE60000
-VIA_PA		EQU		1
-VIA_DDRA	EQU		3
-VIA_ACR			EQU		11
-VIA_IFR			EQU		13
-VIA_IER			EQU		14
-VIA_T3LL		EQU		18
-VIA_T3LH		EQU		19
-VIA_T3CMPL	EQU		20
-VIA_T3CMPH	EQU		21
-TEXTSCR		EQU		$FFFE00000
-TEXTREG		EQU		$FFFE0DF00
-TEXT_COLS	EQU		0
-TEXT_ROWS	EQU		1
-TEXT_CURPOS	EQU		34
-ACIA		EQU		$FFFE30100
-ACIA_TX		EQU		0
-ACIA_RX		EQU		0
-ACIA_STAT	EQU		1
-ACIA_CMD	EQU		2
-ACIA_CTRL	EQU		3
-ACIA_CTRL2	EQU		11
-RTC				EQU		$FFFE30500	; I2C
-RTCBuf		EQU		$7FC0
-
-KEYBD		EQU		$FFFE30400
-KEYBDCLR	EQU		$FFFE30402
-PIC			EQU		$FFFE3F000
-SPRITE_CTRL		EQU		$FFFE10000
-SPRITE_EN			EQU		$3C0
-
-OUTSEMA	EQU	$EF0000
-SEMAABS	EQU	$1000
-OSSEMA	EQU	$EF0010
-
 BIOS_SCREENS	EQU	$17000000	; $17000000 to $171FFFFF
 
 ; EhBASIC vars:
 ;
-NmiBase		EQU		$FF0013
-IrqBase		EQU		$FF0014
+NmiBase		EQU		$FFC013
+IrqBase		EQU		$FFC014
 
 IOFocusNdx	EQU		$100
 
 ; These variables in global OS storage area
 
-IOFocusList	EQU		$FF0000	; to $FF000F
-IOFocusID		EQU		$FF0010
-IrqSource		EQU		$FF0011
-IRQFlag			EQU		$FF0012
+IOFocusList	EQU		$FFC000	; to $FF000F
+IOFocusID		EQU		$FFC010
+IrqSource		EQU		$FFC011
+IRQFlag			EQU		$FFC012
+RunningID		EQU		$FFC013
+; Top of boot stack is at $FFC0FF
 
 ; These variables use direct page access
 CursorRow	EQU		$110
@@ -192,6 +139,11 @@ CharOutVec	EQU		$800
 CharInVec	EQU		$804
 CmdPromptJI	EQU	$808
 MonErrVec	EQU		$80C
+BreakpointFlag	EQU		$810
+NumSetBreakpoints	EQU	$811
+Breakpoints			EQU		$820	; to $82F
+BreakpointBytes	EQU		$830	; to $83F
+mon_vectb				EQU		$880
 
 ; Register save area for monitor
 mon_DSAVE	EQU		$900
@@ -206,6 +158,9 @@ mon_CCRSAVE	EQU		$90F
 mon_numwka	EQU		$910
 mon_r1		EQU		$920
 mon_r2		EQU		$924
+jmpvec		EQU		$928
+mon_init	EQU		$92C
+mon_retflag	EQU	$930
 
 ; The ORG directive must set an address a multiple of 4 in order for the Verilog
 ; output to work correctly.
@@ -291,13 +246,17 @@ ramtest3:
 ramerr:
 	lda		#$80
 	sta		LEDS
-	ldx		#TEXTSCR
 	ldb		COREID
+	cmpb	#$20
+	beq		ramerr1
+	ldx		#TEXTSCR
 	abx
 	lda		#'F'
 	sta		,x
 	sync
+ramerr1:
 	jmp		,u
+
 
 	org		$FFE000
 	FDB Monitor
@@ -331,8 +290,9 @@ start:
 	sta		LEDS
 	lda		#1				; prime OS semaphore
 	sta		OSSEMA+$1000
+	sta		OUTSEMA+$1000
 	ldu		#st6			; U = return address
-	jmp		ramtest		; JMP dont JSR
+;	jmp		ramtest		; JMP dont JSR
 st6:
 	lds		#$6FFF		; boot up stack area
 	lda		COREID
@@ -347,9 +307,15 @@ st8:
 ;	jmp		,x				; jump to the BIOS now in local RAM
 st7:
 	bsr		Delay3s		; give some time for devices to reset
+	clr		BreakpointFlag
+	clr		NumSetBreakpoints
 	lda		#$AA
 	sta		LEDS
+	lda		COREID
+	cmpa	#$20
+	beq		st11
 	lda		#FIRST_CORE
+st11:
 	sta		IOFocusID	; core #2 has focus
 	sta		RunningID
 	; Clear IO focus list
@@ -370,11 +336,14 @@ st9:
 	std		CharOutVec
 	ldd		#SerialPeekCharDirect
 	std		CharInVec
-	ldb		#24				; request IO focus
-	lbsr	OSCall
+;	swi
+;	fcb		MF_OSCALL
+;	fcb		24					; request IO focus
 	ldb		COREID
 	cmpb	#FIRST_CORE
 	beq		init
+	cmpb	#$20				; CmodA709 core?
+	beq		init2
 	bra		skip_init
 	bra		multi_sieve
 st3:
@@ -392,11 +361,6 @@ init1:
 	clr		,x+
 	decb
 	bne		init1
-	lbsr	TimerInit
-	lbsr	InitSerial
-	ldx		#128
-	lda		#1			; set irq(bit0), clear firq (bit1), disable int (bit 6), clear edge sense(bit 7)
-	ldb		#FIRST_CORE			; serving core id
 st1:
 	clr		PIC,x			; cause code
 	sta		PIC+1,x
@@ -404,34 +368,43 @@ st1:
 	leax	4,x
 	cmpx	#256
 	blo		st1
-;	lda		#4				; make the timer interrupt edge sensitive
-;	sta		PIC+4			; reg #4 is the edge sensitivity setting
-;	sta		PIC				; reg #0 is interrupt enable
 	lda		#$81			; make irq edge sensitive
 	sta		PIC+$FD
 	lda		#31				; enable timer interrupt
-;	sta		PIC+9
-	ldb		#1
-	stb		OUTSEMA+SEMAABS	; set semaphore to 1 available slot
-skip_init:
-	andcc	#$EF			; unmask irq
-	lda		#56
+	sta		PIC+9
+	lda		#COLS
 	sta		TEXTREG+TEXT_COLS
-	lda		#29
+	lda		#ROWS
 	sta		TEXTREG+TEXT_ROWS
 	bsr		ClearScreen
 	bsr		HomeCursor
-	lda		#5
-	sta		LEDS
-	ldd		#msgStartup
-	bsr		DisplayString
 	ldx		#0
 	ldd		#0
 	lbsr	ShowSprites
 	lbsr	KeybdInit
 	ldd		KeybdID
 	bsr		DispWordAsHex
-	jmp		MonitorStart
+init2:
+	lbsr	TimerInit
+	lbsr	InitSerial
+	ldx		#128
+	lda		#1			; set irq(bit0), clear firq (bit1), disable int (bit 6), clear edge sense(bit 7)
+	ldb		#FIRST_CORE			; serving core id
+;	lda		#4				; make the timer interrupt edge sensitive
+;	sta		PIC+4			; reg #4 is the edge sensitivity setting
+;	sta		PIC				; reg #0 is interrupt enable
+	ldb		#1
+	stb		OUTSEMA+SEMAABS	; set semaphore to 1 available slot
+skip_init:
+	andcc	#$EF			; unmask irq
+	lda		#5
+	sta		LEDS
+	ldd		#msgStartup
+	bsr		DisplayString
+st10:
+	swi
+	fcb		MF_Monitor
+	bra		st10
 
 msgStartup
 	fcb		"rf6809 12-bit System Starting.",CR,LF,0
@@ -584,7 +557,7 @@ CopyVirtualScreenToScreen:
 	tfr		d,x
 	pshs	d
 	ldy		#TEXTSCR
-	ldu		#56*29/2
+	ldu		#COLS*ROWS/2
 cv2s1:
 	ldd		,x++
 	std		,y++
@@ -594,7 +567,7 @@ cv2s1:
 	; reset the cursor position in the text controller
 	puls	x
 	ldb		CursorRow,x
-	lda		#56
+	lda		#COLS
 	mul
 	tfr		d,y
 	ldb		CursorCol,x
@@ -611,7 +584,7 @@ CopyScreenToVirtualScreen:
 	bsr		GetScreenLocation
 	tfr		d,y
 	ldx		#TEXTSCR
-	ldu		#56*29/2
+	ldu		#COLS*ROWS/2
 cs2v1:
 	ldd		,x++
 	std		,y++
@@ -651,7 +624,7 @@ TextSeek:
 
 ClearScreen:
 	pshs	d,x,y,u
-	ldx		#56*29
+	ldx		#COLS*ROWS
 	tfr		x,u
 	bsr		GetScreenLocation
 	tfr		d,y
@@ -683,17 +656,17 @@ cs3:
 
 ScrollUp:
 	pshs	d,x,y,u
-	ldy		#(56*29-1)/2	; y = num chars/2 to move
+	ldy		#(COLS*ROWS-1)/2	; y = num chars/2 to move
 	bsr		GetScreenLocation
 	tfr		d,x
 	tfr		d,u
-	leax	56,x			; x = index to source row
+	leax	COLS,x		; x = index to source row
 scrup1:
 	ldd		,x++			; move 2 characters
 	std		,u++
 	dey
 	bne		scrup1
-	lda		#29
+	lda		#ROWS-1
 	bsr		BlankLine
 	puls	d,x,y,u,pc
 
@@ -712,11 +685,11 @@ BlankLine:
 	bsr		GetScreenLocation
 	tfr		d,x
 	puls	a
-	ldb		#56		; b = # chars to blank out from video controller
+	ldb		#COLS	; b = # chars to blank out from video controller
 	mul					; d = screen index (row# * #cols)
 	leax	d,x
 	lda		#' '
-	ldb		#56		; b = # chars to blank out from video controller
+	ldb		#COLS	; b = # chars to blank out from video controller
 blnkln1:
 	sta		,x+
 	decb
@@ -737,6 +710,8 @@ GetScreenLocation:
 	lda		COREID			; which core are we?
 	cmpa	IOFocusID		; do we have the IO focus
 	bne		gsl1				; no, go pick virtual screen address
+	cmpa	#$20				; CmodA709?
+	beq		gsl1
 	ldd		#TEXTSCR		; yes, we update the real screen
 	rts
 gsl1:
@@ -758,6 +733,8 @@ HomeCursor:
 	ldb		COREID
 	cmpb	IOFocusID
 	bne		hc1
+	cmpb	#$20
+	beq		hc1
 	clra
 	sta		TEXTREG+TEXT_CURPOS
 hc1:
@@ -775,7 +752,9 @@ UpdateCursorPos:
 	pshs	d,x
 	ldb		COREID				; update cursor position in text controller
 	cmpb	IOFocusID			; only for the task with the output focus
-	bne		ucp1					
+	bne		ucp1
+	cmpb	#$20					; and not for CmodA709
+	beq		ucp1					
 	lda		CursorRow
 	anda	#$3F					; limit of 63 rows
 	ldb		TEXTREG+TEXT_COLS
@@ -800,7 +779,7 @@ ucp1:
 CalcScreenLoc:
 	pshs	x
 	lda		CursorRow
-	ldb		#56
+	ldb		#COLS
 	mul
 	tfr		d,x
 	ldb		CursorCol
@@ -808,6 +787,8 @@ CalcScreenLoc:
 	ldb		COREID				; update cursor position in text controller
 	cmpb	IOFocusID			; only for the task with the output focus
 	bne		csl1					
+	cmpb	#$20
+	beq		csl1
 	stx		TEXTREG+TEXT_CURPOS
 csl1:
 	bsr		GetScreenLocation
@@ -839,7 +820,7 @@ dccr:
 	cmpb	#$91				; cursor right ?
 	bne		dcx6
 	lda		CursorCol
-	cmpa	#56
+	cmpa	#COLS
 	bhs		dcx7
 	inca
 	sta		CursorCol
@@ -866,7 +847,7 @@ dcx9:
 	cmpb	#$92				; cursor down ?
 	bne		dcx10
 	lda		CursorRow
-	cmpa	#29
+	cmpa	#ROWS
 	beq		dcx7
 	inca
 	sta		CursorRow
@@ -902,7 +883,7 @@ dcx5:
 	ldb		1,x
 	stb		,x++
 	inca
-	cmpa	#56
+	cmpa	#COLS
 	blo		dcx5
 	ldb		#' '
 	dex
@@ -938,7 +919,7 @@ IncCursorPos:
 	lda		CursorCol
 	inca
 	sta		CursorCol
-	cmpa	#56
+	cmpa	#COLS
 	blo		icc1
 	clr		CursorCol		; column = 0
 	bra		icr1
@@ -948,7 +929,7 @@ icr1:
 	lda		CursorRow
 	inca
 	sta		CursorRow
-	cmpa	#29
+	cmpa	#ROWS
 	blo		icc1
 	deca							; backup the cursor row, we are scrolling up
 	sta		CursorRow
@@ -970,6 +951,9 @@ icc2:
 DisplayString:
 	pshs	d,x
 	tfr		d,x
+	lda		COREID
+	cmpa	#$20
+	beq		dspj1B
 dspj2:						; lock semaphore for access
 	lda		OUTSEMA+1
 	beq		dspj2
@@ -1110,6 +1094,7 @@ KeybdSeek:
 ;==============================================================================
 
 OPT INCLUDE "d:\cores2022\rf6809\software\boot\serial.asm"
+OPT INCLUDE "d:\cores2022\rf6809\software\boot\S19Loader.asm"
 
 ;------------------------------------------------------------------------------
 ; Check if there is a keyboard character available. If so return true (<0)
@@ -1213,20 +1198,7 @@ OSCallTbl:
 	fcw		0
 	fcw		RequestIOFocus
 
-OSCall:
-	; wait for availability
-osc1:
-	tst		OSSEMA+1
-	beq		osc1
-	aslb
-	ldx		#OSCallTbl
-	abx
-	tst		,x
-	beq		oscx
-	jmp		[,x]
-oscx:
-	clr		OSSEMA+1
-	rts
+NumOSFuncs	EQU	(*-OSCallTbl)/2
 
 RequestIOFocus:
 	ldb		COREID
@@ -1269,14 +1241,98 @@ riof1:
 		
 	
 ;==============================================================================
-; Disassembler
 ;==============================================================================
 
-OPT	include "d:\cores2022\rf6809\software\boot\disassem.asm"
-	
+;------------------------------------------------------------------------------
+; Seed the random number generator. All channels are seeded with the same
+; value.
+;
+; Parameters:
+;		d = 'z' part of seed
+;		x = 'w' part of seed
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+mon_srand:
+	ldy	#0
+mon_srand1:
+	sty	PRNG+4				; select channel
+	clr	PRNG+8
+	clr PRNG+9
+	std	PRNG+10				; update low half of value
+	clr PRNG+12
+	clr PRNG+13
+	stx	PRNG+14				; update low half of value
+	iny
+	cmpy	#$400				; 1k channels
+	blo		mon_srand1
+	rts
+
+;------------------------------------------------------------------------------
+; Get a random number and generate the next one.
+;
+; Parameters:
+;		d = channel to use
+; Returns:
+;		x,d = 36 bit random value
+;------------------------------------------------------------------------------
+
+mon_rand:
+	std	PRNG+4				; select channel
+	ldx	PRNG+0
+	ldd	PRNG+2
+	stb	PRNG+3				; trigger calc of next number
+	rts
+
 ;==============================================================================
 ; System Monitor
 ;==============================================================================
+
+; Command Tables
+
+cmdTable1:
+	fcb		'<','>'+$800
+	fcb		'b','s'+$800
+	fcb		'b','c'+$800
+	fcb		'D','R'+$800
+	fcb		'D'+$800
+	fcb		':'+$800
+	fcb		"FI",'G'+$800
+	fcb		"FI",'L'+$800
+	fcb		'F','L'+$800
+	fcb		'J'+$800
+	fcb		"RAMTES",'T'+$800
+	fcb		"SP",'D'+$800
+	fcb		"TI",'R'+$800
+	fcb		'U'+$800
+	fcb		"exi",'t'+$800
+	fcb		'?'+$800
+	fcb		"CL",'S'+$800
+	fcb		"S1",'9'+$800
+	fcb		"JD",'4'+$800
+	fcw		0
+
+cmdTable2:
+	fcw		Redirect
+	fcw		MonArmBreakpoint
+	fcw		MonDisarmBreakpoint
+	fcw		DumpRegs
+	fcw		DumpMemory
+	fcw		EditMemory
+	fcw		$FE0000					; FIG forth
+	fcw		FillMemory
+	fcw		DumpIOFocusList
+	fcw		jump_to_code
+	fcw		$FFD400
+	fcw		$FF8000					; sprite demo
+	fcw		rtc_read
+	fcw		$FF8003					; unassembler
+	fcw		xitMonitor
+	fcw		PromptHelp
+	fcw		PromptClearscreen
+	fcw		S19Loader
+	fcw		$FFD400
 
 CmdPrompt:
 	lbsr	CRLF
@@ -1287,7 +1343,15 @@ CmdPrompt:
 msgF09Starting:
 	fcb		"Femtiki F09 Multi-core OS Starting",CR,LF,0
 
-MonitorStart:
+Monitor:
+	ldd		mon_init			; check special code to see if monitor has been initialized
+	cmpd	#1234567
+	beq		mon1
+	clr		BreakpointFlag
+	clr		NumSetBreakpoints
+	ldd		#123
+	ldx		#654
+	lbsr	mon_srand
 	ldd		#msgF09Starting
 	lbsr	DisplayString
 	ldd		#HelpMsg
@@ -1298,7 +1362,18 @@ MonitorStart:
 	std		MonErrVec
 	ldd		#$63FF			; default app stack
 	std		mon_SSAVE
-Monitor:
+	clr		mon_DPRSAVE	;
+	tfr		ccr,a
+	sta		mon_CCRSAVE
+	clr		mon_PCSAVE
+	ldd		#Monitor
+	std		mon_PCSAVE+1
+	clr		mon_XSAVE
+	clr		mon_YSAVE
+	clr		mon_USAVE
+	ldd		#1234567
+	std		mon_init
+mon1:
 	leas	$6FFF				; reset stack pointer
 	clrb							; turn off keyboard echo
 	lbsr	SetKeyboardEcho
@@ -1318,10 +1393,10 @@ PromptLn:
 Prompt3:
 	ldd		#-1					; block until key present
 	lbsr	INCH
-	cmpb	#CR
-	beq		Prompt1
-	lbsr	OUTCH
-	bra		Prompt3
+	cmpb	#CR					; carriage return?
+	beq		Prompt1	
+	lbsr	OUTCH				; spit out the character
+	bra		Prompt3			; and keep going
 
 ; Process the screen line that the CR was keyed on
 ;
@@ -1331,28 +1406,43 @@ Prompt1:
 ;	ldb		RunningID
 ;	cmpb	#61
 ;	bhi		Prompt3
-	ldd		#$5151
-	std		LEDS
 	clr		CursorCol			; go back to the start of the line
 	lbsr	CalcScreenLoc	; calc screen memory location
 	tfr		d,y
-	ldd		#$5252
-	std		LEDS
 skipDollar:
 	bsr		MonGetNonSpace
 	cmpb	#'$'
 	beq		skipDollar		; skip over '$' prompt character
-	lda		#$5353
-	std		LEDS
 
-; Dispatch based on command character
+; Dispatch based on command
 ;
-Prompt2:
-	cmpb	#'<'
-	bne		PromptHelp
-	bsr		MonGetch
-	cmpb	#'>'
-	bne		Monitor
+	dey
+	tfr		y,u							; save off input position
+	clrb
+	ldx		#cmdTable1
+parseCmd1:
+	lda		,y+							; get input character
+	tst		,x							; test for end of command
+	bmi		endOfWord				;
+	cmpa	,x+							; does input match command?
+	beq		parseCmd1
+scanNextWord:
+	tst		,x+
+	beq		Monitor					; if end of table reached, not a command
+	bpl		scanNextWord
+	incb
+	tfr		u,y							; reset input pointer
+	bra		parseCmd1				; try again
+endOfWord:
+	eora	,x
+	asla
+	bne		scanNextWord
+	; we found the command in the table
+	aslb									; b = word index
+	ldx		#cmdTable2
+	jmp		[b,x]						; execute command
+
+Redirect:
 	bsr		MonGetch
 	cmpb	#'s'
 	bne		Prompt2a
@@ -1369,71 +1459,16 @@ Prompt2a:
 	ldd		#DisplayChar
 	std		CharOutVec
 	bra		Monitor
+
 PromptHelp:
-	cmpb	#'?'			; $? - display help
-	bne		PromptC
 	ldd		#HelpMsg
 	lbsr	DisplayString
 	bra		Monitor
-PromptC:
-	cmpb	#'C'
-	bne		PromptD
+
+PromptClearscreen:
 	lbsr	ClearScreen
 	lbsr	HomeCursor
 	bra		Monitor
-PromptD:
-	cmpb	#'D'
-	bne		PromptColon
-	bsr		MonGetch
-	cmpb	#'R'
-	bne		DumpMemory
-	bra		DumpRegs
-PromptColon:
-	cmpb	#':'
-	bne		PromptF
-	lbra	EditMemory
-PromptF:
-	cmpb	#'F'
-	bne		PromptJ
-	bsr		MonGetch
-	cmpb	#'I'
-	bne		PromptFL
-	bsr		MonGetch
-	cmpb	#'G'
-	bne		Monitor
-	jmp		$FE0000
-PromptFL:
-	cmpb	#'L'
-	bne		Monitor
-	lbra	DumpIOFocusList
-PromptJ:
-	cmpb	#'J'
-	lbeq	jump_to_code
-PromptR:
-	cmpb	#'R'
-	bne		Prompt_s
-	ldu		#Monitor
-	lbra	ramtest
-Prompt_s:
-	cmpb	#'s'
-	bne		PromptT
-	lbsr	SerialOutputTest
-	bra		Monitor
-PromptT:
-	cmpb	#'T'
-	bne		PromptU
-	bsr		MonGetch
-	cmpb	#'I'
-	bne		Monitor
-	bsr		MonGetch
-	cmpb	#'R'
-	bne		Monitor
-	lbsr	rtc_read
-	bra		Monitor
-PromptU:
-	cmpb	#'U'
-	bne		Monitor
-	lbra	disassem
 
 MonGetch:
 	ldb		,y
@@ -1445,6 +1480,15 @@ MonGetNonSpace:
 	cmpb	#' '
 	beq		MonGetNonSpace
 	rts
+
+MonArmBreakpoint:
+	lbsr	ArmBreakpoint
+	ldb		#$FFF
+	stb		BreakpointFlag
+	lbra	Monitor
+MonDisarmBreakpoint:
+	lbsr	DisarmBreakpoint
+	lbra	Monitor
 
 ;------------------------------------------------------------------------------
 ; Ignore blanks in the input
@@ -1461,16 +1505,38 @@ ignBlanks1:
 	rts
 
 ;------------------------------------------------------------------------------
+; Multiply number in work area by 10.
+;------------------------------------------------------------------------------
+Times10:
+	pshs	d
+	ldd		mon_numwka		; make a copy of the number
+	std		mon_numwka+8
+	ldd		mon_numwka+2
+	std		mon_numwka+10
+	bsr		shl_numwka		; shift left = *2
+	bsr		shl_numwka		; shift left = *4
+	ldd		mon_numwka+2	; add in original value
+	addd	mon_numwka+10	; = *5
+	ldb		mon_numwka+1
+	adcb	mon_numwka+9
+	stb		mon_numwka+1
+	lda		mon_numwka+0
+	adca	mon_numwka+8
+	sta		mon_numwka+0
+	bsr		shl_numwka		; shift left = * 10
+	puls	d,pc
+	
+;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 GetTwoParams:
 	bsr		ignBlanks
-	bsr		GetHexNumber	; get start address of dump
+	bsr		GetNumber			; get start address of dump
 	ldd		mon_numwka
 	std		mon_r1
 	ldd		mon_numwka+2
 	std		mon_r1+2
 	bsr		ignBlanks
-	bsr		GetHexNumber	; get end address of dump
+	bsr		GetNumber			; get end address of dump
 	ldd		mon_numwka
 	std		mon_r2
 	ldd		mon_numwka+2
@@ -1534,7 +1600,66 @@ gthxn1:
 	tfr		x,d
 	puls	x,pc
 
-;GetDecNumber:
+GetBinNumber:
+	clrd
+	std		mon_numwka
+	std		mon_numwka+2
+	pshs	x
+	ldx		#0
+gtbin2:
+	bsr		MonGetch
+	bsr		AsciiToBinDigit
+	tstb
+	bmi		gtbin1
+	bsr		shl_numwka
+	orb		mon_numwka+3
+	stb		mon_numwka+3
+	inx
+	cpx		#48
+	blo		gtbin2
+gtbin1:
+	tfr		x,d
+	puls	x,pc
+	
+GetDecNumber:
+	clrd
+	std		mon_numwka
+	std		mon_numwka+2
+	pshs	x
+	ldx		#0
+gtdec2:
+	bsr		MonGetch
+	bsr		AsciiToDecDigit
+	tstb
+	bmi		gtdec1
+	bsr		Times10
+	addb	mon_numwka+3
+	stb		mon_numwka+3
+	ldb		mon_numwka+2
+	adcb	#0
+	stb		mon_numwka+2
+	ldb		mon_numwka+1
+	adcb	#0
+	stb		mon_numwka+1
+	ldb		mon_numwka+0
+	adcb	#0
+	stb		mon_numwka+0
+	inx
+	cpx		#15
+	blo		gtdec2
+gtdec1:
+	tfr		x,d
+	puls	x,pc
+
+GetNumber:
+	bsr		MonGetch
+	cmpb	#'+'
+	beq		GetDecNumber
+	cmpb	#'%'
+	beq		GetBinNumber
+	dey
+	bra		GetHexNumber
+
 ;	phx
 ;	push	r4
 ;	push	r5
@@ -1589,14 +1714,28 @@ gthx3:
 	ldb		#-1		; not a hex number
 	rts
 
-AsciiToDecNybble:
+AsciiToDecDigit:
 	cmpb	#'0'
-	bcc		gtdc3
-	cmpb	#'9'+1
-	bcs		gtdc3
+	blo		gtdc3
+	cmpb	#'9'
+	bhi		gtdc3
 	subb	#'0'
 	rts
 gtdc3:
+	ldb		#-1
+	rts
+
+AsciiToBinDigit:
+	cmpb	#'0'
+	bne		abd1
+	clrb
+	rts
+abd1:
+	cmpb	#'1'
+	bne		abd2
+	ldb		#1
+	rts
+abd2:
 	ldb		#-1
 	rts
 
@@ -1617,30 +1756,36 @@ msgErr:
 HelpMsg:
 	fcb		"? = Display help",CR,LF
 	fcb	"CLS = clear screen",CR,LF
+	fcb	"bs = set breakpoint",CR,LF
+	fcb	"bc = clear breakpoint",CR,LF
 ;	db	"S = Boot from SD Card",CR,LF
 	fcb	": = Edit memory bytes",CR,LF
 ;	db	"L = Load sector",CR,LF
 ;	db	"W = Write sector",CR,LF
 	fcb "DR = Dump registers",CR,LF
 	fcb	"D = Dump memory",CR,LF
-;	db	"F = Fill memory",CR,LF
+	fcb	"F = Fill memory",CR,LF
 	fcb "FL = Dump I/O Focus List",CR,LF
-	fcb "FIG = start FIG Forth",CR,LF
+;	fcb "FIG = start FIG Forth",CR,LF
 ;	db	"KILL n = kill task #n",CR,LF
 ;	db	"B = start tiny basic",CR,LF
 ;	db	"b = start EhBasic 6502",CR,LF
 	fcb	"J = Jump to code",CR,LF
-	fcb "RAM = test RAM",CR,LF
+	fcb	"JD4 = Jump to $FFD400",CR,LF
+	fcb "RAMTEST = test RAM",CR,LF
 ;	db	"R[n] = Set register value",CR,LF
 ;	db	"r = random lines - test bitmap",CR,LF
 ;	db	"e = ethernet test",CR,LF
 	fcb	"s = serial output test",CR,LF
+	fcb	"S19 = run S19 loader",CR,LF
+	fcb	"SP = sprite demo",CR,LF
 ;	db	"T = Dump task list",CR,LF
 ;	db	"TO = Dump timeout list",CR,LF
 	fcb	"TI = display date/time",CR,LF
 ;	db	"TEMP = display temperature",CR,LF
 	fcb	"U = unassemble",CR,LF
-;	db	"P = Piano",CR,LF,0
+;	db	"P = Piano",CR,LF
+	fcb	"x = exit monitor",CR,LF
 	fcb		0
 
 msgRegHeadings
@@ -1736,7 +1881,7 @@ EditMem2:
 	lbsr	ignBlanks			; skip over blanks
 	lbsr	GetHexNumber	; get the byte value
 	tstb								; check for valid value
-	bmi		EditMem1			; if invalid, quit
+	beq		EditMem1			; if invalid, quit
 	ldb		mon_numwka+3	; get value
 	stb		,x+						; update memory at address
 	leau	-1,u					; decremeent byte count
@@ -1762,6 +1907,37 @@ EditMem3:
 	lbra	Monitor
 	
 
+;------------------------------------------------------------------------------
+; Fill Memory
+;
+; Usage:
+; 	$$F FFFC12 FFFC30 89F
+;
+;------------------------------------------------------------------------------
+
+FillMemory:
+	lbsr	GetRange			; get address range to fill
+	lbsr	ignBlanks
+	lbsr	GetHexNumber	; get target byte to write
+	ldb		mon_numwka+3
+	ldx		mon_r1+2
+	clra
+fillm1:								; Check for a CTRL-C every page of memory
+	tsta
+	bne		fillm2
+	clrb								; we want a non-blocking check
+	clra
+	lbsr	INCH
+	cmpb	#CTRLC
+	lbeq	Monitor
+	ldb		mon_numwka+3	; reset target byte
+fillm2:
+	stb		,x+
+	cmpx	mon_r2+2
+	bls		fillm1
+fillm3:
+	lbra	Monitor
+	
 ;------------------------------------------------------------------------------
 ; Dump Registers
 ;
@@ -1811,12 +1987,12 @@ DumpRegs:
 ;------------------------------------------------------------------------------
 
 jump_to_code:
-	bsr		GetHexNumber
+	bsr		GetNumber
 	sei
 	lds		mon_SSAVE
-	ldd		#<jtc_exit		; setup stack for RTS back to monitor
+	ldd		#jtc_exit		; setup stack for RTS back to monitor
 	pshs	d
-	ldb		#>jtc_exit
+	ldb		#0
 	pshs	b
 	ldd		mon_numwka+2	; get the address parameter
 	pshs	d
@@ -1828,7 +2004,7 @@ jump_to_code:
 	pshs	d
 	ldd		mon_XSAVE
 	pshs	d
-	lda		mon_DPRSave
+	lda		mon_DPRSAVE
 	pshs	a
 	ldd		mon_DSAVE
 	pshs	d
@@ -1881,47 +2057,285 @@ dfl1:
 	lbsr	CRLF
 	lbra	Monitor
 	
+bootpg:
+	fcb		$000
+boot_stack:
+	fcw		$FFC0FF
+numBreakpoints:
+	fcb		8
+mon_rom_vectab:
+	fcw		mon_rom_vecs
+mon_rom_vecs:
+	fcw		Monitor						; enter monitor program
+	fcw		INCH							; input a character
+	fcw		OUTCH							; output a character
+	fcw		CRLF							; output carriage-return, line feed
+	fcw		DisplayString
+	fcw		DispByteAsHex
+	fcw		DispWordAsHex
+	fcw		ShowSprites
+	fcw		mon_srand
+	fcw		mon_rand
+	fcw		0									; operating system call
+	fcw		GetRange
+	fcw		GetNumber
+
+NumFuncs	EQU	(*-mon_rom_vectab)/2
+
+; The following table indicates which routines need to return values in the
+; D and possibly X registers.
+
+mon_rettab:
+	fcb		0			; monitor
+	fcb		$800	; INCH
+	fcb		0			; OUTCH
+	fcb		0			; CRLF
+	fcb		0			; DisplayString
+	fcb		0			; DisplayByte
+	fcb		0			; DisplayWord
+	fcb		0			; show sprites
+	fcb		0			; srand
+	fcb		$C00	; rand
+	fcb		$C00	; OS call
+	fcb		0			; GetRange
+	fcb		$800	; GetNumber
+	
+;------------------------------------------------------------------------------
+; SWI routine.
+;
+; SWI is used to call ROM monitor routines and process breakpoints.
+;
+;	swi
+;	fcb <desired function>
+;------------------------------------------------------------------------------
+
+swi_rout:
+	ldb		bootpg,pcr			; reset direct page
+	tfr		b,dp
+swi_rout1:
+	ldu		11,s						; get program counter (low order 2 bytes)
+	leau	-1,u						; backup a byte
+	tst		BreakpointFlag	; are we in breakpoint mode?
+	beq		swiNotBkpt
+	ldu		#Breakpoints
+	ldb		NumSetBreakpoints
+	beq		swiNotBkpt
+swi_rout2:
+	cmpu	,y++	
+	beq		processBreakpoint
+	decb
+	bne		swi_rout2
+swiNotBkpt:
+	clr		BreakpointFlag
+	pulu	d								; get function #, increment PC
+	cmpb	#NumFuncs
+	lbhi	DisplayErr
+	stu		11,s						; save updated PC on stack
+	cmpb	#MF_OSCALL
+	beq		swiCallOS
+	aslb									; 2 bytes per vector
+	ldx		mon_rom_vectab,pcr
+	abx
+	ldx		,x
+	stx		jmpvec
+	lsrb
+	ldx		#mon_rettab
+	abx
+	ldb		,x
+	stb		mon_retflag
+	sts		mon_SSAVE				; save the stack pointer
+	ldd		1,s							; get back D
+	ldx		4,s							; get back X
+	ldy		6,s							; get back Y
+	ldu		8,s							; get back U
+	lds		boot_stack,pcr	; and use our own stack
+	jsr		[jmpvec]				; call the routine
+swi_rout3:
+	lds		mon_SSAVE				; restore stack
+	tst		mon_retflag
+	bpl		swi_rout4
+	std		1,s							; return value in D
+	asl		mon_retflag
+	bpl		swi_rout4
+	stx		4,s							; return value in X
+swi_rout4:
+	rti
+
+processBreakpoint:
+	lda		,s
+	sta		mon_CCRSAVE
+	ldd		1,s
+	std		mon_DSAVE
+	ldb		3,s
+	stb		mon_DPRSAVE
+	ldd		4,s
+	std		mon_XSAVE
+	ldd		6,s
+	std		mon_YSAVE
+	ldd		8,s
+	std		mon_USAVE
+	sts		mon_SSAVE
+	ldd		11,s
+	std		mon_PCSAVE
+	lds		boot_stack,pcr
+	ldd		#swi_rout3			; setup so monitor can return
+	pshs	d
+	bsr		DisarmAllBreakpoints
+	lbra	DumpRegs
+
+xitMonitor:
+	bra		ArmAllBreakpoints
+
+swiCallOS:	
+	leau	1,u							; next byte is func number
+	ldb		,u+
+	cmpb	#NumOSFuncs			; check for valid range
+	lbhi	DisplayErr
+	stu		11,s						; save updateed PC on stack
+	aslb									; compute vector address
+	ldx		#OSCallTbl
+	tst		b,x							; check for non-zero vector
+	beq		swi_rout3
+osc1:
+;	tst		OSSEMA+1				; wait for availability
+;	beq		osc1
+	jsr		[b,x]						; call the OS routine
+oscx:
+	clr		OSSEMA+1
+	bra		swi_rout3
+
+DisarmAllBreakpoints:
+	pshs	d,x,y
+	ldy		#0
+	clrb
+	ldx		#BreakpointBytes	; x = breakpoint byte table address
+disarm2:
+	cmpb	#numBreakpoints		; safety check
+	bhs		disarm1
+	cmpb	NumSetBreakpoints
+	bhs		disarm1
+	lda		b,x								; get memory byte
+	sta		[Breakpoints,y]		; and store it back to memory
+	leay	2,y								; increment for next address
+	incb										; increment to next byte
+	bra		disarm2						; loop back
+disarm1:
+	puls	d,x,y,pc
+
+ArmAllBreakpoints:
+	pshs	d,x,y
+	ldy		#0
+	clrb
+	ldx		#BreakpointBytes	; x = breakpoint byte table address
+arm2:
+	cmpb	numBreakpoints		; safety check
+	bhs		arm1
+	cmpb	NumSetBreakpoints
+	bhs		arm1
+	lda		[Breakpoints,y]		; load byte at memory address
+	sta		b,x								; save in table
+	leay	2,y								; increment for next address
+	incb										; increment to next byte
+	bra		arm2							; loop back
+arm1:
+	puls	d,x,y,pc
+
+ArmBreakpoint:
+	pshs	d,x,y
+	lda		NumSetBreakpoints		; check if too many breakpoints set
+	cmpa	numBreakpoints
+	lbhs	DisplayErr
+	lbsr	GetHexNumber				; get address parameter
+	ldb		NumSetBreakpoints		; bv= number of set breakpoints
+	ldy		mon_numwka+2				; get address
+	lda		,y									; get byte at address
+	ldx		#BreakpointBytes		; and store byte in a table
+	sta		b,x									; record
+	lda		#OPC_SWI						; put a SWI instruction in place
+	sta		,y
+	ldx		#Breakpoints				; also store the address in a table
+	aslb											; index for 2 byte values
+	sty		b,x
+	lsrb											; size back to single byte
+	incb
+	stb		NumSetBreakpoints
+	puls	d,x,y,pc
+
+DisarmBreakpoint:
+	pshs	d,x,y,u
+	lbsr	GetHexNumber
+	clrb
+	clrb
+	tfr		d,x									; x = zero too
+disarm6:
+	cmpb	numBreakpoints			; no more than this many may be set
+	bhs		disarm4
+	cmpb	NumSetBreakpoints		; number actually set
+	bhs		disarm4
+	ldy		Breakpoints,x				; y = breakpoint address
+	cmpy	mon_numwka+2				; is it the one we want?
+	bne		disarm3							; if not, go increment to next
+	ldx		mon_numwka+2				; x = memory address
+	ldy		#BreakpointBytes
+	lda		b,y									; get saved byte from table
+	sta		,x									; set the byte at the memory address
+	; compress breakpoint table by removing breakpoint
+	dec		NumSetBreakpoints		; set the new number of set breakpoints
+	pshs	b										; save the position we're removing from
+disarm7:
+	incb											; set index for next byte
+	lda		b,y									; get byte
+	decb											; and store it back
+	sta		b,y
+	incb											; move to next position
+	cmpb	numBreakpoints			; hit end of table?
+	blo		disarm7
+	puls	b										; get back position
+	aslb											; times two for word index
+	clra
+	tfr		d,y
+	lsrb											; back to byte index value
+disarm8:
+	ldu		2,y									; get next breakpoint address
+	stu		,y++								; store in current pos, increment
+	incb											; increment count
+	cmpb	numBreakpoints			; hit end of table?
+	blo		disarm8
+	puls	d,x,y,u,pc
+disarm3:
+	leax	2,x
+	incb
+	bra		disarm6
+disarm4:
+	puls	d,x,y,u,pc
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 swi3_rout:
 	sei
-	puls	a
+	lda		,s
 	sta		mon_CCRSAVE
-	puls	D,DPR,X,Y,U
+	ldd		1,s
 	std		mon_DSAVE
-	stx		mon_XSAVE
-	sty		mon_YSAVE
-	stu		mon_USAVE
-	tfr		dpr,a
-	sta		mon_DPRSAVE
-	puls	a
-	sta		mon_PCSAVE
-	puls	D
-	std		mon_PCSAVE+1
+	ldb		3,s
+	stb		mon_DPRSAVE
+	ldd		4,s
+	std		mon_XSAVE
+	ldd		6,s
+	std		mon_YSAVE
+	ldd		8,s
+	std		mon_USAVE
+	sts		mon_SSAVE
+	ldd		11,s
+	std		mon_PCSAVE
 	sts		mon_SSAVE
 	lds		#$3FFF
+	ldd		#swi3_exit
+	pshs	d
 	cli
 	jmp		DumpRegs
 swi3_exit:
-	sei
 	lds		mon_SSAVE
-	ldd		mon_PCSAVE+1
-	pshs	d
-	lda		mon_PCSAVE
-	pshs	a
-	ldu		mon_USAVE
-	ldy		mon_YSAVE
-	ldx		mon_XSAVE
-	pshs	x,y,u
-	lda		mon_DPRSAVE
-	pshs	a
-	ldd		mon_DSAVE
-	pshs	d
-	lda		mon_CCRSAVE
-	pshs	a
-	tfr		a,ccr
-	cli
 	rti
 
 ;------------------------------------------------------------------------------
@@ -1931,25 +2345,25 @@ firq_rout:
 
 irq_rout:
 ;	lbsr	SerialIRQ	; check for recieved character
-;	lbsr	TimerIRQ
+	lbsr	TimerIRQ
 
 	; Reset the edge sense circuit in the PIC
-	lda		#31							; Timer is IRQ #31
-	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
-	sta		PIC+16					; register 16 is edge sense reset reg	
-	lda		VIA+VIA_IFR
-	bpl		notTimerIRQ2
-	bita	#$800
-	beq		notTimerIRQ2
-	clr		VIA+VIA_T3LL
-	clr		VIA+VIA_T3LH
-	inc		$E00037					; update timer IRQ screen flag
-notTimerIRQ2:
+;	lda		#31							; Timer is IRQ #31
+;	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
+;	sta		PIC+16					; register 16 is edge sense reset reg	
+;	lda		VIA+VIA_IFR
+;	bpl		notTimerIRQ2
+;	bita	#$800
+;	beq		notTimerIRQ2
+;	clr		VIA+VIA_T3LL
+;	clr		VIA+VIA_T3LH
+;	inc		$E00037					; update timer IRQ screen flag
+;notTimerIRQ2:
 
 	lda		IrqBase			; get the IRQ flag byte
 	lsra
 	ora		IrqBase
-	anda	#$E0
+	anda	#$FE0
 	sta		IrqBase
 
 ;	inc		TEXTSCR+54		; update IRQ live indicator on screen
@@ -2003,6 +2417,6 @@ rti_insn:
 	fcw		rti_insn		; SWI2
 	fcw		firq_rout		; FIRQ
 	fcw		irq_rout		; IRQ
-	fcw		start				; SWI
+	fcw		swi_rout		; SWI
 	fcw		nmi_rout		; NMI
 	fcw		start				; RST

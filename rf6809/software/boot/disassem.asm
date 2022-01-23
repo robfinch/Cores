@@ -34,6 +34,11 @@
 ;                                                                          
 ; ============================================================================
 ;
+farflag	EQU		$15F
+asmbuf	EQU		$160	; to $17F
+CharOutVec	EQU		$800
+CharInVec	EQU		$804
+
 ; Disassembler
 ;
 ;
@@ -425,14 +430,18 @@ distbl4:
 
 disassem:
 	clr		farflag
-	lbsr	GetRange
-	lbsr	CRLF
+	swi
+	fcb		MF_GetRange
+	swi
+	fcb		MF_CRLF
 	ldy		mon_r1+2
 disLoop1:
 	tfr		y,d
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		#' '
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,y+
 	bitb	#$300
 	lbne	dis1
@@ -448,21 +457,27 @@ dis23:
 	mul
 	abx
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#' '
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
 	lbeq	disNextLine
 	cmpb	#DIRECT
 	bne		disNotDirect
 	ldb		,y+
-	lbsr	DispByteAsHex
+	swi
+	fcb		MF_DisplayByteAsHex
 	lbra	disNextLine
 disNotDirect:
 	cmpb	#LSREL
@@ -472,7 +487,8 @@ dis21:
 dis2:
 	leax	d,y
 	tfr		x,d
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	lbra	disNextLine
 disNotLRel:
 	cmpb	#SREL
@@ -494,19 +510,23 @@ disNotRel:
 	deca							; sign extend offset
 	orb		#$E00
 dis3:
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNot9:
 	pshs	b
 	bitb	#$100			; check if indirect
 	beq		dis4
 	ldb		#'['
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis4:
 	ldb		,s				; get back b
 	andb	#15
@@ -515,22 +535,27 @@ dis4:
 	bitb	#$80			; outer indexed?
 	beq		dis5
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis5:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'+'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotRplus:
 	cmpb	#1
@@ -539,23 +564,29 @@ disNotRplus:
 	bitb	#$80			; outer indexed?
 	beq		dis6
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis6:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'+'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotRplusplus:
 	cmpb	#2
@@ -564,22 +595,27 @@ disNotRplusplus:
 	bitb	#$80			; outer indexed?
 	beq		dis7
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis7:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotRminus:
 	cmpb	#3
@@ -588,23 +624,29 @@ disNotRminus:
 	bitb	#$80			; outer indexed?
 	beq		dis8
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis8:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotRminusminus:
 	cmpb	#4
@@ -613,286 +655,361 @@ disNotRminusminus:
 	bitb	#$80			; outer indexed?
 	beq		dis9
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis9:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotR:
 	cmpb	#5
 	bne		disNotBOffs
 	ldb		#'B'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis10
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis10:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotBOffs:
 	cmpb	#6
 	bne		disNotAOffs
 	ldb		#'A'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis11
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis11:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotAOffs:
 	cmpb	#8
 	bne		disNotBO
 	ldb		,y+
 	sex
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis12
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis12:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotBO:
 	cmpb	#9
 	bne		disNotWO
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis13
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis13:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotWO:
 	cmpb	#10
 	bne		disNotTO
 	ldb		,y++
-	lbsr	DispByteAsHex
+	swi
+	fcb		MF_DisplayByteAsHex
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis14
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis14:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotTO:
 	cmpb	#11
 	bne		disNotDOffs
 	ldb		#'D'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis15
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis15:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotDOffs:
 	cmpb	#12
 	bne		disNotPBO
 	ldb		,y+
 	sex
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis16
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis16:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
 	ldb		#'P'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'C'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotPBO:
 	cmpb	#13
 	bne		disNotPWO	
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis17
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis17:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
 	ldb		#'P'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'C'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotPWO:
 	cmpb	#14
 	bne		disNotPTO
 	ldb		,y+
-	lbsr	DispByteAsHex
+	swi
+	fcb		MF_DisplayByteAsHex
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		,s
 	bitb	#$80			; outer indexed?
 	beq		dis18
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 dis18:
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	bsr		disNdxReg
 	ldb		#'P'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'C'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#'-'
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	puls	b
 	bitb	#$100
 	lbeq	disNextLine
 	bitb	#$80
 	lbne	disNextLine
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotPTO:
 	ldb		#'['
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	ldb		#']'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotNdx:
 	cmpb	#EXT
@@ -900,27 +1017,33 @@ disNotNdx:
 	tst		farflag
 	beq		dis30
 	ldb		,y++
-	lbsr	DispByteAsHex
+	swi
+	fcb		MF_DisplayByteAsHex
 dis30:
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	clr		farflag
 	lbra	disNextLine
 disNotExt:
 	cmpb	#IMMB
 	bne		disNotIMMB
 	ldb		#'#'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,y+
-	lbsr	DispByteAsHex
+	swi
+	fcb		MF_DisplayByteAsHex
 	lbra	disNextLine
 disNotIMMB:
 	cmpb	#IMMW
 	bne		disNotIMMW
 	ldb		#'#'
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldd		,y++
-	lbsr	DispWordAsHex
+	swi
+	fcb		MF_DisplayWordAsHex
 	bra		disNextLine
 disNotIMMW:
 	cmpb	#TFREXG
@@ -940,15 +1063,20 @@ dis1:
 	aslb
 	abx
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,x+
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		#' '
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	lbra	dis21
 dis19:
 	ldx		#0
@@ -962,17 +1090,25 @@ dis25:
 	cmpx	#31
 	blo		dis24
 	ldb		#'?'
-	lbsr	OUTCH
-	lbsr	OUTCH
-	lbsr	OUTCH
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
+	swi
+	fcb		MF_OUTCH
 	bra		disNextLine
 disNextLine:
 	clr		farflag
-	lbsr	CRLF
+	swi
+	fcb		MF_CRLF
 	cmpy	mon_r2+2
 	lblo	disLoop1
-	lbra	Monitor
+disJmpMon:
+	swi
+	fcb		MF_Monitor
+	bra		disJmpMon
 
 disNdxRegs:
 	fcb		'X','Y','S','U'
@@ -999,13 +1135,15 @@ disTfrReg:
 	aslb
 	lda		b,x
 	exg		a,b
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	exg		a,b
 	inx
 	ldb		b,x
 	cmpb	#' '
 	beq		disTfr1
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 disTfr1:
 	puls	b,x,pc
 	
@@ -1018,7 +1156,8 @@ disTfrExg:
 	andb	#15
 	bsr		disTfrReg
 	ldb		#','
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	ldb		,s
 	andb	#15
 	bsr		disTfrReg
@@ -1032,7 +1171,7 @@ ASMO:
 
 ASMOO:
 	pshs	d
-	ldd		#DisplayChar
+''	ldd		#DisplayChar
 	std		CharOutVec
 	puls	d,pc
 
@@ -1045,7 +1184,8 @@ DumpAsmbuf:
 dab2:
 	ldb		,u+
 	beq		dab1
-	lbsr	OUTCH
+	swi
+	fcb		MF_OUTCH
 	bra		dab2
 dab1:
 	rts

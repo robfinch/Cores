@@ -345,7 +345,7 @@ always_comb
 		13'b01???10000110:	NdxAddr <= {{BPB*2{acca[BPBM1]}},acca};
 		13'b01???10001000:	NdxAddr <= offset12;
 		13'b01???10001001:	NdxAddr <= offset24;
-		13'b01???10001010:	NdxAddr <= offset24;
+		13'b01???10001010:	NdxAddr <= offset36;
 		13'b01???10001011:	NdxAddr <= {acca,accb};
 		13'b01???10001100:	NdxAddr <= pc + offset12 + 3'd3;
 		13'b01???10001101:	NdxAddr <= pc + offset24 + 3'd4;
@@ -414,7 +414,7 @@ always_comb
 		12'b1???00001101:	insnsz <= 4'h4;
 		12'b1???00001110:	insnsz <= 4'h5;
 		12'b1??000001111:	insnsz <= isFar ? 4'h5 : 4'h4;
-		12'b1??000011111:	insnsz <= 4'h4;
+		12'b1??100001111:	insnsz <= 4'h4;
 		default:	insnsz <= 4'h2;
 		endcase
 
@@ -723,6 +723,7 @@ if (rst_i) begin
 	accd <= 24'h0;
 	xr <= 24'h0;
 	yr <= 24'h0;
+	usppg <= 16'h0;
 	usp <= 24'h0;
 	ssp <= 24'h0;
 	if (halt_i) begin
@@ -778,7 +779,7 @@ PUSH1:
 			ssp <= (ssp - cnt);
 		end
 		else begin	// PSHU
-			wadr <= ({usppg,8'h00} + usp - cnt);
+			wadr <= ({usppg,{bitsPerByte{1'b0}}} + usp - cnt);
 			usp <= (usp - cnt);
 		end
 	end
@@ -1327,14 +1328,14 @@ begin
 					2'b10:	usp <= (usp + 4'd2);
 					2'b11:	ssp <= (ssp + 4'd2);
 					endcase
-			12'b1??0x0000010:
+			12'b1??0?0000010:
 				case(ndxbyte[10:9])
 				2'b00:	xr <= (xr - 2'd1);
 				2'b01:	yr <= (yr - 2'd1);
 				2'b10:	usp <= (usp - 2'd1);
 				2'b11:	ssp <= (ssp - 2'd1);
 				endcase
-			12'b1??0x0000011:
+			12'b1??0?0000011:
 				case(ndxbyte[10:9])
 				2'b00:	xr <= (xr - 2'd2);
 				2'b01:	yr <= (yr - 2'd2);
@@ -1685,10 +1686,15 @@ begin
 		end
 	`JSR_NDX:
 		begin
-		   begin
-          store_what <= `SW_PCH;
-          wadr <= ssp - 2'd2;
-          ssp <= ssp - 2'd2;
+	    if (isFar) begin
+				store_what <= `SW_PC2316;
+		    wadr <= ssp - 16'd3;
+		    ssp <= ssp - 16'd3;
+	    end
+			begin
+				store_what <= `SW_PCH;
+				wadr <= ssp - 2'd2;
+				ssp <= ssp - 2'd2;
 			end
 			pc <= pc + insnsz;
 			next_state(STORE1);
@@ -3116,7 +3122,7 @@ begin
 				// If loading from the vector table in bank zero, force pc[23:16]=0
 				if (radr[`BYTE3]=={BPB{1'b0}} && radr[`BYTE2]=={BPB{1'b1}} && radr[7:4]==4'hF)
 					pc[`BYTE3] <= {BPB{1'b0}};
-				if (isRTI|isRTS|isPULS) begin
+				if (isRTI|isRTS|isRTF|isPULS) begin
 					$display("loadded PCL=%h", dat);
 					ssp <= ssp + 2'd1;
 				end
@@ -3128,7 +3134,7 @@ begin
 				pc[`HIBYTE] <= dat;
 				load_what <= `LW_PCL;
 				radr <= radr + 2'd1;
-				if (isRTI|isRTS|isPULS) begin
+				if (isRTI|isRTS|isRTF|isPULS) begin
 					$display("loadded PCH=%h", dat);
 					ssp <= ssp + 2'd1;
 				end

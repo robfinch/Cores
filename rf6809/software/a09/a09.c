@@ -1463,7 +1463,7 @@ unsigned vslide;
 int nRepNext = 0;                       /* # repetitions for REP pseudo-op   */
 int nSkipCount = 0;                     /* # lines to skip                   */
 
-unsigned short tfradr = 0;
+unsigned tfradr = 0;
 int tfradrset = 0;
 
 int nCurLine = 0;                       /* current output line on page       */
@@ -7010,8 +7010,8 @@ case OUT_VER:
 	break;
   case OUT_SREC :                       /* Motorola S51-09                   */
     flushhex();
-    chksum = (tfradr & 0xff) + ((tfradr >> 8) & 0xff) + 3;
-    fprintf(objfile, "S903%04X%02X\n", tfradr, 0xff - (chksum & 0xff));
+    chksum = (tfradr & 0xfff) + ((tfradr >> 12) & 0xfff) + 3;
+    fprintf(objfile, "S9003%06X%03X\n", tfradr, 0xfff - (chksum & 0xfff));
     break;
   case OUT_IHEX :                       /* Intel Hex                         */
     flushihex();

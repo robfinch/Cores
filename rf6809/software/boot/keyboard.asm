@@ -427,6 +427,7 @@ dbgk2:
 	bne		dbgk1							; branch if something in buffer
 	tstb
 	bmi		dbgk2							; if no key and blocking - loop
+	bra		dbgk24
 dbgk20:
 	ldy		#0
 	bsr		KeybdGetStatus
@@ -435,8 +436,9 @@ dbgk20:
 	bne		dbgk1							; branch if key
 	tstb										; block?
 	bmi		dbgk2							; If no key and blocking - loop
+dbgk24:
 	ldd		#-1								; return -1 if no block and no key
-	puls	x,pc
+	puls	x,y,pc
 dbgk1:
 	cmpy	#0
 	bne		dbgk22

@@ -11,6 +11,9 @@ The core may be configured to use 12-bit bytes. This increases the effective add
 ## Instruction cache
 There is a 4kB instruction cache. The cache can supply all the bytes of an instruction in one clock cycle improving performance.
 
+## Pipeline
+The pipeline is non-overlapped except that the writeback stage is performed during the instruction fetch stage of the next instruction.
+
 ## Asynchronous Readback Cycles
 The core may be configured for asynchronous readback for instruction cache read cycles. With async. readback there may be multiple outstanding read requests made by the processor before any read data is returned to it. The read data may return out-of-order with respect to the read requests. Re-ordering is handled using a four-bit address tag returned along with the read data. Async readback offers higher performance than synchronous readback.
 
@@ -68,4 +71,5 @@ There is a modified version of the hc12 VBCC compiler which also is for twelve b
 
 
 # Test Project
-The rf6809 is used in a test project. Multiple rf6809 cores are networked together in a ring topology using a parallel bus.
+There is a small system-on-chip setup for the CmodA7 FPGA board. The system includes the cpu core, an acia and via. Communication is via the serial port at 9600 baud.
+The rf6809 is used in a another test project. Multiple rf6809 cores are networked together in a ring topology using a parallel bus.

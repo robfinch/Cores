@@ -57,7 +57,7 @@ I2C_STAT	EQU		$4
 ; Returns: none
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_i2c_init:
+i2c_init:
 	pshs	b
 	ldb		#4									; setup prescale for 400kHz clock
 	stb		I2C_PREL,x
@@ -103,7 +103,7 @@ i2c_wr_cmd:
 ; Stack space: 2 words
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-_i2c_xmit1:
+i2c_xmit1:
 	pshs	d								; save data value
 	pshs	d								; and save it again
 	ldb		#1
