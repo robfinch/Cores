@@ -117,6 +117,7 @@ reg [31:0] ib;
 reg [31:0] iedge;
 reg [31:0] rste;
 reg [31:0] es;
+reg [31:0] irq_active;
 reg [3:0] irq [0:31];
 reg [BPB:0] cause [0:31];
 reg [5:0] server [0:31];
@@ -198,6 +199,7 @@ begin
 		8'b1?????00: dat_o <= cause[adr_i[6:2]];
 		8'b1?????01: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],2'b0,irq[adr_i[6:2]]};
 		8'b1?????10:	dat_o <= {2'b0,server[adr_i[6:2]]};
+		8'b1?????11:	dat_o <= irq_active[adr_i[6:2]];
 		default:	dat_o <= 12'h00;
 		endcase
 	else
@@ -229,10 +231,16 @@ end
 // misreads
 // nmi is not encoded
 always @(posedge clk)
-begin
+if (rst_i)
+	irq_active <= 32'd0;
+else begin
 	irqenc <= 5'd0;
-	for (n = 31; n > 0; n = n - 1)
+	for (n = 31; n > 0; n = n - 1) begin
 		if ((es[n] ? iedge[n] : i[n])) irqenc <= n;
+		if ((es[n] ? iedge[n] : i[n])) irq_active[n] <= 1'b1;
+	end
+	if (cs && wr_i && adr_i[7] && &adr_i[1:0])
+		irq_active[adr_i[6:2]] <= dat_i[0];
 end
 
 endmodule
