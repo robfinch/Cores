@@ -41,6 +41,10 @@ char *typname[]={"strange","bit","char","short","int","long","long long",
                  "near-pointer","far-pointer","huge-pointer",
 		 "array","struct","union","enum","function"};
 
+int bitsperbyte = 8;
+int bytemask = 0xff;
+int dbl_bytemask = 0xffff;
+
 /*  Alignment-requirements for all types in bytes.              */
 zmax align[MAX_TYPE+1];
 
@@ -568,17 +572,17 @@ static void emit_obj(FILE *f,struct obj *p,int t)
     if(flags==KONSTINC){
       eval_const(&p->val,p->am->base);
       if((t&NQ)==CHAR){
-	vumax=zumrshift(vumax,24-8*p->am->offset);
-	vumax=zumand(vumax,ul2zum(4095UL));
+	vumax=zumrshift(vumax,bitsperbyte*3-bitsperbyte*p->am->offset);
+	vumax=zumand(vumax,ul2zum(tu_max[CHAR]));
       }else{
-	vumax=zumrshift(vumax,16-8*p->am->offset);
-	vumax=zumand(vumax,ul2zum(0xFFFFFFUL));
+	vumax=zumrshift(vumax,bitsperbyte*2-bitsperbyte*p->am->offset);
+	vumax=zumand(vumax,ul2zum(tu_max[SHORT]));
       }
       emit(f,"#%lu",zum2ul(vumax));
       return;
     }
     if(flags<POST_INC||flags>PRE_DEC||CPU==6812)
-      emit(f,"%ld",p->am->offset&0xffffff);
+      emit(f,"%ld",p->am->offset&tu_max[SHORT]);
     if(p->am->v){
       if(p->am->v->storage_class==STATIC)
 	emit(f,"+%s%ld",labprefix,zm2l(p->am->v->offset));
@@ -694,7 +698,7 @@ static int mov_op(struct obj *o)
     if(f==IMM_IND){
       if(o->am->v) return 0;
       off=o->am->offset;
-      if(off>=-16&&off<=15)
+      if(off>=-256&&off<=255)
 	return 1;
       else
 	return 0;
@@ -707,7 +711,7 @@ static int mov_op(struct obj *o)
     if(o->v->storage_class==STATIC||o->v->storage_class==EXTERN)
       return 1;
     off=voff(o);
-    if(off>=-16&&off<=15)
+    if(off>=-256&&off<=255)
       return 1;
     else
       return 0;
@@ -1441,10 +1445,16 @@ int init_cg(void)
 
   CPU=CPUOPT;
 
+	if (CPU==680912) {
+		bitsperbyte = 12;
+		bytemask = 0xfff;
+		dbl_bytemask = 0xffffff;
+	}
+	
   /*  Initialize some values which cannot be statically initialized   */
   /*  because they are stored in the target's arithmetic.             */
   maxalign=l2zm(1L);
-  char_bit=l2zm(12L);
+  char_bit=l2zm((long)bitsperbyte);
   for(i=0;i<=MAX_TYPE;i++){
     sizetab[i]=l2zm(msizetab[i]);
     align[i]=l2zm(malign[i]);
@@ -1460,24 +1470,46 @@ int init_cg(void)
   /*  want to be portable.                                            */
   /*  That's the reason for the subtraction in t_min[INT]. Long could */
   /*  be unable to represent -2147483648 on the host system.          */
-  t_min[CHAR]=l2zm(-2048L);
-  t_min[SHORT]=l2zm(-8388608L);
-  t_min[INT]=t_min[SHORT];
-  t_min[LONG]=zmsub(l2zm(0x800000000000LL),l2zm(1L));
-  t_min[LLONG]=zmlshift(l2zm(1L),l2zm(63L));
-  t_min[MAXINT]=t_min(LLONG);
-  t_max[CHAR]=ul2zum(2047L);
-  t_max[SHORT]=ul2zum(8388607UL);
-  t_max[INT]=t_max[SHORT];
-  t_max[LONG]=ul2zum(0x7fffffffffffULL);
-  t_max[LLONG]=zumrshift(zumkompl(ul2zum(0UL)),ul2zum(1UL));
-  t_max[MAXINT]=t_max(LLONG);
-  tu_max[CHAR]=ul2zum(4095UL);
-  tu_max[SHORT]=ul2zum(16777215UL);
-  tu_max[INT]=tu_max[SHORT];
-  tu_max[LONG]=ul2zum(0xffffffffffffULL);
-  tu_max[LLONG]=zumkompl(ul2zum(0UL));
-  tu_max[MAXINT]=t_max(UNSIGNED|LLONG);
+  if (CPU==680912) {
+	  t_min[CHAR]=l2zm(-2048L);
+	  t_min[SHORT]=l2zm(-8388608L);
+	  t_min[INT]=t_min[SHORT];
+	  t_min[LONG]=zmsub(l2zm(0x800000000000LL),l2zm(1L));
+	  t_min[LLONG]=zmlshift(l2zm(1L),l2zm(63L));
+	  t_min[MAXINT]=t_min(LLONG);
+	  t_max[CHAR]=ul2zum(2047L);
+	  t_max[SHORT]=ul2zum(8388607UL);
+	  t_max[INT]=t_max[SHORT];
+	  t_max[LONG]=ul2zum(0x7fffffffffffULL);
+	  t_max[LLONG]=zumrshift(zumkompl(ul2zum(0UL)),ul2zum(1UL));
+	  t_max[MAXINT]=t_max(LLONG);
+	  tu_max[CHAR]=ul2zum(4095UL);
+	  tu_max[SHORT]=ul2zum(16777215UL);
+	  tu_max[INT]=tu_max[SHORT];
+	  tu_max[LONG]=ul2zum(0xffffffffffffULL);
+	  tu_max[LLONG]=zumkompl(ul2zum(0UL));
+	  tu_max[MAXINT]=t_max(UNSIGNED|LLONG);
+	}
+	else {
+	  t_min[CHAR]=l2zm(-128L);
+	  t_min[SHORT]=l2zm(-32768L);
+	  t_min[INT]=t_min[SHORT];
+	  t_min[LONG]=zmsub(l2zm(-2147483647L),l2zm(1L));
+	  t_min[LLONG]=zmlshift(l2zm(1L),l2zm(63L));
+	  t_min[MAXINT]=t_min(LLONG);
+	  t_max[CHAR]=ul2zum(127L);
+	  t_max[SHORT]=ul2zum(32767UL);
+	  t_max[INT]=t_max[SHORT];
+	  t_max[LONG]=ul2zum(2147483647UL);
+	  t_max[LLONG]=zumrshift(zumkompl(ul2zum(0UL)),ul2zum(1UL));
+	  t_max[MAXINT]=t_max(LLONG);
+	  tu_max[CHAR]=ul2zum(255UL);
+	  tu_max[SHORT]=ul2zum(65535UL);
+	  tu_max[INT]=tu_max[SHORT];
+	  tu_max[LONG]=ul2zum(4294967295UL);
+	  tu_max[LLONG]=zumkompl(ul2zum(0UL));
+	  tu_max[MAXINT]=t_max(UNSIGNED|LLONG);
+	}
 
   if(g_flags[9]&USEDFLAG) drel=1;
   if(g_flags[10]&USEDFLAG) MINADDI2P=SHORT;
@@ -1522,6 +1554,8 @@ int init_cg(void)
     marray[1]="__6809__";
   if(CPU==6309)
     marray[1]="__6309__";
+  if(CPU==680912)
+    marray[1]="__680912__";
   target_macros=marray;
 
 
@@ -2646,7 +2680,7 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 	    emit(f,"\tjmp\t");
 	  else
 	    emit(f,"\tjsr\t");
-	  if (p->q1.v.tattr&FAR)
+	  if (p->q1.v->tattr&FAR)
 	  	emit(f,"\tfar\t");
 	  emit_obj(f,&p->q1,t);
 	  emit(f,"\n");
@@ -2657,7 +2691,7 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 	  }else{
 	    emit(f,"\t%s\t",jsrinst); /*emit(f,"\tbsr\t");*/
 	  }
-	  if (p->q1.v.tattr&FAR)
+	  if (p->q1.v->tattr&FAR)
 	  	emit(f,"\tfar\t");
 	  if(pcrel){
 	    pcrel=0;
@@ -2787,9 +2821,9 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 	  int l=++label,cnt=(int)(optsize?size:size/8);
 	  if(regs[acc]&&!scratchreg(acc,p)){
 	    if(c==PUSH)
-	      emit(f,"\tst%c\t%ld,%s\n",(CPU!=6812&&cnt<=4095)?'b':'d',loff-roff-6-stackoffset,regnames[sp]);
+	      emit(f,"\tst%c\t%ld,%s\n",(CPU!=6812&&cnt<=bytemask)?'b':'d',loff-roff-6-stackoffset,regnames[sp]);
 	    else{
-	      if(CPU!=6812&&cnt<=4095){
+	      if(CPU!=6812&&cnt<=bytemask){
 		emit(f,SPUSH("b"));
 		push(1);
 	      }else{
@@ -2797,9 +2831,9 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 		push(2);
 	      }
 	    }
-	    pd=(CPU!=6812&&cnt<=4095)?1:2;
+	    pd=(CPU!=6812&&cnt<=bytemask)?1:2;
 	  }
-	  if(CPU!=6812&&cnt<=4095)
+	  if(CPU!=6812&&cnt<=bytemask)
 	    emit(f,"\tldb\t#%lu\n",cnt);
 	  else
 	    emit(f,"\tldd\t#%lu\n",cnt);
@@ -2836,7 +2870,7 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 	      emit(f,"\tld%s\t,%s++\n\tst%s\t,%s++\n",regnames[cr],regnames[qr],regnames[cr],regnames[zr]);
 	      size&=7;
 	    }
-	    if(cnt<=4095)
+	    if(cnt<=bytemask)
 	      emit(f,"\tdecb\n");
 	    else
 	      emit(f,"\tsubd\t#1\n");
@@ -3449,20 +3483,20 @@ void gen_code(FILE *f,struct IC *fp,struct Var *v,zmax offset)
 	  eval_const(&p->q2.val,t);
 	  l=zum2ul(vumax);
 	  if((t&NQ)!=CHAR){
-	    h=(l>>12)&4095;
+	    h=(l>>bitsperbyte)&bytemask;
 	    if(c==AND&&h==0)
 	      emit(f,"\tclra\n");
-	    else if(c==XOR&&h==4095)
+	    else if(c==XOR&&h==bytemask)
 	      emit(f,"\tcoma\n");
-	    else if((c==AND&&h!=4095)||(c==OR&&h!=0)||(c==XOR&&h!=0))
+	    else if((c==AND&&h!=bytemask)||(c==OR&&h!=0)||(c==XOR&&h!=0))
 	      emit(f,"\t%sa\t#%lu\n",s,h);
 	  }
-	  h=l&4095;
+	  h=l&bytemask;
 	  if(c==AND&&h==0)
 	    emit(f,"\tclrb\n");
-	  else if(c==XOR&&h==4095)
+	  else if(c==XOR&&h==bytemask)
 	    emit(f,"\tcomb\n");
-	  else if((c==AND&&h!=4095)||(c==OR&&h!=0)||(c==XOR&&h!=0))
+	  else if((c==AND&&h!=bytemask)||(c==OR&&h!=0)||(c==XOR&&h!=0))
 	    emit(f,"\t%sb\t#%lu\n",s,h);
 	}else{
 	  if(isreg(q2)){
