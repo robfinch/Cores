@@ -34,6 +34,16 @@
 ;                                                                          
 ; ============================================================================
 ;
+; ASCII control characters.
+SOH		equ 1
+EOT		equ 4
+ACK		equ 6
+BS		equ 8
+NAK		equ 21
+ETB		equ	$17
+CAN		equ 24
+DEL		equ 127
+
 CR	EQU	$0D		;ASCII equates
 LF	EQU	$0A
 TAB	EQU	$09
@@ -46,6 +56,7 @@ CTRLM   EQU $0D
 CTRLS	EQU	$13
 CTRLT EQU $14
 CTRLX	EQU	$18
+CTRLZ	EQU	$1A
 XON		EQU	$11
 XOFF	EQU	$13
 
@@ -66,7 +77,9 @@ MF_ShowSprites	EQU		7
 MF_Srand		EQU		8
 MF_Random		EQU		9
 MF_OSCALL		EQU		10
-MF_GetRange	EQU		11
+MF_GetRange	EQU		11	; gets a pair of numbers last>first
+MF_GetNumber	EQU	12
+MF_SerialPutchar	EQU	13
 
 mon_numwka	EQU		$910
 mon_r1		EQU		$920

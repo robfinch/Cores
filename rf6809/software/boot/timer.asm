@@ -31,25 +31,41 @@ TimerInit:
 	clr		VIA+VIA_T3LH
 	lda		VIA+VIA_ACR			; set continuous mode for timer
 	ora		#$100
-	sta		VIA+VIA_ACR			; enable timer #3 interrupts
-	lda		#$810
+	sta		VIA+VIA_ACR			
+	lda		#$880						; enable timer #3 interrupts
 	sta		VIA+VIA_IER
 	rts
 
 TimerIRQ:
 	; Reset the edge sense circuit in the PIC
 	lda		#31							; Timer is IRQ #31
-	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
 	sta		PIC+16					; register 16 is edge sense reset reg	
-	lda		VIA+VIA_IFR
-	bpl		notTimerIRQ
-	bita	#$800
+	lda		PIC+$FF					; Timer active interrupt flag
 	beq		notTimerIRQ
-	clr		VIA+VIA_T3LL
+	clr		PIC+$FF					; clear the flag
+	lda		#31							; Timer is IRQ #31
+	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
+	clr		VIA+VIA_T3LL		; should clear the interrupt
 	clr		VIA+VIA_T3LH
-	inc		$E00037					; update timer IRQ screen flag
+	lda		#31							; Timer is IRQ #31
+	sta		PIC+16					; register 16 is edge sense reset reg	
+	clr		PIC+$FF					; clear the flag
+	inc		$E0003F					; update timer IRQ screen flag
+	ldd		milliseconds+2
+	addd	#10
+	std		milliseconds+2
+	ldd		milliseconds
+	adcb	#0
+	stb		milliseconds+1
+	adca	#0
+	sta		milliseconds
+
+	; Update XModem timer, we just always do it rather than testing if XModem
+	; is active. The increment is set to give approximately 3s before the MSB
+	; gets set.
+	ldb		xm_timer
+	addb	#4
+	stb		xm_timer
 notTimerIRQ:
 	rts
-
-
 	
