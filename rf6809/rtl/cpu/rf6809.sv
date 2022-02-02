@@ -703,8 +703,9 @@ end
 endgenerate
 
 // Divider logic
+reg [5:0] divcnt;
+/*
 reg divsign;
-reg [4:0] divcnt;
 reg [`DBLBYTE] dividend;
 // Table of positive constants 1/0 to 1/2047, accurate to 35 bits
 reg [26:0] divtbl [0:2047];	
@@ -746,6 +747,44 @@ generate begin : gDivPipe
 	end
 end
 endgenerate
+*/
+wire [23:0] divres24;
+wire [15:0] divrem12;
+wire [47:0] divres48;
+wire [23:0] divrem24;
+wire [15:0] divres16;
+wire [7:0] divrem8;
+wire [31:0] divres32;
+wire [15:0] divrem16;
+
+`ifdef SUPPORT_6309
+generate begin : gDividers
+	if (bitsPerByte==12) begin
+		div24by12 udiv24by12 (
+		  .aclk(clk_i),                                      // input wire aclk
+		  .s_axis_divisor_tvalid(1'b1),    // input wire s_axis_divisor_tvalid
+		  .s_axis_divisor_tdata({4'h0,b12}),      // input wire [15 : 0] s_axis_divisor_tdata
+		  .s_axis_dividend_tvalid(1'b1),  // input wire s_axis_dividend_tvalid
+		  .s_axis_dividend_tdata({acca,accb}),    // input wire [23 : 0] s_axis_dividend_tdata
+		  .m_axis_dout_tvalid(),          // output wire m_axis_dout_tvalid
+		  .m_axis_dout_tuser(),            // output wire [0 : 0] m_axis_dout_tuser
+		  .m_axis_dout_tdata({divres24,divrem12})            // output wire [39 : 0] m_axis_dout_tdata
+		);
+
+		div48by24 udiv48by24 (
+		  .aclk(clk_i),                                      // input wire aclk
+		  .s_axis_divisor_tvalid(1'b1),    // input wire s_axis_divisor_tvalid
+		  .s_axis_divisor_tdata(b),      // input wire [23 : 0] s_axis_divisor_tdata
+		  .s_axis_dividend_tvalid(1'b1),  // input wire s_axis_dividend_tvalid
+		  .s_axis_dividend_tdata({accw,accd}),    // input wire [47 : 0] s_axis_dividend_tdata
+		  .m_axis_dout_tvalid(),          // output wire m_axis_dout_tvalid
+		  .m_axis_dout_tuser(),            // output wire [0 : 0] m_axis_dout_tuser
+		  .m_axis_dout_tdata({divres48,divrem24})            // output wire [71 : 0] m_axis_dout_tdata
+		);
+	end
+end
+endgenerate
+`endif
 
 // For asynchronous reads,
 // The read response might come back in any order (the packets could loop
@@ -891,9 +930,9 @@ if (rst_i) begin
 	end
 	outstanding <= 16'h0;
 	iccnt <= 4'h0;
-	dividend <= 'b0;
+	//dividend <= 'b0;
 	divcnt <= 'b0;
-	divsign <= 'b0;
+	//divsign <= 'b0;
 end
 else begin
 
@@ -933,15 +972,16 @@ STORE2:	tStore2();
 MUL1:
 	begin
 		next_state(MUL2);
-		divcnt <= 5'd7;
+		divcnt <= 6'd7;
 	end
 MUL2:
-	if (divcnt != 5'd0)
+	if (divcnt != 6'd0)
 		divcnt <= divcnt - 2'd1;
 	else
 		next_state(IFETCH);
 DIV1:
 	begin
+		/*
 		divsign <= acca[bitsPerByte-1] ^ b12[bitsPerByte-1];
 		if (acca[bitsPerByte-1])
 			dividend <= -{acca,accb};
@@ -949,19 +989,25 @@ DIV1:
 			dividend <= {acca,accb};
 		if (b12[bitsPerByte-1])
 			b <= -b;
-		divcnt <= 5'd13;
+		*/
+		case(ir12)
+		`DIVD_IMM,`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
+			divcnt <= 6'd28;
+		`DIVQ_IMM,`DIVQ_DP,`DIVQ_NDX,`DIVQ_EXT:
+			divcnt <= 6'd52;
+		endcase
 		next_state(DIV2);
 	end
 DIV2:
-	if (divcnt != 5'd0)
+	if (divcnt != 6'd0)
 		divcnt <= divcnt - 2'd1;
 	else
 		next_state(DIV3);
 DIV3:
 	begin
-		res[`LOBYTE] <= divsign ? -divres12[37:26] : divres12[37:26];
-		res[`HIBYTE] <= divsign ? -divrem12 : divrem12;
-		vf <= divres[49:38] != 12'd0;
+		res[`LOBYTE] <= divres24[11:0];
+		res[`HIBYTE] <= divrem12;
+		vf <= divres24[23:12] != {12{divres24[11]}};
 		next_state(IFETCH);
 	end
 
@@ -2010,6 +2056,12 @@ begin
 	`DIVD_IMM:
 		begin
 			b <= {ir[`BYTE3],ir[`BYTE2]};
+			pc <= pc + 2'd2;
+			next_state(DIV1);
+		end
+	`DIVQ_IMM:
+		begin
+			b <= {ir[`BYTE3],ir[`BYTE2]};
 			pc <= pc + 2'd3;
 			next_state(DIV1);
 		end
@@ -2038,6 +2090,7 @@ begin
 	`ANDD_DP,
 	`ORD_DP,
 	`DIVD_DP,
+	`DIVQ_DP,
 	`EORD_DP:
 		begin
 			load_what <= `LW_BL;
@@ -2126,6 +2179,7 @@ begin
 	`ANDD_NDX,
 	`ORD_NDX,
 	`DIVD_NDX,
+	`DIVQ_NDX,
 	`EORD_NDX:
 		begin
 			pc <= pc + insnsz;
@@ -2262,6 +2316,7 @@ begin
 	`ANDD_EXT,
 	`ORD_EXT,
 	`DIVD_EXT,
+	`DIVQ_EXT,
 	`EORD_EXT:
 		begin
 			load_what <= `LW_BL;
@@ -2638,6 +2693,7 @@ begin
 	`BITD_DP,`BITD_NDX,`BITD_EXT,
 	`ANDD_DP,`ANDD_NDX,`ANDD_EXT:
 		res <= {acca[`LOBYTE],accb[`LOBYTE]} & b[`DBLBYTE];
+	`DIVQ_DP,`DIVQ_NDX,`DIVQ_EXT,
 	`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
 		next_state(DIV1);
 	`MULD_DP,`MULD_NDX,`MULD_EXT:
@@ -3045,10 +3101,37 @@ begin
 			end
 		`DIVD_IMM,`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
 			begin
-				acca <= res[`HIBYTE];
-				accb <= res[`LOBYTE];
+				acca <= res[`BYTE2];
+				accb <= res[`BYTE1];
 				// Overflow set eariler
 				cf <= res[0];
+				nf <= res[bitsPerByte-1];
+				zf <= ~|res[bitsPerByte-1:0];
+			end
+		`DIVQ_IMM,`DIVQ_DP,`DIVQ_NDX,`DIVQ_EXT:
+			begin
+				if (bitsPerByte==12) begin
+					acca <= divrem24[`BYTE2];
+					accb <= divrem24[`BYTE1];
+					acce <= divres48[`BYTE2];
+					accf <= divres48[`BYTE1];
+					// Overflow set eariler
+					cf <= divres48[0];
+					vf <= divres48[47:24]!={24{divres48[23]}};
+					nf <= divres48[23];
+					zf <= ~|divres48[23:0];
+				end
+				else if (bitsPerByte==8) begin
+					acca <= divrem16[`BYTE2];
+					accb <= divrem16[`BYTE1];
+					acce <= divres32[`BYTE2];
+					accf <= divres32[`BYTE1];
+					// Overflow set eariler
+					cf <= divres32[0];
+					vf <= divres32[31:16]!={16{divres32[15]}};
+					nf <= divres48[15];
+					zf <= ~|divres48[15:0];
+				end
 			end
 		`MULD_IMM,`MULD_DP,`MULD_NDX,`MULD_EXT:
 			begin
