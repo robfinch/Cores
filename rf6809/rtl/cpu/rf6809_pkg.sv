@@ -10,7 +10,7 @@ parameter BPBM1 =	BPB-1;
 parameter BPBX2M1 =	BPB*2-1;
 
 // The following adds support for many 6309 instructions.
-//`define SUPPORT_6309
+`define SUPPORT_6309
 
 // The following allows asynchronous reads for icache updating.
 // It increases the size of the core.
@@ -31,6 +31,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define HIBYTE	15:8
 `define DBLBYTE	15:0
 `define TRPBYTE		23:0
+`define QUADBYTE	31:0
 `define BYTE1		7:0
 `define BYTE2		15:8
 `define BYTE3		23:16
@@ -48,6 +49,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define HIBYTE	23:12
 `define DBLBYTE	23:0
 `define TRPBYTE		35:0
+`define QUADBYTE	47:0
 `define BYTE1		11:0
 `define BYTE2		23:12
 `define BYTE3		35:24
@@ -465,18 +467,22 @@ parameter BPBX2M1 =	BPB*2-1;
 `define LDE_IMM		12'h286
 `define ADDE_IMM	12'h28B
 `define DIVD_IMM	12'h28D
+`define MULD_IMM	12'h28F
 `define SUBE_DP		12'h290
 `define LDE_DP		12'h296
 `define ADDE_DP		12'h29B
 `define DIVD_DP		12'h29D
+`define MULD_DP		12'h29F
 `define SUBE_NDX	12'h2A0
 `define LDE_NDX		12'h2A6
 `define ADDE_NDX	12'h2AB
 `define DIVD_NDX	12'h2AD
+`define MULD_NDX	12'h2AF
 `define SUBE_EXT	12'h2B0
 `define LDE_EXT		12'h2B6
 `define ADDE_EXT	12'h2BB
 `define DIVD_EXT	12'h2BD
+`define MULD_EXT	12'h2BF
 `define SUBF_IMM	12'h2C0
 `define LDF_IMM		12'h2C6
 `define ADDF_IMM	12'h2CB

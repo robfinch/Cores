@@ -55,6 +55,11 @@ parameter STORE1a = 6'd10;
 parameter STORE2 = 6'd11;
 parameter OUTER_INDEXING = 6'd12;
 parameter OUTER_INDEXING2 = 6'd13;
+parameter DIV1 = 6'd16;
+parameter DIV2 = 6'd17;
+parameter DIV3 = 6'd18;
+parameter MUL1 = 6'd19;
+parameter MUL2 = 6'd20;
 parameter ICACHE1 = 6'd31;
 parameter ICACHE2 = 6'd32;
 parameter ICACHE3 = 6'd33;
@@ -127,9 +132,9 @@ wire [`LOBYTE] ndxbyte;
 reg cf,vf,zf,nf,hf,ef;
 wire [`LOBYTE] cfx8 = cf;
 wire [`DBLBYTE] cfx24 = {23'b0,cf};
-reg im,firqim;
+reg im,im1,firqim;
 reg sync_state,wait_state;
-wire [`LOBYTE] ccr = {ef,firqim,hf,im,nf,zf,vf,cf};
+wire [`LOBYTE] ccr = {im1,ef,firqim,hf,im,nf,zf,vf,cf};
 reg [`LOBYTE] acca,accb;
 `ifdef SUPPORT_6309
 reg [`LOBYTE] acce,accf;
@@ -196,6 +201,8 @@ endfunction
 reg [bitsPerByte-1:0] dati;
 always_comb
 	dati = dat_i;
+
+genvar g;
 
 // Evaluate the branch conditional
 reg takb;
@@ -472,16 +479,16 @@ always_comb
 	4'b0011:	src1 <= usp;
 	4'b0100:	src1 <= ssp;
 	4'b0101:	src1 <= pcp2;
-	4'b1000:	src1 <= acca[`LOBYTE];
-	4'b1001:	src1 <= accb[`LOBYTE];
-	4'b1010:	src1 <= ccr;
-	4'b1011:	src1 <= dpr;
+	4'b1000:	src1 <= {12'hFFF,acca[`LOBYTE]};
+	4'b1001:	src1 <= {12'hFFF,accb[`LOBYTE]};
+	4'b1010:	src1 <= {ccr,ccr};
+	4'b1011:	src1 <= {dpr,dpr};
 	4'b1100:	src1 <= usppg;
 	4'b1101:	src1 <= 24'h0000;
 `ifdef SUPPORT_6309
 	4'b0110:	src1 <= {acce[`LOBYTE],accf[`LOBYTE]};
-	4'b1110:	src1 <= acce;
-	4'b1111:	src1 <= accf;
+	4'b1110:	src1 <= {12'hFFF,acce};
+	4'b1111:	src1 <= {12'hFFF,accf};
 `else
 	4'b1110:	src1 <= 24'h0000;
 	4'b1111:	src1 <= 24'h0000;
@@ -678,16 +685,67 @@ rf6809_itagmem u2
 	.hit1(hit1)
 );
 
-/* Need to account for signed division
-reg [35:0] divtbl [0:4095];
-genvar g;
-generate begin: gDivtbl
-	for (g = 0; g < 4096; g = g + 1)
-		divtbl[g] = 36'h800000000 / g;
+
+// Multiplier logic
+wire signed [`QUADBYTE] muld_prod = $signed({acca,accb}) * $signed(b[`DBLBYTE]);
+reg [`QUADBYTE] muld_res [0:15];
+reg [`QUADBYTE] muld_res6;
+genvar g4;
+generate begin : gMulPipe
+	always_ff @(posedge clk_i)
+		muld_res[0] <= muld_prod;
+	always_ff @(posedge clk_i)
+		muld_res6 <= muld_res[5];
+	for (g4 = 1; g4 < 6; g4 = g4 + 1)
+		always_ff @(posedge clk_i)
+			muld_res[g4] = muld_res[g4-1];
+end
 endgenerate
-wire [`DBLBYTE] divres = ({acca,accb} * divtbl[b12]) >> 36;
-wire [11:0] divrem = {acca,accb} - divres * b12;
-*/
+
+// Divider logic
+reg divsign;
+reg [4:0] divcnt;
+reg [`DBLBYTE] dividend;
+// Table of positive constants 1/0 to 1/2047, accurate to 35 bits
+reg [26:0] divtbl [0:2047];	
+genvar g2;
+generate begin: gDivtbl
+	for (g2 = 0; g2 < 2048; g2 = g2 + 1)
+	initial begin
+		divtbl[g2] = 27'h4000000 / g2;
+	end
+end
+endgenerate
+reg [49:0] divres;
+always_comb
+	divres = ({36'd0,dividend} * divtbl[b12]);
+reg [11:0] divrem;
+always_comb
+	divrem = dividend - divres[49:26] * b12;
+// Now create an 12-stage divider pipeline. Hopefully the synthesizer
+// will backfill along this pipeline. Each multiplier requires only
+// about 5 stages for best performance.
+genvar g1;
+reg [49:0] divrespipe [0:31];
+reg [11:0] divrempipe [0:31];
+reg [49:0] divres12;
+reg [11:0] divrem12;
+generate begin : gDivPipe
+	always_ff @(posedge clk_i)
+		divrespipe[0] <= divres;
+	always_ff @(posedge clk_i)
+		divrempipe[0] <= divrem;
+	always_ff @(posedge clk_i)
+		divres12 <= divrespipe[12];
+	always_ff @(posedge clk_i)
+		divrem12 <= divrempipe[12];
+	for (g1 = 1; g1 < 13; g1 = g1 + 1)
+	always_ff @(posedge clk_i) begin
+		divrespipe[g1] <= divrespipe[g1-1];
+		divrempipe[g1] <= divrempipe[g1-1];
+	end
+end
+endgenerate
 
 // For asynchronous reads,
 // The read response might come back in any order (the packets could loop
@@ -717,11 +775,11 @@ else begin
 `endif
 end
 
-genvar g;
+genvar g3;
 generate begin : gIcin
-for (g = 0; g < 16; g = g + 1)
+for (g3 = 0; g3 < 16; g3 = g3 + 1)
 	always_comb
-		icbuf2[(g+1)*bitsPerByte-1:g*bitsPerByte] <= icbuf[g];
+		icbuf2[(g3+1)*bitsPerByte-1:g3*bitsPerByte] <= icbuf[g3];
 end
 endgenerate
 
@@ -833,6 +891,9 @@ if (rst_i) begin
 	end
 	outstanding <= 16'h0;
 	iccnt <= 4'h0;
+	dividend <= 'b0;
+	divcnt <= 'b0;
+	divsign <= 'b0;
 end
 else begin
 
@@ -866,6 +927,43 @@ CALC:		tExecute();
 STORE1:	tStore1();
 STORE1a:	tStore1a();
 STORE2:	tStore2();
+
+// ============================================================================
+// ============================================================================
+MUL1:
+	begin
+		next_state(MUL2);
+		divcnt <= 5'd7;
+	end
+MUL2:
+	if (divcnt != 5'd0)
+		divcnt <= divcnt - 2'd1;
+	else
+		next_state(IFETCH);
+DIV1:
+	begin
+		divsign <= acca[bitsPerByte-1] ^ b12[bitsPerByte-1];
+		if (acca[bitsPerByte-1])
+			dividend <= -{acca,accb};
+		else
+			dividend <= {acca,accb};
+		if (b12[bitsPerByte-1])
+			b <= -b;
+		divcnt <= 5'd13;
+		next_state(DIV2);
+	end
+DIV2:
+	if (divcnt != 5'd0)
+		divcnt <= divcnt - 2'd1;
+	else
+		next_state(DIV3);
+DIV3:
+	begin
+		res[`LOBYTE] <= divsign ? -divres12[37:26] : divres12[37:26];
+		res[`HIBYTE] <= divsign ? -divrem12 : divrem12;
+		vf <= divres[49:38] != 12'd0;
+		next_state(IFETCH);
+	end
 
 // ============================================================================
 // ============================================================================
@@ -1909,6 +2007,20 @@ begin
 			next_state(LOAD1);
 		end
 `ifdef SUPPORT_6309
+	`DIVD_IMM:
+		begin
+			b <= {ir[`BYTE3],ir[`BYTE2]};
+			pc <= pc + 2'd3;
+			next_state(DIV1);
+		end
+	`MULD_IMM:
+		begin
+			b <= {ir[`BYTE3],ir[`BYTE2]};
+			pc <= pc + 2'd3;
+			next_state(MUL1);
+		end
+`endif
+`ifdef SUPPORT_6309
 	`CMPE_DP,`CMPF_DP,
 	`LDE_DP,`LDF_DP,
 	`SUBE_DP,`SUBF_DP,
@@ -1925,6 +2037,7 @@ begin
 	`BITD_DP,
 	`ANDD_DP,
 	`ORD_DP,
+	`DIVD_DP,
 	`EORD_DP:
 		begin
 			load_what <= `LW_BL;
@@ -1934,6 +2047,7 @@ begin
 		end
 `endif
 `ifdef SUPPORT_6309
+	`MULD_DP,
 	`ADDW_DP,`CMPW_DP,`LDW_DP,`SUBW_DP,
 `endif
 	`SUBD_DP,`ADDD_DP,`LDD_DP,`CMPD_DP,`ADCD_DP,`SBCD_DP:
@@ -2011,6 +2125,7 @@ begin
 	`BITD_NDX,
 	`ANDD_NDX,
 	`ORD_NDX,
+	`DIVD_NDX,
 	`EORD_NDX:
 		begin
 			pc <= pc + insnsz;
@@ -2023,6 +2138,22 @@ begin
 			else begin
 				b <= 24'd0;
 				load_what <= `LW_BL;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+		end
+	`MULD_NDX:
+		begin
+			pc <= pc + insnsz;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_BH;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+			else begin
+				b <= 24'd0;
+				load_what <= `LW_BH;
 				radr <= NdxAddr;
 				next_state(LOAD1);
 			end
@@ -2130,6 +2261,7 @@ begin
 	`BITD_EXT,
 	`ANDD_EXT,
 	`ORD_EXT,
+	`DIVD_EXT,
 	`EORD_EXT:
 		begin
 			load_what <= `LW_BL;
@@ -2139,6 +2271,7 @@ begin
 		end
 `endif
 `ifdef SUPPORT_6309
+	`MULD_EXT,
 	`ADDW_EXT,`CMPW_EXT,`LDW_EXT,`SUBW_EXT,
 `endif
 	`SUBD_EXT,`ADDD_EXT,`LDD_EXT,`CMPD_EXT,`ADCD_EXT,`SBCD_EXT:
@@ -2505,6 +2638,10 @@ begin
 	`BITD_DP,`BITD_NDX,`BITD_EXT,
 	`ANDD_DP,`ANDD_NDX,`ANDD_EXT:
 		res <= {acca[`LOBYTE],accb[`LOBYTE]} & b[`DBLBYTE];
+	`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
+		next_state(DIV1);
+	`MULD_DP,`MULD_NDX,`MULD_EXT:
+		next_state(MUL1);
 	`EORD_DP,`EORD_NDX,`EORD_EXT:
 		res <= {acca[`LOBYTE],accb[`LOBYTE]} ^ b[`DBLBYTE];
 	`ORD_DP,`ORD_NDX,`ORD_EXT:
@@ -2905,6 +3042,22 @@ begin
 				nf <= res24n;
 				zf <= res24z;
 				vf <= 1'b0;
+			end
+		`DIVD_IMM,`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
+			begin
+				acca <= res[`HIBYTE];
+				accb <= res[`LOBYTE];
+				// Overflow set eariler
+				cf <= res[0];
+			end
+		`MULD_IMM,`MULD_DP,`MULD_NDX,`MULD_EXT:
+			begin
+				accb <= muld_res6[`BYTE1];
+				acca <= muld_res6[`BYTE2];
+				accf <= muld_res6[`BYTE3];
+				acce <= muld_res6[`BYTE4];
+				zf <= ~|muld_res6;
+				nf <= muld_res6[bitsPerByte*4-1];
 			end
 `endif
 		`ASLA:
@@ -3859,7 +4012,7 @@ begin
 				ef <= dat[7];
 				if (isRTI) begin
 					$display("loaded ccr=%b", dat);
-					ir[`HIBYTE] <= dat[7] ? 12'hFE : 12'h80;
+					ir[`HIBYTE] <= dat[7] ? 12'h3FE : 12'h080;
 					ssp <= ssp + 2'd1;
 				end
 				else if (isPULS)
