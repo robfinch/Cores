@@ -58,7 +58,6 @@ parameter OUTER_INDEXING2 = 6'd13;
 parameter DIV1 = 6'd16;
 parameter DIV2 = 6'd17;
 parameter DIV3 = 6'd18;
-parameter MUL1 = 6'd19;
 parameter MUL2 = 6'd20;
 parameter ICACHE1 = 6'd31;
 parameter ICACHE2 = 6'd32;
@@ -113,7 +112,7 @@ wire icacheOn = 1'b1;
 reg [`TRPBYTE] ibufadr, icwa;
 reg [191:0] ibuf;
 wire ibufhit = ibufadr==pc;
-reg natMd,firqMd;
+reg natMd,firqMd,iplMd,dbz,iop;
 reg md32;
 wire [`DBLBYTE] mask = 24'hFFFFFF;
 reg [1:0] ipg;
@@ -128,13 +127,18 @@ wire [`LOBYTE] ir12 = ir[`LOBYTE];
 `endif
 reg [`LOBYTE] dpr;		// direct page register
 reg [`DBLBYTE] usppg;	// user stack pointer page
+
+Address [3:0] brkad;	// breakpoint addresses
+brkCtrl [3:0] brkctrl;
+
 wire [`LOBYTE] ndxbyte;
 reg cf,vf,zf,nf,hf,ef;
 wire [`LOBYTE] cfx8 = cf;
 wire [`DBLBYTE] cfx24 = {23'b0,cf};
 reg im,im1,firqim;
+reg dm;	// decimal mode
 reg sync_state,wait_state;
-wire [`LOBYTE] ccr = {im1,ef,firqim,hf,im,nf,zf,vf,cf};
+wire [`LOBYTE] ccr = bitsPerByte==12 ? {2'b00,im1,dm,ef,firqim,hf,im,nf,zf,vf,cf} : {ef,firqim,hf,im,nf,zf,vf,cf};
 reg [`LOBYTE] acca,accb;
 `ifdef SUPPORT_6309
 reg [`LOBYTE] acce,accf;
@@ -378,6 +382,11 @@ always_comb
 		13'b01???00000100:	NdxAddr <= ndxreg;
 		13'b01???00000101:	NdxAddr <= ndxreg + {{BPB*2{accb[BPBM1]}},accb};
 		13'b01???00000110:	NdxAddr <= ndxreg + {{BPB*2{acca[BPBM1]}},acca};
+`ifdef SUPPORT_6309
+		13'b01???00010101:	NdxAddr <= ndxreg + {{BPB*2{accf[BPBM1]}},accf};
+		13'b01???00010110:	NdxAddr <= ndxreg + {{BPB*2{acce[BPBM1]}},acce};
+		13'b01???00011011:	NdxAddr <= ndxreg + {acce,accf};
+`endif
 		13'b01???00001000:	NdxAddr <= ndxreg + offset12;
 		13'b01???00001001:	NdxAddr <= ndxreg + offset24;
 		13'b01???00001010:	NdxAddr <= ndxreg + offset36;
@@ -394,6 +403,11 @@ always_comb
 		13'b01???10000100:	NdxAddr <= 24'd0;
 		13'b01???10000101:	NdxAddr <= {{BPB*2{accb[BPBM1]}},accb};
 		13'b01???10000110:	NdxAddr <= {{BPB*2{acca[BPBM1]}},acca};
+`ifdef SUPPORT_6309
+		13'b01???10010101:	NdxAddr <= {{BPB*2{accf[BPBM1]}},accf};
+		13'b01???10010110:	NdxAddr <= {{BPB*2{acce[BPBM1]}},acce};
+		13'b01???10011011:	NdxAddr <= {acce,accf};
+`endif		
 		13'b01???10001000:	NdxAddr <= offset12;
 		13'b01???10001001:	NdxAddr <= offset24;
 		13'b01???10001010:	NdxAddr <= offset36;
@@ -455,12 +469,12 @@ always_comb
 		12'b1???00000010:	insnsz <= 4'h2;
 		12'b1???00000011:	insnsz <= 4'h2;
 		12'b1???00000100:	insnsz <= 4'h2;
-		12'b1???00000101:	insnsz <= 4'h2;
-		12'b1???00000110:	insnsz <= 4'h2;
+		12'b1???000?0101:	insnsz <= 4'h2;
+		12'b1???000?0110:	insnsz <= 4'h2;
 		12'b1???00001000:	insnsz <= 4'h3;
 		12'b1???00001001:	insnsz <= 4'h4;
 		12'b1???00001010:	insnsz <= 4'h5;
-		12'b1???00001011:	insnsz <= 4'h2;
+		12'b1???000?1011:	insnsz <= 4'h2;
 		12'b1???00001100:	insnsz <= 4'h3;
 		12'b1???00001101:	insnsz <= 4'h4;
 		12'b1???00001110:	insnsz <= 4'h5;
@@ -539,6 +553,12 @@ wire isAcca	= 	ir12==`NEGA || ir12==`COMA || ir12==`LSRA || ir12==`RORA || ir12=
 				ir12==`SUBA_EXT || ir12==`CMPA_EXT || ir12==`SBCA_EXT || ir12==`ANDA_EXT || ir12==`BITA_EXT ||
 				ir12==`LDA_EXT || ir12==`EORA_EXT || ir12==`ADCA_EXT || ir12==`ORA_EXT || ir12==`ADDA_EXT
 				;
+wire isAdc = 	ir12==`ADCA_IMM || ir12==`ADCA_DP || ir12==`ADCA_NDX || ir12==`ADCA_EXT ||
+							ir12==`ADCB_IMM || ir12==`ADCB_DP || ir12==`ADCB_NDX || ir12==`ADCB_EXT ||
+							ir12==`ADCD_IMM || ir12==`ADCD_DP || ir12==`ADCD_NDX || ir12==`ADCD_EXT ;
+wire isSbc =	ir12==`SBCA_IMM || ir12==`SBCA_DP || ir12==`SBCA_NDX || ir12==`SBCA_EXT ||
+							ir12==`SBCB_IMM || ir12==`SBCB_DP || ir12==`SBCB_NDX || ir12==`SBCB_EXT ||
+							ir12==`SBCD_IMM || ir12==`SBCD_DP || ir12==`SBCD_NDX || ir12==`SBCD_EXT ;
 
 `ifdef SUPPORT_6309
 wire isAcce = 	ir12 ==	`ADDE_IMM || ir12==`ADDE_DP || ir12==`ADDE_NDX || ir12==`ADDE_EXT || ir12==`CLRE || ir12==`COME ||
@@ -583,7 +603,7 @@ reg rhit0;
 
 assign lic_o =	(state==CALC && !isRMW) ||
 				(state==DECODE && (
-					ir12==`NOP || ir12==`ORCC || ir12==`ANDCC || ir12==`DAA || ir12==`LDMD || ir12==`TFR || ir12==`EXG ||
+					ir12==`NOP || ir12==`ORCC || ir12==`ANDCC || ir12==`DAA || ir12==`LDMD || ir12==`BITMD || ir12==`TFR || ir12==`EXG ||
 					ir12==`NEGA || ir12==`COMA || ir12==`LSRA || ir12==`RORA || ir12==`ASRA || ir12==`ROLA || ir12==`DECA || ir12==`INCA || ir12==`TSTA || ir12==`CLRA ||
 					ir12==`DECE || ir12==`DECF || ir12==`DECD || ir12==`DECW || ir12==`INCE || ir12==`INCF || ir12==`INCD || ir12==`INCW ||
 					ir12==`NEGB || ir12==`COMB || ir12==`LSRB || ir12==`RORB || ir12==`ASRB || ir12==`ROLB || ir12==`DECB || ir12==`INCB || ir12==`TSTB || ir12==`CLRB ||
@@ -685,6 +705,81 @@ rf6809_itagmem u2
 	.hit1(hit1)
 );
 
+wire bcdaddbcf, bcdsuubbcf,bcdaddcf,bcdsubcf,bcdnegcf,bcdnegbcf;
+wire [bitsPerByte-1:0] bcdaddbo, bcdsubbo, bcdnegbo;
+wire [bitsPerByte*2-1:0] bcdaddo, bcdsubo, bcdnego;
+wire [31:0] bcdmulo;
+
+`ifdef SUPPORT_BCD
+BCDAddN #(.N(3)) ubcda1 (
+	.ci(isAdc ? cf : 1'b0),
+	.a(acc),
+	.b(b12),
+	.o(bcdaddbo),
+	.co(bcdaddbcf)
+);
+
+BCDAddN #(.N(6)) ubcda2 (
+	.ci(isAdc ? cf : 1'b0),
+	.a({acca,accb}),
+	.b(b),
+	.o(bcdaddo),
+	.co(bcdaddcf)
+);
+
+BCDSubN #(.N(3)) ubcds1 (
+	.ci(isSbc ? cf : 1'b0),
+	.a(acc),
+	.b(b12),
+	.o(bcdsubbo),
+	.co(bcdsubbcf)
+);
+
+BCDSubN #(.N(6)) ubcds2 (
+	.ci(isSbc ? cf : 1'b0),
+	.a({acca,accb}),
+	.b(b),
+	.o(bcdsubo),
+	.co(bcdsubcf)
+);
+
+BCDSubN #(.N(3)) ubcds3 (
+	.ci(1'b0),
+	.a(12'h0),
+	.b(acc),
+	.o(bcdnegbo),
+	.co(bcdnegbcf)
+);
+
+BCDSubN #(.N(6)) ubcds4 (
+	.ci(1'b0),
+	.a(12'h0),
+	.b({acca,accb}),
+	.o(bcdnego),
+	.co(bcdnegcf)
+);
+
+BCDMul4 ubcdmul1
+(
+	.a({4'h0,acca}),
+	.b({4'h0,accb}),
+	.o(bcdmulo)
+);
+`endif
+
+reg [bitsPerByte*2-1:0] bcdmul_res [0:15];
+reg [bitsPerByte*2-1:0] bcdmul_res16;
+genvar g5;
+generate begin : gBCDMulPipe
+	always_ff @(posedge clk_i)
+		bcdmul_res[0] <= bcdmulo[23:0];
+	always_ff @(posedge clk_i)
+		bcdmul_res16 <= muld_res[15];
+	for (g5 = 1; g5 < 16; g5 = g5 + 1)
+		always_ff @(posedge clk_i)
+			bcdmul_res[g5] = bcdmul_res[g5-1];
+end
+endgenerate
 
 // Multiplier logic
 wire signed [`QUADBYTE] muld_prod = $signed({acca,accb}) * $signed(b[`DBLBYTE]);
@@ -758,6 +853,7 @@ wire [31:0] divres32;
 wire [15:0] divrem16;
 
 `ifdef SUPPORT_6309
+`ifdef SUPPORT_DIVIDE
 generate begin : gDividers
 	if (bitsPerByte==12) begin
 		div24by12 udiv24by12 (
@@ -776,7 +872,7 @@ generate begin : gDividers
 		  .s_axis_divisor_tvalid(1'b1),    // input wire s_axis_divisor_tvalid
 		  .s_axis_divisor_tdata(b),      // input wire [23 : 0] s_axis_divisor_tdata
 		  .s_axis_dividend_tvalid(1'b1),  // input wire s_axis_dividend_tvalid
-		  .s_axis_dividend_tdata({accw,accd}),    // input wire [47 : 0] s_axis_dividend_tdata
+		  .s_axis_dividend_tdata({acca,accb,acce,accf}),    // input wire [47 : 0] s_axis_dividend_tdata
 		  .m_axis_dout_tvalid(),          // output wire m_axis_dout_tvalid
 		  .m_axis_dout_tuser(),            // output wire [0 : 0] m_axis_dout_tuser
 		  .m_axis_dout_tdata({divres48,divrem24})            // output wire [71 : 0] m_axis_dout_tdata
@@ -784,6 +880,7 @@ generate begin : gDividers
 	end
 end
 endgenerate
+`endif
 `endif
 
 // For asynchronous reads,
@@ -873,14 +970,14 @@ always_ff @(posedge clk_i)
 	tsc_latched <= tsc_i;
 
 always_ff @(posedge clk_i)
-	nmi1 <= nmi_i;
+	nmi1 <= iplMd ? &{nmi_i,firq_i,irq_i} : nmi_i;
 always_ff @(posedge clk_i)
 `ifdef SUPPORT_CHECKPOINT
 	if (ms_count[9:0]==10'h3FF && chkpoint!=12'h000)
 		nmi_edge <= 1'b1;
 	else 
 `endif
-	if (nmi_i & !nmi1)
+	if ((iplMd ? &{nmi_i,firq_i,irq_i} : nmi_i) & !nmi1)
 		nmi_edge <= 1'b1;
 	else if (state==DECODE && ir12==`INT)
 		nmi_edge <= 1'b0;
@@ -890,6 +987,9 @@ reg [11:0] rst_cnt;
 always @(posedge clk_i)
 if (rst_i) begin
 	wb_nack();
+	natMd <= 1'b0;
+	firqMd <= 1'b0;
+	iplMd <= 1'b0;
 	rty <= `FALSE;
 	rst_cnt <= {id,4'd0};
 	next_state(RESET);
@@ -907,6 +1007,7 @@ if (rst_i) begin
 	pc <= {{BPB*3-1{1'b1}},1'b0};	// FF...FE
 	ir <= {4{`NOP}};
 	ibuf <= {4{`NOP}};
+	dm <= 1'b0;
 	im <= 1'b1;
 	firqim <= 1'b1;
 	nmi_armed <= `FALSE;
@@ -915,6 +1016,9 @@ if (rst_i) begin
 	acca <= 12'h0;
 	accb <= 12'h0;
 	accd <= 24'h0;
+`ifdef SUPPORT_6309
+	accw <= 24'h0;
+`endif
 	xr <= 24'h0;
 	yr <= 24'h0;
 	usppg <= 16'h0;
@@ -969,11 +1073,6 @@ STORE2:	tStore2();
 
 // ============================================================================
 // ============================================================================
-MUL1:
-	begin
-		next_state(MUL2);
-		divcnt <= 6'd7;
-	end
 MUL2:
 	if (divcnt != 6'd0)
 		divcnt <= divcnt - 2'd1;
@@ -1075,6 +1174,7 @@ PUSH2:
 		end
 		else begin
 			if (isINT) begin
+				dm <= 1'b0;
 				radr <= vect;
 				if (vec_i != 24'h0) begin
 					$display("vector: %h", vec_i);
@@ -1207,12 +1307,12 @@ OUTER_INDEXING:
 			12'b1????0000010:	radr <= radr + ndxreg;
 			12'b1????0000011:	radr <= radr + ndxreg;
 			12'b1????0000100:	radr <= radr + ndxreg;
-			12'b1????0000101:	radr <= radr + ndxreg;
-			12'b1????0000110:	radr <= radr + ndxreg;
+			12'b1????00?0101:	radr <= radr + ndxreg;
+			12'b1????00?0110:	radr <= radr + ndxreg;
 			12'b1????0001000:	radr <= radr + ndxreg;
 			12'b1????0001001:	radr <= radr + ndxreg;
 			12'b1????0001010:	radr <= radr + ndxreg;
-			12'b1????0001011:	radr <= radr + ndxreg;
+			12'b1????00?1011:	radr <= radr + ndxreg;
 			default:	radr <= radr;
 			endcase
 		end
@@ -1470,6 +1570,16 @@ begin
 			ipg <= 2'b11;
 			vect <= `NMI_VECT;
 		end
+		else if ({nmi_i,firq_i,irq_i} > {im1,firqim,im} && !sync_state && iplMd) begin
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			case({nmi_i,firq_i,irq_i})
+			3'd1:	vect <= `IRQ_VECT;
+			3'd2:	vect <= `FIRQ_VECT;
+			default:	vect <= `DBG_VECT | {nmi_i,firq_i,irq_i,1'b0};
+			endcase
+		end
 		else if (firq_i & !firqim & !sync_state) begin
 			bs_o <= 1'b1;
 			ir[`LOBYTE] <= `INT;
@@ -1485,6 +1595,37 @@ begin
 			ipg <= 2'b11;
 			vect <= `IRQ_VECT;
 		end
+`ifdef SUPPORT_DEBUG_REG
+		// Check for instruction breakpoint hit.
+		else if (brkctrl[0].en && brkctrl[0].match_type==BMT_IA && (pc & {{20{1'b1}},brkctrl[0].amask})==brkad[0]) begin
+			brkctrl[0].hit <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `DBG_VECT;
+		end
+		else if (brkctrl[1].en && brkctrl[1].match_type==BMT_IA && (pc & {{20{1'b1}},brkctrl[1].amask})==brkad[1]) begin
+			brkctrl[1].hit <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `DBG_VECT;
+		end
+		else if (brkctrl[2].en && brkctrl[2].match_type==BMT_IA && (pc & {{20{1'b1}},brkctrl[2].amask})==brkad[2]) begin
+			brkctrl[2].hit <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `DBG_VECT;
+		end
+		else if (brkctrl[3].en && brkctrl[3].match_type==BMT_IA && (pc & {{20{1'b1}},brkctrl[3].amask})==brkad[3]) begin
+			brkctrl[3].hit <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `DBG_VECT;
+		end
+`endif
 		else begin
 			if (sync_state) begin
 				ba_o <= 1'b1;
@@ -1619,6 +1760,7 @@ begin
 			hf <= hf | ir[bitsPerByte+5];
 			firqim <= firqim | ir[bitsPerByte+6];
 			ef <= ef | ir[bitsPerByte+7];
+			dm <= dm | ir[bitsPerByte+8];
 			pc <= pcp2;
 			end
 	`ANDCC:
@@ -1631,6 +1773,7 @@ begin
 			hf <= hf & ir[bitsPerByte+5];
 			firqim <= firqim & ir[bitsPerByte+6];
 			ef <= ef & ir[bitsPerByte+7];
+			dm <= dm & ir[bitsPerByte+8];
 			pc <= pcp2;
 			end
 	`DAA:
@@ -1649,6 +1792,7 @@ begin
 			im <= im & ir[bitsPerByte+4];
 			hf <= hf & ir[bitsPerByte+5];
 			firqim <= firqim & ir[bitsPerByte+6];
+			dm <= dm & ir[bitsPerByte+8];
 			ef <= 1'b1;
 			pc <= pc + 2'd2;
 			ir[`HIBYTE] <= -1;
@@ -1659,8 +1803,18 @@ begin
 	`LDMD:	begin
 			natMd <= ir[bitsPerByte];
 			firqMd <= ir[bitsPerByte+1];
+			iplMd <= ir[bitsPerByte+2];
 			pc <= pc + 2'd2;
 			end
+	`BITMD:
+		begin
+			res <= {dbz,iop,3'd0,iplMd,firqMd,natMd} & ir[`BYTE2];
+			if (ir[bitsPerByte+7])
+				dbz <= 1'b0;
+			if (ir[bitsPerByte+6])
+				iop <= 1'b0;
+			pc <= pc + 2'd2;
+		end
 	`TFR:	pc <= pc + 2'd2;
 	`EXG:	pc <= pc + 2'd2;
 	`ABX:	res <= xr + accb;
@@ -1671,7 +1825,12 @@ begin
 `ifdef EIGHTBIT
 	`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
 `endif
-	`NEGA,`NEGB:	begin res12 <= -acc[`LOBYTE]; a <= 24'h00; b <= acc; end
+	`NEGA,`NEGB:	
+		if (dm) begin
+			a <= 'b0; b <= acc;
+			next_state(CALC);
+		end
+		else begin res12 <= -acc[`LOBYTE]; a <= 24'h00; b <= acc; end
 	`COMA,`COMB:	begin res12 <= ~acc[`LOBYTE]; end
 	`LSRA,`LSRB:	begin res12 <= {acc[0],1'b0,acc[BPBM1:1]}; end
 	`RORA,`RORB:	begin res12 <= {acc[0],cf,acc[BPBM1:1]}; end
@@ -1682,12 +1841,18 @@ begin
 	`INCA,`INCB:	begin res12 <= acc[`LOBYTE] + 2'd1; end
 	`TSTA,`TSTB:	begin res12 <= acc[`LOBYTE]; end
 	`CLRA,`CLRB:	begin res12 <= 13'h000; end
+	`MUL:	if (dm) begin divcnt <= 6'd17; next_state(MUL2); end
 `ifdef SUPPORT_6309
 	`TSTD:	res <= {acca,accb};
 	`TSTW:	res <= {acce,accf};
 	`TSTE:	res12 <= acce;
 	`TSTF:	res12 <= accf;
-	`NEGD:	begin res <= -{acca,accb}; a <= 'd0; b <= {acca,accb}; end
+	`NEGD:	
+		if (dm) begin
+			a <= 'd0; b <= {acca,accb};
+			next_state(CALC);
+		end
+		else begin res <= -{acca,accb}; a <= 'd0; b <= {acca,accb}; end
 	`INCE,`INCF:	begin res12 <= acc[`LOBYTE] + 2'd1; end
 	`INCD:	res <= {acca,accb} + 2'd1;
 	`INCW:	res <= {acce,accf} + 2'd1;
@@ -1738,6 +1903,7 @@ begin
 					hf <= sum12[5];
 					firqim <= sum12[6];
 					ef <= sum12[7];
+					dm <= sum12[8];
 				end
 			4'b1011:	begin dpr <= sum12; nf <= sum12[bitsPerByte-1]; zf <= sum12[`LOBYTE]=='b0; cf <= sum12[bitsPerByte]; vf <= fnAddOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],sum12[bitsPerByte-1]); end
 			endcase
@@ -1763,6 +1929,7 @@ begin
 					hf <= sum12c[5];
 					firqim <= sum12c[6];
 					ef <= sum12c[7];
+					dm <= sum12c[8];
 				end
 			4'b1011:	begin dpr <= sum12c; nf <= sum12c[bitsPerByte-1]; zf <= sum12c[`LOBYTE]=='b0; cf <= sum12c[bitsPerByte]; vf <= fnAddOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],sum12c[bitsPerByte-1]); end
 			endcase
@@ -1788,6 +1955,7 @@ begin
 					hf <= and12[5];
 					firqim <= and12[6];
 					ef <= and12[7];
+					dm <= and12[8];
 				end
 			4'b1011:	begin dpr <= and12; nf <= and12[bitsPerByte-1]; zf <= and12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -1813,6 +1981,7 @@ begin
 					hf <= eor12[5];
 					firqim <= eor12[6];
 					ef <= eor12[7];
+					dm <= eor12[8];
 				end
 			4'b1011:	begin dpr <= eor12; nf <= eor12[bitsPerByte-1]; zf <= eor12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -1838,6 +2007,7 @@ begin
 					hf <= or12[5];
 					firqim <= or12[6];
 					ef <= or12[7];
+					dm <= or12[8];
 				end
 			4'b1011:	begin dpr <= or12; nf <= or12[bitsPerByte-1]; zf <= or12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -1878,6 +2048,7 @@ begin
 					hf <= dif12c[5];
 					firqim <= dif12c[6];
 					ef <= dif12c[7];
+					dm <= dif12c[8];
 				end
 			4'b1011:	begin dpr <= dif12c; nf <= dif12c[bitsPerByte-1]; zf <= dif12c[`LOBYTE]=='b0; cf <= dif12c[bitsPerByte]; vf <= fnSubOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],dif12c[bitsPerByte-1]); end
 			endcase
@@ -1903,6 +2074,7 @@ begin
 					hf <= dif12[5];
 					firqim <= dif12[6];
 					ef <= dif12[7];
+					dm <= dif12[8];
 				end
 			4'b1011:	begin dpr <= dif12; nf <= dif12[bitsPerByte-1]; zf <= dif12[`LOBYTE]=='b0; cf <= dif12[bitsPerByte]; vf <= fnSubOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],dif12[bitsPerByte-1]); end
 			endcase
@@ -1916,9 +2088,11 @@ begin
 `endif
 	// Immediate mode instructions
 	`SUBA_IMM,`SUBB_IMM,`CMPA_IMM,`CMPB_IMM:
-		begin res12 <= acc[`LOBYTE] - ir[`HIBYTE]; pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
+		if (dm) begin pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; next_state(CALC); end
+		else begin res12 <= acc[`LOBYTE] - ir[`HIBYTE]; pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`SBCA_IMM,`SBCB_IMM:
-		begin res12 <= acc[`LOBYTE] - ir[`HIBYTE] - cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
+		if (dm) begin pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; next_state(CALC); end
+		else begin res12 <= acc[`LOBYTE] - ir[`HIBYTE] - cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`ANDA_IMM,`ANDB_IMM,`BITA_IMM,`BITB_IMM:
 		begin res12 <= acc[`LOBYTE] & ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`LDA_IMM,`LDB_IMM:
@@ -1926,11 +2100,13 @@ begin
 	`EORA_IMM,`EORB_IMM:
 		begin res12 <= acc[`LOBYTE] ^ ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`ADCA_IMM,`ADCB_IMM:
-		begin res12 <= acc[`LOBYTE] + ir[`HIBYTE] + cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
+		if (dm) begin pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; next_state(CALC); end
+		else begin res12 <= acc[`LOBYTE] + ir[`HIBYTE] + cf; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`ORA_IMM,`ORB_IMM:
 		begin res12 <= acc[`LOBYTE] | ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 	`ADDA_IMM,`ADDB_IMM:
-		begin res12 <= acc[`LOBYTE] + ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
+		if (dm) begin pc <= pc + 4'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; next_state(CALC); end
+		else begin res12 <= acc[`LOBYTE] + ir[`HIBYTE]; pc <= pc + 2'd2; a <= acc[`LOBYTE]; b <= ir[`HIBYTE]; end
 `ifdef SUPPORT_6309
 	`BITD_IMM,
 	`ANDD_IMM:
@@ -1950,7 +2126,13 @@ begin
 			end
 `endif
 	`ADDD_IMM:
-			begin 
+			if (dm) begin
+				a <= {acca,accb};
+				b <= {ir[`BYTE2],ir[`BYTE3]};
+				pc <= pc + 2'd3;
+				next_state(CALC);
+			end
+			else begin 
 				res <= {acca[`LOBYTE],accb[`LOBYTE]} + {ir[`HIBYTE],ir[`BYTE3]};
 				pc <= pc + 2'd3;
 			end
@@ -1961,16 +2143,28 @@ begin
 				pc <= pc + 2'd3;
 			end
 	`ADCD_IMM:
-			begin 
+			if (dm) begin
+				a <= {acca,accb};
+				b <= {ir[`BYTE2],ir[`BYTE3]};
+				pc <= pc + 32'd3;
+				next_state(CALC);
+			end
+			else begin 
 				res <= {acca[`LOBYTE],accb[`LOBYTE]} + {ir[`BYTE2],ir[`BYTE3]} + {23'b0,cf};
 				pc <= pc + 32'd3;
 			end
 `endif		
 	`SUBD_IMM:	
-				begin 
-					res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
-					pc <= pc + 2'd3;
-				end
+			if (dm) begin
+				a <= {acca,accb};
+				b <= {ir[`BYTE2],ir[`BYTE3]};
+				pc <= pc + 32'd3;
+				next_state(CALC);
+			end
+			else begin 
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
+				pc <= pc + 2'd3;
+			end
 `ifdef SUPPORT_6309					
 	`SUBW_IMM:	
 				begin 
@@ -1978,7 +2172,13 @@ begin
 					pc <= pc + 2'd3;
 				end
 	`SBCD_IMM:
-		begin 
+		if (dm) begin
+			a <= {acca,accb};
+			b <= {ir[`BYTE2],ir[`BYTE3]};
+			pc <= pc + 32'd3;
+			next_state(CALC);
+		end
+		else begin 
 			res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`BYTE2],ir[`BYTE3]} - {23'b0,cf};
 			pc <= pc + 32'd3;
 		end
@@ -2000,12 +2200,18 @@ begin
 				end
 
 	`CMPD_IMM:	
-				begin
-					res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
-					pc <= pc + 2'd3;
-					a <= {acca[`LOBYTE],accb[`LOBYTE]};
-					b <= {ir[`HIBYTE],ir[`BYTE3]};
-				end
+			if (dm) begin
+				a <= {acca,accb};
+				b <= {ir[`BYTE2],ir[`BYTE3]};
+				pc <= pc + 32'd3;
+				next_state(CALC);
+			end
+			else begin
+				res <= {acca[`LOBYTE],accb[`LOBYTE]} - {ir[`HIBYTE],ir[`BYTE3]};
+				pc <= pc + 2'd3;
+				a <= {acca[`LOBYTE],accb[`LOBYTE]};
+				b <= {ir[`HIBYTE],ir[`BYTE3]};
+			end
 `ifdef SUPPORT_6309
 	`CMPW_IMM:
 				begin
@@ -2069,7 +2275,8 @@ begin
 		begin
 			b <= {ir[`BYTE3],ir[`BYTE2]};
 			pc <= pc + 2'd3;
-			next_state(MUL1);
+			divcnt <= 6'd7;
+			next_state(MUL2);
 		end
 `endif
 `ifdef SUPPORT_6309
@@ -2524,28 +2731,28 @@ begin
 			if (wait_state) begin
 				wait_state <= `FALSE;
 				if (vec_i != 24'h0) begin
-				    pc <= vec_i;
-				    next_state(IFETCH);
+			    pc <= vec_i;
+			    next_state(IFETCH);
 				end
 				else begin
-				    radr <= vect;
-                      load_what <= `LW_PCH;
-				    pc <= 32'hFFFFFFFE;
-				    next_state(LOAD1);
+			    radr <= vect;
+	        load_what <= `LW_PCH;
+			    pc <= 32'hFFFFFFFE;
+			    next_state(LOAD1);
 				end
 			end
 			else begin
 				if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
-					ir[`HIBYTE] <= 16'hFFFF;
+					ir[`HIBYTE] <= natMd ? 12'hFFF : 12'h0FF;
 					ef <= 1'b1;
 				end
 				else if (isFIRQ) begin
 					if (natMd) begin
 						ef <= firqMd;
-						ir[`HIBYTE] <= firqMd ? 16'hFFFF : 12'h81;
+						ir[`HIBYTE] <= firqMd ? 12'hFFF : 12'h081;
 					end
 					else begin
-						ir[`HIBYTE] <= 12'h81;
+						ir[`HIBYTE] <= 12'h081;
 						ef <= 1'b0;
 					end
 				end
@@ -2554,7 +2761,15 @@ begin
 				next_state(PUSH1);
 			end
 		end
-	default:	;
+	default:
+		if (natMd) begin
+			iop <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `IOP_VECT;
+			next_state(DECODE);
+		end
 	endcase
 end
 endtask
@@ -2568,13 +2783,62 @@ begin
 	if (unCachedData)
 `endif
 	case(radr)
-	{{BPB*3-8{1'b1}},8'hE0}:	load_tsk({2'b0,id});
-	{{BPB*3-8{1'b1}},8'hE1}:	load_tsk(chkpoint);
-	{{BPB*3-8{1'b1}},8'hE4}:	load_tsk(12'h0);
-	{{BPB*3-8{1'b1}},8'hE5}:	load_tsk(ms_count[35:24]);
-	{{BPB*3-8{1'b1}},8'hE6}:	load_tsk(ms_count[23:12]);
-	{{BPB*3-8{1'b1}},8'hE7}:	load_tsk(ms_count[11: 0]);
+	`CORENO:		load_tsk({2'b0,id});
+	`CHKPOINT:	load_tsk(chkpoint);
+	`MSCOUNT+0:	load_tsk(12'h0);
+	`MSCOUNT+1:	load_tsk(ms_count[35:24]);
+	`MSCOUNT+2:	load_tsk(ms_count[23:12]);
+	`MSCOUNT+3:	load_tsk(ms_count[11: 0]);
+`ifdef SUPPORT_DEBUG_REG
+	`BRKAD0+0:		load_tsk(brkad[0][`BYTE2]);
+	`BRKAD0+1:		load_tsk(brkad[0][`BYTE1]);
+	`BRKAD1+0:		load_tsk(brkad[1][`BYTE2]);
+	`BRKAD1+1:		load_tsk(brkad[1][`BYTE1]);
+	`BRKAD2+0:		load_tsk(brkad[2][`BYTE2]);
+	`BRKAD2+1:		load_tsk(brkad[2][`BYTE1]);
+	`BRKAD3+0:		load_tsk(brkad[3][`BYTE2]);
+	`BRKAD3+1:		load_tsk(brkad[3][`BYTE1]);
+	`BRKCTRL0:		load_tsk(brkctrl[0]);
+	`BRKCTRL1:		load_tsk(brkctrl[1]);
+	`BRKCTRL2:		load_tsk(brkctrl[2]);
+	`BRKCTRL3:		load_tsk(brkctrl[3]);
+`endif	
 	default:
+`ifdef SUPPORT_DEBUG_REG
+	if (brkctrl[0].en && brkctrl[0].match_type==BMT_LS && (radr & {{20{1'b1}},brkctrl[0].amask})==brkad[0]) begin
+		brkctrl[0].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[1].en && brkctrl[1].match_type==BMT_LS && (radr & {{20{1'b1}},brkctrl[1].amask})==brkad[1]) begin
+		brkctrl[1].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[2].en && brkctrl[2].match_type==BMT_LS && (radr & {{20{1'b1}},brkctrl[2].amask})==brkad[2]) begin
+		brkctrl[2].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[3].en && brkctrl[3].match_type==BMT_LS && (radr & {{20{1'b1}},brkctrl[3].amask})==brkad[3]) begin
+		brkctrl[3].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else
+`endif
 	if (~ack_i) begin
 		lock_o <= lock_bus;
 		wb_read(radr);
@@ -2625,19 +2889,26 @@ task tExecute;
 begin
 	next_state(IFETCH);
 	case(ir12)
+	`SUBD_IMM,
 	`SUBD_DP,`SUBD_NDX,`SUBD_EXT,
 	`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
-		begin
+		if (dm)
+			res <= bcdsubo;
+		else begin
 		    a <= {acca[`LOBYTE],accb[`LOBYTE]};
 			res <= {acca[`LOBYTE],accb[`LOBYTE]} - b[`DBLBYTE];
 		end
-	`SBCD_DP,`SBCD_NDX,`SBCD_EXT:
-		begin
+	`SBCD_IMM,`SBCD_DP,`SBCD_NDX,`SBCD_EXT:
+		if (dm)
+			res <= bcdsubo;
+		else begin
 		    a <= {acca[`LOBYTE],accb[`LOBYTE]};
 			res <= {acca[`LOBYTE],accb[`LOBYTE]} - b[`DBLBYTE] - {23'b0,cf};
 		end
-	`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
-		begin
+	`ADDD_IMM,`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
+		if (dm)
+			res <= bcdaddo;
+		else begin
 		    a <= {acca[`LOBYTE],accb[`LOBYTE]};
 			res <= {acca[`LOBYTE],accb[`LOBYTE]} + b[`DBLBYTE];
 		end
@@ -2656,8 +2927,10 @@ begin
 	`LDW_DP,`LDW_NDX,`LDW_EXT:		
 		res <= b[`DBLBYTE];
 `endif
-	`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
-		begin
+	`ADCD_IMM,`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
+		if (dm)
+			res <= bcdaddo;
+		else begin
 		    a <= {acca[`LOBYTE],accb[`LOBYTE]};
 			res <= {acca[`LOBYTE],accb[`LOBYTE]} + b[`DBLBYTE] + {23'b0,cf};
 		end
@@ -2667,23 +2940,31 @@ begin
 	`CMPE_DP,`CMPE_NDX,`CMPE_EXT,
 	`CMPF_DP,`CMPF_NDX,`CMPF_EXT,
 	`SUBE_DP,`SUBE_NDX,`SUBE_EXT,
-	`SUBF_DP,`SUBF_NDX,`SUBF_EXT,
-`endif
-	`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
-	`SUBA_DP,`SUBA_NDX,`SUBA_EXT,
-	`CMPB_DP,`CMPB_NDX,`CMPB_EXT,
-	`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
+	`SUBF_DP,`SUBF_NDX,`SUBF_EXT:
 	        begin
   		        a <= acc;
            res12 <= acc[`LOBYTE] - b12;
 			end
+`endif
+	`CMPA_IMM,`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
+	`SUBA_IMM,`SUBA_DP,`SUBA_NDX,`SUBA_EXT,
+	`CMPB_IMM,`CMPB_DP,`CMPB_NDX,`CMPB_EXT,
+	`SUBB_IMM,`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
+		if (dm)
+			res12 <= bcdsubbo;
+		else begin
+        a <= acc;
+     	res12 <= acc[`LOBYTE] - b12;
+		end
 	
-	`SBCA_DP,`SBCA_NDX,`SBCA_EXT,
-	`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
-	        begin
-	            a <= acc;
-          res12 <= acc[`LOBYTE] - b12 - cf;
-              end
+	`SBCA_IMM,`SBCA_DP,`SBCA_NDX,`SBCA_EXT,
+	`SBCB_IMM,`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
+		if (dm)
+			res12 <= bcdsubbo;
+	  else begin
+        a <= acc;
+    res12 <= acc[`LOBYTE] - b12 - cf;
+    end
 	`BITA_DP,`BITA_NDX,`BITA_EXT,
 	`ANDA_DP,`ANDA_NDX,`ANDA_EXT,
 	`BITB_DP,`BITB_NDX,`BITB_EXT,
@@ -2695,9 +2976,21 @@ begin
 		res <= {acca[`LOBYTE],accb[`LOBYTE]} & b[`DBLBYTE];
 	`DIVQ_DP,`DIVQ_NDX,`DIVQ_EXT,
 	`DIVD_DP,`DIVD_NDX,`DIVD_EXT:
-		next_state(DIV1);
+		if (b==24'd0) begin
+			dbz <= 1'b1;
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `IOP_VECT;
+			next_state(DECODE);
+		end
+		else
+			next_state(DIV1);
 	`MULD_DP,`MULD_NDX,`MULD_EXT:
-		next_state(MUL1);
+		begin
+			divcnt <= 6'd7;
+			next_state(MUL2);
+		end
 	`EORD_DP,`EORD_NDX,`EORD_EXT:
 		res <= {acca[`LOBYTE],accb[`LOBYTE]} ^ b[`DBLBYTE];
 	`ORD_DP,`ORD_NDX,`ORD_EXT:
@@ -2712,12 +3005,14 @@ begin
 	`EORA_DP,`EORA_NDX,`EORA_EXT,
 	`EORB_DP,`EORB_NDX,`EORB_EXT:
 				res12 <= acc[`LOBYTE] ^ b12;
-	`ADCA_DP,`ADCA_NDX,`ADCA_EXT,
-	`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
-			begin
-			    a <= acc;
-				res12 <= acc[`LOBYTE] + b12 + cf;
-			end
+	`ADCA_IMM,`ADCA_DP,`ADCA_NDX,`ADCA_EXT,
+	`ADCB_IMM,`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
+		if (dm)
+			res12 <= bcdaddbo;
+		else begin
+		    a <= acc;
+			res12 <= acc[`LOBYTE] + b12 + cf;
+		end
 	`ORA_DP,`ORA_NDX,`ORA_EXT,
 	`ORB_DP,`ORB_NDX,`ORB_EXT:
 				res12 <= acc[`LOBYTE] | b12;
@@ -2725,12 +3020,14 @@ begin
 	`ADDE_DP,`ADDE_NDX,`ADDE_EXT,
 	`ADDF_DP,`ADDF_NDX,`ADDF_EXT,
 `endif
-	`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
-	`ADDB_DP,`ADDB_NDX,`ADDB_EXT:
-	        begin
-	            a <= acc;
-                      res12 <= acc[`LOBYTE] + b12;
-              end
+	`ADDA_IMM,`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
+	`ADDB_IMM,`ADDB_DP,`ADDB_NDX,`ADDB_EXT:
+		if (dm)
+			res12 <= bcdaddbo;
+		else begin
+	    a <= acc;
+      res12 <= acc[`LOBYTE] + b12;
+  	end
 	
 	`LDU_DP,`LDS_DP,`LDX_DP,`LDY_DP,
 	`LDU_NDX,`LDS_NDX,`LDX_NDX,`LDY_NDX,
@@ -2741,6 +3038,7 @@ begin
 	`CMPU_DP,`CMPU_NDX,`CMPU_EXT:	begin a <= usp; res <= usp[`DBLBYTE] - b[`DBLBYTE]; end
 
 	`NEG_DP,`NEG_NDX,`NEG_EXT:	begin res12 <= -b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
+	`NEGA,`NEGB:	begin res12 <= bcdnegbo; end
 	`COM_DP,`COM_NDX,`COM_EXT:	begin res12 <= ~b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 	`LSR_DP,`LSR_NDX,`LSR_EXT:	begin res12 <= {b[0],1'b0,b[BPBM1:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
 	`ROR_DP,`ROR_NDX,`ROR_EXT:	begin res12 <= {b[0],cf,b[BPBM1:1]}; store_what <= `SW_RES8; wadr <= radr; next_state(STORE1); end
@@ -2751,6 +3049,7 @@ begin
 	`INC_DP,`INC_NDX,`INC_EXT:	begin res12 <= b12 + 2'd1; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 	`TST_DP,`TST_NDX,`TST_EXT:	res12 <= b12;
 `ifdef SUPPORT_6309
+	`NEGD:	begin res <= bcdnego; end
 	`AIM_DP,`AIM_NDX,`AIM_EXT:	begin res12 <= ir[`HIBYTE] & b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 	`OIM_DP,`OIM_NDX,`OIM_EXT:	begin res12 <= ir[`HIBYTE] | b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 	`EIM_DP,`EIM_NDX,`OIM_EXT:  begin res12 <= ir[`HIBYTE] ^ b12; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
@@ -2770,9 +3069,44 @@ begin
 	if (!ack_i) begin	
 		lock_o <= lock_bus;
 `ifdef SUPPORT_CHECKPOINT
-		if (wadr=={{BPB*3-8{1'b1}},8'hE1})
+		if (wadr==CHKPOINT)
 			next_state(IFETCH);
 		else
+`endif
+`ifdef SUPPORT_DEBUG_REG
+	if (brkctrl[0].en && brkctrl[0].match_type==BMT_DS && (radr & {{20{1'b1}},brkctrl[0].amask})==brkad[0]) begin
+		brkctrl[0].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[1].en && brkctrl[1].match_type==BMT_DS && (radr & {{20{1'b1}},brkctrl[1].amask})==brkad[1]) begin
+		brkctrl[1].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[2].en && brkctrl[2].match_type==BMT_DS && (radr & {{20{1'b1}},brkctrl[2].amask})==brkad[2]) begin
+		brkctrl[2].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else if (brkctrl[3].en && brkctrl[3].match_type==BMT_DS && (radr & {{20{1'b1}},brkctrl[3].amask})==brkad[3]) begin
+		brkctrl[3].hit <= 1'b1;
+		bs_o <= 1'b1;
+		ir[`LOBYTE] <= `INT;
+		ipg <= 2'b11;
+		vect <= `DBG_VECT;
+		next_state(DECODE);
+	end
+	else
 `endif
 		begin
 			case(store_what)
@@ -2993,7 +3327,7 @@ begin
 		`ADDA_IMM,`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
 		`ADCA_IMM,`ADCA_DP,`ADCA_NDX,`ADCA_EXT:
 			begin
-				cf <= (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
+				cf <= dm ? bcdaddbcf : (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
 				hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
 				vf <= (res12[BPBM1] ^ b[BPBM1]) & (1'b1 ^ a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3003,7 +3337,7 @@ begin
 		`ADDB_IMM,`ADDB_DP,`ADDB_NDX,`ADDB_EXT,
 		`ADCB_IMM,`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
 			begin
-				cf <= (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
+				cf <= dm ? bcdaddbcf : (a[BPBM1]&b[BPBM1])|(a[BPBM1]&~res12[BPBM1])|(b[BPBM1]&~res12[BPBM1]);
 				hf <= (a[`HCBIT]&b[`HCBIT])|(a[`HCBIT]&~res12[`HCBIT])|(b[`HCBIT]&~res12[`HCBIT]);
 				vf <= (res12[BPBM1] ^ b[BPBM1]) & (1'b1 ^ a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3032,7 +3366,7 @@ begin
 `endif
 		`ADDD_IMM,`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
 			begin
-				cf <= (a[BPBX2M1]&b[BPBX2M1])|(a[BPBX2M1]&~res[BPBX2M1])|(b[BPBX2M1]&~res[BPBX2M1]);
+				cf <= dm ? bcdaddcf : (a[BPBX2M1]&b[BPBX2M1])|(a[BPBX2M1]&~res[BPBX2M1])|(b[BPBX2M1]&~res[BPBX2M1]);
 				vf <= (res[BPBX2M1] ^ b[BPBX2M1]) & (1'b1 ^ a[BPBX2M1] ^ b[BPBX2M1]);
 				nf <= res[BPBX2M1];
 				zf <= res[`DBLBYTE]==24'h000000;
@@ -3051,7 +3385,7 @@ begin
 			end
 		`ADCD_IMM,`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
 			begin
-				cf <= (a[BPBX2M1]&b[BPBX2M1])|(a[BPBX2M1]&~res[BPBX2M1])|(b[BPBX2M1]&~res[BPBX2M1]);
+				cf <= dm ? bcdaddcf : (a[BPBX2M1]&b[BPBX2M1])|(a[BPBX2M1]&~res[BPBX2M1])|(b[BPBX2M1]&~res[BPBX2M1]);
 				vf <= (res[BPBX2M1] ^ b[BPBX2M1]) & (1'b1 ^ a[BPBX2M1] ^ b[BPBX2M1]);
 				nf <= res[BPBX2M1];
 				zf <= res[`DBLBYTE]==24'h0000;
@@ -3111,10 +3445,10 @@ begin
 		`DIVQ_IMM,`DIVQ_DP,`DIVQ_NDX,`DIVQ_EXT:
 			begin
 				if (bitsPerByte==12) begin
-					acca <= divrem24[`BYTE2];
-					accb <= divrem24[`BYTE1];
-					acce <= divres48[`BYTE2];
-					accf <= divres48[`BYTE1];
+					acce <= divrem24[`BYTE2];
+					accf <= divrem24[`BYTE1];
+					acca <= divres48[`BYTE2];
+					accb <= divres48[`BYTE1];
 					// Overflow set eariler
 					cf <= divres48[0];
 					vf <= divres48[47:24]!={24{divres48[23]}};
@@ -3122,10 +3456,10 @@ begin
 					zf <= ~|divres48[23:0];
 				end
 				else if (bitsPerByte==8) begin
-					acca <= divrem16[`BYTE2];
-					accb <= divrem16[`BYTE1];
-					acce <= divres32[`BYTE2];
-					accf <= divres32[`BYTE1];
+					acce <= divrem16[`BYTE2];
+					accf <= divrem16[`BYTE1];
+					acca <= divres32[`BYTE2];
+					accb <= divres32[`BYTE1];
 					// Overflow set eariler
 					cf <= divres32[0];
 					vf <= divres32[31:16]!={16{divres32[15]}};
@@ -3263,6 +3597,8 @@ begin
 				accb <= 12'h000;
 			end
 `ifdef SUPPORT_6309
+		`BITMD:
+			zf <= res12==12'h0;
 		`CLRD:
 			begin
 				vf <= 1'b0;
@@ -3307,10 +3643,7 @@ begin
 			end
 `ifdef SUPPORT_6309
 		`CMPE_IMM,`CMPE_DP,`CMPE_NDX,`CMPE_EXT,
-		`CMPF_IMM,`CMPF_DP,`CMPF_NDX,`CMPF_EXT,
-`endif
-		`CMPA_IMM,`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
-		`CMPB_IMM,`CMPB_DP,`CMPB_NDX,`CMPB_EXT:
+		`CMPF_IMM,`CMPF_DP,`CMPF_NDX,`CMPF_EXT:
 			begin
 				cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
@@ -3318,12 +3651,28 @@ begin
 				nf <= res12[BPBM1];
 				zf <= res12[`LOBYTE]==12'h000;
 			end
+`endif
+		`CMPA_IMM,`CMPA_DP,`CMPA_NDX,`CMPA_EXT,
+		`CMPB_IMM,`CMPB_DP,`CMPB_NDX,`CMPB_EXT:
+			begin
+				cf <= dm ? bcdsubbcf : (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
+				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
+				nf <= res12[BPBM1];
+				zf <= res12[`LOBYTE]==12'h000;
+			end
 `ifdef SUPPORT_6309
-		`CMPW_IMM,`CMPW_DP,`CMPW_NDX,`CMPW_EXT,
+		`CMPW_IMM,`CMPW_DP,`CMPW_NDX,`CMPW_EXT:
+			begin
+				cf <= (~a[BPBX2M1]&b[BPBX2M1])|(res[BPBX2M1]&~a[BPBX2M1])|(res[BPBX2M1]&b[BPBX2M1]);
+				vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
+				nf <= res[BPBX2M1];
+				zf <= res[`DBLBYTE]==24'h000000;
+			end
 `endif
 		`CMPD_IMM,`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
 			begin
-				cf <= (~a[BPBX2M1]&b[BPBX2M1])|(res[BPBX2M1]&~a[BPBX2M1])|(res[BPBX2M1]&b[BPBX2M1]);
+				cf <= dm ? bcdsubcf : (~a[BPBX2M1]&b[BPBX2M1])|(res[BPBX2M1]&~a[BPBX2M1])|(res[BPBX2M1]&b[BPBX2M1]);
 				vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
 				nf <= res[BPBX2M1];
 				zf <= res[`DBLBYTE]==24'h000000;
@@ -3494,6 +3843,7 @@ begin
 						hf <= src1[5];
 						firqim <= src1[6];
 						ef <= src1[7];
+						dm <= src1[8];
 					end
 				4'b1011:	dpr <= src1[`LOBYTE];
 				4'b1100:	usppg <= src1[`DBLBYTE];
@@ -3530,6 +3880,7 @@ begin
 						hf <= src2[5];
 						firqim <= src2[6];
 						ef <= src2[7];
+						dm <= src2[8];
 					end
 				4'b1011:	dpr <= src2[`LOBYTE];
 				4'b1100:	usppg <= src2[`DBLBYTE];
@@ -3703,7 +4054,13 @@ begin
 				zf <= res12[`LOBYTE]==12'h000;
 			end
 		`MUL:
-			begin
+			if (dm) begin
+				accb <= bcdmul_res16[`BYTE1];
+				acca <= bcdmul_res16[`BYTE2];
+				zf <= ~|bcdmul_res16;
+				cf <= bcdmul_res16[bitsPerByte*2-1];
+			end
+			else begin
 				cf <= prod[BPBM1];
 				zf <= res24z;
 				acca <= prod[`HIBYTE];
@@ -3711,7 +4068,7 @@ begin
 			end
 		`NEGA:
 			begin
-				cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+				cf <= dm ? bcdnegbcf : (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3720,7 +4077,7 @@ begin
 			end
 		`NEGB:
 			begin
-				cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+				cf <= dm ? bcdnegbcf : (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3730,7 +4087,7 @@ begin
 `ifdef SUPPORT_6309
 		`NEGD:
 			begin
-				cf <= (~a[bitsPerByte*2-1]&b[bitsPerByte*2-1])|(res[bitsPerByte*2-1]&~a[bitsPerByte*2-1])|(res[bitsPerByte*2-1]&b[bitsPerByte*2-1]);
+				cf <= dm ? bcdnegcf : (~a[bitsPerByte*2-1]&b[bitsPerByte*2-1])|(res[bitsPerByte*2-1]&~a[bitsPerByte*2-1])|(res[bitsPerByte*2-1]&b[bitsPerByte*2-1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res[`HCBIT]&~a[`HCBIT])|(res[`HCBIT]&b[`HCBIT]);
 				vf <= (1'b1 ^ res[bitsPerByte*2-1] ^ b[bitsPerByte*2-1]) & (a[bitsPerByte*2-1] ^ b[bitsPerByte*2-1]);
 				nf <= res[bitsPerByte*2-1];
@@ -3794,7 +4151,7 @@ begin
 			end
 		`SBCA_IMM,`SBCA_DP,`SBCA_NDX,`SBCA_EXT:
 			begin
-				cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+				cf <= dm ? bcdsubbcf : (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3803,7 +4160,7 @@ begin
 			end
 		`SBCB_IMM,`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
 			begin
-				cf <= (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
+				cf <= dm ? bcdsubbcf : (~a[BPBM1]&b[BPBM1])|(res12[BPBM1]&~a[BPBM1])|(res12[BPBM1]&b[BPBM1]);
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
 				nf <= res12[BPBM1];
@@ -3865,6 +4222,7 @@ begin
 						hf <= src1[5];
 						firqim <= src1[6];
 						ef <= src1[7];
+						dm <= src1[8];
 					end
 				4'b1011:	dpr <= src1[`LOBYTE];
 				4'b1100:	usppg <= src1[`DBLBYTE];
@@ -3912,7 +4270,7 @@ begin
 				nf <= res12n;
 				zf <= res12z;
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
-				cf <= res12c;
+				cf <= dm ? bcdsubbcf : res12c;
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 			end
 		`SUBB_IMM,`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
@@ -3921,7 +4279,7 @@ begin
 				nf <= res12n;
 				zf <= res12z;
 				vf <= (1'b1 ^ res12[BPBM1] ^ b[BPBM1]) & (a[BPBM1] ^ b[BPBM1]);
-				cf <= res12c;
+				cf <= dm ? bcdsubbcf : res12c;
 				hf <= (~a[`HCBIT]&b[`HCBIT])|(res12[`HCBIT]&~a[`HCBIT])|(res12[`HCBIT]&b[`HCBIT]);
 			end
 `ifdef SUPPORT_6309
@@ -3956,7 +4314,7 @@ begin
 `endif
 		`SUBD_IMM,`SUBD_DP,`SUBD_NDX,`SUBD_EXT:
 			begin
-				cf <= res24c;
+				cf <= dm ? bcdsubcf : res24c;
 				vf <= (1'b1 ^ res[BPBX2M1] ^ b[BPBX2M1]) & (a[BPBX2M1] ^ b[BPBX2M1]);
 				nf <= res[BPBX2M1];
 				zf <= res[`DBLBYTE]==24'h000000;
@@ -4040,15 +4398,39 @@ begin
 end
 endtask
 
+// Trap writes to special registers
 task wb_write;
 input [`TRPBYTE] adr;
 input [`LOBYTE] dat;
 begin
-	if (!tsc) begin
-		we_o <= 1'b1;
-		adr_o <= adr;
-		dat_o <= dat;
-	end
+		if (!tsc) begin
+			next_state(IFETCH);
+`ifdef SUPPORT_DEBUG_REG
+			case(adr)
+			`BRKAD0+0:	brkad[0][`BYTE2] <= dat;	
+			`BRKAD0+1: brkad[0][`BYTE1] <= dat;
+			`BRKAD1+0:	brkad[1][`BYTE2] <= dat;	
+			`BRKAD1+1: brkad[1][`BYTE1] <= dat;
+			`BRKAD2+0:	brkad[2][`BYTE2] <= dat;	
+			`BRKAD2+1: brkad[2][`BYTE1] <= dat;
+			`BRKAD3+0:	brkad[3][`BYTE2] <= dat;	
+			`BRKAD3+1: brkad[3][`BYTE1] <= dat;
+			`BRKCTRL0: brkctrl[0] <= dat;
+			`BRKCTRL1: brkctrl[1] <= dat;
+			`BRKCTRL2: brkctrl[2] <= dat;
+			`BRKCTRL3: brkctrl[3] <= dat;
+			default:
+				begin
+`endif	
+				we_o <= 1'b1;
+				adr_o <= adr;
+				dat_o <= dat;
+				next_state(STORE1a);
+`ifdef SUPPORT_DEBUG_REG				
+				end
+			endcase
+`endif			
+		end
 end
 endtask	
 
@@ -4093,6 +4475,7 @@ begin
 				hf <= dat[5];
 				firqim <= dat[6];
 				ef <= dat[7];
+				dm <= dat[8];
 				if (isRTI) begin
 					$display("loaded ccr=%b", dat);
 					ir[`HIBYTE] <= dat[7] ? 12'h3FE : 12'h080;

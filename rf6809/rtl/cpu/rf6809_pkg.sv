@@ -4,13 +4,36 @@ package rf6809_pkg;
 typedef logic [23:0] Address;
 typedef logic [11:0] Data;
 
+// Breakpoint Control Register
+// One for each breakpoint address register
+typedef struct packed
+{
+	logic hit;
+	logic [2:0] pad;
+	logic en;
+	logic trace_en;
+	logic [1:0] match_type;
+	logic [3:0] amask;
+} brkCtrl;
+
+// Breakpoint match types
+parameter BMT_IA = 2'd0;
+parameter BMT_DS = 2'd1;
+parameter BMT_LS = 2'd3;
+
 parameter bitsPerByte =	$bits(Data);
 parameter BPB = bitsPerByte;
 parameter BPBM1 =	BPB-1;
 parameter BPBX2M1 =	BPB*2-1;
 
 // The following adds support for many 6309 instructions.
-`define SUPPORT_6309
+`define SUPPORT_6309	1
+// Support BCD arithmetic mode and the decimal mode flag
+`define SUPPORT_BCD		1
+// Support divide operations
+`define SUPPORT_DIVIDE 1
+
+`define SUPPORT_DEBUG_REG	1
 
 // The following allows asynchronous reads for icache updating.
 // It increases the size of the core.
@@ -72,7 +95,29 @@ parameter BPBX2M1 =	BPB*2-1;
 `define FIRQ_VECT	24'hFFFFF6
 `define SWI2_VECT	24'hFFFFF4
 `define SWI3_VECT	24'hFFFFF2
-`define RESV_VECT	24'hFFFFF0
+`define IOP_VECT	24'hFFFFF0
+`define IPL7_VECT	24'hFFFFEE
+`define IPL6_VECT 24'hFFFFEC
+`define IPL5_VECT 24'hFFFFEA
+`define IPL4_VECT	24'hFFFFE8
+`define IPL3_VECT 24'hFFFFE6
+`define IPL2_VECT 24'hFFFFE4
+`define IPL1_VECT	24'hFFFFE2
+`define DBG_VECT	24'hFFFFE0
+
+`define MSCOUNT		24'hFFFF14
+`define CHKPOINT	24'hFFFF11
+`define CORENO		24'hFFFF10
+
+`define BRKCTRL3	24'hFFFF0B
+`define BRKCTRL2	24'hFFFF0A
+`define BRKCTRL1	24'hFFFF09
+`define BRKCTRL0	24'hFFFF08
+`define BRKAD3		24'hFFFF06
+`define BRKAD2		24'hFFFF04
+`define BRKAD1		24'hFFFF02
+`define BRKAD0		24'hFFFF00
+
 
 `define NEG_DP		12'h000
 `define OIM_DP		12'h001
@@ -450,6 +495,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define STQ_EXT		12'h1FD
 `define LDS_EXT		12'h1FE
 `define STS_EXT		12'h1FF
+`define BITMD		12'h23C
 `define LDMD		12'h23D
 `define SWI3		12'h23F
 `define COME		12'h243
