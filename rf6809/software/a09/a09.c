@@ -391,7 +391,7 @@ struct oprecord optable09[]=
   { "ADDR",    OPCAT_6309 |
                OPCAT_IREG,        0x130, 0 },
   { "ADDW",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x18b, 0 },
+               OPCAT_DBLREG1BYTE, 0x18b, 0 },
   { "AIM",     OPCAT_6309 |
                OPCAT_BITDIRECT,   0x02, 0 }, 
   { "AND",     OPCAT_ACCARITH,    0x84, 0 },
@@ -407,13 +407,13 @@ struct oprecord optable09[]=
   { "ASLB",    OPCAT_ONEBYTE,     0x58, 0 },
   { "ASLD",    OPCAT_TWOBYTE,     0x058049, 0 },
   { "ASLD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x148, 0 },
+               OPCAT_ONEBYTE,     0x148, 0 },
   { "ASR",     OPCAT_SINGLEADDR,  0x07, 0 },
   { "ASRA",    OPCAT_ONEBYTE,     0x47, 0 },
   { "ASRB",    OPCAT_ONEBYTE,     0x57, 0 },
   { "ASRD",    OPCAT_TWOBYTE,     0x047056, 0 },
   { "ASRD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x147, 0 },
+               OPCAT_ONEBYTE,     0x147, 0 },
   { "BAND",    OPCAT_6309 |
                OPCAT_BITTRANS,    0x230, 0 }, 
   { "BCC",     OPCAT_SBRANCH,     0x24, 0 },
@@ -466,13 +466,13 @@ struct oprecord optable09[]=
   { "CLRB",    OPCAT_ONEBYTE,     0x5f, 0 },
   { "CLRD",    OPCAT_TWOBYTE,     0x4f05f, 0 },
   { "CLRD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x14f, 0 },
+               OPCAT_ONEBYTE,     0x14f, 0 },
   { "CLRE",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x24f, 0 },
+               OPCAT_ONEBYTE,     0x24f, 0 },
   { "CLRF",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x25f, 0 },
+               OPCAT_ONEBYTE,     0x25f, 0 },
   { "CLRW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x15f, 0 },
+               OPCAT_ONEBYTE,     0x15f, 0 },
   { "CLV",     OPCAT_TWOBYTE,     0x1c0fd, 0 },
   { "CLZ",     OPCAT_TWOBYTE,     0x1c0fb, 0 },
   { "CMP",     OPCAT_ACCARITH,    0x81, 0 },
@@ -488,7 +488,7 @@ struct oprecord optable09[]=
   { "CMPS",    OPCAT_DBLREG1BYTE, 0x28c, 4 },
   { "CMPU",    OPCAT_DBLREG1BYTE, 0x283, 3 },
   { "CMPW",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x181, 0 },
+               OPCAT_DBLREG1BYTE, 0x181, 0 },
   { "CMPX",    OPCAT_DBLREG1BYTE, 0x8c, 1 },
   { "CMPY",    OPCAT_DBLREG1BYTE, 0x18c, 2 },
   { "COM",     OPCAT_SINGLEADDR,  0x03, 0 },
@@ -499,9 +499,9 @@ struct oprecord optable09[]=
   { "COME",    OPCAT_6309 |
                OPCAT_TWOBYTE,     0x243, 0  },
   { "COMF",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x253, 0 },
+               OPCAT_ONEBYTE,     0x253, 0 },
   { "COMW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x153, 0 },
+               OPCAT_ONEBYTE,     0x153, 0 },
   { "COMMON",  OPCAT_PSEUDO,      PSEUDO_COMMON, 0 },
   { "CPD",     OPCAT_DBLREG1BYTE, 0x183, 0 },
   { "CPX",     OPCAT_DBLREG1BYTE, 0x8c, 1 },
@@ -513,13 +513,13 @@ struct oprecord optable09[]=
   { "DECB",    OPCAT_ONEBYTE,     0x5a, 0 },
   { "DECD",    OPCAT_THREEBYTE,   0x083000001LL, 0 },
   { "DECD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x14a, 0 },
+               OPCAT_ONEBYTE,     0x14a, 0 },
   { "DECE",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x24a, 0 },
+               OPCAT_ONEBYTE,     0x24a, 0 },
   { "DECF",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x25a, 0 },
+               OPCAT_ONEBYTE,     0x25a, 0 },
   { "DECW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x15a, 0 },
+               OPCAT_ONEBYTE,     0x15a, 0 },
   { "DEF",     OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
   { "DEFINE",  OPCAT_PSEUDO,      PSEUDO_DEF, 0 },
   { "DES",     OPCAT_TWOBYTE,     0x327ff, 4 },
@@ -529,7 +529,7 @@ struct oprecord optable09[]=
   { "DIVD",    OPCAT_6309 |
                OPCAT_ARITH,      0x28d, 0 },
   { "DIVQ",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x28e, 0 },
+               OPCAT_DBLREG1BYTE, 0x28e, 0 },
   { "DUP",     OPCAT_PSEUDO,      PSEUDO_DUP, 0 },
   { "EIM",     OPCAT_6309 |
                OPCAT_BITDIRECT,   0x05, 0 }, 
@@ -570,14 +570,14 @@ struct oprecord optable09[]=
   { "INCB",    OPCAT_ONEBYTE,     0x5c, 0 },
   { "INCD",    OPCAT_THREEBYTE,   0x0c3000001LL, 0 },
   { "INCD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x14c, 0 },
+               OPCAT_ONEBYTE,     0x14c, 0 },
   { "INCE",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x24c, 0 },
+               OPCAT_ONEBYTE,     0x24c, 0 },
   { "INCF",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x25c, 0 },
+               OPCAT_ONEBYTE,     0x25c, 0 },
   { "INCLUDE", OPCAT_PSEUDO,      PSEUDO_INCLUDE, 0 },
   { "INCW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x15c, 0 },
+               OPCAT_ONEBYTE,     0x15c, 0 },
   { "INS",     OPCAT_TWOBYTE,     0x32601, 4 },
   { "INU",     OPCAT_TWOBYTE,     0x33401, 3 },
   { "INX",     OPCAT_TWOBYTE,     0x30001, 1 },
@@ -625,7 +625,7 @@ struct oprecord optable09[]=
   { "LDS",     OPCAT_DBLREG1BYTE, 0x1ce, 4 },
   { "LDU",     OPCAT_DBLREG1BYTE, 0xce, 3 },
   { "LDW",     OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x186, 0 },
+               OPCAT_DBLREG1BYTE, 0x186, 0 },
   { "LDX",     OPCAT_DBLREG1BYTE, 0x8e, 1 },
   { "LDY",     OPCAT_DBLREG1BYTE, 0x18e, 2 },
   { "LEAS",    OPCAT_LEA,         0x32, 4 },
@@ -639,19 +639,19 @@ struct oprecord optable09[]=
   { "LSLB",    OPCAT_ONEBYTE,     0x58, 0 },
   { "LSLD",    OPCAT_TWOBYTE,     0x58049, 0 },
   { "LSLD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x148, 0 },
+               OPCAT_ONEBYTE,     0x148, 0 },
   { "LSR",     OPCAT_SINGLEADDR,  0x04, 0 },
   { "LSRA",    OPCAT_ONEBYTE,     0x44, 0 },
   { "LSRB",    OPCAT_ONEBYTE,     0x54, 0 },
   { "LSRD",    OPCAT_TWOBYTE,     0x44056, 0 },
   { "LSRD63",  OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x144, 0 },
+               OPCAT_ONEBYTE,     0x144, 0 },
   { "LSRW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x154, 0 },
+               OPCAT_ONEBYTE,     0x154, 0 },
   { "MACRO",   OPCAT_PSEUDO,      PSEUDO_MACRO, 0 },
   { "MUL",     OPCAT_ONEBYTE,     0x3d, 0 },
   { "MULD",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x28f, 0 },
+               OPCAT_DBLREG1BYTE, 0x28f, 0 },
   { "NAM",     OPCAT_PSEUDO,      PSEUDO_NAM, 0 },
   { "NAME",    OPCAT_PSEUDO,      PSEUDO_NAME, 0 },
   { "NEG",     OPCAT_SINGLEADDR,  0x00, 0 },
@@ -682,10 +682,10 @@ struct oprecord optable09[]=
   { "PSHD",    OPCAT_TWOBYTE,     0x34006, 0 },
   { "PSHS",    OPCAT_STACK,       0x34, 4 },
   { "PSHSW",   OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x138, 0 },
+               OPCAT_ONEBYTE,     0x138, 0 },
   { "PSHU",    OPCAT_STACK,       0x36, 3 },
   { "PSHUW",   OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x13a, 0 },
+               OPCAT_ONEBYTE,     0x13a, 0 },
   { "PSHX",    OPCAT_TWOBYTE,     0x34010, 1 },
   { "PSHY",    OPCAT_TWOBYTE,     0x34020, 2 },
   { "PUB",     OPCAT_PSEUDO,      PSEUDO_PUB, 0 },
@@ -696,10 +696,10 @@ struct oprecord optable09[]=
   { "PULD",    OPCAT_TWOBYTE,     0x35006, 0 },
   { "PULS",    OPCAT_STACK,       0x35, 4 },
   { "PULSW",   OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x139, 0 },
+               OPCAT_ONEBYTE,     0x139, 0 },
   { "PULU",    OPCAT_STACK,       0x37, 3 },
   { "PULUW",   OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x13b, 0 },
+               OPCAT_ONEBYTE,     0x13b, 0 },
   { "PULX",    OPCAT_TWOBYTE,     0x35010, 1 },
   { "PULY",    OPCAT_TWOBYTE,     0x35020, 2 },
   { "REG",     OPCAT_PSEUDO,      PSEUDO_REG, 0 },
@@ -713,14 +713,14 @@ struct oprecord optable09[]=
   { "ROLD",    OPCAT_6309 |
                OPCAT_ONEBYTE,     0x149, 0 },
   { "ROLW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x159, 0 },
+               OPCAT_ONEBYTE,     0x159, 0 },
   { "ROR",     OPCAT_SINGLEADDR,  0x06, 0 },
   { "RORA",    OPCAT_ONEBYTE,     0x46, 0 },
   { "RORB",    OPCAT_ONEBYTE,     0x56, 0 },
   { "RORD",    OPCAT_6309 |
                OPCAT_ONEBYTE,     0x146, 0 },
   { "RORW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x156, 0 },
+               OPCAT_ONEBYTE,     0x156, 0 },
   { "RPT",     OPCAT_PSEUDO,      PSEUDO_REP, 0 },
   { "RTF",     OPCAT_ONEBYTE,     0x38, 0 },
   { "RTI",     OPCAT_ONEBYTE,     0x3b, 0 },
@@ -778,7 +778,7 @@ struct oprecord optable09[]=
                OPCAT_DBLREG1BYTE, 0xcf, 3 },
   { "STW",     OPCAT_NOIMM |
                OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x187, 0 },
+               OPCAT_DBLREG1BYTE, 0x187, 0 },
   { "STX",     OPCAT_NOIMM |
                OPCAT_DBLREG1BYTE, 0x8f, 1 },
   { "STY",     OPCAT_NOIMM |
@@ -792,7 +792,7 @@ struct oprecord optable09[]=
   { "SUBF",    OPCAT_6309 |
                OPCAT_ARITH,      0x2c0, 0 },
   { "SUBW",    OPCAT_6309 |
-               OPCAT_DBLREG2BYTE, 0x180, 0 },
+               OPCAT_DBLREG1BYTE, 0x180, 0 },
   { "SUBR",    OPCAT_6309 |
                OPCAT_IREG,        0x132, 0 },
   { "SWI",     OPCAT_ONEBYTE,     0x3f, 0 },
@@ -817,11 +817,11 @@ struct oprecord optable09[]=
   { "TSTD",    OPCAT_6309 |
                OPCAT_ONEBYTE,     0x14d, 0 },
   { "TSTE",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x24d, 0 },
+               OPCAT_ONEBYTE,     0x24d, 0 },
   { "TSTF",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x25d, 0 },
+               OPCAT_ONEBYTE,     0x25d, 0 },
   { "TSTW",    OPCAT_6309 |
-               OPCAT_TWOBYTE,     0x15d, 0 },
+               OPCAT_ONEBYTE,     0x15d, 0 },
   { "TSX",     OPCAT_TWOBYTE,     0x1f041, 1 },
   { "TSY",     OPCAT_FOURBYTE,    0x034040035020LL, 2 },  /* PSHS S/PULS Y */
   { "TTL",     OPCAT_PSEUDO,      PSEUDO_NAM, 0 },
@@ -1094,7 +1094,7 @@ struct symrecord lcltable[MAXLABELS];   /* local symbol table (fixed size)   */
 struct regrecord
   {
   char *name;                           /* name of the register              */
-  unsigned char tfr, psh;               /* bit value for tfr and psh/pul     */
+  unsigned short tfr, psh;               /* bit value for tfr and psh/pul     */
   };
 
 /*****************************************************************************/
@@ -1126,7 +1126,7 @@ struct regrecord regtable63[]=          /* same for HD6309                   */
   { "U",   0x03, 0x40 },
   { "S",   0x04, 0x40 },
   { "PC",  0x05, 0x80 },
-  { "W",   0x06, 0x00 },
+  { "W",   0x06, 0x300 },
   { "V",   0x07, 0x00 },
   { "A",   0x08, 0x02 },
   { "B",   0x09, 0x04 },
@@ -1135,8 +1135,8 @@ struct regrecord regtable63[]=          /* same for HD6309                   */
   { "DP",  0x0b, 0x08 },
   { "DPR", 0x0b, 0x08 },
   { "0",   0x0c, 0x00 },
-  { "E",   0x0e, 0x00 },
-  { "F",   0x0f, 0x00 },
+  { "E",   0x0e, 0x100 },
+  { "F",   0x0f, 0x200 },
   { 0,     0,    0    }
   };
 
@@ -3849,7 +3849,7 @@ if (dwOptions & OPTION_LPA)             /* if in patch mode                  */
       {
       case PSEUDO_SETDP :
         if (dpsetting >= 0)
-          putlist("setdp %02X\n", dpsetting);
+          putlist("setdp %06X\n", dpsetting);
         break;
       case PSEUDO_ORG :
         putlist("insert %08X \\        ORG $%08X\n", loccounter, loccounter);
@@ -4647,7 +4647,7 @@ void tfrexg(int co)
 {
 struct regrecord * p;
 
-putbyte((unsigned char)co);
+putbyte((unsigned short)co);
 skipspace();
 scanname();
 
@@ -4709,7 +4709,12 @@ else do
   if (!(dwOptions & OPTION_TSC))
     skipspace();
   scanname(); 
-  if ((p = findreg(unamebuf)) == 0)
+  if (dwOptions & OPTION_H63)
+    p = findreg63(unamebuf);
+  else
+    p = findreg(unamebuf);
+
+  if (p == 0)
     error |= ERR_ILLEGAL_ADDR;
   else
     postbyte |= p->psh; 
@@ -5610,10 +5615,10 @@ switch (co)
       operand = scanexpr(0, &p);
     if (unknown)
       error |= ERR_LABEL_UNDEF;
-    if (!(operand & 4095))
-      operand = (unsigned)operand >> 12;
-    if ((unsigned)operand > 4095)
-      operand = -1;
+    //if (!(operand & 4095))
+    //  operand = (unsigned)operand >> 12;
+    //if ((unsigned)operand > 4095)
+    //  operand = -1;
     if (absmode)
       dpsetting = operand;              
     else
@@ -6431,7 +6436,7 @@ if ((isalnum(*srcptr)) ||
         oneaddr(co);
         break;
       case OPCAT_IREG :                 /* 6309 only                         */
-        putbyte((unsigned short)(co >> 12));
+//        putbyte((unsigned short)(co >> 12));
         /* fall thru on purpose! */
       case OPCAT_2REG :
         tfrexg(co);

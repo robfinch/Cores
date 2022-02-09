@@ -36,7 +36,7 @@
 ;
 ; Xmodem variables
 ;
-xm_timer				EQU		$FFC020
+xm_timer				EQU		$FFFFFC020
 xm_protocol			EQU		$9F5
 xm_flag					EQU		$9F6
 xm_checksum			EQU		$9F7

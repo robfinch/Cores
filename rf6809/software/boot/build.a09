@@ -1,0 +1,759 @@
+	.text
+	.global	start
+start:
+	lds		#0x10000
+	lda		#0xAA
+	sta		0xE60000
+	jmp		start
+	jmp		main
+
+
+
+#off1=4
+#toff=0
+# offset=4
+	.text
+	.global	main
+main:
+	leas	-4,s
+	std	0,s
+	ldd	#.l3
+	jsr	(printf)
+	std	2,s
+	ldd	#0
+.l1:
+	leas	4,s
+	rts
+	.type	main,@function
+	.size	main,$-main
+	.section	.rodata
+	.type	.l3,@object
+	.size	.l3,13
+.l3:
+	.byte	72
+	.byte	101
+	.byte	108
+	.byte	108
+	.byte	111
+	.byte	32
+	.byte	119
+	.byte	111
+	.byte	114
+	.byte	108
+	.byte	100
+	.byte	33
+	.byte	0
+#off1=6
+#toff=0
+# offset=6
+	.text
+	.global	DBGClearScreen
+DBGClearScreen:
+	leas	-6,s
+	ldd	#0
+	std	0,s
+	addd	#14680064
+	std	0,s
+	ldd	(DBGAttr)
+	orb	#32
+	std	2,s
+	ldd	#0
+	std	4,s
+	bra	.l4
+.l3:
+	ldd	4,s
+	aslb
+	rola
+	ldx	0,s
+	leax	d,x
+	ldd	2,s
+	std	0,x
+.l6:
+	inc	5,s
+	bne	.l7
+	inc	4,s
+.l7:
+.l4:
+	ldd	4,s
+	cmpd	#1624
+	blt	.l3
+.l5:
+.l1:
+	leas	6,s
+	rts
+	.type	DBGClearScreen,@function
+	.size	DBGClearScreen,$-DBGClearScreen
+# stacksize=6
+	.equ	__stack_DBGClearScreen,6
+#off1=4
+#toff=0
+# offset=4
+	.global	DBGSetVideoReg
+DBGSetVideoReg:
+	leas	-4,s
+	std	0,s
+.l8:
+	leas	4,s
+	rts
+	.type	DBGSetVideoReg,@function
+	.size	DBGSetVideoReg,$-DBGSetVideoReg
+# stacksize=4
+	.equ	__stack_DBGSetVideoReg,4
+#off1=4
+#toff=0
+# offset=4
+	.global	DBGSetCursorPos
+DBGSetCursorPos:
+	leas	-4,s
+	std	0,s
+	ldd	#14737152
+	std	2,s
+	ldx	2,s
+	ldd	0,s
+	std	36,x
+.l10:
+	leas	4,s
+	rts
+	.type	DBGSetCursorPos,@function
+	.size	DBGSetCursorPos,$-DBGSetCursorPos
+# stacksize=4
+	.equ	__stack_DBGSetCursorPos,4
+#off1=4
+#toff=0
+# offset=4
+	.global	DBGUpdateCursorPos
+DBGUpdateCursorPos:
+	leas	-4,s
+	ldd	#56
+	pshs	b,a
+	ldb	(DBGCursorRow)
+	sex
+	jsr	(__mulint16)
+	std	4,s
+	ldb	(DBGCursorCol)
+	sex
+	addd	4,s
+	std	2,s
+	jsr	(DBGSetCursorPos)
+	leas	2,s
+.l12:
+	leas	4,s
+	rts
+	.type	DBGUpdateCursorPos,@function
+	.size	DBGUpdateCursorPos,$-DBGUpdateCursorPos
+#off1=0
+#toff=0
+# offset=0
+	.global	DBGHomeCursor
+DBGHomeCursor:
+	clr	(DBGCursorCol)
+	clr	(DBGCursorRow)
+	jmp	(DBGUpdateCursorPos)
+.l14:
+	rts
+	.type	DBGHomeCursor,@function
+	.size	DBGHomeCursor,$-DBGHomeCursor
+#off1=12
+#toff=0
+# offset=12
+	.global	DBGBlankLine
+DBGBlankLine:
+	leas	-12,s
+	std	0,s
+	ldd	#14680064
+	std	2,s
+	ldd	#56
+	pshs	b,a
+	ldd	2,s
+	jsr	(__mulint16)
+	std	12,s
+	aslb
+	rola
+	ldx	4,s
+	leax	d,x
+	stx	4,s
+	ldd	(DBGAttr)
+	orb	#32
+	std	10,s
+	ldd	#0
+	std	6,s
+	leas	2,s
+	bra	.l19
+.l18:
+	ldd	4,s
+	aslb
+	rola
+	ldx	2,s
+	leax	d,x
+	ldd	8,s
+	std	0,x
+.l21:
+	inc	5,s
+	bne	.l22
+	inc	4,s
+.l22:
+.l19:
+	ldd	4,s
+	cmpd	#56
+	blt	.l18
+.l20:
+.l16:
+	leas	12,s
+	rts
+	.type	DBGBlankLine,@function
+	.size	DBGBlankLine,$-DBGBlankLine
+#off1=8
+#toff=0
+# offset=8
+	.global	DBGScrollUp
+DBGScrollUp:
+	pshs	y
+	leas	-8,s
+	ldd	#14680064
+	std	0,s
+	ldd	#14680120
+	std	2,s
+	ldd	#1624
+	std	6,s
+	ldd	#0
+	std	4,s
+	bra	.l26
+.l25:
+	ldd	4,s
+	aslb
+	rola
+	ldx	2,s
+	leax	d,x
+	ldd	4,s
+	aslb
+	rola
+	ldy	0,s
+	leay	d,y
+	ldd	0,x
+	std	0,y
+.l28:
+	inc	5,s
+	bne	.l29
+	inc	4,s
+.l29:
+.l26:
+	ldd	4,s
+	cmpd	6,s
+	blt	.l25
+.l27:
+	ldd	#28
+	jsr	(DBGBlankLine)
+.l23:
+	leas	8,s
+	puls	y,pc
+	.type	DBGScrollUp,@function
+	.size	DBGScrollUp,$-DBGScrollUp
+#off1=0
+#toff=0
+# offset=0
+	.global	DBGIncrementCursorRow
+DBGIncrementCursorRow:
+	ldb	(DBGCursorRow)
+	cmpb	#28
+	bge	.l33
+.l32:
+	inc	(DBGCursorRow)
+	jsr	(DBGUpdateCursorPos)
+	rts
+.l33:
+	jsr	(DBGScrollUp)
+	dec	(DBGCursorRow)
+.l30:
+	rts
+	.type	DBGIncrementCursorRow,@function
+	.size	DBGIncrementCursorRow,$-DBGIncrementCursorRow
+#off1=0
+#toff=0
+# offset=0
+	.global	DBGIncrementCursorPos
+DBGIncrementCursorPos:
+	ldb	(DBGCursorCol)
+	cmpb	#56
+	bge	.l37
+.l36:
+	inc	(DBGCursorCol)
+	jsr	(DBGUpdateCursorPos)
+	rts
+.l37:
+	clr	(DBGCursorCol)
+	jmp	(DBGIncrementCursorRow)
+.l34:
+	rts
+	.type	DBGIncrementCursorPos,@function
+	.size	DBGIncrementCursorPos,$-DBGIncrementCursorPos
+#off1=37
+#toff=0
+# offset=37
+	.global	DBGDisplayChar
+DBGDisplayChar:
+	pshs	y
+	leas	-37,s
+	stb	0,s
+	ldd	#0
+	std	1,s
+	ldb	0,s
+	cmpb	#8
+	beq	.l63
+	cmpb	#9
+	beq	.l71
+	cmpb	#10
+	beq	.l42
+	cmpb	#12
+	beq	.l70
+	cmpb	#13
+	beq	.l41
+	cmpb	#144
+	beq	.l46
+	cmpb	#145
+	beq	.l43
+	cmpb	#146
+	beq	.l52
+	cmpb	#147
+	beq	.l49
+	cmpb	#148
+	beq	.l55
+	cmpb	#153
+	beq	.l58
+	bra	.l78
+.l41:
+	clr	(DBGCursorCol)
+	jsr	(DBGUpdateCursorPos)
+	bra	.l40
+.l42:
+	clr	(DBGCursorCol)
+	jsr	(DBGIncrementCursorRow)
+	bra	.l40
+.l43:
+	ldb	(DBGCursorCol)
+	cmpb	#55
+	bge	.l45
+.l44:
+	inc	(DBGCursorCol)
+	jsr	(DBGUpdateCursorPos)
+.l45:
+	bra	.l40
+.l46:
+	ldb	(DBGCursorRow)
+	tstb
+	ble	.l48
+.l47:
+	dec	(DBGCursorRow)
+	jsr	(DBGUpdateCursorPos)
+.l48:
+	bra	.l40
+.l49:
+	ldb	(DBGCursorCol)
+	tstb
+	ble	.l51
+.l50:
+	dec	(DBGCursorCol)
+	jsr	(DBGUpdateCursorPos)
+.l51:
+	bra	.l40
+.l52:
+	ldb	(DBGCursorRow)
+	cmpb	#28
+	bge	.l54
+.l53:
+	inc	(DBGCursorRow)
+	jsr	(DBGUpdateCursorPos)
+.l54:
+	bra	.l40
+.l55:
+	ldb	(DBGCursorCol)
+	bne	.l57
+.l56:
+	clr	(DBGCursorRow)
+.l57:
+	clr	(DBGCursorCol)
+	jsr	(DBGUpdateCursorPos)
+	bra	.l40
+.l58:
+	ldd	#56
+	pshs	b,a
+	ldb	(DBGCursorRow)
+	sex
+	jsr	(__mulint16)
+	std	7,s
+	std	11,s
+	tfr	a,b
+	sex
+	tfr	a,b
+	std	9,s
+	ldd	11,s
+	addd	#0
+	std	15,s
+	ldd	9,s
+	adcb	#224
+	adca	#0
+	std	13,s
+	ldd	15,s
+	std	19,s
+	ldd	13,s
+	lsl	20,s
+	rol	19,s
+	rolb
+	rola
+	std	17,s
+	ldd	3,s
+	addd	19,s
+	std	3,s
+	pshs	b,a
+	ldb	(DBGCursorCol)
+	sex
+	std	7,s
+	puls	a,b
+	leas	2,s
+	bra	.l60
+.l59:
+	ldd	3,s
+	addd	#1
+	aslb
+	rola
+	ldx	1,s
+	leax	d,x
+	ldd	3,s
+	aslb
+	rola
+	ldy	1,s
+	leay	d,y
+	ldd	0,x
+	std	0,y
+.l62:
+	inc	4,s
+	bne	.l79
+	inc	3,s
+.l79:
+.l60:
+	ldd	3,s
+	cmpd	#55
+	blt	.l59
+.l61:
+	ldd	(DBGAttr)
+	orb	#32
+	pshs	b,a
+	ldd	5,s
+	aslb
+	rola
+	std	21,s
+	puls	a,b
+	ldx	1,s
+	pshs	b,a
+	ldd	21,s
+	leax	d,x
+	puls	a,b
+	std	0,x
+	bra	.l40
+.l63:
+	ldb	(DBGCursorCol)
+	tstb
+	ble	.l65
+.l64:
+	dec	(DBGCursorCol)
+	ldd	#56
+	pshs	b,a
+	ldb	(DBGCursorRow)
+	sex
+	jsr	(__mulint16)
+	std	23,s
+	std	27,s
+	tfr	a,b
+	sex
+	tfr	a,b
+	std	25,s
+	ldd	27,s
+	addd	#0
+	std	31,s
+	ldd	25,s
+	adcb	#224
+	adca	#0
+	std	29,s
+	ldd	31,s
+	std	35,s
+	ldd	29,s
+	lsl	36,s
+	rol	35,s
+	rolb
+	rola
+	std	33,s
+	ldd	3,s
+	addd	35,s
+	std	3,s
+	pshs	b,a
+	ldb	(DBGCursorCol)
+	sex
+	std	7,s
+	puls	a,b
+	leas	2,s
+	bra	.l67
+.l66:
+	ldd	3,s
+	addd	#1
+	aslb
+	rola
+	ldx	1,s
+	leax	d,x
+	ldd	3,s
+	aslb
+	rola
+	ldy	1,s
+	leay	d,y
+	ldd	0,x
+	std	0,y
+.l69:
+	inc	4,s
+	bne	.l80
+	inc	3,s
+.l80:
+.l67:
+	ldd	3,s
+	cmpd	#55
+	blt	.l66
+.l68:
+	ldd	(DBGAttr)
+	orb	#32
+	pshs	b,a
+	ldd	5,s
+	aslb
+	rola
+	std	37,s
+	puls	a,b
+	ldx	1,s
+	pshs	b,a
+	ldd	37,s
+	leax	d,x
+	puls	a,b
+	std	0,x
+.l65:
+	bra	.l40
+.l70:
+	jsr	(DBGClearScreen)
+	jsr	(DBGHomeCursor)
+	bra	.l40
+.l71:
+	ldd	#0
+	std	3,s
+	bra	.l73
+.l72:
+	ldx	#(tabstops)
+	ldd	3,s
+	leax	d,x
+	ldb	(DBGCursorCol)
+	cmpb	0,x
+	bge	.l77
+.l76:
+	ldx	#(tabstops)
+	ldd	3,s
+	leax	d,x
+	ldb	0,x
+	stb	(DBGCursorCol)
+	bra	.l74
+.l77:
+.l75:
+	inc	4,s
+	bne	.l81
+	inc	3,s
+.l81:
+.l73:
+	ldd	3,s
+	cmpd	#32
+	blt	.l72
+.l74:
+	bra	.l40
+.l78:
+	ldd	#14680064
+	std	1,s
+	ldd	#56
+	pshs	b,a
+	ldb	(DBGCursorRow)
+	sex
+	jsr	(__mulint16)
+	std	23,s
+	ldb	(DBGCursorCol)
+	sex
+	addd	23,s
+	std	5,s
+	ldb	2,s
+	sex
+	orb	1+(DBGAttr)
+	ora	(DBGAttr)
+	pshs	b,a
+	ldd	7,s
+	aslb
+	rola
+	std	27,s
+	puls	a,b
+	ldx	3,s
+	pshs	b,a
+	ldd	27,s
+	leax	d,x
+	puls	a,b
+	std	0,x
+	jsr	(DBGIncrementCursorPos)
+	leas	2,s
+.l40:
+.l38:
+	leas	37,s
+	puls	y,pc
+	.type	DBGDisplayChar,@function
+	.size	DBGDisplayChar,$-DBGDisplayChar
+#off1=0
+#toff=0
+# offset=0
+	.global	DBGCRLF
+DBGCRLF:
+	ldd	#13
+	jsr	(DBGDisplayChar)
+	ldd	#10
+	jmp	(DBGDisplayChar)
+.l82:
+	rts
+	.type	DBGCRLF,@function
+	.size	DBGCRLF,$-DBGCRLF
+#off1=3
+#toff=0
+# offset=3
+	.global	DBGDisplayString
+DBGDisplayString:
+	leas	-3,s
+	std	0,s
+	bra	.l87
+.l86:
+	ldb	2,s
+	sex
+	jsr	(DBGDisplayChar)
+	inc	1,s
+	bne	.l89
+	inc	0,s
+.l89:
+.l87:
+	ldb	[0,s]
+	stb	2,s
+	bne	.l86
+.l88:
+.l84:
+	leas	3,s
+	rts
+	.type	DBGDisplayString,@function
+	.size	DBGDisplayString,$-DBGDisplayString
+#off1=3
+#toff=0
+# offset=3
+	.global	DBGDisplayAsciiString
+DBGDisplayAsciiString:
+	leas	-3,s
+	std	0,s
+	bra	.l93
+.l92:
+	ldb	2,s
+	clra
+	jsr	(DBGDisplayChar)
+	inc	1,s
+	bne	.l95
+	inc	0,s
+.l95:
+.l93:
+	ldb	[0,s]
+	stb	2,s
+	bne	.l92
+.l94:
+.l90:
+	leas	3,s
+	rts
+	.type	DBGDisplayAsciiString,@function
+	.size	DBGDisplayAsciiString,$-DBGDisplayAsciiString
+#off1=2
+#toff=0
+# offset=2
+	.global	DBGDisplayStringCRLF
+DBGDisplayStringCRLF:
+	pshs	b,a
+	jsr	(DBGDisplayString)
+	jsr	(DBGCRLF)
+.l96:
+	leas	2,s
+	rts
+	.type	DBGDisplayStringCRLF,@function
+	.size	DBGDisplayStringCRLF,$-DBGDisplayStringCRLF
+#off1=2
+#toff=0
+# offset=2
+	.global	DBGDisplayAsciiStringCRLF
+DBGDisplayAsciiStringCRLF:
+	pshs	b,a
+	jsr	(DBGDisplayAsciiString)
+	jsr	(DBGCRLF)
+.l98:
+	leas	2,s
+	rts
+	.type	DBGDisplayAsciiStringCRLF,@function
+	.size	DBGDisplayAsciiStringCRLF,$-DBGDisplayAsciiStringCRLF
+#off1=6
+#toff=0
+# offset=6
+	.global	DBGHideCursor
+DBGHideCursor:
+	leas	-6,s
+	std	0,s
+	ldd	#14737152
+	std	2,s
+	ldx	2,s
+	ldd	12,x
+	std	4,s
+	ldd	0,s
+	beq	.l103
+	ldd	4,s
+	clra
+	clrb
+	ora	#255
+	orb	#255
+	ldx	2,s
+	std	12,x
+	bra	.l104
+.l103:
+	ldd	4,s
+	clra
+	clrb
+	orb	#231
+	ldx	2,s
+	std	12,x
+.l104:
+.l100:
+	leas	6,s
+	rts
+	.type	DBGHideCursor,@function
+	.size	DBGHideCursor,$-DBGHideCursor
+# stacksize=6
+	.equ	__stack_DBGHideCursor,6
+	.global	pascal
+	.section	.bss
+	.type	pascal,@object
+	.size	pascal,2
+	.global	pascal
+	.lcomm	pascal,2
+	.global	DBGCursorCol
+	.type	DBGCursorCol,@object
+	.size	DBGCursorCol,1
+	.global	DBGCursorCol
+	.lcomm	DBGCursorCol,1
+	.global	DBGCursorRow
+	.type	DBGCursorRow,@object
+	.size	DBGCursorRow,1
+	.global	DBGCursorRow
+	.lcomm	DBGCursorRow,1
+	.global	DBGAttr
+	.type	DBGAttr,@object
+	.size	DBGAttr,2
+	.global	DBGAttr
+	.lcomm	DBGAttr,2
+	.global	tabstops
+	.type	tabstops,@object
+	.size	tabstops,32
+	.global	tabstops
+	.lcomm	tabstops,32
+

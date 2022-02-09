@@ -1,6 +1,6 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) S2022  Robert Finch, Waterloo
+;   \\__/ o\    (C) 2013-2022  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@opencores.org
 ;       ||
@@ -33,67 +33,60 @@
 ; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;                                                                          
 ; ============================================================================
+;
+; ASCII control characters.
+SOH		equ 1
+EOT		equ 4
+ACK		equ 6
+BS		equ 8
+NAK		equ 21
+ETB		equ	$17
+CAN		equ 24
+DEL		equ 127
 
-IO_PAGE		EQU $FFFE00000
-; Special Registers
-BRKAD0		EQU	$FFFFFFF00
-BRKAD1		EQU	$FFFFFFF04
-BRKAD2		EQU	$FFFFFFF08
-BRKAD3		EQU	$FFFFFFF0C
-BRKCTRL0	EQU	$FFFFFFF10
-BRKCTRL1	EQU	$FFFFFFF11
-BRKCTRL2	EQU	$FFFFFFF12
-BRKCTRL3	EQU	$FFFFFFF13
-COREID	EQU		$FFFFFFF14
-CHECKPT	EQU		$FFFFFFF15
-MMU_AKEY	EQU	$FFFFFFF16
-MMU_OKEY	EQU	$FFFFFFF17
-MSCOUNT	EQU		$FFFFFFF18
+CR	EQU	$0D		;ASCII equates
+LF	EQU	$0A
+TAB	EQU	$09
+CTRLC	EQU	$03
+CTRLH	EQU	$08
+CTRLI	EQU	$09
+CTRLJ	EQU	$0A
+CTRLK	EQU	$0B
+CTRLM   EQU $0D
+CTRLS	EQU	$13
+CTRLT EQU $14
+CTRLX	EQU	$18
+CTRLZ	EQU	$1A
+XON		EQU	$11
+XOFF	EQU	$13
 
-LEDS		EQU		$FFFE60001
-VIA_MMU	EQU		$F306FF			; constant to map VIA into address space
-VIA			EQU		$FFFE60000
-VIA_PA		EQU		1
-VIA_DDRA	EQU		3
-VIA_ACR			EQU		11
-VIA_IFR			EQU		13
-VIA_IER			EQU		14
-VIA_T3CL		EQU		16
-VIA_T3CH		EQU		17
-VIA_T3LL		EQU		18
-VIA_T3LH		EQU		19
-VIA_T3CMPL	EQU		20
-VIA_T3CMPH	EQU		21
-TEXTSCR		EQU		$FFFE00000
-TEXTREG		EQU		$FFFE07F00
-TEXT_COLS	EQU		0
-TEXT_ROWS	EQU		1
-TEXT_CURPOS	EQU		34
-COLS		EQU		64
-ROWS		EQU		32
-ACIA_MMU	EQU	$F196FF		; constant to map ACIA into address space
-ACIA		EQU		$FFFE32000
-ACIA_TX		EQU		0
-ACIA_RX		EQU		0
-ACIA_STAT	EQU		1
-ACIA_CMD	EQU		2
-ACIA_CTRL	EQU		3
-ACIA_IRQS	EQU		4
-ACIA_CTRL2	EQU		11
-RTC				EQU		$FFFE34000	; I2C
-RTCBuf		EQU		$7FC0
-PRNG_MMU	EQU		$71B6FF
-PRNG		EQU		$FFFE36000
-KEYBD		EQU		$FFFE30000
-KEYBDCLR	EQU		$FFFE30002
-PIC_MMU	EQU		$F1F6FF				; constant to map PIC into address space
-PIC			EQU		$FFFE3E000
-SPRITE_MMU		EQU		$F086FF	; constant to map SPRITE into address space
-SPRITE_CTRL		EQU		$FFFE10000
-SPRITE_EN			EQU		$3C0
-MMU			EQU		$FFFE38000
+FIRST_CORE	EQU	1
+MAX_TASKNO	EQU 63
+DRAM_BASE	EQU $10000000
 
-SEMA_MMU	EQU		$F786FF
-OUTSEMA	EQU	$FFFEF0000
-SEMAABS	EQU	$1000
-OSSEMA	EQU	$FFFEF0010
+; ROM monitor functions
+;
+MF_Monitor	EQU		0
+MF_INCH			EQU		1
+MF_OUTCH		EQU 	2
+MF_CRLF			EQU		3
+MF_DisplayString	EQU		4
+MF_DisplayByteAsHex		EQU	5
+MF_DisplayWordAsHex		EQU	6
+MF_ShowSprites	EQU		7
+MF_Srand		EQU		8
+MF_Random		EQU		9
+MF_OSCALL		EQU		10
+MF_GetRange	EQU		11	; gets a pair of numbers last>first
+MF_GetNumber	EQU	12
+MF_SerialPutchar	EQU	13
+
+mon_numwka	EQU		$910
+mon_r1		EQU		$920
+mon_r2		EQU		$924
+
+OSF_PAMFree						EQU		41
+OSF_AllocMem					EQU		42
+OSF_FemtikiTimerIRQ		EQU		44
+OSF_FMTK_Reschedule		EQU		45
+

@@ -1,0 +1,969 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+;
+; ============================================================================
+
+OPT include "d:\cores2022\rf6809\software\fmtk\config.a09"
+OPT include "d:\cores2022\rf6809\software\fmtk\const.a09"
+OPT include "d:\cores2022\rf6809\software\fmtk\types.a09"
+OPT include "d:\cores2022\rf6809\software\boot\io_equates.a09"
+OPT include "d:\cores2022\rf6809\software\fmtk\source\kernel\Femtiki_vars.a09"
+
+;------------------------------------------------------------------------------
+; Operating system call dispatcher.
+;------------------------------------------------------------------------------
+	org		$FFFFF9000
+OSCall:
+	oim		#$400,MMU_OKEY	; set access to OS variables
+	bsr		SaveContext			; save context to TCB
+	ldb		[TCBxPC+1,x]		; Grab op byte at PC location
+	inc		TCBxPC+2,x			; Increment PC
+	bne		0001f
+	inc		TCBxPC+1,x
+0001:
+	cmpb	#47							; make sure function number in range
+	bhi		OSCallBadFunc
+	aslb									; *2 bytes per address
+	ldx		#OSCallTbl
+	jmp		[b,x]
+OSCallBadFunc:
+	aim		#$BFF,MMU_OKEY	; disable access to OS variables
+  ldx  	#E_Func
+  stx		7,s
+  rti
+
+;------------------------------------------------------------------------------
+; Operating system exit point.
+;
+; On the OS call entry, the OS variable area was mapped into the address
+; space. This was okay to do since the app was not active. When exiting
+; back to the app the OS vars need to be unmapped. The OS vars will still
+; be present in the map until unmapped.
+;------------------------------------------------------------------------------
+
+OSExit:
+	bsr		GetRunningTCBPointer
+	ldb		TCBappid,x
+	bsr		GetAppMid
+	orb		#$C00							; MMU enable bit
+	; As soon as the operate key is set memory will be mapped according
+	; to the task being returned to. That means the current stack pointer
+	; is invalid and needs to be loaded from the TCB.
+	stb		MMU_OKEY					; need access to OS vars to restore context
+	lds		TCBxSP,x					; OS vars are accessible
+	bsr		RestoreContext
+	aim		#$BFF,MMU_OKEY	; disable access to OS variables
+	rti
+
+;------------------------------------------------------------------------------
+; Map operating system variables into app address space
+;------------------------------------------------------------------------------
+
+MapOSVars:
+	ldb		MMU_OKEY
+	stb		MMU_AKEY
+	clrd
+	tfr		d,x
+	ldd		#$000E00
+MapOSVars1:
+	std		MMU,x
+	inca
+	leax	2,x
+	cmpx	#512
+	blo		MapOSVars1
+	rts
+
+;------------------------------------------------------------------------------
+; Unmap the operating system variables.
+;------------------------------------------------------------------------------
+
+UnmapOSVars:
+	ldb		MMU_OKEY
+	stb		MMU_AKEY
+	clrd
+	tfr		d,x
+UnmapOSVars1:
+	std		MMU,x
+	leax	2,x
+	cmpx	#512
+	blo		UnmapOSVars1
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+GetRunningTCBPointer:
+	ldb		RunningID
+	lda		#192
+	mul
+	addd	#32
+	addd	#tcbs
+	tfr		d,x
+	rts
+
+;------------------------------------------------------------------------------
+; Got the AppID, now get the mid
+;
+; Parameters:
+;		B = app id
+;------------------------------------------------------------------------------
+
+GetAppMid:
+	clra
+	tfr		d,y
+	ldy		ACBPtrs,y
+	ldb		ACBmid,y
+	rts
+
+;------------------------------------------------------------------------------
+; Save the register context in the TCB for the task.
+;------------------------------------------------------------------------------
+
+SaveContext:
+	bsr		GetRunningTCBPointer
+	puls	u						; u = return address
+	ldb		,s
+	stb		TCBxCCR,x
+	ldb		1,s
+	stb		TCBxAcca,x
+	ldb		2,s
+	stb		TCBxAccb,x
+	ldb		3,s
+	stb		TCBxAcce,x
+	ldb		4,s
+	stb		TCBxAccf,x
+	ldd		5,s
+	std		TCBxDPR,x
+	ldd		7,s
+	std		TCBxXR,x
+	ldd		9,s
+	std		TCBxYR,x
+	ldd		11,s
+	std		TCBxUSP,x
+	ldb		13,s
+	stb		TCBxPC,x
+	ldd		14,s
+	std		TCBxPC+1,x
+	sts		TCBxSP,x
+	jmp		,u
+
+;------------------------------------------------------------------------------
+; Restore the register context.
+;
+;	Expects:
+;		S already loaded from TCB
+;------------------------------------------------------------------------------
+
+RestoreContext:
+	puls	u				; get return address into U
+	ldb		TCBxCCR,x
+	stb		,s
+	ldb		TCBxAcca,x
+	stb		1,s
+	ldb		TCBxAccb,x
+	stb		2,s
+	ldb		TCBxAcce,x
+	stb		3,s
+	ldb		TCBxAccf,x
+	stb		4,s
+	ldd		TCBxDPR,x
+	std		5,s
+	ldd		TCBxXR,x
+	std		7,s
+	ldd		TCBxYR,x
+	std		9,s
+	ldd		TCBxUSP,x
+	std		11,s
+	ldb		TCBxPC,x
+	stb		13,s
+	ldd		TCBxPC+1,x
+	std		14,s
+	jmp		,u
+	
+;OSCallTbl2:
+;  fcw    SchedulerIRQ
+;  fcw    IStartTask
+;  fcw    ISendMsg
+;  fcw    ISleep
+
+OSCallTbl:
+	fcw		FMTK_Initialize					; 0
+	fcw		FMTK_StartTask					; 1
+	fcw		FMTK_ExitTask
+	fcw		FMTK_KillTask
+	fcw		FMTK_SetTaskPriority
+	fcw		FMTK_Sleep							; 5
+	fcw		FMTK_AllocMbx
+	fcw		FMTK_FreeMbx
+	fcw		FMTK_PostMsg
+	fcw		FMTK_SendMsg
+	fcw		FMTK_WaitMsg						; 10
+	fcw		FMTK_PeekMsg
+	fcw		FMTK_StartApp           ; 12
+	fcw		FMTK_ExitApp            ; 13
+	fcw		FMTK_GetCurrentTid
+	fcw		FMTK_TCBFinalizerExit   ; 15
+	fcw		FMTK_KillApp
+	fcw		FMTK_RunAsOS            ; 17
+	fcw		FMTK_GetTaskAppId       ; 18
+	fcw		FMTK_SetTaskId          ; 19
+	fcw		FMTK_HasIOFocus					; 20
+	fcw		FMTK_SwitchIOFocus			; 21
+	fcw		FMTK_ReleaseIOFocus			; 22
+	fcw		FMTK_ForceReleaseIOFocus	; 23
+	fcw		FMTK_RequestIOFocus			; 24
+	fcw		FMTK_MapOSVars          ; 25
+	fcw		FMTK_IO									; 26
+	fcw    FMTK_GetDCBField        ; 27
+	fcw    FMTK_SetDCBField        ; 28
+	fcw    FMTK_GetAppTaskId       ; 29
+	fcw    FMTK_SetTaskAppId       ; 30
+	fcw    OSCallBadFunc
+	fcw    GetPamBit               ; 32
+	fcw    FetchMemoryWord         ; 33
+	fcw    Monitor                 ; 34
+	fcw    GetIRQFlag              ; 35
+	fcw    SetIRQFlag              ; 36
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    PAMAlloc	             	 ; 40
+	fcw    PAMFree                 ; 41
+	fcw    AllocMem                ; 42
+	fcw    FreeMem                 ; 43
+	fcw    FemtikiTimerIRQ         ; 44
+	fcw    FMTK_Reschedule         ; 45
+	fcw    FMTK_GetCurrentMid      ; 46
+	fcw    FMTK_GetRunningTCBPointer	; 47
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FMTK_Initialize:
+  lbsr  FMTK_Init
+  bra   OSExit
+ 
+;------------------------------------------------------------------------------
+; Get the task id for the currently running task.
+;
+; Returns:
+;		D = task id
+;------------------------------------------------------------------------------
+
+GetCurrentTid:
+	ldb		RunningID
+	clra
+	rts
+
+FMTK_GetCurrentTid:
+	ldb		RunningID
+	clra
+	tfr		d,x
+	bsr		TCBHandleToPointer
+	exg		d,x
+	std		TCBxAcca,x
+	ldx		#E_Ok
+	stx		TCBxXR,x
+	bra		OSExit
+
+;------------------------------------------------------------------------------
+; Some useful OS return points.
+;------------------------------------------------------------------------------
+
+FMTK_RetDX:
+	tfr		d,w
+	bsr		GetRunningTCBPtr
+	tfr		d,u
+	stw		TCBxAcca,u
+	stx		TCBxXR,u
+	bra		OSExit
+
+FMTK_RetOKQ:
+	tfr		d,u
+	tfr		w,y
+	bsr		GetRunningTCBPtr
+	tfr		d,x
+	stu		TCBxAcca,x
+	sty		TCBxAcce,x
+	ldd		#E_Ok
+	std		TCBxXR,x
+	bra		OSExit
+
+FMTK_RetOKD:
+	tfr		d,u
+	bsr		GetRunningTCBPtr
+	tfr		d,x
+	stu		TCBxAcca,x
+	ldd		#E_Ok
+	std		TCBxXR,x
+	bra		OSExit
+
+FMTK_RetOK:
+	bsr		GetRunningTCBPtr
+	tfr		d,x
+	ldd		#E_Ok
+	std		TCBxXR,x
+	bra		OSExit
+
+FMTK_RetErr:
+	bsr		GetRunningTCBPtr
+	tfr		d,u
+	stx		TCBxXR,u
+	bra		OSExit
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+GetIRQFlag:
+  ldb   IRQFlag
+  clra
+  bra		FMTK_RetOKD
+
+SetIRQFlag:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBxAccb,x
+  stb   IRQFlag
+  bra		FMTK_RetOK
+
+; Accessors
+; Parameters:
+;	 	D = task id
+FMTK_GetTaskAppId:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBxAccb,x
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBappid,x
+	clra
+	bra		FMTK_RetOKD
+
+; Parameters:
+;		D = task id
+;		E = App id
+;
+FMTK_SetTaskAppId:
+	ldb		2,s
+	lda		#192
+	mul											; B * 192
+	addd	#32								; add in collection header (object) size
+	addd	#tcbs
+	tfr		d,x
+	lde		3,s
+	ste		TCBappid,x
+	bra		FMTK_RetOK
+
+FMTK_GetAppTaskId:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBxAccb,x
+	clra
+	bsr		ACBHandleToPointer
+	tfr		d,x
+	ldb		ACBTask,x
+	clra
+	bra		FMTK_RetOKD
+
+; The following only really needed by startup code, otherwise the task id
+; is completely managed by the OS.
+FMTK_SetTaskId:
+  ; Should get the id and see if it's currently zero (unset).
+  ; but this would be more code bloat.
+  ldb		2,s
+  stb		RunningID
+  bra		FMTK_RetOK
+
+FMTK_GetCurrentMid:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBappid,x
+	clra
+	bsr		ACBHandleToPointer
+	tfr		d,y
+	ldb		ACBmid,y
+	clra
+	bra		FMTK_RetOKD
+
+; Parameters:
+;		B = task id
+;
+FMTK_GetMid:
+	pshs	x
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBappid,x
+	clra
+	bsr		ACBHandleToPointer
+	tfr		d,x
+	ldb		ACBmid,x
+	puls	x,pc
+	
+;------------------------------------------------------------------------------
+; Get a pointer to the TCB for the currently running task.
+;
+; Parameters:
+;		none
+; Returns:
+;		D = pointer to running TCB
+;------------------------------------------------------------------------------
+
+GetRunningTCBPtr:
+	ldb		RunningID
+	; fall through into conversion code
+
+;------------------------------------------------------------------------------
+; Convert a TCB handle into a pointer to the corresponding TCB.
+; Handles vary from 1 to 4095.
+;------------------------------------------------------------------------------
+
+TCBHandleToPointer:
+	decb
+	lda		#TCB_SIZE
+	mul
+	addd	#OBJ_SIZE
+	addd	#tcbs
+	rts
+
+FMTK_GetRunningTCBPointer:
+	bsr		GetRunningTCBPtr
+	tfr		d,x
+	std		TCBxAcca,x
+	bra		FMTK_RetOKD
+
+;------------------------------------------------------------------------------
+; Convert an ACB handle into a pointer to the corresponding ACB.
+; Handles vary from 1 to 31.
+;------------------------------------------------------------------------------
+
+ACBHandleToPointer:
+	decd
+	muld	#ACB_SIZE
+	tfr		w,d
+	addd	#OBJ_SIZE
+	addd	#acbs
+	rts
+
+;------------------------------------------------------------------------------
+; Convert a TCB pointer into a handle for the TCB.
+;------------------------------------------------------------------------------
+
+TCBPointerToHandle:
+	subd	#tcbs
+	subd	#OBJ_SIZE
+	divd	#TCB_SIZE
+	incb
+	rts
+
+;				while (TimeoutList > 0 && TimeoutList < NR_TCB) {
+;					if (tcbs[TimeoutList].timeout<=0)
+;						InsertIntoReadyList(PopTimeoutList());
+;					else {
+;						tcbs[TimeoutList].timeout = tcbs[TimeoutList].timeout - missed_ticks - 1;
+;						missed_ticks = 0;
+;						break;
+;					}
+;				}
+
+DecrementTimeout:
+	ldb		TimeoutList
+	beq		0001f
+	bmi		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	bsr		TCBHandleToPointer
+	tfr		d,x										; X = pointer to TCB
+	tst		TCBTimeout,x					; 
+	beq		0002f
+	bpl		0003f
+	bmi		0004f
+0002:
+	tst		TCBTimeout+2,x
+	bne		0003f
+0004:
+	bsr		PopTimeoutList
+	bra		InsertIntoReadyList
+0003:
+	sec
+	ldd		TCBTimeout+2,x
+	sbcd	missed_ticks
+	std		TCBTimeout+2,x
+	ldd		TCBTimeout,x
+	sbcd	#0
+	std		TCBTimeout,x
+	clr		missed_ticks	
+0001:
+	rts
+
+SchedulerIRQa:
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	tst		TCBPriority,x
+	beq		0001f
+	lda		#TS_PREEMPT
+	sta		TCBStatus,x
+	bsr		DecrementTimeout
+	lda		TCBPriority,x
+	cmpa	#2
+	bls		0002f
+	bsr		SelectTaskToRun
+	stb		RunningID
+0002:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	lda		#TS_RUNNING
+	sta		TCBStatus,x
+	rts
+0001:
+	inc		missed_ticks
+	rts
+	
+SchedulerIRQb:
+	ldd		#20
+	bsr		LockSysSemaphore
+	beq		0001f
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldd		TCBStartTick+2,x
+	pshs	d
+	ldd		TCBStartTick,x
+	pshs	d
+	ldd		TCBEndTick+2,x
+	subd	2,s
+	std		2,s
+	ldd		TCBEndTick,x
+	sbcd	,s
+	std		,s
+	ldd		TCBTicks+2,x
+	addd	2,s
+	std		TCBTicks+2,x
+	ldd		TCBTicks,x
+	sbcd	,s
+	std		TCBTicks,x
+	bsr		SchedulerIRQa
+	bsr		UnlockSysSemaphore
+	bra		0002f
+0001:
+	inc		missed_ticks
+0002:
+	rts
+
+FemtikiTimerIRQ:
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	bsr		GetTick
+	stw		TCBEndTick+2,x
+	std		TCBEndTick,x
+	bsr		SchedulerIRQb
+	ldb		RunningID
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	tst		TCBException,x
+	beq		0001f
+	; ToDo: exception processing code
+	ldd		#45
+	std		TCBxXR,x
+0001:
+	bsr		GetTick
+	stw		TCBStartTick+2,x
+	std		TCBStartTick,x
+	bra		OSExit
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+FMTK_Sleep:
+  bsr  ISleep
+  bra  OSExit
+
+FMTK_StartTask:
+  bsr  IStartTask
+  bra  OSExit
+
+;------------------------------------------------------------------------------
+; Exit the current task.
+;
+; Parameters:
+;		none
+; Modifies:
+;		a1 = task id
+;------------------------------------------------------------------------------
+
+FMTK_ExitTask:
+	ldb		RunningID
+	; fall through to KillTask
+	
+;------------------------------------------------------------------------------
+; Parameters:
+;		B = tid of task to kill
+;------------------------------------------------------------------------------
+
+FMTK_KillTask:
+  bsr  	IKillTask
+	bra		OSExit
+
+;// ----------------------------------------------------------------------------
+;// Select a task to run.
+;// ----------------------------------------------------------------------------
+
+;private const __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
+;private __int16 startQNdx;
+
+;private hTCB SelectTaskToRun()
+;{
+;	int nn,kk;
+;	TCB *p, *q;
+;	int qToCheck;
+;  hTCB h;
+; 
+;	startQNdx++;
+;	startQNdx &= 31;
+;	qToCheck = startQ[startQNdx];
+;	qToCheck &= 7;
+;	for (nn = 0; nn < 8; nn++) {
+;		h = readyQ[qToCheck];
+;		if (h >= 0 && h < NR_TCB) {
+;			p = &tcbs[h];
+;      kk = 0;
+;      // Can run the head of a lower Q level if it's not the running
+;      // task, otherwise look to the next task.
+;      if (h != GetRunningTCB())
+;     		q = p;
+;			else
+;     		q = &tcbs[p->next];
+;      do {  
+;        if (!(q->status & TS_RUNNING)) {
+;          if (q->affinity == getCPU()) {
+;				  	readyQ[qToCheck] = q - tcbs;
+;				   	return (q - tcbs);
+;          }
+;        }
+;        q = &tcbs[q->next];
+;        kk = kk + 1;
+;      } while (q != p && kk < NR_TCB);
+;    }
+;		qToCheck++;
+;		qToCheck &= 7;
+;	}
+;	// ToDo: wait in low power mode.
+;	return (GetRunningTCB());
+;	panic("No entries in ready queue.");
+;}
+;
+; Parameters:
+;		X = q
+;		Y = p
+;		F = qToCheck
+
+SelectTaskToRunKKLoop:
+	clre						; e = kk = 0
+0004:
+	tim		#TS_RUNNING,TCBStatus,x
+	bne		0001f
+	ldb		COREID		; GetCPU()
+	cmpb	TCBAffinity,x
+	bne		0002f
+	tfr		x,d
+	bsr		TCBPointerToHandle
+	ldu		#readyQ
+	stb		f,u
+	leas	4,s				; do a three-up return
+	rts
+0002:
+0001:
+	ldb		TCBNext,x
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ince						; kk = kk + 1
+	cmpr	x,y
+	beq		0003f
+	cmpe	#NR_TCB
+	blo		0004b
+0003:
+	rts
+
+SelectTaskToRunInnerFor:
+	ldu		#readyQ
+	ldb		f,u
+	tstb
+	beq		0001f
+	bmi		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	pshs	b
+	bsr		TCBHandleToPointer
+	tfr		d,y
+	puls	b
+	cmpb	RunningID
+	beq		0002f
+	tfr		y,x
+	bra		0003f
+0002:
+	ldb		TCBNext,y
+	bsr		TCBHandleToPointer
+	tfr		d,x
+0003:
+	bsr		SelectTaskToRunKKLoop
+0001:
+	incf
+	cmpf	#7
+	bls		0005f
+	clrf
+0005:
+	rts
+
+startQ:
+	fcb		0,0,0,1,0,0,0,2,0,0,0,3,0,1,0,4,0,0,0,5,0,0,0,6,0,1,0,7,0,0,0,0
+
+SelectTaskToRun:
+	ldb		startQNdx
+	incb
+	andb	#31
+	stb		startQNdx
+	ldx		#startQ
+	ldf		b,x					; f = qToCheck
+	; Loop 8 times (unrolled)
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	bsr		SelectTaskToRunInnerFor
+	ldb		RunningID
+	rts
+	
+	
+;// ----------------------------------------------------------------------------
+;// Sleep for a number of clock ticks.
+;// ----------------------------------------------------------------------------
+;
+;int FMTK_Sleep(int timeout)
+;{
+;  hTCB ht;
+;  int tick1, tick2;
+;
+;	while (timeout > 0) {
+;		tick1 = GetTick();
+;    if (LockSysSemaphore(100000)) {
+;      ht = GetRunningTCB();
+;      RemoveFromReadyList(ht);
+;      InsertIntoTimeoutList(ht, timeout);
+;      UnlockSysSemaphore();
+;			FMTK_Reschedule();
+;      break;
+;    }
+;		else {
+;			tick2 = GetTick();
+;			timeout -= (tick2-tick1);
+;		}
+;	}
+;  return (E_Ok);
+;}
+
+ISleep:
+	puls	u
+FMTK_Sleep2:
+	tst		1,s
+	bmi		0001f
+	bsr		IGetTick
+	pshs	w											; push tick1
+	pshs	d
+	ldd		#100000								; try a bunch of times to lock semaphore
+	bsr		LockSysSemaphore
+	beq		FMTK_Sleep1
+	leas	4,s										; remove tick1 from stack
+	bsr		GetRunningTID					; D = running TID
+	bsr		RemoveFromReadyQueue
+	tfr		d,x
+	ldd		1,s
+	ldw		3,s
+	bsr		InsertIntoReadyQueue
+	bsr		UnlockSysSemaphore
+	swi2
+	fcb		OSF_FMTK_Reschedule
+0001:
+	ldx		#E_Ok
+	stx		7,s
+	jmp		,u
+FMTK_Sleep1:
+	bsr		IGetTick							; D,W = tick2
+	exg		d,w
+	subd	2,s										; subtract: tick2 - tick1
+	exg		d,w
+	sbcd	,s
+	pshs	w											; push dif = tick2 - tick1
+	pshs	d
+	ldd		9,s										; D,W = timeout
+	ldw		11,s
+	exg		d,w
+	subd	2,s										; D,W = timeout - diff
+	exg		d,w
+	sbcd	,s
+	stw		11,s									; timeout = timeout - tickdif
+	std		9,s
+	leas	8,s										; get rid of tick1, tick2
+	bra		FMTK_Sleep2
+	
+;------------------------------------------------------------------------------
+; Lock the system semaphore.
+;
+; Parameters:
+;		D = number of retry attempts
+;	Returns:
+;		D = 1 if lock successful, 0 otherwise
+;------------------------------------------------------------------------------
+
+LockSysSemaphore:
+LockSysSema2:
+	decd
+	beq		LockSysSema1
+	lda		OSSEMA+1
+	beq		LockSysSema2
+	ldd		#1
+	rts
+LockSysSema1:
+	clrd
+	rts
+
+;------------------------------------------------------------------------------
+; Unlock system semaphore.
+;
+; Parameters:
+;		none
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+UnlockSysSemaphore:
+	clr		OSSEMA+1
+	rts
+
+;------------------------------------------------------------------------------
+; Get the system tick (milliseconds).
+;
+; Trickery involved in guarenteeing that the tick was read without an
+; intervening interrupt updating it.
+;
+; Parameters:
+;		none
+; Returns:
+;		D,W = tick value
+;------------------------------------------------------------------------------
+
+IGetTick:
+GetTick1:
+	ldd		milliseconds
+	ldw		milliseconds+2
+	cmpd	milliseconds
+	bne		GetTick1					; this branch should be false almost always
+	rts
+
+;------------------------------------------------------------------------------
+; Link each message to the next in the free list.
+;------------------------------------------------------------------------------
+
+InitFreeMessageList:
+	clr		FreeMsg					; set start of free message list to first message
+	ldx		#messages+32
+	ldd		#1
+0003:
+	std		MSG_LINK,x			; update link
+	incd									; increment to next index value
+	leax	MSG_SIZE,x			; increment to next message
+	cmpx	#messages_end		; done all messages?
+	blo		0003b
+	rts
+
+;------------------------------------------------------------------------------
+; Link each mailbox to the next in the free list.
+;------------------------------------------------------------------------------
+
+InitFreeMailboxList:
+	clr		FreeMbx					; set start of free mailbox list to first mailbox
+	ldx		#mailboxes+32
+	ldd		#1
+0003:
+	std		MBX_LINK,x			; update link
+	incd									; increment to next index value
+	leax	MBX_SIZE,x			; increment to next mailbox
+	cmpx	#mailboxes_end	; done all mailboxes?
+	blo		0003b
+	rts
+
+;------------------------------------------------------------------------------
+; Initialize Femtiki
+;------------------------------------------------------------------------------
+
+FMTK_Init:
+
+	ldb		#$800				; select the system memory map
+	stb		MMU_OKEY		; set in operate key
+
+	; First clear out the Femtiki memory area
+	ldx		#0
+	clrd
+FMTK_Init0002:
+	std		,x++
+	cmpx	#$200000
+	blo		FMTK_Init0002
+
+	; Set stack bottoms for all the memory maps
+	ldx		#0
+	ldb		#MAXVPG
+FMTK_Init0001:
+	stb		MidStackBottoms,x
+	inx
+	cmpx	#32
+	blo		FMTK_Init0001
+
+	bsr		InitFreeMessageList
+	bsr		InitFreeMailboxList
+
+	clr		startQNdx
+
+	rts
+
+OPT include "d:\cores2022\rf6809\software\fmtk\source\kernel\tcb.a09"
+OPT include "d:\cores2022\rf6809\software\fmtk\msg.a09"
+OPT include "d:\cores2022\rf6809\software\boot\bios-pam.a09"
+OPT include "d:\cores2022\rf6809\software\boot\bios-mem.a09"

@@ -1,0 +1,13 @@
+MAX_TID		EQU		4095
+NR_TCB		EQU		4095
+NTASK     EQU   4095    ; number of tasks allowed
+LOG_TCBSZ	EQU		10
+LOG_PGSZ	EQU		10
+LOG_ACBSZ EQU   12
+OSPAGES		EQU		16		; pages of memory dedicated to OS
+PAGESZ    EQU   8192  ; size of a page of memory
+MEMSZ     EQU   65536   ; pages
+MBX_BLOCKPTR_BUFSZ  EQU   8 ; number of block pointer entries
+NR_MSG		EQU		21842		; number of messages available
+
+

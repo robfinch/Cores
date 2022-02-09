@@ -1,0 +1,382 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+;
+; ============================================================================
+
+; The max page that will be used for an app. Pages above this are for the
+; OS ROMs. 
+
+MEMSZ			EQU		65536		; memory size in 8kB pages
+MAXVPG		EQU		$7BF
+
+;------------------------------------------------------------------------------
+; Page Mapping Ram centric MMU
+;------------------------------------------------------------------------------
+
+MMUInit:
+	ldd		#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
+	std		NPAGES
+	; Free all memory for all tasks
+	; Sets all pages to map to page zero for all tasks, except for the system
+	; task (task #0) which pre-allocates the first 16kB of memory.
+	clrd
+	tfr		d,y	
+MMUInit2:
+	stb		MMU_AKEY				; set access key
+	ldx		#0
+MMUInit1:
+	sty		MMU,x
+	leax	2,x
+	cmpx	#$1000
+	blo		MMUInit1
+	incb
+	cmpb	#64
+	blo		MMUInit2
+
+	; Now ensure all pages in PAM are marked as free or OS allocated
+	bsr  	PAMInit
+
+	; allocate last page for system stacks
+	clr		MMU_AKEY				; select Mid #0 (system)
+	ldd		#$FFFE0F				; read/write/cacheable page $FFFF (last page of RAM)
+	ldx		#$DFE
+	std		MMU,x
+
+	rts
+
+;------------------------------------------------------------------------------
+; Find a run of buckets available for mapping virtual to physical addresses.
+;
+; Parameters:
+;		D = mid
+;		X = number of pages required.
+; Modifies:
+;		
+; Returns:
+;		D = starting bucket number, -1 if no run found
+;   N flag set if no run found
+;------------------------------------------------------------------------------
+
+FindRun:
+	pshs		u,w
+	cmpx		#0								; make sure a reasonable request is made
+	beq			FindRun0002
+	cmpx		#MAXVPG
+	bhs			FindRun0002
+	stb			MMU_AKEY					; set MMU access key
+	tfr			x,y								; Y = number of consecutive empty buckets needed
+	ldd			#OSPAGES					; start looking at page D=8 (others are for OS)
+	asld
+	tfr			d,u
+	; First find an empty bucket
+FindRun0001:
+	ldd			MMU,u							; get map entry into U
+	beq			FindRunEmpty0     ; is it empty?
+	leau		2,u
+	cmpu		#MAXVPG*2
+	blo			FindRun0001
+FindRun0002:
+	ldd			#-1								; got here so no run was found
+	puls		u,w,pc
+	; Check subsequent buckets for emptiness
+FindRunEmpty0:
+	tfr			u,w								; w = start of run bucket
+FindRunEmpty1:
+	ldd			MMU,u							; get bucket value
+	bne			FindRun0003
+	dey
+	beq		  FindRunFoundEnough
+	leau		2,u								; advance to next bucket
+	bra			FindRunEmpty1
+FindRun0003:
+	leau		2,u								; increment to next bucket
+	tfr			x,y								; reset required count
+	bra			FindRun0001				; continue search
+FindRunFoundEnough:
+	tfr			w,d
+	puls		u,w,pc
+
+;------------------------------------------------------------------------------
+; AllocMem allocates memory in the current memory map.
+;
+; Parameters:
+;		D = amount of memory to allocate
+; Modifies:
+;		
+; Returns:
+;		D = pointer to allocated memory in virtual address space.
+;		X = E_Ok for success, E_NotAlloc otherwise
+;------------------------------------------------------------------------------
+
+AllocMem:
+	pshs		d
+	swi2
+	fcb			OSF_GetCurrentMid
+	puls		x
+	bsr			IAlloc
+	exg			d,x
+	lbra		FMTK_RetDX
+		
+;------------------------------------------------------------------------------
+; IAlloc allocates memory in the given memory map. The allocated memory is
+; zeroed out.
+;
+; Parameters:
+;		D = mid
+;		X = amount of memory to allocate
+; Modifies:
+;		t0
+; Returns:
+;		X = pointer to allocated memory in virtual address space.
+;		D = E_Ok for success, E_NotAlloc otherwise
+;   Z flag set if successful
+;------------------------------------------------------------------------------
+;
+IAlloc:
+	pshs		w,y,u
+	stb			MMU_AKEY
+	tfr			x,d
+	tfr			x,w								; w = size of allocation
+	beq     allocZero
+	; First check if there are enough pages available in the system.
+	addd		#32								; word
+	addd		#PAGESZ-1					; D = round memory request
+	tfr			a,b								; convert to pages required (/8192)
+	clra
+	lsrb
+	cmpb		NPAGES						; check number of pages available
+	bls		  allocEnough
+allocNoRun2:
+	ldx			#0								; not enough, return null
+	bra			allocNoRun
+allocEnough:
+	tfr			d,u								; u = number of pages
+	; There are enough pages, but is there a run long enough in map space?
+	pshs		d									; save required # pages
+	bsr 		FindRun						; find a run of available slots
+	tsta
+	puls		x									; X = number of pages required
+	bmi			allocNoRun
+	; Now there are enough pages, and a run available, so allocate
+	pshs		d									; save start of run
+	ldd			NPAGES						; decrease number of pages available in system
+	subr		x,d
+	std			NPAGES
+	puls		d									; D = start of run
+	pshs		d
+alloc0001:
+	pshs		d									; save current run page
+	tfr			d,y								; convert D to index
+	addr		y,y
+	lbsr		PAMAlloc					; alloc page
+	ora			#$F00							; set ACR: cacheable, readable, writeable, executable
+	stb			MMU,y							; store translation in table
+	sta			MMU+1,y
+	ldd			,s								; D = page number within run
+	tfr			b,a								; * 4096
+	asla											; * 8192 (D now equal pointer to mem)
+	tfr			d,y								; Y = pointer to mem
+	clrd											; value to set memory to
+	clre											; 4096 words to clear
+alloc0004:
+	std			,y
+	leay		2,y								; index to next word
+	dece											; decrement word count
+	bne			alloc0004					; until zero again
+	puls		d									; D = page number in run
+  incd											; D = next page number in run
+  dex												; decrement number in run
+  bne			alloc0001
+	puls		d									; D = start of run
+	tfr			b,a								; * 4096
+	asla											; * 8192 (D now equal pointer to mem)
+	; Setup object fields
+	tfr			d,x								; X = pointer to mem
+	exg			d,u								; D = numm pages
+	tfr			b,a								; num pages * 8192
+	clrb
+	asla
+	std			OBJ_SIZE,x
+	ldd			#('M'<<16)+('E'<<8)+'M'
+	std			OBJMagic,x
+	leax		32,x							; point past object header
+	ldd			#E_Ok
+	puls		w,y,u,pc
+allocNoRun:
+allocZero:
+	ldd			#E_NotAlloc
+	puls		w,y,u,pc
+
+;------------------------------------------------------------------------------
+; Allocate the stack page for a task. The stack is located at $FDFFFF and
+; downwards. The virtual address of the stack is fixed at $FDE000. The physical
+; page varies.
+;
+; Parameters:
+;		b = mid to allocate for
+;	Returns:
+;		d = physical address, 0 if unsuccessful
+;		x = virtual address, not valid unless successful
+;------------------------------------------------------------------------------
+
+AllocStack:
+	pshs		ccr
+	stb			MMU_AKEY				; set access key for table
+	ldx			#MAXVPG*2				; last page of memory is for stack
+	orcc		#$290						; mask off interrupts
+	ldd			MMU,x						; check if stack already allocated
+	bne		  asAlreadyAlloc
+	lbsr    PAMAlloc				; allocate a page, will set / clear Z
+	beq		  astkXit    			; success?
+	exg			a,b
+	orb			#$E00						; set page for cacheable read / write access
+	ldx			#MAXVPG*2				; last page of memory is for stack
+	std			MMU,x
+asAlreadyAlloc:
+	clra										; convert pages to addresses (*8192)
+	aslb										; B already has high-order byte, so is *4096
+	ldx			#MAXVPG*8192
+astkXit:
+	puls		ccr,pc
+
+;------------------------------------------------------------------------------
+; Increase the stack allocation
+;
+; Parameter:
+;		B = mid to allocate for
+;------------------------------------------------------------------------------
+
+IncreaseStackSize:
+	swi2
+	fcb		OSF_GetRunningTCBPointer
+	tfr		d,x
+	ldb		TCBxAccb,x				; get B argument
+	stb		MMU_AKEY
+	ldy		#MidStackBottoms
+	ldb		b,y
+	clra
+	decb										; down a page
+	tfr		b,e								; E = new stack bottom
+	aslb
+	tfr		d,x
+	ldd		MMU,x							; check if virtual address available
+	bne		IncreaseStackOutOfMem	; crashed into other allocation?
+	bsr		PAMAlloc					; allocate page D = page number
+	bmi		IncreaseStackOutOfMem
+	ora		#$F00							; ACR = CRWX
+	exg		a,b
+	std		MMU,x
+	ldb		MMU_AKEY
+	ste		b,y
+	lbra	FMTK_RetOK
+IncreaseStackOutOfMem:
+	ldx		#E_NotAlloc
+	lbra	FMTK_RetErr
+	
+;------------------------------------------------------------------------------
+; This routine will de-allocate all the pages associated with a task including
+; the stack.
+;
+; Parameters:
+;		D = mid to free memory for
+;	Modifies:
+;		
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+FreeAll:
+	pshs		u,ccr
+	tstb										; cannot freeall system map
+	beq			FreeAllXit
+	stb			MMU_AKEY				; set access key to MMU
+	ldu			#-1							; start at first entry
+FreeAllNxt:
+	andcc		#$D6F						; enable interrupts
+	leau		1,u							; increment page number
+	cmpu		#MAXVPG+1				; number of buckets to check, dont free OS memory
+	bhs			FreeAllXit
+	tfr			u,d							; D = page number
+	aslb										; convert page number to MMU table index
+	tfr			d,x
+	orcc		#$290						; mask off interrupts
+	ldd			MMU,x						; get current mapping
+	andb		#$0FF						; mask off ACR
+	exg			a,b							; D = page number
+	tfr			d,x
+	tst			PAMShareCounts,x	; check the share count for the page
+	beq			FreeAll1				
+	dec			PAMShareCounts,x	; decrement share count if non-zero
+	bne			FreeAllNxt			; we're done with this page if share count non-zero
+FreeAll1:
+	swi2
+	fcb			OSF_PAMFree
+	aslb										; D = index into MMU tables
+	tfr			d,x							; X = index into MMU tables
+	clr			MMU,x						; clear the entry in the MMU (marks as free)
+	clr			MMU+1,x
+	inc			NPAGES					; update the number of available pages
+	bra			FreeAllNxt
+FreeAllXit:
+	puls		u,ccr
+	lbra		FMTK_RetOK
+
+;------------------------------------------------------------------------------
+; Convert a virtual address to a physical one. The physical address may contain
+; more than 24 bits so it is returned in the Q register.
+;
+; Stack Space:
+;		1 word
+; Parameters:
+;		D = virtual address to convert
+; Returns:
+;		Q = physical address
+;------------------------------------------------------------------------------
+
+VirtToPhys:
+	pshs	x
+	tfr		a,b									; convert virtual address to page number (/8192)
+	clra											; (divide by 8192 then multiply by 2 = /4096)
+	andb	#$FFE								; mask for table index
+	pshs	d										; save off table index
+	swi2
+	fcb		OSF_GetCurrentMid
+	stb		MMU_AKEY						; set access key for table
+	puls	x										; get back table index
+	ldd		MMU,x								; get the translation
+	andb	#$0FF								; mask off ACR bits
+	exg		a,b
+	muld	#8192
+	puls	x,pc
+

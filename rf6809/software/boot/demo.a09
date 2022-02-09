@@ -35,15 +35,17 @@
 ; ============================================================================
 ;
 
-OPT include "d:\cores2022\rf6809\software\boot\mon_equates.asm"
-OPT include "d:\cores2022\rf6809\software\boot\io_equates.asm"
+OPT include ".\mon_equates.a09"
+OPT include ".\io_equates.a09"
+
+milliseconds	EQU		$FFC014
 
 sprite_xpos	EQU		$1000
 sprite_ypos	EQU		$1020
 sprite_dx		EQU		$1040
 sprite_dy		EQU		$1080
 
-	org		$FF8000
+	org		$FFFFF8000
 	lbra	sprite_demo
 	lbra	disassem
 
@@ -51,7 +53,7 @@ sprite_dy		EQU		$1080
 ; Disassembler
 ;==============================================================================
 
-OPT	include "d:\cores2022\rf6809\software\boot\disassem.asm"
+OPT	include "d:\cores2022\rf6809\software\boot\disassem.a09"
 
 ;==============================================================================
 ; Sprite Demo
@@ -205,4 +207,6 @@ calc_crc24a:
 	dey
 	bne		calc_crc24c
 	rts
+
+OPT	include "..\fmtk\source\kernel\Femtiki.a09"
 

@@ -1,8 +1,8 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) S2022  Robert Finch, Waterloo
+;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
-;     \/_//     robfinch<remove>@opencores.org
+;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
 ;  
 ;
@@ -31,69 +31,53 @@
 ; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 ; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-;                                                                          
+;
 ; ============================================================================
 
-IO_PAGE		EQU $FFFE00000
-; Special Registers
-BRKAD0		EQU	$FFFFFFF00
-BRKAD1		EQU	$FFFFFFF04
-BRKAD2		EQU	$FFFFFFF08
-BRKAD3		EQU	$FFFFFFF0C
-BRKCTRL0	EQU	$FFFFFFF10
-BRKCTRL1	EQU	$FFFFFFF11
-BRKCTRL2	EQU	$FFFFFFF12
-BRKCTRL3	EQU	$FFFFFFF13
-COREID	EQU		$FFFFFFF14
-CHECKPT	EQU		$FFFFFFF15
-MMU_AKEY	EQU	$FFFFFFF16
-MMU_OKEY	EQU	$FFFFFFF17
-MSCOUNT	EQU		$FFFFFFF18
+TS_NONE			EQU		0
+TS_READY		EQU		1
+TS_DEAD			EQU		2
+TS_MSGRDY		EQU		4
+TS_WAITMSG	EQU		8
+TS_TIMEOUT	EQU		16
+TS_PREEMPT	EQU		32
+TS_RUNNING	EQU		128
 
-LEDS		EQU		$FFFE60001
-VIA_MMU	EQU		$F306FF			; constant to map VIA into address space
-VIA			EQU		$FFFE60000
-VIA_PA		EQU		1
-VIA_DDRA	EQU		3
-VIA_ACR			EQU		11
-VIA_IFR			EQU		13
-VIA_IER			EQU		14
-VIA_T3CL		EQU		16
-VIA_T3CH		EQU		17
-VIA_T3LL		EQU		18
-VIA_T3LH		EQU		19
-VIA_T3CMPL	EQU		20
-VIA_T3CMPH	EQU		21
-TEXTSCR		EQU		$FFFE00000
-TEXTREG		EQU		$FFFE07F00
-TEXT_COLS	EQU		0
-TEXT_ROWS	EQU		1
-TEXT_CURPOS	EQU		34
-COLS		EQU		64
-ROWS		EQU		32
-ACIA_MMU	EQU	$F196FF		; constant to map ACIA into address space
-ACIA		EQU		$FFFE32000
-ACIA_TX		EQU		0
-ACIA_RX		EQU		0
-ACIA_STAT	EQU		1
-ACIA_CMD	EQU		2
-ACIA_CTRL	EQU		3
-ACIA_IRQS	EQU		4
-ACIA_CTRL2	EQU		11
-RTC				EQU		$FFFE34000	; I2C
-RTCBuf		EQU		$7FC0
-PRNG_MMU	EQU		$71B6FF
-PRNG		EQU		$FFFE36000
-KEYBD		EQU		$FFFE30000
-KEYBDCLR	EQU		$FFFE30002
-PIC_MMU	EQU		$F1F6FF				; constant to map PIC into address space
-PIC			EQU		$FFFE3E000
-SPRITE_MMU		EQU		$F086FF	; constant to map SPRITE into address space
-SPRITE_CTRL		EQU		$FFFE10000
-SPRITE_EN			EQU		$3C0
-MMU			EQU		$FFFE38000
+; error codes
+E_Ok		=		0x00
+E_Arg		=		0x01
+E_Func  =    0x02
+E_BadMbx	=		0x04
+E_QueFull	=		0x05
+E_NoThread	=		0x06
+E_NotAlloc	=		0x09
+E_NoMsg		=		0x0b
+E_Timeout	=		0x10
+E_BadAlarm	=		0x11
+E_NotOwner	=		0x12
+E_QueStrategy =		0x13
+E_BadDevNum	=		0x18
+E_DCBInUse	=		0x19
+; Device driver errors
+E_BadDevNum	=		0x20
+E_NoDev		=		0x21
+E_BadDevOp	=		0x22
+E_ReadError	=		0x23
+E_WriteError =		0x24
+E_BadBlockNum	=	0x25
+E_TooManyBlocks	=	0x26
 
-SEMA_MMU	EQU		$F786FF
-OUTSEMA	EQU	$FFFEF0000
-SEMAABS	EQU	$1000
-OSSEMA	EQU	$FFFEF0010
+; resource errors
+E_NoMoreMbx	=		0x40
+E_NoMoreMsgBlks	=	0x41
+E_NoMoreAlarmBlks	=0x44
+E_NoMoreTCBs	=	0x45
+E_NoMem		= 12
+
+OSF_PAMFree						EQU		41
+OSF_AllocMem					EQU		42
+OSF_FemtikiTimerIRQ		EQU		44
+OSF_FMTK_Reschedule		EQU		45
+OSF_GetCurrentMid			EQU		46
+OSF_GetRunningTCBPointer		EQU		47
+

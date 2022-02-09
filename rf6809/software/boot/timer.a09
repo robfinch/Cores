@@ -74,6 +74,13 @@ TimerIRQ:
 	ldb		xm_timer
 	addb	#4
 	stb		xm_timer
+	ldd		#$000F00			; done with VIA, map it out
+	std		MMU
+	ldd		#$001F00			; done with PIC, map it out
+	std		MMU+2
+	swi2
+	fcb		OSF_FemtikiTimerIRQ
+	rts
 notTimerIRQ:
 	ldd		#$000F00			; done with VIA, map it out
 	std		MMU

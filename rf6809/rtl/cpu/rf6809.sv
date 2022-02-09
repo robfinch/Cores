@@ -40,7 +40,7 @@ import rf6809_pkg::*;
 
 module rf6809(id, rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, vec_i, ba_o, bs_o, lic_o, tsc_i,
 	rty_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, we_o, ack_i, aack_i, atag_i,
-	adr_o, dat_i, dat_o, state);
+	adr_o, dat_i, dat_o, pcr_o, icl_o, exv_i, wrv_i, rdv_i, state);
 parameter RESET = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd2;
@@ -100,6 +100,11 @@ input [3:0] atag_i;
 output reg [`TRPBYTE] adr_o;
 input [`LOBYTE] dat_i;
 output reg [`LOBYTE] dat_o;
+output reg [23:0] pcr_o;
+output reg icl_o;
+input exv_i;
+input wrv_i;
+input rdv_i;
 output [5:0] state;
 
 reg [5:0] state;
@@ -125,8 +130,8 @@ wire [9:0] ir12 = {ipg,ir[`LOBYTE]};
 `ifdef TWELVEBIT
 wire [`LOBYTE] ir12 = ir[`LOBYTE];
 `endif
-reg [`LOBYTE] dpr;		// direct page register
-reg [`DBLBYTE] usppg;	// user stack pointer page
+reg [`DBLBYTE] dpr;		// direct page register
+reg [`LOBYTE] stkbnk;	// stack pointer bank
 
 Address [3:0] brkad;	// breakpoint addresses
 brkCtrl [3:0] brkctrl;
@@ -240,7 +245,7 @@ begin
 	cnt = 	(ir[bitsPerByte] ? 5'd1 : 5'd0) +
 			(ir[bitsPerByte+1] ? 5'd1 : 5'd0) +
 			(ir[bitsPerByte+2] ? 5'd1 : 5'd0) +
-			(ir[bitsPerByte+3] ? 5'd1 : 5'd0) +
+			(ir[bitsPerByte+3] ? (bitsPerByte== 8 ? 5'd1 : 5'd2) : 5'd0) +
 			(ir[bitsPerByte+4] ? 5'd2 : 5'd0) +
 			(ir[bitsPerByte+5] ? 5'd2 : 5'd0) +
 			(ir[bitsPerByte+6] ? 5'd2 : 5'd0) +
@@ -296,20 +301,20 @@ assign ndxbyte = ir[`HIBYTE];
 
 // Detect type of interrupt
 wire isINT = ir12==`INT;
-wire isRST = vect[3:0]==4'hE;
-wire isNMI = vect[3:0]==4'hC;
-wire isSWI = vect[3:0]==4'hA;
-wire isIRQ = vect[3:0]==4'h8;
-wire isFIRQ = vect[3:0]==4'h6;
-wire isSWI2 = vect[3:0]==4'h4;
-wire isSWI3 = vect[3:0]==4'h2;
+wire isRST = bitsPerByte==8 ? vect[7:0]==8'hFE : vect[7:0]==8'hFC;
+wire isNMI = bitsPerByte==8 ? vect[7:0]==8'hFC : vect[7:0]==8'hF8;
+wire isSWI = bitsPerByte==8 ? vect[7:0]==8'hFA : vect[7:0]==8'hF4;
+wire isIRQ = bitsPerByte==8 ? vect[7:0]==8'hF8 : vect[7:0]==8'hF0;
+wire isFIRQ = bitsPerByte==8 ? vect[7:0]==8'hF6 : vect[7:0]==8'hEC;
+wire isSWI2 = bitsPerByte==8 ? vect[7:0]==8'hF4 : vect[7:0]==8'hE8;
+wire isSWI3 = bitsPerByte==8 ? vect[7:0]==8'hF2 : vect[7:0]==8'hE4;
 
 wire [`TRPBYTE] far_address = {ir[`HIBYTE],ir[`BYTE3],ir[`BYTE4]};
 wire [`TRPBYTE] address = {ir[`HIBYTE],ir[`BYTE3]};
 wire [`TRPBYTE] dp_address = {dpr,ir[`HIBYTE]};
 wire [`TRPBYTE] ex_address = isFar ? far_address : address;
-wire [`TRPBYTE] offset12 = {{bitsPerByte{ir[bitsPerByte*3-1]}},ir[`BYTE3]};
-wire [`TRPBYTE] offset24 = {ir[`BYTE3],ir[`BYTE4]};
+wire [`TRPBYTE] offset12 = {{bitsPerByte*2{ir[bitsPerByte*3-1]}},ir[`BYTE3]};
+wire [`TRPBYTE] offset24 = {{bitsPerByte{ir[bitsPerByte*3-1]}},ir[`BYTE3],ir[`BYTE4]};
 wire [`TRPBYTE] offset36 = {ir[`BYTE3],ir[`BYTE4],ir[`BYTE5]};
 
 // Choose the indexing register
@@ -319,15 +324,15 @@ always_comb
 		case(ndxbyte[6:5])
 		2'b00:	ndxreg <= xr;
 		2'b01:	ndxreg <= yr;
-		2'b10:	ndxreg <= {usppg,8'h00} + usp;
-		2'b11:	ndxreg <= ssp;
+		2'b10:	ndxreg <= {stkbnk,usp};
+		2'b11:	ndxreg <= {stkbnk,ssp};
 		endcase
 	else if (bitsPerByte==12)
 		case(ndxbyte[10:9])
 		2'b00:	ndxreg <= xr;
 		2'b01:	ndxreg <= yr;
-		2'b10:	ndxreg <= {usppg,8'h00} + usp;
-		2'b11:	ndxreg <= ssp;
+		2'b10:	ndxreg <= {stkbnk,usp};
+		2'b11:	ndxreg <= {stkbnk,ssp};
 		endcase
 	
 reg [`TRPBYTE] NdxAddr;
@@ -496,8 +501,8 @@ always_comb
 	4'b1000:	src1 <= {12'hFFF,acca[`LOBYTE]};
 	4'b1001:	src1 <= {12'hFFF,accb[`LOBYTE]};
 	4'b1010:	src1 <= {ccr,ccr};
-	4'b1011:	src1 <= {dpr,dpr};
-	4'b1100:	src1 <= usppg;
+	4'b1011:	src1 <= bitsPerByte==8 ? dpr[`LOBYTE] : dpr;
+	4'b1100:	src1 <= stkbnk;
 	4'b1101:	src1 <= 24'h0000;
 `ifdef SUPPORT_6309
 	4'b0110:	src1 <= {acce[`LOBYTE],accf[`LOBYTE]};
@@ -520,8 +525,8 @@ always_comb
 	4'b1000:	src2 <= acca[`LOBYTE];
 	4'b1001:	src2 <= accb[`LOBYTE];
 	4'b1010:	src2 <= ccr;
-	4'b1011:	src2 <= dpr;
-	4'b1100:	src2 <= usppg;
+	4'b1011:	src2 <= bitsPerByte==8 ? dpr[`LOBYTE] : dpr;
+	4'b1100:	src2 <= stkbnk;
 	4'b1101:	src2 <= 24'h0000;
 `ifdef SUPPORT_6309
 	4'b0110:	src2 <= {acce[`LOBYTE],accf[`LOBYTE]};
@@ -647,7 +652,7 @@ assign lic_o =	(state==CALC && !isRMW) ||
 				(state==LOAD2 && 
 					(load_what==`LW_ACCA && !(isRTI || isPULU || isPULS)) ||
 					(load_what==`LW_ACCB && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_DPR && !(isRTI || isPULU || isPULS)) ||
+					(load_what==`LW_DPRL && !(isRTI || isPULU || isPULS)) ||
 					(load_what==`LW_XL && !(isRTI || isPULU || isPULS)) ||
 					(load_what==`LW_YL && !(isRTI || isPULU || isPULS)) ||
 					(load_what==`LW_USPL && !(isRTI || isPULU || isPULS)) ||
@@ -987,6 +992,7 @@ reg [11:0] rst_cnt;
 always @(posedge clk_i)
 if (rst_i) begin
 	wb_nack();
+	pcr_o <= 'h0;
 	natMd <= 1'b0;
 	firqMd <= 1'b0;
 	iplMd <= 1'b0;
@@ -1001,7 +1007,9 @@ if (rst_i) begin
 `ifdef EIGHTBIT
 	isOuterIndexed <= `FALSE;
 `endif
-	dpr <= 12'h000;
+	dpr <= 'h0;
+	stkbnk <= 'h0;
+	icl_o <= `FALSE;
 	ibufadr <= {BPB*3{1'b0}};
 //	pc <= 24'hFFFFFE;
 	pc <= {{BPB*3-1{1'b1}},1'b0};	// FF...FE
@@ -1021,7 +1029,6 @@ if (rst_i) begin
 `endif
 	xr <= 24'h0;
 	yr <= 24'h0;
-	usppg <= 16'h0;
 	usp <= 24'h0;
 	ssp <= 24'h0;
 	if (halt_i) begin
@@ -1052,7 +1059,7 @@ RESET:
 		bs_o <= 1'b0;
 		vect <= `RST_VECT;
 		radr <= `RST_VECT;
-		load_what <= `LW_PCH;
+		load_what <= `LW_PC3124;
 		next_state(LOAD1);
 	end
 	else
@@ -1116,11 +1123,11 @@ PUSH1:
 	begin
 		next_state(PUSH2);
 		if (isINT | isPSHS) begin
-			wadr <= (ssp - cnt);
+			wadr <= {stkbnk,ssp} - cnt;
 			ssp <= (ssp - cnt);
 		end
 		else begin	// PSHU
-			wadr <= ({usppg,{bitsPerByte{1'b0}}} + usp - cnt);
+			wadr <= {stkbnk,usp} - cnt;
 			usp <= (usp - cnt);
 		end
 	end
@@ -1150,7 +1157,7 @@ PUSH2:
 		end
 `endif
 		else if (ir[bitsPerByte+3]) begin
-			store_what <= `SW_DPR;
+			store_what <= bitsPerByte==8 ? `SW_DPRL : `SW_DPRH;
 			ir[bitsPerByte+3] <= 1'b0;
 		end
 		else if (ir[bitsPerByte+4]) begin
@@ -1182,8 +1189,8 @@ PUSH2:
 					next_state(IFETCH);
 				end
 				else begin
-					pc[`BYTE3] <= 8'h00;
-					load_what <= `LW_PCH;
+					//pc[`BYTE3] <= 8'h00;
+					load_what <= `LW_PC3124;
 					next_state(LOAD1);
 				end
 			end
@@ -1217,7 +1224,7 @@ PULL1:
 		end
 `endif
 		else if (ir[bitsPerByte+3]) begin
-			load_what <= `LW_DPR;
+			load_what <= bitsPerByte==8 ? `LW_DPRL : `LW_DPRH;
 			ir[bitsPerByte+3] <= 1'b0;
 		end
 		else if (ir[bitsPerByte+4]) begin
@@ -1342,6 +1349,7 @@ ICACHE1:
 			next_state(IFETCH);
 		else if (!tsc && !ack_i) begin
 			rhit0 <= hit0;
+			icl_o <= 1'b1;
 			bte_o <= 2'b00;
 			cti_o <= 3'b001;
 			cyc_o <= 1'b1;
@@ -1403,7 +1411,10 @@ ICACHE4:
 	end
 
 ICACHE6:
-	next_state(ICACHE1);
+	begin
+		icl_o <= 1'b0;
+		next_state(ICACHE1);
+	end
 
 // The following states to handle outstanding transfers.
 // The transfer might retry several times if it has not registered.
@@ -1570,6 +1581,26 @@ begin
 			ipg <= 2'b11;
 			vect <= `NMI_VECT;
 		end
+	/*
+		else if (exv_i && !sync_state) begin
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `EXV_VECT;
+		end
+		else if (wrv_i && !sync_state) begin
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `WRV_VECT;
+		end
+		else if (rdv_i && !sync_state) begin
+			bs_o <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `RDV_VECT;
+		end
+	*/
 		else if ({nmi_i,firq_i,irq_i} > {im1,firqim,im} && !sync_state && iplMd) begin
 			bs_o <= 1'b1;
 			ir[`LOBYTE] <= `INT;
@@ -1577,6 +1608,7 @@ begin
 			case({nmi_i,firq_i,irq_i})
 			3'd1:	vect <= `IRQ_VECT;
 			3'd2:	vect <= `FIRQ_VECT;
+			3'd7: vect <= `NMI_VECT;
 			default:	vect <= `DBG_VECT | {nmi_i,firq_i,irq_i,1'b0};
 			endcase
 		end
@@ -2671,13 +2703,13 @@ begin
 		end
 	`PULS:
 		begin
-			radr <= ssp;
+			radr <= {stkbnk,ssp};
 			next_state(PULL1);
 			pc <= pc + 2'd2;
 		end
 	`PULU:
 		begin
-			radr <= {usppg,8'h00} + usp;
+			radr <= {stkbnk,usp};
 			next_state(PULL1);
 			pc <= pc + 2'd2;
 		end
@@ -2704,6 +2736,7 @@ begin
 		begin
 			im <= 1'b1;
 			firqim <= 1'b1;
+			im1 <= 1'b1;
 			ir[`LOBYTE] <= `INT;
 			ipg <= 2'b11;
 			vect <= `SWI_VECT;
@@ -2736,17 +2769,13 @@ begin
 				end
 				else begin
 			    radr <= vect;
-	        load_what <= `LW_PCH;
-			    pc <= 32'hFFFFFFFE;
+	        load_what <= `LW_PC3124;
+			    pc <= 36'hFFFFFFFFC;
 			    next_state(LOAD1);
 				end
 			end
 			else begin
-				if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
-					ir[`HIBYTE] <= natMd ? 12'hFFF : 12'h0FF;
-					ef <= 1'b1;
-				end
-				else if (isFIRQ) begin
+				if (isFIRQ) begin
 					if (natMd) begin
 						ef <= firqMd;
 						ir[`HIBYTE] <= firqMd ? 12'hFFF : 12'h081;
@@ -2755,6 +2784,10 @@ begin
 						ir[`HIBYTE] <= 12'h081;
 						ef <= 1'b0;
 					end
+				end
+				else begin	//if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
+					ir[`HIBYTE] <= natMd ? 12'hFFF : 12'h0FF;
+					ef <= 1'b1;
 				end
 				pc <= pc;
 				isFar <= `TRUE;
@@ -2802,6 +2835,8 @@ begin
 	`BRKCTRL1:		load_tsk(brkctrl[1]);
 	`BRKCTRL2:		load_tsk(brkctrl[2]);
 	`BRKCTRL3:		load_tsk(brkctrl[3]);
+	`MMU_AKEY:		load_tsk(pcr_o[11:0]);
+	`MMU_OKEY:		load_tsk(pcr_o[23:12]);
 `endif	
 	default:
 `ifdef SUPPORT_DEBUG_REG
@@ -3120,7 +3155,8 @@ begin
 			`SW_ACCE:	wb_write(wadr,acce[`LOBYTE]);
 			`SW_ACCF:	wb_write(wadr,accf[`LOBYTE]);
 `endif
-			`SW_DPR:	wb_write(wadr,dpr);
+			`SW_DPRH:	wb_write(wadr,dpr[`HIBYTE]);
+			`SW_DPRL:	wb_write(wadr,dpr[`LOBYTE]);
 			`SW_XL:	wb_write(wadr,xr[`LOBYTE]);
 			`SW_XH:	wb_write(wadr,xr[`HIBYTE]);
 			`SW_YL:	wb_write(wadr,yr[`LOBYTE]);
@@ -3177,8 +3213,10 @@ begin
 		`SW_CCR:
 			begin
 				if (isINT) begin
-					im <= 1'b1;
-					firqim <= 1'b1;
+					if (natMd & iplMd)
+						{im1,firqim,im} <= {nmi_i,firq_i,irq_i};
+					else
+						{im1,firqim,im} <= 3'b111;
 				end
 				next_state(PUSH2);
 			end
@@ -3216,7 +3254,13 @@ begin
 				next_state(STORE1);
 			end
 		`SW_ACCDL:	next_state(IFETCH);
-		`SW_DPR:	next_state(PUSH2);
+		`SW_DPRH:
+			begin
+				store_what <= `SW_DPRL;
+				next_state(STORE1);
+			end
+		`SW_DPRL:
+				next_state(PUSH2);
 		`SW_XH:
 			begin
 				store_what <= `SW_XL;
@@ -3845,8 +3889,8 @@ begin
 						ef <= src1[7];
 						dm <= src1[8];
 					end
-				4'b1011:	dpr <= src1[`LOBYTE];
-				4'b1100:	usppg <= src1[`DBLBYTE];
+				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src1[`LOBYTE]} : src1[`DBLBYTE];
+				4'b1100:	stkbnk <= src1[`LOBYTE];
 `ifdef SUPPORT_6309				
 				4'b0110:	{acce,accf} <= src1[`DBLBYTE];
 				4'b1110:	acce <= src1[`LOBYTE];
@@ -3882,8 +3926,8 @@ begin
 						ef <= src2[7];
 						dm <= src2[8];
 					end
-				4'b1011:	dpr <= src2[`LOBYTE];
-				4'b1100:	usppg <= src2[`DBLBYTE];
+				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src2[`LOBYTE]} : src2[`DBLBYTE];
+				4'b1100:	stkbnk <= src2[`LOBYTE];
 `ifdef SUPPORT_6309
 				4'b1110:	acce <= src2[`LOBYTE];
 				4'b1111:	accf <= src2[`LOBYTE];
@@ -4224,8 +4268,8 @@ begin
 						ef <= src1[7];
 						dm <= src1[8];
 					end
-				4'b1011:	dpr <= src1[`LOBYTE];
-				4'b1100:	usppg <= src1[`DBLBYTE];
+				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src1[`LOBYTE]} : src1[`DBLBYTE];
+				4'b1100:	stkbnk <= src1[`LOBYTE];
 `ifdef SUPPORT_6309
 				4'b0110:	{acce,accf} <= src1[`DBLBYTE];
 				4'b1110:	acce <= src1[`LOBYTE];
@@ -4419,6 +4463,8 @@ begin
 			`BRKCTRL1: brkctrl[1] <= dat;
 			`BRKCTRL2: brkctrl[2] <= dat;
 			`BRKCTRL3: brkctrl[3] <= dat;
+			`MMU_AKEY:	pcr_o[11:0] <= dat;
+			`MMU_OKEY:	pcr_o[23:12] <= dat;
 			default:
 				begin
 `endif	
@@ -4564,25 +4610,32 @@ begin
 					next_state(IFETCH);
 			end
 `endif
-	`LW_DPR:	begin
-				dpr <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded dpr=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+	`LW_DPRH:
+		begin
+			load_what <= `LW_DPRL;
+			next_state(LOAD1);
+			dpr[`HIBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isRTI|isPULS) begin
+				$display("loaded dpr=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
 			end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+			end
+		end
+	`LW_DPRL:
+		begin
+			next_state(PULL1);
+			dpr[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isRTI|isPULS) begin
+				$display("loaded dpr=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+			end
+			else if (isPULU)
+				usp <= usp + 2'd1;
+		end
 	`LW_XH:	begin
 				load_what <= `LW_XL;
 				next_state(LOAD1);
@@ -4737,6 +4790,16 @@ begin
 	`LW_PC2316:	begin
 				pc[`BYTE3] <= dat;
 				load_what <= `LW_PCH;
+				radr <= radr + 16'd1;
+				if (isRTI|isRTF|isPULS)
+					ssp <= ssp + 16'd1;
+				else if (isPULU)
+					usp <= usp + 16'd1;
+				next_state(LOAD1);
+			end
+	`LW_PC3124:	begin
+				//pc[`BYTE4] <= dat; // Throw the byte away
+				load_what <= `LW_PC2316;
 				radr <= radr + 16'd1;
 				if (isRTI|isRTF|isPULS)
 					ssp <= ssp + 16'd1;

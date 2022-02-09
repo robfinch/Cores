@@ -1,0 +1,105 @@
+;------------------------------------------------------------------------------
+; Remove a task from the timeout list.
+; Called when a mailbox is freed and a task is waiting at the
+; mailbox.
+;
+; Parameters:
+;		D = task id to remove
+; Modifies:
+;		none
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+RemoveFromTimeoutList:
+	pshs	d,w,x,y,u
+	cmpb	TimeoutList			; head of list?
+	beq		0001f
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	clra
+	tfr		d,u
+	ldf		TCBPrev,x
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	stf		TCBPrev,y
+	tfr		f,b
+	clra
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	tfr		u,d
+	stb		TCBNext,y
+	bra		0002f
+	; Removing from head of timeout list
+0001:
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	stb		TimeoutList		; set new head of list
+	clra
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	clrd
+	std		TCBPrev,y			; next->prev = NULL
+0002:
+	clrd
+	std		TCBNext,x			; next = NULL
+	std		TCBPrev,x			; prev = NULL
+	puls	d,w,x,y,u,pc
+	
+;// ----------------------------------------------------------------------------
+;// Pop the top entry from the timeout list.
+;// ----------------------------------------------------------------------------
+;
+;hTCB PopTimeoutList()
+;{
+;    TCB *p;
+;    hTCB h;
+;
+;    h = TimeoutList;
+;    if (TimeoutList > 0 && TimeoutList < NR_TCB) {
+;        TimeoutList = tcbs[TimeoutList].next;
+;        if (TimeoutList >= 0 && TimeoutList < NR_TCB) {
+;            tcbs[TimeoutList].prev = h->prev;
+;            h->prev->next = TimeoutList;
+;        }
+;    }
+;    return h;
+;}
+;
+; Returns:
+;		B = task at top of list
+;
+
+PopTimeoutList:
+	pshs	w,x,y
+	ldb		TimeoutList
+	pshs	b
+	beq		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	tfr		b,f
+	lde		TCBPrev,x
+	stb		TimeoutList
+	beq		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	bsr		TCBHandleToPointer
+	tfr		d,y
+	ste		TCBPrev,y
+	tfr		e,b
+	bsr		TCBHandleToPointer
+	tfr		d,y
+	stf		TCBNext,y
+	clr		TCBPrev,x
+	clr		TCBNext,x
+0001:
+	puls	b
+	puls	x,y,w,pc
+
+
+

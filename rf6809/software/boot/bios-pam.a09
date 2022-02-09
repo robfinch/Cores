@@ -1,0 +1,139 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+;
+; ============================================================================
+
+; The share count is the number of times a page has been shared.
+
+PAMShareCounts		EQU	0	; 64kB
+
+;------------------------------------------------------------------------------
+; PAM
+; 0 = unallocated
+; 1 = allocated
+;------------------------------------------------------------------------------
+
+
+;------------------------------------------------------------------------------
+; Find a page and mark it allocated. Proceeds starting at the previous byte
+; where there was an allocation. This should help reduce the search time to
+; find a freepage.
+;
+; Parameters:
+; Returns:
+;   d = page number, -1 if insufficient memory
+;   N flag set if insufficient memory
+;------------------------------------------------------------------------------
+
+PAMAlloc:
+	pshs	x,y
+	ldx		PAMLastAllocate
+	ldy		#65536							; number of bytes to look at
+PAMAlloc0002:
+	ldb		PAMShareCounts,x
+	bne		PAMAlloc0001				; page empty?
+	; Found an empty
+	inc		PAMShareCounts,x
+	stx		PAMLastAllocate
+	tfr		x,d
+	ldx		#E_Ok
+	bra		PAMAlloc0003
+PAMAlloc0001:
+	dey
+	beq		PAMAllocOutOfMem
+	inx												; advance to next word
+	cmpx	#65536
+	blo		PAMAlloc0002
+	ldx		#OSPAGES/12					; dont bother checking pages allocated to OS
+	bra		PAMAlloc0002
+PAMAllocOutOfMem:
+	ldd		#-1
+	ldx		#E_NoMem
+PAMAlloc0003:
+	puls	x,y
+	stx		7,s
+	std		1,s
+	lbra	OSExit
+
+;------------------------------------------------------------------------------
+; Free memory previously allocated with PAMAlloc.
+;
+; Parameters:
+;		d = page number to free
+; Modifies:
+;		none
+;------------------------------------------------------------------------------
+
+PAMFree:
+	cmpd		#MEMSZ-8					; last page is permanently allocated to system stack
+	bhs			pump1
+	cmpd		#768							; first 768 pages (6MB) allocated permanently to system
+	blo			pump1
+	tfr			d,x
+	tst			PAMShareCounts,x	; memory already free?
+	beq			pump1
+	dec			PAMShareCounts,x	; decrease share count
+pump1:
+	ldx			#E_Ok
+	lbra		OSExit
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+PAMInit:
+  ; First zero out the entire PAM using word stores
+  clrd
+  tfr		d,x
+PAMInit0002:
+  std   ,x++
+  cmpx	#65536							; 65536 bytes
+  blo		PAMInit0002
+
+  ; Now preallocate memory pages
+  ; The first 2MB is allocated to the OS
+  ; The next 4MB is allocated for the bitmapped display
+  ldd   #767  					; 768 pages
+  std		PAMLastAllocate	; begin search after OS pages
+  ldx		#0
+  ldd		#$001001
+PAMInit0001:
+	std		,x++
+	cmpx	#768
+  blo		PAMInit0001
+  ; The last 8 pages (64kB) of memory are reserved for OS stacks
+  std		65534
+  std		65532
+  std		65530
+  std		65528
+	rts

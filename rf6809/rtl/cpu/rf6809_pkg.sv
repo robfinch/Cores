@@ -88,35 +88,37 @@ parameter BPBX2M1 =	BPB*2-1;
 `define TRUE		1'b1
 `define FALSE		1'b0
 
-`define RST_VECT	24'hFFFFFE
-`define NMI_VECT	24'hFFFFFC
-`define SWI_VECT	24'hFFFFFA
-`define IRQ_VECT	24'hFFFFF8
-`define FIRQ_VECT	24'hFFFFF6
-`define SWI2_VECT	24'hFFFFF4
-`define SWI3_VECT	24'hFFFFF2
-`define IOP_VECT	24'hFFFFF0
-`define IPL7_VECT	24'hFFFFEE
-`define IPL6_VECT 24'hFFFFEC
-`define IPL5_VECT 24'hFFFFEA
-`define IPL4_VECT	24'hFFFFE8
-`define IPL3_VECT 24'hFFFFE6
-`define IPL2_VECT 24'hFFFFE4
-`define IPL1_VECT	24'hFFFFE2
-`define DBG_VECT	24'hFFFFE0
+`define RST_VECT	36'hFFFFFFFFC
+`define NMI_VECT	36'hFFFFFFFF8
+`define SWI_VECT	36'hFFFFFFFF4
+`define IRQ_VECT	36'hFFFFFFFF0
+`define FIRQ_VECT	36'hFFFFFFFEC
+`define SWI2_VECT	36'hFFFFFFFE8
+`define SWI3_VECT	36'hFFFFFFFE4
+`define IOP_VECT	36'hFFFFFFFE0
+`define EXV_VECT	36'hFFFFFFFDC
+`define IPL6_VECT 36'hFFFFFFFD8
+`define IPL5_VECT 36'hFFFFFFFD4
+`define IPL4_VECT	36'hFFFFFFFD0
+`define IPL3_VECT 36'hFFFFFFFCC
+`define WRV_VECT 	36'hFFFFFFFC8
+`define RDV_VECT	36'hFFFFFFFC4
+`define DBG_VECT	36'hFFFFFFFC0
 
-`define MSCOUNT		24'hFFFF14
-`define CHKPOINT	24'hFFFF11
-`define CORENO		24'hFFFF10
+`define MSCOUNT		36'hFFFFFFF18
+`define MMU_OKEY	36'hFFFFFFF17
+`define MMU_AKEY	36'hFFFFFFF16
+`define CHKPOINT	36'hFFFFFFF15
+`define CORENO		36'hFFFFFFF14
 
-`define BRKCTRL3	24'hFFFF0B
-`define BRKCTRL2	24'hFFFF0A
-`define BRKCTRL1	24'hFFFF09
-`define BRKCTRL0	24'hFFFF08
-`define BRKAD3		24'hFFFF06
-`define BRKAD2		24'hFFFF04
-`define BRKAD1		24'hFFFF02
-`define BRKAD0		24'hFFFF00
+`define BRKCTRL3	36'hFFFFFFF13
+`define BRKCTRL2	36'hFFFFFFF12
+`define BRKCTRL1	36'hFFFFFFF11
+`define BRKCTRL0	36'hFFFFFFF10
+`define BRKAD3		36'hFFFFFFF0C
+`define BRKAD2		36'hFFFFFFF08
+`define BRKAD1		36'hFFFFFFF04
+`define BRKAD0		36'hFFFFFFF00
 
 
 `define NEG_DP		12'h000
@@ -573,7 +575,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define LW_CCR		6'd0
 `define LW_ACCA		6'd1
 `define LW_ACCB		6'd2
-`define LW_DPR		6'd3
+`define LW_DPRH		6'd3
 `define LW_XH		6'd4
 `define LW_XL		6'd5
 `define LW_YH		6'd6
@@ -604,13 +606,16 @@ parameter BPBX2M1 =	BPB*2-1;
 `define LW_SSP2316	6'd31
 `define LW_ACCE			6'd32
 `define LW_ACCF			6'd33
+`define LW_DPRL			6'd34
+`define LW_PCB3			6'd35
+`define LW_PCB2			6'd36
 `define LW_NOTHING	6'd63
 
 `define SW_ACCDH	6'd0
 `define SW_ACCDL	6'd1
 `define SW_ACCA		6'd2
 `define SW_ACCB		6'd3
-`define SW_DPR		6'd4
+`define SW_DPRH		6'd4
 `define SW_XL		6'd5
 `define SW_XH		6'd6
 `define SW_YL		6'd7
@@ -652,6 +657,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define SW_ACCF		6'd43
 `define SW_ACCWH	6'd44
 `define SW_ACCWL	6'd45
+`define SW_DPRL		6'd46
 `define SW_NOTHING	6'd63
 
 endpackage

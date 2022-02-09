@@ -34,8 +34,9 @@
 ;                                                                          
 ; ============================================================================
 ;
-OPT include "d:\cores2022\rf6809\software\boot\mon_equates.asm"
-OPT include "d:\cores2022\rf6809\software\boot\io_equates.asm"
+OPT include ".\mon_equates.a09"
+OPT include ".\io_equates.a09"
+OPT include "..\fmtk\source\kernel\femtiki_vars.a09"
 
 OPC_SWI				EQU		$03F
 ScreenLocation		EQU		$10
@@ -87,11 +88,8 @@ IOFocusNdx	EQU		$100
 
 ; These variables in global OS storage area
 
-IOFocusList	EQU		$FFC000	; to $FF000F
-IOFocusID		EQU		$FFC010
 IrqSource		EQU		$FFC011
 IRQFlag			EQU		$FFC012
-RunningID		EQU		$FFC013
 milliseconds	EQU		$FFC014
 
 ; One copy of serial buffer management
@@ -133,12 +131,6 @@ QNdx1		EQU		QNdx0+2
 QNdx2		EQU		QNdx1+2
 QNdx3		EQU		QNdx2+2
 QNdx4		EQU		QNdx3+2
-FreeTCB		EQU		QNdx4+2
-TimeoutList	EQU		FreeTCB+2
-FreeMbx		EQU		RunningTCB + 2
-nMailbox	EQU		FreeMbx + 2
-FreeMsg		EQU		nMailbox + 2
-nMsgBlk		EQU		FreeMsg + 2
 
 
 CharOutVec	EQU		$800
@@ -427,6 +419,7 @@ st8:
 ;	tfr		d,x
 ;	jmp		,x				; jump to the BIOS now in local RAM
 st7:
+	lbsr	MMUInit
 	lbsr	InitMMU
 	bsr		Delay3s		; give some time for devices to reset
 	clr		BreakpointFlag
@@ -1668,7 +1661,7 @@ MonGetch:
 	rts
 
 MonGetNonSpace:
-	bsr		MonGetCh
+	bsr		MonGetch
 	cmpb	#' '
 	beq		MonGetNonSpace
 	rts
@@ -2813,7 +2806,7 @@ ipl3_rout:
 	org		$FFFFFFFE0
 	fcdw		iop_rout		; illegal operation / divide by zero
 	fcdw		swi3_rout		; SWI3
-	fcdw		rti_insn		; SWI2
+	fcdw		$ff9000			; SWI2
 	fcdw		firq_rout		; FIRQ
 	fcdw		irq_rout		; IRQ
 	fcdw		swi_rout		; SWI
