@@ -1,0 +1,6 @@
+OSF_FemtikiInit				EQU		0
+OSF_FemtikiTimerIRQ		EQU		44
+OSF_FMTK_Reschedule		EQU		45
+OSF_GetCurrentMid			EQU		46
+OSF_GetRunningTCBPointer		EQU		47
+

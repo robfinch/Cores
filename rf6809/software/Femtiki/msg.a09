@@ -36,7 +36,7 @@
 
 ;	bss
 ;	align 4
-;FreeMsg	dw	0
+;FreeMSG	dw	0
 ;msgs:
 ;	fill.b	MSG_SIZE*1024,0
 ;mbxs:
@@ -162,7 +162,7 @@ FMTK_AllocMbx:
 	ldd		#-1
 	lbsr	LockSysSemaphore
 	beq		0001b
-	ldd		FreeMbx
+	ldd		FreeMBX
   bne   amGotMbx
   lbsr	UnlockSysSemaphore
   ldx		#E_NotAlloc
@@ -173,7 +173,7 @@ amGotMbx:
 	bsr		MBXHandleToPointer
 	tfr		d,x
 	ldd		MBX_LINK,x
-	std		FreeMbx
+	std		FreeMBX
 	lbsr	UnlockSysSemaphore
 	clrd
 	std		MBX_LINK,x
@@ -210,9 +210,9 @@ FMTK_FreeMbx:
   ldd		#-1
   lbsr	LockSysSemaphore
   beq		0004b
-  ldd   FreeMbx
+  ldd   FreeMBX
   std   MBX_LINK,x
-  stw   FreeMbx
+  stw   FreeMBX
 FreeMbx1:
 	ldb		MBX_TQHEAD,x
 0002:
@@ -221,7 +221,7 @@ FreeMbx1:
 	clra
 	lbsr	TCBHandleToPointer
 	tfr		d,x
-	aim		#~TS_WAITMSG,TCBStatus,x	; no longer waiting
+	aim		#TS_WAITMSG^$FFF,TCBStatus,x	; no longer waiting
 	clra
 	ldb   TCBtid,x
 	tim		#TS_TIMEOUT,TCBStatus,x   ; Is the task timing out?
@@ -250,10 +250,10 @@ FreeMbx1:
   ldd   MBX_MQTAIL,x 				; get pointer to last message
   bsr		MSGHandleToPointer
   tfr		d,y
-  ldd   FreeMsg
+  ldd   FreeMSG
   std   MSG_LINK,y   				; link current free list onto it
   ldd   MBX_MQHEAD,x
-  std   FreeMsg         		; set new head of free list
+  std   FreeMSG         		; set new head of free list
   lbsr	UnlockSysSemaphore
 	ldx		#E_Ok
 	stx		7,s
@@ -275,66 +275,38 @@ fmBadMbx:
 ; Parameters:
 ;   none
 ; Returns:
-;   $a0 = status (E_Ok)
-;   $a1 = pointer to message
+;   X = status (E_Ok)
+;   D = message handle
 ;------------------------------------------------------------------------------
 
 AllocMsg:
+  ldd  	FreeMSG
+  beq   0004f
+	pshs	d								; save MSG handle
+	bsr		MSGHandleToPointer
+	tfr		d,x
+  ldw   MSG_LINK,x			; set new head of free message list
+  stw   FreeMSG
+  clrw
+  stw   MSG_LINK,x
+  puls	d								; return MSG handle
+  ldx		#E_Ok
+  rts
+0004:
+  ldx   #E_NotAlloc
+  rts
+
+FMTK_AllocMsg:
 0002:
 	ldd		#-1
   lbsr	LockSysSemaphore
   beq		0002b
-  ldd  	FreeMsg
-  bne   .gotMsg
-  ; no free messages?
-  ldd		#8160
-  swi2
-  fcb		OSF_AllocMem
-  cmpx	#E_Ok
-  bne   .outOfMem
-  ldi   $t0,#680           ; 680 messages in block
-  tfr		d,x
-  ; Initialize object fields
-  ldw   #MSG_MAGIC
-  stw   OBJMagic,x
-  ldw   #8192
-  stw   OBJSize,x
-  clr   OBJState,x
-  clr   OBJScavcnt,x
-  clr   OBJOwningMap,x
-  ldw   #MsgFinalizer
-  stw   OBJFinalizer,x
- 
-  add   $t1,$a0,#64       ; point to first message
-  sto   $t1,FreeMsg
-  mov   $a0,$t1
-0001:
-  add   $t2,$t1,#MSG_SIZE
-  sto   $t2,MSG_LINK[$t1]
-  mov   $t1,$t2
-  sub.  $t0,$t0,#1
-  bgt   0001b
-  sto   $x0,MSG_LINK[$t1]
-.gotMsg:
-	std		1,s								; return MSG handle
-	bsr		MSGHandleToPointer
-	tfr		d,x
-  ldw   MSG_LINK,x
-  stw   FreeMsg
-  clrw
-  stw   MSG_LINK,x
+  bsr		AllocMsg
   lbsr	UnlockSysSemaphore
-  ldx   #E_Ok
-  stx		7,s
-  lbra	OSExit
-.outOfMem:
-  lbsr	UnlockSysSemaphore
-  ldx   #E_NoMem
-  stx		7,s
-  lbra	OSExit
+  lbra	FMTK_RetDX
 
 ;------------------------------------------------------------------------------
-; FreeMsg
+; FreeMSG
 ;
 ; This internally used routine frees a message previously allocated with
 ; AllocMsg. The message is added to the free list. Must be called only
@@ -346,14 +318,14 @@ AllocMsg:
 ;   none
 ;------------------------------------------------------------------------------
 
-FreeMsgRout:
+FreeMSGRout:
   pshs	d,y
   bsr		MSGHandleToPointer
   tfr		d,y
-  ldd   FreeMsg
+  ldd   FreeMSG
   std   MSG_LINK,y
   puls	d,y
-  std   FreeMsg
+  std   FreeMSG
   rts
 
 ;------------------------------------------------------------------------------
@@ -361,86 +333,92 @@ FreeMsgRout:
 ; The message will be broadcast to any waiting tasks. Waiting tasks will then
 ; be moved to the ready list. If there are no waiting tasks then the message
 ; is queued at the mailbox.
+; The system semaphore must be locked already when this routine is called.
 ;
 ; Register Usage:
-;		$t0 = mailbox pointer
-;		$t1 = message pointer
-;		$s1 = task id of waiting task
 ; Modifies:
-;		$a0
 ; Parameters:
-;		$a1 = mailbox handle
-;		$a2 = message d1
-;		$a3 = message d2
-;		$a4 = message d3
+;		D = mailbox handle
+;		X = message d1
+;		Y = message d2
+;		U = message d3
 ;------------------------------------------------------------------------------
-  align 16
-ISendMsg:
-;  mEI
-;	slt		$t0,$a1,#32
-;	beq		$t0,$x0,.badMbx
-;	sll		$t0,$a1,#4					; convert handle to pointer
-;	add		$t0,$t0,#mbxs
-  mov   $a0,$a1
-  mMbxHandleToPointer
-  mov   $t0,$a0
-	ldt.	$s3,MBX_TQHEAD[$t0]
-	beq		.noWaiters
-	sto		$a2,TCBMsgD1[$s3]		; copy message to TCB
-	sto		$a3,TCBMsgD2[$s3]
-	sto		$a4,TCBMsgD3[$s3]
-	ldbu	$t2,TCBStatus[$s3]
-	or		$t2,$t2,#TS_MSGRDY
-	stb		$t2,TCBStatus[$s3]
-	ldwu  $a0,TCBtid[$s3]
-	sub		$sp,$sp,#8
-	sto		$t0,[$sp]						; push t0
-	call	InsertIntoReadyQueue
-	ldo		$t0,[$sp]						; pop t0
-	add		$sp,$sp,#8
-	ldo   $s5,TCBMbxNext[$s3]
-	sto   $x0,TCBMbxNext[$s3]
-	sto   $x0,TCBMbxPrev[$s3]
-	sto   $s5,MBX_TQHEAD[$t0]
-	ldi		$a0,#E_Ok
-	jmp   .xit
-.noWaiters:
-  jsr   AllocMsg
-  tst   $a0
-	bne	  .noMsg			    ; message available?
-	sto		$a2,MSG_D1[$a1]
-	sto		$a3,MSG_D2[$a1]
-	sto		$a4,MSG_D3[$a1]
-	ldo.	$t3,MBX_MQTAIL[$t0]
-	beq	  .mbxEmpty
-	sto		$a1,MSG_LINK[$t3]
-	sto		$a1,MBX_MQTAIL[$t0]
-	ldi		$a0,#E_Ok
-	jmp   .xit
-.mbxEmpty:
-	sto		$a1,MBX_MQHEAD[$t0]
-	sto		$a1,MBX_MQTAIL[$t0]
-	ldi		$a0,#E_Ok
-	jmp   .xit
-.noMsg:
-	ldi		$a0,#E_NoMsg
-	jmp   .xit
-.badMbx:
-	ldi		$a0,#E_BadMbx				; return null pointer if bad mailbox
-.xit
-	ret
 
-  align 16
+ISendMsg:
+  bsr		MBXHandleToPointer
+  tfr		d,u
+	ldb		MBX_TQHEAD,u
+	beq		0001f
+	lbsr	TCBHandleToPointer
+	tfr		d,x									; X = pointer to TCB to dequeue
+	lbsr	GetRunningTCBPtr
+	tfr		d,y									; Y = pointer to running TCB
+	ldw		TCBxXR,y						; copy message to TCB
+	stw		TCBMsgD1,x
+	ldw		TCBxYR,y
+	stw		TCBMsgD2,x
+	ldw		TCBxUSP,y
+	stw		TCBMsgD3,x
+	oim		#TS_MSGRDY,TCBStatus,x
+	lde   TCBMbxNext,x
+	ste   MBX_TQHEAD,u
+	clr   TCBMbxNext,x
+	clr   TCBMbxPrev,x
+	ldb  	TCBtid,x
+	lbsr	InsertIntoReadyQueue
+	ldx		#E_Ok
+	rts
+0001:
+  bsr		AllocMsg
+  cmpx	#E_Ok
+	bne	  0002f			    ; message available?
+	pshs	d										; save message handle
+	bsr		MSGHandleToPointer
+	tfr		d,x
+	lbsr	GetRunningTCBPtr
+	tfr		d,y
+	ldw		TCBxXR,y						; copy message to TCB
+	stw		MSG_D1,x
+	ldw		TCBxYR,y
+	stw		MSG_D2,x
+	ldw		TCBxUSP,y
+	stw		MSG_D3,x
+	ldd		MBX_MQTAIL,u
+	lbsr	MSGHandleToPointer
+	tfr		d,x
+	beq	  0003f
+	puls	d										; get message handle
+	std		MSG_LINK,x					; tail->link = msg
+	std		MBX_MQTAIL,u				; mqtail = msg
+	ldx		#E_Ok
+	rts
+0003:
+	puls	d
+	std		MBX_MQHEAD,u
+	std		MBX_MQTAIL,u
+	ldx		#E_Ok
+	rts
+0002:
+	ldx		#E_NoMsg
+	rts
+
 FMTK_SendMsg:
-  chk.  $a1,$x0,#4096
-  bf    .badMbx
-  mDI
+	cmpd	#1
+	blo		0001f
+	cmpd	#NR_MBX
+	bhs		0001f
+	pshs	d
+0002:
+	ldd		#-1
+	lbsr	LockSysSemaphore
+	beq		0002b
+	puls	d
   jsr   ISendMsg
-  mEI
-  jmp   OSExit
-.badMbx:
-  ldi   $a0,#E_BadMbx
-  jmp   OSExit
+  lbsr	UnlockSysSemaphore
+  lbra	FMTK_RetOK
+0001:
+  ldx   #E_BadMbx
+  lbra	FMTK_RetDX
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -452,67 +430,53 @@ FMTK_SendMsg:
 ;------------------------------------------------------------------------------
 
 PeekMsg:
-;	slt		$t0,$a1,#32
-;	beq		$t0,$x0,.badMbx
-;	sll		$t2,$a1,#4					; convert handle to pointer
-;	add		$t2,$t2,#mbxs
-	puls	u										; U = return address
-	ldd		1,s
-	bsr		MBXHandleToPointer
+	lbsr	GetRunningTCBPtr
 	tfr		d,x
-	orcc	#$290								; disable interrupts
-	ldd		MBX_MQHEAD,x
-	beq	  pmNoMsg
-	tst   3,s
-	beq 	pmNodq
-	bsr		MSGHandleToPointer
+	ldd		TCBxAcca,x
+	bsr		MBXHandleToPointer
 	tfr		d,y
-	ldd		MSG_LINK,y
-	std		MBX_MQHEAD,x
+0001:
+	ldd		#-1
+	lbsr	LockSysSemaphore
+	beq		0001b
+	ldd		MBX_MQHEAD,y
+	beq	  0002f
+	pshs	d
+	bsr		MSGHandleToPointer
+	tfr		d,u
+	tst   TCBxAcce,x
+	beq 	0003f					; remove from queue?
+	ldd		MSG_LINK,u
+	std		MBX_MQHEAD,y
 	; This is done here only because interrupts are disabled
-	tfr		y,d
-	bsr  	FreeMsgRout
-pmNodq:
-  ; Makes use of the MPRV feature. PeekMsg() or WaitMsg() will be running in
-  ; the task context expecting to receive a message. That means the base
-  ; registers and ASID should be set appropriately.
-	ldi   $a1,#$20000       ; bit 17 = mprv
-  ldb   $a0,TCBmid[$t1]   ; $a0 = mid
-  tst   $a2
-	beq   .nod1
-	ldo		$t3,MSG_D1[$t1]
-	csrrs $x0,#CSR_MSTATUS,$a1
-	sto		$t3,[$a2]
-	csrrc $x0,#CSR_MSTATUS,$a1
-.nod1:
-  tst   $a3
-	beq	  .nod2
-	ldo		$t3,MSG_D2[$t1]
-	csrrs $x0,#CSR_MSTATUS,$a1
-	sto		$t3,[$a3]
-	csrrc $x0,#CSR_MSTATUS,$a1
-.nod2:
-  tst   $a4
-	beq	  .nod3
-	ldo		$t3,MSG_D3[$t1]
-	csrrs $x0,#CSR_MSTATUS,$a1
-	sto		$t3,[$a4]
-	csrrc $x0,#CSR_MSTATUS,$a1
-.nod3:
-	ldi		$a0,#E_Ok
-	jmp		.ret
-pmNoMsg:
+	puls	d
+	bsr  	FreeMSGRout
+	bra		0005f
+0003:
+	puls	d
+0005:
+  tst   TCBxXR,x
+	beq   0004f
+	ldw		MSG_D1,u
+	stw		[TCBxXR,x]
+0004:
+  tst   TCBxYR,x
+	beq	  0006f
+	ldw		MSG_D2,u
+	stw		[TCBxYR,x]
+0006:
+  tst   TCBxUSP,x
+	beq	  0007f
+	ldw		MSG_D3,u
+	stw		[TCBxUSP,x]
+0007:
+	ldx		#E_Ok
+	lbsr	UnlockSysSemaphore
+	rts
+0002:
+	lbsr	UnlockSysSemaphore
 	ldx		#E_NoMsg
-	stx		7,s
-	andcc	#$D6F								; enable interrupts
-	jmp		,u
-pmbadMbx:
-	ldx		#E_BadMbx						; return null pointer if bad mailbox
-	stx		7,s
-	jmp		,u
-.ret:
-  mEI
-	ret
+	rts
 
 ;------------------------------------------------------------------------------
 ; PeekMsg will check for a message at a mailbox optionally dequeuing it.
@@ -528,70 +492,82 @@ pmbadMbx:
 ;------------------------------------------------------------------------------
 
 FMTK_PeekMsg:
+	lbsr	GetRunningTCBPtr
+	tfr		d,x
+	ldd		TCBxAcca,x
   cmpd	#1
-  blo		fpmBadMbx
+  blo		0001f
   cmpd	#NR_MSG
-  bhs		fpmBadMbx
+  bhs		0001f
 	bsr 	PeekMsg
-	lbra	OSExit
-fpmBbadMbx:
+	lbra	FMTK_RetDX
+0001:
   ldx   #E_BadMbx
-  stx		7,s
-  lbra  OSExit
+  lbra	FMTK_RetDX
 
 ;------------------------------------------------------------------------------
 ; Calling WaitMsg will cause the task to be queued at the mailbox and a task
 ; switch to occur if there are no messages at the mailbox.
 ;
 ; Parameters:
-;		a1 = mailbox handle
-;		a2 = pointer where to put message D1
-;		a3 = pointer where to put message D2
-;		a4 = pointer where to put message D3
-;		a5 = time limit
+;		D = mailbox handle
+;		X = pointer where to put message D1
+;		Y = pointer where to put message D2
+;		U = pointer where to put message D3
+;		W = time limit
 ;------------------------------------------------------------------------------
-  align 16
+
 FMTK_WaitMsg:
-  chk.  $a1,$x0,#4096
-  bf    .badMbx
-	mov		$s5,$a5
-	ldi		$a5,#1              ; dequeue messages
-	call 	PeekMsg							; check for a message, return if available
-	seq		$a0,#E_NoMsg
-	bt		.qt					        ; no message? Then go queue task
-	jmp		OSExit
-.qt:
-  mov   $a0,$a1
-  mMbxHandleToPointer
-  mov   $t3,$a0
-	mGetCurrentTid
-	asl		$t1,$a0,#LOG_TCBSZ  ; $t1 = tcb pointer
-;	sll		$t3,$a1,#5					; convert handle to pointer
-;	add		$t3,$t3,#mbxs
-  mDI
-	ldo.	$t4,MBX_TQTAIL[$t3]	; get waiting task list tail
-	beq   .qempty
-  sto   $t4,TCBMbxPrev[$t1] ; add task onto tail of waiting list
-  sto   $t1,TCBMbxNext[$t4] ; tail->next = tid tcb pointer
-  sto   $t1,MBX_TQTAIL[$t3]
-  jmp   .setA
-.qempty:
-  sto   $t1,MBX_TQHEAD[$t3]
-  sto   $t1,MBX_TQTAIL[$t3]
-.setA:
-  sto   $a2,TCBxA2[$t1]   ; save pointers for data in task regs
-  sto   $a3,TCBxA3[$t1]
-  sto   $a4,TCBxA4[$t1]
-	ldbu	$t3,TCBStatus[$t1]
-	or		$t3,$t3,#TS_WAITMSG	; set waiting for message status
-	and		$t3,$t3,#~TS_READY	; not ready
-	stb		$t3,TCBStatus[$t1]
-	stb		$a1,TCBWaitMbx[$t1]	; set mailbox task is waiting for
-	mEI
-	jmp		FMTK_Sleep          ; Continue by switching tasks
-.badMbx:
-  ldi   $a0,#E_BadMbx
-  jmp   OSExit
+	lbsr	GetRunningTCBPtr
+	tfr		d,x
+	ldd		TCBxAcca,x
+	cmpd	#1
+	blo		0001f
+	cmpd	#NR_MBX
+	bhs		0001f
+	leas	-4,s
+	std		,s
+	ldw		TCBxAcce,x
+	stw		2,s
+	ldb		#1
+	stb		TCBxAcce,x					; dequeue messages
+	ldd		,s
+	bsr 	PeekMsg							; check for a message, return if available
+	ldw		2,s
+	stw		TCBxAcce,x
+	cmpx	#E_NoMsg
+	beq		0002f
+	leas	4,s
+	lbra	FMTK_RetDX					; no message? Then go queue task
+0002:
+  bsr		MBXHandleToPointer
+  tfr		d,x
+  lbsr	GetRunningTCBPtr
+  tfr		d,y
+  lbsr	LockSysSemaphore
+	ldb		MBX_TQTAIL,x				; get waiting task list tail
+	beq   0003f
+  stb   TCBMbxPrev,y 				; add task onto tail of waiting list
+  lbsr	TCBHandleToPointer
+  tfr		d,u
+  ldb		RunningID
+  stb   TCBMbxNext,u 				; tail->next = tid tcb pointer
+  stb   MBX_TQTAIL,x
+  bra   0004f
+0003:	; Queue empty
+	ldb		RunningID
+  stb   MBX_TQHEAD,x
+  stb   MBX_TQTAIL,x
+0004:
+	oim		#TS_WAITMSG,TCBStatus,y	; set waiting for message status
+	aim		#TS_READY^$FFF,TCBStatus,y	; not ready
+	ldd		TCBxAcca,y
+	std		TCBWaitMbx,y				; set mailbox task is waiting for
+	lbsr	UnlockSysSemaphore
+	lbra	FMTK_Sleep          ; Continue by switching tasks
+0001:
+  ldx   #E_BadMbx
+  lbra	FMTK_RetDX
 
 MsgFinalizer:
-  ret
+  rts

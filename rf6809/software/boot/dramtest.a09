@@ -1,8 +1,8 @@
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
+;   \\__/ o\    (C) 2013-2022  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
-;     \/_//     robfinch<remove>@finitron.ca
+;     \/_//     robfinch<remove>@opencores.org
 ;       ||
 ;  
 ;
@@ -31,46 +31,69 @@
 ; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 ; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-;
+;                                                                          
 ; ============================================================================
+;
+include "d:\cores2022\rf6809\software\boot\mon_equates.a09"
+include "d:\cores2022\rf6809\software\boot\io_equates.a09"
 
-TS_NONE			EQU		0
-TS_READY		EQU		1
-TS_DEAD			EQU		2
-TS_MSGRDY		EQU		4
-TS_WAITMSG	EQU		8
-TS_TIMEOUT	EQU		16
-TS_PREEMPT	EQU		32
-TS_RUNNING	EQU		128
+	org		$FFFFFD400
 
-; error codes
-E_Ok		=		0x00
-E_Arg		=		0x01
-E_Func  =    0x02
-E_BadMbx	=		0x04
-E_QueFull	=		0x05
-E_NoThread	=		0x06
-E_NotAlloc	=		0x09
-E_NoMsg		=		0x0b
-E_Timeout	=		0x10
-E_BadAlarm	=		0x11
-E_NotOwner	=		0x12
-E_QueStrategy =		0x13
-E_BadDevNum	=		0x18
-E_DCBInUse	=		0x19
-; Device driver errors
-E_BadDevNum	=		0x20
-E_NoDev		=		0x21
-E_BadDevOp	=		0x22
-E_ReadError	=		0x23
-E_WriteError =		0x24
-E_BadBlockNum	=	0x25
-E_TooManyBlocks	=	0x26
+; Local RAM test routine
+; Checkerboard testing.
+; There is 70kB of local RAM
+; Does not use any RAM including no stack
 
-; resource errors
-E_NoMoreMbx	=		0x40
-E_NoMoreMsgBlks	=	0x41
-E_NoMoreAlarmBlks	=0x44
-E_NoMoreTCBs	=	0x45
-E_NoMem		= 12
-
+dramtest:
+	ldy		#$10000			; DRAM starts here
+	lda		#1
+	sta		LEDS
+	ldu		#$AAA555
+	swi
+	fcb		MF_CRLF
+dramtest1:
+	deca
+	bne		dramtest4
+	tfr		y,d
+	swi
+	fcb		MF_DisplayWordAsHex
+	ldb		#CR
+	swi
+	fcb		MF_OUTCH
+dramtest4:
+	stu		,y++
+	cmpy	#$E00000		; DRAM ends here
+	blo		dramtest1
+	; now readback values and compare
+	ldy		#$10000
+	lda		#1
+	swi
+	fcb		MF_CRLF
+dramtest3:
+	deca
+	bne		dramtest5
+	tfr		y,d
+	swi
+	fcb		MF_DisplayWordAsHex
+	ldb		#CR
+	swi
+	fcb		MF_OUTCH
+dramtest5:
+	cmpu	,y++
+	bne		dramerr
+	cmpy	#$E00000
+	blo		dramtest3
+	lda		#2
+	sta		LEDS
+	swi
+	fcb		MF_Monitor
+dramerr:
+	lda		#$80
+	sta		LEDS
+	ldx		#TEXTSCR
+	ldb		COREID
+	abx
+	lda		#'F'
+	sta		,x
+	swi
+	fcb		MF_Monitor

@@ -34,9 +34,11 @@
 ;                                                                          
 ; ============================================================================
 ;
-OPT include ".\mon_equates.a09"
-OPT include ".\io_equates.a09"
-OPT include "..\fmtk\source\kernel\femtiki_vars.a09"
+include ".\mon_equates.a09"
+include ".\io_equates.a09"
+include "..\fmtk\types.a09"
+include "..\fmtk\source\kernel\femtiki_vars.a09"
+include "..\fmtk\FemtikiFuncs.a09"
 
 OPC_SWI				EQU		$03F
 ScreenLocation		EQU		$10
@@ -126,39 +128,33 @@ SertZero		EQU	$132
 farflag	EQU		$15F
 asmbuf	EQU		$160	; to $17F
 
-QNdx0		EQU		$780
-QNdx1		EQU		QNdx0+2
-QNdx2		EQU		QNdx1+2
-QNdx3		EQU		QNdx2+2
-QNdx4		EQU		QNdx3+2
-
-
-CharOutVec	EQU		$800
-CharInVec	EQU		$804
-CmdPromptJI	EQU	$808
-MonErrVec	EQU		$80C
-BreakpointFlag	EQU		$810
-NumSetBreakpoints	EQU	$811	; to 812
-Breakpoints			EQU		$820	; to $83F
-BreakpointBytes	EQU		$850	; to $85F
-mon_vectb				EQU		$880
+CharOutVec	EQU		$FFC200
+CharInVec	EQU		$FFC204
+CmdPromptJI	EQU	$FFC208
+MonErrVec	EQU		$FFC20C
+BreakpointFlag	EQU		$FFC210
+NumSetBreakpoints	EQU	$FFC211	; to 812
+Breakpoints			EQU		$FFC220	; to $83F
+BreakpointBytes	EQU		$FFC250	; to $85F
+mon_vectb				EQU		$FFC280
 
 ; Register save area for monitor
-mon_DSAVE	EQU		$900
-mon_XSAVE	EQU		$902
-mon_YSAVE	EQU		$904
-mon_USAVE	EQU		$906
-mon_SSAVE	EQU		$908
-mon_PCSAVE	EQU		$90A
-mon_DPRSAVE	EQU		$90E
-mon_CCRSAVE	EQU		$90F
+mon_DSAVE	EQU		$FFC300
+mon_WSAVE	EQU		$FFC302
+mon_XSAVE	EQU		$FFC304
+mon_YSAVE	EQU		$FFC306
+mon_USAVE	EQU		$FFC308
+mon_SSAVE	EQU		$FFC30A
+mon_PCSAVE	EQU		$FFC30C
+mon_DPRSAVE	EQU		$FFC30F
+mon_CCRSAVE	EQU		$FFC311
 
-mon_numwka	EQU		$910
-mon_r1		EQU		$920
-mon_r2		EQU		$924
-jmpvec		EQU		$928
-mon_init	EQU		$92C
-mon_retflag	EQU	$930
+;mon_numwka	EQU		$910
+;mon_r1		EQU		$920
+;mon_r2		EQU		$924
+jmpvec		EQU		$FFC328
+mon_init	EQU		$FFC32C
+mon_retflag	EQU	$FFC330
 
 ; The ORG directive must set an address a multiple of 4 in order for the Verilog
 ; output to work correctly.
@@ -263,7 +259,7 @@ BCDArith:
 	lbsr	ignBlanks
 	lbsr	MonGetch
 	stb		mon_r1
-	lbsr	ignblanks
+	lbsr	ignBlanks
 	lbsr	GetHexNumber
 	ldd		mon_numwka+2
 	std		mon_r2+2
@@ -302,71 +298,8 @@ bcdDoMul:
 	lbsr	CRLF
 	lbra	Monitor
 
-;------------------------------------------------------------------------------
-; Set MAP #0 up as a linear memory map
-; - semaphore memory is mapped
-; - ROMs are mapped
-; - The text screen memory is mapped.
-;------------------------------------------------------------------------------
-
-InitMMU:
-	clrb
-	stb		MMU_AKEY
-	ldx		#0
-	ldd		#$F00000	; CRWX=1111
-	clre
-immu1:
-	stb		MMU,x
-	sta		MMU+1,x
-	leax	2,x
-	incb
-	ince
-	cmpe	#2048			; number of entries to update
-	blo		immu1
-	; Map the MMU table into the address space.
-	; (requires only 1 page)
-	ldx		#$E38			; E38000 = page 71C * 2 bytes per record
-	ldd		#$F1C6FF	; high order bits are all ones, plus CRWX=0110
-	std		MMU,x
-	; Map semaphore memory into address space.
-	ldx		#$EF0
-	ldd		#SEMA_MMU
-	std		MMU,x
-	; Map LEDs (VIA) into address space
-	ldx		#$E60
-	ldd		#VIA_MMU
-	std		MMU,x
-	; Map ROMs into address space
-	ldx		#$F00
-	lda		#$F80
-	ldb		#$DFF			; D=cachable, readable, executable
-	clre
-immu2:
-	sta		MMU,x
-	stb		MMU+1,x
-	leax	2,x
-	inca
-	ince
-	cmpe	#128
-	blo		immu2
-	; Map Text Screen
-	; Map Entire I/O region
-	ldx		#$E00
-	lda		#$F00
-	ldb		#$6FF			; 6 = readable, writable
-	clre						; e = 0
-immu3:
-	sta		MMU,x
-	stb		MMU+1,x
-	leax	2,x
-	inca
-	ince
-	cmpe	#128
-	blo		immu3
-
-	ldb		#$800
-	stb		MMU_OKEY	; turn on mapping
-	rts
+include "d:\cores2022\rf6809\software\boot\bios-pam.a09"
+include "d:\cores2022\rf6809\software\boot\bios-mem.a09"
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -407,7 +340,7 @@ start:
 	ldu		#st6			; U = return address
 ;	jmp		ramtest		; JMP dont JSR
 st6:
-	lds		#$6FFF		; boot up stack area
+	lds		#$FFCFFF		; boot up stack area
 	lda		COREID
 	cmpa	#FIRST_CORE
 ;	beq		st8
@@ -419,9 +352,20 @@ st8:
 ;	tfr		d,x
 ;	jmp		,x				; jump to the BIOS now in local RAM
 st7:
-	lbsr	MMUInit
-	lbsr	InitMMU
+	lda		#1
+	sta		RunningID
 	bsr		Delay3s		; give some time for devices to reset
+	lda		COREID
+	cmpa	#$20
+	beq		0001f
+	swi
+	fcb		MF_PAMInit
+	swi
+	fcb		MF_MMUInit
+	swi2
+	fcb		OSF_FemtikiInit
+	orcc	#$290
+0001:
 	clr		BreakpointFlag
 	clr		NumSetBreakpoints
 	lda		#$AA
@@ -1171,16 +1115,16 @@ DispNyb1
 ; Timer
 ;==============================================================================
 
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\timer.asm"
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\i2c.asm"
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\rtc_driver.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\timer.a09"
+INCLUDE "d:\cores2022\rf6809\software\boot\i2c.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\rtc_driver.asm"
 
 ;==============================================================================
 ; Keyboard I/O
 ;==============================================================================
 
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\scancodes.asm"
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\keyboard.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\scancodes.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\keyboard.asm"
 
 	fcb		"KEYBOARD"
 	fcw		KeybdOpen
@@ -1214,9 +1158,9 @@ KeybdSeek:
 ; Serial I/O
 ;==============================================================================
 
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\serial.asm"
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\C19Loader.asm"
-OPT INCLUDE "d:\cores2022\rf6809\software\boot\xmodem.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\serial.a09"
+INCLUDE "d:\cores2022\rf6809\software\boot\C19Loader.asm"
+INCLUDE "d:\cores2022\rf6809\software\boot\xmodem.a09"
 
 ;------------------------------------------------------------------------------
 ; Check if there is a keyboard character available. If so return true (<0)
@@ -1543,7 +1487,7 @@ Monitor:
 	std		CmdPromptJI
 	ldd		#DisplayErr
 	std		MonErrVec
-	ldd		#$63FF			; default app stack
+	ldd		#$FFCBFF			; default app stack
 	std		mon_SSAVE
 	clr		mon_DPRSAVE	;
 	tfr		ccr,a
@@ -2286,15 +2230,17 @@ jump_to_code:
 	pshs	d
 	lda		mon_DPRSAVE
 	pshs	a
+	ldd		mon_WSAVE
+	pshs	d
 	ldd		mon_DSAVE
 	pshs	d
 	lda		mon_CCRSAVE
 	pshs	a
-	puls	far ccr,d,dpr,x,y,u
+	puls	ccr,d,dpr,w,x,y,u
 	jmp		far [mon_numwka+1]
 jtc_exit:
 	sts		>mon_SSAVE		; need to use extended addressing, no direct page setting
-	leas	$6FFF					; reset stack to system area, dont modify flags register!
+	leas	$FFCBFF					; reset stack to system area, dont modify flags register!
 	pshs	ccr						; now the stack can be used
 	pshs	a							; save acca register so we can use it
 	tfr		dpr,a					; a = outgoing dpr value
@@ -2303,6 +2249,7 @@ jtc_exit:
 	tfr		a,dpr					; saved in the monitor register save area.
 	puls	a							; get back acca
 	std		mon_DSAVE			; save regsters, can use direct addressing now
+	stw		mon_WSAVE
 	stx		mon_XSAVE
 	sty		mon_YSAVE
 	stu		mon_USAVE
@@ -2361,6 +2308,14 @@ mon_rom_vecs:
 	fcw		GetRange
 	fcw		GetNumber
 	fcw		SerialPutChar	
+	fcw		PAMInit						; 14
+	fcw		PAMAlloc					; 15
+	fcw		PAMFree						; 16
+	fcw		PAMShare					; 17
+	fcw		MMUInit						; 18
+	fcw		AllocMem					; 19
+	fcw		0									; 20
+	fcw		FreeAll						; 21
 
 NumFuncs	EQU	(*-mon_rom_vectab)/2
 
@@ -2382,7 +2337,15 @@ mon_rettab:
 	fcb		0			; GetRange
 	fcb		$800	; GetNumber
 	fcb		0			; SerialPutChar
-	
+	fcb		0			; PAMInit
+	fcb		$800	; PAMAlloc
+	fcb		0			; PAMFree
+	fcb		0			; PAMSharePAge
+	fcb		0			; MMUInit
+	fcb		$800	; AllocMem
+	fcb		0			; FreeMem
+	fcb		0			; FreeAll
+
 ;------------------------------------------------------------------------------
 ; SWI routine.
 ;
@@ -2396,7 +2359,7 @@ swi_rout:
 	ldb		bootpg,pcr			; reset direct page
 	tfr		b,dp
 swi_rout1:
-	ldu		11,s						; get program counter (low order 2 bytes)
+	ldu		14,s						; get program counter (low order 2 bytes)
 	leau	-1,u						; backup a byte
 	tst		BreakpointFlag	; are we in breakpoint mode?
 	beq		swiNotBkpt
@@ -2413,7 +2376,7 @@ swiNotBkpt:
 	pulu	d								; get function #, increment PC
 	cmpb	#NumFuncs
 	lbhi	DisplayErr
-	stu		11,s						; save updated PC on stack
+	stu		14,s						; save updated PC on stack
 	cmpb	#MF_OSCALL
 	beq		swiCallOS
 	aslb									; 2 bytes per vector
@@ -2428,9 +2391,10 @@ swiNotBkpt:
 	stb		mon_retflag
 	sts		mon_SSAVE				; save the stack pointer
 	ldd		1,s							; get back D
-	ldx		4,s							; get back X
-	ldy		6,s							; get back Y
-	ldu		8,s							; get back U
+	ldw		3,s							; get back W
+	ldx		7,s							; get back X
+	ldy		9,s							; get back Y
+	ldu		11,s							; get back U
 	lds		boot_stack,pcr	; and use our own stack
 	jsr		[jmpvec]				; call the routine
 swi_rout3:
@@ -2440,7 +2404,7 @@ swi_rout3:
 	std		1,s							; return value in D
 	asl		mon_retflag
 	bpl		swi_rout4
-	stx		4,s							; return value in X
+	stx		7,s							; return value in X
 swi_rout4:
 	rti
 
@@ -2453,18 +2417,20 @@ processBreakpoint:
 	sta		mon_CCRSAVE
 	ldd		1,s
 	std		mon_DSAVE
-	ldb		3,s
-	stb		mon_DPRSAVE
-	ldd		4,s
+	ldd		3,s
+	std		mon_DPRSAVE
+	ldd		5,s
+	std		mon_WSAVE
+	ldd		7,s
 	std		mon_XSAVE
-	ldd		6,s
+	ldd		9,s
 	std		mon_YSAVE
-	ldd		8,s
+	ldd		11,s
 	std		mon_USAVE
 	sts		mon_SSAVE
-	ldb		10,s
+	ldb		13,s
 	stb		mon_PCSAVE
-	ldd		11,s
+	ldd		14,s
 	std		mon_PCSAVE+1
 	lds		boot_stack,pcr
 	ldd		#swi_rout3			; setup so monitor can return
@@ -2709,16 +2675,18 @@ swi3_rout:
 	sta		mon_CCRSAVE
 	ldd		1,s
 	std		mon_DSAVE
-	ldb		3,s
+	ldd		3,s
 	stb		mon_DPRSAVE
-	ldd		4,s
+	ldd		5,s
+	std		mon_WSAVE
+	ldd		7,s
 	std		mon_XSAVE
-	ldd		6,s
+	ldd		9,s
 	std		mon_YSAVE
-	ldd		8,s
+	ldd		11,s
 	std		mon_USAVE
 	sts		mon_SSAVE
-	ldd		11,s
+	ldd		14,s
 	std		mon_PCSAVE
 	sts		mon_SSAVE
 	lds		#$3FFF
@@ -2756,11 +2724,17 @@ irq_rout:
 	lda		COREID
 	cmpa	IOFocusID
 	bne		tr1a
+	bra		tr1a
 	lda		CursorFlash		; test if we want a flashing cursor
 	beq		tr1a
 	lbsr	CalcScreenLoc	; compute cursor location in memory
 	tfr		d,y
 	inc		$2000,y			; get color code $2000 higher in memory
+	lda		CharColor
+	sta		$2001,y
+	sta		$1999,y
+	sta		$2000-COLS,y
+	sta		$2000+COLS,y
 tr1a:
 	rti
 
@@ -2806,7 +2780,7 @@ ipl3_rout:
 	org		$FFFFFFFE0
 	fcdw		iop_rout		; illegal operation / divide by zero
 	fcdw		swi3_rout		; SWI3
-	fcdw		$ff9000			; SWI2
+	fcdw		$fffff9000	; SWI2
 	fcdw		firq_rout		; FIRQ
 	fcdw		irq_rout		; IRQ
 	fcdw		swi_rout		; SWI

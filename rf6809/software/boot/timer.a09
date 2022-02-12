@@ -27,8 +27,8 @@ TimerInit:
 	pshs	ccr
 	sei										; turn off interrupts while using mapped I/O
 	ldd		#VIA_MMU				; VIA MMU setting; map VIA into page $000
-	std		MMU
-	ldd		#$61A80					; compare to 400000 (100 Hz assuming 40MHz clock)
+	std		MMU							; compare to 666666 for 60 Hz IRQ
+	ldd		#$A2C2A			; 61A80					; compare to 400000 (100 Hz assuming 40MHz clock)
 	stb		VIA_T3CMPL
 	sta		VIA_T3CMPH
 	clr		VIA_T3LL
@@ -78,8 +78,8 @@ TimerIRQ:
 	std		MMU
 	ldd		#$001F00			; done with PIC, map it out
 	std		MMU+2
-	swi2
-	fcb		OSF_FemtikiTimerIRQ
+;	swi2
+;	fcb		OSF_FemtikiTimerIRQ
 	rts
 notTimerIRQ:
 	ldd		#$000F00			; done with VIA, map it out

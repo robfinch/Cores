@@ -34,9 +34,11 @@
 ;
 ; ============================================================================
 
-; The share count is the number of times a page has been shared.
+;OPT include "d:\cores2022\rf6809\software\fmtk\config.a09"
+include "d:\cores2022\rf6809\software\boot\bios-const.a09"
 
-PAMShareCounts		EQU	0	; 64kB
+; The share count is the number of times a page has been shared.
+PAMLastAllocate		EQU		$FFFFFC020
 
 ;------------------------------------------------------------------------------
 ; PAM
@@ -57,34 +59,32 @@ PAMShareCounts		EQU	0	; 64kB
 ;------------------------------------------------------------------------------
 
 PAMAlloc:
-	pshs	x,y
+	pshs	y
 	ldx		PAMLastAllocate
-	ldy		#65536							; number of bytes to look at
-PAMAlloc0002:
+	ldy		#MEMSZ							; number of bytes to look at
+0002:
 	ldb		PAMShareCounts,x
-	bne		PAMAlloc0001				; page empty?
+	bne		0001f								; page empty?
 	; Found an empty
-	inc		PAMShareCounts,x
+	tfr		x,d
+	bsr		PAMShare
 	stx		PAMLastAllocate
 	tfr		x,d
-	ldx		#E_Ok
-	bra		PAMAlloc0003
-PAMAlloc0001:
+	puls	y
+	rts
+0001:
 	dey
 	beq		PAMAllocOutOfMem
 	inx												; advance to next word
-	cmpx	#65536
-	blo		PAMAlloc0002
-	ldx		#OSPAGES/12					; dont bother checking pages allocated to OS
-	bra		PAMAlloc0002
+	cmpx	#MEMSZ
+	blo		0002b
+	ldx		#0
+	bra		0002b
 PAMAllocOutOfMem:
+	puls	y
 	ldd		#-1
 	ldx		#E_NoMem
-PAMAlloc0003:
-	puls	x,y
-	stx		7,s
-	std		1,s
-	lbra	OSExit
+	rts
 
 ;------------------------------------------------------------------------------
 ; Free memory previously allocated with PAMAlloc.
@@ -96,17 +96,32 @@ PAMAlloc0003:
 ;------------------------------------------------------------------------------
 
 PAMFree:
-	cmpd		#MEMSZ-8					; last page is permanently allocated to system stack
+	cmpd		#MEMSZ-STACK_PAGES	; last page is permanently allocated to system stack
 	bhs			pump1
-	cmpd		#768							; first 768 pages (6MB) allocated permanently to system
+	cmpd		#NUM_PERM_PAGES_LO	; first 768 pages (6MB) allocated permanently to system
 	blo			pump1
 	tfr			d,x
 	tst			PAMShareCounts,x	; memory already free?
 	beq			pump1
 	dec			PAMShareCounts,x	; decrease share count
 pump1:
-	ldx			#E_Ok
-	lbra		OSExit
+	rts
+
+;------------------------------------------------------------------------------
+; Share a page of memory. A page cannot be shared more than 4095 times.
+;------------------------------------------------------------------------------
+
+PAMShare:
+	cmpd		#MEMSZ
+	bhs			0001f
+	pshs		x
+	tfr			d,x
+	inc			PAMShareCounts,x
+	bne			0001f
+	dec			PAMShareCounts,x
+	puls		x
+0001:
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -117,23 +132,27 @@ PAMInit:
   tfr		d,x
 PAMInit0002:
   std   ,x++
-  cmpx	#65536							; 65536 bytes
+  cmpx	#MEMSZ							; 65536 bytes
   blo		PAMInit0002
 
   ; Now preallocate memory pages
   ; The first 2MB is allocated to the OS
   ; The next 4MB is allocated for the bitmapped display
-  ldd   #767  					; 768 pages
+  ldd   #NUM_PERM_PAGES_LO-1	; 768 pages
   std		PAMLastAllocate	; begin search after OS pages
   ldx		#0
   ldd		#$001001
 PAMInit0001:
 	std		,x++
-	cmpx	#768
+	cmpx	#NUM_PERM_PAGES_LO
   blo		PAMInit0001
+IFD &CMODA709
+	stb		MEMSZ-1
+ELSE
   ; The last 8 pages (64kB) of memory are reserved for OS stacks
-  std		65534
-  std		65532
-  std		65530
-  std		65528
+  std		MEMSZ-2
+  std		MEMSZ-4
+  std		MEMSZ-6
+  std		MEMSZ-8
+ENDIF
 	rts

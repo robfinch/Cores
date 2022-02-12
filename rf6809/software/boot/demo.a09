@@ -34,9 +34,9 @@
 ;                                                                          
 ; ============================================================================
 ;
-
-OPT include ".\mon_equates.a09"
-OPT include ".\io_equates.a09"
+include "..\fmtk\FemtikiFuncs.a09"
+include ".\mon_equates.a09"
+include ".\io_equates.a09"
 
 milliseconds	EQU		$FFC014
 
@@ -53,7 +53,7 @@ sprite_dy		EQU		$1080
 ; Disassembler
 ;==============================================================================
 
-OPT	include "d:\cores2022\rf6809\software\boot\disassem.a09"
+include "d:\cores2022\rf6809\software\boot\disassem.a09"
 
 ;==============================================================================
 ; Sprite Demo
@@ -208,5 +208,4 @@ calc_crc24a:
 	bne		calc_crc24c
 	rts
 
-OPT	include "..\fmtk\source\kernel\Femtiki.a09"
-
+include "..\fmtk\source\kernel\Femtiki.a09"

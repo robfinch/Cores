@@ -9,5 +9,7 @@ PAGESZ    EQU   8192  ; size of a page of memory
 MEMSZ     EQU   65536   ; pages
 MBX_BLOCKPTR_BUFSZ  EQU   8 ; number of block pointer entries
 NR_MSG		EQU		21842		; number of messages available
+NR_MBX		EQU		9792
+
 
 

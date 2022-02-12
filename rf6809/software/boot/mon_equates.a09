@@ -61,8 +61,9 @@ XON		EQU	$11
 XOFF	EQU	$13
 
 FIRST_CORE	EQU	1
-MAX_TASKNO	EQU 63
+MAX_TASKNO	EQU 4095
 DRAM_BASE	EQU $10000000
+MAXVPG		EQU		$7BF
 
 ; ROM monitor functions
 ;
@@ -80,13 +81,15 @@ MF_OSCALL		EQU		10
 MF_GetRange	EQU		11	; gets a pair of numbers last>first
 MF_GetNumber	EQU	12
 MF_SerialPutchar	EQU	13
+MF_PAMInit	EQU		14
+MF_PAMAlloc	EQU		15
+MF_PAMFree	EQU		16
+MF_PAMShare	EQU		17
+MF_MMUInit	EQU		18
+MF_AllocMem	EQU		19
+MF_FreeMem	EQU		20
+MF_FreeAll	EQU		21
 
 mon_numwka	EQU		$910
 mon_r1		EQU		$920
 mon_r2		EQU		$924
-
-OSF_PAMFree						EQU		41
-OSF_AllocMem					EQU		42
-OSF_FemtikiTimerIRQ		EQU		44
-OSF_FMTK_Reschedule		EQU		45
-

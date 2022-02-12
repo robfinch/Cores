@@ -54,7 +54,7 @@ TCBxAcca    EQU   $001
 TCBxAccb		EQU		$002
 TCBxAcce		EQU		$003
 TCBxAccf		EQU		$004
-TCBxDpr			EQU		$005
+TCBxDPR			EQU		$005
 TCBxXR			EQU		$007
 TCBxYR			EQU		$009
 TCBxUSP			EQU		$00B

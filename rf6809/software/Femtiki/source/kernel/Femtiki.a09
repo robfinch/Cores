@@ -34,11 +34,13 @@
 ;
 ; ============================================================================
 
-OPT include "d:\cores2022\rf6809\software\fmtk\config.a09"
-OPT include "d:\cores2022\rf6809\software\fmtk\const.a09"
-OPT include "d:\cores2022\rf6809\software\fmtk\types.a09"
-OPT include "d:\cores2022\rf6809\software\boot\io_equates.a09"
-OPT include "d:\cores2022\rf6809\software\fmtk\source\kernel\Femtiki_vars.a09"
+include "d:\cores2022\rf6809\software\fmtk\config.a09"
+include "d:\cores2022\rf6809\software\fmtk\const.a09"
+include "d:\cores2022\rf6809\software\fmtk\types.a09"
+;OPT include "d:\cores2022\rf6809\software\boot\io_equates.a09"
+include "d:\cores2022\rf6809\software\fmtk\source\kernel\Femtiki_vars.a09"
+
+IRQFlag			EQU		$FFC012
 
 ;------------------------------------------------------------------------------
 ; Operating system call dispatcher.
@@ -52,11 +54,12 @@ OSCall:
 	bne		0001f
 	inc		TCBxPC+1,x
 0001:
-	cmpb	#47							; make sure function number in range
+	cmpb	#49							; make sure function number in range
 	bhi		OSCallBadFunc
 	aslb									; *2 bytes per address
 	ldx		#OSCallTbl
-	jmp		[b,x]
+	abx
+	jmp		[,x]						; jmp [b,x] does not assemble correctly here
 OSCallBadFunc:
 	aim		#$BFF,MMU_OKEY	; disable access to OS variables
   ldx  	#E_Func
@@ -73,7 +76,8 @@ OSCallBadFunc:
 ;------------------------------------------------------------------------------
 
 OSExit:
-	bsr		GetRunningTCBPointer
+	bsr		GetRunningTCBPtr
+	tfr		d,x
 	ldb		TCBappid,x
 	bsr		GetAppMid
 	orb		#$C00							; MMU enable bit
@@ -81,6 +85,7 @@ OSExit:
 	; to the task being returned to. That means the current stack pointer
 	; is invalid and needs to be loaded from the TCB.
 	stb		MMU_OKEY					; need access to OS vars to restore context
+	; The stack must be set here before attempting a subroutine call.
 	lds		TCBxSP,x					; OS vars are accessible
 	bsr		RestoreContext
 	aim		#$BFF,MMU_OKEY	; disable access to OS variables
@@ -121,18 +126,6 @@ UnmapOSVars1:
 	rts
 
 ;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-GetRunningTCBPointer:
-	ldb		RunningID
-	lda		#192
-	mul
-	addd	#32
-	addd	#tcbs
-	tfr		d,x
-	rts
-
-;------------------------------------------------------------------------------
 ; Got the AppID, now get the mid
 ;
 ; Parameters:
@@ -140,9 +133,8 @@ GetRunningTCBPointer:
 ;------------------------------------------------------------------------------
 
 GetAppMid:
-	clra
+	bsr		ACBHandleToPointer
 	tfr		d,y
-	ldy		ACBPtrs,y
 	ldb		ACBmid,y
 	rts
 
@@ -151,7 +143,8 @@ GetAppMid:
 ;------------------------------------------------------------------------------
 
 SaveContext:
-	bsr		GetRunningTCBPointer
+	bsr		GetRunningTCBPtr
+	tfr		d,x
 	puls	u						; u = return address
 	ldb		,s
 	stb		TCBxCCR,x
@@ -222,50 +215,72 @@ OSCallTbl:
 	fcw		FMTK_StartTask					; 1
 	fcw		FMTK_ExitTask
 	fcw		FMTK_KillTask
-	fcw		FMTK_SetTaskPriority
+;	fcw		FMTK_SetTaskPriority
+	fcw    OSCallBadFunc
 	fcw		FMTK_Sleep							; 5
 	fcw		FMTK_AllocMbx
 	fcw		FMTK_FreeMbx
-	fcw		FMTK_PostMsg
+;	fcw		FMTK_PostMsg
+	fcw    OSCallBadFunc
 	fcw		FMTK_SendMsg
 	fcw		FMTK_WaitMsg						; 10
 	fcw		FMTK_PeekMsg
-	fcw		FMTK_StartApp           ; 12
-	fcw		FMTK_ExitApp            ; 13
+;	fcw		FMTK_StartApp           ; 12
+;	fcw		FMTK_ExitApp            ; 13
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
 	fcw		FMTK_GetCurrentTid
-	fcw		FMTK_TCBFinalizerExit   ; 15
-	fcw		FMTK_KillApp
-	fcw		FMTK_RunAsOS            ; 17
+;	fcw		FMTK_TCBFinalizerExit   ; 15
+;	fcw		FMTK_KillApp
+;	fcw		FMTK_RunAsOS            ; 17
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
 	fcw		FMTK_GetTaskAppId       ; 18
 	fcw		FMTK_SetTaskId          ; 19
-	fcw		FMTK_HasIOFocus					; 20
-	fcw		FMTK_SwitchIOFocus			; 21
-	fcw		FMTK_ReleaseIOFocus			; 22
-	fcw		FMTK_ForceReleaseIOFocus	; 23
-	fcw		FMTK_RequestIOFocus			; 24
-	fcw		FMTK_MapOSVars          ; 25
-	fcw		FMTK_IO									; 26
-	fcw    FMTK_GetDCBField        ; 27
-	fcw    FMTK_SetDCBField        ; 28
+;	fcw		FMTK_HasIOFocus					; 20
+;	fcw		FMTK_SwitchIOFocus			; 21
+;	fcw		FMTK_ReleaseIOFocus			; 22
+;	fcw		FMTK_ForceReleaseIOFocus	; 23
+;	fcw		FMTK_RequestIOFocus			; 24
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+;	fcw		FMTK_MapOSVars          ; 25
+;	fcw		FMTK_IO									; 26
+;	fcw    FMTK_GetDCBField        ; 27
+;	fcw    FMTK_SetDCBField        ; 28
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
+	fcw    OSCallBadFunc
 	fcw    FMTK_GetAppTaskId       ; 29
 	fcw    FMTK_SetTaskAppId       ; 30
 	fcw    OSCallBadFunc
-	fcw    GetPamBit               ; 32
-	fcw    FetchMemoryWord         ; 33
-	fcw    Monitor                 ; 34
+;	fcw    GetPamBit               ; 32
+	fcw    OSCallBadFunc
+;	fcw    FetchMemoryWord         ; 33
+	fcw    OSCallBadFunc
+;	fcw    Monitor                 ; 34
+	fcw    OSCallBadFunc
 	fcw    GetIRQFlag              ; 35
 	fcw    SetIRQFlag              ; 36
 	fcw    OSCallBadFunc
 	fcw    OSCallBadFunc
 	fcw    OSCallBadFunc
-	fcw    PAMAlloc	             	 ; 40
-	fcw    PAMFree                 ; 41
-	fcw    AllocMem                ; 42
-	fcw    FreeMem                 ; 43
+	fcw    OSCallBadFunc         	 ; 40
+	fcw    OSCallBadFunc           ; 41
+	fcw    OSCallBadFunc           ; 42
+	fcw    OSCallBadFunc
 	fcw    FemtikiTimerIRQ         ; 44
-	fcw    FMTK_Reschedule         ; 45
+;	fcw    FMTK_Reschedule         ; 45
+	fcw    OSCallBadFunc
 	fcw    FMTK_GetCurrentMid      ; 46
 	fcw    FMTK_GetRunningTCBPointer	; 47
+	fcw		OSCallBadFunc							 ; 48
+	fcw		DumpTCBs								; 49
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -302,6 +317,7 @@ FMTK_GetCurrentTid:
 ;------------------------------------------------------------------------------
 
 FMTK_RetDX:
+FMTK_RetXD:
 	tfr		d,w
 	bsr		GetRunningTCBPtr
 	tfr		d,u
@@ -468,14 +484,14 @@ FMTK_GetRunningTCBPointer:
 
 ;------------------------------------------------------------------------------
 ; Convert an ACB handle into a pointer to the corresponding ACB.
-; Handles vary from 1 to 31.
+; Handles vary from 1 to 32.
 ;------------------------------------------------------------------------------
 
 ACBHandleToPointer:
-	decd
+	decb
+	clra
 	muld	#ACB_SIZE
 	tfr		w,d
-	addd	#OBJ_SIZE
 	addd	#acbs
 	rts
 
@@ -517,7 +533,7 @@ DecrementTimeout:
 	bne		0003f
 0004:
 	bsr		PopTimeoutList
-	bra		InsertIntoReadyList
+	bra		InsertIntoReadyQueue
 0003:
 	sec
 	ldd		TCBTimeout+2,x
@@ -537,7 +553,7 @@ SchedulerIRQa:
 	beq		0001f
 	lda		#TS_PREEMPT
 	sta		TCBStatus,x
-	bsr		DecrementTimeout
+;	bsr		DecrementTimeout
 	lda		TCBPriority,x
 	cmpa	#2
 	bls		0002f
@@ -575,7 +591,7 @@ SchedulerIRQb:
 	addd	2,s
 	std		TCBTicks+2,x
 	ldd		TCBTicks,x
-	sbcd	,s
+	adcd	,s
 	std		TCBTicks,x
 	bsr		SchedulerIRQa
 	bsr		UnlockSysSemaphore
@@ -586,26 +602,29 @@ SchedulerIRQb:
 	rts
 
 FemtikiTimerIRQ:
+	lbra	OSExit
+	pshs	d,w,x
 	ldb		RunningID
 	bsr		TCBHandleToPointer
 	tfr		d,x
-	bsr		GetTick
+	bsr		IGetTick
 	stw		TCBEndTick+2,x
 	std		TCBEndTick,x
-	bsr		SchedulerIRQb
-	ldb		RunningID
+;	bsr		SchedulerIRQb
+	ldb		RunningID											; scheduling may have changed this value
 	bsr		TCBHandleToPointer
 	tfr		d,x
 	tst		TCBException,x
 	beq		0001f
 	; ToDo: exception processing code
-	ldd		#45
-	std		TCBxXR,x
+;	ldd		#45
+;	std		TCBxXR,x
 0001:
-	bsr		GetTick
+	bsr		IGetTick
 	stw		TCBStartTick+2,x
 	std		TCBStartTick,x
-	bra		OSExit
+	puls	d,w,x
+	lbra	OSExit
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -615,7 +634,7 @@ FMTK_Sleep:
   bra  OSExit
 
 FMTK_StartTask:
-  bsr  IStartTask
+;  bsr  IStartTask
   bra  OSExit
 
 ;------------------------------------------------------------------------------
@@ -637,142 +656,51 @@ FMTK_ExitTask:
 ;------------------------------------------------------------------------------
 
 FMTK_KillTask:
-  bsr  	IKillTask
+;  bsr  	IKillTask
 	bra		OSExit
 
-;// ----------------------------------------------------------------------------
-;// Select a task to run.
-;// ----------------------------------------------------------------------------
-
-;private const __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
-;private __int16 startQNdx;
-
-;private hTCB SelectTaskToRun()
-;{
-;	int nn,kk;
-;	TCB *p, *q;
-;	int qToCheck;
-;  hTCB h;
-; 
-;	startQNdx++;
-;	startQNdx &= 31;
-;	qToCheck = startQ[startQNdx];
-;	qToCheck &= 7;
-;	for (nn = 0; nn < 8; nn++) {
-;		h = readyQ[qToCheck];
-;		if (h >= 0 && h < NR_TCB) {
-;			p = &tcbs[h];
-;      kk = 0;
-;      // Can run the head of a lower Q level if it's not the running
-;      // task, otherwise look to the next task.
-;      if (h != GetRunningTCB())
-;     		q = p;
-;			else
-;     		q = &tcbs[p->next];
-;      do {  
-;        if (!(q->status & TS_RUNNING)) {
-;          if (q->affinity == getCPU()) {
-;				  	readyQ[qToCheck] = q - tcbs;
-;				   	return (q - tcbs);
-;          }
-;        }
-;        q = &tcbs[q->next];
-;        kk = kk + 1;
-;      } while (q != p && kk < NR_TCB);
-;    }
-;		qToCheck++;
-;		qToCheck &= 7;
-;	}
-;	// ToDo: wait in low power mode.
-;	return (GetRunningTCB());
-;	panic("No entries in ready queue.");
-;}
+; ----------------------------------------------------------------------------
+; Select a task to run. Relatively easy as task selection is handled by
+; hardware. All that needs to be done is to keep popping the hardware queue
+; until a valid running task is found.
 ;
-; Parameters:
-;		X = q
-;		Y = p
-;		F = qToCheck
-
-SelectTaskToRunKKLoop:
-	clre						; e = kk = 0
-0004:
-	tim		#TS_RUNNING,TCBStatus,x
-	bne		0001f
-	ldb		COREID		; GetCPU()
-	cmpb	TCBAffinity,x
-	bne		0002f
-	tfr		x,d
-	bsr		TCBPointerToHandle
-	ldu		#readyQ
-	stb		f,u
-	leas	4,s				; do a three-up return
-	rts
-0002:
-0001:
-	ldb		TCBNext,x
-	bsr		TCBHandleToPointer
-	tfr		d,x
-	ince						; kk = kk + 1
-	cmpr	x,y
-	beq		0003f
-	cmpe	#NR_TCB
-	blo		0004b
-0003:
-	rts
-
-SelectTaskToRunInnerFor:
-	ldu		#readyQ
-	ldb		f,u
-	tstb
-	beq		0001f
-	bmi		0001f
-	cmpb	#NR_TCB
-	bhs		0001f
-	pshs	b
-	bsr		TCBHandleToPointer
-	tfr		d,y
-	puls	b
-	cmpb	RunningID
-	beq		0002f
-	tfr		y,x
-	bra		0003f
-0002:
-	ldb		TCBNext,y
-	bsr		TCBHandleToPointer
-	tfr		d,x
-0003:
-	bsr		SelectTaskToRunKKLoop
-0001:
-	incf
-	cmpf	#7
-	bls		0005f
-	clrf
-0005:
-	rts
-
-startQ:
-	fcb		0,0,0,1,0,0,0,2,0,0,0,3,0,1,0,4,0,0,0,5,0,0,0,6,0,1,0,7,0,0,0,0
+; Modifies:
+;		none
+; Retuns:
+;		B = next task to run
+; ----------------------------------------------------------------------------
 
 SelectTaskToRun:
-	ldb		startQNdx
-	incb
-	andb	#31
-	stb		startQNdx
-	ldx		#startQ
-	ldf		b,x					; f = qToCheck
-	; Loop 8 times (unrolled)
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	bsr		SelectTaskToRunInnerFor
-	ldb		RunningID
+	pshs	a,x
+	; There should always be at least one task in the ready queue. It should
+	; be guarenteed to be popped within 32 tries (the number of attempts for
+	; all queues to be tested). The following limit is in case something is
+	; broken.
+sttr0004:
+	lda		#128
+sttr0001:						; keep popping tasks from the readyQ until a valid one
+	deca							; is found. If none valid for a long time default to
+	beq		sttr0002		; the OS task
+	ldb		RDYQO
+	beq		sttr0001
+	; Here we got a valid task id. If the task is still supposed to be
+	; running, push it back onto the reqdy queue. Otherwise go get the
+	; next task.
+	pshs	b
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	tim		#TS_RUNNING,TCBStatus,x
+	puls	b
+	beq		sttr0004
+	lbsr	InsertIntoReadyQueue
+	puls	a,x,pc
 	rts
-	
-	
+	; Nothing in queues? There is supposed to be. Add the OS task to the queue.
+sttr0002:
+	ldb		#1
+	lbsr	InsertIntoReadyQueue
+	puls	a,x,pc
+
 ;// ----------------------------------------------------------------------------
 ;// Sleep for a number of clock ticks.
 ;// ----------------------------------------------------------------------------
@@ -812,7 +740,8 @@ FMTK_Sleep2:
 	bsr		LockSysSemaphore
 	beq		FMTK_Sleep1
 	leas	4,s										; remove tick1 from stack
-	bsr		GetRunningTID					; D = running TID
+	ldb		RunningID							; D = running TID
+	clra
 	bsr		RemoveFromReadyQueue
 	tfr		d,x
 	ldd		1,s
@@ -891,11 +820,11 @@ UnlockSysSemaphore:
 ;------------------------------------------------------------------------------
 
 IGetTick:
-GetTick1:
+0001:
 	ldd		milliseconds
 	ldw		milliseconds+2
 	cmpd	milliseconds
-	bne		GetTick1					; this branch should be false almost always
+	bne		0001b						; this branch should be false almost always
 	rts
 
 ;------------------------------------------------------------------------------
@@ -903,9 +832,10 @@ GetTick1:
 ;------------------------------------------------------------------------------
 
 InitFreeMessageList:
-	clr		FreeMsg					; set start of free message list to first message
-	ldx		#messages+32
 	ldd		#1
+	std		FreeMSG					; set start of free message list to first message
+	ldx		#messages+32
+	incd
 0003:
 	std		MSG_LINK,x			; update link
 	incd									; increment to next index value
@@ -919,9 +849,10 @@ InitFreeMessageList:
 ;------------------------------------------------------------------------------
 
 InitFreeMailboxList:
-	clr		FreeMbx					; set start of free mailbox list to first mailbox
-	ldx		#mailboxes+32
 	ldd		#1
+	std		FreeMBX					; set start of free mailbox list to first mailbox
+	ldx		#mailboxes+32
+	incd
 0003:
 	std		MBX_LINK,x			; update link
 	incd									; increment to next index value
@@ -936,34 +867,91 @@ InitFreeMailboxList:
 
 FMTK_Init:
 
-	ldb		#$800				; select the system memory map
+	ldb		#$C00				; select the system memory map
 	stb		MMU_OKEY		; set in operate key
 
-	; First clear out the Femtiki memory area
-	ldx		#0
+	; Clear out variable area
+	ldx		#FemtikiVars
 	clrd
-FMTK_Init0002:
+0001:
 	std		,x++
-	cmpx	#$200000
-	blo		FMTK_Init0002
+	cmpx	#FemtikiVars_end
+	blo		0001b
+	lda		#1
+	sta		RunningAID
+	sta		RunningID		; reset this
 
 	; Set stack bottoms for all the memory maps
 	ldx		#0
 	ldb		#MAXVPG
-FMTK_Init0001:
+0003:
 	stb		MidStackBottoms,x
 	inx
 	cmpx	#32
-	blo		FMTK_Init0001
+	blo		0003b
 
 	bsr		InitFreeMessageList
 	bsr		InitFreeMailboxList
 
 	clr		startQNdx
+	
+	bsr		InitAppOne
+	bsr		InitTaskOne
 
+	; Map ACB into virtual address space at $600000
+	ldd		#$094F00
+	std		MMU+$600
+	inca
+	std		MMU+$602
 	rts
 
-OPT include "d:\cores2022\rf6809\software\fmtk\source\kernel\tcb.a09"
-OPT include "d:\cores2022\rf6809\software\fmtk\msg.a09"
-OPT include "d:\cores2022\rf6809\software\boot\bios-pam.a09"
-OPT include "d:\cores2022\rf6809\software\boot\bios-mem.a09"
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+InitAppOne:
+	ldb		#1
+	bsr		ACBHandleToPointer
+	tfr		d,x
+	ldd		#('A' << 16) | ('C' << 8) | 'B'
+	std		ACBObject+OBJMagic,x
+	clr		ACBmid,x			; system uses map #0
+	ldd		#$E00000
+	std		ACBpVidMem,x
+	lda		#64
+	sta		ACBVideoCols,x
+	lda		#32
+	sta		ACBVideoRows,x
+	clr		ACBCursorCol,x
+	clr		ACBCursorRow,x
+	lda		#$CE
+	sta		ACBNormAttr,x
+	lda		#1
+	sta		ACBHasFocus,x
+	sta		ACBTask,x
+	rts
+
+;------------------------------------------------------------------------------
+; When called, the context for the task has already been stored in the TCB.
+;------------------------------------------------------------------------------
+
+InitTaskOne:
+	ldb		#1
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	lda		#1						; appid 1 i system app
+	sta		TCBappid,x
+	sta		TCBtid,x
+	sta		TCBNext,x
+	sta		TCBPrev,x
+	sta		TCBHasFocus,x
+	lda		#TS_RUNNING
+	sta		TCBStatus,x
+	lda		#3
+	sta		TCBPriority,x
+	ldb		#1
+	lbsr	InsertIntoReadyQueue
+	rts
+
+
+include "d:\cores2022\rf6809\software\fmtk\source\kernel\tcb.a09"
+include "d:\cores2022\rf6809\software\fmtk\msg.a09"

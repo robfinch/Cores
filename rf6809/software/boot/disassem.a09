@@ -47,7 +47,7 @@ LSREL		EQU	2
 IMMB		EQU	3
 SREL		EQU	4
 NDX			EQU	5
-EXT			EQU	6
+EXTX			EQU	6
 IMMW		EQU	7
 FAREXT	EQU	8
 TFREXG	EQU	9
@@ -180,22 +180,22 @@ distbl1:
 	fcb		"CLR ", NDX
 
 	; 70 to 7F
-	fcb		"NEG ", EXT
+	fcb		"NEG ", EXTX
 	fcb		"    ", 0
 	fcb	  "    ", 0
-	fcb		"COM ", EXT
-	fcb		"LSR ", EXT
+	fcb		"COM ", EXTX
+	fcb		"LSR ", EXTX
 	fcb		"    ", 0
-	fcb		"ROR ", EXT
-	fcb		"ASR ", EXT
-	fcb		"ASL ", EXT
-	fcb		"ROL ", EXT
-	fcb		"DEC ", EXT
+	fcb		"ROR ", EXTX
+	fcb		"ASR ", EXTX
+	fcb		"ASL ", EXTX
+	fcb		"ROL ", EXTX
+	fcb		"DEC ", EXTX
 	fcb		"    ", 0
-	fcb		"INC ", EXT
-	fcb		"TST ", EXT
-	fcb		"JMP ", EXT
-	fcb		"CLR ", EXT
+	fcb		"INC ", EXTX
+	fcb		"TST ", EXTX
+	fcb		"JMP ", EXTX
+	fcb		"CLR ", EXTX
 
 	; 80 to 8F
 	fcb		"SUBA", IMMB
@@ -252,22 +252,22 @@ distbl1:
 	fcb		"STX ", NDX
 
 	; B0 to BF
-	fcb		"SUBA", EXT
-	fcb		"CMPA",	EXT
-	fcb		"SBCA", EXT
-	fcb		"SUBD", EXT
-	fcb		"ANDA", EXT
-	fcb		"BITA", EXT
-	fcb		"LDA ", EXT
-	fcb		"STA ", EXT
-	fcb		"EORA", EXT
-	fcb		"ADCA", EXT
-	fcb		"ORA ", EXT
-	fcb		"ADDA", EXT
-	fcb		"CMPX", EXT
-	fcb		"JSR ", EXT
-	fcb		"LDX ", EXT
-	fcb		"STX ", EXT
+	fcb		"SUBA", EXTX
+	fcb		"CMPA",	EXTX
+	fcb		"SBCA", EXTX
+	fcb		"SUBD", EXTX
+	fcb		"ANDA", EXTX
+	fcb		"BITA", EXTX
+	fcb		"LDA ", EXTX
+	fcb		"STA ", EXTX
+	fcb		"EORA", EXTX
+	fcb		"ADCA", EXTX
+	fcb		"ORA ", EXTX
+	fcb		"ADDA", EXTX
+	fcb		"CMPX", EXTX
+	fcb		"JSR ", EXTX
+	fcb		"LDX ", EXTX
+	fcb		"STX ", EXTX
 	
 	; C0 to CF
 	fcb		"SUBB", IMMB
@@ -324,22 +324,22 @@ distbl1:
 	fcb		"STU ", NDX
 
 	; F0 to FF
-	fcb		"SUBB", EXT
-	fcb		"CMPB",	EXT
-	fcb		"SBCB", EXT
-	fcb		"ADDD", EXT
-	fcb		"ANDB", EXT
-	fcb		"BITB", EXT
-	fcb		"LDB ", EXT
-	fcb		"STB ", EXT
-	fcb		"EORB", EXT
-	fcb		"ADCB", EXT
-	fcb		"ORB ", EXT
-	fcb		"ADDB", EXT
-	fcb		"LDD ", EXT
-	fcb		"STD ", EXT
-	fcb		"LDU ", EXT
-	fcb		"STU ", EXT
+	fcb		"SUBB", EXTX
+	fcb		"CMPB",	EXTX
+	fcb		"SBCB", EXTX
+	fcb		"ADDD", EXTX
+	fcb		"ANDB", EXTX
+	fcb		"BITB", EXTX
+	fcb		"LDB ", EXTX
+	fcb		"STB ", EXTX
+	fcb		"EORB", EXTX
+	fcb		"ADCB", EXTX
+	fcb		"ORB ", EXTX
+	fcb		"ADDB", EXTX
+	fcb		"LDD ", EXTX
+	fcb		"STD ", EXTX
+	fcb		"LDU ", EXTX
+	fcb		"STU ", EXTX
 
 	; 120 to 12F
 distbl2:
@@ -407,17 +407,17 @@ distbl4:
 	fcb		"CMPY", NDX
 	fcb		"LDY ", NDX
 	fcb		"STY ", NDX
-	fcb		"CMPD", EXT
-	fcb		"CMPY", EXT
-	fcb		"LDY ", EXT
-	fcb		"STY ", EXT
+	fcb		"CMPD", EXTX
+	fcb		"CMPY", EXTX
+	fcb		"LDY ", EXTX
+	fcb		"STY ", EXTX
 	fcb		"LDS ", IMMW
 	fcb		"LDS ", DIRECT
 	fcb		"STS ", DIRECT
 	fcb		"LDS ", NDX
 	fcb		"STS ", NDX
-	fcb		"LDS ", EXT
-	fcb		"STS ", EXT
+	fcb		"LDS ", EXTX
+	fcb		"STS ", EXTX
 	fcb		"SWI3", 0
 	fcb		"CMPU", IMMW
 	fcb		"CMPS", IMMW
@@ -425,8 +425,8 @@ distbl4:
 	fcb		"CMPS", DIRECT
 	fcb		"CMPU", NDX
 	fcb		"CMPS", NDX
-	fcb		"CMPU", EXT
-	fcb		"CMPS", EXT
+	fcb		"CMPU", EXTX
+	fcb		"CMPS", EXTX
 
 disassem:
 	clr		farflag
@@ -1012,7 +1012,7 @@ disNotPTO:
 	fcb		MF_OUTCH
 	lbra	disNextLine
 disNotNdx:
-	cmpb	#EXT
+	cmpb	#EXTX
 	bne		disNotExt
 	tst		farflag
 	beq		dis30

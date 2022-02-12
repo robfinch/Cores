@@ -366,9 +366,18 @@ struct oprecord
 #define PSEUDO_IFND          43
 #define PSEUDO_BINARY        44
 #define PSEUDO_FCDW          45
+#define PSEUDO_TYPE           46
+#define PSEUDO_SIZE           47
+#define PSEUDO_GLOBAL         48
+#define PSEUDO_DOTTEXT        49
 
 struct oprecord optable09[]=
   {
+  { ".BYTE",   OPCAT_PSEUDO,      PSEUDO_FCB, 0 },
+  { ".GLOBAL", OPCAT_PSEUDO,      PSEUDO_PUB, 0 },
+  { ".SIZE",   OPCAT_PSEUDO,      PSEUDO_SIZE, 0 },
+  { ".TEXT",   OPCAT_PSEUDO,      PSEUDO_DOTTEXT, 0 },
+  { ".TYPE",   OPCAT_PSEUDO,      PSEUDO_TYPE, 0 },
   { "ABA",     OPCAT_FOURBYTE,    0x0340040ab0e0LL, 0 },
   { "ABS",     OPCAT_PSEUDO,      PSEUDO_ABS, 0 },
   { "ABX",     OPCAT_ONEBYTE,     0x3a, 0 },
@@ -456,6 +465,7 @@ struct oprecord optable09[]=
   { "BSR",     OPCAT_SBRANCH,     0x8d, 0 },
   { "BVC",     OPCAT_SBRANCH,     0x28, 0 },
   { "BVS",     OPCAT_SBRANCH,     0x29, 0 },
+  { "BYTE",    OPCAT_PSEUDO,      PSEUDO_FCB, 0 },
   { "CBA",     OPCAT_FOURBYTE,    0x0340040a10e0LL, 0 },
   { "CLC",     OPCAT_TWOBYTE,     0x1c0fe, 0 },
   { "CLF",     OPCAT_TWOBYTE,     0x1c0bf, 0 },
@@ -747,6 +757,7 @@ struct oprecord optable09[]=
   { "SEXW",    OPCAT_6309 |
                OPCAT_ONEBYTE,     0x14, 0 },
   { "SEZ",     OPCAT_TWOBYTE,     0x1a004, 0 },
+  { "SIZE",    OPCAT_PSEUDO,      PSEUDO_SIZE, 0 },
   { "SPC",     OPCAT_PSEUDO,      PSEUDO_SPC, 0 },
   { "STA",     OPCAT_NOIMM |
                OPCAT_ARITH,       0x87, 0 },
@@ -791,16 +802,16 @@ struct oprecord optable09[]=
                OPCAT_ARITH,      0x280, 0 },
   { "SUBF",    OPCAT_6309 |
                OPCAT_ARITH,      0x2c0, 0 },
-  { "SUBW",    OPCAT_6309 |
-               OPCAT_DBLREG1BYTE, 0x180, 0 },
   { "SUBR",    OPCAT_6309 |
                OPCAT_IREG,        0x132, 0 },
+  { "SUBW",    OPCAT_6309 |
+               OPCAT_DBLREG1BYTE, 0x180, 0 },
   { "SWI",     OPCAT_ONEBYTE,     0x3f, 0 },
   { "SWI2",    OPCAT_ONEBYTE,     0x13f, 0 },
   { "SWI3",    OPCAT_ONEBYTE,     0x23f, 0 },
   { "SYMLEN",  OPCAT_PSEUDO,      PSEUDO_SYMLEN, 0 },
   { "SYNC",    OPCAT_ONEBYTE,     0x13, 0 },
-  { "TAB",     OPCAT_THREEBYTE,   0x1f08904d, 0 },
+//  { "TAB",     OPCAT_THREEBYTE,   0x1f08904d, 0 },
   { "TAP",     OPCAT_TWOBYTE,     0x1f08a, 0 },
   { "TBA",     OPCAT_THREEBYTE,   0x1f09804dLL, 0 },
   { "TEXT",    OPCAT_PSEUDO,      PSEUDO_TEXT, 0 },
@@ -826,6 +837,7 @@ struct oprecord optable09[]=
   { "TSY",     OPCAT_FOURBYTE,    0x034040035020LL, 2 },  /* PSHS S/PULS Y */
   { "TTL",     OPCAT_PSEUDO,      PSEUDO_NAM, 0 },
   { "TXS",     OPCAT_TWOBYTE,     0x1f014, 4 },
+  { "TYPE",    OPCAT_PSEUDO,      PSEUDO_TYPE, 0 },
   { "TYS",     OPCAT_FOURBYTE,    0x034020035040LL, 4 },  /* PSHS Y/PULS S */
   { "WAI",     OPCAT_TWOBYTE,     0x3c0ff, 0 },
   { "WORD",    OPCAT_PSEUDO,      PSEUDO_FCW, 0 },
@@ -1039,6 +1051,9 @@ struct oprecord optable00[]=
 #define EXPRCAT_FIXED         0x10
 #define EXPRCAT_NEGATIVE      0x20
 
+#define SYMTYP_FUNC     0x01
+#define SYMTYP_OBJ      0x02
+
 /*****************************************************************************/
 /* Symbol definitions                                                        */
 /*****************************************************************************/
@@ -1046,10 +1061,12 @@ struct oprecord optable00[]=
 struct symrecord
   {
   char name[MAXIDLEN + 1];              /* symbol name                       */
+  char type;
   char cat;                             /* symbol category                   */
   char isFar;						/* far assumed */
   char isFarkw;						/* FAR keyword used in symbol definiton */
   unsigned value;                 /* symbol value                      */
+  unsigned size;
   union
     {
     struct symrecord *parent;           /* parent symbol (for COMMON)        */
@@ -1494,6 +1511,19 @@ int nTexts = 0;                         /* # currently defined texts         */
 void processline();
 struct linebuf *readfile(char *name, unsigned char lvl, struct linebuf *after);
 struct linebuf *readbinary(char *name, unsigned char lvl, struct linebuf *after, struct symrecord *lp);
+
+int isIdentChar(char ch) {
+  return (isalnum(ch) || ch == '_');
+}
+int isFirstIdentChar(char ch) {
+  return (isalpha(ch) || ch == '.' || ch=='_');
+}
+
+int ishexdigit(char ch) {
+  return ((ch >= '0' && ch <= '9') 
+    || (ch >= 'a' && ch <= 'f') 
+    || (ch >= 'A' && ch <= 'F'));
+}
 
 /*****************************************************************************/
 /* allocline : allocates a line of text                                      */
@@ -2168,19 +2198,17 @@ void scanname()
 int i = 0;
 char c;
 char cValid;
+int count = 0;
 
 while (1)
-  {
+{
   c = *srcptr++;
-  if ((!(dwOptions & OPTION_TSC)) &&    /* TSC Assembler is case-sensitive   */
-      (!(dwOptions & OPTION_GAS)) &&    /* GNU Assembler is case-sensitive   */
-      (c >= 'a' && c <= 'z'))
-    c -= 32;
+  //if ((!(dwOptions & OPTION_TSC)) &&    /* TSC Assembler is case-sensitive   */
+  //    (!(dwOptions & OPTION_GAS)) &&    /* GNU Assembler is case-sensitive   */
+  //    (c >= 'a' && c <= 'z'))
+  //  c -= 32;
   cValid = 0;                           /* check for validity                */
-  if ((c >= '0' && c <= '9') ||         /* normally, labels may consist of   */
-      (c >= 'A' && c <= 'Z') ||         /* the characters A..Z,a..z,_        */
-      (c >= 'a' && c <= 'z') ||
-      (c == '_'))
+  if (count ? isIdentChar(c) : (isFirstIdentChar(c) || isdigit(c)))
     cValid = 1;
   if (dwOptions & OPTION_GAS)           /* for GNU AS compatibility,         */
     {                                   /* the following rules apply:        */
@@ -2190,7 +2218,7 @@ while (1)
     }
   if (!cValid)                          /* if invalid character encountered  */
     break;                              /* stop here                         */
-
+  count++;
   if (i < maxidlen)
     {
     namebuf[i] = c;
@@ -2418,7 +2446,7 @@ return p->value;
 
 int isfactorstart(char c)
 {
-if (isalpha(c))
+if (isFirstIdentChar(c))
   return 1;
 else if (isdigit(c))
   return 1;
@@ -2451,7 +2479,7 @@ long t;
 if (!(dwOptions & OPTION_TSC))
   skipspace();
 c = *srcptr;
-if (isalpha(c))
+if (isFirstIdentChar(c) && !isdigit(c))
   return (unsigned)scanlabel(p);
 else if (isdigit(c))
   {
@@ -2466,7 +2494,7 @@ else if (isdigit(c))
   switch (c)
     {
     case '0' :                          /* GNU AS bin/oct/hex?               */
-      if (dwOptions & OPTION_GAS)       /* if GNU AS extensions,             */
+      if (1 || (dwOptions & OPTION_GAS))       /* if GNU AS extensions,             */
         {
         if (srcptr[1] == 'b')           /* if binary value,                  */
           {
@@ -2492,7 +2520,14 @@ else switch (c)
     exprcat |= EXPRCAT_INTADDR;
     return loccounter;
   case '$' :
-    return scanhex();
+    if (ishexdigit(srcptr[1])) {
+      return scanhex();
+    }
+    else {
+      srcptr++;
+      exprcat |= EXPRCAT_INTADDR;
+      return loccounter;
+    };
   case '%' :
     return scanbin();
   case '@' :
@@ -2678,6 +2713,14 @@ while (parsing)
       t = t != scanexpr(6, &p);
       exprcat |= oldcat | EXPRCAT_FIXED;
       break;             
+    //case '~':
+    //  if (level == 9)
+    //    EXITEVAL
+    //  oldcat = exprcat;
+    //  t = ~scanexpr(9, &p);
+    //  exprcat ^= EXPRCAT_NEGATIVE;
+    //  RESOLVECAT
+    //  break;
     case '=':
       if (level >= 6)
         EXITEVAL
@@ -2741,21 +2784,21 @@ return t;
 
 int scanindexreg()
 {
-switch (toupper(*srcptr))
+  switch (toupper(*srcptr))
   {
-  case 'X':
-    return 1;
-  case 'Y':
-    postbyte |= 0x200;
-    return 1;
-  case 'U':
-    postbyte |= 0x400;
-    return 1;
-  case 'S':
-    postbyte |= 0x600;
-    return 1;
+    case 'X':
+      return 1;
+    case 'Y':
+      postbyte |= 0x200;
+      return 1;
+    case 'U':
+      postbyte |= 0x400;
+      return 1;
+    case 'S':
+      postbyte |= 0x600;
+      return 1;
   }  
-return 0;
+  return 0;
 }
 
 /*****************************************************************************/
@@ -2925,6 +2968,7 @@ char c, *oldsrcptr, *ptr;
 unsigned short accpost, h63 = 0;
 unsigned short isIndexed = 0;
 unsigned short indirect_byte = 0;
+postbyte = 0;
 isFar = 0;
 isPostIndexed = 0;
 unknown = 0;
@@ -2935,7 +2979,7 @@ skipspace();
 c = *srcptr;
 mode = ADRMODE_IMM;
 if (c == '[')
-  {
+{
   c = *++srcptr;
   if (c=='[') {
 	  c = *++srcptr;
@@ -2944,10 +2988,10 @@ if (c == '[')
   }
   else
 	  mode = ADRMODE_IND;
-    indirect_byte = 0x100;
-  }
+  indirect_byte = 0x100;
+}
 switch (toupper(c))
-  {
+{
   case 'D':
     accpost = 0x80b;
   accoffset:
@@ -2958,7 +3002,7 @@ switch (toupper(c))
     if (*srcptr != ',')
       RESTORE
     else
-      {
+    {
 		  isIndexed = 1;
       if ((h63) && (!(dwOptions & OPTION_H63)))
         error |= ERR_ILLEGAL_ADDR;
@@ -2967,11 +3011,11 @@ switch (toupper(c))
       if (!scanindexreg())
         RESTORE
       else
-        {
+      {
         srcptr++;
         set3();
-        }
       }
+    }
     break;    
   case 'A':
     accpost = 0x806;
@@ -3007,28 +3051,28 @@ switch (toupper(c))
     else
       mode = ADRMODE_IMM;
     srcptr++;
-	if (*srcptr=='>') {
-		srcptr++;
-	    operand = (scanexpr(0, pp) >> 24LL) & 0xffffffLL;
-		isFar = 0;
-		opsize = 3;
-	}
-	else if (*srcptr=='<') {
-		srcptr++;
-	    operand = scanexpr(0, pp) & 0xffffffLL;
-		isFar = 0;
-		opsize = 3;
-	}
-	else
-		operand = scanexpr(0, pp);
+	  if (*srcptr=='>') {
+		  srcptr++;
+	      operand = (scanexpr(0, pp) >> 24LL) & 0xffffffLL;
+		  isFar = 0;
+		  opsize = 3;
+	  }
+	  else if (*srcptr=='<') {
+		  srcptr++;
+	      operand = scanexpr(0, pp) & 0xffffffLL;
+		  isFar = 0;
+		  opsize = 3;
+	  }
+	  else
+		  operand = scanexpr(0, pp);
     break;
   case '<':
     srcptr++;
     if (*srcptr == '<')
-      {
+    {
       srcptr++;
       opsize = 1;
-      }
+    }
     else
       opsize = 2;
     goto dodefault;    
@@ -3042,7 +3086,7 @@ switch (toupper(c))
     if (!(dwOptions & OPTION_TSC))
       skipspace();
     if (*srcptr == ',')
-      {
+    {
 		  isIndexed = 1;
       srcptr++;
       if (!(dwOptions & OPTION_TSC))
@@ -3055,11 +3099,11 @@ switch (toupper(c))
         scanspecial();
       else
         scanindexed();
-      }
+    }
     else
-      {
+    {
       if (opsize == 0)
-        {
+      {
         if ((unsigned)operand >= 16777216)
 		      opsize = 4;
 	      else
@@ -3069,7 +3113,7 @@ switch (toupper(c))
           opsize = 3;
         else
           opsize = 2;
-        }  
+      }  
       /*
       if (opsize == 4) {
         if ((operand & 0xff800000) == 0xff800000)
@@ -3081,52 +3125,52 @@ switch (toupper(c))
       if (opsize == 1)
         opsize = 2;         
       if (mode == ADRMODE_IND)
-        {
+      {
         postbyte = 0x80f;
 		// Why is the following set ?
 //        opsize = 3;
-        }
-	  else if (mode == ADRMODE_DBL_IND)
-		  ;
-	  else {
-		  switch(opsize) {
-		case 2: mode = ADRMODE_DIR; break;
-		case 3: mode = ADRMODE_EXT; break;
-//		case 4:
-		case 4: mode = ADRMODE_EXT; isFar = 1; break;
-		default: mode = opsize - 1;
-		  }
-	  }
       }
+	    else if (mode == ADRMODE_DBL_IND)
+		    ;
+	    else {
+		    switch(opsize) {
+		    case 2: mode = ADRMODE_DIR; break;
+		    case 3: mode = ADRMODE_EXT; break;
+//		  case 4:
+		    case 4: mode = ADRMODE_EXT; isFar = 1; break;
+		    default: mode = opsize - 1;
+		    }
+	    }
+    }
   }
 
 if (mode >= ADRMODE_IND)
-  {
+{
   if (!(dwOptions & OPTION_TSC))
     skipspace();
   if (mode != ADRMODE_DBL_IND)
-	postbyte |= 0x100;
+  	postbyte |= 0x100;
   if (*srcptr != ']')
     error |= ERR_ILLEGAL_ADDR;
   srcptr++;
   if (mode==ADRMODE_DBL_IND) {
 	  if (*srcptr != ']')
-		error |= ERR_ILLEGAL_ADDR;
+  		error |= ERR_ILLEGAL_ADDR;
 	  srcptr++;
   }
-  }
-  skipspace();
-  if (*srcptr==',') {
-	  srcptr++;
-	  isPostIndexed = 1;
-    scanindexed();	// scanindexed will reset the postbyte
-	  postbyte |= indirect_byte | 0x80;
-  }
-  else {
-	  if (postbyte==0x90F || postbyte==0x80F)
-		  opsize = 3;
-      if (mode == ADRMODE_IND || mode==ADRMODE_DBL_IND)
-        {
+}
+skipspace();
+if (*srcptr==',') {
+	srcptr++;
+	isPostIndexed = 1;
+  scanindexed();	// scanindexed will reset the postbyte
+	postbyte |= indirect_byte | 0x80;
+}
+else {
+	if (postbyte==0x90F || postbyte==0x80F)
+		opsize = 3;
+  if (mode == ADRMODE_IND || mode==ADRMODE_DBL_IND)
+  {
 /*
 			if ((postbyte & 0xF)==4)	// 0 offset
 				opsize = 0;
@@ -3134,8 +3178,8 @@ if (mode >= ADRMODE_IND)
 			else
 				opsize = 3;
 */
-        }
-  }
+    }
+}
 if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF; 
 }
@@ -3790,6 +3834,7 @@ for (i = 0; i < 16; i++)
 
 if ((dwOptions & OPTION_TSC))           /* suppress warning 1 in TSC mode    */
   warning &= ~WRN_OPT;
+warning &= ~WRN_OPT;
 
 if (!(dwOptions & OPTION_WAR))          /* reset warnings if not wanted      */
   warning = WRN_OK;
@@ -4258,7 +4303,7 @@ scanoperands(&p);
 if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
   error |= ERR_ILLEGAL_ADDR;
 offs = operand - loccounter - 2;
-if (!unknown && (offs < -2048 || offs >= 2048))
+if (!unknown && (offs < -2048 || offs >= 2048) && pass > 1)
   error |= ERR_RANGE;
 if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF;
@@ -5210,7 +5255,7 @@ return 1;                               /* unknown option                    */
 
 void pseudoop(int co, struct symrecord * lp)
 {
-int i, j;
+int i, j, k;
 char c;
 struct relocrecord p = {0};
 
@@ -5302,27 +5347,27 @@ switch (co)
     if (!lp)
       error |= ERR_LABEL_MISSING;
     else
-      {
+    {
       if (lp->cat == SYMCAT_EMPTY ||
           lp->cat == SYMCAT_UNRESOLVED ||
           (lp->value == (unsigned)operand &&
            pass > 1))
-        {
+      {
         if (exprcat == EXPRCAT_INTADDR)
           lp->cat = SYMCAT_LABEL;
         else
           lp->cat = SYMCAT_CONSTANT;
         lp->value = (unsigned)operand;
-        }
+      }
       else
         error |= ERR_LABEL_MULT;
-      }
+    }
     break;
   case PSEUDO_PUB :                     /* PUBLIC a[,b[,c...]]               */
   case PSEUDO_EXT :                     /* EXTERN a[,b[,c...]]               */
     nRepNext = 0;                       /* reset eventual repeat             */
     skipspace();
-    while (isalnum(*srcptr))
+    for (k = 0; k == 0 ? isFirstIdentChar(*srcptr) : isIdentChar(*srcptr); k++)
       {
       scanname();                       /* parse option                      */
       lp = findsym(namebuf, 1);         /* look up the symbol                */
@@ -5922,6 +5967,8 @@ switch (co)
     else                                /* if all OK, (re)define text        */
       settext(lp->name, srcptr);
     break;
+  case PSEUDO_DOTTEXT:
+    break;
   case PSEUDO_NAME :                    /* NAME <modulename> ?               */
     if (!(dwOptions & OPTION_TSC))
       skipspace();
@@ -5963,6 +6010,45 @@ switch (co)
       srcptr = osrc;
       }
     break; 
+  case PSEUDO_TYPE:
+    skipspace();
+    scanname();
+    if (*srcptr == ',') {
+      lp = findsym(namebuf, 0);
+      srcptr++;
+      skipspace();
+      if (*srcptr == '@')
+        srcptr++;
+      scanname();
+      if (strcmp(namebuf, "function") == 0) {
+        lp->type = SYMTYP_FUNC;
+      }
+      else if (strcmp(namebuf, "object") == 0) {
+        lp->type = SYMTYP_OBJ;
+      }
+      else
+        lp->type = 0;
+    }
+    break;
+  case PSEUDO_SIZE:
+    skipspace();
+    scanname();
+    lp = findsym(namebuf, 1);
+    if (*srcptr == ',') {
+      srcptr++;
+      skipspace();
+      operand = scanexpr(0, &p);
+    }
+    if (lp) {
+      int nn;
+      //if (lp->cat)
+      //  setlabel(lp);
+      lp->size = operand;
+      if (lp->cat == SYMCAT_VARIABLE)
+      for (nn = 0; nn < operand; nn++)
+        putbyte(0);
+    }
+    break;
   }
 }
 
@@ -6329,8 +6415,8 @@ isFarkw = 0;
 if (inMacro)
   curline->lvl |= LINCAT_MACDEF;
 
-if (isalnum(*srcptr))                   /* look for label on line start      */
-  {
+if (isFirstIdentChar(*srcptr) || isalnum(*srcptr))                   /* look for label on line start      */
+{
   scanname();
   if (stricmp(namebuf, "far")==0) {
 	  isFar = 1;
@@ -6338,17 +6424,23 @@ if (isalnum(*srcptr))                   /* look for label on line start      */
 	  while(*srcptr==' ' || *srcptr=='\t') srcptr++;
 	  scanname();
   }
-  lp = findsym(namebuf, 1);
-  if (*srcptr == ':')
-    srcptr++;
+  op = findop(unamebuf);
+  if (op == NULL) {
+    lp = findsym(namebuf, 1);
+    if (*srcptr == ':')
+      srcptr++;
 
-  if ((lp) &&
+    if ((lp) &&
       (lp->cat != SYMCAT_COMMONDATA) &&
       (lp->u.flags & SYMFLAG_FORWARD))
-    lp->u.flags |= SYMFLAG_PASSED;
-  } 
+      lp->u.flags |= SYMFLAG_PASSED;
+  }
+  else
+    goto process_op;
+}
+
 skipspace();
-if ((isalnum(*srcptr)) ||
+if ((isFirstIdentChar(*srcptr) || isalnum(*srcptr)) ||
     ((dwOptions & OPTION_GAS) && (*srcptr == '.')))
   {
   scanname();
@@ -6361,16 +6453,19 @@ if ((isalnum(*srcptr)) ||
        (!strcmp(unamebuf, "INCD")) ||
        (!strcmp(unamebuf, "CLRD"))))
     strcat(unamebuf, "63");
+  if (strnicmp(unamebuf, "IFD", 3) == 0)
+    printf("hi");
   op = findop(unamebuf);
+process_op:
   if (op)
-    {
+  {
     if ((dwOptions & OPTION_TSC))       /* if TSC compatible, skip space NOW */
       skipspace();                      /* since it's not allowed inside arg */
     if (op->cat != OPCAT_PSEUDO)
-      {
+    {
       setlabel(lp);
       generating = 1;
-      }
+    }
     co = op->code;
     cat = op->cat;
                                         /* only pseudo-ops in common mode!   */
@@ -6480,29 +6575,30 @@ if ((isalnum(*srcptr)) ||
       error |= ERR_ILLEGAL_ADDR; 
     }
   else
-    {
+  {
     lpmac = findsym(namebuf, 0);        /* look whether opcode is a macro    */
     if (lpmac && lpmac->cat == SYMCAT_MACRO)
-      {
+    {
       if (pass == 1)                    /* if in pass 1                      */
         expandmacro(lp, lpmac);         /* expand macro below current line   */
-      }
-    else
+    }
+    else {
       error |= ERR_ILLEGAL_MNEM;
     }
   }
+}
 else
-  {
+{
   nRepNext = 0;                         /* reset eventual repeat if no code  */
   setlabel(lp);
-  }
+}
 
 if (inMacro)                            /* if in macro definition            */
-  {
+{
   codeptr = 0;                          /* ignore the code                   */
   error &= (ERR_MALLOC | ERR_NESTING);  /* ignore most errors                */
   warning &= WRN_SYM;                   /* ignore most warnings              */
-  }
+}
 
 if (pass == MAX_PASSNO)
   {
@@ -6539,23 +6635,26 @@ oldlc = loccounter;
 codeptr = 0;
 condline = 0;
 if (nSkipCount > 0)
-  {
+{
   nSkipCount--;
   condline = 1;                         /* this is STILL conditional         */
-  }
+}
 else
+{
+  if (isFirstIdentChar(*srcptr) || isalnum(*srcptr))
   {
-  if (isalnum(*srcptr))
-    {
     scanname();
     if (*srcptr == ':')
       srcptr++;
-    }
-  skipspace();
-  scanname();
+  }
+  op = findop(unamebuf);
+  if (op == NULL) {
+    skipspace();
+    scanname();
+  }
   op = findop(unamebuf);
   if (op && op->cat == OPCAT_PSEUDO)    /* examine pseudo-ops in detail      */
-    {
+  {
     if ((op->code == PSEUDO_IF) ||      /* IF variants                       */
         (op->code == PSEUDO_IFN) ||
         (op->code == PSEUDO_IFC) ||
@@ -6565,23 +6664,23 @@ else
       {
       ifcount++;
       condline = 1;                     /* this is a conditional line        */
-      }
+    }
     else if (op->code == PSEUDO_ENDIF)  /* ENDIF                             */
-      {
+    {
       if (ifcount > 0)
         ifcount--;
       else if (suppress == 1 || suppress == 2)
         suppress = 0;
       condline = 1;                     /* this is a conditional line        */
-      }
+    }
     else if (op->code == PSEUDO_ELSE)   /* ELSE                              */
-      {
+    {
       if (ifcount == 0 && suppress == 2)
         suppress = 0;
       condline = 1;                     /* this is a conditional line        */
-      }
-    }  
-  }
+    }
+  }  
+}
 
 if (((pass == MAX_PASSNO) || (dwOptions & OPTION_LP1)) &&
     (listing & LIST_ON) &&

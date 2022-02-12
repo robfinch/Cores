@@ -37,15 +37,12 @@
 ; The max page that will be used for an app. Pages above this are for the
 ; OS ROMs. 
 
-MEMSZ			EQU		65536		; memory size in 8kB pages
-MAXVPG		EQU		$7BF
-
 ;------------------------------------------------------------------------------
 ; Page Mapping Ram centric MMU
 ;------------------------------------------------------------------------------
 
 MMUInit:
-	ldd		#MEMSZ-OSPAGES-4  ; set number of available pages (20 pages already allocated)
+	ldd		#MEMSZ-OSPAGES 	; set number of available pages (20 pages already allocated)
 	std		NPAGES
 	; Free all memory for all tasks
 	; Sets all pages to map to page zero for all tasks, except for the system
@@ -58,14 +55,11 @@ MMUInit2:
 MMUInit1:
 	sty		MMU,x
 	leax	2,x
-	cmpx	#$1000
+	cmpx	#MMU_ENTRIES
 	blo		MMUInit1
 	incb
-	cmpb	#64
+	cmpb	#32
 	blo		MMUInit2
-
-	; Now ensure all pages in PAM are marked as free or OS allocated
-	bsr  	PAMInit
 
 	; allocate last page for system stacks
 	clr		MMU_AKEY				; select Mid #0 (system)
@@ -73,7 +67,126 @@ MMUInit1:
 	ldx		#$DFE
 	std		MMU,x
 
+;------------------------------------------------------------------------------
+; Set MAP #0 up as a linear memory map
+; - semaphore memory is mapped
+; - ROMs are mapped
+; - The text screen memory is mapped.
+;------------------------------------------------------------------------------
+
+	clr		MMU_AKEY
+	ldx		#0
+IFD &CMODA709
+	ldb		#$E00			; RWX=111
+ELSE
+	ldd		#$F00000	; CRWX=1111
+ENDIF
+	clre
+0001:
+	stb		MMU,x
+IFD &CMODA709
+	inx
+ELSE
+	sta		MMU+1,x
+	leax	2,x
+ENDIF
+	incb
+	ince
+IFD &COMDA709
+	cmpe	#1
+ELSE
+	cmpe	#1792			; number of entries to update
+ENDIF
+	blo		0001b
+	; Map the MMU table into the address space.
+	; (requires only 1 page)
+;	ldx		#$E38			; E38000 = page 71C * 2 bytes per record
+;	ldd		#$F1C6FF	; high order bits are all ones, plus CRWX=0110
+;	std		MMU,x
+	; Map semaphore memory into address space.
+;	ldx		#$EF0
+;	ldd		#SEMA_MMU
+;	std		MMU,x
+	; Map LEDs (VIA) into address space
+;	ldx		#$E60
+;	ldd		#VIA_MMU
+;	std		MMU,x
+	; Map ROMs into address space
+	bsr		MapROM
+
+	; Map Text Screen
+	; Map Entire I/O region
+	bsr		MapIO
+
+	ldb		#$800
+	stb		MMU_OKEY	; turn on mapping
 	rts
+
+; Map ROMs into the current address space
+; ROM is mapped in the 1MB region $F00000 to $FFFFFF
+
+IFD &CMODA709
+MapROM:
+	ldx		#$F8
+	lda		#$FF8
+	clre
+0001:
+	sta		MMU,x
+	inx
+	inca
+	ince
+	cmpe	#8
+	blo		0001b
+	rts
+ELSE
+MapROM:
+	ldx		#$F00
+	lda		#$F80
+	ldb		#$FFF			; F=cachable, readable, writeable executable
+	clre
+0001:
+	sta		MMU,x
+	stb		MMU+1,x
+	leax	2,x
+	inca
+	ince
+	cmpe	#128
+	blo		0001b
+	rts
+ENDIF
+
+; Map I/O into the current address space
+; I/O is mapped in the 1MB region $E00000 to $EFFFFF
+
+IFD &CMODA709
+MapIO:
+	ldx		#$E00
+	lda		#$FF0
+	clre						; e = 0
+0001:
+	sta		MMU,x
+	inx
+	inca
+	ince
+	cmpe	#8
+	blo		0001b
+	rts
+ELSE
+MapIO:
+	ldx		#$E00
+	lda		#$F00
+	ldb		#$6FF			; 6 = readable, writable
+	clre						; e = 0
+0001:
+	sta		MMU,x
+	stb		MMU+1,x
+	leax	2,x
+	inca
+	ince
+	cmpe	#128
+	blo		0001b
+	rts
+ENDIF
 
 ;------------------------------------------------------------------------------
 ; Find a run of buckets available for mapping virtual to physical addresses.
@@ -97,14 +210,25 @@ FindRun:
 	stb			MMU_AKEY					; set MMU access key
 	tfr			x,y								; Y = number of consecutive empty buckets needed
 	ldd			#OSPAGES					; start looking at page D=8 (others are for OS)
+IFND &CMODA709
 	asld
+ENDIF
 	tfr			d,u
 	; First find an empty bucket
 FindRun0001:
+IFD &COMDA709
+	ldb			MMU,u
+ELSE
 	ldd			MMU,u							; get map entry into U
+ENDIF
 	beq			FindRunEmpty0     ; is it empty?
+IFD &CMODA709
+	leau		1,u
+	cmpu		#MAXVPG
+ELSE
 	leau		2,u
 	cmpu		#MAXVPG*2
+ENDIF
 	blo			FindRun0001
 FindRun0002:
 	ldd			#-1								; got here so no run was found
@@ -128,28 +252,7 @@ FindRunFoundEnough:
 	puls		u,w,pc
 
 ;------------------------------------------------------------------------------
-; AllocMem allocates memory in the current memory map.
-;
-; Parameters:
-;		D = amount of memory to allocate
-; Modifies:
-;		
-; Returns:
-;		D = pointer to allocated memory in virtual address space.
-;		X = E_Ok for success, E_NotAlloc otherwise
-;------------------------------------------------------------------------------
-
-AllocMem:
-	pshs		d
-	swi2
-	fcb			OSF_GetCurrentMid
-	puls		x
-	bsr			IAlloc
-	exg			d,x
-	lbra		FMTK_RetDX
-		
-;------------------------------------------------------------------------------
-; IAlloc allocates memory in the given memory map. The allocated memory is
+; AllocMem allocates memory in the given memory map. The allocated memory is
 ; zeroed out.
 ;
 ; Parameters:
@@ -163,7 +266,8 @@ AllocMem:
 ;   Z flag set if successful
 ;------------------------------------------------------------------------------
 ;
-IAlloc:
+AllocMem:
+	andcc		#$D6F							; enable interrupts
 	pshs		w,y,u
 	stb			MMU_AKEY
 	tfr			x,d
@@ -171,7 +275,7 @@ IAlloc:
 	beq     allocZero
 	; First check if there are enough pages available in the system.
 	addd		#32								; word
-	addd		#PAGESZ-1					; D = round memory request
+	addd		#PGSZ-1						; D = round memory request
 	tfr			a,b								; convert to pages required (/8192)
 	clra
 	lsrb
@@ -198,20 +302,41 @@ allocEnough:
 alloc0001:
 	pshs		d									; save current run page
 	tfr			d,y								; convert D to index
+IFND &CMODA709
 	addr		y,y
-	lbsr		PAMAlloc					; alloc page
+ENDIF
+	swi
+	fcb			MF_PAMAlloc					; alloc page
+IFD &CMODA709
+	ora			#$E00							; set ACR: cacheable, readable, writeable, executable
+	stb			MMU,y							; store translation in table
+ELSE
 	ora			#$F00							; set ACR: cacheable, readable, writeable, executable
 	stb			MMU,y							; store translation in table
 	sta			MMU+1,y
+ENDIF
 	ldd			,s								; D = page number within run
+IFD &CMODA709
 	tfr			b,a								; * 4096
+	clrb
+	lsra											; * 2048
+	rorb
+ELSE
+	tfr			b,a								; * 4096
+	clrb
 	asla											; * 8192 (D now equal pointer to mem)
+ENDIF
 	tfr			d,y								; Y = pointer to mem
 	clrd											; value to set memory to
 	clre											; 4096 words to clear
 alloc0004:
+IFD &CMODA709
+	stb			,y
+	iny												; index to next word
+ELSE
 	std			,y
 	leay		2,y								; index to next word
+ENDIF
 	dece											; decrement word count
 	bne			alloc0004					; until zero again
 	puls		d									; D = page number in run
@@ -219,14 +344,29 @@ alloc0004:
   dex												; decrement number in run
   bne			alloc0001
 	puls		d									; D = start of run
+IFD &CMODA709
 	tfr			b,a								; * 4096
+	clrb											; 
+	lsra											; * 2048
+	rorb
+ELSE
+	tfr			b,a								; * 4096
+	clrb
 	asla											; * 8192 (D now equal pointer to mem)
+ENDIF
 	; Setup object fields
 	tfr			d,x								; X = pointer to mem
 	exg			d,u								; D = numm pages
+IFD &CMODA709
+	tfr			b,a								; num pages * 2048
+	clrb
+	lsra											; *2048
+	rorb
+ELSE
 	tfr			b,a								; num pages * 8192
 	clrb
 	asla
+ENDIF
 	std			OBJ_SIZE,x
 	ldd			#('M'<<16)+('E'<<8)+'M'
 	std			OBJMagic,x
@@ -253,20 +393,43 @@ allocZero:
 AllocStack:
 	pshs		ccr
 	stb			MMU_AKEY				; set access key for table
+IFD &CMODA709
+	ldx			#MAXVPG
+ELSE
 	ldx			#MAXVPG*2				; last page of memory is for stack
+ENDIF
 	orcc		#$290						; mask off interrupts
+IFD &CMODA709
+	ldb			MMU,x
+ELSE
 	ldd			MMU,x						; check if stack already allocated
+ENDIF
 	bne		  asAlreadyAlloc
-	lbsr    PAMAlloc				; allocate a page, will set / clear Z
+	swi
+	fcb    	MF_PAMAlloc				; allocate a page
+	tstd
 	beq		  astkXit    			; success?
+IFD &CMODA709
+	orb			#$C00						; set page for read / write access
+	ldx			#MAXVPG					; last page of memory is for stack
+	stb			MMU,x
+ELSE
 	exg			a,b
 	orb			#$E00						; set page for cacheable read / write access
 	ldx			#MAXVPG*2				; last page of memory is for stack
 	std			MMU,x
+ENDIF
 asAlreadyAlloc:
+IFD &CMODA709
+	tfr			b,a
+	clrb
+	lsra
+	rorb
+ELSE
 	clra										; convert pages to addresses (*8192)
 	aslb										; B already has high-order byte, so is *4096
-	ldx			#MAXVPG*8192
+ENDIF
+	ldx			#MAXVPG*PGSZ
 astkXit:
 	puls		ccr,pc
 
@@ -278,34 +441,43 @@ astkXit:
 ;------------------------------------------------------------------------------
 
 IncreaseStackSize:
-	swi2
-	fcb		OSF_GetRunningTCBPointer
-	tfr		d,x
-	ldb		TCBxAccb,x				; get B argument
 	stb		MMU_AKEY
 	ldy		#MidStackBottoms
 	ldb		b,y
 	clra
 	decb										; down a page
 	tfr		b,e								; E = new stack bottom
+IFND &CMODA709
 	aslb
+ENDIF
 	tfr		d,x
+IFD &CMODA709
+	ldb		MMU,x
+ELSE
 	ldd		MMU,x							; check if virtual address available
+ENDIF
 	bne		IncreaseStackOutOfMem	; crashed into other allocation?
-	bsr		PAMAlloc					; allocate page D = page number
+	swi
+	fcb		MF_PAMAlloc					; allocate page D = page number
+	tstd
 	bmi		IncreaseStackOutOfMem
+IFD &CMODA709
+	orb		#$E00
+	stb		MMU,x
+ELSE
 	ora		#$F00							; ACR = CRWX
 	exg		a,b
 	std		MMU,x
+ENDIF
 	ldb		MMU_AKEY
 	ste		b,y
-	lbra	FMTK_RetOK
+	rts
 IncreaseStackOutOfMem:
-	ldx		#E_NotAlloc
-	lbra	FMTK_RetErr
+	ldd		#E_NotAlloc
+	rts
 	
 ;------------------------------------------------------------------------------
-; This routine will de-allocate all the pages associated with a task including
+; This routine will de-allocate all the pages associated with a map including
 ; the stack.
 ;
 ; Parameters:
@@ -328,55 +500,84 @@ FreeAllNxt:
 	cmpu		#MAXVPG+1				; number of buckets to check, dont free OS memory
 	bhs			FreeAllXit
 	tfr			u,d							; D = page number
+IFND &CMODA709
 	aslb										; convert page number to MMU table index
+ENDIF
 	tfr			d,x
 	orcc		#$290						; mask off interrupts
+IFD &CMODA709
+	ldb			MMU,x						; get current mapping
+	andb		#$1FF						; mask off ACR
+	clra
+ELSE
 	ldd			MMU,x						; get current mapping
 	andb		#$0FF						; mask off ACR
 	exg			a,b							; D = page number
+ENDIF
 	tfr			d,x
 	tst			PAMShareCounts,x	; check the share count for the page
 	beq			FreeAll1				
 	dec			PAMShareCounts,x	; decrement share count if non-zero
 	bne			FreeAllNxt			; we're done with this page if share count non-zero
 FreeAll1:
-	swi2
-	fcb			OSF_PAMFree
+	swi
+	fcb			MF_PAMFree
+IFND &CMODA709
 	aslb										; D = index into MMU tables
+ENDIF
 	tfr			d,x							; X = index into MMU tables
 	clr			MMU,x						; clear the entry in the MMU (marks as free)
+IFND &CMODA709
 	clr			MMU+1,x
+ENDIF
 	inc			NPAGES					; update the number of available pages
 	bra			FreeAllNxt
 FreeAllXit:
-	puls		u,ccr
-	lbra		FMTK_RetOK
+	puls		u,ccr,pc
+
 
 ;------------------------------------------------------------------------------
 ; Convert a virtual address to a physical one. The physical address may contain
-; more than 24 bits so it is returned in the Q register.
+; more than 24 bits so it is returned in the D and X registers.
 ;
 ; Stack Space:
 ;		1 word
 ; Parameters:
-;		D = virtual address to convert
+;		B = mid
+;		X = virtual address to convert
 ; Returns:
-;		Q = physical address
+;		D,X = physical address
 ;------------------------------------------------------------------------------
 
 VirtToPhys:
-	pshs	x
+	pshs	w
+	exg		x,d
+IFD &CMODA709
+	aslb
+	bcc		0001f
+	tfr		a,b
+	lsrb
+	orb		#$800
+	bra		0002f
+0001:
+	tfr		a,b
+	lsrb
+0002:
+ELSE
 	tfr		a,b									; convert virtual address to page number (/8192)
 	clra											; (divide by 8192 then multiply by 2 = /4096)
 	andb	#$FFE								; mask for table index
-	pshs	d										; save off table index
-	swi2
-	fcb		OSF_GetCurrentMid
+ENDIF
+	exg		d,x
 	stb		MMU_AKEY						; set access key for table
-	puls	x										; get back table index
+IFD &CMODA709
+	ldb		MMU,x
+	andb	#$1FF								; mask off ACR bits
+	exg		a,b
+ELSE
 	ldd		MMU,x								; get the translation
 	andb	#$0FF								; mask off ACR bits
-	exg		a,b
-	muld	#8192
-	puls	x,pc
-
+ENDIF
+	muld	#PGSZ
+	tfr		w,x
+	puls	w,pc
