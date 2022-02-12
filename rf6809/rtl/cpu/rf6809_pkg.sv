@@ -46,6 +46,9 @@ parameter BPBX2M1 =	BPB*2-1;
 // The following enables support for the checkpoint interrupt.
 //`define SUPPORT_CHECKPOINT
 
+// The following enables OS components
+`define SUPPORT_OS	1
+
 //`define EIGHTBIT	1
 `define TWELVEBIT	2
 
@@ -105,6 +108,8 @@ parameter BPBX2M1 =	BPB*2-1;
 `define RDV_VECT	36'hFFFFFFFC4
 `define DBG_VECT	36'hFFFFFFFC0
 
+`define RDYQO			36'hFFFFFFF28
+`define RDYQI			36'b1111_1111_1111_1111_1111_1111_1111_0010_0xxx
 `define MSCOUNT		36'hFFFFFFF18
 `define MMU_OKEY	36'hFFFFFFF17
 `define MMU_AKEY	36'hFFFFFFF16

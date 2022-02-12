@@ -211,6 +211,27 @@ reg [bitsPerByte-1:0] dati;
 always_comb
 	dati = dat_i;
 
+reg rdyq_ins;
+reg rdyq_pop;
+reg rdyq_peek;
+reg [2:0] rdyq_wa;
+reg [11:0] rdyq_tidi;
+wire [11:0] rdyq_tido;
+
+`ifdef SUPPORT_OS
+ReadyQueues urdyq1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.insert_i(rdyq_ins),
+	.pop_i(rdyq_pop),
+	.peek_i(rdyq_peek),
+	.tid_i(rdy1_tidi),
+	.priority_i(rdyq_wa),
+	.tid_o(rdyq_tido)
+);
+`endif
+
 genvar g;
 
 // Evaluate the branch conditional
@@ -1017,6 +1038,7 @@ if (rst_i) begin
 	ibuf <= {4{`NOP}};
 	dm <= 1'b0;
 	im <= 1'b1;
+	im1 <= 1'b1;
 	firqim <= 1'b1;
 	nmi_armed <= `FALSE;
 	ic_invalidate <= `TRUE;
@@ -1044,8 +1066,14 @@ if (rst_i) begin
 	//dividend <= 'b0;
 	divcnt <= 'b0;
 	//divsign <= 'b0;
+	rdyq_ins <= 1'b0;
+	rdyq_pop <= 1'b0;
+	rdyq_peek <= 1'b0;
 end
 else begin
+
+rdyq_ins <= 1'b0;
+rdyq_pop <= 1'b0;
 
 // Release any bus lock during the last state of an instruction.
 if (lic_o && ack_i && (state==STORE2 || state==LOAD2))
@@ -1181,6 +1209,11 @@ PUSH2:
 		end
 		else begin
 			if (isINT) begin
+				if (vect==`SWI_VECT) begin
+					im1 <= 1'b1;
+					firqim <= 1'b1;
+					im <= 1'b1;
+				end
 				dm <= 1'b0;
 				radr <= vect;
 				if (vec_i != 24'h0) begin
@@ -2732,11 +2765,10 @@ begin
 			isFar <= `TRUE;
 			next_state(LOAD1);
 		end
+	// The CCR must be pushed onto the stack before interrupts are masked. So,
+	// interrupts are maksed when the PC is loaded after all the pushing.
 	`SWI:
 		begin
-			im <= 1'b1;
-			firqim <= 1'b1;
-			im1 <= 1'b1;
 			ir[`LOBYTE] <= `INT;
 			ipg <= 2'b11;
 			vect <= `SWI_VECT;
@@ -2835,8 +2867,11 @@ begin
 	`BRKCTRL1:		load_tsk(brkctrl[1]);
 	`BRKCTRL2:		load_tsk(brkctrl[2]);
 	`BRKCTRL3:		load_tsk(brkctrl[3]);
+`endif	
 	`MMU_AKEY:		load_tsk(pcr_o[11:0]);
 	`MMU_OKEY:		load_tsk(pcr_o[23:12]);
+`ifdef SUPPORT_OS
+	`RDYQO:				begin load_tsk(rdyq_tido); rdyq_pop <= 1'b1; end
 `endif	
 	default:
 `ifdef SUPPORT_DEBUG_REG
@@ -4449,8 +4484,11 @@ input [`LOBYTE] dat;
 begin
 		if (!tsc) begin
 			next_state(IFETCH);
+			casez(adr)
+`ifdef SUPPORT_OS
+			`RDYQI:			begin rdyq_tidi <= dat; rdyq_ins <= 1'b1; rdyq_wa <= adr[2:0]; end
+`endif
 `ifdef SUPPORT_DEBUG_REG
-			case(adr)
 			`BRKAD0+0:	brkad[0][`BYTE2] <= dat;	
 			`BRKAD0+1: brkad[0][`BYTE1] <= dat;
 			`BRKAD1+0:	brkad[1][`BYTE2] <= dat;	
@@ -4463,19 +4501,17 @@ begin
 			`BRKCTRL1: brkctrl[1] <= dat;
 			`BRKCTRL2: brkctrl[2] <= dat;
 			`BRKCTRL3: brkctrl[3] <= dat;
+`endif
 			`MMU_AKEY:	pcr_o[11:0] <= dat;
 			`MMU_OKEY:	pcr_o[23:12] <= dat;
 			default:
-				begin
-`endif	
+				begin	
 				we_o <= 1'b1;
 				adr_o <= adr;
 				dat_o <= dat;
 				next_state(STORE1a);
-`ifdef SUPPORT_DEBUG_REG				
 				end
 			endcase
-`endif			
 		end
 end
 endtask	
@@ -4522,6 +4558,7 @@ begin
 				firqim <= dat[6];
 				ef <= dat[7];
 				dm <= dat[8];
+				im1 <= dat[9];
 				if (isRTI) begin
 					$display("loaded ccr=%b", dat);
 					ir[`HIBYTE] <= dat[7] ? 12'h3FE : 12'h080;

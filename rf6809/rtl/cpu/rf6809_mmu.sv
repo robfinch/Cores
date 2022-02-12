@@ -44,6 +44,7 @@
 module rf6809_mmu(rst_i, clk_i, pcr_i, mapen_i, s_ex_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o,
     pea_o, cyc_o, stb_o, we_o,
     exv_o, rdv_o, wrv_o);
+parameter SMALL = 1'b0;
 input rst_i;
 input clk_i;
 input [23:0] pcr_i;     // paging enabled
@@ -67,6 +68,7 @@ output reg wrv_o;       // write violation
 
 wire cs = s_cyc_i && s_stb_i && s_cs_i;
 wire [5:0] okey = pcr_i[5:0];
+wire os_gate = pcr_i[22];
 wire [5:0] akey = pcr_i[17:12];
 
 ack_gen #(
@@ -92,7 +94,7 @@ reg cyc1,cyc2,stb1,stb2;
 wire [1:0] douta;
 wire [23:0] doutb;
 wire [20:0] doutca;
-wire [3:0] crwx = doutb[23:20];
+reg [3:0] crwx;
 
 always @(posedge clk_i)
   exv_o <= s_ex_i & ~crwx[0] & cyc2 & stb2 & mapen_i;
@@ -101,9 +103,38 @@ always @(posedge clk_i)
 always @(posedge clk_i)
   wrv_o <= s_wr_i & ~crwx[1] & cyc2 & stb2 & mapen_i;
 
+genvar g;
+generate begin : gMapRam
+if (SMALL) begin
+wire [11:0] addra = {akey[3:0],s_adr_i[ 7: 0]};
+wire [11:0] addrb = {okey[3:0],s_adr_i[18:11]};
+
+// block RAM (2 block RAMs)
+// 12 bits wide by 4096 rows deep
+rf6809_SmallMMURam u1 (
+  .clka(clk_i),    // input wire clka
+  .ena(cs),      // input wire ena
+  .wea(cs & s_wr_i),      // input wire [0 : 0] wea
+  .addra(addra),  // input wire [17 : 0] addra
+  .dina(s_dat_i[11:0]),    // input wire [11 : 0] dina
+  .douta(douta),
+  .clkb(clk_i),    // input wire clkb
+  .enb(1'b1),  // input wire enb
+  .web(1'b0),
+  .addrb(addrb),  // input wire [13 : 0] addrb
+  .dinb(12'h0),
+  .doutb(doutb[11:0])  // output wire [51 : 0] doutb
+);
+always_comb
+	crwx = {1'b0,doutb[11:9]};
+end
+else begin
 wire [17:0] addra = {akey,s_adr_i[11: 0]};
 wire [16:0] addrb = {okey,s_adr_i[23:13]};
 
+// block RAM: (88 block RAMS)
+// PortA: 12 bits wide, 262144 rows deep
+// PortB: 24 bits wide, 131072 rows deep
 rf6809_MMURam u1 (
   .clka(clk_i),    // input wire clka
   .ena(cs),      // input wire ena
@@ -118,6 +149,11 @@ rf6809_MMURam u1 (
   .dinb(24'h0),
   .doutb(doutb)  // output wire [51 : 0] doutb
 );
+always_comb
+	crwx = doutb[23:20];
+end
+end
+endgenerate
 
 always_ff @(posedge clk_i)
 if (s_cs_i)
@@ -154,11 +190,21 @@ if (rst_i) begin
   pea_o <= 32'hFFFFFFFE;
 end
 else begin
- 	pea_o[12:0] <= s_adr2[12:0];
-	if (mapen2)
-  	pea_o[31:13] <= doutb[18:0];
-	else
-		pea_o[31:13] <= s_adr2[31:13];
+	if (SMALL) begin
+	 	pea_o[10:0] <= s_adr2[10:0];
+		if (mapen2)
+	  	pea_o[19:11] <= doutb[8:0];
+		else
+			pea_o[19:11] <= s_adr2[19:11];
+		pea_o[31:20] <= 12'h0;
+	end
+	else begin
+	 	pea_o[12:0] <= s_adr2[12:0];
+		if (mapen2)
+	  	pea_o[31:13] <= doutb[18:0];
+		else
+			pea_o[31:13] <= s_adr2[31:13];
+	end
   cyc_o <= cyc2 & s_cyc_i;
   stb_o <= stb2 & s_stb_i;
   we_o <= mapen2 ? crwx[1] & s_wr_i : s_wr_i;
