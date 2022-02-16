@@ -67,6 +67,14 @@ MMUInit1:
 	ldx		#$DFE
 	std		MMU,x
 
+	ldb		#$C00
+	ldy		#MidStackBottoms
+0001:
+	stb		,y
+	iny
+	cmpy	#MidStackBottoms+32
+	blo		0001b
+
 ;------------------------------------------------------------------------------
 ; Set MAP #0 up as a linear memory map
 ; - semaphore memory is mapped
@@ -150,6 +158,10 @@ MapROM:
 	leax	2,x
 	inca
 	ince
+	cmpe	#120
+	blo		0002f
+	ldb		#$DFF			; make hi rom read-only
+0002:
 	cmpe	#128
 	blo		0001b
 	rts
@@ -438,6 +450,8 @@ astkXit:
 ;
 ; Parameter:
 ;		B = mid to allocate for
+; Returns:
+;		D = page number of bottom of stack
 ;------------------------------------------------------------------------------
 
 IncreaseStackSize:
@@ -468,12 +482,14 @@ ELSE
 	ora		#$F00							; ACR = CRWX
 	exg		a,b
 	std		MMU,x
+	exg		a,b
+	anda	#$0FF
 ENDIF
-	ldb		MMU_AKEY
-	ste		b,y
+	ldf		MMU_AKEY
+	ste		f,y
 	rts
 IncreaseStackOutOfMem:
-	ldd		#E_NotAlloc
+	clrd
 	rts
 	
 ;------------------------------------------------------------------------------

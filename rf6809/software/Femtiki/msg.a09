@@ -163,30 +163,30 @@ FMTK_AllocMbx:
 	lbsr	LockSysSemaphore
 	beq		0001b
 	ldd		FreeMBX
-  bne   amGotMbx
+  bne   0002f
   lbsr	UnlockSysSemaphore
   ldx		#E_NotAlloc
-  stx		7,s
-  lbra	OSExit
-amGotMbx: 
+  lbsr	FMTK_RetErr
+0002: 
 	tfr		d,w										; save mailbox handle
 	bsr		MBXHandleToPointer
-	tfr		d,x
-	ldd		MBX_LINK,x
+	tfr		d,u
+	ldd		MBX_LINK,u
 	std		FreeMBX
 	lbsr	UnlockSysSemaphore
 	clrd
-	std		MBX_LINK,x
-	stb   MBX_TQHEAD,x
-	stb   MBX_TQTAIL,x
-	std   MBX_MQHEAD,x
-	std   MBX_MQTAIL,x
-	ldb		2,s
-	stb		MBX_OWNER,x
-	tfr		w,d
-	std		1,s
-	ldx		#E_Ok
-	stx		7,s
+	std		MBX_LINK,u
+	stb   MBX_TQHEAD,u
+	stb   MBX_TQTAIL,u
+	std   MBX_MQHEAD,u
+	std   MBX_MQTAIL,u
+	lbsr	GetRunningTCBPtr
+	tfr		d,x
+	ldd		TCBxAcca,x
+	stb		MBX_OWNER,u
+	stw		TCBxAcca,x
+	ldd		#E_Ok
+	std		TCBxXR,x
 	lbra	OSExit
 
 ;------------------------------------------------------------------------------
@@ -255,13 +255,10 @@ FreeMbx1:
   ldd   MBX_MQHEAD,x
   std   FreeMSG         		; set new head of free list
   lbsr	UnlockSysSemaphore
-	ldx		#E_Ok
-	stx		7,s
-	lbra	OSExit
+  lbra	FMTK_RetOK
 fmBadMbx:
 	ldx		#E_BadMbx						; return null pointer if bad mailbox
-	stx		7,s
-	lbra	OSExit
+	lbra	FMTK_RetErr
 
 
 ;------------------------------------------------------------------------------

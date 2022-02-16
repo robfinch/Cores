@@ -78,8 +78,16 @@ TimerIRQ:
 	std		MMU
 	ldd		#$001F00			; done with PIC, map it out
 	std		MMU+2
-;	swi2
-;	fcb		OSF_FemtikiTimerIRQ
+	; The OS is not re-entrant, so test if it is active before calling the
+	; OS timer routine.
+	tst		OSActive
+	bne		0001f
+	nop
+	swi2
+	fcb		OSF_FemtikiTimerIRQ
+	rts
+0001:
+	inc		missed_ticks
 	rts
 notTimerIRQ:
 	ldd		#$000F00			; done with VIA, map it out

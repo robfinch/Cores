@@ -44,33 +44,32 @@ TS_PREEMPT	EQU		32
 TS_RUNNING	EQU		128
 
 ; error codes
-E_Ok		=		0x00
-E_Arg		=		0x01
-E_Func  =    0x02
-E_BadMbx	=		0x04
-E_QueFull	=		0x05
-E_NoThread	=		0x06
-E_NotAlloc	=		0x09
-E_NoMsg		=		0x0b
-E_Timeout	=		0x10
-E_BadAlarm	=		0x11
-E_NotOwner	=		0x12
-E_QueStrategy =		0x13
-E_BadDevNum	=		0x18
-E_DCBInUse	=		0x19
+E_Ok		EQU		$00
+E_Arg		EQU		$01
+E_Func  EQU    $02
+E_BadMbx	EQU		$04
+E_QueFull	EQU		$05
+E_NoThread	EQU		$06
+E_NotAlloc	EQU		$09
+E_NoMsg		EQU		$0b
+E_Timeout	EQU		$10
+E_BadAlarm	EQU		$11
+E_NotOwner	EQU		$12
+E_QueStrategy EQU		$13
+E_DCBInUse	EQU		$19
 ; Device driver errors
-E_BadDevNum	=		0x20
-E_NoDev		=		0x21
-E_BadDevOp	=		0x22
-E_ReadError	=		0x23
-E_WriteError =		0x24
-E_BadBlockNum	=	0x25
-E_TooManyBlocks	=	0x26
+E_BadDevNum	EQU		$20
+E_NoDev		EQU		$21
+E_BadDevOp	EQU		$22
+E_ReadError	EQU		$23
+E_WriteError EQU		$24
+E_BadBlockNum	EQU	$25
+E_TooManyBlocks	EQU	$26
 
 ; resource errors
-E_NoMoreMbx	=		0x40
-E_NoMoreMsgBlks	=	0x41
-E_NoMoreAlarmBlks	=0x44
-E_NoMoreTCBs	=	0x45
-E_NoMem		= 12
+E_NoMoreMbx	EQU		$40
+E_NoMoreMsgBlks	EQU	$41
+E_NoMoreAlarmBlks	EQU $44
+E_NoMoreTCBs	EQU	$45
+E_NoMem		EQU 12
 

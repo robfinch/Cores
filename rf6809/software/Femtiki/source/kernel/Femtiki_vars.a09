@@ -25,7 +25,7 @@ iof_switch		EQU		$FFFFFC0AD
 nMessage			EQU		$FFFFFC0AE
 nMailbox			EQU		$FFFFFC0B0
 FreeACB				EQU		$FFFFFC0B2
-freeTCB				EQU		$FFFFFC0B3
+FreeTCB				EQU		$FFFFFC0B3
 FreeMSG				EQU		$FFFFFC0B4
 FreeMBX				EQU		$FFFFFC0B6
 TimeoutList		EQU		$FFFFFC0B8
@@ -44,6 +44,7 @@ mmu_FreeMaps	EQU		$FFFFFC0E0
 mmu_entries		EQU		$FFFFFC100
 freelist			EQU		$FFFFFC102
 hSearchMap		EQU		$FFFFFC104
+OSActive			EQU		$FFFFFC105
 FemtikiVars_end	EQU	$FFFFFC120
 
 ;gc_stack		rmb		512

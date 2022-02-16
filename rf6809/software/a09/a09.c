@@ -594,6 +594,7 @@ struct oprecord optable09[]=
   { "INY",     OPCAT_TWOBYTE,     0x31201, 2 },
   { "JMP",     OPCAT_SINGLEADDR,  0x0e, 0 },
   { "JSR",     OPCAT_DBLREG1BYTE, 0x8d, 0 },
+  { "JTT",     OPCAT_DBLREG1BYTE, 0x18d, 0 },
   { "LBCC",    OPCAT_LBR1BYTE,    0x124, 0 },
   { "LBCS",    OPCAT_LBR1BYTE,    0x125, 0 },
   { "LBEC",    OPCAT_LBR1BYTE,    0x124, 0 },

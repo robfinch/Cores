@@ -35,6 +35,54 @@
 ; ============================================================================
 
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+IAllocTCB:
+	pshs	f,x
+	ldb		FreeTCB
+	beq		0001f
+	tfr		b,f
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	stb		FreeTCB
+	tfr		f,b
+0001:
+	clra
+	puls	f,x,pc
+
+AllocTCB:
+0002:
+	ldd		#-1
+	lbsr	LockSysSemaphore
+	beq		0002b
+	bsr		IAllocTCB
+	lbsr	UnlockSysSemaphore
+	lbra	FMTK_RetOKD
+	
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+IFreeTCB:
+	pshs	d
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		FreeTCB
+	stb		TCBNext,x
+	puls	d
+	stb		FreeTCB
+	rts
+
+FreeTCB:
+0001:
+	ldd		#-1
+	lbsr	LockSysSemaphore
+	beq		0001b
+	bsr		IFreeTCB
+	lbsr	UnlockSysSemaphore
+	lbra	FMTK_RetOK
+	
+;------------------------------------------------------------------------------
 ; Stack Space:
 ;		2 words
 ; Modifies:

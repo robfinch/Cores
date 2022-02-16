@@ -362,6 +362,17 @@ st7:
 	fcb		MF_PAMInit
 	swi
 	fcb		MF_MMUInit
+	ldx		#tcbs+OBJ_SIZE	; tcb[1]
+	lda		#$290			; mask interrupts, clear decimal mode
+	sta		TCBxCCR,x
+	ldd		#$BFFFFC
+	std		TCBxSP,x
+	ldb		#-1
+	stb		TCBxPC,x
+	ldd		#st12
+	std		TCBxPC+1,x
+	jtt		,x
+st12:	
 	swi2
 	fcb		OSF_FemtikiInit
 	orcc	#$290
@@ -421,7 +432,10 @@ init1:
 	decb
 	bne		init1
 	ldx		#128			; register to start at
-	sei
+	orcc	#$290			; disable interrupts
+	clrd
+	tfr		d,dpr
+	setdp	0
 	ldd		#PIC_MMU
 	std		MMU
 st1:
@@ -461,7 +475,7 @@ init2:
 	ldb		#1
 	stb		OUTSEMA+SEMAABS	; set semaphore to 1 available slot
 skip_init:
-	andcc	#$EF			; unmask irq
+	andcc	#$D6F			; unmask irq
 	lda		#5
 	sta		LEDS
 	ldd		#msgStartup
@@ -1232,15 +1246,18 @@ SetKeyboardEcho:
 ;------------------------------------------------------------------------------
 
 ShowSprites:
-	pshs	ccr,u
+	pshs	ccr,dpr,u
+	ldu		#0
+	tfr		u,dpr
+	setdp	0
 	ldu		#SPRITE_MMU
-	sei
+	orcc	#$290
 	stu		MMU
 	stx		SPRITE_EN
 	std		SPRITE_EN+2
 	ldu		#$000F00
 	stu		MMU
-	puls	ccr,u,pc
+	puls	ccr,dpr,u,pc
 
 ;==============================================================================
 ; Femtiki Operating System.
@@ -1470,7 +1487,7 @@ Monitor:
 	sta		16						; register 16 is edge sense reset reg	
 	ldd		#$000F00
 	std		MMU
-	andcc	#$EF					; SWI disables interrupts, re-enable them
+	andcc	#$D6F					; SWI disables interrupts, re-enable them
 	ldd		mon_init			; check special code to see if monitor has been initialized
 	cmpd	#1234567
 	beq		mon1
@@ -1501,7 +1518,7 @@ Monitor:
 	ldd		#1234567
 	std		mon_init
 mon1:
-	leas	$6FFF				; reset stack pointer
+	leas	$BFF7FF				; reset stack pointer
 	clrb							; turn off keyboard echo
 	lbsr	SetKeyboardEcho
 	; Reset IO vectors
@@ -2316,6 +2333,7 @@ mon_rom_vecs:
 	fcw		AllocMem					; 19
 	fcw		0									; 20
 	fcw		FreeAll						; 21
+	fcw		IncreaseStackSize	; 22
 
 NumFuncs	EQU	(*-mon_rom_vectab)/2
 
@@ -2345,6 +2363,7 @@ mon_rettab:
 	fcb		$800	; AllocMem
 	fcb		0			; FreeMem
 	fcb		0			; FreeAll
+	fcb		$800	; IncreaseStackSize
 
 ;------------------------------------------------------------------------------
 ; SWI routine.
@@ -2689,7 +2708,7 @@ swi3_rout:
 	ldd		14,s
 	std		mon_PCSAVE
 	sts		mon_SSAVE
-	lds		#$3FFF
+	lds		#$BFF7FF
 	ldd		#swi3_exit
 	pshs	d
 	cli
@@ -2769,7 +2788,7 @@ ipl3_rout:
 	fcdw		dbg_rout
 	fcdw		irq_rout
 	fcdw		firq_rout
-	fcdw		firq_rout
+	fcdw		irq_rout
 	fcdw		ipl4_rout
 	fcdw		ipl5_rout
 	fcdw		ipl6_rout

@@ -58,8 +58,8 @@ TCBxDPR			EQU		$005
 TCBxXR			EQU		$007
 TCBxYR			EQU		$009
 TCBxUSP			EQU		$00B
-TCBxPC			EQU		$00D
-TCBxSP      EQU   $010
+TCBxSP      EQU   $00D
+TCBxPC			EQU		$00F
 TCBFltRegs  EQU   $020    ; float register set storage area
 TCBRegsEnd  EQU   $060
 ; First 64 bytes are for integer register set
@@ -87,12 +87,17 @@ TCBOpMode   EQU   $089
 TCBMbxNext  EQU   $08A
 TCBMbxPrev  EQU   $08C
 TCBTaskNum  EQU   $08E
-TCBName			EQU		$090
+TCBAcbNext	EQU		$090
+TCBAcbPrev	EQU		$092
+TCBhMailboxes	EQU		$094
+TCBName			EQU		$0A0
 TCB_SIZE		EQU		$0C0
 
 ; Application Control Block
 ACBObject     EQU   0
-ACBpData      EQU   32
+ACBNumTask		EQU		66
+ACBStackSize	EQU		68
+ACBpData      EQU   70
 ACBDataSize   EQU   72
 ACBpUIData    EQU   80
 ACBUIDataSize EQU   88
@@ -128,7 +133,7 @@ ACBKeybdTail  EQU   879
 ACBKeybdBuffer  EQU   880
 ACBnumber     EQU   944
 ACBNext       EQU   952
-ACBTask       EQU   960
+ACBTaskList   EQU   960
 ACBHasFocus   EQU   962
 ACBmid        EQU   964
 ACBStatus     EQU   966

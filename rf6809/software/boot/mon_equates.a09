@@ -89,7 +89,7 @@ MF_MMUInit	EQU		18
 MF_AllocMem	EQU		19
 MF_FreeMem	EQU		20
 MF_FreeAll	EQU		21
-
+MF_IncreaseStackSize	EQU		22
 mon_numwka	EQU		$910
 mon_r1		EQU		$920
 mon_r2		EQU		$924
