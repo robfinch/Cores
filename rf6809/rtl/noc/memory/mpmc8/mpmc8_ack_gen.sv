@@ -37,7 +37,7 @@
 import mpmc8_pkg::*;
 
 module mpmc8_ack_gen(rst, clk, state, ch, cs, adr, cr, wr, to, taghit, 
-	resv_ch, resv_adr, ack);
+	resv_ch, resv_adr, ack, pre_ack);
 parameter N = 0;
 input rst;
 input clk;
@@ -52,38 +52,47 @@ input taghit;
 input [3:0] resv_ch [0:NAR-1];
 input [31:0] resv_adr [0:NAR-1];
 output reg ack;
+output reg pre_ack;
 
 integer n;
+reg [7:0] ack_pipe;
 
 // Setting ack output
 // Ack takes place outside of a state so that reads from different read caches
 // may occur at the same time.
 always_ff @(posedge clk)
 if (rst)
-	ack <= FALSE;
+	ack_pipe <= 'd0;
 else begin
+	ack_pipe <= {ack_pipe[6:0],ack_pipe[0]};	
+
 	// Reads: the ack doesn't happen until the data's been cached. If there is
 	// cached data we give an ack right away.
 	if (taghit)
-		ack <= TRUE;
+		ack_pipe[0] <= 8'd1;
 
 	if (state==IDLE) begin
     if (cr) begin
-      ack <= TRUE;
+      ack_pipe <= 8'hFF;
     	for (n = 0; n < NAR; n = n + 1)
-      	if ((resv_ch[n]==N) && (resv_adr[n][31:4]==adr[31:4]))
-        	ack <= FALSE;
+      	if ((resv_ch[n]==N) && (resv_adr[n][31:4]==adr[31:4])) begin
+					ack_pipe <= 'd0;
+				end
     end
 	end
 
 	// Write: an ack can be sent back as soon as the write state is reached..
 	if ((state==PRESET1 && wr) || to)
 		if (ch==N)
-			ack <= TRUE;
+			ack_pipe <= 8'hFF;
 
 	// Clear the ack when the circuit is de-selected.
 	if (!cs)
-		ack <= FALSE;
+		ack_pipe <= 'd0;
+
+	ack <= ack_pipe[7];
+	pre_ack <= ack_pipe[0];
+
 end
 
 endmodule

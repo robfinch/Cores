@@ -36,52 +36,35 @@
 //
 import mpmc8_pkg::*;
 
-module mpmc8_strm_read_cache(rst, wclk, wr, wadr, wdat, inv,
-	rclk, radr, rdat, hit
+module mpmc8_sync(clk, cs_i, we_i, sel_i, adr_i, dati_i, sr_i, cr_i,
+	cs_o, we_o, sel_o, adr_o, dati_o, sr_o, cr_o
 );
-input rst;
-input wclk;
-input wr;
-input [31:0] wadr;
-input [127:0] wdat;
-input inv;
-input rclk;
-input [31:0] radr;
-output reg [127:0] rdat;
-output reg hit;
+parameter W=128;
+input clk;
+input cs_i;
+input we_i;
+input [W/8-1:0] sel_i;
+input [31:0] adr_i;
+input [W-1:0] dati_i;
+input sr_i;
+input cr_i;
+output reg cs_o;
+output reg we_o;
+output reg [W/8-1:0] sel_o;
+output reg [31:0] adr_o;
+output reg [W-1:0] dati_o;
+output reg sr_o;
+output reg cr_o;
 
-(* ram_style="distributed" *)
-reg [127:0] lines [0:31];
-(* ram_style="distributed" *)
-reg [27:0] tags [0:31];
-(* ram_style="distributed" *)
-reg [31:0] vbit;
-reg [31:0] radrr;
-reg [27:0] tago;
-reg vbito;
-
-always_ff @(posedge rclk)
-	radrr <= radr;
-always_ff @(posedge wclk)
-	if (wr) lines[wadr[8:4]] <= wdat;
-always_ff @(posedge rclk)
-	rdat <= lines[radrr[8:4]];
-always_ff @(posedge rclk)
-	tago <= tags[radrr[8:4]];
-always_ff @(posedge rclk)
-	vbito <= vbit[radrr[8:4]];
-always_ff @(posedge wclk)
-	if (wr) tags[wadr[8:4]] <= wadr[31:4];
-always_ff @(posedge wclk)
-if (rst)
-	vbit <= 'b0;
-else begin
-	if (wr)
-		vbit[wadr[8:4]] <= 1'b1;
-	else if (inv)
-		vbit[wadr[8:4]] <= 1'b0;
+always_ff @(posedge clk)
+begin
+	cs_o <= cs_i;
+	we_o <= we_i;
+	sel_o <= sel_i;
+	adr_o <= adr_i;
+	dati_o <= dati_i;
+	sr_o <= sr_i;
+	cr_o <= cr_i;
 end
-always_comb
-	hit = (tago==radrr[31:4]) && (vbito==1'b1);
 
 endmodule

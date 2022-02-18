@@ -36,52 +36,52 @@
 //
 import mpmc8_pkg::*;
 
-module mpmc8_strm_read_cache(rst, wclk, wr, wadr, wdat, inv,
-	rclk, radr, rdat, hit
+module mpmc8_mask_select(rst, clk, state, ch,
+	wmask0, wmask1, wmask2, wmask3, wmask4, wmask5, wmask6, wmask7, 
+	mask, mask2
 );
 input rst;
-input wclk;
-input wr;
-input [31:0] wadr;
-input [127:0] wdat;
-input inv;
-input rclk;
-input [31:0] radr;
-output reg [127:0] rdat;
-output reg hit;
+input clk;
+input [3:0] state;
+input [3:0] ch;
+input [15:0] wmask0;
+input [15:0] wmask1;
+input [15:0] wmask2;
+input [15:0] wmask3;
+input [15:0] wmask4;
+input [15:0] wmask5;
+input [15:0] wmask6;
+input [15:0] wmask7;
+output reg [15:0] mask;
+output reg [15:0] mask2;
 
-(* ram_style="distributed" *)
-reg [127:0] lines [0:31];
-(* ram_style="distributed" *)
-reg [27:0] tags [0:31];
-(* ram_style="distributed" *)
-reg [31:0] vbit;
-reg [31:0] radrr;
-reg [27:0] tago;
-reg vbito;
-
-always_ff @(posedge rclk)
-	radrr <= radr;
-always_ff @(posedge wclk)
-	if (wr) lines[wadr[8:4]] <= wdat;
-always_ff @(posedge rclk)
-	rdat <= lines[radrr[8:4]];
-always_ff @(posedge rclk)
-	tago <= tags[radrr[8:4]];
-always_ff @(posedge rclk)
-	vbito <= vbit[radrr[8:4]];
-always_ff @(posedge wclk)
-	if (wr) tags[wadr[8:4]] <= wadr[31:4];
-always_ff @(posedge wclk)
+// Setting the data mask. Values are enabled when the data mask is zero.
+always_ff @(posedge clk)
 if (rst)
-	vbit <= 'b0;
+  mask2 <= 16'h0000;
 else begin
-	if (wr)
-		vbit[wadr[8:4]] <= 1'b1;
-	else if (inv)
-		vbit[wadr[8:4]] <= 1'b0;
+	if (state==PRESET1)
+		case(ch)
+		4'd0:	mask2 <= wmask0;
+		4'd1:	mask2 <= wmask1;
+		4'd2:	mask2 <= wmask2;
+		4'd3:	mask2 <= wmask3;
+		4'd4:	mask2 <= wmask4;
+		4'd5:	mask2 <= wmask5;
+		4'd6:	mask2 <= wmask6;
+		4'd7:	mask2 <= wmask7;
+		default:	mask2 <= 16'h0000;
+		endcase
+	// For RMW cycle all bytes are writtten.
+	else if (state==WRITE_TRAMP1)
+		mask2 <= 16'h0000;
 end
-always_comb
-	hit = (tago==radrr[31:4]) && (vbito==1'b1);
+always_ff @(posedge clk)
+if (rst)
+  mask <= 16'h0000;
+else begin
+	if (state==PRESET2)
+		mask <= mask2;
+end
 
 endmodule

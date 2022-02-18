@@ -36,14 +36,22 @@
 //
 import mpmc8_pkg::*;
 
-module mpmc8_addr_select(rst, clk, state, ch,
+module mpmc8_ch_prioritize(clk, elevate,
+	cs0, cs1, cs2, cs3, cs4, cs5, cs6, cs7,
 	we0, we1, we2, we3, we4, we5, we6, we7,
-	adr0, adr1, adr2, adr3, adr4, adr5, adr6, adr7,
-	adr);
-input rst;
+	ch0_taghit, ch1_taghit, ch2_taghit, ch3_taghit,
+	ch4_taghit, ch5_taghit, ch6_taghit, ch7_taghit,
+	ch);
 input clk;
-input [3:0] state;
-input [3:0] ch;
+input elevate;
+input cs0;
+input cs1;
+input cs2;
+input cs3;
+input cs4;
+input cs5;
+input cs6;
+input cs7;
 input we0;
 input we1;
 input we2;
@@ -52,46 +60,93 @@ input we4;
 input we5;
 input we6;
 input we7;
-input [31:0] adr0;
-input [31:0] adr1;
-input [31:0] adr2;
-input [31:0] adr3;
-input [31:0] adr4;
-input [31:0] adr5;
-input [31:0] adr6;
-input [31:0] adr7;
-output reg [31:0] adr;
+input ch0_taghit;
+input ch1_taghit;
+input ch2_taghit;
+input ch3_taghit;
+input ch4_taghit;
+input ch5_taghit;
+input ch6_taghit;
+input ch7_taghit;
+output reg [3:0] ch;
 
-// Select the address input
-reg [31:0] adrx;
+
+// Select the channel
+// This prioritizes the channel during the IDLE state.
+// During an elevate cycle the channel priorities are reversed.
 always_ff @(posedge clk)
-if (state==IDLE) begin
-	case(ch)
-	3'd0:	if (we0)
-				adrx <= {adr0[AMSB:4],4'h0};
-			else
-				adrx <= {adr0[AMSB:7],7'h0};
-	3'd1:	if (we1)
-				adrx <= {adr1[AMSB:4],4'h0};
-			else
-				adrx <= {adr1[AMSB:5],5'h0};
-	3'd2:	adrx <= {adr2[AMSB:4],4'h0};
-	3'd3:	adrx <= {adr3[AMSB:4],4'h0};
-	3'd4:	adrx <= {adr4[AMSB:4],4'h0};
-	3'd5:	adrx <= {adr5[AMSB:6],6'h0};
-	3'd6:	adrx <= {adr6[AMSB:4],4'h0};
-	3'd7:
-		if (we7) 
-			adrx <= {adr7[AMSB:4],4'h0};
+begin
+	if (elevate) begin
+		if (cs7 & we7)
+			ch <= 4'd7;
+		else if (cs6 & we6)
+			ch <= 4'd6;
+		else if (cs5 & we5)
+			ch <= 4'd5;
+		else if (cs4 & we4)
+			ch <= 4'd4;
+		else if (cs3 & we3)
+			ch <= 4'd3;
+		else if (cs2 & we2)
+			ch <= 4'd2;
+		else if (cs1 & we1)
+			ch <= 4'd1;
+		else if (cs0 & we0)
+			ch <= 4'd0;
+		else if (cs7 & ~ch7_taghit)
+			ch <= 4'd7;
+		else if (cs6 & ~ch6_taghit)
+			ch <= 4'd6;
+		else if (cs5 & ~ch5_taghit)
+			ch <= 4'd5;
+		else if (cs4 & ~ch4_taghit)
+			ch <= 4'd4;
+		else if (cs3 & ~ch3_taghit)
+			ch <= 4'd3;
+		else if (cs2 & ~ch2_taghit)
+			ch <= 4'd2;
+		else if (cs1 & ~ch1_taghit)
+			ch <= 4'd1;
+		else if (cs0 & ~ch0_taghit)
+			ch <= 4'd0;
 		else
-			adrx <= {adr7[AMSB:4],4'h0};
-	default:	adrx <= 29'h1FFFFFF0;
-	endcase
+			ch <= 4'hF;
+	end
+	// Channel 0 read or write takes precedence
+	else if (cs0 & we0)
+		ch <= 4'd0;
+	else if (cs0 & ~ch0_taghit)
+		ch <= 4'd0;
+	else if (cs1 & we1)
+		ch <= 4'd1;
+	else if (cs2 & we2)
+		ch <= 4'd2;
+	else if (cs3 & we3)
+		ch <= 4'd3;
+	else if (cs4 & we4)
+		ch <= 4'd4;
+	else if (cs6 & we6)
+		ch <= 4'd6;
+	else if (cs7 & we7)
+		ch <= 4'd7;
+	// Reads, writes detected above
+	else if (cs1 & ~ch1_taghit)
+		ch <= 4'd1;
+	else if (cs2 & ~ch2_taghit)
+		ch <= 4'd2;
+	else if (cs3 & ~ch3_taghit)
+		ch <= 4'd3;
+	else if (cs4 & ~ch4_taghit)
+		ch <= 4'd4;
+	else if (cs5 & ~ch5_taghit)
+		ch <= 4'd5;
+	else if (cs6 & ~ch6_taghit)
+		ch <= 4'd6;
+	else if (cs7 & ~ch7_taghit)
+		ch <= 4'd7;
+	// Nothing selected
+	else
+		ch <= 4'hF;
 end
-always_ff @(posedge clk)
-if (rst)
-	adr <= 32'h1FFFFFF0;
-else if (state==PRESET1)
-	adr <= adrx;
 
 endmodule

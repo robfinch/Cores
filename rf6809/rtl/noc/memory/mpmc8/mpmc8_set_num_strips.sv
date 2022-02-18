@@ -36,52 +36,36 @@
 //
 import mpmc8_pkg::*;
 
-module mpmc8_strm_read_cache(rst, wclk, wr, wadr, wdat, inv,
-	rclk, radr, rdat, hit
-);
-input rst;
-input wclk;
-input wr;
-input [31:0] wadr;
-input [127:0] wdat;
-input inv;
-input rclk;
-input [31:0] radr;
-output reg [127:0] rdat;
-output reg hit;
+module mpmc8_set_num_strips(clk, state, ch,
+	we0, we1, we2, we3, we4, we5, we6, we7, num_strips);
+input clk;
+input [3:0] state;
+input [3:0] ch;
+input we0;
+input we1;
+input we2;
+input we3;
+input we4;
+input we5;
+input we6;
+input we7;
+output reg [2:0] num_strips;
 
-(* ram_style="distributed" *)
-reg [127:0] lines [0:31];
-(* ram_style="distributed" *)
-reg [27:0] tags [0:31];
-(* ram_style="distributed" *)
-reg [31:0] vbit;
-reg [31:0] radrr;
-reg [27:0] tago;
-reg vbito;
-
-always_ff @(posedge rclk)
-	radrr <= radr;
-always_ff @(posedge wclk)
-	if (wr) lines[wadr[8:4]] <= wdat;
-always_ff @(posedge rclk)
-	rdat <= lines[radrr[8:4]];
-always_ff @(posedge rclk)
-	tago <= tags[radrr[8:4]];
-always_ff @(posedge rclk)
-	vbito <= vbit[radrr[8:4]];
-always_ff @(posedge wclk)
-	if (wr) tags[wadr[8:4]] <= wadr[31:4];
-always_ff @(posedge wclk)
-if (rst)
-	vbit <= 'b0;
-else begin
-	if (wr)
-		vbit[wadr[8:4]] <= 1'b1;
-	else if (inv)
-		vbit[wadr[8:4]] <= 1'b0;
+// Setting burst length
+always_ff @(posedge clk)
+if (state==IDLE) begin
+	num_strips <= 3'd0;
+	case(ch)
+	4'd0:	if (!we0) num_strips <= 3'd7;		//7
+	4'd1:	if (!we1)	num_strips <= 3'd1;		//1
+	4'd2:	;
+	4'd3:	;
+	4'd4:	;
+	4'd5:	num_strips <= 3'd3;	//3
+	4'd6:	;
+	4'd7:	if (!we7) num_strips <= 3'd3;
+	default:	;
+	endcase
 end
-always_comb
-	hit = (tago==radrr[31:4]) && (vbito==1'b1);
 
 endmodule
