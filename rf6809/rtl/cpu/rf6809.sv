@@ -59,6 +59,8 @@ parameter DIV1 = 6'd16;
 parameter DIV2 = 6'd17;
 parameter DIV3 = 6'd18;
 parameter MUL2 = 6'd20;
+parameter DFMUL1 = 6'd21;
+parameter DFDIV1 = 6'd22;
 parameter ICACHE1 = 6'd31;
 parameter ICACHE2 = 6'd32;
 parameter ICACHE3 = 6'd33;
@@ -109,10 +111,12 @@ output [5:0] state;
 
 reg [5:0] state;
 reg [5:0] load_what,store_what,load_what2;
+reg [`LOBYTE] tr;		// task register
+reg [`TRPBYTE] tcb_base;
 reg [`TRPBYTE] pc;
 wire [`TRPBYTE] pcp2 = pc + 4'd2;
 wire [`TRPBYTE] pcp16 = pc + 5'd16;
-wire [`HEXBYTE] insn;
+wire [`OCTABYTE] insn;
 wire icacheOn = 1'b1;
 reg [`TRPBYTE] ibufadr, icwa;
 reg [191:0] ibuf;
@@ -123,7 +127,7 @@ wire [`DBLBYTE] mask = 24'hFFFFFF;
 reg [1:0] ipg;
 reg isFar;
 reg isOuterIndexed;
-reg [`HEXBYTE] ir;
+reg [`OCTABYTE] ir;
 `ifdef EIGHTBIT
 wire [9:0] ir12 = {ipg,ir[`LOBYTE]};
 `endif
@@ -142,13 +146,15 @@ wire [`LOBYTE] cfx8 = cf;
 wire [`DBLBYTE] cfx24 = {23'b0,cf};
 reg im,im1,firqim;
 reg dm;	// decimal mode
+reg df;	// done flag
 reg sync_state,wait_state;
-wire [`LOBYTE] ccr = bitsPerByte==12 ? {2'b00,im1,dm,ef,firqim,hf,im,nf,zf,vf,cf} : {ef,firqim,hf,im,nf,zf,vf,cf};
+wire [`LOBYTE] ccr = bitsPerByte==12 ? {1'b0,df,im1,dm,ef,firqim,hf,im,nf,zf,vf,cf} : {ef,firqim,hf,im,nf,zf,vf,cf};
 reg [`LOBYTE] acca,accb;
 `ifdef SUPPORT_6309
 reg [`LOBYTE] acce,accf;
 `endif
 reg [`DBLBYTE] accd;
+reg [127:0] accg;
 `ifdef SUPPORT_6309
 reg [`DBLBYTE] accw;
 `endif
@@ -173,7 +179,8 @@ reg [15:0] icgot;
 reg [23:0] btocnt;
 reg bto;							// bus timed out
 
-reg [`DBLBYTE] a,b;
+reg [`DBLBYTE] a;
+reg [127:0] b;
 wire [`LOBYTE] b12 = b[`LOBYTE];
 reg [`TRPBYTE] radr,wadr;
 reg [`DBLBYTE] wdat;
@@ -184,9 +191,10 @@ reg nmi_armed;
 reg isStore;
 reg isPULU,isPULS;
 reg isPSHS,isPSHU;
-reg isRTS,isRTI,isRTF;
+reg isRTS,isRTI,isRTF,isJTT;
 reg isLEA;
 reg isRMW;
+reg isDFSub;
 
 function fnAddOverflow;
 input a;
@@ -230,6 +238,7 @@ ReadyQueues urdyq1
 	.priority_i(rdyq_wa),
 	.tid_o(rdyq_tido)
 );
+
 `endif
 
 genvar g;
@@ -318,7 +327,7 @@ always_comb
 	isOuterIndexed = ndxbyte[bitsPerByte-5] & ndxbyte[bitsPerByte-1];
 `endif
 
-assign ndxbyte = ir[`HIBYTE];
+assign ndxbyte = isInMem ? ir[`BYTE3] : ir[`HIBYTE];
 
 // Detect type of interrupt
 wire isINT = ir12==`INT;
@@ -327,16 +336,18 @@ wire isNMI = bitsPerByte==8 ? vect[7:0]==8'hFC : vect[7:0]==8'hF8;
 wire isSWI = bitsPerByte==8 ? vect[7:0]==8'hFA : vect[7:0]==8'hF4;
 wire isIRQ = bitsPerByte==8 ? vect[7:0]==8'hF8 : vect[7:0]==8'hF0;
 wire isFIRQ = bitsPerByte==8 ? vect[7:0]==8'hF6 : vect[7:0]==8'hEC;
-wire isSWI2 = bitsPerByte==8 ? vect[7:0]==8'hF4 : vect[7:0]==8'hE8;
+//wire isSWI2 = bitsPerByte==8 ? vect[7:0]==8'hF4 : vect[7:0]==8'hE8;
+reg isSWI2;
+reg isSYS;
 wire isSWI3 = bitsPerByte==8 ? vect[7:0]==8'hF2 : vect[7:0]==8'hE4;
 
-wire [`TRPBYTE] far_address = {ir[`HIBYTE],ir[`BYTE3],ir[`BYTE4]};
-wire [`TRPBYTE] address = {ir[`HIBYTE],ir[`BYTE3]};
-wire [`TRPBYTE] dp_address = {dpr,ir[`HIBYTE]};
+wire [`TRPBYTE] far_address = isInMem ? {ir[`BYTE3],ir[`BYTE4],ir[`BYTE5]} : {ir[`HIBYTE],ir[`BYTE3],ir[`BYTE4]};
+wire [`TRPBYTE] address = isInMem ? {ir[`BYTE3],ir[`BYTE4]} : {ir[`HIBYTE],ir[`BYTE3]};
+wire [`TRPBYTE] dp_address = isInMem ? {dpr,ir[`BYTE3]} : {dpr,ir[`HIBYTE]};
 wire [`TRPBYTE] ex_address = isFar ? far_address : address;
-wire [`TRPBYTE] offset12 = {{bitsPerByte*2{ir[bitsPerByte*3-1]}},ir[`BYTE3]};
-wire [`TRPBYTE] offset24 = {{bitsPerByte{ir[bitsPerByte*3-1]}},ir[`BYTE3],ir[`BYTE4]};
-wire [`TRPBYTE] offset36 = {ir[`BYTE3],ir[`BYTE4],ir[`BYTE5]};
+wire [`TRPBYTE] offset12 = isInMem ? {{bitsPerByte*2{ir[bitsPerByte*4-1]}},ir[`BYTE4]} : {{bitsPerByte*2{ir[bitsPerByte*3-1]}},ir[`BYTE3]};
+wire [`TRPBYTE] offset24 = isInMem ? {{bitsPerByte{ir[bitsPerByte*4-1]}},ir[`BYTE4],ir[`BYTE5]} : {{bitsPerByte{ir[bitsPerByte*3-1]}},ir[`BYTE3],ir[`BYTE4]};
+wire [`TRPBYTE] offset36 = isInMem ? {ir[`BYTE4],ir[`BYTE5],ir[`BYTE6]} : {ir[`BYTE3],ir[`BYTE4],ir[`BYTE5]};
 
 // Choose the indexing register
 reg [`TRPBYTE] ndxreg;
@@ -524,7 +535,7 @@ always_comb
 	4'b1010:	src1 <= {ccr,ccr};
 	4'b1011:	src1 <= bitsPerByte==8 ? dpr[`LOBYTE] : dpr;
 	4'b1100:	src1 <= stkbnk;
-	4'b1101:	src1 <= 24'h0000;
+	4'b1101:	src1 <= {12'hFFF,tr};
 `ifdef SUPPORT_6309
 	4'b0110:	src1 <= {acce[`LOBYTE],accf[`LOBYTE]};
 	4'b1110:	src1 <= {12'hFFF,acce};
@@ -548,7 +559,7 @@ always_comb
 	4'b1010:	src2 <= ccr;
 	4'b1011:	src2 <= bitsPerByte==8 ? dpr[`LOBYTE] : dpr;
 	4'b1100:	src2 <= stkbnk;
-	4'b1101:	src2 <= 24'h0000;
+	4'b1101:	src2 <= tr;
 `ifdef SUPPORT_6309
 	4'b0110:	src2 <= {acce[`LOBYTE],accf[`LOBYTE]};
 	4'b1110:	src2 <= acce;
@@ -606,8 +617,9 @@ wire [`DBLBYTE] acc = isAcca ? acca : accb;
 
 always_ff @(posedge clk_i)
 if (state==DECODE) begin
-	isStore <= 	ir12==`STA_DP || ir12==`STB_DP || ir12==`STD_DP || ir12==`STX_DP || ir12==`STY_DP || ir12==`STU_DP || ir12==`STS_DP ||
+	isStore <= 	ir12==`STA_DP || ir12==`STB_DP || ir12==`STD_DP || ir12==`STX_DP || ir12==`STY_DP || ir12==`STU_DP || ir12==`STS_DP || ir12==`STG_DP ||
 				ir12==`STA_NDX || ir12==`STB_NDX || ir12==`STD_NDX || ir12==`STX_NDX || ir12==`STY_NDX || ir12==`STU_NDX || ir12==`STS_NDX ||
+				ir12==`STG_NDX || ir12==`STG_EXT ||
 				ir12==`STA_EXT || ir12==`STB_EXT || ir12==`STD_EXT || ir12==`STX_EXT || ir12==`STY_EXT || ir12==`STU_EXT || ir12==`STS_EXT ||
 				ir12==`STE_DP || ir12==`STE_NDX || ir12==`STE_EXT || ir12==`STF_DP || ir12==`STF_NDX || ir12==`STF_EXT ||
 				ir12==`STW_DP || ir12==`STW_NDX || ir12==`STW_EXT
@@ -617,10 +629,12 @@ if (state==DECODE) begin
 	isPSHS <= ir12==`PSHS;
 	isPSHU <= ir12==`PSHU;
 	isRTI <= ir12==`RTI;
+	isJTT <= ir12==`JTT || ir12==`JTT_DP || ir12==`JTT_NDX || ir12==`JTT_EXT;
 	isRTS <= ir12==`RTS;
 	isRTF <= ir12==`RTF;
 	isLEA <= ir12==`LEAX_NDX || ir12==`LEAY_NDX || ir12==`LEAU_NDX || ir12==`LEAS_NDX;
 	isRMW <= isRMW1;
+	isDFSub <= ir12==`SUBG_DP || ir12==`SUBG_NDX || ir12==`SUBG_EXT;
 end
 
 wire hit0, hit1;
@@ -658,6 +672,7 @@ assign lic_o =	(state==CALC && !isRMW) ||
 					(store_what==`SW_ACCB && !(isINT || isPSHS || isPSHU)) ||
 					(store_what==`SW_ACCDH && wadr[1:0]!=2'b11) ||
 					(store_what==`SW_ACCDL) ||
+					(store_what==`SW_G0) ||
 					(store_what==`SW_X3124 && wadr[1:0]==2'b00 && !(isINT || isPSHS || isPSHU)) ||
 					(store_what==`SW_XL && !(isINT || isPSHS || isPSHU)) ||
 					(store_what==`SW_YL && !(isINT || isPSHS || isPSHU)) ||
@@ -671,13 +686,16 @@ assign lic_o =	(state==CALC && !isRMW) ||
 				(state==PULL1 && ir[`HIBYTE]==12'h000) ||
 				(state==OUTER_INDEXING2 && isLEA) ||
 				(state==LOAD2 && 
-					(load_what==`LW_ACCA && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_ACCB && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_DPRL && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_XL && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_YL && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_USPL && !(isRTI || isPULU || isPULS)) ||
-					(load_what==`LW_SSPL && !(isRTI || isPULU || isPULS)) ||
+					(load_what==`LW_ACCA && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_ACCB && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_ACCE && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_ACCF && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_DPRL && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_XL && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_YL && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_USPL && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_SSPL && !(isRTI || isJTT || isPULU || isPULS)) ||
+					(load_what==`LW_B0) ||
 					(load_what==`LW_PCL) ||
 					(load_what==`LW_IAL && !isOuterIndexed && isLEA) ||
 					(load_what==`LW_IA3124 && radr[1:0]==2'b00 && !isOuterIndexed && isLEA)
@@ -688,10 +706,12 @@ wire lock_bus = load_what==`LW_XH || load_what==`LW_YH || load_what==`LW_USPH ||
 				load_what==`LW_PCH || load_what==`LW_BH || load_what==`LW_IAH || load_what==`LW_PC2316 ||
 				load_what==`LW_IA2316 || load_what==`LW_B2316 || 
 				load_what==`LW_X2316 || load_what==`LW_Y2316 || load_what==`LW_USP2316 || load_what==`LW_SSP2316 ||
+				load_what==`LW_B10 ||
 				isRMW ||
 				store_what==`SW_ACCDH || store_what==`SW_XH || store_what==`SW_YH || store_what==`SW_USPH || store_what==`SW_SSPH ||
 				store_what==`SW_PCH || store_what==`SW_PC2316 || store_what==`SW_ACCQ2316 ||
-				store_what==`SW_X2316 || store_what==`SW_Y2316 || store_what==`SW_USP2316 || store_what==`SW_SSP2316
+				store_what==`SW_X2316 || store_what==`SW_Y2316 || store_what==`SW_USP2316 || store_what==`SW_SSP2316 ||
+				store_what==`SW_G10
 				;
 
 wire isPrefix = ir12==`PG2 || ir12==`PG3 || ir12==`OUTER;
@@ -909,6 +929,66 @@ endgenerate
 `endif
 `endif
 
+wire [127:0] dfaso;
+// takes about 25 clocks (27 to be safe)
+DFPAddsub128nr udfa1
+(
+	.clk(clk_i),
+	.ce(1'b1),
+	.rm(3'd0),
+	.op(isDFSub),
+	.a(accg),
+	.b(b),
+	.o(dfaso)
+);
+
+wire [127:0] dfmo;
+wire dfm_done;
+wire dfm_vf;
+DFPMultiply128nr udfm1
+(
+	.clk(clk_i),
+	.ce(1'b1),
+	.ld(state==CALC),
+	.a(accg),
+	.b(b),
+	.o(dfmo),
+	.rm(3'd0),
+	.sign_exe(),
+	.inf(),
+	.overflow(dfm_vf),
+	.underflow(),
+	.done(dfm_done)
+);
+
+wire dfd_done;
+wire [127:0] dfdo;
+wire dfd_vf;
+DFPDivide128nr udfd1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ce(1'b1),
+	.ld(state==CALC),
+	.op(),
+	.a(accg),
+	.b(b),
+	.o(dfdo),
+	.rm(3'd0),
+	.done(dfd_done),
+	.sign_exe(),
+	.inf(),
+	.overflow(dfd_vf),
+	.underflow()
+);
+
+wire [11:0] dfco;
+DFPCompare128 udfc1(
+	.a(accg),
+	.b(b),
+	.o(dfco)
+);
+
 // For asynchronous reads,
 // The read response might come back in any order (the packets could loop
 // around in the network.
@@ -1013,10 +1093,12 @@ reg [11:0] rst_cnt;
 always @(posedge clk_i)
 if (rst_i) begin
 	wb_nack();
+	tr <= 'd0;
 	pcr_o <= 'h0;
 	natMd <= 1'b0;
 	firqMd <= 1'b0;
 	iplMd <= 1'b0;
+	df <= 1'b1;
 	rty <= `FALSE;
 	rst_cnt <= {id,4'd0};
 	next_state(RESET);
@@ -1025,6 +1107,8 @@ if (rst_i) begin
 	md32 <= `FALSE;
 	ipg <= 2'b00;
 	isFar <= `FALSE;
+	isSWI2 <= `FALSE;
+	isSYS <= FALSE;
 `ifdef EIGHTBIT
 	isOuterIndexed <= `FALSE;
 `endif
@@ -1069,6 +1153,7 @@ if (rst_i) begin
 	rdyq_ins <= 1'b0;
 	rdyq_pop <= 1'b0;
 	rdyq_peek <= 1'b0;
+	tcb_base <= 24'h10000;
 end
 else begin
 
@@ -1108,6 +1193,32 @@ STORE2:	tStore2();
 
 // ============================================================================
 // ============================================================================
+DFMUL1:
+	begin
+		next_state(IFETCH);
+		if (dfm_done) begin
+			df <= 1'b1;
+			case(ir[`LOBYTE])
+			`MULG_DP:	pc <= pc + 2'd2;
+			`MULG_NDX:	pc <= pc + insnsz;
+			`MULG_EXT:	pc <= pc + (isFar ? 3'd4 : 3'd3);
+			default:	pc <= pc + 2'd1;
+			endcase
+		end
+	end
+DFDIV1:
+	begin
+		next_state(IFETCH);
+		if (dfd_done) begin
+			df <= 1'b1;
+			case(ir[`LOBYTE])
+			`DIVG_DP:	pc <= pc + 2'd2;
+			`DIVG_NDX:	pc <= pc + insnsz;
+			`DIVG_EXT:	pc <= pc + (isFar ? 3'd4 : 3'd3);
+			default:	pc <= pc + 2'd1;
+			endcase
+		end
+	end
 MUL2:
 	if (divcnt != 6'd0)
 		divcnt <= divcnt - 2'd1;
@@ -1139,9 +1250,9 @@ DIV2:
 		next_state(DIV3);
 DIV3:
 	begin
-		res[`LOBYTE] <= divres24[11:0];
+		res[`LOBYTE] <= divres24[`BYTE1];
 		res[`HIBYTE] <= divrem12;
-		vf <= divres24[23:12] != {12{divres24[11]}};
+		vf <= divres24[`BYTE2] != {bitsPerByte{divres24[bitsPerByte-1]}};
 		next_state(IFETCH);
 	end
 
@@ -1150,7 +1261,9 @@ DIV3:
 PUSH1:
 	begin
 		next_state(PUSH2);
-		if (isINT | isPSHS) begin
+		if (isSYS)
+			wadr <= tcb_base + {tr,8'd32};
+		else if (isINT | isPSHS) begin
 			wadr <= {stkbnk,ssp} - cnt;
 			ssp <= (ssp - cnt);
 		end
@@ -1202,6 +1315,10 @@ PUSH2:
 			else
 				store_what <= `SW_SSPH;
 			ir[bitsPerByte+6] <= 1'b0;
+		end
+		else if (ir[bitsPerByte+10]) begin
+			store_what <= `SW_SSPH;
+			ir[bitsPerByte+10] <= 1'b0;
 		end
 		else if (ir[bitsPerByte+7]) begin
 			store_what <= isFar ? `SW_PC2316 : `SW_PCH;
@@ -1274,6 +1391,10 @@ PULL1:
 			else
 				load_what <= `LW_USPH;
 			ir[bitsPerByte+6] <= 1'b0;
+		end
+		else if (ir[bitsPerByte+10]) begin
+			load_what <= `LW_SSPH;
+			ir[bitsPerByte+10] <= 1'b0;
 		end
 		else if (ir[bitsPerByte+7]) begin
 			load_what <= isFar ? `LW_PC2316 : `LW_PCH;
@@ -1390,7 +1511,6 @@ ICACHE1:
 			stb_o <= 1'b1;
 			we_o <= 1'b0;
 			adr_o <= !hit0 ? {pc[bitsPerByte*3-1:4],4'b00} : {pcp16[bitsPerByte*3-1:4],4'b0000};
-			dat_o <= 12'd0;
 			next_state(ICACHE2);
 		end
 	end
@@ -1501,7 +1621,6 @@ ICACHE3:
 		stb_o <= 1'b1;
 		we_o <= 1'b0;
 		adr_o <= !rhit0 ? {pc[bitsPerByte*3-1:4],4'b00} : {pcp16[bitsPerByte*3-1:4],4'b0000};
-		dat_o <= 12'd0;
 		next_state(ICACHE2);
 	end
 
@@ -1515,7 +1634,6 @@ IBUF1:
 		stb_o <= 1'b1;
 		we_o <= 1'b0;
 		adr_o <= pc[`DBLBYTE];
-		dat_o <= 12'd0;
 		next_state(IBUF2);
 	end
 IBUF2:
@@ -1598,6 +1716,8 @@ begin
 		bs_o <= 1'b0;
 		next_state(DECODE);
 		isFar <= `FALSE;
+		isSWI2 <= `FALSE;
+		isSYS <= `FALSE;
 `ifdef EIGHTBIT
 		isOuterIndexed <= `FALSE;
 `endif
@@ -1826,6 +1946,8 @@ begin
 			firqim <= firqim | ir[bitsPerByte+6];
 			ef <= ef | ir[bitsPerByte+7];
 			dm <= dm | ir[bitsPerByte+8];
+			im1 <= im1 | ir[bitsPerByte+9];
+			df <= df | ir[bitsPerByte+10];
 			pc <= pcp2;
 			end
 	`ANDCC:
@@ -1839,6 +1961,8 @@ begin
 			firqim <= firqim & ir[bitsPerByte+6];
 			ef <= ef & ir[bitsPerByte+7];
 			dm <= dm & ir[bitsPerByte+8];
+			im1 <= im1 & ir[bitsPerByte+9];
+			df <= df & ir[bitsPerByte+10];
 			pc <= pcp2;
 			end
 	`DAA:
@@ -1858,6 +1982,8 @@ begin
 			hf <= hf & ir[bitsPerByte+5];
 			firqim <= firqim & ir[bitsPerByte+6];
 			dm <= dm & ir[bitsPerByte+8];
+			im1 <= im1 & ir[bitsPerByte+9];
+			df <= df & ir[bitsPerByte+10];
 			ef <= 1'b1;
 			pc <= pc + 2'd2;
 			ir[`HIBYTE] <= -1;
@@ -1884,11 +2010,11 @@ begin
 	`EXG:	pc <= pc + 2'd2;
 	`ABX:	res <= xr + accb;
 	`SEX: res <= {{bitsPerByte{accb[BPBM1]}},accb[`LOBYTE]};
-	`PG2:	begin ipg <= 2'b01; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
-	`PG3:	begin ipg <= 2'b10; ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
-	`FAR:	begin isFar <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+	`PG2:	begin ipg <= 2'b01; ir <= ir[bitsPerByte*8-1:bitsPerByte]; next_state(DECODE); end
+	`PG3:	begin ipg <= 2'b10; ir <= ir[bitsPerByte*8-1:bitsPerByte]; next_state(DECODE); end
+	`FAR:	begin isFar <= `TRUE;  ir <= ir[bitsPerByte*8-1:bitsPerByte]; next_state(DECODE); end
 `ifdef EIGHTBIT
-	`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[bitsPerByte*5-1:bitsPerByte]; next_state(DECODE); end
+	`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[bitsPerByte*8-1:bitsPerByte]; next_state(DECODE); end
 `endif
 	`NEGA,`NEGB:	
 		if (dm) begin
@@ -1918,6 +2044,8 @@ begin
 			next_state(CALC);
 		end
 		else begin res <= -{acca,accb}; a <= 'd0; b <= {acca,accb}; end
+	`NEGG:	begin accg[127] <= ~accg[127]; b[127] <= ~accg[127]; b[126:0] <= accg[126:0]; end
+	`TSTG:	begin b[127] <= accg[127]; b[126:0] <= accg[126:0]; end
 	`INCE,`INCF:	begin res12 <= acc[`LOBYTE] + 2'd1; end
 	`INCD:	res <= {acca,accb} + 2'd1;
 	`INCW:	res <= {acce,accf} + 2'd1;
@@ -1928,6 +2056,7 @@ begin
 	`COME,`COMF:	res <= ~acc[`LOBYTE];
 	`COMW:	res <= ~{acce,accf};
 	`CLRD:	res <= 'b0;
+	`CLRG:	begin accg <= 'd0; b <= 'd0; end
 	`CLRW:	res <= 'b0;
 	`CLRE:	res12 <= 'b0;
 	`CLRF:	res12 <= 'b0;
@@ -1969,6 +2098,8 @@ begin
 					firqim <= sum12[6];
 					ef <= sum12[7];
 					dm <= sum12[8];
+					im1 <= sum12[9];
+					df <= sum12[10];
 				end
 			4'b1011:	begin dpr <= sum12; nf <= sum12[bitsPerByte-1]; zf <= sum12[`LOBYTE]=='b0; cf <= sum12[bitsPerByte]; vf <= fnAddOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],sum12[bitsPerByte-1]); end
 			endcase
@@ -1995,6 +2126,8 @@ begin
 					firqim <= sum12c[6];
 					ef <= sum12c[7];
 					dm <= sum12c[8];
+					im1 <= sum12c[9];
+					df <= sum12c[10];
 				end
 			4'b1011:	begin dpr <= sum12c; nf <= sum12c[bitsPerByte-1]; zf <= sum12c[`LOBYTE]=='b0; cf <= sum12c[bitsPerByte]; vf <= fnAddOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],sum12c[bitsPerByte-1]); end
 			endcase
@@ -2021,6 +2154,8 @@ begin
 					firqim <= and12[6];
 					ef <= and12[7];
 					dm <= and12[8];
+					im1 <= and12[9];
+					df <= and12[10];
 				end
 			4'b1011:	begin dpr <= and12; nf <= and12[bitsPerByte-1]; zf <= and12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -2047,6 +2182,8 @@ begin
 					firqim <= eor12[6];
 					ef <= eor12[7];
 					dm <= eor12[8];
+					im1 <= eor12[9];
+					df <= eor12[10];
 				end
 			4'b1011:	begin dpr <= eor12; nf <= eor12[bitsPerByte-1]; zf <= eor12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -2073,6 +2210,8 @@ begin
 					firqim <= or12[6];
 					ef <= or12[7];
 					dm <= or12[8];
+					im1 <= or12[9];
+					df <= or12[10];
 				end
 			4'b1011:	begin dpr <= or12; nf <= or12[bitsPerByte-1]; zf <= or12[`LOBYTE]=='b0; vf <= 1'b0; end
 			endcase
@@ -2114,6 +2253,8 @@ begin
 					firqim <= dif12c[6];
 					ef <= dif12c[7];
 					dm <= dif12c[8];
+					im1 <= dif12c[9];
+					df <= dif12c[10];
 				end
 			4'b1011:	begin dpr <= dif12c; nf <= dif12c[bitsPerByte-1]; zf <= dif12c[`LOBYTE]=='b0; cf <= dif12c[bitsPerByte]; vf <= fnSubOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],dif12c[bitsPerByte-1]); end
 			endcase
@@ -2140,6 +2281,8 @@ begin
 					firqim <= dif12[6];
 					ef <= dif12[7];
 					dm <= dif12[8];
+					im1 <= dif12[9];
+					df <= dif12[10];
 				end
 			4'b1011:	begin dpr <= dif12; nf <= dif12[bitsPerByte-1]; zf <= dif12[`LOBYTE]=='b0; cf <= dif12[bitsPerByte]; vf <= fnSubOverflow(src1[bitsPerByte-1],src2[bitsPerByte-1],dif12[bitsPerByte-1]); end
 			endcase
@@ -2344,6 +2487,32 @@ begin
 			next_state(MUL2);
 		end
 `endif
+	`MULG_DP:
+		if (df) begin
+			df <= 1'b0;
+			load_what <= `LW_B10;
+			radr <= dp_address;
+			next_state(LOAD1);
+		end
+		else
+			next_state(DFMUL1);
+	`DIVG_DP:
+		if (df) begin
+			load_what <= `LW_B10;
+			radr <= dp_address;
+			next_state(LOAD1);
+		end
+		else
+			next_state(DFDIV1);
+	`CMPG_DP,
+	`SUBG_DP,
+	`ADDG_DP:
+		begin
+			load_what <= `LW_B10;
+			radr <= dp_address;
+			pc <= pc + 2'd2;
+			next_state(LOAD1);
+		end
 `ifdef SUPPORT_6309
 	`CMPE_DP,`CMPF_DP,
 	`LDE_DP,`LDF_DP,
@@ -2370,6 +2539,13 @@ begin
 			pc <= pc + 2'd2;
 			next_state(LOAD1);
 		end
+	`BAND_DP,`BEOR_DP,`BIAND_DP,`BIEOR_DP,`BOR_DP,`BIOR_DP:
+		begin
+			load_what <= `LW_BL;
+			radr <= {dpr,ir[`BYTE3]};
+			pc <= pc + 2'd3;
+			next_state(LOAD1);
+		end
 `endif
 `ifdef SUPPORT_6309
 	`MULD_DP,
@@ -2378,6 +2554,13 @@ begin
 	`SUBD_DP,`ADDD_DP,`LDD_DP,`CMPD_DP,`ADCD_DP,`SBCD_DP:
 		begin
 			load_what <= `LW_BH;
+			pc <= pc + 2'd2;
+			radr <= dp_address;
+			next_state(LOAD1);
+		end
+	`LDG_DP:
+		begin
+			load_what <= `LW_B10;
 			pc <= pc + 2'd2;
 			radr <= dp_address;
 			next_state(LOAD1);
@@ -2398,6 +2581,7 @@ begin
 	`STA_DP:	dp_store(`SW_ACCA);
 	`STB_DP:	dp_store(`SW_ACCB);
 	`STD_DP:	dp_store(`SW_ACCDH);
+	`STG_DP:	dp_store(`SW_G10);
 	`STU_DP:	dp_store(`SW_USPH);
 	`STS_DP:	dp_store(`SW_SSPH);
 	`STX_DP:	dp_store(`SW_XH);
@@ -2420,6 +2604,60 @@ begin
 			else begin
 				b <= 24'd0;
 				load_what <= `LW_BL;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+		end
+	`MULG_NDX:
+		if (df) begin
+			df <= 1'b0;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+			else begin
+				b <= 'd0;
+				load_what <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+		end
+		else
+			next_state(DFMUL1);
+	`DIVG_NDX:
+		if (df) begin
+			df <= 1'b0;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+			else begin
+				b <= 'd0;
+				load_what <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+		end
+		else
+			next_state(DFDIV1);
+	`CMPG_NDX,
+	`SUBG_NDX,
+	`ADDG_NDX:
+		begin
+			pc <= pc + insnsz;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+			else begin
+				b <= 'd0;
+				load_what <= `LW_B10;
 				radr <= NdxAddr;
 				next_state(LOAD1);
 			end
@@ -2503,6 +2741,21 @@ begin
 				next_state(LOAD1);
 			end
 		end
+	`LDG_NDX:
+		begin
+			pc <= pc + insnsz;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+			else begin
+				load_what <= `LW_B10;
+				radr <= NdxAddr;
+				next_state(LOAD1);
+			end
+		end
 	`CMPX_NDX,`LDX_NDX,`LDU_NDX,`LDS_NDX,
 	`CMPY_NDX,`CMPS_NDX,`CMPU_NDX,`LDY_NDX:
 		begin
@@ -2527,6 +2780,7 @@ begin
 	`STA_NDX:	indexed_store(`SW_ACCA);
 	`STB_NDX:	indexed_store(`SW_ACCB);
 	`STD_NDX:	indexed_store(`SW_ACCDH);
+	`STG_NDX:	indexed_store(`SW_G10);
 	`STU_NDX:	indexed_store(`SW_USPH);
 	`STS_NDX:	indexed_store(`SW_SSPH);
 	`STX_NDX:	indexed_store(`SW_XH);
@@ -2535,32 +2789,38 @@ begin
 	`STW_NDX:	indexed_store(`SW_ACCWH);
 	`STE_NDX:	indexed_store(`SW_ACCE);
 	`STF_NDX:	indexed_store(`SW_ACCF);
-		`AIM_DP,`EIM_DP,`OIM_DP,`TIM_DP:
-			begin
-				load_what <= `LW_BL;
-				pc <= pc + 4'd3;
-				radr <= dp_address;
+	`AIM_DP,`EIM_DP,`OIM_DP,`TIM_DP:
+		begin
+			load_what <= `LW_BL;
+			pc <= pc + 4'd3;
+			radr <= dp_address;
+			next_state(LOAD1);
+		end
+	`AIM_NDX,`EIM_NDX,`OIM_NDX,`TIM_NDX:
+		begin
+			pc <= pc + insnsz + 4'd1;
+			if (isIndirect) begin
+				load_what <= isFar ? `LW_IA2316 : `LW_IAH;
+				load_what2 <= `LW_BL;
+				radr <= NdxAddr;
 				next_state(LOAD1);
 			end
-		`AIM_NDX,`EIM_NDX,`OIM_NDX,`TIM_NDX:
-			begin
-				pc <= pc + insnsz + 4'd1;
-				if (isIndirect) begin
-					load_what <= isFar ? `LW_IA2316 : `LW_IAH;
-					load_what2 <= `LW_BL;
-					radr <= NdxAddr;
-					next_state(LOAD1);
-				end
-				else begin
-					b <= 'd0;
-					load_what <= `LW_BL;
-					radr <= NdxAddr;
-					next_state(LOAD1);
-				end
+			else begin
+				b <= 'd0;
+				load_what <= `LW_BL;
+				radr <= NdxAddr;
+				next_state(LOAD1);
 			end
+		end
 `endif
 `ifdef SUPPORT_6309
-	`AIM_EXT,`OIM_EXT,`EIM_EXT,`TIM_EXT,
+	`AIM_EXT,`OIM_EXT,`EIM_EXT,`TIM_EXT:
+		begin
+			load_what <= `LW_BL;
+			radr <= ex_address;
+			pc <= pc + (isFar ? 32'd5 : 32'd4);
+			next_state(LOAD1);
+		end
 `endif
 	// Extended mode instructions
 	`NEG_EXT,`COM_EXT,`LSR_EXT,`ROR_EXT,`ASR_EXT,`ASL_EXT,`ROL_EXT,`DEC_EXT,`INC_EXT,`TST_EXT:
@@ -2583,6 +2843,31 @@ begin
 			pc <= pc + (isFar ? 32'd4 : 32'd3);
 			next_state(LOAD1);
 		end
+	`MULG_EXT:
+		if (df) begin
+			df <= 1'b0;
+			load_what <= `LW_B10;
+			radr <= ex_address;
+			next_state(LOAD1);
+		end
+		else
+			next_state(DFMUL1);
+	`DIVG_EXT:
+		if (df) begin
+			df <= 1'b0;
+			load_what <= `LW_B10;
+			radr <= ex_address;
+			next_state(LOAD1);
+		end
+		else
+			next_state(DFDIV1);
+	`ADDG_EXT,`SUBG_EXT,`CMPG_EXT:
+		begin
+			load_what <= `LW_B10;
+			radr <= ex_address;
+			pc <= pc + (isFar ? 32'd4 : 32'd3);
+			next_state(LOAD1);
+		end
 `ifdef SUPPORT_6309
 	`BITD_EXT,
 	`ANDD_EXT,
@@ -2591,7 +2876,7 @@ begin
 	`DIVQ_EXT,
 	`EORD_EXT:
 		begin
-			load_what <= `LW_BL;
+			load_what <= `LW_BH;
 			radr <= ex_address;
 			pc <= pc + (isFar ? 32'd4 : 32'd3);
 			next_state(LOAD1);
@@ -2604,6 +2889,13 @@ begin
 	`SUBD_EXT,`ADDD_EXT,`LDD_EXT,`CMPD_EXT,`ADCD_EXT,`SBCD_EXT:
 		begin
 			load_what <= `LW_BH;
+			radr <= ex_address;
+			pc <= pc + (isFar ? 32'd4 : 32'd3);
+			next_state(LOAD1);
+		end
+	`LDG_EXT:
+		begin
+			load_what <= `LW_B10;
 			radr <= ex_address;
 			pc <= pc + (isFar ? 32'd4 : 32'd3);
 			next_state(LOAD1);
@@ -2624,6 +2916,7 @@ begin
 	`STA_EXT:	ex_store(`SW_ACCA);
 	`STB_EXT:	ex_store(`SW_ACCB);
 	`STD_EXT:	ex_store(`SW_ACCDH);
+	`STG_EXT:	ex_store(`SW_G10);
 	`STU_EXT:	ex_store(`SW_USPH);
 	`STS_EXT:	ex_store(`SW_SSPH);
 	`STX_EXT:	ex_store(`SW_XH);
@@ -2703,7 +2996,7 @@ begin
 			next_state(LOAD1);
 		end
 	`JMP_DP:	pc <= dp_address;
-	`JMP_EXT:	pc <= address;
+	`JMP_EXT:	pc <= ex_address;
 	`JMP_FAR:	pc <= far_address;
 	`JMP_NDX:
 		begin
@@ -2717,6 +3010,27 @@ begin
 			end
 			else
 				pc <= isFar ? NdxAddr : {pc[`BYTE3],NdxAddr[`DBLBYTE]};
+		end
+	`JTT_DP:
+		begin
+			radr <= dp_address; 
+			ir[`HIBYTE] <= 12'h7FF;
+			isFar <= `TRUE;
+			next_state(PULL1);
+		end
+	`JTT_EXT:
+		begin
+			radr <= ex_address; 
+			ir[`HIBYTE] <= 12'h7FF;
+			isFar <= `TRUE;
+			next_state(PULL1);
+		end
+	`JTT_NDX:
+		begin
+			radr <= NdxAddr;
+			ir[`HIBYTE] <= 12'h7FF;
+			isFar <= `TRUE;
+			next_state(PULL1);
 		end
 	`LEAX_NDX,`LEAY_NDX,`LEAS_NDX,`LEAU_NDX:
 		begin
@@ -2765,6 +3079,13 @@ begin
 			isFar <= `TRUE;
 			next_state(LOAD1);
 		end
+	`JTT:
+		begin
+			ir[`HIBYTE] <= 12'h7FF;
+			load_what <= `LW_CCR;
+			isFar <= `TRUE;
+			next_state(LOAD1);
+		end
 	// The CCR must be pushed onto the stack before interrupts are masked. So,
 	// interrupts are maksed when the PC is loaded after all the pushing.
 	`SWI:
@@ -2776,6 +3097,7 @@ begin
 		end
 	`SWI2:
 		begin
+			isSWI2 <= 1'b1;
 			ir[`LOBYTE] <= `INT;
 			ipg <= 2'b11;
 			vect <= `SWI2_VECT;
@@ -2786,6 +3108,14 @@ begin
 			ir[`LOBYTE] <= `INT;
 			ipg <= 2'b11;
 			vect <= `SWI3_VECT;
+			next_state(DECODE);
+		end
+	`SYS:
+		begin
+			isSYS <= 1'b1;
+			ir[`LOBYTE] <= `INT;
+			ipg <= 2'b11;
+			vect <= `SYS_VECT;
 			next_state(DECODE);
 		end
 	// If the processor was in the wait state before the interrupt occurred
@@ -2807,10 +3137,13 @@ begin
 				end
 			end
 			else begin
-				if (isFIRQ) begin
+				if (isSYS) begin
+					ir[`HIBYTE] <= 12'h7FF;
+				end
+				else if (isFIRQ) begin
 					if (natMd) begin
 						ef <= firqMd;
-						ir[`HIBYTE] <= firqMd ? 12'hFFF : 12'h081;
+						ir[`HIBYTE] <= firqMd ? 12'h3FF : 12'h081;
 					end
 					else begin
 						ir[`HIBYTE] <= 12'h081;
@@ -2818,7 +3151,7 @@ begin
 					end
 				end
 				else begin	//if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
-					ir[`HIBYTE] <= natMd ? 12'hFFF : 12'h0FF;
+					ir[`HIBYTE] <= natMd ? 12'h3FF : 12'h0FF;
 					ef <= 1'b1;
 				end
 				pc <= pc;
@@ -2868,10 +3201,12 @@ begin
 	`BRKCTRL2:		load_tsk(brkctrl[2]);
 	`BRKCTRL3:		load_tsk(brkctrl[3]);
 `endif	
-	`MMU_AKEY:		load_tsk(pcr_o[11:0]);
-	`MMU_OKEY:		load_tsk(pcr_o[23:12]);
+	`MMU_AKEY:		load_tsk(pcr_o[`BYTE1]);
+	`MMU_OKEY:		load_tsk(pcr_o[`BYTE2]);
 `ifdef SUPPORT_OS
 	`RDYQO:				begin load_tsk(rdyq_tido); rdyq_pop <= 1'b1; end
+	`TCB_BASE+0:	load_tsk(tcb_base[`BYTE2]);
+	`TCB_BASE+1:	load_tsk(tcb_base[`BYTE1]);
 `endif	
 	default:
 `ifdef SUPPORT_DEBUG_REG
@@ -3040,6 +3375,16 @@ begin
 	`BITB_DP,`BITB_NDX,`BITB_EXT,
 	`ANDB_DP,`ANDB_NDX,`ANDB_EXT:
 				res12 <= acc[`LOBYTE] & b12;
+	`ADDG_DP,`ADDG_NDX,`ADDG_EXT,
+	`SUBG_DP,`SUBG_NDX,`SUBG_EXT:
+		begin
+			divcnt <= 6'd40;
+			next_state(MUL2);
+		end
+	`MULG_DP,`MULG_NDX,`MULG_EXT:
+		next_state(DFMUL1);
+	`DIVG_DP,`DIVG_NDX,`DIVG_EXT:
+		next_state(DFDIV1);
 `ifdef SUPPORT_6309
 	`BITD_DP,`BITD_NDX,`BITD_EXT,
 	`ANDD_DP,`ANDD_NDX,`ANDD_EXT:
@@ -3068,6 +3413,160 @@ begin
 	`LDE_DP,`LDE_NDX,`LDE_EXT,
 	`LDF_DP,`LDF_NDX,`LDF_EXT:
 		res12 <= b12;
+`ifdef SUPPORT_BxxDP
+`ifdef TWELVEBIT
+	`BAND_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] & b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+	`BEOR_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] ^ b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+	`BIAND_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] & ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+	`BIEOR_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] ^ ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+	`BIOR_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] | ~b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+	`BOR_DP:
+		begin
+			case(ir[bitsPerByte+10:bitsPerByte+8])
+			3'd0:	
+				case(ir[bitsPerByte+3:bitsPerByte+0])
+				4'd0:	cf <= cf | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd1:	vf <= vf | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd2:	zf <= zf | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd3: nf <= nf | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd4: im <= im | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd5: hf <= hf | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd6: firqim <= firqim | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd7: ef <= ef | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd8:	dm <= dm | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd9: im1 <= im1 | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				4'd10: df <= df | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+				default:	;
+				endcase
+			3'd1:	acca[ir[bitsPerByte+3:bitsPerByte+0]] <= acca[ir[bitsPerByte+3:bitsPerByte+0]] | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd2:	accb[ir[bitsPerByte+3:bitsPerByte+0]] <= accb[ir[bitsPerByte+3:bitsPerByte+0]] | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd3:	acce[ir[bitsPerByte+3:bitsPerByte+0]] <= acce[ir[bitsPerByte+3:bitsPerByte+0]] | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			3'd4:	accf[ir[bitsPerByte+3:bitsPerByte+0]] <= accf[ir[bitsPerByte+3:bitsPerByte+0]] | b12[ir[bitsPerByte+7:bitsPerByte+4]];
+			default:	;
+			endcase
+		end
+`endif
+`endif
 `endif
 	`LDA_DP,`LDA_NDX,`LDA_EXT,
 	`LDB_DP,`LDB_NDX,`LDB_EXT:
@@ -3208,6 +3707,17 @@ begin
 			`SW_RES16H:	wb_write(wadr,res[`HIBYTE]);
 			`SW_RES16L:	wb_write(wadr,res[`LOBYTE]);
 			`SW_DEF8:	wb_write(wadr,wdat);
+			`SW_G10:	wb_write(wadr,accg[`BYTE11]);
+			`SW_G9:	wb_write(wadr,accg[`BYTE10]);
+			`SW_G8:	wb_write(wadr,accg[`BYTE9]);
+			`SW_G7:	wb_write(wadr,accg[`BYTE8]);
+			`SW_G6:	wb_write(wadr,accg[`BYTE7]);
+			`SW_G5:	wb_write(wadr,accg[`BYTE6]);
+			`SW_G4:	wb_write(wadr,accg[`BYTE5]);
+			`SW_G3:	wb_write(wadr,accg[`BYTE4]);
+			`SW_G2:	wb_write(wadr,accg[`BYTE3]);
+			`SW_G1:	wb_write(wadr,accg[`BYTE2]);
+			`SW_G0:	wb_write(wadr,accg[`BYTE1]);
 			default:	wb_write(wadr,wdat);
 			endcase
 `ifdef SUPPORT_DCACHE
@@ -3282,7 +3792,61 @@ begin
 				next_state(STORE1);
 			end
 		`SW_ACCWL:	next_state(IFETCH);
-`endif				
+`endif
+		`SW_G10:				
+			begin
+				store_what <= `SW_G9;
+				next_state(STORE1);
+			end
+		`SW_G9:				
+			begin
+				store_what <= `SW_G8;
+				next_state(STORE1);
+			end
+		`SW_G8:
+			begin
+				store_what <= `SW_G7;
+				next_state(STORE1);
+			end
+		`SW_G7:
+			begin
+				store_what <= `SW_G6;
+				next_state(STORE1);
+			end
+		`SW_G6:
+			begin
+				store_what <= `SW_G5;
+				next_state(STORE1);
+			end
+		`SW_G5:
+			begin
+				store_what <= `SW_G4;
+				next_state(STORE1);
+			end
+		`SW_G4:
+			begin
+				store_what <= `SW_G3;
+				next_state(STORE1);
+			end
+		`SW_G3:
+			begin
+				store_what <= `SW_G2;
+				next_state(STORE1);
+			end
+		`SW_G2:
+			begin
+				store_what <= `SW_G1;
+				next_state(STORE1);
+			end
+		`SW_G1:
+			begin
+				store_what <= `SW_G0;
+				next_state(STORE1);
+			end
+		`SW_G0:
+			begin
+				next_state(IFETCH);
+			end
 		`SW_ACCDH:
 			begin
 				store_what <= `SW_ACCDL;
@@ -3548,14 +4112,41 @@ begin
 			end
 		`MULD_IMM,`MULD_DP,`MULD_NDX,`MULD_EXT:
 			begin
-				accb <= muld_res6[`BYTE1];
-				acca <= muld_res6[`BYTE2];
-				accf <= muld_res6[`BYTE3];
-				acce <= muld_res6[`BYTE4];
+				accf <= muld_res6[`BYTE1];
+				acce <= muld_res6[`BYTE2];
+				accb <= muld_res6[`BYTE3];
+				acca <= muld_res6[`BYTE4];
 				zf <= ~|muld_res6;
 				nf <= muld_res6[bitsPerByte*4-1];
 			end
 `endif
+		`CMPG_DP,`CMPG_NDX,`CMPG_EXT:
+			begin
+				zf <= dfco[0];
+				nf <= dfco[1];
+				vf <= dfco[4];
+			end
+		`ADDG_DP,`ADDG_NDX,`ADDG_EXT,
+		`SUBG_DP,`SUBG_NDX,`SUBG_EXT:
+			begin
+				nf <= dfaso[127];
+				zf <= ~|dfaso[126:0];
+				accg <= dfaso;
+			end
+		`MULG_DP,`MULG_NDX,`MULG_EXT:
+			begin
+				nf <= dfmo[127];
+				zf <= ~|dfmo[126:0];
+				vf <= dfm_vf;
+				accg <= dfmo;
+			end
+		`DIVG_DP,`DIVG_NDX,`DIVG_EXT:
+			begin
+				nf <= dfdo[127];
+				zf <= ~|dfdo[126:0];
+				vf <= dfd_vf;
+				accg <= dfdo;
+			end
 		`ASLA:
 			begin
 				cf <= res12c;
@@ -3923,9 +4514,12 @@ begin
 						firqim <= src1[6];
 						ef <= src1[7];
 						dm <= src1[8];
+						im1 <= src1[9];
+						df <= src1[10];
 					end
 				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src1[`LOBYTE]} : src1[`DBLBYTE];
 				4'b1100:	stkbnk <= src1[`LOBYTE];
+				4'b1101:	tr <= src1[`LOBYTE];
 `ifdef SUPPORT_6309				
 				4'b0110:	{acce,accf} <= src1[`DBLBYTE];
 				4'b1110:	acce <= src1[`LOBYTE];
@@ -3960,9 +4554,12 @@ begin
 						firqim <= src2[6];
 						ef <= src2[7];
 						dm <= src2[8];
+						im1 <= src2[9];
+						df <= src2[10];
 					end
 				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src2[`LOBYTE]} : src2[`DBLBYTE];
 				4'b1100:	stkbnk <= src2[`LOBYTE];
+				4'b1101:	tr <= src2[`LOBYTE];
 `ifdef SUPPORT_6309
 				4'b1110:	acce <= src2[`LOBYTE];
 				4'b1111:	accf <= src2[`LOBYTE];
@@ -4058,6 +4655,15 @@ begin
 				nf <= res24n;
 				acca <= res[`HIBYTE];
 				accb <= res[`LOBYTE];
+			end
+		`TSTG,`NEGG,`CLRG,
+		`STG_DP,`STG_NDX,`STG_EXT,
+		`LDG_DP,`LDG_NDX,`LDG_EXT:
+			begin
+				vf <= 1'b0;
+				zf <= ~|b[126:0];
+				nf <= b[127];
+				accg <= b;
 			end
 `ifdef SUPPORT_6309
 		`LDW_IMM,`LDW_DP,`LDW_NDX,`LDW_EXT:
@@ -4302,9 +4908,12 @@ begin
 						firqim <= src1[6];
 						ef <= src1[7];
 						dm <= src1[8];
+						im1 <= src1[9];
+						df <= src1[10];
 					end
 				4'b1011:	dpr <= bitsPerByte==8 ? {8'h00,src1[`LOBYTE]} : src1[`DBLBYTE];
 				4'b1100:	stkbnk <= src1[`LOBYTE];
+				4'b1101:	tr <= src1[`LOBYTE];
 `ifdef SUPPORT_6309
 				4'b0110:	{acce,accf} <= src1[`DBLBYTE];
 				4'b1110:	acce <= src1[`LOBYTE];
@@ -4487,6 +5096,8 @@ begin
 			casez(adr)
 `ifdef SUPPORT_OS
 			`RDYQI:			begin rdyq_tidi <= dat; rdyq_ins <= 1'b1; rdyq_wa <= adr[2:0]; end
+			`TCB_BASE+0:	tcb_base[`BYTE2] <= dat;
+			`TCB_BASE+1:	tcb_base[`BYTE1] <= dat;
 `endif
 `ifdef SUPPORT_DEBUG_REG
 			`BRKAD0+0:	brkad[0][`BYTE2] <= dat;	
@@ -4523,8 +5134,8 @@ begin
 	cyc_o <= 1'b0;
 	stb_o <= 1'b0;
 	we_o <= 1'b0;
-	adr_o <= 24'd0;
-	dat_o <= 12'd0;
+//	adr_o <= 24'd0;
+//	dat_o <= 12'd0;
 end
 endtask
 
@@ -4533,119 +5144,133 @@ input [`LOBYTE] dat;
 begin
 	case(load_what)
 	`LW_BH:
-			begin
-				radr <= radr + 2'd1;
-				b[`HIBYTE] <= dat;
-				load_what <= `LW_BL;
-				next_state(LOAD1);
-			end
+		begin
+			radr <= radr + 2'd1;
+			b[`HIBYTE] <= dat;
+			load_what <= `LW_BL;
+			next_state(LOAD1);
+		end
 	`LW_BL:
-			begin
-				// Don't increment address here for the benefit of the memory
-				// operate instructions which set wadr=radr in CALC.
-				b[`LOBYTE] <= dat;
-				next_state(CALC);
+		begin
+			// Don't increment address here for the benefit of the memory
+			// operate instructions which set wadr=radr in CALC.
+			b[`LOBYTE] <= dat;
+			next_state(CALC);
+		end
+	`LW_CCR:
+		begin
+			next_state(PULL1);
+			radr <= radr + 2'd1;
+			cf <= dat[0];
+			vf <= dat[1];
+			zf <= dat[2];
+			nf <= dat[3];
+			im <= dat[4];
+			hf <= dat[5];
+			firqim <= dat[6];
+			ef <= dat[7];
+			dm <= dat[8];
+			im1 <= dat[9];
+			df <= dat[10];
+			if (isRTI) begin
+				$display("loaded ccr=%b", dat);
+				ir[`HIBYTE] <= dat[7] ? 12'h3FE : 12'h080;
+				ssp <= ssp + 2'd1;
 			end
-	`LW_CCR:	begin
+			else if (isPULS)
+				ssp <= ssp + 2'd1;
+			else if (isPULU)
+				usp <= usp + 2'd1;
+		end
+	`LW_ACCA:
+		begin
+			acca <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
 				next_state(PULL1);
-				radr <= radr + 2'd1;
-				cf <= dat[0];
-				vf <= dat[1];
-				zf <= dat[2];
-				nf <= dat[3];
-				im <= dat[4];
-				hf <= dat[5];
-				firqim <= dat[6];
-				ef <= dat[7];
-				dm <= dat[8];
-				im1 <= dat[9];
-				if (isRTI) begin
-					$display("loaded ccr=%b", dat);
-					ir[`HIBYTE] <= dat[7] ? 12'h3FE : 12'h080;
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULS)
-					ssp <= ssp + 2'd1;
-				else if (isPULU)
-					usp <= usp + 2'd1;
+			else if (isRTI) begin
+				$display("loaded acca=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_ACCA:	begin
-				acca <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded acca=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_ACCB:	begin
-				accb <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded accb=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
+			else
+				next_state(IFETCH);
+		end
+	`LW_ACCB:
+		begin
+			accb <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loaded accb=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
 `ifdef SUPPORT_6309
-	`LW_ACCE:	begin
-				acce <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded acce=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+	`LW_ACCE:
+		begin
+			acce <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loaded acce=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_ACCF:	begin
-				accf <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded accf=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
 			end
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
+	`LW_ACCF:
+		begin
+			accf <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loaded accf=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
 `endif
 	`LW_DPRH:
 		begin
@@ -4653,7 +5278,9 @@ begin
 			next_state(LOAD1);
 			dpr[`HIBYTE] <= dat;
 			radr <= radr + 2'd1;
-			if (isRTI|isPULS) begin
+			if (isJTT)
+				;
+			else if (isRTI|isPULS) begin
 				$display("loaded dpr=%h from %h", dat, radr);
 				ssp <= ssp + 2'd1;
 			end
@@ -4666,227 +5293,338 @@ begin
 			next_state(PULL1);
 			dpr[`LOBYTE] <= dat;
 			radr <= radr + 2'd1;
-			if (isRTI|isPULS) begin
+			if (isJTT)
+				;
+			else if (isRTI|isPULS) begin
 				$display("loaded dpr=%h from %h", dat, radr);
 				ssp <= ssp + 2'd1;
 			end
 			else if (isPULU)
 				usp <= usp + 2'd1;
 		end
-	`LW_XH:	begin
-				load_what <= `LW_XL;
-				next_state(LOAD1);
-				xr[`HIBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded XH=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-				end
+	`LW_XH:
+		begin
+			load_what <= `LW_XL;
+			next_state(LOAD1);
+			xr[`HIBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				;
+			else if (isRTI) begin
+				$display("loaded XH=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
 			end
-	`LW_XL:	begin
-				xr[`LOBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loaded XL=%h from %h", dat, radr);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+			else if (isPULU)
+				usp <= usp + 2'd1;
+			else if (isPULS)
+				ssp <= ssp + 2'd1;
+		end
+	`LW_XL:
+		begin
+			xr[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loaded XL=%h from %h", dat, radr);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_YH:
-			begin
-				load_what <= `LW_YL;
-				next_state(LOAD1);
-				yr[`HIBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loadded YH=%h", dat);
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-				end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_YL:	begin
-				yr[`LOBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loadded YL=%h", dat);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
-	`LW_USPH:	begin
-				load_what <= `LW_USPL;
-				next_state(LOAD1);
-				usp[`HIBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loadded USPH=%h", dat);
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-				end
-			end
-	`LW_USPL:	begin
-				usp[`LOBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					$display("loadded USPL=%h", dat);
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
-			end
-	`LW_SSPH:	begin
-				load_what <= `LW_SSPL;
-				next_state(LOAD1);
-				ssp[`HIBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-				end
-			end
-	`LW_SSPL:	begin
-				ssp[`LOBYTE] <= dat;
-				radr <= radr + 2'd1;
-				if (isRTI) begin
-					ssp <= ssp + 2'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 2'd1;
-					next_state(PULL1);
-				end
-				else
-					next_state(IFETCH);
-			end
-	`LW_PCL:	begin
-				pc[`LOBYTE] <= dat;
-				radr <= radr + 2'd1;
-				// If loading from the vector table in bank zero, force pc[23:16]=0
-				if (radr[`BYTE3]=={BPB{1'b0}} && radr[`BYTE2]=={BPB{1'b1}} && radr[7:4]==4'hF)
-					pc[`BYTE3] <= {BPB{1'b0}};
-				if (isRTI|isRTS|isRTF|isPULS) begin
-					$display("loadded PCL=%h", dat);
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULU)
-					usp <= usp + 2'd1;
+			else
 				next_state(IFETCH);
+		end
+	`LW_YH:
+		begin
+			load_what <= `LW_YL;
+			next_state(LOAD1);
+			yr[`HIBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				;
+			else if (isRTI) begin
+				$display("loadded YH=%h", dat);
+				ssp <= ssp + 2'd1;
 			end
-	`LW_PCH:	begin
-				pc[`HIBYTE] <= dat;
-				load_what <= `LW_PCL;
-				radr <= radr + 2'd1;
-				if (isRTI|isRTS|isRTF|isPULS) begin
-					$display("loadded PCH=%h", dat);
-					ssp <= ssp + 2'd1;
-				end
-				else if (isPULU)
-					usp <= usp + 2'd1;
-				next_state(LOAD1);
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
 			end
-	`LW_PC2316:	begin
-				pc[`BYTE3] <= dat;
-				load_what <= `LW_PCH;
-				radr <= radr + 16'd1;
-				if (isRTI|isRTF|isPULS)
-					ssp <= ssp + 16'd1;
-				else if (isPULU)
-					usp <= usp + 16'd1;
-				next_state(LOAD1);
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
 			end
-	`LW_PC3124:	begin
-				//pc[`BYTE4] <= dat; // Throw the byte away
-				load_what <= `LW_PC2316;
-				radr <= radr + 16'd1;
-				if (isRTI|isRTF|isPULS)
-					ssp <= ssp + 16'd1;
-				else if (isPULU)
-					usp <= usp + 16'd1;
-				next_state(LOAD1);
+		end
+	`LW_YL:	begin
+			yr[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loadded YL=%h", dat);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
 			end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
+	`LW_USPH:
+		begin
+			load_what <= `LW_USPL;
+			next_state(LOAD1);
+			usp[`HIBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				;
+			else if (isRTI) begin
+				$display("loadded USPH=%h", dat);
+				ssp <= ssp + 2'd1;
+			end
+			else if (isPULS)
+				ssp <= ssp + 2'd1;
+		end
+	`LW_USPL:
+		begin
+			usp[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				$display("loadded USPL=%h", dat);
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULS) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
+	`LW_SSPH:
+		begin
+			load_what <= `LW_SSPL;
+			next_state(LOAD1);
+			ssp[`HIBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				;
+			else if (isRTI)
+				ssp <= ssp + 2'd1;
+			else if (isPULU)
+				usp <= usp + 2'd1;
+		end
+	`LW_SSPL:
+		begin
+			ssp[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				next_state(PULL1);
+			else if (isRTI) begin
+				ssp <= ssp + 2'd1;
+				next_state(PULL1);
+			end
+			else if (isPULU) begin
+				usp <= usp + 2'd1;
+				next_state(PULL1);
+			end
+			else
+				next_state(IFETCH);
+		end
+	`LW_PCL:
+		begin
+			pc[`LOBYTE] <= dat;
+			radr <= radr + 2'd1;
+			// If loading from the vector table in bank zero, force pc[23:16]=0
+			if (radr[`BYTE3]=={BPB{1'b0}} && radr[`BYTE2]=={BPB{1'b1}} && radr[7:4]==4'hF)
+				pc[`BYTE3] <= {BPB{1'b0}};
+			if (isJTT)
+				;
+			else if (isRTI|isRTS|isRTF|isPULS) begin
+				$display("loadded PCL=%h", dat);
+				ssp <= ssp + 2'd1;
+			end
+			else if (isPULU)
+				usp <= usp + 2'd1;
+			next_state(IFETCH);
+		end
+	`LW_PCH:
+		begin
+			pc[`HIBYTE] <= dat;
+			load_what <= `LW_PCL;
+			radr <= radr + 2'd1;
+			if (isJTT)
+				;
+			else if (isRTI|isRTS|isRTF|isPULS) begin
+				$display("loadded PCH=%h", dat);
+				ssp <= ssp + 2'd1;
+			end
+			else if (isPULU)
+				usp <= usp + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_PC2316:
+		begin
+			pc[`BYTE3] <= dat;
+			load_what <= `LW_PCH;
+			radr <= radr + 16'd1;
+			if (isJTT)
+				;
+			else if (isRTI|isRTF|isPULS)
+				ssp <= ssp + 16'd1;
+			else if (isPULU)
+				usp <= usp + 16'd1;
+			next_state(LOAD1);
+		end
+	`LW_PC3124:
+		begin
+			//pc[`BYTE4] <= dat; // Throw the byte away
+			load_what <= `LW_PC2316;
+			radr <= radr + 16'd1;
+			if (isJTT)
+				;
+			else if (isRTI|isRTF|isPULS)
+				ssp <= ssp + 16'd1;
+			else if (isPULU)
+				usp <= usp + 16'd1;
+			next_state(LOAD1);
+		end
+	`LW_B10:
+		begin
+			load_what <= `LW_B9;
+			b[127:120] <= dat[7:0];
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B9:
+		begin
+			load_what <= `LW_B8;
+			b[119:108] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B8:
+		begin
+			load_what <= `LW_B7;
+			b[107:96] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B7:
+		begin
+			load_what <= `LW_B6;
+			b[95:84] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B6:
+		begin
+			load_what <= `LW_B5;
+			b[83:72] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B5:
+		begin
+			load_what <= `LW_B4;
+			b[71:60] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B4:
+		begin
+			load_what <= `LW_B3;
+			b[`BYTE5] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B3:
+		begin
+			load_what <= `LW_B2;
+			b[`BYTE4] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B2:
+		begin
+			load_what <= `LW_B1;
+			b[`BYTE3] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B1:
+		begin
+			load_what <= `LW_B0;
+			b[`BYTE2] <= dat;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
+	`LW_B0:
+		begin
+			b[`BYTE1] <= dat;
+			radr <= radr + 2'd1;
+			next_state(CALC);
+		end
 	`LW_IAL:
-			begin
-				ia[`LOBYTE] <= dat;
-				res[`LOBYTE] <= dat;
-				radr <= {ia[`BYTE3],ia[`HIBYTE],dat};
-				wadr <= {ia[`BYTE3],ia[`HIBYTE],dat};
+		begin
+			ia[`LOBYTE] <= dat;
+			res[`LOBYTE] <= dat;
+			radr <= {ia[`BYTE3],ia[`HIBYTE],dat};
+			wadr <= {ia[`BYTE3],ia[`HIBYTE],dat};
 `ifdef SUPPORT_DBL_IND
-				if (isDblIndirect) begin
-          load_what <= `LW_IAH;
-          next_state(LOAD1);
-          isDblIndirect <= `FALSE;				
-				end
-				else
+			if (isDblIndirect) begin
+        load_what <= `LW_IAH;
+        next_state(LOAD1);
+        isDblIndirect <= `FALSE;				
+			end
+			else
 `endif
-				begin
-          load_what <= load_what2;
-          if (isOuterIndexed)
-              next_state(OUTER_INDEXING);
-          else begin
-              if (isLEA)
-                  next_state(IFETCH);
-              else if (isStore)
-                  next_state(STORE1);
-              else
-                  next_state(LOAD1);
+			begin
+        load_what <= load_what2;
+        if (isOuterIndexed)
+          next_state(OUTER_INDEXING);
+        else begin
+          if (isLEA)
+            next_state(IFETCH);
+          else if (isStore)
+            next_state(STORE1);
+          else if (isJTT) begin
+          	load_what <= `LW_CCR;
+          	next_state(PULL1);
           end
-				end
+          else
+            next_state(LOAD1);
+        end
 			end
+		end
 	`LW_IAH:
-			begin
-				ia[`HIBYTE] <= dat;
-				res[`HIBYTE] <= dat;
-				load_what <= `LW_IAL;
-				radr <= radr + 2'd1;
-				next_state(LOAD1);
-			end
+		begin
+			ia[`HIBYTE] <= dat;
+			res[`HIBYTE] <= dat;
+			load_what <= `LW_IAL;
+			radr <= radr + 2'd1;
+			next_state(LOAD1);
+		end
 	`LW_IA2316:
-			begin
-				ia[`BYTE3] <= dat;
-				load_what <= `LW_IAH;
-				radr <= radr + 32'd1;
-				next_state(LOAD1);
-			end
+		begin
+			ia[`BYTE3] <= dat;
+			load_what <= `LW_IAH;
+			radr <= radr + 32'd1;
+			next_state(LOAD1);
+		end
 	endcase
 end
 endtask
@@ -4905,8 +5643,8 @@ input [BPB*16-1:0] i;
 input rclk;
 input rce;
 input [11:0] pc;
-output [`HEXBYTE] insn;
-reg [`HEXBYTE] insn;
+output [`OCTABYTE] insn;
+reg [`OCTABYTE] insn;
 
 integer n;
 reg [BPB*16-1:0] mem [0:255];

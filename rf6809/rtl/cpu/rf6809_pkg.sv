@@ -49,6 +49,8 @@ parameter BPBX2M1 =	BPB*2-1;
 // The following enables OS components
 `define SUPPORT_OS	1
 
+`define SUPPORT_BxxDP	1
+
 //`define EIGHTBIT	1
 `define TWELVEBIT	2
 
@@ -63,8 +65,11 @@ parameter BPBX2M1 =	BPB*2-1;
 `define BYTE3		23:16
 `define BYTE4		31:24
 `define BYTE5		39:32
-`define QUINBYTE	47:0
-`define HEXBYTE		55:0
+`define BYTE6		47:40
+`define QUINBYTE	39:0
+`define HEXBYTE		47:0
+`define SEVEN_BYTES	55:0
+`define OCTABYTE	63:0
 `define DBLBYTEP1	16:0
 `define LOBYTEP1	8:0
 `define HCBIT		3
@@ -81,8 +86,11 @@ parameter BPBX2M1 =	BPB*2-1;
 `define BYTE3		35:24
 `define BYTE4		47:36
 `define BYTE5		59:48
+`define BYTE6		71:60
 `define QUINBYTE	59:0
 `define HEXBYTE		71:0
+`define SEVEN_BYTES	83:0
+`define OCTABYTE	95:0
 `define DBLBYTEP1	24:0
 `define LOBYTEP1	12:0
 `define HCBIT		3
@@ -107,7 +115,9 @@ parameter BPBX2M1 =	BPB*2-1;
 `define WRV_VECT 	36'hFFFFFFFC8
 `define RDV_VECT	36'hFFFFFFFC4
 `define DBG_VECT	36'hFFFFFFFC0
+`define SYS_VECT	36'hFFFFFFFBC
 
+`define TCB_BASE	36'hFFFFFFF30
 `define RDYQO			36'hFFFFFFF28
 `define RDYQI			36'b1111_1111_1111_1111_1111_1111_1111_0010_0xxx
 `define MSCOUNT		36'hFFFFFFF18
@@ -262,7 +272,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define ORA_IMM		12'h08A
 `define ADDA_IMM	12'h08B
 `define CMPX_IMM	12'h08C
-`define BSR			12'h08D
+`define BSR				12'h08D
 `define LDX_IMM		12'h08E
 `define JMP_FAR		12'h08F
 
@@ -411,6 +421,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define ORR			12'h135
 `define EORR		12'h136
 `define CMPR		12'h137
+`define JTT			12'h13B
 `define SWI2		12'h13F
 `define NEGD		12'h140
 `define COMD		12'h143
@@ -457,6 +468,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define ORD_DP		12'h19A
 `define ADDW_DP		12'h19B
 `define CMPY_DP		12'h19C
+`define JTT_DP		12'h19D
 `define LDY_DP		12'h19E
 `define STY_DP		12'h19F
 `define SUBW_NDX	12'h1A0
@@ -472,6 +484,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define ORD_NDX		12'h1AA
 `define ADDW_NDX	12'h1AB
 `define CMPY_NDX	12'h1AC
+`define JTT_NDX		12'h1AD
 `define LDY_NDX		12'h1AE
 `define STY_NDX		12'h1AF
 `define SUBW_EXT	12'h1B0
@@ -487,6 +500,7 @@ parameter BPBX2M1 =	BPB*2-1;
 `define	ORD_EXT		12'h1BA
 `define ADDW_EXT	12'h1BB
 `define CMPY_EXT	12'h1BC
+`define JTT_EXT		12'h1BD
 `define LDY_EXT		12'h1BE
 `define STY_EXT		12'h1BF
 `define LDS_IMM		12'h1CE
@@ -502,6 +516,12 @@ parameter BPBX2M1 =	BPB*2-1;
 `define STQ_EXT		12'h1FD
 `define LDS_EXT		12'h1FE
 `define STS_EXT		12'h1FF
+`define BAND_DP		12'h230
+`define BIAND_DP	12'h231
+`define BOR_DP		12'h232
+`define BIOR_DP		12'h233
+`define BEOR_DP		12'h234
+`define BIEOR_DP	12'h235
 `define BITMD		12'h23C
 `define LDMD		12'h23D
 `define SWI3		12'h23F
@@ -574,6 +594,40 @@ parameter BPBX2M1 =	BPB*2-1;
 `define CMPU_EXT	12'h2B3
 `define CMPS_EXT	12'h2BC
 
+`define DFADD			12'h331
+`define DFSUB			12'h332
+`define DFCMP			12'h333
+`define DFMUL			12'h334
+`define DFDIV			12'h335
+`define SYS				12'h33F
+
+`define NEGG			12'h340
+`define TSTG			12'h34D
+`define CLRG			12'h34F
+
+`define CMPG_DP		12'h393
+`define LDG_DP		12'h396
+`define DIVG_DP		12'h39D
+`define MULG_DP		12'h39F
+`define CMPG_NDX	12'h3A3
+`define LDG_NDX		12'h3A6
+`define DIVG_NDX	12'h3AD
+`define MULG_NDX	12'h3AF
+`define CMPG_EXT	12'h3B3
+`define LDG_EXT		12'h3B6
+`define DIVG_EXT	12'h3BD
+`define MULG_EXT	12'h3BF
+
+`define ADDG_DP		12'h3D3
+`define SUBG_DP		12'h3D4
+`define STG_DP		12'h3DD
+`define ADDG_NDX	12'h3E3
+`define SUBG_NDX	12'h3E4
+`define STG_NDX		12'h3ED
+`define ADDG_EXT	12'h3F3
+`define SUBG_EXT	12'h3F4
+`define STG_EXT		12'h3FD
+
 // Unused opcode
 `define INT			12'h33E
 
@@ -614,6 +668,17 @@ parameter BPBX2M1 =	BPB*2-1;
 `define LW_DPRL			6'd34
 `define LW_PCB3			6'd35
 `define LW_PCB2			6'd36
+`define LW_B0			6'd40
+`define LW_B1			6'd41
+`define LW_B2			6'd42
+`define LW_B3			6'd43
+`define LW_B4			6'd44
+`define LW_B5			6'd45
+`define LW_B6			6'd46
+`define LW_B7			6'd47
+`define LW_B8			6'd48
+`define LW_B9			6'd49
+`define LW_B10			6'd50
 `define LW_NOTHING	6'd63
 
 `define SW_ACCDH	6'd0
@@ -663,6 +728,17 @@ parameter BPBX2M1 =	BPB*2-1;
 `define SW_ACCWH	6'd44
 `define SW_ACCWL	6'd45
 `define SW_DPRL		6'd46
+`define SW_G0			6'd50
+`define SW_G1			6'd51
+`define SW_G2			6'd52
+`define SW_G3			6'd53
+`define SW_G4			6'd54
+`define SW_G5			6'd55
+`define SW_G6			6'd56
+`define SW_G7			6'd57
+`define SW_G8			6'd58
+`define SW_G9			6'd59
+`define SW_G10		6'd60
 `define SW_NOTHING	6'd63
 
 endpackage

@@ -41,14 +41,13 @@
 `define LOW     1'b0
 `define HIGH    1'b1
 
-module rf6809_mmu(rst_i, clk_i, pcr_i, mapen_i, s_ex_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o,
+module rf6809_mmu(rst_i, clk_i, pcr_i, s_ex_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o,
     pea_o, cyc_o, stb_o, we_o,
     exv_o, rdv_o, wrv_o);
 parameter SMALL = 1'b0;
 input rst_i;
 input clk_i;
 input [23:0] pcr_i;     // paging enabled
-input mapen_i;
 input s_ex_i;           // executable address
 input s_cs_i;
 input s_cyc_i;
@@ -67,9 +66,10 @@ output reg rdv_o;       // read violation
 output reg wrv_o;       // write violation
 
 wire cs = s_cyc_i && s_stb_i && s_cs_i;
-wire [5:0] okey = pcr_i[5:0];
+wire [5:0] okey = pcr_i[17:12];
+wire mapen = pcr_i[23];
 wire os_gate = pcr_i[22];
-wire [5:0] akey = pcr_i[17:12];
+wire [5:0] akey = pcr_i[5:0];
 
 ack_gen #(
 	.READ_STAGES(3),
@@ -97,11 +97,11 @@ wire [20:0] doutca;
 reg [3:0] crwx;
 
 always @(posedge clk_i)
-  exv_o <= s_ex_i & ~crwx[0] & cyc2 & stb2 & mapen_i;
+  exv_o <= s_ex_i & ~crwx[0] & cyc2 & stb2 & mapen;
 always @(posedge clk_i)
-  rdv_o <= ~(s_wr_i | s_ex_i) & ~crwx[2] & cyc2 & stb2 & mapen_i;
+  rdv_o <= ~(s_wr_i | s_ex_i) & ~crwx[2] & cyc2 & stb2 & mapen;
 always @(posedge clk_i)
-  wrv_o <= s_wr_i & ~crwx[1] & cyc2 & stb2 & mapen_i;
+  wrv_o <= s_wr_i & ~crwx[1] & cyc2 & stb2 & mapen;
 
 genvar g;
 generate begin : gMapRam
@@ -179,7 +179,7 @@ always @(posedge clk_i)
 always @(posedge clk_i)
   stb2 <= stb1 & s_stb_i;    
 always @(posedge clk_i)
-	mapen1 <= mapen_i;
+	mapen1 <= mapen;
 always @(posedge clk_i)
 	mapen2 <= mapen1;
 

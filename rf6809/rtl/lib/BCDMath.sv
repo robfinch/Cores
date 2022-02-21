@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2021  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2022  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,7 +49,7 @@ output c;
 wire c0;
 
 reg [4:0] hsN0;
-always_comb
+always  @*
 begin
 	hsN0 = a[3:0] + b[3:0] + ci;
 	if (hsN0 > 5'd9)
@@ -68,11 +68,9 @@ output [7:0] o;
 output c;
 
 wire c0,c1;
-reg [4:0] hsN0, hsN1;
-always_comb
-	hsN0 <= a[3:0] + b[3:0] + ci;
-always_comb
-	hsN1 <= a[7:4] + b[7:4] + c0;
+
+wire [4:0] hsN0 = a[3:0] + b[3:0] + ci;
+wire [4:0] hsN1 = a[7:4] + b[7:4] + c0;
 
 BCDAddAdjust u1 (hsN0,o[3:0],c0);
 BCDAddAdjust u2 (hsN1,o[7:4],c);
@@ -90,15 +88,10 @@ output c8;
 wire c0,c1,c2;
 assign c8 = c1;
 
-reg [4:0] hsN0, hsN1, hsN2, hsN3;
-always_comb
-	hsN0 <= a[3:0] + b[3:0] + ci;
-always_comb
-	hsN1 <= a[7:4] + b[7:4] + c0;
-always_comb
-	hsN2 <= a[11:8] + b[11:8] + c1;
-always_comb
-	hsN3 <= a[15:12] + b[15:12] + c2;
+wire [4:0] hsN0 = a[3:0] + b[3:0] + ci;
+wire [4:0] hsN1 = a[7:4] + b[7:4] + c0;
+wire [4:0] hsN2 = a[11:8] + b[11:8] + c1;
+wire [4:0] hsN3 = a[15:12] + b[15:12] + c2;
 
 BCDAddAdjust u1 (hsN0,o[3:0],c0);
 BCDAddAdjust u2 (hsN1,o[7:4],c1);
@@ -124,7 +117,7 @@ assign c[0] = ci;
 assign co = c[N];
 
 for (g = 0; g < N; g = g + 1)
-	always_comb
+	always @*
 		hsN[g] = a[g*4+3:g*4] + b[g*4+3:g*4] + c[g];
 
 for (g = 0; g < N; g = g + 1)
@@ -133,6 +126,33 @@ end
 endgenerate
 
 endmodule
+/*
+module BCDAdd8NClk(clk, a, b, o, ci, co);
+parameter N=33;
+input clk;
+input [N*8-1:0] a;
+input [N*8-1:0] b;
+output [N*8-1:0] o;
+input ci;
+output co;
+
+reg [N:0] c;
+wire [N:0] d;
+assign c[0] = ci;
+assign co = c[N];
+
+genvar g;
+generate begin : gBCDadd
+for (g = 0; g < N; g = g + 1) begin
+	BCDAdd u1 (c[g],a[g*8+7:g*8],b[g*8+7:g*8],o[g*8+7:g*8],d[g+1]);
+
+	always_ff @(posedge clk)
+		c[g+1] <= d[g+1];
+end
+end
+endgenerate
+endmodule
+*/
 
 module BCDSub(ci,a,b,o,c);
 input ci;		// carry input
@@ -143,11 +163,8 @@ output c;
 
 wire c0,c1;
 
-reg [4:0] hdN0, hdN1;
-always_comb
-	hdN0 <= a[3:0] - b[3:0] - ci;
-always_comb
-	hdN1 <= a[7:4] - b[7:4] - c0;
+wire [4:0] hdN0 = a[3:0] - b[3:0] - ci;
+wire [4:0] hdN1 = a[7:4] - b[7:4] - c0;
 
 BCDSubAdjust u1 (hdN0,o[3:0],c0);
 BCDSubAdjust u2 (hdN1,o[7:4],c);
@@ -165,15 +182,10 @@ output c8;
 wire c0,c1,c2;
 assign c8 = c1;
 
-reg [4:0] hdN0, hdN1, hdN2, hdN3;
-always_comb
-	hdN0 <= a[3:0] - b[3:0] - ci;
-always_comb
-	hdN1 <= a[7:4] - b[7:4] - c0;
-always_comb
-	hdN2 <= a[11:8] - b[11:8] - c1;
-always_comb
-	hdN3 <= a[15:12] - b[15:12] - c2;
+wire [4:0] hdN0 = a[3:0] - b[3:0] - ci;
+wire [4:0] hdN1 = a[7:4] - b[7:4] - c0;
+wire [4:0] hdN2 = a[11:8] - b[11:8] - c1;
+wire [4:0] hdN3 = a[15:12] - b[15:12] - c2;
 
 BCDSubAdjust u1 (hdN0,o[3:0],c0);
 BCDSubAdjust u2 (hdN1,o[7:4],c1);
@@ -199,7 +211,7 @@ assign c[0] = ci;
 assign co = c[N];
 
 for (g = 0; g < N; g = g + 1)
-	always_comb
+	always @*
 		hdN[g] = a[g*4+3:g*4] - b[g*4+3:g*4] - c[g];
 
 for (g = 0; g < N; g = g + 1)
@@ -208,6 +220,32 @@ end
 endgenerate
 
 endmodule
+			 
+module BCDSub8NClk(clk, a, b, o, ci, co);
+parameter N=33;
+input clk;
+input [N*8-1:0] a;
+input [N*8-1:0] b;
+output [N*8-1:0] o;
+input ci;
+output co;
+
+reg [N:0] c;
+wire [N:0] d;
+assign c[0] = ci;
+assign co = c[N];
+
+genvar g;
+generate begin : gBCDsub
+for (g = 0; g < N; g = g + 1) begin
+	BCDSub u1 (c[g],a[g*8+7:g*8],b[g*8+7:g*8],o[g*8+7:g*8],d[g+1]);
+
+	always_ff @(posedge clk)
+		c[g+1] <= d[g+1];
+end
+end
+endgenerate
+endmodule
 
 module BCDAddAdjust(i,o,c);
 input [4:0] i;
@@ -215,7 +253,7 @@ output [3:0] o;
 reg [3:0] o;
 output c;
 reg c;
-always_comb
+always @(i)
 case(i)
 5'h0: begin o = 4'h0; c = 1'b0; end
 5'h1: begin o = 4'h1; c = 1'b0; end
@@ -247,7 +285,7 @@ output [3:0] o;
 reg [3:0] o;
 output c;
 reg c;
-always_comb
+always @(i)
 case(i)
 5'h0: begin o = 4'h0; c = 1'b0; end
 5'h1: begin o = 4'h1; c = 1'b0; end
@@ -281,8 +319,8 @@ input [3:0] b;
 output [7:0] o;
 reg [7:0] o;
 
-always_comb
-case({a,b})
+always @(a or b)
+casex({a,b})
 8'h00: o = 8'h00;
 8'h01: o = 8'h00;
 8'h02: o = 8'h00;
@@ -520,7 +558,7 @@ endgenerate
 endmodule
 
 // Perform a logical shift to the right.
-module BCDSRLN(ci, i, o, co);
+module BCDSRL(ci, i, o, co);
 parameter N=4;
 input ci;
 input [N*4-1:0] i;
@@ -530,7 +568,7 @@ output co;
 reg [N:0] c;
 
 genvar g;
-generate begin :gSRL
+generate begin
 always @*
 	c[N] = ci;
 for (g = N - 1; g >= 0; g = g - 1)
@@ -539,13 +577,12 @@ always @*
 for (g = N - 1; g >= 0; g = g - 1)
 always @*
 begin
+	o[g*4+3:g*4] = {1'b0,i[g*4+3:g*4+1]};
 	// Because there is a divide by two, the value will range between 0 and 4.
 	// Adding 5 keeps it within deicmal boundaries of 0 to 9. No carry can be
 	// generated
-	if (c[g+1])
-		o[g*4+3:g*4] = {1'b0,i[g*4+3:g*4+1]} + 4'd5;
-	else
-		o[g*4+3:g*4] = {1'b0,i[g*4+3:g*4+1]};
+	if (c[N+1])
+		o[g*4+3:g*4] = o[g*4+3:g*4] + 4'd5;
 end
 	assign co = c[0];
 end
