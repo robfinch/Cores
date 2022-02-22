@@ -66,7 +66,7 @@ DDBinToBCD ub2b1
 );
 
 DFP128U ui;
-wire [13:0] zeroXp = {13{1'b1}};
+wire [13:0] zeroXp = 14'h17FF;
 
 reg iz;			// zero input ?
 wire [7:0] lz;		// count the leading zeros in the number

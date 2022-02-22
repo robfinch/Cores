@@ -88,9 +88,9 @@ begin
 case(st)
 SUBN:
 	begin
-		clkcnt <= clkcnt + 1'd1;
 		digcnt <= digcnt - 1'd1;
 		if (digcnt=='d0) begin
+			clkcnt <= clkcnt + 1'd1;
 			digcnt <= 6'd3;
 			if (co) begin
 				ri <= {ri,qi[FPWID*2-1:FPWID*2-4]};
@@ -122,8 +122,11 @@ SUBN:
 						if (|cnt)
 							gotnz <= 1'b1;
 						else if (!gotnz) begin
-							if (lzcnt[3:0]==4'd9)
+							if (lzcnt[3:0]==4'd9) begin
 								lzcnt <= lzcnt + 4'd7;
+								if (lzcnt[7:4]==4'd9)
+									lzcnt[7:4] <= 4'd0;
+							end
 							else
 								lzcnt <= lzcnt + 1'd1;
 						end
@@ -155,7 +158,7 @@ if (ld) begin
 	bi <= b;
 	st <= SUBN;
 	gotnz <= 1'b0;
-	lzcnt <= 8'd0;
+	lzcnt <= 8'h00;
 	done <= 1'b0;
 end
 end

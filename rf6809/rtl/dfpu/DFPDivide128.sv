@@ -46,6 +46,9 @@
 
 import DFPPkg::*;
 
+`define QINFDIV		4'd2
+`define QZEROZERO	4'd3
+
 module DFPDivide128(rst, clk, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 parameter N=34;
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
@@ -88,7 +91,6 @@ wire [(N+2)*4*2-1:0] divo;
 
 // Operands
 reg sa, sb;			// sign bit
-reg [13:0] xa, xb;	// exponent bits
 reg [N*4-1:0] siga, sigb;
 reg az, bz;
 reg aInf, bInf;
@@ -133,7 +135,7 @@ wire done3a,done3;
 // Perform divide
 dfdiv #(N+2) u2 (.clk(clk), .ld(ld1), .a({siga,8'b0}), .b({sigb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
 wire [7:0] lzcnt_bin = lzcnt[3:0] + (lzcnt[7:4] * 10);
-wire [(N+2)*4*2-1:0] divo1 = divo[(N+2)*4*2-1:0] << ({lzcnt_bin,2'b0}+(N*4));//WAS FPWID=128?+44
+wire [(N+2)*4*2-1:0] divo1 = divo[(N+2)*4*2-1:0] << ({lzcnt_bin,2'b0}+N*4);//WAS FPWID=128?+44
 ft_delay #(.WID(1), .DEP(3)) u3 (.clk(clk), .ce(ce), .i(done1), .o(done3a));
 assign done3 = done1&done3a;
 
@@ -151,7 +153,7 @@ reg [15:0] ex1;	// sum of exponents
 reg qNaNOut;
 
 always @(posedge clk)
-  if (ce) ex1 <= xa - xb + bias - lzcnt;
+  if (ce) ex1 <= au.exp - bu.exp + bias - lzcnt_bin;
 
 always @(posedge clk)
   if (ce) qNaNOut <= (az&bz)|(aInf&bInf);

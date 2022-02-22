@@ -59,7 +59,7 @@ DFP128U ui;
 DFPUnpack128 uunpk1 (i, ui);
 
 wire [127:0] maxInt = op ? {1'd0,{127{1'b1}}} : {128{1'b1}};		// maximum integer value
-wire [13:0] zeroXp = {1'd0,{13{1'b1}}};
+wire [13:0] zeroXp = 14'h17FF;
 
 reg sgn;									// sign
 always @(posedge clk)

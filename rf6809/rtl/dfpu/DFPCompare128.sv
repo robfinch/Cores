@@ -40,7 +40,7 @@ import DFPPkg::*;
 module DFPCompare128(a, b, o);
 input DFP128 a;
 input DFP128 b;
-output reg [11:0] o;
+output reg [11:0] o ='d0;
 localparam N=34;			// number of BCD digits
 
 parameter TRUE = 1'b1;
@@ -48,13 +48,15 @@ parameter FALSE = 1'b0;
 
 DFP128U au;
 DFP128U bu;
-wire sa, sb;
 
 DFPUnpack128 u00 (a, au);
 DFPUnpack128 u01 (b, bu);
 
-wire sa = au.sign;
-wire sb = bu.sign;
+reg sa, sb;
+always_comb
+	sa = au.sign;
+always_comb
+	sb = bu.sign;
 wire az = ~|{au.exp,au.sig};
 wire bz = ~|{bu.exp,bu.sig};
 wire unordered = au.nan | bu.nan;

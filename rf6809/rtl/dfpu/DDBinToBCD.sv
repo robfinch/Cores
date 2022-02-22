@@ -39,7 +39,7 @@
 //
 module DDBinToBCD(rst, clk, ld, bin, bcd, done);
 parameter WID = 128;
-parameter DEP = 2;		// pipeline depth
+parameter DEP = 2;		// cascade depth
 localparam BCDWID = ((WID+(WID-4)/3)+3) & -4;
 input rst;
 input clk;
