@@ -40,19 +40,18 @@
 `define FALSE 1'b0
 `define LOW   1'b0
 `define HIGH  1'b1
-`define TURBO2	1'b1
-`define HDMI	1'b1
 
 // 640x480 standard VGA timing is used, but the horizontal constants are multiplied
 // by 1.299... to account for the use of a 32.71705MHz clock instead of 25.175.
 // A five times clock (164MHz) is needed to drive the DVI interface.
+// The 32.71705MHz clock was carefully selected as being on the high side of 32MHz
+// given an input clock of 14.318MHz. Dividing 32.71705 by 32 gives a phi02 clock
+// of 1.022MHz, really close to that normally supplied by the VIC-II.
 //
-module FAL6567h(cr_clk, phi02, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, //hSync, vSync,
-//		p, blank_n, synclk, colclk,
-	  TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
-		ram_adr, ram_dat, ram_we, ram_ce, ram_oe, casram_n
-//		,Sync, comp, colorBurst
-	);
+module FAL6567h(chip_i, cr_clk, phi02, rst_o, irq, aec, ba,
+	cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n,
+	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
+);
 parameter PAL = 1'b0;
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
@@ -101,6 +100,7 @@ parameter VIC_CHAR = 4;  // character acccess cycle
 parameter VIC_G = 5;
 parameter VIC_PAL = 6;	// palette initialization
 
+input [1:0] chip_i;			// = CHIP6567R8; (pull downs)
 input cr_clk;           // color reference clcck (14.31818)
 output phi02;
 output rst_o;
@@ -140,12 +140,10 @@ reg synclk;		// sync+lum clocking
 reg colclk;		// color clocking
 reg hSync, vSync;	// sync outputs
 
-reg [1:0] chip;// = CHIP6567R8;
 integer n;
 wire cs = !cs_n;
-wire clk164;
-wire clk32, clk33;	// 32.73 or 38.18 MHz
-wire clk57, dotclk;
+wire clk164;	// 163.58525 MHz
+wire clk33;		//  32.71705 MHz
 reg [7:0] regShadow [127:0];
 
 reg [7:0] ado;
@@ -192,17 +190,10 @@ wire vicAddrValid;
 reg [7:0] dbo8;
 wire [7:0] dbo33 = 8'h00;
 
-reg turbo = 0;
-reg turbo2 = 0;
-reg palette_inited;
-reg [3:0] cram [0:1023];
-wire [3:0] cram_dat = cram[ram_adr[9:0]];
-
 wire badline;                   // flag bad line condition
 reg den;                        // display enable
 reg rsel, bmm, ecm;
 reg csel, mcm, res;
-reg [17:0] pixadr;				// pixel address for scan conversion
 reg [10:0] preRasterX;
 reg [10:0] rasterX;
 reg [10:0] rasterXMax;
@@ -294,8 +285,6 @@ reg embc;
 reg emmc;
 reg elp;
 
-wire [7:0] dbFlt;
-
 assign irq = (ilp & elp) | (immc & emmc) | (imbc & embc) | (irst & erst); 
  
 reg rasterIRQDone;
@@ -318,26 +307,14 @@ reg [18:0] vadr;
 reg [7:0] vdat;
 reg [7:0] vdatr;
 
-wire ft816_rw;
-wire [7:0] ft816_db;
-wire [23:0] ft816_ad;
-
 reg [21:0] rstcntr = 0;
 wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
-always @(posedge cr_clk)
+always_ff @(posedge cr_clk)
 if (xrst)
   rstcntr <= rstcntr + 4'd1;
 
 // Set Limits
 always_ff @(posedge clk33)
-if (turbo2)
-case(chip)
-CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd607; end
-CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd607; end
-CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd607; end
-CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd607; end
-endcase
-else
 case(chip)
 CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = {7'd64,3'b111}; end
 CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = {7'd63,3'b111}; end
@@ -351,10 +328,6 @@ FAL6567_clkgen #(PAL) u1
 	.xclk(cr_clk),
 	.clk164(clk164),
 	.clk33(clk33),
-	.turbo2(turbo2),
-	.dcrate(1'b0),
-	.dotclk(dotclk),
-	.clk57(clk57),
 	.locked(locked)
 );
 
@@ -363,18 +336,11 @@ assign rst_o = rst;
 
 assign den_n = aec ? cs_n : 1'b0;
 assign dir = aec ? rw : 1'b0;
-assign db = rst ? 12'bz : (aec && !cs_n && rw) ? (ad[7:0] < 8'h33 ? {4'h0,dbo8} : {4'h0,dbFlt}) : 12'bz;
+assign db = rst ? 12'bz : (aec && !cs_n && rw) ? {4'h0,dbo8} : 12'bz;
 
-// Generate color burst clock
-reg [3:0] burstClk16x = 4'h0;
-wire burstClk;
-always @(posedge clk57)
-	burstClk16x <= burstClk16x + 4'd1;
-assign burstClk = burstClk16x[3];
-	
-always @(posedge clk33)
-if (rst)
- 	chip <= db[9:8];
+reg [1:0] chip;
+always_ff @(posedge clk33)
+	chip <= chip_i;
 always_ff @(posedge clk33)
 if (rst)
 	ado <= 8'hFF;
@@ -382,163 +348,13 @@ else
 	ado <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
 assign ad = aec ? 12'bz : {vicAddr[11:8],ado};
 
-wire casram_npe, casram_nne;
 wire ras_nne;
 wire phi02_pe;
-reg [7:0] cpu_dat;
-reg cpu_wrote;
-reg cpu_access;
-reg [7:0] col_adr, row_adr;
-reg [7:0] ram_dato;
-reg rst_cpu_access;
-edge_det ued1 (.rst(rst), .clk(clk33), .ce(1'b1), .i(casram_n), .pe(casram_npe), .ne(casram_nne));
 edge_det ued2 (.rst(rst), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
 edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
-wire phi02_1, phi02_2, phi02_3;
-delay1 #1 udly1 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_1));
-delay2 #1 udly2 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_2));
-delay3 #1 udly3 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_3));
-
-always_ff @(posedge clk33)
-	if (phi02 & casram_nne)
-		cpu_access <= 1'b1;
-	else if (rst_cpu_access)
-		cpu_access <= 1'b0;
-always_ff @(posedge clk33)
-	if (phi02 & casram_npe)
-		col_adr <= ad[7:0];
-always_ff @(posedge clk33)
-	if (phi02 & ras_nne)
-		row_adr <= ad[7:0];
-always_ff @(posedge clk33)
-	if (phi02 & casram_npe)
-		cpu_dat <= db;
-always_ff @(posedge clk33)
-	if (phi02 & casram_npe)
-		cpu_wrote <= rw;
-wire [15:0] cpu_adr = {row_adr,col_adr};
-
-always_ff @(posedge clk33)
-case(stc[31:29])
-3'b100:	ram_adr <= {3'b0,cpu_adr};
-3'b010:	ram_adr <= {ram_page,vicAddr};
-3'b001:	ram_adr <= vadr;
-default:	ram_adr <= ft816_ad[18:0];
-endcase
-
-always_ff @(posedge clk33)
-case(stc[31:29])
-3'b100:	if (cpu_wrote & cpu_access)
-			ram_dato <= cpu_dat;
-3'b001:	ram_dato <= vdat;
-default:	ram_dato <= ft816_db;
-endcase
-
-reg vwr1;
-always_ff @(posedge clk33)
-if (vwr)
-	vwr1 <= 1'b1;
-else if (stc[26])
-	vwr1 <= 1'b0;
-
-reg ram_we1;
-always_ff @(posedge clk33)
-case(stc[31:29])
-3'b100:	ram_we1 <= ~(cpu_wrote & cpu_access);
-3'b010:	ram_we1 <= 1'b1;
-3'b001:	ram_we1 <= ~vwr1;
-default:	ram_we1 <= ft816_rw;
-endcase
-always @*
-	ram_we <= ram_we1 | clk33_240;
-
-always_ff @(posedge clk33)
-case(stc[31:29])
-3'b100:	ram_oe <= cpu_access ? (cpu_wrote ? 1'b1 : 1'b0) : 1'b1;
-3'b010:	ram_oe <= 1'b0;
-3'b001:	ram_oe <= vwr1;
-default:	ram_oe <= ~ft816_rw;
-endcase
-
-always_ff @(posedge clk33)
-case(stc[31:29])
-3'b100:	ram_ce <= ~cpu_access;
-3'b010:	ram_ce <= 1'b0;
-3'b001:	ram_ce <= 1'b0;
-default:	ram_ce <= ~(ft816_ad[23:19]==5'h0);
-endcase
-
-always_ff @(posedge clk33)
-if (stc[31:28]==4'b0001)
-	vdatr <= ram_dat;
-
-always_ff @(posedge clk33)
-	if (phi02_pe)
-		rst_cpu_access <= cpu_access;
-
-assign ram_dat = ram_we1 ? ram_dato : 8'bz;
-always_ff @(posedge clk33)
-	if (ram_we1 && ram_adr[15:10]==6'b110110)
-		cram[ram_adr[9:0]] <= ram_dato[3:0];
-
-//------------------------------------------------------------------------------
-// '816 system components
-//------------------------------------------------------------------------------
-
-wire ft816_cs_vic = ft816_ad[23:10]==14'b1011_0000_1101_00;
-wire ft816_cs_flt = ft816_ad[23:10]==14'b1011_0000_1110_00;
-
-assign dbFlt = ft816_rw ? 8'bz : ft816_db;
-FAL6567Float uflt1 (rst_o, clk33, ft816_cs_flt, ft816_cs_flt, ~ft816_rw, ft816_ad[7:0], dbFlt);
-
-reg [7:0] ft816_dbi;
-always @*
-casez({ft816_cs_vic,ft816_cs_flt})
-2'b1?:	ft816_dbi <= dbo8;
-2'b01:	ft816_dbi <= dbFlt;
-default:	ft816_dbi <= ram_dat;
-endcase
-
-assign ft816_db = ft816_rw ? ft816_dbi : 8'bz;
-
-reg ft816_rst;
-wire ft816_clk;
-BUFGMUX ubg2 (.S(|stc[27:0]), .I0(1'b0), .I1(clk33), .O(ft816_clk));
-
-FT816 ucpu1
-(
-	.rst(ft816_rst),	// active low
-	.clk(ft816_clk),
-	.clko(),
-	.cyc(),
-	.phi11(),
-	.phi12(),
-	.phi81(),
-	.phi82(),
-	.nmi(),
-	.irq(irq),
-	.abort(),
-	.e(),
-	.mx(),
-	.rdy(1'b1),
-	.be(1'b1),
-	.vpa(),
-	.vda(),
-	.mlb(),
-	.vpb(),
-	.rw(ft816_rw),
-	.ad(ft816_ad),
-	.db(ft816_db),
-	.err_i(1'b0),
-	.rty_i(1'b0)
-);
-
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-
-always_ff @(posedge clk33)
-	p <= color33;
 
 always_ff @(posedge clk33)
 if (rst)
@@ -595,6 +411,7 @@ else begin
 		BUS_CG:     rasr <= 32'b11111100000000001111111000000000;  // G,C
 		BUS_G:      rasr <= 32'b11111100000000001111111000000000;  // G,C
 		BUS_REF:    rasr <= 32'b11111100000000001111111000000000;  // R,C or R
+		default:		rasr <= 32'hFFFFFFFF;
 		endcase
 		end
 	else
@@ -615,6 +432,7 @@ else begin
 		BUS_CG:     muxr <= 32'b11111110000000001111111100000000;  // G,C
 		BUS_G:      muxr <= 32'b11111110000000001111111100000000;  // G,C
 		BUS_REF:    muxr <= 32'b00000000000000001111111100000000;  // R,C or R
+		default:		muxr <= 32'hFFFFFFFF;
 		endcase
 		end
 	else
@@ -637,6 +455,7 @@ else begin
 		BUS_CG:     casr <= 32'b11111111000000001111111110000000;  // G,C
 		BUS_G:      casr <= 32'b11111111000000001111111110000000;  // G,C
 		BUS_REF:    casr <= 32'b11111111111111111111111110000000;  // R,C
+		default:		casr <= 32'hFFFFFFFF;
 		endcase
 	end
 	else
@@ -800,9 +619,6 @@ end
 
 wire [10:0] rasterX2 = {preRasterX,1'b0};
 always_comb
-if (pi_req)
-	vicCycle <= VIC_PAL;
-else
 casez(rasterX2)
 11'h00?: vicCycle <= VIC_REF;
 11'h01?: vicCycle <= VIC_REF;
@@ -848,44 +664,6 @@ casez(rasterX2)
 11'h29?: vicCycle <= VIC_CHAR;
 11'h2A?: vicCycle <= VIC_CHAR;
 default:
-if (turbo2)
-casez(rasterX2)
-11'h2B?: vicCycle <= VIC_CHAR;
-11'h2C?: vicCycle <= VIC_CHAR;
-11'h2D?: vicCycle <= VIC_CHAR;
-11'h2E?: vicCycle <= VIC_CHAR;
-11'h2F?: vicCycle <= VIC_CHAR;
-11'h30?: vicCycle <= VIC_CHAR;
-11'h31?: vicCycle <= VIC_CHAR;
-11'h32?: vicCycle <= VIC_CHAR;
-11'h33?: vicCycle <= VIC_G;
-11'h34?: vicCycle <= VIC_IDLE;
-11'h35?: vicCycle <= VIC_IDLE;
-11'h36?: vicCycle <= VIC_IDLE;
-11'h37?: vicCycle <= VIC_IDLE;
-11'h38?: vicCycle <= VIC_SPRITE;
-11'h39?: vicCycle <= VIC_SPRITE;
-11'h3A?: vicCycle <= VIC_SPRITE;
-11'h3B?: vicCycle <= VIC_SPRITE;
-11'h3C?: vicCycle <= VIC_SPRITE;
-11'h3D?: vicCycle <= VIC_SPRITE;
-11'h3E?: vicCycle <= VIC_SPRITE;
-11'h3F?: vicCycle <= VIC_SPRITE;
-11'h40?: vicCycle <= VIC_SPRITE;
-11'h41?: vicCycle <= VIC_SPRITE;
-11'h42?: vicCycle <= VIC_SPRITE;
-11'h43?: vicCycle <= VIC_SPRITE;
-11'h44?: vicCycle <= VIC_SPRITE;
-11'h45?: vicCycle <= VIC_SPRITE;
-11'h46?: vicCycle <= VIC_SPRITE;
-11'h47?: vicCycle <= VIC_SPRITE;
-11'h48?: vicCycle <= VIC_IDLE;
-11'h49?: vicCycle <= VIC_IDLE;
-11'h4A?: vicCycle <= VIC_IDLE;
-11'h4B?: vicCycle <= VIC_REF;
-default: vicCycle <= VIC_IDLE;
-endcase
-else
 casez(rasterX2)
 11'h2B?: vicCycle <= VIC_G;
 11'h2C?: vicCycle <= VIC_IDLE;
@@ -935,18 +713,11 @@ endcase
 
 always_ff @(posedge clk33)
 if (clken8) begin
-	if (turbo2)
-    case(chip)
-    CHIP6567R8:   sprite1 <= rasterX2 - 11'h37E;
-    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h37E;
-    default:      sprite1 <= rasterX2 - 11'h37E;
-    endcase
-	else
-    case(chip)
-    CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
-    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
-    default:      sprite1 <= rasterX2 - 11'h2DE;
-    endcase
+  case(chip)
+  CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
+  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
+  default:      sprite1 <= rasterX2 - 11'h2DE;
+  endcase
   if (leg)
 		sprite2 <= sprite1[7:5];
   else
@@ -978,34 +749,18 @@ integer n1;
 always_ff @(posedge clk33)
 	for (n1 = 0; n1 < MIBCNT; n1 = n1 + 1) begin
 		if (me[n1] && ((my[n1]==nextRasterY)||MActive[n1])) begin
-			if (turbo2) begin
-				if (leg)
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h350 + {n1,5'b0}) && (rasterX2 < 11'h3A0 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h350 + {n1,5'b0}) && (rasterX2 < 11'h3A0 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h350 + {n1,5'b0}) && (rasterX2 < 11'h3A0 + {n1,5'b0}); 
-					endcase
-				else
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h350 + {n1,4'b0}) && (rasterX2 < 11'h390 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h350 + {n1,4'b0}) && (rasterX2 < 11'h390 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h350 + {n1,4'b0}) && (rasterX2 < 11'h390 + {n1,4'b0});
-					endcase
-			end
-			else begin
-				if (leg)
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,5'b0}) && (rasterX2 < 11'h320 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,5'b0}) && (rasterX2 < 11'h310 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,5'b0}) && (rasterX2 < 11'h300 + {n1,5'b0}); 
-					endcase
-				else
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,4'b0}) && (rasterX2 < 11'h310 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,4'b0}) && (rasterX2 < 11'h300 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,4'b0}) && (rasterX2 < 11'h2F0 + {n1,4'b0}); 
-					endcase
-			end
+			if (leg)
+				case(chip)
+				CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,5'b0}) && (rasterX2 < 11'h320 + {n1,5'b0});
+				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,5'b0}) && (rasterX2 < 11'h310 + {n1,5'b0});
+				default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,5'b0}) && (rasterX2 < 11'h300 + {n1,5'b0}); 
+				endcase
+			else
+				case(chip)
+				CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,4'b0}) && (rasterX2 < 11'h310 + {n1,4'b0});
+				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,4'b0}) && (rasterX2 < 11'h300 + {n1,4'b0});
+				default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,4'b0}) && (rasterX2 < 11'h2F0 + {n1,4'b0}); 
+				endcase
 		end
 		else begin
 			balos[n1] <= `FALSE;
@@ -1014,12 +769,11 @@ always_ff @(posedge clk33)
 
 reg [10:0] baloff;
 always_ff @(posedge clk33)
-case({turbo2,chip})
-3'b000:	baloff <= 11'h2C0;
-3'b001:	baloff <= 11'h2B0;
-3'b010:	baloff <= 11'h2A0;
-3'b011:	baloff <= 11'h2A0;
-default:	baloff <= 11'h340;
+case(chip)
+2'b00:	baloff <= 11'h2C0;
+2'b01:	baloff <= 11'h2B0;
+2'b10:	baloff <= 11'h2A0;
+2'b11:	baloff <= 11'h2A0;
 endcase
 wire balo = |balos | (badline && rasterX2 < baloff);
 
@@ -1071,22 +825,18 @@ integer n2;
 always_ff @(posedge clk33)
 if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
 	if (badline)
-		nextChar <= turbo ? {cram_dat,ram_dat} : db;
+		nextChar <= db;
 	else
-		nextChar <= turbo2 ? charbuf[46] : charbuf[38];
-	if (turbo2)
-		for (n2 = 46; n2 > 0; n2 = n2 -1)
-			charbuf[n2] = charbuf[n2-1];
-	else
-		for (n2 = 38; n2 > 0; n2 = n2 -1)
-			charbuf[n2] = charbuf[n2-1];
+		nextChar <= charbuf[38];
+	for (n2 = 38; n2 > 0; n2 = n2 -1)
+		charbuf[n2] = charbuf[n2-1];
 	charbuf[0] <= nextChar;
 end
 
 always_ff @(posedge clk33)
 if (phi02==`LOW && enaData) begin
 	if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
-		readPixels <= turbo ? ram_dat : db[7:0];
+		readPixels <= db[7:0];
 		readChar <= nextChar;
 	end
 	waitingPixels <= readPixels;
@@ -1094,9 +844,9 @@ if (phi02==`LOW && enaData) begin
 end
 
 always_ff @(posedge clk33)
-if (phis==`LOW && enaSData==1'b1 && busCycle==BUS_SPRITE) begin
+if (phis==`LOW && enaSData==1'b1 && busCycle==(leg ? BUS_LS : BUS_SPRITE)) begin
 	if (MActive[sprite])
-		MPtr[sprite] <= turbo ? ram_dat : db[7:0];
+		MPtr[sprite] <= db[7:0];
 	else
 		MPtr[sprite] <= 8'd255;
 end
@@ -1117,7 +867,7 @@ else begin
 			vmndx <= 11'd0;
 		if ((vicCycle==VIC_CHAR||vicCycle==VIC_G) && badline)
 			vmndx <= vmndx + 1;
-		if (rasterX2[10:4]==(turbo2 ? 7'h34 : 7'h2C)) begin
+		if (rasterX2[10:4]==7'h2C) begin
 			if (scanline==3'd7)
 				vmndxStart <= vmndx;
 			else
@@ -1143,7 +893,7 @@ else begin
 			if (badline)
 				scanline <= 3'd0;
 		end
-		if (rasterX2[10:4]==(turbo2 ? 7'h34 : 7'h2C))
+		if (rasterX2[10:4]==7'h2C)
 			scanline <= scanline + 3'd1;
 	end
 end
@@ -1168,9 +918,6 @@ if (rst)
 else begin
 	if (immc_clr)
 		immc <= `FALSE;
-	if (ad[7:0]==8'h1E && regpg==2'b10 && phi02 && aec && cs && enaData) begin
-		m2m[23:16] <= 8'h0;
-	end
 	if (ad[7:0]==8'h1E && regpg==2'b01 && phi02 && aec && cs && enaData) begin
 		m2m[15:8] <= 8'h0;
 	end
@@ -1179,31 +926,23 @@ else begin
 		m2mhit <= `FALSE;
 	end
 	case(collision)
-	24'b000000000000000000000000,
-	24'b000000000000000000000001,
-	24'b000000000000000000000010,
-	24'b000000000000000000000100,
-	24'b000000000000000000001000,
-	24'b000000000000000000010000,
-	24'b000000000000000000100000,
-	24'b000000000000000001000000,
-	24'b000000000000000010000000,
-	24'b000000000000000100000000,
-	24'b000000000000001000000000,
-	24'b000000000000010000000000,
-	24'b000000000000100000000000,
-	24'b000000000001000000000000,
-	24'b000000000010000000000000,
-	24'b000000000100000000000000,
-	24'b000000001000000000000000,
-	24'b000000010000000000000000,
-	24'b000000100000000000000000,
-	24'b000001000000000000000000,
-	24'b000010000000000000000000,
-	24'b000100000000000000000000,
-	24'b001000000000000000000000,
-	24'b010000000000000000000000,
-	24'b100000000000000000000000:
+	16'b0000000000000000,
+	16'b0000000000000001,
+	16'b0000000000000010,
+	16'b0000000000000100,
+	16'b0000000000001000,
+	16'b0000000000010000,
+	16'b0000000000100000,
+	16'b0000000001000000,
+	16'b0000000010000000,
+	16'b0000000100000000,
+	16'b0000001000000000,
+	16'b0000010000000000,
+	16'b0000100000000000,
+	16'b0001000000000000,
+	16'b0010000000000000,
+	16'b0100000000000000,
+	16'b1000000000000000:
 	;
 	default:
 		begin
@@ -1224,9 +963,6 @@ if (rst)
 else begin
 	if (imbc_clr)
 		imbc <= `FALSE;
-	if (ad[7:0]==8'h1F && regpg==2'b10 && phi02 && aec && cs && enaData) begin
-		m2d[23:16] <= 8'h0;
-	end
 	if (ad[7:0]==8'h1F && regpg==2'b01 && phi02 && aec && cs && enaData) begin
 		m2d[15:8] <= 8'h0;
 	end
@@ -1266,7 +1002,7 @@ end
 else begin
 	// Trigger sprite accesses on the last character cycle
 	// if the sprite Y coordinate will match.
-	if (rasterX2==(turbo2 ? 11'h330 : 11'h2B0)) begin
+	if (rasterX2==11'h2B0) begin
 		for (n7 = 0; n7 < MIBCNT; n7 = n7 + 1) begin
 			if (!MActive[n7] && me[n7] && nextRasterY == my[n7])
 				MCnt[n7] <= 6'd0;
@@ -1414,8 +1150,6 @@ end
 always_comb
 begin
 	case(vicCycle)
-	VIC_PAL:
-		addr <= {8'h00,pi_adr};
 	VIC_REF:
 		addr <= {6'b111111,refcntr};
 	VIC_RC:
@@ -1439,7 +1173,7 @@ begin
 	VIC_SPRITE:
 		if (leg) begin
 			if (phi02==`LOW && sprite1[4])
-				addr <= vm + ((turbo2 ? 14'b11111111000 : 14'b1111111000) | sprite[2:0]);
+				addr <= vm + (14'b1111111000 | sprite[2:0]);
 			else
 				addr <= {MPtr[sprite],MCnt[sprite]};
 		end
@@ -1447,7 +1181,7 @@ begin
 			if (!phis)
 				addr <= {MPtr[sprite],MCnt[sprite]};
 			else
-				addr <= vm + ((turbo2 ? 14'b11111100000 : 14'b1111100000) | {~sprite[4:3],sprite[2:0]});
+				addr <= vm + (14'b1111110000 | {~sprite[3],sprite[2:0]});
 		end
 	default: addr <= 14'h3FFF;
 	endcase
@@ -1479,16 +1213,16 @@ end
 reg lightPenHit;
 always_ff @(posedge clk33)
 begin
-    if (ilp_clr)
+  if (ilp_clr)
 		ilp <= `LOW;
-    if (rasterY == rasterYMax)
+  if (rasterY == rasterYMax)
 		lightPenHit <= `FALSE;
-    else if (!lightPenHit && lp_n == `LOW) begin
+  else if (!lightPenHit && lp_n == `LOW) begin
 		lightPenHit <= `TRUE; 
 		ilp <= `HIGH; 
-		lpx <= rasterX[8:1];
-		lpy <= rasterY[7:0];
-    end
+		lpx <= rasterX[9:2];
+		lpy <= rasterY[8:1];
+  end
 end
 
 //------------------------------------------------------------------------------
@@ -1510,9 +1244,9 @@ end
 reg [9:0] hVicBlankOff;
 reg [9:0] hVicBlankOn;
 always_ff @(posedge clk33)
-	hVicBlankOff <= turbo2 ? 10'd88 : 10'd103;
+	hVicBlankOff <= 10'd103;
 always_ff @(posedge clk33)
-	hVicBlankOn <= turbo2 ? 10'd508 : 10'd592;
+	hVicBlankOn <= 10'd592;
 
 always_ff @(posedge clk33)
 begin
@@ -1535,48 +1269,12 @@ FAL6567_sync usg1
 	.chip(chip),
 	.rst(rst),
 	.clk(clk33),
-	.turbo2(turbo2),
 	.rasterX(rasterX),
 	.rasterY(rasterY),
 	.hSync(hSync8),
 	.vSync(vSync8),
 	.cSync(Sync)
 );
-
-//------------------------------------------------------------------------------
-// Color burst window.
-// - determines when color burst should be output. Not needed for the current
-//   version of the core which only outputs VGA.
-//------------------------------------------------------------------------------
-
-reg [9:0] burstWindowBegin;
-reg [9:0] burstWindowEnd;
-// 504
-always_ff @(posedge clk33)
-case(chip)
-CHIP6567R8,CHIP6567OLD:
-	burstWindowBegin <= turbo2 ? 10'd50 : 10'd43;
-CHIP6569,CHIP6572:
-	burstWindowBegin <= turbo2 ? 10'd53 : 10'd44;
-endcase
-always_ff @(posedge clk33)
-case(chip)
-CHIP6567R8,CHIP6567OLD:
-	burstWindowEnd <= turbo2 ? 10'd74 : 10'd63;
-CHIP6569,CHIP6572:
-	burstWindowEnd <= turbo2 ? 10'd95 : 10'd62;
-endcase
-reg burstWindow;
-always_ff @(posedge clk33)
-begin
-	if (rasterX >= burstWindowBegin && rasterX < burstWindowEnd && rasterY > 8)
-		burstWindow <= `TRUE;
-	else
-		burstWindow <= `FALSE;
-end
-
-BUFGMUX ubgbrst (.S(burstWindow|burstClk), .I0(1'b0), .I1(burstClk), .O(colorBurst));
-
 
 //------------------------------------------------------------------------------
 // Borders
@@ -1602,11 +1300,11 @@ begin
 	hVicBorder <= `TRUE;
 	if (den) begin
 		if (csel) begin
-			if (rasterX >= 25 && rasterX <= (turbo2 ? 409 : 345))
+			if (rasterX >= 25 && rasterX <= 345)
 				hVicBorder <= `FALSE;
 		end
 		else begin
-			if (rasterX >= 32 && rasterX <= (turbo2 ? 396 : 336))
+			if (rasterX >= 32 && rasterX <= 336)
 				hVicBorder <= `FALSE;
 		end
 	end
@@ -1746,39 +1444,26 @@ if (clken8) begin
 		color8 <= color_code;
 end
 
-`ifdef HDMI
 FAL6567_ScanConverter usc1
 (
   .chip(chip),
-  .clk40(clk40),
+  .clk33(clk33),
   .clken8(clken8),
   .hSync8_i(hSync8),
   .vSync8_i(vSync8),
   .color_i(color8),
   .hSync33_i(hSync),
   .vSync33_i(vSync),
-  .color_o(color40)
+  .color_o(color33)
 );
 
 FAL6567_ColorROM ucrom1
 (
-	.clk(clk40),
+	.clk(clk33),
 	.ce(1'b1),
-	.code(color40),
+	.code(color33),
 	.color(RGB)
 );
-
-FAL6567_dviclk uclkd2
-(
-  // Clock out ports
-  .clk200(clk200),     // output clk200
-  .clk40(clk40),     // output clk40
-  // Status and control signals
-  .reset(xrst), // input reset
-  .locked(),       // output locked
- // Clock in ports
-  .clk_in1(cr_clk)
-);      // input clk_in1
 
 rgb2dvi #(
 	.kGenerateSerialClk(1'b0),
@@ -1798,25 +1483,10 @@ ur2d1
 	.vid_pVDE(~blank),
 	.vid_pHSync(hSync),    // hSync is neg going for 1366x768
 	.vid_pVSync(vSync),
-	.PixelClk(clk40),
-	.SerialClk(clk200)
+	.PixelClk(clk33),
+	.SerialClk(clk164)
 );
 
-
-`else
-wire [4:0] comp1;
-RGB2Composite urgb2c1
-(
-	.clk(clk57),
-	.ph(burstClk16x),
-	.r(RGB[23:16]),
-	.g(RGB[15:8]),
-	.b(RGB[7:0]),
-	.co(comp1)
-);
-always_ff @(posedge clk57)
-	comp <= (hVicBlank|vVicBlank) ? 5'd0 : comp1;
-`endif
 
 //------------------------------------------------------------------------------
 // Register Interface
@@ -1827,11 +1497,7 @@ always_ff @(posedge clk57)
 integer n14;
 always_ff @(posedge clk33)
 if (rst) begin
-	ft816_rst <= 1'b0;	// active low
-	turbo <= 1'b0;
-	ram_page <= 5'd0;
-	rst_pal <= 1'b0;
-	regpg <= 1'd0;
+	regpg <= 2'd0;
 	leg <= LEGACY;
 	hSyncOn <= phSyncOn;
 	hSyncOff <= phSyncOff;
@@ -1860,9 +1526,6 @@ if (rst) begin
 		mx[n14] = 9'd200;
 		my[n14] = 8'd5;
 	end
-	vdat <= 8'h00;
-	vadr <= 19'h00000;
-	vwr <= 1'b0;
 end
 else begin
 	vwr <= 1'b0;
@@ -1911,36 +1574,31 @@ else begin
             1'd1: dbo8 <= me[15:8];
             endcase
     8'h16:  dbo8 <= {2'b11,res,mcm,csel,xscroll};
-    8'h17:  case(regpg)
+    8'h17:  case(regpg[0])
             1'd0: dbo8 <= mye[7:0];
             1'd1: dbo8 <= mye[15:8];
             endcase
     8'h18:  begin
-    		if (regpg) begin
-    			dbo8 <= {3'd0,ram_page};
-    		end
-    		else begin
             	dbo8[0] <= 1'b1;
             	dbo8[3:1] <= cb[13:11];
             	dbo8[7:4] <= vm[13:10];
-        	end
             end
     8'h19:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
     8'h1A:  dbo8 <= {4'b1111,elp,emmc,embc,erst};
     8'h1B:  dbo8 <= mdp;
-    8'h1C:  case(regpg)
+    8'h1C:  case(regpg[0])
             1'd0: dbo8 <= mmc[7:0];
             1'd1: dbo8 <= mmc[15:8];
             endcase
-    8'h1D:  case(regpg)
+    8'h1D:  case(regpg[0])
             1'd0: dbo8 <= mxe[7:0];
             1'd1: dbo8 <= mxe[15:8];
             endcase
-    8'h1E:  case(regpg)
+    8'h1E:  case(regpg[0])
             1'd0: dbo8 <= m2m[7:0];
             1'd1: dbo8 <= m2m[15:8];
             endcase
-    8'h1F:  case(regpg)
+    8'h1F:  case(regpg[0])
             1'd0: dbo8 <= m2d[7:0];
             1'd1: dbo8 <= m2d[15:0];
             endcase
@@ -1959,13 +1617,7 @@ else begin
     8'h2C:  dbo8[3:0] <= mc[{regpg,3'd5}];
     8'h2D:  dbo8[3:0] <= mc[{regpg,3'd6}];
     8'h2E:  dbo8[3:0] <= mc[{regpg,3'd7}];
-    8'h32:  dbo8 <= {leg,turbo,5'h1F,regpg};
-    8'h3A:	dbo8 <= 8'h46;
-    8'h3B:	dbo8 <= 8'h49;
-    8'h34:	dbo8 <= vdatr;
-    8'h35:	dbo8 <= vadr[7:0];
-    8'h36:	dbo8 <= vadr[15:8];
-    8'h37:	dbo8 <= {5'h0,vadr[18:16]};
+    8'h32:  dbo8 <= {leg,1'b0,4'hF,regpg};
     default:  dbo8 <= 8'hFF;
     endcase
   end
@@ -2014,7 +1666,7 @@ else begin
         8'h12:  rasterCmp[7:0] <= db;
         8'h13:  ; // light pen x
         8'h14:  ; // light pen y
-        8'h15:  case(regpg)
+        8'h15:  case(regpg[0])
                 1'd0: me[7:0] <= db;
                 1'd1: me[15:8] <= db;
                 endcase
@@ -2024,17 +1676,13 @@ else begin
                 mcm <= db[4];
                 res <= db[5];
                 end  
-        8'h17:  case(regpg)
+        8'h17:  case(regpg[0])
                 1'd0: mye[7:0] <= db;
                 1'd1: mye[15:8] <= db;
                 endcase
         8'h18:  begin
-        		if (regpg)
-        			ram_page <= db[4:0];
-        		else begin
                 	cb[13:11] <= db[3:1];
                 	vm[13:10] <= db[7:4];
-            	end
                 end
         8'h19:  begin
                 irst_clr <= db[0];
@@ -2078,82 +1726,44 @@ else begin
 
         8'h30:  regno <= db[5:0];
         8'h32:  begin
-                regpg <= db[0];
-                if (db[4])
-                	rst_pal <= 1'b1;
-`ifdef TURBO2                
-                turbo2 <= db[5];
-                if (db[5]) begin
-                	hSyncOn <= 12'd24;
-                	hSyncOff <= 12'd171;
-                	hBlankOff <= 12'd244;
-                	hBorderOff <= 12'd349;
-                	hBorderOn <= 12'd1117;
-                	hBlankOn <= 12'd1222;
-                	hTotal <= 12'd1222;
-                	hSyncPol <= 1'b1;
-	            end
-	            else begin
-                	hSyncOn <= 12'd21;
-                	hSyncOff <= 12'd147;
-                	hBlankOff <= 12'd209;
-                	hBorderOff <= 12'd308;
-                	hBorderOn <= 12'd948;
-                	hBlankOn <= 12'd1047;
-                	hTotal <= 12'd1047;
-                	hSyncPol <= 1'b1;
-	            end
-`else
-				turbo2 <= 1'b0;                
-`endif             
-                turbo <= db[6];
+                regpg <= db[1:0];
                 leg <= db[7];
                 end
         8'h31:
           case(regno)
-        6'h00:  hSyncOn[7:0] <= db;
-        6'h01:  hSyncOn[11:8] <= db[3:0];
-        6'h02:  hSyncOff[7:0] <= db;
-        6'h03:  hSyncOff[11:8] <= db[3:0];
-        6'h04:  hBlankOff[7:0] <= db;
-        6'h05:  hBlankOff[11:8] <= db[3:0];
-        6'h06:  hBorderOff[7:0] <= db;
-        6'h07:  hBorderOff[11:8] <= db[3:0];
-        6'h08:  hBorderOn[7:0] <= db;
-        6'h09:  hBorderOn[11:8] <= db[3:0];
-        6'h0A:  hBlankOn[7:0] <= db;
-        6'h0B:  hBlankOn[11:8] <= db[3:0];
-        6'h0C:  hTotal[7:0] <= db;
-        6'h0D:  hTotal[11:8] <= db[3:0];
-        6'h0F:  begin
-                hSyncPol <= db[0];
-                vSyncPol <= db[1];
-                end
-        6'h10:  vSyncOn[7:0] <= db;
-        6'h11:  vSyncOn[11:8] <= db[3:0];
-        6'h12:  vSyncOff[7:0] <= db;
-        6'h13:  vSyncOff[11:8] <= db[3:0];
-        6'h14:  vBlankOff[7:0] <= db;
-        6'h15:  vBlankOff[11:8] <= db[3:0];
-        6'h16:  vBorderOff[7:0] <= db;
-        6'h17:  vBorderOff[11:8] <= db[3:0];
-        6'h18:  vBorderOn[7:0] <= db;
-        6'h19:  vBorderOn[11:8] <= db[3:0];
-        6'h1A:  vBlankOn[7:0] <= db;
-        6'h1B:  vBlankOn[11:8] <= db[3:0];
-        6'h1C:  vTotal[7:0] <= db;
-        6'h1D:  vTotal[11:8] <= db[3:0];
-        endcase
-        8'h34:  vdat <= db[7:0];
-        8'h35:	vadr[7:0] <= db[7:0];
-        8'h36:	vadr[15:8] <= db[7:0];
-        8'h37:	begin
-        		vadr[18:16] <= db[2:0];
-        		vwr <= db[7];
-        		end
-        8'h38:	begin
-        		ft816_rst <= db[0];
-        		end
+	        6'h00:  hSyncOn[7:0] <= db;
+	        6'h01:  hSyncOn[11:8] <= db[3:0];
+	        6'h02:  hSyncOff[7:0] <= db;
+	        6'h03:  hSyncOff[11:8] <= db[3:0];
+	        6'h04:  hBlankOff[7:0] <= db;
+	        6'h05:  hBlankOff[11:8] <= db[3:0];
+	        6'h06:  hBorderOff[7:0] <= db;
+	        6'h07:  hBorderOff[11:8] <= db[3:0];
+	        6'h08:  hBorderOn[7:0] <= db;
+	        6'h09:  hBorderOn[11:8] <= db[3:0];
+	        6'h0A:  hBlankOn[7:0] <= db;
+	        6'h0B:  hBlankOn[11:8] <= db[3:0];
+	        6'h0C:  hTotal[7:0] <= db;
+	        6'h0D:  hTotal[11:8] <= db[3:0];
+	        6'h0F:  begin
+	                hSyncPol <= db[0];
+	                vSyncPol <= db[1];
+	                end
+	        6'h10:  vSyncOn[7:0] <= db;
+	        6'h11:  vSyncOn[11:8] <= db[3:0];
+	        6'h12:  vSyncOff[7:0] <= db;
+	        6'h13:  vSyncOff[11:8] <= db[3:0];
+	        6'h14:  vBlankOff[7:0] <= db;
+	        6'h15:  vBlankOff[11:8] <= db[3:0];
+	        6'h16:  vBorderOff[7:0] <= db;
+	        6'h17:  vBorderOff[11:8] <= db[3:0];
+	        6'h18:  vBorderOn[7:0] <= db;
+	        6'h19:  vBorderOn[11:8] <= db[3:0];
+	        6'h1A:  vBlankOn[7:0] <= db;
+	        6'h1B:  vBlankOn[11:8] <= db[3:0];
+	        6'h1C:  vTotal[7:0] <= db;
+	        6'h1D:  vTotal[11:8] <= db[3:0];
+	        endcase
         endcase
       end
     end

@@ -38,7 +38,7 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module FAL6567_sync(chip, rst, clk, turbo2, rasterX, rasterY, hSync, vSync, cSync);
+module FAL6567_sync(chip, rst, clk, rasterX, rasterY, hSync, vSync, cSync);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -46,7 +46,6 @@ parameter CHIP6572 = 2'd3;
 input [1:0] chip;
 input rst;
 input clk;
-input turbo2;
 input [9:0] rasterX;
 input [8:0] rasterY;
 output reg hSync;
@@ -75,9 +74,9 @@ reg [9:0] hSyncWidth;
 always_ff @(posedge clk)
 case(chip)
 CHIP6567R8,CHIP6567OLD:
-	hSyncWidth <= turbo2 ? 10'd49 : 10'd42;
+	hSyncWidth <= 10'd42;
 CHIP6569,CHIP6572:
-	hSyncWidth <= turbo2 ? 10'd45 : 10'd37;
+	hSyncWidth <= 10'd37;
 endcase
 always_ff @(posedge clk)
 begin
@@ -91,7 +90,6 @@ wire EQ, SE;
 EqualizationPulse ueqp1
 (
 	.chip(chip),
-	.turbo2(turbo2),
 	.rasterX(rasterX),
 	.EQ(EQ)
 );
@@ -100,7 +98,6 @@ EqualizationPulse ueqp1
 SerrationPulse usep1
 (
 	.chip(chip),
-	.turbo2(turbo2),
 	.rasterX(rasterX),
 	.SE(SE)
 );

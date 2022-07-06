@@ -35,46 +35,16 @@
 //                                                                
 // ============================================================================
 //
-module SerrationPulse(chip, turbo2, rasterX, SE);
+module SerrationPulse(chip, rasterX, SE);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
 parameter CHIP6572 = 2'd3;
 input [1:0] chip;
-input turbo2;
 input [9:0] rasterX;
 output reg SE;
 
 always_comb
-if (turbo2)
-case(chip)
-CHIP6567R8:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd261) ||	// 43%
-	(	
-		(rasterX >= 10'd304) &&	// 50%
-	 	(rasterX < 10'd565)		// 93%
-	)
-	;
-CHIP6567OLD:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd261) ||	// 43%
-	(	
-		(rasterX >= 10'd304) &&
-	 	(rasterX < 10'd565)
-	)
-	;
-	// ToDo: fix serration for PAL turbo2
-CHIP6569,CHIP6572:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd261) ||
-	(	
-		(rasterX >= 10'd304) &&
-	 	(rasterX < 10'd565)
-	)
-	;
-endcase
-else
 case(chip)
 CHIP6567R8:
 	SE <=		// 93% tH (7%tH) (3051-427)

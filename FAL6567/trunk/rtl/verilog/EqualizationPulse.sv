@@ -35,45 +35,16 @@
 //                                                                
 // ============================================================================
 //
-module EqualizationPulse(chip, turbo2, rasterX, EQ);
+module EqualizationPulse(chip, rasterX, EQ);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
 parameter CHIP6572 = 2'd3;
 input [1:0] chip;
-input turbo2;
 input [9:0] rasterX;
 output reg EQ;
 
 always_comb
-if (turbo2)
-case(chip)
-CHIP6567R8:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd24) ||
-	(
-		(rasterX >= 10'd304) &&	// 50%
-		(rasterX < 10'd328)		// 54%
-	)
-	;
-CHIP6567OLD:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd24) ||
-	(
-		(rasterX >= 10'd304) &&
-		(rasterX < 10'd328)
-	)
-	;
-CHIP6569,CHIP6572:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd24) ||
-	(
-		(rasterX >= 10'd304) &&
-		(rasterX < 10'd328)
-	)
-	;
-endcase
-else
 case(chip)
 CHIP6567R8:
 	EQ <=		//  4% tH equalization width
