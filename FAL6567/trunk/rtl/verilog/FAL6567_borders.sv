@@ -37,12 +37,13 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_borders(clk33, den, rsel, csel, rasterX, rasterY, hBorder, vBorder, border);
+module FAL6567_borders(clk33, den, col80, rsel, csel, rasterX, rasterY, hBorder, vBorder, border);
 input clk33;
 input den;
+input col80;
 input rsel;
 input csel;
-input [9:0] rasterX;
+input [10:0] rasterX;
 input [8:0] rasterY;
 output reg hBorder;
 output reg vBorder;
@@ -67,13 +68,25 @@ always_ff @(posedge clk33)
 begin
 	hBorder <= `TRUE;
 	if (den) begin
-		if (csel) begin
-			if (rasterX >= 10'd25 && rasterX <= 10'd345)
-				hBorder <= `FALSE;
+		if (col80) begin
+			if (csel) begin
+				if (rasterX >= 11'd25 && rasterX <= 11'd665)
+					hBorder <= `FALSE;
+			end
+			else begin
+				if (rasterX >= 11'd32 && rasterX <= 11'd656)
+					hBorder <= `FALSE;
+			end
 		end
 		else begin
-			if (rasterX >= 10'd32 && rasterX <= 10'd336)
-				hBorder <= `FALSE;
+			if (csel) begin
+				if (rasterX >= 11'd25 && rasterX <= 11'd345)
+					hBorder <= `FALSE;
+			end
+			else begin
+				if (rasterX >= 11'd32 && rasterX <= 11'd336)
+					hBorder <= `FALSE;
+			end
 		end
 	end
 end

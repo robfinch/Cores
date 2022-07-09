@@ -53,10 +53,10 @@ input [13:0] cb;
 input [2:0] scanline;
 input [11:0] nextChar;
 input [3:0] sprite;
-input [31:0] sprite1;
+input [7:0] sprite1;
 input [5:0] MCnt [MIBCNT-1:0];
 input [7:0] MPtr [MIBCNT-1:0];
-output [13:0] vicAddr;
+output reg [13:0] vicAddr;
 
 reg [13:0] addr;
 

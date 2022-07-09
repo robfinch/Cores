@@ -47,7 +47,7 @@ input col80;
 input [MIBCNT-1:0] me;
 input [7:0] my [MIBCNT-1:0];
 input badline;
-input [10:0] rasterX2;
+input [11:0] rasterX2;
 input [8:0] nextRasterY;
 input [MIBCNT-1:0] MActive;
 input stCycle2;
@@ -63,29 +63,29 @@ always_ff @(posedge clk33)
 			if (col80) begin
 				if (leg)
 					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h550 + {n1,5'b0}) && (rasterX2 < 11'h5A0 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h540 + {n1,5'b0}) && (rasterX2 < 11'h590 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h530 + {n1,5'b0}) && (rasterX2 < 11'h580 + {n1,5'b0}); 
+					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,5'b0}) && (rasterX2 < 12'h5A0 + {n1,5'b0});
+					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,5'b0}) && (rasterX2 < 12'h590 + {n1,5'b0});
+					default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,5'b0}) && (rasterX2 < 12'h580 + {n1,5'b0}); 
 					endcase
 				else
 					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h550 + {n1,4'b0}) && (rasterX2 < 11'h590 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h540 + {n1,4'b0}) && (rasterX2 < 11'h580 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h530 + {n1,4'b0}) && (rasterX2 < 11'h570 + {n1,4'b0}); 
+					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,4'b0}) && (rasterX2 < 12'h590 + {n1,4'b0});
+					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,4'b0}) && (rasterX2 < 12'h580 + {n1,4'b0});
+					default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,4'b0}) && (rasterX2 < 12'h570 + {n1,4'b0}); 
 					endcase
 			end
 			else begin
 				if (leg)
 					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,5'b0}) && (rasterX2 < 11'h320 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,5'b0}) && (rasterX2 < 11'h310 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,5'b0}) && (rasterX2 < 11'h300 + {n1,5'b0}); 
+					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,5'b0}) && (rasterX2 < 12'h320 + {n1,5'b0});
+					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,5'b0}) && (rasterX2 < 12'h310 + {n1,5'b0});
+					default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,5'b0}) && (rasterX2 < 12'h300 + {n1,5'b0}); 
 					endcase
 				else
 					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,4'b0}) && (rasterX2 < 11'h310 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,4'b0}) && (rasterX2 < 11'h300 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,4'b0}) && (rasterX2 < 11'h2F0 + {n1,4'b0}); 
+					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,4'b0}) && (rasterX2 < 12'h310 + {n1,4'b0});
+					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,4'b0}) && (rasterX2 < 12'h300 + {n1,4'b0});
+					default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,4'b0}) && (rasterX2 < 12'h2F0 + {n1,4'b0}); 
 					endcase
 			end
 		end

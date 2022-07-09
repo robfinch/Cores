@@ -45,8 +45,8 @@ input phi02;
 input enaData;
 input ref5;
 input badline;
-input [10:0] rasterX2;
-output [2:0] scanline;
+input [11:0] rasterX2;
+output reg [2:0] scanline;
 
 always_ff @(posedge clk33)
 if (rst) begin
@@ -58,7 +58,7 @@ else begin
 			if (badline)
 				scanline <= 3'd0;
 		end
-		if (rasterX2[10:4]==7'h2C)
+		if (rasterX2[11:4]==8'h2C)
 			scanline <= scanline + 3'd1;
 	end
 end

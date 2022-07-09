@@ -56,15 +56,15 @@ output reg [3:0] color_o;
 (* ram_style="block" *)
 reg [3:0] mem [0:274431];	// 134kB
 reg [9:0] raster8X;
-reg [9:0] raster8XMax;
-reg [8:0] raster8Y;
+reg [9:0] raster8XMax = 10'd0;
+reg [8:0] raster8Y = 9'd0;
 reg [8:0] raster8YMax;
-reg phSync8, pvSync8;
+reg phSync8 = 1'b0, pvSync8 = 1'b0;
 
 reg [11:0] raster33X;
 reg [9:0] raster33Y;
 reg [9:0] raster33YMax;
-reg phSync33, pvSync33;
+reg phSync33 = 1'b0, pvSync33 = 1'b0;
 
 reg [3:0] color_ir;
 reg [3:0] color_ou;
@@ -79,15 +79,6 @@ CHIP6567OLD:  raster8XMax = 10'd512;
 CHIP6569:     raster8XMax = 10'd504;
 CHIP6572:     raster8XMax = 10'd504;
 endcase
-
-initial begin
-	phSync8 = 1'b0;
-	pvSync8 = 1'b0;
-	phSync33 = 1'b1;
-	pvSync33 = 1'b1;
-	raster8X = 10'd0;
-	raster8Y = 9'd0;
-end
 
 always_ff @(posedge clk33)
 if (clken8) begin

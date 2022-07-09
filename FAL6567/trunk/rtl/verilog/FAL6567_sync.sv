@@ -46,7 +46,7 @@ parameter CHIP6572 = 2'd3;
 input [1:0] chip;
 input rst;
 input clk;
-input [9:0] rasterX;
+input [10:0] rasterX;
 input [8:0] rasterY;
 output reg hSync;
 output reg vSync;
@@ -74,9 +74,9 @@ reg [9:0] hSyncWidth;
 always_ff @(posedge clk)
 case(chip)
 CHIP6567R8,CHIP6567OLD:
-	hSyncWidth <= 10'd42;
+	hSyncWidth <= 11'd42;
 CHIP6569,CHIP6572:
-	hSyncWidth <= 10'd37;
+	hSyncWidth <= 11'd37;
 endcase
 always_ff @(posedge clk)
 begin

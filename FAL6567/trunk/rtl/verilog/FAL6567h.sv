@@ -33,7 +33,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                
-// Requires 67kB of block RAM   536kBits       
+// Requires 134kB of block RAM
 // ============================================================================
 //
 import FAL6567_pkg::*;
@@ -49,6 +49,8 @@ module FAL6567h(cr_clk, phi02, rst_o, irq, aec, ba,
 	cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n,
 	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
 );
+parameter pSymRasterEnable = 48;
+parameter SIM = 0;
 
 // Constants multiplied by 1.299... for 32.71705MHz clock
 parameter phSyncOn  = 21;       //   16 front porch
@@ -90,17 +92,6 @@ output TMDS_OUT_clk_n;
 output [2:0] TMDS_OUT_data_p;
 output [2:0] TMDS_OUT_data_n;
 
-output reg [18:0] ram_adr;
-inout [7:0] ram_dat;
-output reg ram_we;
-output reg ram_oe;
-output reg ram_ce;
-input casram_n;
-
-output Sync;
-output reg [4:0] comp;
-output colorBurst;
-
 
 reg [3:0] p;
 reg blank_n;
@@ -141,11 +132,13 @@ wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
 reg col80 = 1'b0;
 
+reg [1:0] chip;
 wire locked;
 wire clken8;
 
 wire phi0,phi1;
 wire phi02,phis;
+wire [31:0] phi02r;
 wire mux;
 wire enaData,enaSData;
 wire vicRefresh;
@@ -188,13 +181,13 @@ reg [11:0] nextChar;
 reg [11:0] charbuf [78:0];
 wire [2:0] scanline;
 
-reg [4:0] sprite;
+reg [3:0] sprite;
 reg [MIBCNT-1:0] MActive;
-reg [MIBCNT-1:0] MPtr [7:0];
-reg [5:0] MCnt [0:MIBCNT-1];
-reg [8:0] mx [0:MIBCNT-1];
-reg [7:0] my [0:MIBCNT-1];
-reg [3:0] mc [0:MIBCNT-1];
+reg [7:0] MPtr [MIBCNT-1:0];
+reg [5:0] MCnt [MIBCNT-1:0];
+reg [8:0] mx [MIBCNT-1:0];
+reg [7:0] my [MIBCNT-1:0];
+reg [3:0] mc [MIBCNT-1:0];
 reg [MIBCNT-1:0] mmc;
 reg [MIBCNT-1:0] me;
 reg [MIBCNT-1:0] mye, mye_ff;
@@ -303,14 +296,18 @@ else
 	CHIP6572:     rasterXMax = {8'd62,3'b111};
 	endcase
 
-FAL6567_clkgen u1
+FAL6567_clkgenwiz u1
 (
-	.rst(xrst),
-	.xclk(cr_clk),
-	.clk164(clk164),
-	.clk33(clk33),
-	.locked(locked)
-);
+  // Clock out ports
+  .clk164(clk164),     // output clk164
+  .clk33(clk33),     // output clk33
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked),       // output locked
+ // Clock in ports
+  .clk_in1(cr_clk)
+);      // input clk_in1
+
 
 wire rst = !locked;
 assign rst_o = rst;
@@ -320,7 +317,6 @@ assign den_n = aec ? cs_n : 1'b0;
 assign dir = aec ? rw : 1'b0;
 assign db = rst ? 12'bz : (aec && !cs_n && rw) ? {4'h0,dbo8} : 12'bz;
 
-reg [1:0] chip;
 always_ff @(posedge clk33)
 	if (rst)
 		chip <= db[9:8];
@@ -335,24 +331,6 @@ wire ras_nne;
 wire phi02_pe;
 edge_det ued2 (.rst(rst), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
 edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
-
-//------------------------------------------------------------------------------
-//------------------------------------------------------------------------------
-
-FAL6567_Timing utim1 (
-	.rst(rst),
-	.clk33(clk33),
-	.clken8(clken8),
-	.stc(stc),
-	.phi02(phi02),
-	.phis(phis),
-	.ras_n(ras_n),
-	.mux(mux),
-	.cas_n(cas_n),
-	.enaData(enaData),
-	.enaSData(enaSData),
-	.enaMCnt(enaMCnt)
-);
 
 //------------------------------------------------------------------------------
 // Bus cycle type
@@ -379,8 +357,30 @@ begin
 			busCycle <= BUS_G;
 	VIC_IDLE:
 		busCycle <= BUS_IDLE;
+	default:
+		busCycle <= BUS_IDLE;
 	endcase
 end
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+FAL6567_Timing utim1 (
+	.rst(rst),
+	.clk33(clk33),
+	.clken8(clken8),
+	.stc(stc),
+	.phi02(phi02),
+	.phi02r(phi02r),
+	.phis(phis),
+	.busCycle(busCycle),
+	.ras_n(ras_n),
+	.mux(mux),
+	.cas_n(cas_n),
+	.enaData(enaData),
+	.enaSData(enaSData),
+	.enaMCnt(enaMCnt)
+);
 
 //------------------------------------------------------------------------------
 // Raster / Refresh counters
@@ -812,7 +812,7 @@ FAL6567_SpritePixelShifter usprps1
 	.MActive(MActive),
 	.MShift(MShift),
 	.mClkShift(mClkShift),
-	.mc(mc),
+	.mmc(mmc),
 	.db(db[7:0]),
 	.sprite(sprite),
 	.MCurrentPixel(MCurrentPixel)
@@ -840,7 +840,7 @@ FAL6567_AddressGen uag1
 	.sprite(sprite),
 	.sprite1(sprite1),
 	.MCnt(MCnt),
-	.MPtr(Mptr),
+	.MPtr(MPtr),
 	.vicAddr(vicAddr)
 );
 
@@ -906,6 +906,7 @@ FAL6567_blank ublnk
 (
 	.chip(chip),
 	.clk33(clk33),
+	.col80(col80),
 	.rasterX(rasterX),
 	.rasterY(rasterY),
 	.vBlank(vVicBlank),
@@ -927,6 +928,7 @@ FAL6567_borders ubrdr1
 (
 	.clk33(clk33),
 	.den(den),
+	.col80(col80),
 	.rsel(rsel),
 	.csel(csel),
 	.rasterX(rasterX),
@@ -981,7 +983,7 @@ FAL6567_ComputePixelColor ucpc1
 	.pixelColor(pixelColor),
 	.shiftingPixels(shiftingPixels),
 	.shiftingChar(shiftingChar),
-	.b0c(boc),
+	.b0c(b0c),
 	.b1c(b1c),
 	.b2c(b2c),
 	.b3c(b3c)
@@ -1004,6 +1006,7 @@ FAL6567_ColorSelect ucs1
 	.mcm(mcm),
 	.pixelColor(pixelColor),
 	.mdp(mdp), 
+	.mmc(mmc),
 	.pixelBgFlag(pixelBgFlag),
 	.MCurrentPixel(MCurrentPixel),
 	.mm0(mm0),

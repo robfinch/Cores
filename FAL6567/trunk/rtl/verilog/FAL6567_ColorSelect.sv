@@ -35,16 +35,17 @@
 //                                                                
 // ============================================================================
 //
-module FAL6567_ColorSelect(clk33, clken8, ecm, bmm, mcm, pixelColor, mdp, 
+module FAL6567_ColorSelect(clk33, clken8, ecm, bmm, mcm, pixelColor, mdp, mmc,
 	pixelBgFlag, MCurrentPixel, mm0, mm1, mc, ec, vicBlank, vicBorder, color);
 parameter MIBCNT = 16;
 input clk33;
 input clken8;
 input ecm;
-input bmm,
+input bmm;
 input mcm;
 input [3:0] pixelColor;
 input [MIBCNT-1:0] mdp;
+input [MIBCNT-1:0] mmc;
 input pixelBgFlag;
 input [1:0] MCurrentPixel [MIBCNT-1:0];
 input [3:0] mm0;

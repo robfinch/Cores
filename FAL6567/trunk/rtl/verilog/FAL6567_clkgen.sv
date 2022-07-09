@@ -47,6 +47,7 @@ wire clk33u;
 wire clk164u;
 wire clkfb,clkfbo;
 BUFG clkbufg (.I(clkfbo), .O(clkfb));
+BUFG clkbuf33 (.I(clk33u), .O(clk33));
 BUFG clkbuf164 (.I(clk164u), .O(clk164));
 
 // MMCM must be used rather than a PLL because the PLL min frequency is
