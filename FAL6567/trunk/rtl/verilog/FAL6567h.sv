@@ -33,13 +33,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                
-// Requires 67kB of block RAM          
+// Requires 67kB of block RAM   536kBits       
 // ============================================================================
 //
-`define TRUE  1'b1
-`define FALSE 1'b0
-`define LOW   1'b0
-`define HIGH  1'b1
+import FAL6567_pkg::*;
 
 // 640x480 standard VGA timing is used, but the horizontal constants are multiplied
 // by 1.299... to account for the use of a 32.71705MHz clock instead of 25.175.
@@ -48,17 +45,10 @@
 // given an input clock of 14.318MHz. Dividing 32.71705 by 32 gives a phi02 clock
 // of 1.022MHz, really close to that normally supplied by the VIC-II.
 //
-module FAL6567h(chip_i, cr_clk, phi02, rst_o, irq, aec, ba,
+module FAL6567h(cr_clk, phi02, rst_o, irq, aec, ba,
 	cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n,
 	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
 );
-parameter PAL = 1'b0;
-parameter CHIP6567R8 = 2'd0;
-parameter CHIP6567OLD = 2'd1;
-parameter CHIP6569 = 2'd2;
-parameter CHIP6572 = 2'd3;
-parameter LEGACY = 1'b1;
-parameter MIBCNT = 16;
 
 // Constants multiplied by 1.299... for 32.71705MHz clock
 parameter phSyncOn  = 21;       //   16 front porch
@@ -79,37 +69,15 @@ parameter pvBlankOn = 525;  	//    0 border	0
 parameter pvTotal = 525;		//  525 total scan lines
 parameter pvSyncPol = 1;        // neg. polarity
 
-parameter pSimRasterEnable = 48;
-
-parameter TRUE = 1'b1;
-parameter FALSE = 1'b0;
-parameter SIM = 1'b0;
-
-parameter BUS_IDLE = 0;
-parameter BUS_SPRITE = 1;
-parameter BUS_REF = 2;
-parameter BUS_CG = 3;
-parameter BUS_G = 4;
-parameter BUS_LS = 5;
-
-parameter VIC_IDLE = 0;   // idle cycle
-parameter VIC_SPRITE = 1; // sprite cycle
-parameter VIC_REF = 2;   // refresh cycle
-parameter VIC_RC = 3;
-parameter VIC_CHAR = 4;  // character acccess cycle
-parameter VIC_G = 5;
-parameter VIC_PAL = 6;	// palette initialization
-
-input [1:0] chip_i;			// = CHIP6567R8; (pull downs)
 input cr_clk;           // color reference clcck (14.31818)
 output phi02;
 output rst_o;
 output irq;
 output aec;
-output reg ba;
+output ba;
 input cs_n;
 input rw;
-inout [11:0] ad;
+inout [7:0] ad;
 inout tri [11:0] db;
 output den_n;
 output dir;
@@ -148,8 +116,8 @@ reg [7:0] regShadow [127:0];
 
 reg [7:0] ado;
 wire vSync8,hSync8;
-reg [3:0] pixelColor;
-reg [3:0] color8;
+wire [3:0] pixelColor;
+wire [3:0] color8;
 wire [3:0] color33;
 wire [23:0] RGB;
 reg blank;			// blanking output
@@ -171,19 +139,14 @@ reg vSyncPol;
 wire wr = !rw;
 wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
+reg col80 = 1'b0;
 
 wire locked;
 wire clken8;
 
-reg [31:0] phi02r,phisr;
 wire phi0,phi1;
-reg phi02,phis;
-reg [31:0] clk8r;
+wire phi02,phis;
 wire mux;
-reg [31:0] rasr;
-reg [31:0] muxr;
-reg [31:0] casr;
-reg [31:0] enaDatar,enaSDatar;
 wire enaData,enaSData;
 wire vicRefresh;
 wire vicAddrValid;
@@ -194,12 +157,12 @@ wire badline;                   // flag bad line condition
 reg den;                        // display enable
 reg rsel, bmm, ecm;
 reg csel, mcm, res;
-reg [10:0] preRasterX;
-reg [10:0] rasterX;
+wire [10:0] preRasterX;
+wire [10:0] rasterX;
 reg [10:0] rasterXMax;
-reg [8:0] preRasterY;
-reg [8:0] rasterY;
-reg [8:0] nextRasterY;
+wire [8:0] preRasterY;
+wire [8:0] rasterY;
+wire [8:0] nextRasterY;
 reg [8:0] rasterCmp;
 reg [8:0] rasterYMax;
 reg [8:0] nextRaster;
@@ -215,6 +178,7 @@ reg [3:0] b0c,b1c,b2c,b3c;
 reg [2:0] vicCycleNext,vicCycle;  // cycle the VIC state machine is in
 reg [2:0] busCycle;              // BUS cycle type
 reg [7:0] refcntr;
+reg ref5;
 
 reg pixelBgFlag;
 
@@ -222,7 +186,7 @@ reg pixelBgFlag;
 reg [10:0] vmndx;                  // video matrix index
 reg [11:0] nextChar;
 reg [11:0] charbuf [78:0];
-reg [2:0] scanline;
+wire [2:0] scanline;
 
 reg [4:0] sprite;
 reg [MIBCNT-1:0] MActive;
@@ -247,12 +211,10 @@ reg [5:0] regno;
 reg [1:0] regpg;  // register set page for sprites
 reg leg;          // legacy compatibility
 
-reg [MIBCNT-1:0] balos = 16'h0000;
-
 reg [4:0] ram_page;
 reg [13:0] addr;
-reg [13:0] vicAddr;
-reg [32:0] stc;
+wire [13:0] vicAddr;
+wire [31:0] stc;
 wire stCycle = stc[31];
 wire stCycle1 = stc[0];
 wire stCycle2 = stc[1];
@@ -266,7 +228,8 @@ reg [3:0] sprite2,sprite3,sprite4,sprite5;
 reg [10:0] rasterX3;
 
 reg [11:0] shiftingChar,waitingChar,readChar;
-reg [7:0] shiftingPixels,waitingPixels,readPixels;
+wire [7:0] shiftingPixels;
+reg [7:0] waitingPixels,readPixels;
 
 // Interrupt bits
 reg irst;
@@ -290,11 +253,12 @@ assign irq = (ilp & elp) | (immc & emmc) | (imbc & embc) | (irst & erst);
 reg rasterIRQDone;
 
 // VIC-II timing
-reg hVicBlank;
-reg vVicBlank;
-reg hVicBorder;
-reg vVicBorder;
-wire vicBorder = hVicBorder | vVicBorder;
+wire hVicBlank;
+wire vVicBlank;
+wire vicBlank;
+wire hVicBorder;
+wire vVicBorder;
+wire vicBorder;
 
 reg rst_pal = 0;
 wire pi_req;
@@ -314,15 +278,32 @@ if (xrst)
   rstcntr <= rstcntr + 4'd1;
 
 // Set Limits
+// Yes, this is clocked because we want the outputs to come from ff's not
+// combo logic.
 always_ff @(posedge clk33)
 case(chip)
-CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = {7'd64,3'b111}; end
-CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = {7'd63,3'b111}; end
-CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
-CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
+CHIP6567R8:   rasterYMax = 9'd262;
+CHIP6567OLD:  rasterYMax = 9'd261;
+CHIP6569:     rasterYMax = 9'd311;
+CHIP6572:     rasterYMax = 9'd311;
 endcase
+always_ff @(posedge clk33)
+if (col80)
+	case(chip)
+	CHIP6567R8:   rasterXMax = {8'd129,3'b111};
+	CHIP6567OLD:  rasterXMax = {8'd128,3'b111};
+	CHIP6569:     rasterXMax = {8'd126,3'b111};
+	CHIP6572:     rasterXMax = {8'd126,3'b111};
+	endcase
+else
+	case(chip)
+	CHIP6567R8:   rasterXMax = {8'd64,3'b111};
+	CHIP6567OLD:  rasterXMax = {8'd63,3'b111};
+	CHIP6569:     rasterXMax = {8'd62,3'b111};
+	CHIP6572:     rasterXMax = {8'd62,3'b111};
+	endcase
 
-FAL6567_clkgen #(PAL) u1
+FAL6567_clkgen u1
 (
 	.rst(xrst),
 	.xclk(cr_clk),
@@ -334,19 +315,21 @@ FAL6567_clkgen #(PAL) u1
 wire rst = !locked;
 assign rst_o = rst;
 
+// We can put the tri-state logic in this module assuming it is the top one.
 assign den_n = aec ? cs_n : 1'b0;
 assign dir = aec ? rw : 1'b0;
 assign db = rst ? 12'bz : (aec && !cs_n && rw) ? {4'h0,dbo8} : 12'bz;
 
 reg [1:0] chip;
 always_ff @(posedge clk33)
-	chip <= chip_i;
+	if (rst)
+		chip <= db[9:8];
 always_ff @(posedge clk33)
 if (rst)
 	ado <= 8'hFF;
 else
 	ado <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
-assign ad = aec ? 12'bz : {vicAddr[11:8],ado};
+assign ad = aec ? 8'bz : ado;
 
 wire ras_nne;
 wire phi02_pe;
@@ -356,137 +339,20 @@ edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne(
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-always_ff @(posedge clk33)
-if (rst)
-	blank_n <= 1'b0;
-else
-	blank_n <= blank;
-
-always_ff @(posedge clk33)
-if (rst) begin
-	clk8r <= 32'b10001000100010001000100010001000;
-end
-else begin
-	if (stCycle)
-		clk8r <= 32'b00010001000100010001000100010001;
-	else
-		clk8r <= {clk8r[30:0],clk8r[31]};
-end
-assign clken8 = clk8r[31];
-
-always_ff @(posedge clk33)
-if (rst)
-	stc <= 32'b10000000000000000000000000000000;
-else
-	stc <= {stc[30:0],stc[31]};
-
-always_ff @(posedge clk33)
-if (rst)
-	phi02r <= 32'b00000000000000001111111111111111;
-else begin
-	phi02r <= {phi02r[30:0],phi02r[31]};
-end
-always_ff @(posedge clk33)
-	phi02 <= phi02r[0];
-//assign phi02 = phi02r[32];
-
-always_ff @(posedge clk33)
-if (rst)
-	phisr <= 32'b00000000000000000000011111111111;
-else
-	phisr <= {phisr[30:0],phisr[31]};
-always @(posedge clk33)
-	phis <= phisr[1];
-
-always_ff @(posedge clk33)
-if (rst) begin
-	rasr <= 32'b11111111111111111111111110000000;
-end
-else begin
-	if (stCycle2) begin
-		case(busCycle)
-		BUS_IDLE:   rasr <= 32'b11111111111111111111111000000000;  // I
-		BUS_LS:     rasr <= 32'b11111100000000001111111000000000;  // S
-		BUS_SPRITE: rasr <= 32'b11100000000000000000011110000000;  // S - cycle
-		BUS_CG:     rasr <= 32'b11111100000000001111111000000000;  // G,C
-		BUS_G:      rasr <= 32'b11111100000000001111111000000000;  // G,C
-		BUS_REF:    rasr <= 32'b11111100000000001111111000000000;  // R,C or R
-		default:		rasr <= 32'hFFFFFFFF;
-		endcase
-		end
-	else
-		rasr <= {rasr[30:0],1'b0};
-end
-assign ras_n = rasr[31];
-  
-always_ff @(posedge clk33)
-if (rst) begin
-	muxr <= 32'b11111111111111111111111100000000;  // I
-end
-else begin
-	if (stCycle1) begin
-		case(busCycle)
-		BUS_IDLE:   muxr <= 32'b11111111111111111111111100000000;  // I
-		BUS_LS:     muxr <= 32'b11111110000000001111111100000000;  // S
-		BUS_SPRITE: muxr <= 32'b11110000000000000000011111000000;  // S - cycle
-		BUS_CG:     muxr <= 32'b11111110000000001111111100000000;  // G,C
-		BUS_G:      muxr <= 32'b11111110000000001111111100000000;  // G,C
-		BUS_REF:    muxr <= 32'b00000000000000001111111100000000;  // R,C or R
-		default:		muxr <= 32'hFFFFFFFF;
-		endcase
-		end
-	else
-		muxr <= {muxr[30:0],1'b0};
-end
-assign mux = muxr[31];
-  
-always_ff @(posedge clk33)
-if (rst) begin
-	casr <= 32'b11111111111000001111111111100000;  // R,C
-end
-else begin
-	if (stCycle2) begin
-		case(busCycle)
-		BUS_IDLE:   casr <= 32'b11111111111111111111111110000000;  // I - cycle
-		//    CHAR5_CYCLE:  casr <= 33'b111111000011000011000011000110000;  // G,C
-		//    CHAR6_CYCLE:  casr <= 33'b110001100001100011000011000110000;  // G,C
-		BUS_LS:     casr <= 32'b11111111000000001111111110000000;  // S
-		BUS_SPRITE: casr <= 32'b11111000011000011000011111100000;  // S - cycle
-		BUS_CG:     casr <= 32'b11111111000000001111111110000000;  // G,C
-		BUS_G:      casr <= 32'b11111111000000001111111110000000;  // G,C
-		BUS_REF:    casr <= 32'b11111111111111111111111110000000;  // R,C
-		default:		casr <= 32'hFFFFFFFF;
-		endcase
-	end
-	else
-		casr <= {casr[30:0],1'b0};
-end
-assign cas_n = casr[31];
-
-always_ff @(posedge clk33)
-if (rst) begin
-	enaDatar <= 32'b00000000000000010000000000000001;  // S - cycle
-end
-else begin
-	if (stCycle2)
-		enaDatar <= 32'b00000000000000010000000000000001;  // S - cycle
-	else
-		enaDatar <= {enaDatar[30:0],1'b0};
-end
-assign enaData = enaDatar[30];
-
-always_ff @(posedge clk33)
-if (rst) begin
-	enaSDatar <= 32'b00000000100000100000100000000001;  // S - cycle
-end
-else begin
-	if (stCycle2)
-		enaSDatar <= 32'b00000000100000100000100000000001;  // S - cycle
-	else
-		enaSDatar <= {enaSDatar[30:0],1'b0};
-end
-assign enaSData = enaSDatar[31];
-wire enaMCnt = enaSDatar[30];
+FAL6567_Timing utim1 (
+	.rst(rst),
+	.clk33(clk33),
+	.clken8(clken8),
+	.stc(stc),
+	.phi02(phi02),
+	.phis(phis),
+	.ras_n(ras_n),
+	.mux(mux),
+	.cas_n(cas_n),
+	.enaData(enaData),
+	.enaSData(enaSData),
+	.enaMCnt(enaMCnt)
+);
 
 //------------------------------------------------------------------------------
 // Bus cycle type
@@ -548,176 +414,48 @@ end
 // in advance of the normal rasterX. This mean we need to delay the signal
 // to get back where we should be.
 //------------------------------------------------------------------------------
-always_ff @(posedge clk33)
-if (rst) begin
-	preRasterX <= 11'd0;
-end
-else begin
-	if (clken8) begin
-		if (preRasterX==rasterXMax)
-			preRasterX <= 11'd0;
-		else
-			preRasterX <= preRasterX + 11'd1;
-	end  
-end
 
-always_ff @(posedge clk33)
-if (rst) begin
-	rasterX <= 10'd0;
-end
-else begin
-	if (clken8) begin
-		if (preRasterX==10'h14)
-			rasterX <= 10'h0;
-		else
-			rasterX <= rasterX + 10'd1;
-	end  
-end
-
-always_ff @(posedge clk33)
-if (rst) begin
-	preRasterY <= 9'd0;
-end
-else begin
-	if (clken8) begin
-		if (preRasterX==rasterXMax) begin
-			if (preRasterY==rasterYMax)
-				preRasterY <= 9'd0;
-			else
-				preRasterY <= preRasterY + 9'd1;
-		end
-	end  
-end
-
-always_ff @(posedge clk33)
-if (rst) begin
-	rasterY <= 9'd0;
-end
-else begin
-	if (clken8) begin
-		if (preRasterX==10'h14) begin
-			rasterY <= preRasterY;
-		end
-	end  
-end
-
-always_ff @(posedge clk33)
-if (rst) begin
-	nextRasterY <= 9'd0;
-end
-else begin
-	if (clken8) begin
-		if (rasterX==10'd0) begin
-			nextRasterY <= rasterY + 9'd1;
-		end
-	end  
-end
+FAL6567_RasterXY urxy1
+(
+	.rst(rst),
+	.clk33(clk33),
+	.clken8(clken8),
+	.rasterXMax(rasterXMax),
+	.rasterYMax(rasterYMax),
+	.preRasterX(preRasterX),
+	.rasterX(rasterX),
+	.preRasterY(preRasterY),
+	.rasterY(rasterY),
+	.nextRasterY(nextRasterY)
+);
 
 //------------------------------------------------------------------------------
 // Decode cycles
 //------------------------------------------------------------------------------
 
-wire [10:0] rasterX2 = {preRasterX,1'b0};
-always_comb
-casez(rasterX2)
-11'h00?: vicCycle <= VIC_REF;
-11'h01?: vicCycle <= VIC_REF;
-11'h02?: vicCycle <= VIC_REF;
-11'h03?: vicCycle <= VIC_REF;
-11'h04?: vicCycle <= VIC_RC;
-11'h05?: vicCycle <= VIC_CHAR;
-11'h06?: vicCycle <= VIC_CHAR;
-11'h07?: vicCycle <= VIC_CHAR;
-11'h08?: vicCycle <= VIC_CHAR;
-11'h09?: vicCycle <= VIC_CHAR;
-11'h0A?: vicCycle <= VIC_CHAR;
-11'h0B?: vicCycle <= VIC_CHAR;
-11'h0C?: vicCycle <= VIC_CHAR;
-11'h0D?: vicCycle <= VIC_CHAR;
-11'h0E?: vicCycle <= VIC_CHAR;
-11'h0F?: vicCycle <= VIC_CHAR;
-11'h10?: vicCycle <= VIC_CHAR;
-11'h11?: vicCycle <= VIC_CHAR;
-11'h12?: vicCycle <= VIC_CHAR;
-11'h13?: vicCycle <= VIC_CHAR;
-11'h14?: vicCycle <= VIC_CHAR;
-11'h15?: vicCycle <= VIC_CHAR;
-11'h16?: vicCycle <= VIC_CHAR;
-11'h17?: vicCycle <= VIC_CHAR;
-11'h18?: vicCycle <= VIC_CHAR;
-11'h19?: vicCycle <= VIC_CHAR;
-11'h1A?: vicCycle <= VIC_CHAR;
-11'h1B?: vicCycle <= VIC_CHAR;
-11'h1C?: vicCycle <= VIC_CHAR;
-11'h1D?: vicCycle <= VIC_CHAR;
-11'h1E?: vicCycle <= VIC_CHAR;
-11'h1F?: vicCycle <= VIC_CHAR;
-11'h20?: vicCycle <= VIC_CHAR;
-11'h21?: vicCycle <= VIC_CHAR;
-11'h22?: vicCycle <= VIC_CHAR;
-11'h23?: vicCycle <= VIC_CHAR;
-11'h24?: vicCycle <= VIC_CHAR;
-11'h25?: vicCycle <= VIC_CHAR;
-11'h26?: vicCycle <= VIC_CHAR;
-11'h27?: vicCycle <= VIC_CHAR;
-11'h28?: vicCycle <= VIC_CHAR;
-11'h29?: vicCycle <= VIC_CHAR;
-11'h2A?: vicCycle <= VIC_CHAR;
-default:
-casez(rasterX2)
-11'h2B?: vicCycle <= VIC_G;
-11'h2C?: vicCycle <= VIC_IDLE;
-11'h2D?: vicCycle <= VIC_IDLE;
-11'h2E?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_IDLE;
-        CHIP6567OLD:  vicCycle <= VIC_IDLE;
-        default:      vicCycle <= VIC_SPRITE;
-        endcase
-11'h2F?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_IDLE;
-        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
-        default:      vicCycle <= VIC_SPRITE;
-        endcase
-11'h30?:  vicCycle <= VIC_SPRITE;
-11'h31?:  vicCycle <= VIC_SPRITE;
-11'h32?:  vicCycle <= VIC_SPRITE;
-11'h33?:  vicCycle <= VIC_SPRITE;
-11'h34?:  vicCycle <= VIC_SPRITE;
-11'h35?:  vicCycle <= VIC_SPRITE;
-11'h36?:  vicCycle <= VIC_SPRITE;
-11'h37?:  vicCycle <= VIC_SPRITE;
-11'h38?:  vicCycle <= VIC_SPRITE;
-11'h39?:  vicCycle <= VIC_SPRITE;
-11'h3A?:  vicCycle <= VIC_SPRITE;
-11'h3B?:  vicCycle <= VIC_SPRITE;
-11'h3C?:  vicCycle <= VIC_SPRITE;
-11'h3D?:  vicCycle <= VIC_SPRITE;
-11'h3E?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_SPRITE;
-        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
-        default:      vicCycle <= VIC_REF;
-        endcase
-11'h3F?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_SPRITE;
-        CHIP6567OLD:  vicCycle <= VIC_REF;
-        default:      vicCycle <= VIC_REF;
-        endcase
-11'h40?:  vicCycle <= VIC_REF;
-default:  vicCycle <= VIC_IDLE;
-endcase
-endcase
+FAL6567_CycleDecode ucycd1
+(
+	.chip(chip),
+	.col80(col80),
+	.preRasterX(preRasterX),
+	.vicCycle(vicCycle)
+);
 
+wire [11:0] rasterX2 = {preRasterX,1'b0};
 always_ff @(posedge clk33)
 if (clken8) begin
-  case(chip)
-  CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
-  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
-  default:      sprite1 <= rasterX2 - 11'h2DE;
-  endcase
+	if (col80)
+	  case(chip)
+	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h57E;
+	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h56E;
+	  default:      sprite1 <= rasterX2 - 11'h55E;
+	  endcase
+	else
+	  case(chip)
+	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
+	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
+	  default:      sprite1 <= rasterX2 - 11'h2DE;
+	  endcase
   if (leg)
 		sprite2 <= sprite1[7:5];
   else
@@ -733,66 +471,36 @@ begin
 	sprite <= sprite5;
 end
 
-wire ref5 = rasterX2[10:4]==7'h03;
+//wire ref5 = rasterX2[10:4]==7'h03;
+always_ff @(posedge clk33)
+	ref5 <= rasterX2[11:4]+2'd1==7'h03;
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-
+// register this?
+//always_ff @(posedge clk33)
 assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 : 9'h30) && preRasterY <= 9'hF7);
 
 //------------------------------------------------------------------------------
 // Bus available generator
 //------------------------------------------------------------------------------
 
-//always @(chip,n,me,my,nextRasterY,rasterX2,MActive,leg)
-integer n1;
-always_ff @(posedge clk33)
-	for (n1 = 0; n1 < MIBCNT; n1 = n1 + 1) begin
-		if (me[n1] && ((my[n1]==nextRasterY)||MActive[n1])) begin
-			if (leg)
-				case(chip)
-				CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,5'b0}) && (rasterX2 < 11'h320 + {n1,5'b0});
-				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,5'b0}) && (rasterX2 < 11'h310 + {n1,5'b0});
-				default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,5'b0}) && (rasterX2 < 11'h300 + {n1,5'b0}); 
-				endcase
-			else
-				case(chip)
-				CHIP6567R8:   balos[n1] <= (rasterX2 >= 11'h2D0 + {n1,4'b0}) && (rasterX2 < 11'h310 + {n1,4'b0});
-				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 11'h2C0 + {n1,4'b0}) && (rasterX2 < 11'h300 + {n1,4'b0});
-				default:      balos[n1] <= (rasterX2 >= 11'h2B0 + {n1,4'b0}) && (rasterX2 < 11'h2F0 + {n1,4'b0}); 
-				endcase
-		end
-		else begin
-			balos[n1] <= `FALSE;
-		end
-	end
-
-reg [10:0] baloff;
-always_ff @(posedge clk33)
-case(chip)
-2'b00:	baloff <= 11'h2C0;
-2'b01:	baloff <= 11'h2B0;
-2'b10:	baloff <= 11'h2A0;
-2'b11:	baloff <= 11'h2A0;
-endcase
-wire balo = |balos | (badline && rasterX2 < baloff);
-
-
-//------------------------------------------------------------------------------
-// Bus available drives the processor's ready line. So the ready line is held
-// inactive until the FPGA is loaded and the pll is locked.
-//------------------------------------------------------------------------------
-
-always_ff @(posedge clk33)
-if (rst) begin
-	ba <= `LOW;
-end
-else begin
-	if (turbo)
-		ba <= 1'b1;
-	else if (stCycle2)
-    	ba <= !balo;
-end
+FAL6567_BusAvailGen uba1
+(
+	.chip(chip),
+	.rst(rst),
+	.clk33(clk33),
+	.leg(leg),
+	.col80(col80),
+	.me(me),
+	.my(my),
+	.badline(badline),
+	.rasterX2(rasterX2),
+	.nextRasterY(nextRasterY),
+	.MActive(MActive),
+	.stCycle2(stCycle2),
+	.ba(ba)
+);
 
 //------------------------------------------------------------------------------
 // AEC
@@ -825,10 +533,10 @@ integer n2;
 always_ff @(posedge clk33)
 if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
 	if (badline)
-		nextChar <= db;
+		nextChar <= db;	// Grab all 12 bits
 	else
-		nextChar <= charbuf[38];
-	for (n2 = 38; n2 > 0; n2 = n2 -1)
+		nextChar <= col80 ? charbuf[78] : charbuf[38];
+	for (n2 = 78; n2 > 0; n2 = n2 -1)
 		charbuf[n2] = charbuf[n2-1];
 	charbuf[0] <= nextChar;
 end
@@ -844,7 +552,7 @@ if (phi02==`LOW && enaData) begin
 end
 
 always_ff @(posedge clk33)
-if (phis==`LOW && enaSData==1'b1 && busCycle==(leg ? BUS_LS : BUS_SPRITE)) begin
+if (phis==`LOW && enaData && busCycle==(leg ? BUS_LS : BUS_SPRITE)) begin
 	if (MActive[sprite])
 		MPtr[sprite] <= db[7:0];
 	else
@@ -883,20 +591,17 @@ end
 // or the bitmapped mode address.
 //------------------------------------------------------------------------------
 
-always_ff @(posedge clk33)
-if (rst) begin
-	scanline <= 3'd0;
-end
-else begin
-	if (phi02==`LOW && enaData) begin
-		if (ref5) begin
-			if (badline)
-				scanline <= 3'd0;
-		end
-		if (rasterX2[10:4]==7'h2C)
-			scanline <= scanline + 3'd1;
-	end
-end
+FAL6567_ScanlineCounter uslc1
+(
+	.rst(rst),
+	.clk33(clk33),
+	.phi02(phi02),
+	.enaData(enaData),
+	.ref5(ref5),
+	.badline(badline),
+	.rasterX2(rasterX2),
+	.scanline(scanline)
+);
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -987,7 +692,7 @@ begin
 	for (n6 = 0; n6 < MIBCNT; n6 = n6 + 1) begin
 		if (rasterX == 10)
 			MShift[n6] <= `FALSE;
-		else if (rasterX == mx[n6])
+		else if (rasterX == (col80 ? {mx[n6],1'b0} : mx[n6]))
 			MShift[n6] <= `TRUE;
 	end
 end
@@ -1002,7 +707,7 @@ end
 else begin
 	// Trigger sprite accesses on the last character cycle
 	// if the sprite Y coordinate will match.
-	if (rasterX2==11'h2B0) begin
+	if (rasterX2==(col80 ? 11'h530 : 11'h2B0)) begin
 		for (n7 = 0; n7 < MIBCNT; n7 = n7 + 1) begin
 			if (!MActive[n7] && me[n7] && nextRasterY == my[n7])
 				MCnt[n7] <= 6'd0;
@@ -1068,11 +773,6 @@ if (clken8) begin
 	end
 end
 
-integer n9;
-always_comb
-	for (n9 = 0; n9 < MIBCNT; n9 = n9 + 1)
-		mClkShift[n9] <= mShiftCount[n9]==2'd3;
-
 // Y expansion
 integer n10;
 always_ff @(posedge clk33)
@@ -1092,103 +792,57 @@ begin
 end
 
 
+integer n9;
+always_comb
+	for (n9 = 0; n9 < MIBCNT; n9 = n9 + 1)
+		mClkShift[n9] <= mShiftCount[n9]==2'd3;
+
 // Handle sprite pixel loading / shifting
-integer n11;
-always_ff @(posedge clk33)
-begin
-	if (clken8) begin
-		for (n11 = 0; n11 < MIBCNT; n11 = n11 + 1) begin
-			if (MShift[n11]) begin
-				if (mClkShift[n11]) begin
-					if (mc[n11])
-						MPixels[n11] <= {MPixels[n11][21:0],2'b0};
-					else
-						MPixels[n11] <= {MPixels[n11][22:0],1'b0};
-				end
-			end
-		end  
-	end
-	if (leg) begin
-		if (sprite1[4]) begin
-			if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
-				if (MActive[sprite])
-					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-			end 
-		end
-		else begin
-			if (vicCycle==VIC_SPRITE && enaData) begin
-				if (MActive[sprite])
-					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-			end
-		end
-	end
-	else begin
-		if (phis==`LOW && enaSData && vicCycle==VIC_SPRITE) begin
-			if (MActive[sprite])
-				MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-		end
-	end
-end
-
-// Adds a pipeline delay of one to the sprite pixel
-integer n12;
-always_ff @(posedge clk33)
-if (clken8) begin
-	for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1) begin
-		if (MShift[n12])
-			MCurrentPixel[n12] <= MPixels[n12][23:22];
-		else
-			MCurrentPixel[n12] <= 2'b00;
-	end  
-end
-
+FAL6567_SpritePixelShifter usprps1
+(
+	.clk33(clk33),
+	.clken8(clken8),
+	.phi02(phi02),
+	.phis(phis),
+	.enaData(enaData),
+	.enaSData(enaSData), 
+	.leg(leg),
+	.sprite1(sprite1),
+	.vicCycle(vicCycle),
+	.MActive(MActive),
+	.MShift(MShift),
+	.mClkShift(mClkShift),
+	.mc(mc),
+	.db(db[7:0]),
+	.sprite(sprite),
+	.MCurrentPixel(MCurrentPixel)
+);
 
 //------------------------------------------------------------------------------
 // Address Generation
 //------------------------------------------------------------------------------
 
-always_comb
-begin
-	case(vicCycle)
-	VIC_REF:
-		addr <= {6'b111111,refcntr};
-	VIC_RC:
-		if (phi02==`HIGH)
-			addr <= vm + vmndx;
-		else    
-			addr <= {6'b111111,refcntr};
-	VIC_CHAR,VIC_G:
-		begin
-			if (phi02==`HIGH)
-				addr <= vm + vmndx;
-			else begin
-				if (bmm)
-					addr <= {cb[13],12'd0} + {vmndx,scanline};
-				else
-					addr <= {cb[13:11],nextChar[7:0],scanline};
-				if (ecm)
-					addr[10:9] <= 2'b00;
-			end
-		end
-	VIC_SPRITE:
-		if (leg) begin
-			if (phi02==`LOW && sprite1[4])
-				addr <= vm + (14'b1111111000 | sprite[2:0]);
-			else
-				addr <= {MPtr[sprite],MCnt[sprite]};
-		end
-			else begin
-			if (!phis)
-				addr <= {MPtr[sprite],MCnt[sprite]};
-			else
-				addr <= vm + (14'b1111110000 | {~sprite[3],sprite[2:0]});
-		end
-	default: addr <= 14'h3FFF;
-	endcase
-end
-
-always_ff @(posedge clk33)
-	vicAddr <= addr;
+FAL6567_AddressGen uag1
+(
+	.clk33(clk33),
+	.phi02(phi02),
+	.phis(phis),
+	.leg(leg),
+	.bmm(bmm),
+	.ecm(ecm),
+	.vicCycle(vicCycle),
+	.refcntr(refcntr),
+	.vm(vm),
+	.vmndx(vmndx),
+	.cb(cb),
+	.scanline(scanline),
+	.nextChar(nextChar),
+	.sprite(sprite),
+	.sprite1(sprite1),
+	.MCnt(MCnt),
+	.MPtr(Mptr),
+	.vicAddr(vicAddr)
+);
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -1226,38 +880,6 @@ begin
 end
 
 //------------------------------------------------------------------------------
-// Video Blank Interval
-//------------------------------------------------------------------------------
-always_ff @(posedge clk33)
-begin
-	vVicBlank <= `FALSE;
-	case(chip)
-	CHIP6567R8,CHIP6567OLD:
-		if (rasterY <= 40)
-			vVicBlank <= `TRUE;
-	CHIP6569,CHIP6572:
-		if (rasterY >= 300 || rasterY < 15)
-			vVicBlank <= `TRUE;
-	endcase
-end
-
-reg [9:0] hVicBlankOff;
-reg [9:0] hVicBlankOn;
-always_ff @(posedge clk33)
-	hVicBlankOff <= 10'd103;
-always_ff @(posedge clk33)
-	hVicBlankOn <= 10'd592;
-
-always_ff @(posedge clk33)
-begin
-	hVicBlank <= `FALSE;
-	if (rasterX < hVicBlankOff)		// 15%
-		hVicBlank <= `TRUE;
-	else if (rasterX >= hVicBlankOn)	// 97.2%
-		hVicBlank <= `TRUE;
-end
-
-//------------------------------------------------------------------------------
 // Video Sync Interval
 // - Video sync still needs to be generated as a reference point for the 
 //   scan converter. Although it's not otherwise used it may be in the future
@@ -1277,39 +899,42 @@ FAL6567_sync usg1
 );
 
 //------------------------------------------------------------------------------
+// Video Blank Interval
+//------------------------------------------------------------------------------
+
+FAL6567_blank ublnk
+(
+	.chip(chip),
+	.clk33(clk33),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.vBlank(vVicBlank),
+	.hBlank(hVicBlank),
+	.blank(vicBlank)
+);
+
+always_ff @(posedge clk33)
+if (rst)
+	blank_n <= 1'b0;
+else
+	blank_n <= blank;
+
+//------------------------------------------------------------------------------
 // Borders
 //------------------------------------------------------------------------------
 
-always_ff @(posedge clk33)
-begin
-	vVicBorder <= `TRUE;
-	if (den) begin
-		if (rsel) begin
-			if (rasterY >= 51 && rasterY <= 251)
-				vVicBorder <= `FALSE;
-		end
-		else begin
-			if (rasterY >= 55 && rasterY <= 247)
-				vVicBorder <= `FALSE;
-		end
-	end
-end
-
-always_ff @(posedge clk33)
-begin
-	hVicBorder <= `TRUE;
-	if (den) begin
-		if (csel) begin
-			if (rasterX >= 25 && rasterX <= 345)
-				hVicBorder <= `FALSE;
-		end
-		else begin
-			if (rasterX >= 32 && rasterX <= 336)
-				hVicBorder <= `FALSE;
-		end
-	end
-end
-
+FAL6567_borders ubrdr1
+(
+	.clk33(clk33),
+	.den(den),
+	.rsel(rsel),
+	.csel(csel),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.hBorder(hVicBorder),
+	.vBorder(vVicBorder),
+	.border(vicBorder)
+);
 
 //------------------------------------------------------------------------------
 // Graphics mode pixel calc.
@@ -1335,120 +960,67 @@ if (clken8) begin
 		shiftingChar <= waitingChar;
 end
 
-// Pixel shifter
-always_ff @(posedge clk33)
-if (clken8) begin
-	if (loadPixels)
-		shiftingPixels <= waitingPixels;
-	else if (clkShift) begin
-		if (ismc)
-			shiftingPixels <= {shiftingPixels[5:0],2'b0};
-		else
-			shiftingPixels <= {shiftingPixels[6:0],1'b0};
-	end
-end
+FAL6567_PixelShifter ups1
+(
+	.clk33(clk33),
+	.clken8(clken8),
+	.ismc(ismc),
+	.load(loadPixels),
+	.shift(clkShift),
+	.pixels_i(waitingPixels),
+	.pixels_o(shiftingPixels)
+);
+
+FAL6567_ComputePixelColor ucpc1
+(
+	.clk33(clk33),
+	.clken8(clken8),
+	.ecm(ecm),
+	.bmm(bmm),
+	.mcm(mcm),
+	.pixelColor(pixelColor),
+	.shiftingPixels(shiftingPixels),
+	.shiftingChar(shiftingChar),
+	.b0c(boc),
+	.b1c(b1c),
+	.b2c(b2c),
+	.b3c(b3c)
+);
+
+//------------------------------------------------------------------------------
+// Output
+//------------------------------------------------------------------------------
 
 always_ff @(posedge clk33)
 if (clken8)
 	pixelBgFlag <= shiftingPixels[7];
 
-// Compute pixel color
-always_ff @(posedge clk33)
-if (clken8) begin
-	pixelColor <= 4'h0; // black
-	case({ecm,bmm,mcm})
-	3'b000:	// Text mode
-		pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
-	3'b001:	// Multi-color text mode
-		if (shiftingChar[11])
-			case(shiftingPixels[7:6])
-			2'b00:  pixelColor <= b0c;
-			2'b01:  pixelColor <= b1c;
-			2'b10:  pixelColor <= b2c;
-			2'b11:  pixelColor <= shiftingChar[10:8];
-			endcase
-		else
-			pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
-	3'b010,3'b110: 
-		pixelColor <= shiftingPixels[7] ? shiftingChar[7:4] : shiftingChar[3:0];
-	3'b011,3'b111:
-		case(shiftingPixels[7:6])
-		2'b00:  pixelColor <= b0c;
-		2'b01:  pixelColor <= shiftingChar[7:4];
-		2'b10:  pixelColor <= shiftingChar[3:0];
-		2'b11:  pixelColor <= shiftingChar[11:8];
-		endcase
-	3'b100:
-		case({shiftingPixels[7],shiftingChar[7:6]})
-		3'b000:  pixelColor <= b0c;
-		3'b001:  pixelColor <= b1c;
-		3'b010:  pixelColor <= b2c;
-		3'b011:  pixelColor <= b3c;
-		default:  pixelColor <= shiftingChar[11:8];
-		endcase
-	3'b101:
-		if (shiftingChar[11])
-			case(shiftingPixels[7:6])
-			2'b00:  pixelColor <= b0c;
-			2'b01:  pixelColor <= b1c;
-			2'b10:  pixelColor <= b2c;
-			2'b11:  pixelColor <= shiftingChar[11:8];
-			endcase
-		else
-			case({shiftingPixels[7],shiftingChar[7:6]})
-			3'b000:  pixelColor <= b0c;
-			3'b001:  pixelColor <= b1c;
-			3'b010:  pixelColor <= b2c;
-			3'b011:  pixelColor <= b3c;
-			default:  pixelColor <= shiftingChar[11:8];
-			endcase
-	endcase
-end
-
-//------------------------------------------------------------------------------
-// Output color selection
-//------------------------------------------------------------------------------
-
-reg [3:0] color_code;
-integer n13;
-always_ff @(posedge clk33)
-begin
-	// Force the output color to black for "illegal" modes
-	case({ecm,bmm,mcm})
-	3'b101,3'b110,3'b111:
-		color_code <= 4'h0;
-	default: color_code <= pixelColor;
-	endcase
-	// See if the mib overrides the output
-	for (n13 = 0; n13 < MIBCNT; n13 = n13 + 1) begin
-		if (!mdp[n13] || !pixelBgFlag) begin
-			if (mmc[n13]) begin  // multi-color mode ?
-				case(MCurrentPixel[n13])
-				2'b00:  ;
-				2'b01:  color_code <= mm0;
-				2'b10:  color_code <= mc[n13];
-				2'b11:  color_code <= mm1;
-				endcase
-			end
-			else if (MCurrentPixel[n13][1])
-				color_code <= mc[n13];
-		end
-	end
-end
-
-always_ff @(posedge clk33)
-if (clken8) begin
-  if (vicBorder)
-		color8 <= ec;
-  else
-		color8 <= color_code;
-end
+FAL6567_ColorSelect ucs1
+(
+	.clk33(clk33),
+	.clken8(clken8),
+	.ecm(ecm),
+	.bmm(bmm),
+	.mcm(mcm),
+	.pixelColor(pixelColor),
+	.mdp(mdp), 
+	.pixelBgFlag(pixelBgFlag),
+	.MCurrentPixel(MCurrentPixel),
+	.mm0(mm0),
+	.mm1(mm1),
+	.mc(mc),
+	.ec(ec),
+	.vicBlank(vicBlank),
+	.vicBorder(vicBorder),
+	.color(color8)
+);
 
 FAL6567_ScanConverter usc1
 (
   .chip(chip),
   .clk33(clk33),
   .clken8(clken8),
+  .col80(col80),
   .hSync8_i(hSync8),
   .vSync8_i(vSync8),
   .color_i(color8),
@@ -1479,7 +1051,7 @@ ur2d1
 	.TMDS_Data_n(TMDS_OUT_data_n),
 	.aRst(rst),
 	.aRst_n(~rst),
-	.vid_pData({RGB[23:16],RBG[7:0],RGB[15:8]}),
+	.vid_pData({RGB[23:16],RGB[7:0],RGB[15:8]}),
 	.vid_pVDE(~blank),
 	.vid_pHSync(hSync),    // hSync is neg going for 1366x768
 	.vid_pVSync(vSync),

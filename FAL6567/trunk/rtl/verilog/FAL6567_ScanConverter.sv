@@ -36,7 +36,7 @@
 // Requires 67kB of block RAM          
 // ============================================================================
 
-module FAL6567_ScanConverter(chip, clken8, clk33, hSync8_i, vSync8_i, color_i, hSync33_i, vSync33_i, color_o);
+module FAL6567_ScanConverter(chip, clken8, clk33, col80, hSync8_i, vSync8_i, color_i, hSync33_i, vSync33_i, color_o);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -45,6 +45,7 @@ parameter CHIP6572 = 2'd3;
 input [1:0] chip;
 input clken8;
 input clk33;
+input col80;
 input hSync8_i;
 input vSync8_i;
 input [3:0] color_i;
@@ -53,7 +54,7 @@ input vSync33_i;
 output reg [3:0] color_o;
 
 (* ram_style="block" *)
-reg [3:0] mem [0:137215];
+reg [3:0] mem [0:274431];	// 134kB
 reg [9:0] raster8X;
 reg [9:0] raster8XMax;
 reg [8:0] raster8Y;
@@ -127,7 +128,10 @@ always_ff @(posedge clk33)
     mem[adr8] <= color_ir;
 
 always_ff @(posedge clk33)
-	adr33 <= raster33Y[9:1] * raster8XMax + raster33X[11:1];
+	if (col80)
+		adr33 <= raster33Y[9:1] * {raster8XMax,1'b0} + raster33X[11:0];
+	else
+		adr33 <= raster33Y[9:1] * raster8XMax + raster33X[11:1];
 always_ff @(posedge clk33)
 	color_ou <= mem[adr33];
 always_ff @(posedge clk33)
