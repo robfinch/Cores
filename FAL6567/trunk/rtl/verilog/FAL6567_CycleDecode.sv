@@ -162,19 +162,35 @@ if (col80) begin
 	11'h63?:  vicCycle <= VIC_SPRITE;
 	11'h64?:  vicCycle <= VIC_SPRITE;
 	11'h65?:  vicCycle <= VIC_SPRITE;
-	11'h66?:
+	11'h66?:  vicCycle <= VIC_SPRITE;
+	11'h67?:  vicCycle <= VIC_SPRITE;
+	11'h68?:  vicCycle <= VIC_SPRITE;
+	11'h69?:  vicCycle <= VIC_SPRITE;
+	11'h6A?:  vicCycle <= VIC_SPRITE;
+	11'h6B?:  vicCycle <= VIC_SPRITE;
+	11'h6C?:  vicCycle <= VIC_SPRITE;
+	11'h6D?:  vicCycle <= VIC_SPRITE;
+	11'h6E?:  vicCycle <= VIC_SPRITE;
+	11'h6F?:  vicCycle <= VIC_SPRITE;
+	11'h70?:  vicCycle <= VIC_SPRITE;
+	11'h71?:  vicCycle <= VIC_SPRITE;
+	11'h72?:  vicCycle <= VIC_SPRITE;
+	11'h73?:  vicCycle <= VIC_SPRITE;
+	11'h74?:  vicCycle <= VIC_SPRITE;
+	11'h75?:  vicCycle <= VIC_SPRITE;
+	11'h76?:
 	        case(chip)
 	        CHIP6567R8:   vicCycle <= VIC_SPRITE;
 	        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
 	        default:      vicCycle <= VIC_REF;
 	        endcase
-	11'h67?:
+	11'h77?:
 	        case(chip)
 	        CHIP6567R8:   vicCycle <= VIC_SPRITE;
 	        CHIP6567OLD:  vicCycle <= VIC_REF;
 	        default:      vicCycle <= VIC_REF;
 	        endcase
-	11'h68?:  vicCycle <= VIC_REF;
+	11'h78?:  vicCycle <= VIC_REF;
 	default:  vicCycle <= VIC_IDLE;
 	endcase
 	endcase

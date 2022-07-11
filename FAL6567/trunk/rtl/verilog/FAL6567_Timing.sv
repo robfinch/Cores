@@ -37,29 +37,26 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_Timing(rst, clk33, clken8, stc, phi02, phi02r, phis, busCycle, ras_n, mux, cas_n,
-	enaData, enaSData, enaMCnt);
+module FAL6567_Timing(rst, clk33, clken8, stc, phi02, phi02r, busCycle, ras_n, mux, cas_n,
+	enaData, enaMCnt);
 input rst;
 input clk33;
 output clken8;
 output reg [31:0] stc;
 output reg phi02;
 output reg [31:0] phi02r;
-output reg phis;
 input [2:0] busCycle;
 output ras_n;
 output mux;
 output cas_n;
 output enaData;
-output enaSData;
 output enaMCnt;
 
-reg [31:0] phisr;
 reg [31:0] clk8r;
 reg [31:0] rasr;
 reg [31:0] muxr;
 reg [31:0] casr;
-reg [31:0] enaDatar,enaSDatar;
+reg [31:0] enaDatar;
 wire stCycle = stc[31];
 wire stCycle1 = stc[0];
 wire stCycle2 = stc[1];
@@ -96,14 +93,6 @@ always_ff @(posedge clk33)
 //assign phi02 = phi02r[32];
 
 always_ff @(posedge clk33)
-if (rst)
-	phisr <= 32'b00000000000000000000011111111111;
-else
-	phisr <= {phisr[30:0],phisr[31]};
-always @(posedge clk33)
-	phis <= phisr[1];
-
-always_ff @(posedge clk33)
 if (rst) begin
 	rasr <= 32'b11111111111111111111111110000000;
 end
@@ -111,8 +100,7 @@ else begin
 	if (stCycle2) begin
 		case(busCycle)
 		BUS_IDLE:   rasr <= 32'b11111111111111111111111000000000;  // I
-		BUS_LS:     rasr <= 32'b11111100000000001111111000000000;  // S
-		BUS_SPRITE: rasr <= 32'b11100000000000000000011110000000;  // S - cycle
+		BUS_SPRITE: rasr <= 32'b11111100000000001111111000000000;  // S
 		BUS_CG:     rasr <= 32'b11111100000000001111111000000000;  // G,C
 		BUS_G:      rasr <= 32'b11111100000000001111111000000000;  // G,C
 		BUS_REF:    rasr <= 32'b11111100000000001111111000000000;  // R,C or R
@@ -132,11 +120,10 @@ else begin
 	if (stCycle1) begin
 		case(busCycle)
 		BUS_IDLE:   muxr <= 32'b11111111111111111111111100000000;  // I
-		BUS_LS:     muxr <= 32'b11111110000000001111111100000000;  // S
-		BUS_SPRITE: muxr <= 32'b11110000000000000000011111000000;  // S - cycle
+		BUS_SPRITE: muxr <= 32'b11111110000000001111111100000000;  // S
 		BUS_CG:     muxr <= 32'b11111110000000001111111100000000;  // G,C
 		BUS_G:      muxr <= 32'b11111110000000001111111100000000;  // G,C
-		BUS_REF:    muxr <= 32'b00000000000000001111111100000000;  // R,C or R
+		BUS_REF:    muxr <= 32'b11111110000000001111111100000000;  // R,C or R
 		default:		muxr <= 32'hFFFFFFFF;
 		endcase
 		end
@@ -153,10 +140,7 @@ else begin
 	if (stCycle2) begin
 		case(busCycle)
 		BUS_IDLE:   casr <= 32'b11111111111111111111111110000000;  // I - cycle
-		//    CHAR5_CYCLE:  casr <= 33'b111111000011000011000011000110000;  // G,C
-		//    CHAR6_CYCLE:  casr <= 33'b110001100001100011000011000110000;  // G,C
-		BUS_LS:     casr <= 32'b11111111000000001111111110000000;  // S
-		BUS_SPRITE: casr <= 32'b11111000011000011000011111100000;  // S - cycle
+		BUS_SPRITE: casr <= 32'b11111111000000001111111110000000;  // S
 		BUS_CG:     casr <= 32'b11111111000000001111111110000000;  // G,C
 		BUS_G:      casr <= 32'b11111111000000001111111110000000;  // G,C
 		BUS_REF:    casr <= 32'b11111111111111111111111110000000;  // R,C
@@ -179,18 +163,6 @@ else begin
 		enaDatar <= {enaDatar[30:0],1'b0};
 end
 assign enaData = enaDatar[30];
-
-always_ff @(posedge clk33)
-if (rst) begin
-	enaSDatar <= 32'b00000000100000100000100000000001;  // S - cycle
-end
-else begin
-	if (stCycle2)
-		enaSDatar <= 32'b00000000100000100000100000000001;  // S - cycle
-	else
-		enaSDatar <= {enaSDatar[30:0],1'b0};
-end
-assign enaSData = enaSDatar[31];
-wire enaMCnt = enaSDatar[30];
+assign enaMCnt = enaDatar[30];
 
 endmodule

@@ -37,12 +37,11 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_AddressGen(clk33, phi02, phis, leg, bmm, ecm, vicCycle, refcntr,
+module FAL6567_AddressGen(clk33, phi02, col80, bmm, ecm, vicCycle, refcntr,
 	vm, vmndx, cb, scanline, nextChar, sprite, sprite1, MCnt, MPtr, vicAddr);
 input clk33;
 input phi02;
-input phis;
-input leg;			// legacy sprites
+input col80;
 input bmm;
 input ecm;
 input [2:0] vicCycle;
@@ -53,7 +52,7 @@ input [13:0] cb;
 input [2:0] scanline;
 input [11:0] nextChar;
 input [3:0] sprite;
-input [7:0] sprite1;
+input [8:0] sprite1;
 input [5:0] MCnt [MIBCNT-1:0];
 input [7:0] MPtr [MIBCNT-1:0];
 output reg [13:0] vicAddr;
@@ -84,18 +83,14 @@ begin
 			end
 		end
 	VIC_SPRITE:
-		if (leg) begin
-			if (phi02==`LOW && sprite1[4])
-				addr <= vm + (14'b1111111000 | sprite[2:0]);
+		if (phi02==`LOW && sprite1[4]) begin
+			if (col80)
+				addr <= vm + {14'b0001111111,sprite[3:0]};
 			else
-				addr <= {MPtr[sprite],MCnt[sprite]};
+				addr <= vm + {14'b00001111111,sprite[2:0]};
 		end
-			else begin
-			if (!phis)
-				addr <= {MPtr[sprite],MCnt[sprite]};
-			else
-				addr <= vm + (14'b1111110000 | {~sprite[3],sprite[2:0]});
-		end
+		else
+			addr <= {MPtr[sprite],MCnt[sprite]};
 	default: addr <= 14'h3FFF;
 	endcase
 end

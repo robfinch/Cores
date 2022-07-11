@@ -61,6 +61,15 @@ parameter phBorderOn = 947;	    //  640 display
 parameter phBlankOn = 1040;		//    0 border
 parameter phTotal = 1040; 		//  800 total clocks
 parameter phSyncPol = 1;
+// PAL Constants multiplied by 1.2533 for 31.55259 MHz clock
+parameter phSyncOnPAL  = 20;       //   16 front porch
+parameter phSyncOffPAL = 140;		//   96 sync
+parameter phBlankOffPAL = 201;		//   48 back porch
+parameter phBorderOffPAL = 282;	//    0 border
+parameter phBorderOnPAL = 922;	    //  640 display
+parameter phBlankOnPAL = 1003;		//    0 border
+parameter phTotalPAL = 1003; 		//  800 total clocks
+parameter phSyncPolPAL = 1;
 //
 parameter pvSyncOn  = 10;		//   10 front porch
 parameter pvSyncOff = 12;		//    2 vertical sync
@@ -202,7 +211,6 @@ reg [13:0] cb;
 reg [13:0] vm;
 reg [5:0] regno;
 reg [1:0] regpg;  // register set page for sprites
-reg leg;          // legacy compatibility
 
 reg [4:0] ram_page;
 reg [13:0] addr;
@@ -216,7 +224,7 @@ wire [18:0] sc_ram_wadr, sc_ram_radr;
 wire [7:0] sc_ram_dato;
 reg sc_ram_rlatch;
 
-reg [7:0] sprite1;
+reg [8:0] sprite1;
 reg [3:0] sprite2,sprite3,sprite4,sprite5;
 reg [10:0] rasterX3;
 
@@ -296,6 +304,20 @@ else
 	CHIP6572:     rasterXMax = {8'd62,3'b111};
 	endcase
 
+generate begin : gClkwiz
+if (PAL)
+FAL6567_clkwizpal u1
+(
+  // Clock out ports
+  .clk160(clk164),     // output clk164
+  .clk32(clk33),     // output clk33
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked),       // output locked
+ // Clock in ports
+  .clk_in1(cr_clk)
+);      // input clk_in1
+else
 FAL6567_clkgenwiz u1
 (
   // Clock out ports
@@ -307,7 +329,8 @@ FAL6567_clkgenwiz u1
  // Clock in ports
   .clk_in1(cr_clk)
 );      // input clk_in1
-
+end
+endgenerate
 
 wire rst = !locked;
 assign rst_o = rst;
@@ -324,7 +347,7 @@ always_ff @(posedge clk33)
 if (rst)
 	ado <= 8'hFF;
 else
-	ado <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
+	ado <= mux ? vicAddr[7:0] : {2'b11,vicAddr[13:8]};
 assign ad = aec ? 8'bz : ado;
 
 wire ras_nne;
@@ -340,12 +363,8 @@ always_comb
 begin
 	case(vicCycle)
 	VIC_SPRITE:
-		if (MActive[sprite2]) begin
-			if (leg)
-				busCycle <= BUS_LS;
-			else 
-				busCycle <= BUS_SPRITE;
-		end
+		if (MActive[sprite2])
+			busCycle <= BUS_SPRITE;
 		else
 			busCycle <= BUS_IDLE;
 	VIC_REF,VIC_RC:
@@ -372,13 +391,11 @@ FAL6567_Timing utim1 (
 	.stc(stc),
 	.phi02(phi02),
 	.phi02r(phi02r),
-	.phis(phis),
 	.busCycle(busCycle),
 	.ras_n(ras_n),
 	.mux(mux),
 	.cas_n(cas_n),
 	.enaData(enaData),
-	.enaSData(enaSData),
 	.enaMCnt(enaMCnt)
 );
 
@@ -446,9 +463,9 @@ always_ff @(posedge clk33)
 if (clken8) begin
 	if (col80)
 	  case(chip)
-	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h57E;
-	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h56E;
-	  default:      sprite1 <= rasterX2 - 11'h55E;
+	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h58E;
+	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h57E;
+	  default:      sprite1 <= rasterX2 - 11'h56E;
 	  endcase
 	else
 	  case(chip)
@@ -456,10 +473,7 @@ if (clken8) begin
 	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
 	  default:      sprite1 <= rasterX2 - 11'h2DE;
 	  endcase
-  if (leg)
-		sprite2 <= sprite1[7:5];
-  else
-		sprite2 <= sprite1[7:4];
+	sprite2 <= col80 ? sprite1[8:5] : {1'b0,sprite1[7:5]};
 end
 
 // Centre sprite number according to RAM timing.
@@ -490,7 +504,6 @@ FAL6567_BusAvailGen uba1
 	.chip(chip),
 	.rst(rst),
 	.clk33(clk33),
-	.leg(leg),
 	.col80(col80),
 	.me(me),
 	.my(my),
@@ -552,7 +565,7 @@ if (phi02==`LOW && enaData) begin
 end
 
 always_ff @(posedge clk33)
-if (phis==`LOW && enaData && busCycle==(leg ? BUS_LS : BUS_SPRITE)) begin
+if (phis==`LOW && enaData && busCycle==BUS_SPRITE) begin
 	if (MActive[sprite])
 		MPtr[sprite] <= db[7:0];
 	else
@@ -725,22 +738,14 @@ else begin
 		end  
 	end
 
-	if (leg) begin
-		if (sprite1[4]) begin
-			if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
-				if (MActive[sprite])
-					MCnt[sprite] <= MCnt[sprite] + 6'd1;
-			end 
-		end
-		else begin
-			if (vicCycle==VIC_SPRITE && enaData) begin
-				if (MActive[sprite])
-					MCnt[sprite] <= MCnt[sprite] + 6'd1;
-			end
-		end
+	if (sprite1[4]) begin
+		if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+			if (MActive[sprite])
+				MCnt[sprite] <= MCnt[sprite] + 6'd1;
+		end 
 	end
 	else begin
-		if (!phis && enaMCnt && vicCycle==VIC_SPRITE) begin
+		if (vicCycle==VIC_SPRITE && enaData) begin
 			if (MActive[sprite])
 				MCnt[sprite] <= MCnt[sprite] + 6'd1;
 		end
@@ -803,10 +808,7 @@ FAL6567_SpritePixelShifter usprps1
 	.clk33(clk33),
 	.clken8(clken8),
 	.phi02(phi02),
-	.phis(phis),
 	.enaData(enaData),
-	.enaSData(enaSData), 
-	.leg(leg),
 	.sprite1(sprite1),
 	.vicCycle(vicCycle),
 	.MActive(MActive),
@@ -826,8 +828,7 @@ FAL6567_AddressGen uag1
 (
 	.clk33(clk33),
 	.phi02(phi02),
-	.phis(phis),
-	.leg(leg),
+	.col80(col80),
 	.bmm(bmm),
 	.ecm(ecm),
 	.vicCycle(vicCycle),
@@ -1073,14 +1074,25 @@ integer n14;
 always_ff @(posedge clk33)
 if (rst) begin
 	regpg <= 2'd0;
-	leg <= LEGACY;
-	hSyncOn <= phSyncOn;
-	hSyncOff <= phSyncOff;
-	hBlankOff <= phBlankOff;
-	hBorderOff <= phBorderOff;
-	hBorderOn <= phBorderOn;
-	hBlankOn <= phBlankOn;
-	hTotal <= phTotal;
+	col80 <= 1'b0;
+	if (PAL) begin
+		hSyncOn <= phSyncOnPAL;
+		hSyncOff <= phSyncOffPAL;
+		hBlankOff <= phBlankOffPAL;
+		hBorderOff <= phBorderOffPAL;
+		hBorderOn <= phBorderOnPAL;
+		hBlankOn <= phBlankOnPAL;
+		hTotal <= phTotalPAL;
+	end
+	else begin
+		hSyncOn <= phSyncOn;
+		hSyncOff <= phSyncOff;
+		hBlankOff <= phBlankOff;
+		hBorderOff <= phBorderOff;
+		hBorderOn <= phBorderOn;
+		hBlankOn <= phBlankOn;
+		hTotal <= phTotal;
+	end
 	hSyncPol <= phSyncPol;
 	vSyncOn <= pvSyncOn;
 	vSyncOff <= pvSyncOff;
@@ -1192,7 +1204,7 @@ else begin
     8'h2C:  dbo8[3:0] <= mc[{regpg,3'd5}];
     8'h2D:  dbo8[3:0] <= mc[{regpg,3'd6}];
     8'h2E:  dbo8[3:0] <= mc[{regpg,3'd7}];
-    8'h32:  dbo8 <= {leg,1'b0,4'hF,regpg};
+    8'h32:  dbo8 <= {1'd0,col80,4'hF,regpg};
     default:  dbo8 <= 8'hFF;
     endcase
   end
@@ -1302,7 +1314,7 @@ else begin
         8'h30:  regno <= db[5:0];
         8'h32:  begin
                 regpg <= db[1:0];
-                leg <= db[7];
+                col80 <= db[6];
                 end
         8'h31:
           case(regno)

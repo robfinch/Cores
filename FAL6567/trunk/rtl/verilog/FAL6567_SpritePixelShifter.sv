@@ -37,16 +37,13 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_SpritePixelShifter(clk33, clken8, phi02, phis, enaData, enaSData, 
-	leg, sprite1, vicCycle, MActive, MShift, mClkShift, mmc, db, sprite, MCurrentPixel);
+module FAL6567_SpritePixelShifter(clk33, clken8, phi02, enaData, 
+	sprite1, vicCycle, MActive, MShift, mClkShift, mmc, db, sprite, MCurrentPixel);
 input clk33;
 input clken8;
 input phi02;
-input phis;
 input enaData;
-input enaSData;
-input leg;			// legacy operation
-input [7:0] sprite1;
+input [8:0] sprite1;
 input [2:0] vicCycle;
 input [MIBCNT-1:0] MActive;
 input [MIBCNT-1:0] MShift;
@@ -73,22 +70,14 @@ begin
 			end
 		end  
 	end
-	if (leg) begin
-		if (sprite1[4]) begin
-			if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
-				if (MActive[sprite])
-					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-			end 
-		end
-		else begin
-			if (vicCycle==VIC_SPRITE && enaData) begin
-				if (MActive[sprite])
-					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-			end
-		end
+	if (sprite1[4]) begin
+		if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+			if (MActive[sprite])
+				MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+		end 
 	end
 	else begin
-		if (phis==`LOW && enaSData && vicCycle==VIC_SPRITE) begin
+		if (vicCycle==VIC_SPRITE && enaData) begin
 			if (MActive[sprite])
 				MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
 		end

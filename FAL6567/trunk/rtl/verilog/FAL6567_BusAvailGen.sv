@@ -37,12 +37,11 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_BusAvailGen(chip, rst, clk33, leg, col80, me, my, badline,
+module FAL6567_BusAvailGen(chip, rst, clk33, col80, me, my, badline,
 	rasterX2, nextRasterY, MActive, stCycle2, ba);
 input [1:0] chip;
 input rst;
 input clk33;
-input leg;
 input col80;
 input [MIBCNT-1:0] me;
 input [7:0] my [MIBCNT-1:0];
@@ -61,32 +60,18 @@ always_ff @(posedge clk33)
 	for (n1 = 0; n1 < MIBCNT; n1 = n1 + 1) begin
 		if (me[n1] && ((my[n1]==nextRasterY[7:0])||MActive[n1])) begin
 			if (col80) begin
-				if (leg)
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,5'b0}) && (rasterX2 < 12'h5A0 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,5'b0}) && (rasterX2 < 12'h590 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,5'b0}) && (rasterX2 < 12'h580 + {n1,5'b0}); 
-					endcase
-				else
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,4'b0}) && (rasterX2 < 12'h590 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,4'b0}) && (rasterX2 < 12'h580 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,4'b0}) && (rasterX2 < 12'h570 + {n1,4'b0}); 
-					endcase
+				case(chip)
+				CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,5'b0}) && (rasterX2 < 12'h5A0 + {n1,5'b0});
+				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,5'b0}) && (rasterX2 < 12'h590 + {n1,5'b0});
+				default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,5'b0}) && (rasterX2 < 12'h580 + {n1,5'b0}); 
+				endcase
 			end
 			else begin
-				if (leg)
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,5'b0}) && (rasterX2 < 12'h320 + {n1,5'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,5'b0}) && (rasterX2 < 12'h310 + {n1,5'b0});
-					default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,5'b0}) && (rasterX2 < 12'h300 + {n1,5'b0}); 
-					endcase
-				else
-					case(chip)
-					CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,4'b0}) && (rasterX2 < 12'h310 + {n1,4'b0});
-					CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,4'b0}) && (rasterX2 < 12'h300 + {n1,4'b0});
-					default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,4'b0}) && (rasterX2 < 12'h2F0 + {n1,4'b0}); 
-					endcase
+				case(chip)
+				CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,5'b0}) && (rasterX2 < 12'h320 + {n1,5'b0});
+				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,5'b0}) && (rasterX2 < 12'h310 + {n1,5'b0});
+				default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,5'b0}) && (rasterX2 < 12'h300 + {n1,5'b0}); 
+				endcase
 			end
 		end
 		else begin
