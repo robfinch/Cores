@@ -51,6 +51,7 @@ reg [7:0] displayRam [0:16383];
 reg [3:0] colorRam [0:1023];
 wire [7:0] displayRamOut = displayRam[ad14];
 wire [3:0] colorRamOut = colorRam[ad14[9:0]];
+integer a;
 
 initial begin
   rst = 1'b1;
@@ -61,10 +62,11 @@ end
 
 integer n;
 initial begin
+	a = $urandom(1);
 	for (n = 0; n < 16384; n = n + 1)
-		displayRam[n] = $urandom(1);
+		displayRam[n] = $urandom();
 	for (n = 0; n < 1024; n = n + 1)
-		colorRam[n] = $urandom(1);
+		colorRam[n] = $urandom();
 end
 
 always #41.667 clk = ~clk;

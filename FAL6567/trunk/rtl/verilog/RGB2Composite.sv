@@ -212,7 +212,7 @@ always_ff @(posedge clk) begin
 	// maximum negative offset that could occur.
 	co1 <= im + qm + ym;
 	if (!cBlank)
-		co <= ((co1[24:19] + 8) * 27) >> 5;
+		co <= ((co1[24:19] + 8) * 24) >> 5;
 	else
 		co <= (cSync * 8) + (colorBurstWindow ? ((sinp31 >> 2) - 6) : 0);
 //		co <= (cSync * 6) + (colorBurstWindow ? $signed((colorBurst * 8) - 4) : 0);

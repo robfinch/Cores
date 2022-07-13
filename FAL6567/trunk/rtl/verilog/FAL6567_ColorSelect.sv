@@ -35,10 +35,10 @@
 //                                                                
 // ============================================================================
 //
-module FAL6567_ColorSelect(clk33, clken8, rasterX, rasterY, ecm, bmm, mcm, pixelColor, mdp, mmc,
+module FAL6567_ColorSelect(clk, clken8, rasterX, rasterY, ecm, bmm, mcm, pixelColor, mdp, mmc,
 	pixelBgFlag, MCurrentPixel, mm0, mm1, mc, ec, ec1, vicBlank, vicBorder, color);
 parameter MIBCNT = 16;
-input clk33;
+input clk;
 input clken8;
 input [10:0] rasterX;
 input [8:0] rasterY;
@@ -61,8 +61,8 @@ output reg [3:0] color;
 
 reg [3:0] color_code;
 integer n13;
-always_ff @(posedge clk33)
-begin
+always_ff @(posedge clk)
+if (clken8) begin
 	// Force the output color to black for "illegal" modes
 	case({ecm,bmm,mcm})
 	3'b101,3'b110,3'b111:
@@ -86,7 +86,7 @@ begin
 	end
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (clken8) begin
 	if (vicBlank)
 		color <= 4'd0;

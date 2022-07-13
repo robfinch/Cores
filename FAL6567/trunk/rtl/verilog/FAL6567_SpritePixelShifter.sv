@@ -37,9 +37,10 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_SpritePixelShifter(clk33, clken8, phi02, enaData, 
+module FAL6567_SpritePixelShifter(rst, clk, clken8, phi02, enaData, 
 	sprite1, vicCycle, MActive, MShift, mClkShift, mmc, db, sprite, MCurrentPixel);
-input clk33;
+input rst;
+input clk;
 input clken8;
 input phi02;
 input enaData;
@@ -56,8 +57,12 @@ output reg [1:0] MCurrentPixel [MIBCNT-1:0];
 reg [23:0] MPixels [MIBCNT-1:0];
 
 integer n11;
-always_ff @(posedge clk33)
-begin
+always_ff @(posedge clk)
+if (rst) begin
+	for (n11 = 0; n11 < MIBCNT; n11 = n11 + 1)
+		MPixels[n11] <= 24'h0;
+end
+else begin
 	if (clken8) begin
 		for (n11 = 0; n11 < MIBCNT; n11 = n11 + 1) begin
 			if (MShift[n11]) begin
@@ -86,13 +91,19 @@ end
 
 // Adds a pipeline delay of one to the sprite pixel
 integer n12;
-always_ff @(posedge clk33)
-if (clken8)
-	for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1) begin
-		if (MShift[n12])
-			MCurrentPixel[n12] <= MPixels[n12][23:22];
-		else
-			MCurrentPixel[n12] <= 2'b00;
-	end
+always_ff @(posedge clk)
+if (rst) begin
+	for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1)
+		MCurrentPixel[n12] <= 2'b00;
+end
+else begin
+	if (clken8)
+		for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1) begin
+			if (MShift[n12])
+				MCurrentPixel[n12] <= MPixels[n12][23:22];
+			else
+				MCurrentPixel[n12] <= 2'b00;
+		end
+end
 
 endmodule

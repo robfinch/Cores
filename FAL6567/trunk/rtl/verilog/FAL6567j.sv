@@ -873,7 +873,8 @@ always_comb
 // Handle sprite pixel loading / shifting
 FAL6567_SpritePixelShifter usprps1
 (
-	.clk33(clk33),
+	.rst(rst),
+	.clk(clk33),
 	.clken8(clken8),
 	.phi02(phi02),
 	.enaData(enaData),
@@ -1034,7 +1035,7 @@ end
 
 FAL6567_PixelShifter ups1
 (
-	.clk33(clk33),
+	.clk(clk33),
 	.clken8(clken8),
 	.ismc(ismc),
 	.load(loadPixels),
@@ -1045,7 +1046,8 @@ FAL6567_PixelShifter ups1
 
 FAL6567_ComputePixelColor ucpc1
 (
-	.clk33(clk33),
+	.rst(rst),
+	.clk(clk33),
 	.clken8(clken8),
 	.ecm(ecm),
 	.bmm(bmm),
@@ -1069,7 +1071,7 @@ if (clken8)
 
 FAL6567_ColorSelect ucs1
 (
-	.clk33(clk33),
+	.clk(clk33),
 	.clken8(clken8),
 	.rasterX(rasterX),
 	.rasterY(rasterY),
@@ -1193,10 +1195,20 @@ if (rst) begin
 	vBlankOn <= pvBlankOn;
 	vTotal <= pvTotal;
 	vSyncPol <= pvSyncPol;
-	vm[9:0] <= 10'd0;
-	cb[10:0] <= 11'b0;
+	vm[13:0] <= 14'd0;
+	cb[13:0] <= 14'b0;
+	ecm <= 1'b0;
+	bmm <= 1'b0;
+	mcm <= 1'b0;
 	ec <= 4'h6;
 	ec1 <= 4'hF;
+	mm0 <= 4'h0;
+	mm1 <= 4'h0;
+	mmc <= 16'h0;
+	b0c <= 4'h0;
+	b1c <= 4'h0;
+	b2c <= 4'h0;
+	b3c <= 4'h0;
 	yscroll <= 3'd0;
 	xscroll <= 3'd0;
 	den = `TRUE;
@@ -1204,6 +1216,7 @@ if (rst) begin
 	for (n14 = 0; n14 < MIBCNT; n14 = n14 + 1) begin
 		mx[n14] = 9'd200;
 		my[n14] = 8'd5;
+		mc[n14] <= 4'h0;
 	end
 end
 else begin
