@@ -38,7 +38,7 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module FAL6567_sync(chip, rst, clk, rasterX, rasterY, hSync, vSync, cSync);
+module FAL6567_sync(chip, rst, clk, rasterX, rasterY, hSync, vSync, cSync, burstWindow);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -51,6 +51,7 @@ input [8:0] rasterY;
 output reg hSync;
 output reg vSync;
 output reg cSync;
+output reg burstWindow;
 
 always_ff @(posedge clk)
 if (rst)
@@ -122,5 +123,36 @@ CHIP6569,CHIP6572:
 			cSync <= ~hSync;
 	endcase
 endcase
+
+//------------------------------------------------------------------------------
+// Color burst window.
+// - determines when color burst should be output.
+//------------------------------------------------------------------------------
+
+reg [10:0] burstWindowBegin;
+reg [10:0] burstWindowEnd;
+// 504
+always @(posedge clk)
+case(chip)
+CHIP6567R8,CHIP6567OLD:
+	burstWindowBegin <= 11'd43;
+CHIP6569,CHIP6572:
+	burstWindowBegin <= 11'd44;
+endcase
+always @(posedge clk)
+case(chip)
+CHIP6567R8,CHIP6567OLD:
+	burstWindowEnd <= 11'd63;
+CHIP6569,CHIP6572:
+	burstWindowEnd <= 11'd62;
+endcase
+reg burstWindow;
+always @(posedge clk)
+begin
+	if (rasterX >= burstWindowBegin && rasterX < burstWindowEnd && rasterY > 8)
+		burstWindow <= `TRUE;
+	else
+		burstWindow <= `FALSE;
+end
 
 endmodule

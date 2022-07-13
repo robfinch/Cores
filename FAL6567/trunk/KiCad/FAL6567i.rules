@@ -11,7 +11,7 @@
     (via_costs 50)
     (plane_via_costs 5)
     (start_ripup_costs 100)
-    (start_pass_no 1)
+    (start_pass_no 9101)
     (layer_rule F.Cu
       (active on)
       (preferred_direction vertical)
@@ -53,6 +53,9 @@
     "kicad_default" "Via[0-1]_800:400_um-kicad_default"
   )
   (class default
+    "unconnected-(J1-Pad19)" "unconnected-(J1-Pad14)" "Net-(JP1-Pad2)" "unconnected-(U$1-Pad14)" "unconnected-(U$1-Pad21)" "unconnected-(U$2-Pad16)" "unconnected-(U$2-Pad15)" +5V
+    "unconnected-(U9-Pad15)" "unconnected-(U9-Pad14)" "unconnected-(U9-Pad13)" "unconnected-(U9-Pad12)" "unconnected-(U10-Pad24)" "unconnected-(U10-Pad8)" "unconnected-(U10-Pad17)" "unconnected-(U10-Pad1)"
+    "unconnected-(U3-Pad11)" "unconnected-(U4-Pad2)" "unconnected-(U4-Pad3)" "unconnected-(U4-Pad4)" "unconnected-(U7-Pad6)" "unconnected-(U7-Pad8)" "unconnected-(U7-Pad10)" "unconnected-(U7-Pad12)"
     (clearance_class default)
     (via_rule default)
     (rule
@@ -69,16 +72,13 @@
     /D6 /VD2 /D5 /VD3 /D4 /VD4 /D3 /VD5
     /D2 /VD6 /D1 /VD7 /D0 /DIR /D8 /VLPB
     /D9 /VRWB /D10 /VCSB /D11 /VD11 /CSB /VD10
-    /RWB /VD9 /LPB /VD8 "Net-(IC3-Pad11)" /VCAS /VRAS /VBA
-    /VAEC /PHI02 /VPHI02 "Net-(IC4-Pad4)" /BA "Net-(IC4-Pad3)" /RAS "Net-(IC4-Pad2)"
-    /CAS "Net-(IC9-Pad12)" /VA8 /VA9 /VA10 /VA11 "Net-(IC9-Pad15)" "Net-(IC9-Pad14)"
-    "Net-(IC9-Pad13)" "Net-(IC9-Pad8)" "Net-(IC9-Pad7)" "Net-(J1-Pad19)" "Net-(J1-Pad16)" "Net-(J1-Pad15)" "Net-(J1-Pad14)" "Net-(J1-Pad13)"
-    "Net-(J1-Pad12)" "Net-(J1-Pad10)" "Net-(J1-Pad9)" "Net-(J1-Pad7)" "Net-(J1-Pad6)" "Net-(J1-Pad4)" "Net-(J1-Pad3)" "Net-(J1-Pad1)"
-    "Net-(JP1-Pad1)" "Net-(JP2-Pad4)" "Net-(JP2-Pad3)" /RESET /IRQ /D2N /D2P /CKN
-    /CKP "Net-(U1-Pad24)" "Net-(U1-Pad8)" /D0N /D0P /D1N /D1P "Net-(U1-Pad17)"
-    "Net-(U1-Pad1)" "Net-(U7-Pad6)" "Net-(U7-Pad12)" "Net-(U7-Pad10)" "Net-(U$1-Pad8)" "Net-(U7-Pad8)" /SYNLUM /COLOR
-    VDD /VCLRCLK "Net-(U$1-Pad22)" "Net-(U$2-Pad39)" "Net-(U$2-Pad38)" "Net-(U$2-Pad36)" "Net-(U$2-Pad18)" "Net-(U$2-Pad16)"
-    "Net-(U$2-Pad15)" +3V3
+    /RWB /VD9 /LPB /VD8 /VCAS /VRAS /VBA /VAEC
+    /PHI02 /VPHI02 /BA /RAS /CAS /VA8 /VA9 /VA10
+    /VA11 "Net-(J1-Pad16)" "Net-(J1-Pad15)" "Net-(J1-Pad13)" "Net-(J1-Pad12)" "Net-(J1-Pad10)" "Net-(J1-Pad9)" "Net-(J1-Pad7)"
+    "Net-(J1-Pad6)" "Net-(J1-Pad4)" "Net-(J1-Pad3)" "Net-(J1-Pad1)" "Net-(JP2-Pad4)" "Net-(JP2-Pad3)" /RESET /IRQ
+    /D2N /D2P /CKN /CKP /D0N /D0P /D1N /D1P
+    "Net-(U$1-Pad8)" /SYNLUM VDD +3V3 /LUMA0 /LUMA1 /LUMA2 /LUMA3
+    /nc
     (clearance_class "kicad_default")
     (via_rule kicad_default)
     (rule

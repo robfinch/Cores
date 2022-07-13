@@ -103,13 +103,16 @@ wire balo = |balos | (badline && rasterX2 < baloff);
 // inactive until the FPGA is loaded and the pll is locked.
 //------------------------------------------------------------------------------
 
+reg ba1;
 always_ff @(posedge clk33)
 if (rst) begin
-	ba <= `LOW;
+	ba1 <= `LOW;
 end
 else begin
 	if (stCycle2)
-  	ba <= !balo;
+  	ba1 <= !balo;
 end
+always_ff @(posedge clk33)
+	ba <= ba1;
 
 endmodule

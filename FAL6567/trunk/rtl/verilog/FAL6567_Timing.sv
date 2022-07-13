@@ -46,10 +46,10 @@ output reg [31:0] stc;
 output reg phi02;
 output reg [31:0] phi02r;
 input [2:0] busCycle;
-output ras_n;
-output mux;
-output cas_n;
-output enaData;
+output reg ras_n;
+output reg mux;
+output reg cas_n;
+output reg enaData;
 output enaMCnt;
 
 reg [31:0] clk8r;
@@ -86,52 +86,67 @@ always_ff @(posedge clk33)
 if (rst)
 	phi02r <= 32'b00000000000000001111111111111111;
 else begin
-	phi02r <= {phi02r[30:0],phi02r[31]};
+	if (stCycle2)
+		phi02r <= 32'b00000000000000001111111111111111;
+	else
+		phi02r <= {phi02r[30:0],1'b0};
 end
+reg phi02a;
 always_ff @(posedge clk33)
-	phi02 <= phi02r[0];
+	phi02 <= phi02r[31];
 //assign phi02 = phi02r[32];
 
+// RAS precharge time = 4*30.6=122.2 ns
+// RAS active time = 12*30.6 = 366.7 ns
 always_ff @(posedge clk33)
 if (rst) begin
-	rasr <= 32'b11111111111111111111111110000000;
+	rasr <= 32'b11111111111111111111000000000000;
 end
 else begin
 	if (stCycle2) begin
 		case(busCycle)
-		BUS_IDLE:   rasr <= 32'b11111111111111111111111000000000;  // I
-		BUS_SPRITE: rasr <= 32'b11111100000000001111111000000000;  // S
-		BUS_CG:     rasr <= 32'b11111100000000001111111000000000;  // G,C
-		BUS_G:      rasr <= 32'b11111100000000001111111000000000;  // G,C
-		BUS_REF:    rasr <= 32'b11111100000000001111111000000000;  // R,C or R
+		BUS_IDLE:   rasr <= 32'b11111111111111111111000000000000;  // I
+		BUS_SPRITE: rasr <= 32'b11110000000000001111000000000000;  // S
+		BUS_CG:     rasr <= 32'b11110000000000001111000000000000;  // G,C
+		BUS_G:      rasr <= 32'b11110000000000001111000000000000;  // G,C
+		BUS_REF:    rasr <= 32'b11110000000000001111000000000000;  // R,C or R
 		default:		rasr <= 32'hFFFFFFFF;
 		endcase
 		end
 	else
 		rasr <= {rasr[30:0],1'b0};
 end
-assign ras_n = rasr[31];
-  
+reg ras1;
+always_ff @(posedge clk33)
+	ras1 <= rasr[31];
+always_ff @(negedge clk33)
+	ras_n <= ras1;
+
 always_ff @(posedge clk33)
 if (rst) begin
-	muxr <= 32'b11111111111111111111111100000000;  // I
+	muxr <= 32'b11111111111111111111100000000000;  // I
 end
 else begin
-	if (stCycle1) begin
+	if (stCycle2) begin
 		case(busCycle)
-		BUS_IDLE:   muxr <= 32'b11111111111111111111111100000000;  // I
-		BUS_SPRITE: muxr <= 32'b11111110000000001111111100000000;  // S
-		BUS_CG:     muxr <= 32'b11111110000000001111111100000000;  // G,C
-		BUS_G:      muxr <= 32'b11111110000000001111111100000000;  // G,C
-		BUS_REF:    muxr <= 32'b11111110000000001111111100000000;  // R,C or R
+		BUS_IDLE:   muxr <= 32'b11111111111111111111100000000000;  // I
+		BUS_SPRITE: muxr <= 32'b11111000000000001111100000000000;  // S
+		BUS_CG:     muxr <= 32'b11111000000000001111100000000000;  // G,C
+		BUS_G:      muxr <= 32'b11111000000000001111100000000000;  // G,C
+		BUS_REF:    muxr <= 32'b11111111111111111111100000000000;  // R,C or R
 		default:		muxr <= 32'hFFFFFFFF;
 		endcase
 		end
 	else
 		muxr <= {muxr[30:0],1'b0};
 end
-assign mux = muxr[31];
+reg mux1;
+always_ff @(posedge clk33)
+	mux1 <= muxr[31];
+always_ff @(negedge clk33)
+	mux <= mux1;
   
+// CAS active time = 10*30.6 = 305.6 ns
 always_ff @(posedge clk33)
 if (rst) begin
 	casr <= 32'b11111111111000001111111111100000;  // R,C
@@ -139,18 +154,22 @@ end
 else begin
 	if (stCycle2) begin
 		case(busCycle)
-		BUS_IDLE:   casr <= 32'b11111111111111111111111110000000;  // I - cycle
-		BUS_SPRITE: casr <= 32'b11111111000000001111111110000000;  // S
-		BUS_CG:     casr <= 32'b11111111000000001111111110000000;  // G,C
-		BUS_G:      casr <= 32'b11111111000000001111111110000000;  // G,C
-		BUS_REF:    casr <= 32'b11111111111111111111111110000000;  // R,C
+		BUS_IDLE:   casr <= 32'b11111111111111111111110000000000;  // I - cycle
+		BUS_SPRITE: casr <= 32'b11111100000000001111110000000000;  // S
+		BUS_CG:     casr <= 32'b11111100000000001111110000000000;  // G,C
+		BUS_G:      casr <= 32'b11111100000000001111110000000000;  // G,C
+		BUS_REF:    casr <= 32'b11111111111111111111110000000000;  // R,C
 		default:		casr <= 32'hFFFFFFFF;
 		endcase
 	end
 	else
 		casr <= {casr[30:0],1'b0};
 end
-assign cas_n = casr[31];
+reg cas1;
+always_ff @(posedge clk33)
+	cas1 <= casr[31];
+always_ff @(negedge clk33)
+	cas_n <= cas1;
 
 always_ff @(posedge clk33)
 if (rst) begin
@@ -162,7 +181,8 @@ else begin
 	else
 		enaDatar <= {enaDatar[30:0],1'b0};
 end
-assign enaData = enaDatar[30];
-assign enaMCnt = enaDatar[30];
+always_ff @(posedge clk33)
+	enaData <= enaDatar[31];
+assign enaMCnt = enaDatar[31];
 
 endmodule

@@ -87,13 +87,12 @@ end
 // Adds a pipeline delay of one to the sprite pixel
 integer n12;
 always_ff @(posedge clk33)
-if (clken8) begin
+if (clken8)
 	for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1) begin
 		if (MShift[n12])
 			MCurrentPixel[n12] <= MPixels[n12][23:22];
 		else
 			MCurrentPixel[n12] <= 2'b00;
-	end  
-end
+	end
 
 endmodule
