@@ -49,15 +49,15 @@ input [11:0] propChar;		// propagated char
 output reg [11:0] char;
 
 integer n2;
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst)
 	char <= 12'h000;
 else begin
 	if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
 		if (badline)
-			nextChar <= {db811,db};	// Grab all 12 bits
+			char <= db;
 		else
-			nextChar <= col80 ? charbuf[78] : charbuf[38];
+			char <= propChar;
 	end
 end
 

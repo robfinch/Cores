@@ -634,6 +634,7 @@ FAL6567_LoadMPtr ulmp1
 	.phi02(phi02),
 	.enaData(enaData),
 	.busCycle(busCycle),
+	.MActive(MActive),
 	.sprite(sprite),
 	.db(db),
 	.MPtr(MPtr)

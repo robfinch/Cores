@@ -47,7 +47,7 @@ input [11:0] char;
 output reg [11:0] charbuf [78:0];
 
 integer n2;
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	for (n2 = 0; n2 < 78; n2 = n2 + 1)
 		charbuf[n2] <= 12'h000;

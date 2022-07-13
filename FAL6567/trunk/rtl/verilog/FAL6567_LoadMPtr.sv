@@ -37,12 +37,13 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_LoadMPtr(rst, clk, phi02, enaData, busCycle, sprite, db);
+module FAL6567_LoadMPtr(rst, clk, phi02, enaData, busCycle, MActive, sprite, db, MPtr);
 input rst;
 input clk;
 input phi02;
 input enaData;
 input [2:0] busCycle;
+input [MIBCNT-1:0] MActive;
 input [3:0] sprite;
 input [7:0] db;
 output reg [7:0] MPtr [MIBCNT-1:0];
