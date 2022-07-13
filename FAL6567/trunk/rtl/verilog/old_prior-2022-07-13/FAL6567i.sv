@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FAL6567j.sv
+//	FAL6567h.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -37,60 +37,59 @@
 // ============================================================================
 //
 import FAL6567_pkg::*;
-`define TRUE  1'b1
-`define FALSE 1'b0
-`define LOW   1'b0
-`define HIGH  1'b1
 
-
-// There are two clock generators used. One for DVI / HDMI VGA timing and a 
-// second one for bus interfacing.
-// 800x600 standard VGA timing is used. The VGA dot clock is 40.0 MHz (40.00142 NTSC
-// and 39.99124 PAL).
-// A five times clock (200MHz) is needed to drive the DVI interface.
-// For bus timing:
+// 640x480 standard VGA timing is used, but the horizontal constants are multiplied
+// by 1.299... to account for the use of a 32.71705MHz clock instead of 25.175.
+// A five times clock (164MHz) is needed to drive the DVI interface.
 // The 32.71705MHz clock was carefully selected as being on the high side of 32MHz
 // given an input clock of 14.318MHz. Dividing 32.71705 by 32 gives a phi02 clock
 // of 1.022MHz, really close to that normally supplied by the VIC-II.
 //
-module FAL6567j(sysclk, phi02, rst_o, irq, aec, ba,
-	cs_n, rw, ad, db, db811, den_n, dir, ras_n, cas_n, lp_n,
-	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
-	luma, chroma
+module FAL6567h(cr_clk, phi02, rst_o, irq, aec, ba,
+	cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n,
+	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
 );
 parameter pSymRasterEnable = 48;
 parameter SIM = 0;
 
 // Constants multiplied by 1.299... for 32.71705MHz clock
-parameter phSyncOn  = 16;       //   16 front porch
-parameter phSyncOff = 112;		//   96 sync
-parameter phBlankOff = 160;		//   48 back porch
-parameter phBorderOff = 288;	//    0 border
-parameter phBorderOn = 928;	    //  640 display
-parameter phBlankOn = 1056;		//    0 border
-parameter phTotal = 1056; 		//  800 total clocks
+parameter phSyncOn  = 21;       //   16 front porch
+parameter phSyncOff = 146;		//   96 sync
+parameter phBlankOff = 208;		//   48 back porch
+parameter phBorderOff = 307;	//    0 border
+parameter phBorderOn = 947;	    //  640 display
+parameter phBlankOn = 1040;		//    0 border
+parameter phTotal = 1040; 		//  800 total clocks
 parameter phSyncPol = 1;
+// PAL Constants multiplied by 1.2533 for 31.55259 MHz clock
+parameter phSyncOnPAL  = 20;       //   16 front porch
+parameter phSyncOffPAL = 140;		//   96 sync
+parameter phBlankOffPAL = 201;		//   48 back porch
+parameter phBorderOffPAL = 282;	//    0 border
+parameter phBorderOnPAL = 922;	    //  640 display
+parameter phBlankOnPAL = 1003;		//    0 border
+parameter phTotalPAL = 1003; 		//  800 total clocks
+parameter phSyncPolPAL = 1;
 //
-parameter pvSyncOn  = 1;		//   1 front porch
-parameter pvSyncOff = 5;		//    4 vertical sync
-parameter pvBlankOff = 28;		//   23 back porch
-parameter pvBorderOff = 128;		//  100 border	0
-parameter pvBorderOn = 528;		//  400 display
-parameter pvBlankOn = 628;  	//    100 border	0
-parameter pvTotal = 628;		//  628 total scan lines
+parameter pvSyncOn  = 10;		//   10 front porch
+parameter pvSyncOff = 12;		//    2 vertical sync
+parameter pvBlankOff = 45;		//   33 back porch
+parameter pvBorderOff = 85;		//    0 border	0
+parameter pvBorderOn = 485;		//  480 display
+parameter pvBlankOn = 525;  	//    0 border	0
+parameter pvTotal = 525;		//  525 total scan lines
 parameter pvSyncPol = 1;        // neg. polarity
 
-input sysclk;           // color reference clcck (14.31818)
+input cr_clk;           // color reference clcck (14.31818)
 output phi02;
 output rst_o;
 output irq;
-output reg aec;
+output aec;
 output ba;
 input cs_n;
 input rw;
 inout [7:0] ad;
-inout tri [7:0] db;
-input [3:0] db811;
+inout tri [11:0] db;
 output den_n;
 output dir;
 output ras_n;
@@ -102,8 +101,6 @@ output TMDS_OUT_clk_n;
 output [2:0] TMDS_OUT_data_p;
 output [2:0] TMDS_OUT_data_n;
 
-output [3:0] luma;
-output [3:0] chroma;
 
 reg [3:0] p;
 reg blank_n;
@@ -113,14 +110,13 @@ reg hSync, vSync;	// sync outputs
 
 integer n;
 wire cs = !cs_n;
-wire clk164;	// 163.58525 MHz
-wire clk33;		//  32.71705 MHz
 wire clk200;
 wire clk40;
-wire clk16xBurst;
-wire colorBurst;
-wire colorBurstWindow;
-wire cSync;
+wire clk28;
+wire clk4x;
+wire dot_clk;
+wire clk164;	// 163.58525 MHz
+wire clk33;		//  32.71705 MHz
 reg [7:0] regShadow [127:0];
 
 reg [7:0] ado;
@@ -128,7 +124,7 @@ wire vSync8,hSync8;
 wire [3:0] pixelColor;
 wire [3:0] color8;
 wire [3:0] color40;
-wire [23:0] RGB, RGB8;
+wire [23:0] RGB;
 reg blank;			// blanking output
 reg border;
 wire vBlank, hBlank;
@@ -151,7 +147,7 @@ wire eof1 = vCtr==vTotal && eol1;
 reg col80 = 1'b0;
 
 reg [1:0] chip;
-wire locked1, locked2, locked3;
+wire locked;
 wire clken8;
 
 wire phi0,phi1;
@@ -182,26 +178,26 @@ reg [2:0] xscroll;
 reg [7:0] lpx, lpy;
 
 // color regs
-reg [3:0] ec, ec1;
+reg [3:0] ec;
 reg [3:0] mm0,mm1;
 reg [3:0] b0c,b1c,b2c,b3c;
 
 reg [2:0] vicCycleNext,vicCycle;  // cycle the VIC state machine is in
 reg [2:0] busCycle;              // BUS cycle type
-wire [7:0] refcntr;
+reg [7:0] refcntr;
 reg ref5;
 
 reg pixelBgFlag;
 
 // Character mode vars
 reg [10:0] vmndx;                  // video matrix index
-wire [11:0] nextChar;
-wire [11:0] charbuf [78:0];
+reg [11:0] nextChar;
+reg [11:0] charbuf [78:0];
 wire [2:0] scanline;
 
 reg [3:0] sprite;
 reg [MIBCNT-1:0] MActive;
-wire [7:0] MPtr [MIBCNT-1:0];
+reg [7:0] MPtr [MIBCNT-1:0];
 reg [5:0] MCnt [MIBCNT-1:0];
 reg [8:0] mx [MIBCNT-1:0];
 reg [7:0] my [MIBCNT-1:0];
@@ -283,21 +279,21 @@ reg [7:0] vdatr;
 
 reg [21:0] rstcntr = 0;
 wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
-always_ff @(posedge sysclk)
+always_ff @(posedge cr_clk)
 if (xrst)
   rstcntr <= rstcntr + 4'd1;
 
 // Set Limits
 // Yes, this is clocked because we want the outputs to come from ff's not
 // combo logic.
-always_ff @(posedge clk33)
+always_ff @(posedge dot_clk)
 case(chip)
 CHIP6567R8:   rasterYMax = 9'd262;
 CHIP6567OLD:  rasterYMax = 9'd261;
 CHIP6569:     rasterYMax = 9'd311;
 CHIP6572:     rasterYMax = 9'd311;
 endcase
-always_ff @(posedge clk33)
+always_ff @(posedge dot_clk)
 if (col80)
 	case(chip)
 	CHIP6567R8:   rasterXMax = {8'd129,3'b111};
@@ -313,88 +309,59 @@ else
 	CHIP6572:     rasterXMax = {8'd62,3'b111};
 	endcase
 
-FAL6567_clkwiz40 u1
+generate begin : gClkwiz
+if (PAL)
+FAL6567_clkwizpal u1
 (
   // Clock out ports
-  .clk200(clk200),     // output clk200
-  .clk40(clk40),     // output clk40
+  .clk160(clk164),     // output clk164
+  .clk32(clk33),     // output clk33
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked),       // output locked
+ // Clock in ports
+  .clk_in1(cr_clk)
+);      // input clk_in1
+else
+FAL6567_clkwiz40 uclk40
+(
+  // Clock out ports
+  .clk200(clk200),     // output clk164
+  .clk40(clk40),     // output clk33
   // Status and control signals
   .reset(xrst), // input reset
   .locked(locked1),       // output locked
  // Clock in ports
-  .clk_in1(sysclk)
+  .clk_in1(cr_clk)
 );      // input clk_in1
-
-generate begin : gClkwiz
-if (PAL) begin
-FAL6567_clkwizPAL32 u2
+FAL6567_clkwiz14 uclk14
 (
   // Clock out ports
-  .clk33(clk33),     // output clk33
+  .clk114(),     // output clk164
+  .clk28(clk28), // output clk28
+  .clk14(clk4x),
+  .clk8(dot_clk),
   // Status and control signals
   .reset(xrst), // input reset
   .locked(locked2),       // output locked
  // Clock in ports
-  .clk_in1(sysclk)
+  .clk_in1(cr_clk)
 );      // input clk_in1
-FAL6567_clkwizBurstPAL u3
-(
-  // Clock out ports
-  .clk16xBurst(clk16xBurst),
-  // Status and control signals
-  .reset(xrst), // input reset
-  .locked(locked3),       // output locked
- // Clock in ports
-  .clk_in1(sysclk)
-);      // input clk_in1
-end
-else begin
-FAL6567_clkgenwiz u2
-(
-  // Clock out ports
-  .clk33(clk33),     // output clk33
-  // Status and control signals
-  .reset(xrst), // input reset
-  .locked(locked2),       // output locked
- // Clock in ports
-  .clk_in1(sysclk)
-);      // input clk_in1
-FAL6567_clkwizBurstNTSC u3
-(
-  // Clock out ports
-  .clk16xBurst(clk16xBurst),
-  // Status and control signals
-  .reset(xrst), // input reset
-  .locked(locked3),       // output locked
- // Clock in ports
-  .clk_in1(sysclk)
-);      // input clk_in1
-end
 end
 endgenerate
 
-reg [3:0] burstcnt;
-reg burstClk;
-always_ff @(posedge clk16xBurst)
-if (rst)
-	burstcnt <= 4'd0;
-else
-	burstcnt <= burstcnt + 2'd1;
-always_ff @(posedge clk16xBurst)
-	burstClk <= burstcnt[3];
-
-wire rst = !(locked1 & locked2 & locked3);
+wire rst = !(locked1&locked2);
 assign rst_o = rst;
 
 // We can put the tri-state logic in this module assuming it is the top one.
 assign den_n = aec ? cs_n : 1'b0;
-assign dir = aec ? ~rw : 1'b1;
-assign db = rst ? 8'bz : (aec && !cs_n && rw) ? dbo8 : 8'bz;
+assign dir = aec ? rw : 1'b0;
+assign db = rst ? 12'bz : (aec && !cs_n && rw) ? {4'h0,dbo8} : 12'bz;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 	if (rst)
-		chip <= db811[1:0];
-always_ff @(negedge clk33)
+		chip <= db[9:8];
+always_ff @(posedge clk28)
 if (rst)
 	ado <= 8'hFF;
 else
@@ -403,8 +370,8 @@ assign ad = aec ? 8'bz : ado;
 
 wire ras_nne;
 wire phi02_pe;
-edge_det ued2 (.rst(rst), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
-edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
+edge_det ued2 (.rst(rst), .clk(clk28), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
+edge_det ued3 (.rst(rst), .clk(clk28), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
 
 //------------------------------------------------------------------------------
 // Bus cycle type
@@ -435,10 +402,9 @@ end
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-FAL6567_Timing utim1 (
+FAL6567i_Timing utim1 (
 	.rst(rst),
-	.clk33(clk33),
-	.clken8(clken8),
+	.clk28(clk28),
 	.stc(stc),
 	.phi02(phi02),
 	.phi02r(phi02r),
@@ -447,21 +413,22 @@ FAL6567_Timing utim1 (
 	.mux(mux),
 	.cas_n(cas_n),
 	.enaData(enaData),
-	.enaMCnt()
+	.enaMCnt(enaMCnt)
 );
 
 //------------------------------------------------------------------------------
 // Raster / Refresh counters
 //------------------------------------------------------------------------------
-
-FAL6567_RefCntr urefc1
-(
-	.rst(rst),
-	.clk33(clk33),
-	.stCycle(stCycle),
-	.vicCycle(vicCycle),
-	.refcntr(refcntr)
-);
+always_ff @(posedge clk28)
+if (rst) begin
+	refcntr <= 8'd255;
+end
+else begin
+	if (stCycle) begin
+		if (vicCycle==VIC_REF || vicCycle==VIC_RC)
+			refcntr <= refcntr - 8'd1;
+	end
+end
 
 //------------------------------------------------------------------------------
 // VIC-II cycling machine.
@@ -482,11 +449,10 @@ FAL6567_RefCntr urefc1
 // to get back where we should be.
 //------------------------------------------------------------------------------
 
-FAL6567_RasterXY urxy1
+FAL6567i_RasterXY urxy1
 (
 	.rst(rst),
-	.clk33(clk33),
-	.clken8(clken8),
+	.clk8(clk8),
 	.rasterXMax(rasterXMax),
 	.rasterYMax(rasterYMax),
 	.preRasterX(preRasterX),
@@ -509,8 +475,8 @@ FAL6567_CycleDecode ucycd1
 );
 
 wire [11:0] rasterX2 = {preRasterX,1'b0};
-always_ff @(posedge clk33)
-if (clken8) begin
+always_ff @(posedge clk8)
+begin
 	if (col80)
 	  case(chip)
 	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h58E;
@@ -527,7 +493,7 @@ if (clken8) begin
 end
 
 // Centre sprite number according to RAM timing.
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 begin
 	sprite3 <= sprite2;
 	sprite4 <= sprite3;
@@ -536,7 +502,7 @@ begin
 end
 
 //wire ref5 = rasterX2[10:4]==7'h03;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 	ref5 <= rasterX2[11:4]+2'd1==7'h03;
 
 //------------------------------------------------------------------------------
@@ -549,11 +515,11 @@ assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 :
 // Bus available generator
 //------------------------------------------------------------------------------
 
-FAL6567_BusAvailGen uba1
+FAL6567i_BusAvailGen uba1
 (
 	.chip(chip),
 	.rst(rst),
-	.clk33(clk33),
+	.clk28(clk28),
 	.col80(col80),
 	.me(me),
 	.my(my),
@@ -572,7 +538,7 @@ FAL6567_BusAvailGen uba1
 //------------------------------------------------------------------------------
 reg ba1,ba2,ba3;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (rst) begin
 	ba1 <= `LOW;
 	ba2 <= `LOW;
@@ -586,65 +552,48 @@ else begin
 	end
 end
 
-always_ff @(negedge clk33)
-	aec <= ba ? phi02 : ba3 & phi02;
+assign aec = ba ? phi02 : ba3 & phi02;
 
 //------------------------------------------------------------------------------
 // Databus loading
 //------------------------------------------------------------------------------
 
-FAL6567_LoadChar uldch1
-(
-	.rst(rst),
-	.clk(clk33),
-	.phi02(phi02),
-	.enaData(enaData),
-	.vicCycle(vicCycle),
-	.badline(badline),
-	.db({db811,db}),
-	.propChar(col80 ? charbuf[78] : charbuf[38]),
-	.char(nextChar)
-);
+integer n2;
+always_ff @(posedge clk28)
+if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
+	if (badline)
+		nextChar <= db;	// Grab all 12 bits
+	else
+		nextChar <= col80 ? charbuf[78] : charbuf[38];
+	for (n2 = 78; n2 > 0; n2 = n2 -1)
+		charbuf[n2] = charbuf[n2-1];
+	charbuf[0] <= nextChar;
+end
 
-FAL6567_ShiftChar ushftch1
-(
-	.rst(rst),
-	.clk(clk33),
-	.phi02(phi02),
-	.enaData(enaData),
-	.vicCycle(vicCycle),
-	.char(nextChar),
-	.charbuf(charbuf)
-);
-
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (phi02==`LOW && enaData) begin
 	if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
-		readPixels <= db;
+		readPixels <= db[7:0];
 		readChar <= nextChar;
 	end
 	waitingPixels <= readPixels;
 	waitingChar <= readChar;
 end
 
-FAL6567_LoadMPtr ulmp1
-(
-	.rst(rst),
-	.clk(clk33),
-	.phi02(phi02),
-	.enaData(enaData),
-	.busCycle(busCycle),
-	.sprite(sprite),
-	.db(db),
-	.MPtr(MPtr)
-);
+always_ff @(posedge clk28)
+if (phis==`LOW && enaData && busCycle==BUS_SPRITE) begin
+	if (MActive[sprite])
+		MPtr[sprite] <= db[7:0];
+	else
+		MPtr[sprite] <= 8'd255;
+end
 
 //------------------------------------------------------------------------------
 // Video matrix counter
 //------------------------------------------------------------------------------
 reg [10:0] vmndxStart;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (rst) begin
 	vmndx <= 11'd0;
 	vmndxStart <= 11'd0;
@@ -671,10 +620,10 @@ end
 // or the bitmapped mode address.
 //------------------------------------------------------------------------------
 
-FAL6567_ScanlineCounter uslc1
+FAL6567i_ScanlineCounter uslc1
 (
 	.rst(rst),
-	.clk33(clk33),
+	.clk28(clk28),
 	.phi02(phi02),
 	.enaData(enaData),
 	.ref5(ref5),
@@ -697,7 +646,7 @@ always_comb
 		collision[n4] = MCurrentPixel[n4][1];
 
 // Sprite-sprite collision logic
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (rst)
 	m2mhit <= `FALSE;
 else begin
@@ -742,7 +691,7 @@ end
 
 // Sprite-background collision logic
 integer n5;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (rst)
 	m2dhit <= `FALSE;
 else begin
@@ -767,7 +716,7 @@ else begin
 end
 
 integer n6;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 begin
 	for (n6 = 0; n6 < MIBCNT; n6 = n6 + 1) begin
 		if (rasterX == 10)
@@ -778,7 +727,7 @@ begin
 end
 
 integer n7;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (rst & SIM) begin
 	for (n7 = 0; n7 < MIBCNT; n7 = n7 + 1) begin
 		MCnt[n7] <= 6'd63;
@@ -823,7 +772,7 @@ end
 reg [1:0] mShiftCount[0:MIBCNT-1];
 
 integer n8;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 if (clken8) begin
 	for (n8 = 0; n8 < MIBCNT; n8 = n8 + 1) begin
 		if (MShift[n8]) begin
@@ -847,7 +796,7 @@ end
 
 // Y expansion
 integer n10;
-always_ff @(posedge clk33)
+always_ff @(posedge clk28)
 begin
 	// Reset expansion flipflop once sprite becomes deactivated or
 	// if no sprite Y expansion.
@@ -870,10 +819,10 @@ always_comb
 		mClkShift[n9] <= mShiftCount[n9]==2'd3;
 
 // Handle sprite pixel loading / shifting
-FAL6567_SpritePixelShifter usprps1
+FAL6567i_SpritePixelShifter usprps1
 (
-	.clk33(clk33),
-	.clken8(clken8),
+	.clk28(clk28),
+	.clk8(clk8),
 	.phi02(phi02),
 	.enaData(enaData),
 	.sprite1(sprite1),
@@ -882,7 +831,7 @@ FAL6567_SpritePixelShifter usprps1
 	.MShift(MShift),
 	.mClkShift(mClkShift),
 	.mmc(mmc),
-	.db(db),
+	.db(db[7:0]),
 	.sprite(sprite),
 	.MCurrentPixel(MCurrentPixel)
 );
@@ -963,8 +912,7 @@ FAL6567_sync usg1
 	.rasterY(rasterY),
 	.hSync(hSync8),
 	.vSync(vSync8),
-	.cSync(cSync),
-	.burstWindow(colorBurstWindow)
+	.cSync(Sync)
 );
 
 //------------------------------------------------------------------------------
@@ -1070,8 +1018,6 @@ FAL6567_ColorSelect ucs1
 (
 	.clk33(clk33),
 	.clken8(clken8),
-	.rasterX(rasterX),
-	.rasterY(rasterY),
 	.ecm(ecm),
 	.bmm(bmm),
 	.mcm(mcm),
@@ -1084,18 +1030,16 @@ FAL6567_ColorSelect ucs1
 	.mm1(mm1),
 	.mc(mc),
 	.ec(ec),
-	.ec1(ec1),
 	.vicBlank(vicBlank),
 	.vicBorder(vicBorder),
 	.color(color8)
 );
 
-FAL6567j_ScanConverter usc1
+FAL6567i_ScanConverter usc1
 (
   .chip(chip),
-  .clk33(clk33),
-  .clken8(clken8),
   .clk40(clk40),
+  .clk8(clk8),
   .col80(col80),
   .hSync8_i(hSync8),
   .vSync8_i(vSync8),
@@ -1135,35 +1079,6 @@ ur2d1
 	.SerialClk(clk200)
 );
 
-wire [16:0] lfsr_o;
-lfsr ulfsr1(.rst(rst), .clk(clk33), .ce(clken8), .cyc(1'b0), .o(lfsr_o));
-
-FAL6567_ColorROM ucrom2
-(
-	.clk(clk33),
-	.ce(clken8),
-	.code(color8),//lfsr_o[3:0]),
-	.color(RGB8)
-);
-
-// Argh! There are not enough pins
-wire dummyl;
-RGB2Composite urgb2comp1
-(
-	.clk(clk16xBurst),
-	.ph(burstcnt),
-	.colorBurst(burstClk),
-	.colorBurstWindow(colorBurstWindow),
-	.cSync(cSync),
-	.cBlank(vicBlank),
-	.r(RGB8[23:16]),
-	.g(RGB8[15:8]),
-	.b(RGB8[7:0]),
-	.co({luma,dummyl}),
-	.yo(),
-	.iq(chroma)
-);
-
 
 //------------------------------------------------------------------------------
 // Register Interface
@@ -1176,13 +1091,24 @@ always_ff @(posedge clk33)
 if (rst) begin
 	regpg <= 2'd0;
 	col80 <= 1'b0;
-	hSyncOn <= phSyncOn;
-	hSyncOff <= phSyncOff;
-	hBlankOff <= phBlankOff;
-	hBorderOff <= phBorderOff;
-	hBorderOn <= phBorderOn;
-	hBlankOn <= phBlankOn;
-	hTotal <= phTotal;
+	if (PAL) begin
+		hSyncOn <= phSyncOnPAL;
+		hSyncOff <= phSyncOffPAL;
+		hBlankOff <= phBlankOffPAL;
+		hBorderOff <= phBorderOffPAL;
+		hBorderOn <= phBorderOnPAL;
+		hBlankOn <= phBlankOnPAL;
+		hTotal <= phTotalPAL;
+	end
+	else begin
+		hSyncOn <= phSyncOn;
+		hSyncOff <= phSyncOff;
+		hBlankOff <= phBlankOff;
+		hBorderOff <= phBorderOff;
+		hBorderOn <= phBorderOn;
+		hBlankOn <= phBlankOn;
+		hTotal <= phTotal;
+	end
 	hSyncPol <= phSyncPol;
 	vSyncOn <= pvSyncOn;
 	vSyncOff <= pvSyncOff;
@@ -1195,7 +1121,6 @@ if (rst) begin
 	vm[9:0] <= 10'd0;
 	cb[10:0] <= 11'b0;
 	ec <= 4'h6;
-	ec1 <= 4'hF;
 	yscroll <= 3'd0;
 	xscroll <= 3'd0;
 	den = `TRUE;
@@ -1280,7 +1205,7 @@ else begin
             1'd0: dbo8 <= m2d[7:0];
             1'd1: dbo8 <= m2d[15:0];
             endcase
-    8'h20:  dbo8[7:0] <= {ec1,ec};
+    8'h20:  dbo8[3:0] <= ec;
     8'h21:  dbo8[3:0] <= b0c;
     8'h22:  dbo8[3:0] <= b1c;
     8'h23:  dbo8[3:0] <= b2c;
@@ -1386,10 +1311,7 @@ else begin
                 endcase
         8'h1E:  ; // mm collision
         8'h1F:  ; // md collision
-        8'h20:  begin
-        				ec <= db[3:0];  // exterior (border color)
-        				ec1 <= db[7:4];
-        				end
+        8'h20:  ec <= db[3:0];  // exterior (border color)
         8'h21:  b0c <= db[3:0]; // background color #0
         8'h22:  b1c <= db[3:0];
         8'h23:  b2c <= db[3:0];
@@ -1458,16 +1380,16 @@ assign hBlank = hCtr >= hBlankOn || hCtr < hBlankOff;
 assign vBorder = vCtr >= vBorderOn || vCtr < vBorderOff;
 assign hBorder = hCtr >= hBorderOn || hCtr < hBorderOff;
 
-counter #(12) u4 (.rst(rst), .clk(clk40), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr) );
-counter #(12) u5 (.rst(rst), .clk(clk40), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr) );
+counter #(12) u4 (.rst(rst), .clk(clk33), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr) );
+counter #(12) u5 (.rst(rst), .clk(clk33), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr) );
 
-always_ff @(posedge clk40)
+always_ff @(posedge clk33)
   blank <= #1 hBlank|vBlank;
-always_ff @(posedge clk40)
+always_ff @(posedge clk33)
   border <= #1 hBorder|vBorder;
-always_ff @(posedge clk40)
+always_ff @(posedge clk33)
 	hSync <= #1 hSync1;
-always_ff @(posedge clk40)
+always_ff @(posedge clk33)
 	vSync <= #1 vSync1;
 
 endmodule

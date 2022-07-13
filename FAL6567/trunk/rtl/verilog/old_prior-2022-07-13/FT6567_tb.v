@@ -29,6 +29,7 @@ wire aec;
 wire ba;
 reg csr_n;
 reg cs_n;
+wire rdy_n;
 reg rw;
 wire [13:0] ad;
 reg [23:0] adr;
@@ -41,6 +42,12 @@ wire hSync;
 wire vSync;
 wire [7:0] db;
 reg [7:0] dbi;
+
+reg [7:0] mem [524287:0];
+assign ram_db = (!ram_oe ? mem[ram_ad] : 8'bz);
+always @(ram_we, ram_db)
+  if (!ram_we)
+    mem[ram_ad] <= ram_db;
 
 initial begin
   rst = 1'b1;
@@ -61,6 +68,8 @@ FT6567 #(
   .rst_o(),
   .irq(),
   .cs_n(cs_n),
+  .vda(1'b1),
+  .rdy_n(rdy_n),
   .rw(rw),
   .ad(adr[15:0]),
   .db(db),
@@ -92,7 +101,8 @@ if (rst) begin
 end
 else begin
 begin
-    state <= state + 1;
+    if (rdy_n==1'b0)
+      state <= state + 1;
     case(state)
     5: begin
       csr_n <= #1 1'b0;
@@ -138,6 +148,6 @@ begin
     end
 end
 
-assign db = phi02d ? dbi : adr[23:16];
+assign db = phi02d ? (rw ? 8'bz : dbi) : adr[23:16];
 
 endmodule

@@ -25,7 +25,7 @@
 `define LOW   1'b0
 `define HIGH  1'b1
 
-module FT6567(clk100, phi02, rst_o, irq, cs_n, vda, rw, ad, db,
+module FT6567(clk100, phi02, rst_o, irq, cs_n, vda, rdy_n, rw, ad, db,
   ram_ce, ram_we, ram_oe, ram_ad, ram_db, lp_n,
   hSync, vSync, red, green, blue);
 parameter MIBCNT = 16;
@@ -81,6 +81,7 @@ output rst_o;
 output irq;
 input cs_n;
 input vda;
+output reg rdy_n;
 input rw;
 input [15:0] ad;
 inout tri [7:0] db;
@@ -125,11 +126,13 @@ wire wr = !rw;
 wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
 
+reg [2:0] mode;
 wire badline;                   // flag bad line condition
 reg den;                        // display enable
-reg rsel, bmm, ecm;
-reg csel, mcm, res;
-reg [2:0] mode;
+reg rsel, ecm;
+reg csel, res;
+wire mcm = mode[0];
+wire bmm = mode==3'b010 || mode==3'b110;
 reg [2:0] charsel;
 reg [18:0] bmmadr;               // bits 15 to 18 of bitmap address
 reg [11:0] rasterCmp;
@@ -234,7 +237,7 @@ always @(posedge phi02)
 reg [7:0] ram_dbl;
 wire [7:0] chro0, chro1, cro0, cro1;
 wire vra_cs = vda && vre && adr[23:19]==vra[23:19];
-wire chr_cs = vda && che && adr[23:14]==chra[23:14];
+wire chr_cs = vda && chre && adr[23:14]==chra[23:14];
 wire cr_cs = vda && cre && adr[23:12]==cra[23:12];
 
 assign db = (cs && rw && phi02) ? dbo8 : 8'bz;
@@ -252,7 +255,7 @@ FT6567Charram uchram
   .rclk(~clk25),
   .ra0(adr[13:0]),
   .o0(chro0),
-  .ra1(vicAddr[13:0]),
+  .ra1({charsel,nextChar[7:0],scanline}),
   .o1(chro1)
 );
 
@@ -574,23 +577,75 @@ end
 // Note that reading the ram for the cpu is tricky because the ram is only
 // accessed for 20 ns. The read back data has to be centred around the 
 // falling edge of phi02. A minimum 10ns setup and hold time are required.
+// This is handled with a state machine which generates a single wait state.
 //------------------------------------------------------------------------------
 
 // Register the ram control signals
 always @(posedge clk100b)
 begin
-  ram_ad <= !clk25 ? adr : vicAddr;
-  ram_ce <= !clk25 ? !vra_cs : !vre;
-  ram_oe <= !clk25 ? !rw : 1'b0;
+  ram_ad <= #1 !clk25 ? adr : vicAddr;
+  ram_ce <= #1 !clk25 ? !vra_cs : !vre;
+  ram_oe <= #1 !clk25 ? !rw : 1'b0;
 end
 
 // The following clock logic centers a 10ns write pulse during the 20ns
 // that the cpu has access to the ram.
 always @(negedge clk100b)
-  ram_we <= (!clk25 && clk12 && clk50) ? !(!rw && vra_cs) : 1'b1;
+  ram_we <= #1 (!clk25 && clk12 && clk50) ? !(!rw && vra_cs) : 1'b1;
 
 assign ram_db = (!clk25 && !rw) ? db : 8'bz;
-assign db = (!clk25 && rw && vra_cs && phi02) ? ram_db : 8'bz;
+
+// Capture data on falling edge of phi02
+// Two things to consider
+// 1) ram controls are set 10ns after the 25MHz clock that gives only
+//    10 ns before phi02 falls. Assuming there is no delay in the logic
+//    it would work. However it's better to delay a bit.
+// 2) The data must be held for at least 10ns after the falling edge of
+//    phi02 so the cpu can read it.
+// A delayed version of phi02 is used to meet these considerations.
+always @(negedge phi02d)
+  ram_dbl <= ram_db;
+
+assign db = (rw && vra_cs && phi02) ? ram_dbl : 8'bz;
+
+parameter MEM_IDLE = 0;
+parameter MEM1 = 1;
+parameter MEM2 = 2;
+parameter MEM3 = 3;
+
+reg [2:0] memstate;
+always @(posedge clk100b)
+if (rst)
+begin
+  rdy_n <= `LOW;
+  memstate <= MEM_IDLE;
+end
+else begin
+  case(memstate)
+  // Detect an read access by the cpu flag as not ready
+  MEM_IDLE:
+    if (rw && vra_cs && phi02) begin
+       memstate <= MEM1;
+       rdy_n <= `HIGH;  // ultimately drives the ready line low
+    end
+  // Wait for the cycle to end
+  MEM1:
+    if (!phi02)
+      memstate <= MEM2;
+  // Wait for the cycle to be active again
+  MEM2:
+    if (phi02) begin
+      memstate <= MEM3;
+      rdy_n <= `LOW;    // now drive the ready line back high
+    end
+  // Wait for the cycle to end
+  MEM3:
+    if (!phi02)
+      memstate <= MEM_IDLE;
+  default:
+    memstate <= MEM_IDLE;
+  endcase
+end
 
 //------------------------------------------------------------------------------
 // Address Generation
@@ -602,10 +657,10 @@ begin
   VIC_CF: vicAddr <= vm + vmndx[11:0];
   VIC_CB: 
       begin
-        if (bmm)
+        if (bmm) // bitmap mode
           vicAddr <= {bmmadr[18:15],vmndx[11:0],scanline};
         else
-          vicAddr <= {charsel,nextChar[7:0],scanline};
+          vicAddr <= 19'h7FFFF; // charram access
       end
   VIC_LB: vicAddr <= {bmmadr[18],vmndx};
   VIC_SL: vicAddr <= {vm[18:12],7'b1111111,sprite,1'b0};
@@ -941,8 +996,6 @@ else begin
                 rsel <= db[3];
                 den <= db[4];
                 mode <= db[7:5];
-                bmm <= db[5];
-                ecm <= db[6];
                 end
         7'h5D:  begin
                 xscroll <= db[2:0];
@@ -1004,6 +1057,7 @@ reg [11:0] vCtrLatch;
 always @(posedge clk50)
 begin
   if (phi02d && cs_n==`LOW) begin
+    dbo8 <= 8'hFF;
     case(adr[6:0])
     7'h58:  dbo8 <= m2m[7:0];
     7'h59:  dbo8 <= m2m[15:8];
@@ -1013,11 +1067,11 @@ begin
             dbo8 <= vCtr[7:0];
             vCtrLatch <= vCtr;
             end
-    7'h5F:  dbo8 <= vCtrLatch[11:8];
+    7'h5F:  dbo8 <= {4'h0,vCtrLatch[11:8]};
     7'h60:  dbo8 <= lpx[7:0];
-    7'h61:  dbo8 <= lpx[11:8];
+    7'h61:  dbo8 <= {4'h0,lpx[11:8]};
     7'h62:  dbo8 <= lpy[7:0];
-    7'h63:  dbo8 <= lpy[11:8];
+    7'h63:  dbo8 <= {4'h0,lpy[11:8]};
     7'h65:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
     default:  dbo8 <= regShadow[adr[6:0]];
     endcase 
@@ -1043,18 +1097,9 @@ always @(posedge clk25)
 always @(posedge clk25)
 	vSync <= #1 vSync1;
 
-wire [23:0] color24;
-
-FAL6567_ColorROM u6
-(
-  .clk(clk25),
-  .ce(1'b1),
-  .code(color33),
-  .color(color24)
-);
-assign red = color24[23:20];
-assign green = color24[15:12];
-assign blue = color24[7:4];
+assign red = color[5:4];
+assign green = color[3:2];
+assign blue = color[1:0];
 
 endmodule
 

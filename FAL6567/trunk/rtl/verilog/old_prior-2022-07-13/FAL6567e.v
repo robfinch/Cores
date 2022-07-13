@@ -169,6 +169,7 @@ wire badline;                   // flag bad line condition
 reg den;                        // display enable
 reg rsel, bmm, ecm;
 reg csel, mcm, res;
+reg [17:0] pixadr;				// pixel address for scan conversion
 reg [10:0] preRasterX;
 reg [10:0] rasterX;
 reg [10:0] rasterXMax;
@@ -292,14 +293,14 @@ endcase
 
 FAL6567_clkgen u1
 (
-  .rst(xrst),
-  .xclk(cr_clk),
-  .clk33(clk33),
-  .dcrate(1'b0),
-  .dotclk(dotclk),
-  .clk32(clk32),
-  .clk57(clk57),
-  .locked(locked)
+	.rst(xrst),
+	.xclk(cr_clk),
+	.clk33(clk33),
+	.dcrate(1'b0),
+	.dotclk(dotclk),
+	.clk32(clk32),
+	.clk57(clk57),
+	.locked(locked)
 );
 
 wire rst = !locked;
@@ -885,29 +886,29 @@ end
 
 always @(posedge clk33)
 if (rst) begin
-  scanline <= 3'd0;
+	scanline <= 3'd0;
 end
 else begin
-  if (phi02==`LOW && enaData) begin
-    if (ref5) begin
-      if (badline)
-        scanline <= 3'd0;
-    end
-    if (rasterX2[10:4]==7'h2C)
-      scanline <= scanline + 3'd1;
-  end
+	if (phi02==`LOW && enaData) begin
+		if (ref5) begin
+			if (badline)
+				scanline <= 3'd0;
+		end
+		if (rasterX2[10:4]==7'h2C)
+			scanline <= scanline + 3'd1;
+	end
 end
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 always @*
-  for (n = 0; n < 16; n = n + 1)
-    MActive[n] <= MCnt[n] != 6'd63;
+	for (n = 0; n < MIBCNT; n = n + 1)
+		MActive[n] <= MCnt[n] != 6'd63;
 
 reg [MIBCNT-1:0] collision;
 always @*
-  for (n = 0; n < MIBCNT; n = n + 1)
-    collision[n] = MCurrentPixel[n][1];
+	for (n = 0; n < MIBCNT; n = n + 1)
+		collision[n] = MCurrentPixel[n][1];
 
 // Sprite-sprite collision logic
 always @(posedge clk33)
@@ -980,12 +981,12 @@ end
 
 always @(posedge clk33)
 begin
-  for (n = 0; n < MIBCNT; n = n + 1) begin
-    if (rasterX == 10)
-      MShift[n] <= `FALSE;
-    else if (rasterX == mx[n])
-      MShift[n] <= `TRUE;
-  end
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (rasterX == 10)
+			MShift[n] <= `FALSE;
+		else if (rasterX == mx[n])
+			MShift[n] <= `TRUE;
+	end
 end
 
 always @(posedge clk33)
@@ -1137,16 +1138,16 @@ always @(posedge clk33)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 always @(posedge clk33)
-	begin
-			if (phi02 && enaData && vicCycle == VIC_SPRITE && sprite == 2)
-				rasterIRQDone <= `FALSE;
-			if (irst_clr)
-				irst <= 1'b0;
-			if (rasterIRQDone == 1'b0 && rasterY == rasterCmp) begin
-				rasterIRQDone <= `TRUE;
-				irst <= 1'b1;
-			end
+begin
+	if (phi02 && enaData && vicCycle == VIC_SPRITE && sprite == 2)
+		rasterIRQDone <= `FALSE;
+	if (irst_clr)
+		irst <= 1'b0;
+	if (rasterIRQDone == 1'b0 && rasterY == rasterCmp) begin
+		rasterIRQDone <= `TRUE;
+		irst <= 1'b1;
 	end
+end
 
 //------------------------------------------------------------------------------
 // Light pen
@@ -1652,10 +1653,10 @@ wire [23:0] color24;
 
 FAL6567_ColorROM u6
 (
-  .clk(clk33),
-  .ce(1'b1),
-  .code(color33),
-  .color(color24)
+	.clk(clk33),
+	.ce(1'b1),
+	.code(color33),
+	.color(color24)
 );
 assign red = color24[23:21];
 assign green = color24[15:13];

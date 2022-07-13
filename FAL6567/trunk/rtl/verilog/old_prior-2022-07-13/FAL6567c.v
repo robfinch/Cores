@@ -1,7 +1,10 @@
 // ============================================================================
-// (C) 2016 Robert Finch
-// rob<remove>@finitron.ca
-// All Rights Reserved.
+//        __
+//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
 //
 //	FAL6567.v
 //
@@ -26,11 +29,11 @@
 `define HIGH  1'b1
 
 // An 800x480 display format is created for VGA using the 640x480 standard VGA
-// timing. The dot clock is faster though at 33.3MHz. This allows a 640x400
+// timing. The dot clock is faster though at 32.727MHz. This allows a 640x400
 // display area with a border to be created. This is double the horizontal and
 // vertical resolution of the VIC-II. 
 //
-module FAL6567(chip, clk100, phi02, dotclk, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
+module FAL6567(chip, cr_clk, phi02, dotclk, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -38,14 +41,14 @@ parameter CHIP6572 = 2'd3;
 parameter LEGACY = 1'b1;
 parameter MIBCNT = 16;
 
-// Constants multiplied by 1.333 for 33.33MHz clock
+// Constants multiplied by 1.31 for 32.727MHz clock
 parameter phSyncOn  = 21;     //   16 front porch
-parameter phSyncOff = 146;		//   96 sync
-parameter phBlankOff = 208;		//   48 back porch
-parameter phBorderOff = 304;	//    0 border
-parameter phBorderOn = 944;	  //  640 display
-parameter phBlankOn = 1040;		//    0 border
-parameter phTotal = 1040; 		//  800 total clocks
+parameter phSyncOff = 147;		//   96 sync
+parameter phBlankOff = 210;		//   48 back porch
+parameter phBorderOff = 309;	//    0 border
+parameter phBorderOn = 948;	  //  640 display
+parameter phBlankOn = 1047;		//    0 border
+parameter phTotal = 1047; 		//  800 total clocks
 parameter phSyncPol = 1;
 //
 parameter pvSyncOn  = 10;		//   10 front porch
@@ -78,7 +81,7 @@ parameter VIC_CHAR = 4;  // character acccess cycle
 parameter VIC_G = 5;
 
 input [1:0] chip;
-input clk100;
+input cr_clk;
 output phi02;
 output dotclk;
 output rst_o;
@@ -132,6 +135,7 @@ wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
 
 wire clken8;
+wire clk8;
 reg [32:0] phi0r,phi1r,phi2r,phi02r,phisr;
 wire phi0,phi1,phi2;
 reg phi02,phis;
@@ -256,7 +260,8 @@ endcase
 FAL6567_clkgen u1
 (
   .rst(xrst),
-  .xclk(clk100),
+  .xclk(cr_clk),
+  .clk8(clk8),
   .clk33(clk33),
   .locked(locked)
 );
@@ -1341,11 +1346,10 @@ else begin
     6'h19:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
     6'h1A:  dbo8 <= {4'b1111,elp,emmc,embc,erst};
     6'h1B:  dbo8 <= mdp;
-    6'h1C:  begin  
-            case(regpg)
+    6'h1C:  case(regpg)
             1'd0: dbo8 <= mmc[7:0];
             1'd1: dbo8 <= mmc[15:8];
-            end
+            endcase
     6'h1D:  case(regpg)
             1'd0: dbo8 <= mxe[7:0];
             1'd1: dbo8 <= mxe[15:8];
@@ -1454,8 +1458,7 @@ else begin
                 elp <= db[3];
                 end
         6'h1B:  mdp <= db;
-        6'h1C:  begin
-                case(regpg)
+        6'h1C:  case(regpg)
                 1'd0: mmc[7:0] <= db;
                 1'd1: mmc[15:8] <= db;
                 endcase

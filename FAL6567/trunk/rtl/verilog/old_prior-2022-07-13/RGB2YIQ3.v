@@ -1,39 +1,25 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2002-2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2002-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	RGB2Composite.sv
+//	RGB2YIQ3.v
 //
-// BSD 3-Clause License
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the copyright holder nor the names of its
-//    contributors may be used to endorse or promote products derived from
-//    this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                
-// ============================================================================
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
 //
 //	RGB to COMPOSITE COLOR SPACE CONVERTER
 //	converts 24 bit RGB to Composite
@@ -85,61 +71,61 @@
 //
 // ============================================================================
 //
-module RGB2Composite(clk, ph, colorBurst, colorBurstWindow, cSync, cBlank, r, g, b, co, yo, iq);
+// Might want to adjust this to also account for sync and
+// blanking levels
+`define DC_OFFSET		11'd1178		// -38 * 31
+
+`define SYNC_LEVEL		12'd0			// neg. sync
+`define BLANK_LEVEL		12'd400
+`define BURST_LEVEL		12'd450
+`define BURST_STRENGTH	9
+`define SIGNAL_LEVEL	`BLANK_LEVEL + `DC_OFFSET
+
+module RGB2Composite(clk, ph, r, g, b, co);
 input clk;		// synchronizing clock 57.27272MHz
 input [3:0] ph;	// clock phase 3.58MHz ref (22.5 deg. inc.)
-input colorBurst;
-input colorBurstWindow;
-input cSync;
-input cBlank;
 input [7:0] r;	// red input
 input [7:0] g;	// green input
 input [7:0] b;	// blue input
-output reg [4:0] co;	// composite output
-output reg [3:0] yo;
-output reg [3:0] iq;
 
+// Only 13 bits are useful for composite output
+// (13 bits = 512*5 bits + 1 extra for rounding). However
+// this signal will also need to have sync and blanking levels
+// added.
+output reg [12:0] co;// composite output
+
+reg [6:0] i;
+reg [6:0] q;
 reg signed [5:0] sin;	// sin of angle
 reg signed [5:0] sin90;	// 90 deg. phase shift sin
-reg [24:0] co1,co2;
-reg [5:0] sinp31, sin90p31;
+reg [24:0] co1;
+
 
 // Even though only nine bits are required for the desired
 // accuracy, a couple of extra bits are preserved in the
 // calculations to enhance accuracy.
 
 // Y generation
-reg [16:0] ry, by, gy, y;
-always_ff @(posedge clk)
-	ry <= r * 9'd153;		// 0.30 * R
-always_ff @(posedge clk)
-	by <= b * 9'd56;			// 0.11 * B
-always_ff @(posedge clk)
-	gy <= g * 9'd302;		// 0.59 * G
-always_ff @(posedge clk)
-	y <= (ry + by + gy);		// won't be more than 511*
+wire [16:0] ry = r * 9'd154;			// 0.3 * R
+wire [16:0] by = b * 9'd56;				// 0.11 * B
+wire [16:0] gy = g * 9'd302;			// 0.59 * G
+wire [18:0] y1 = (ry + by + gy);
+
+wire [8:0] y = y1[10:3];
 
 // I generation
-reg [16:0] ri, bi, gi, i;
-always_ff @(posedge clk)
-	ri <= r * 9'd307;		// 0.60 * R
-always_ff @(posedge clk)
-	bi <= b * 9'd164;		// 0.32 * B
-always_ff @(posedge clk)
-	gi <= g * 9'd143;		// 0.28 * G
-always_ff @(posedge clk)
-	i <= (ri - bi - gi) + 9'd307;		// max 0.60 * 512 = +/-307
+wire [16:0] ri = r * 9'd307;			// 0.60 * R
+wire [16:0] bi = b * 9'd164;			// 0.32 * B
+wire [16:0] gi = g * 9'd143;			// 0.28 * G
+wire [18:0] i2 = (ri - bi - gi);	// result could be -38 to +38
+wire [8:0] i1 = i2[11:3];			// preserves sign
 
 // Q generation
-reg [16:0] rq, bq, gq, q;
-always_ff @(posedge clk)
-	rq <= r * 9'd108;		// 0.21 * R
-always_ff @(posedge clk)
-	bq <= b * 9'd159;		// 0.31 * b
-always_ff @(posedge clk)
-	gq <= g * 9'd266;		// 0.52 * g
-always_ff @(posedge clk)
-	q <= (rq + bq - gq) + 9'd266;		// mac 0.52 * 512 = +/-266
+wire [16:0] rq = r * 9'd108;			// 0.21 * R
+wire [16:0] bq = b * 9'd159;				// 0.31 * b
+wire [16:0] gq = g * 9'd266;			// 0.52 * g
+wire [18:0] q2 = (rq + bq - gq);	// result could be -33 to +33
+wire [8:0] q1 = q2[11:3];
 
 // IM and QM generation
 // im and qm are modulated i and q signals, where the i, q
@@ -147,24 +133,37 @@ always_ff @(posedge clk)
 // that varies in amplitude from -31 to +31. To keep the
 // y signal on the same scale it is also multiplied by
 // 32.
-reg [22:0] im;
-reg [22:0] qm;
-reg [22:0] ym;
-reg [22:0] iq1;
-reg [22:0] yo1;
+reg signed [24:0] im;
+reg signed [24:0] qm;
+reg signed [24:0] ym;
+reg signed [24:0] im2;	// modulation results - complex
+reg signed [24:0] qm2;
+reg signed [24:0] ym2;
 
-always_ff @(posedge clk)
-	im <= i * sinp31;
-always_ff @(posedge clk)
-	qm <= q * sin90p31;
-always_ff @(posedge clk)
-	ym <= y * 48;		// keep ym the same scale
+always @(posedge clk)
+	im2 <= $signed(i2) * $signed(sin);
+always @(posedge clk)
+	qm2 <= $signed(q2) * $signed(sin90);
+always @(posedge clk)
+	ym2 <= ym << 5;		// keep ym the same scale
+
+// phase delay color subcarrier by 90 deg (4 clocks)
+reg [3:0] ph90;
+always @(posedge clk)
+	ph90 <= {ph90[2:0],ph[3]};
+
+always @*
+begin
+	ym <= ym2;
+	im <= im2;
+	qm <= qm2;
+end
 
 // A simple sin lookup table is used because there are only
 // 16 values needed, (assuming a 16x 3.58MHz (57.28MHz) clock
 // is in use). To get a smoother curve a much higher clock
 // frequency is required, which isn't practical.
-always_comb begin
+always @(ph) begin
 	case (ph)
 	4'h0:	sin <= 0;
 	4'h1:	sin <= 12;
@@ -202,27 +201,13 @@ always_comb begin
 	4'hf:	sin90 <= -12;
 	endcase
 end
-always_ff @(posedge clk)
-	sinp31 <= sin + 6'd31;
-always_ff @(posedge clk)
-	sin90p31 <= sin90 + 6'd31;
 
-always_ff @(posedge clk) begin
-	// Last step: create uni-polar output by adding in the
-	// maximum negative offset that could occur.
+always @(posedge clk) begin
 	co1 <= im + qm + ym;
-	if (!cBlank)
-		co <= ((co1[24:19] + 8) * 27) >> 5;
-	else
-		co <= (cSync * 8) + (colorBurstWindow ? ((sinp31 >> 2) - 6) : 0);
-//		co <= (cSync * 6) + (colorBurstWindow ? $signed((colorBurst * 8) - 4) : 0);
-	iq1 <= im + qm;
-	iq <= iq1[22:19];
-	yo1 <= ym;
-	if (!cBlank)
-		yo <= yo1[22:19] + 4;
-	else
-		yo <= (cSync * 3) + (colorBurstWindow ? ((sinp31 >> 2) - 2) : 0);
+	// Last step: create uni-polar output by adding in the
+	// maximum negative offset (31*-38) that could occur.
+	co <= $signed(co1[24:20]) + $signed(5'd16);
 end
 
 endmodule
+
