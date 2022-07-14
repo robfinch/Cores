@@ -37,16 +37,45 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_CycleDecode(chip, col80, preRasterX, vicCycle);
+module FAL6567_CycleDecode(rst, clk, delay, enaData, phi02, chip, col80, preRasterX, vicCycle);
+input rst;
+input clk;
+input [6:0] delay;
+input enaData;
+input phi02;
 input [1:0] chip;
 input col80;
 input [10:0] preRasterX;
 output reg [2:0] vicCycle;
 
 wire [10:0] rasterX2 = {preRasterX,1'b0};
+reg [10:0] vicCycNuma [0:127];
+reg [10:0] vicCycNum;
+integer n;
+always_ff @(posedge clk)
+if (rst) begin
+	for (n = 0; n < 128; n = n + 1)
+		vicCycNuma[n] <= 11'd0;
+end
+else begin
+	if (!phi02 & enaData) begin
+		vicCycNuma[0] <= rasterX2;
+		for (n = 0; n < 128; n = n + 1)
+			vicCycNuma[n+1] <= vicCycNuma[n];
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	vicCycNum <= 11'd0;
+else begin
+	if (!phi02 & enaData)
+		vicCycNum <= vicCycNuma[delay];
+end
+
 always_comb
 if (col80) begin
-	casez(rasterX2)
+	casez(vicCycNum)
 	11'h00?: vicCycle <= VIC_REF;
 	11'h01?: vicCycle <= VIC_REF;
 	11'h02?: vicCycle <= VIC_REF;
@@ -132,7 +161,7 @@ if (col80) begin
 	11'h51?: vicCycle <= VIC_CHAR;
 	11'h52?: vicCycle <= VIC_CHAR;
 	default:
-	casez(rasterX2)
+	casez(vicCycNum)
 	11'h53?: vicCycle <= VIC_G;
 	11'h54?: vicCycle <= VIC_IDLE;
 	11'h55?: vicCycle <= VIC_IDLE;
@@ -196,7 +225,7 @@ if (col80) begin
 	endcase
 end
 else begin
-	casez(rasterX2)
+	casez(vicCycNum)
 	11'h00?: vicCycle <= VIC_REF;
 	11'h01?: vicCycle <= VIC_REF;
 	11'h02?: vicCycle <= VIC_REF;
@@ -241,7 +270,7 @@ else begin
 	11'h29?: vicCycle <= VIC_CHAR;
 	11'h2A?: vicCycle <= VIC_CHAR;
 	default:
-	casez(rasterX2)
+	casez(vicCycNum)
 	11'h2B?: vicCycle <= VIC_G;
 	11'h2C?: vicCycle <= VIC_IDLE;
 	11'h2D?: vicCycle <= VIC_IDLE;

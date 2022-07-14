@@ -502,6 +502,11 @@ FAL6567_RasterXY urxy1
 
 FAL6567_CycleDecode ucycd1
 (
+	.rst(rst),
+	.clk(clk33),
+	.delay(7'd12),
+	.phi02(phi02),
+	.enaData(enaData),
 	.chip(chip),
 	.col80(col80),
 	.preRasterX(preRasterX),
@@ -656,7 +661,7 @@ else begin
 			vmndx <= 11'd0;
 		if ((vicCycle==VIC_CHAR||vicCycle==VIC_G) && badline)
 			vmndx <= vmndx + 1;
-		if (rasterX2[10:4]==7'h2C) begin
+		if (rasterX2[10:4]==7'h3E) begin	// was 2c
 			if (scanline==3'd7)
 				vmndxStart <= vmndx;
 			else
@@ -976,7 +981,7 @@ FAL6567_sync usg1
 FAL6567_blank ublnk
 (
 	.chip(chip),
-	.clk33(clk33),
+	.clk(clk33),
 	.col80(col80),
 	.rasterX(rasterX),
 	.rasterY(rasterY),
@@ -997,9 +1002,13 @@ else
 
 FAL6567_borders ubrdr1
 (
-	.clk33(clk33),
+	.clk(clk33),
 	.den(den),
 	.col80(col80),
+	.vBorderOn(9'd251),
+	.vBorderOff(9'd51),
+	.hBorderOn(11'd452),
+	.hBorderOff(11'd132),
 	.rsel(rsel),
 	.csel(csel),
 	.rasterX(rasterX),
@@ -1211,7 +1220,9 @@ if (rst) begin
 	b3c <= 4'h0;
 	yscroll <= 3'd0;
 	xscroll <= 3'd0;
-	den = `TRUE;
+	den <= `TRUE;
+	csel <= 1'b1;
+	rsel <= 1'b1;
 	me <= 16'h0;
 	for (n14 = 0; n14 < MIBCNT; n14 = n14 + 1) begin
 		mx[n14] = 9'd200;

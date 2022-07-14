@@ -37,10 +37,16 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_borders(clk33, den, col80, rsel, csel, rasterX, rasterY, hBorder, vBorder, border);
-input clk33;
+module FAL6567_borders(clk, den, col80, 
+	vBorderOn, vBorderOff, hBorderOff, hBorderOn,
+	rsel, csel, rasterX, rasterY, hBorder, vBorder, border);
+input clk;
 input den;
 input col80;
+input [8:0] vBorderOn;
+input [8:0] vBorderOff;
+input [10:0] hBorderOn;
+input [10:0] hBorderOff;
 input rsel;
 input csel;
 input [10:0] rasterX;
@@ -49,42 +55,42 @@ output reg hBorder;
 output reg vBorder;
 output border;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 begin
 	vBorder <= `TRUE;
 	if (den) begin
 		if (rsel) begin
-			if (rasterY >= 9'd51 && rasterY <= 9'd251)
+			if (rasterY >= vBorderOff && rasterY <= vBorderOn)
 				vBorder <= `FALSE;
 		end
 		else begin
-			if (rasterY >= 9'd55 && rasterY <= 9'd247)
+			if (rasterY >= vBorderOff + 3'd4 && rasterY <= vBorderOn - 3'd4)
 				vBorder <= `FALSE;
 		end
 	end
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 begin
 	hBorder <= `TRUE;
 	if (den) begin
 		if (col80) begin
 			if (csel) begin
-				if (rasterX >= 11'd25 && rasterX <= 11'd665)
+				if (rasterX >= hBorderOff && rasterX <= hBorderOn + 11'd320)
 					hBorder <= `FALSE;
 			end
 			else begin
-				if (rasterX >= 11'd32 && rasterX <= 11'd656)
+				if (rasterX >= hBorderOff + 3'd7 && rasterX <= hBorderOn + 11'd312)
 					hBorder <= `FALSE;
 			end
 		end
 		else begin
 			if (csel) begin
-				if (rasterX >= 11'd25 && rasterX <= 11'd345)
+				if (rasterX >= hBorderOff && rasterX <= hBorderOn)
 					hBorder <= `FALSE;
 			end
 			else begin
-				if (rasterX >= 11'd32 && rasterX <= 11'd336)
+				if (rasterX >= hBorderOff + 3'd7 && rasterX <= hBorderOn - 4'd9);
 					hBorder <= `FALSE;
 			end
 		end

@@ -38,7 +38,8 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module FAL6567_sync(chip, rst, clk, rasterX, rasterY, hSync, vSync, cSync, burstWindow);
+module FAL6567_sync(chip, rst, clk, rasterX, rasterY, 
+	hSync, vSync, cSync, burstWindow);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -135,16 +136,16 @@ reg [10:0] burstWindowEnd;
 always @(posedge clk)
 case(chip)
 CHIP6567R8,CHIP6567OLD:
-	burstWindowBegin <= 11'd43;
+	burstWindowBegin <= 11'd48;
 CHIP6569,CHIP6572:
-	burstWindowBegin <= 11'd44;
+	burstWindowBegin <= 11'd49;
 endcase
 always @(posedge clk)
 case(chip)
 CHIP6567R8,CHIP6567OLD:
-	burstWindowEnd <= 11'd63;
+	burstWindowEnd <= 11'd84;
 CHIP6569,CHIP6572:
-	burstWindowEnd <= 11'd62;
+	burstWindowEnd <= 11'd83;
 endcase
 reg burstWindow;
 always @(posedge clk)

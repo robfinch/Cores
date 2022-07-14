@@ -37,9 +37,9 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_blank(chip, clk33, col80, rasterX, rasterY, vBlank, hBlank, blank);
+module FAL6567_blank(chip, clk, col80, rasterX, rasterY, vBlank, hBlank, blank);
 input [1:0] chip;
-input clk33;
+input clk;
 input col80;
 input [10:0] rasterX;
 input [8:0] rasterY;
@@ -47,7 +47,7 @@ output reg vBlank;
 output reg hBlank;
 output blank;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 begin
 	vBlank <= `FALSE;
 	case(chip)
@@ -62,12 +62,12 @@ end
 
 reg [10:0] hBlankOff;
 reg [10:0] hBlankOn;
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 	hBlankOff <= 11'd88;
-always_ff @(posedge clk33)
-	hBlankOn <= col80 ? 11'd828 : 11'd508;
+always_ff @(posedge clk)
+	hBlankOn <= col80 ? 11'd812 : 11'd492;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 begin
 	hBlank <= `FALSE;
 	if (rasterX < hBlankOff)		// 15%
