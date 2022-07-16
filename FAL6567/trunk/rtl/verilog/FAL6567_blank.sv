@@ -65,14 +65,14 @@ reg [10:0] hBlankOn;
 always_ff @(posedge clk)
 	hBlankOff <= 11'd88;
 always_ff @(posedge clk)
-	hBlankOn <= col80 ? 11'd812 : 11'd492;
+	hBlankOn <= 11'd492;
 
 always_ff @(posedge clk)
 begin
 	hBlank <= `FALSE;
-	if (rasterX < hBlankOff)		// 15%
+	if (col80 ? rasterX < {hBlankOff,1'b0} : rasterX < hBlankOff)		// 15%
 		hBlank <= `TRUE;
-	else if (rasterX >= hBlankOn)	// 97.2%
+	else if (col80 ? rasterX >= {hBlankOn,1'b0} : rasterX >= hBlankOn)	// 97.2%
 		hBlank <= `TRUE;
 end
 

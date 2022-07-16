@@ -37,11 +37,11 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_SpritePixelShifter(rst, clk, clken8, phi02, enaData, 
+module FAL6567_SpritePixelShifter(rst, clk, dotclk_en, phi02, enaData, 
 	sprite1, vicCycle, MActive, MShift, mClkShift, mmc, db, sprite, MCurrentPixel);
 input rst;
 input clk;
-input clken8;
+input dotclk_en;
 input phi02;
 input enaData;
 input [8:0] sprite1;
@@ -63,7 +63,7 @@ if (rst) begin
 		MPixels[n11] <= 24'h0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		for (n11 = 0; n11 < MIBCNT; n11 = n11 + 1) begin
 			if (MShift[n11]) begin
 				if (mClkShift[n11]) begin
@@ -97,7 +97,7 @@ if (rst) begin
 		MCurrentPixel[n12] <= 2'b00;
 end
 else begin
-	if (clken8)
+	if (dotclk_en)
 		for (n12 = 0; n12 < MIBCNT; n12 = n12 + 1) begin
 			if (MShift[n12])
 				MCurrentPixel[n12] <= MPixels[n12][23:22];

@@ -35,9 +35,9 @@
 //                                                                
 // ============================================================================
 //
-module FAL6567_PixelShifter(clk, clken8, ismc, load, shift, pixels_i, pixels_o);
+module FAL6567_PixelShifter(clk, dotclk_en, ismc, load, shift, pixels_i, pixels_o);
 input clk;
-input clken8;
+input dotclk_en;
 input ismc;
 input load;
 input shift;
@@ -46,7 +46,7 @@ output reg [7:0] pixels_o;
 
 // Pixel shifter
 always_ff @(posedge clk)
-if (clken8) begin
+if (dotclk_en) begin
 	if (load)
 		pixels_o <= pixels_i;
 	else if (shift) begin

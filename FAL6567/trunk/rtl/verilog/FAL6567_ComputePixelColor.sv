@@ -35,11 +35,11 @@
 //                                                                
 // ============================================================================
 //
-module FAL6567_ComputePixelColor(rst, clk, clken8, ecm, bmm, mcm, pixelColor,
+module FAL6567_ComputePixelColor(rst, clk, dotclk_en, ecm, bmm, mcm, pixelColor,
 	shiftingPixels, shiftingChar, b0c, b1c, b2c, b3c);
 input rst;
 input clk;
-input clken8;
+input dotclk_en;
 input ecm;		// extended color mode
 input bmm;		// bitmap mode
 input mcm;		// multi-color mode
@@ -56,7 +56,7 @@ always_ff @(posedge clk)
 if (rst)
 	pixelColor <= 4'h0;
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		pixelColor <= 4'h0; // black
 		case({ecm,bmm,mcm})
 		3'b000:	// Text mode

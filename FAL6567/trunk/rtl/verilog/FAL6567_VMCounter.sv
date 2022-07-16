@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FAL6567_pkg.sv
+//	FAL6567_VMCounter.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -35,43 +35,59 @@
 //                                                                
 // ============================================================================
 //
-package FAL6567_pkg;
+import FAL6567_pkg::*;
 
-`define TRUE  1'b1
-`define FALSE 1'b0
-`define LOW   1'b0
-`define HIGH  1'b1
+module FAL6567_VMCounter(rst, clk, col80, phi02, enaData, badline, vicCycle, 
+	scanline, rasterX2, rasterY, rasterYMax, vmndx);
+input rst;
+input clk;
+input col80;
+input phi02;
+input enaData;
+input badline;
+input [2:0] vicCycle;
+input [2:0] scanline;
+input [10:0] rasterX2;
+input [8:0] rasterY;
+input [8:0] rasterYMax;
+output reg [10:0] vmndx;
 
-parameter PAL = 1'b0;
-parameter CHIP6567R8 = 2'd0;
-parameter CHIP6567OLD = 2'd1;
-parameter CHIP6569 = 2'd2;
-parameter CHIP6572 = 2'd3;
-parameter LEGACY = 1'b1;
-parameter MIBCNT = 16;
+reg [10:0] vmndxStart;
 
-parameter pSimRasterEnable = 48;
+always_ff @(posedge clk)
+if (rst) begin
+	vmndx <= 11'd0;
+	vmndxStart <= 11'd0;
+end
+else begin
+	if (col80) begin
+		if (enaData) begin
+			if (rasterY==rasterYMax)
+				vmndx <= 11'd0;
+			if (vicCycle==VIC_CHAR && badline)
+				vmndx <= vmndx + 1;
+			if (rasterX2[10:4]==7'h3E) begin	// was 2c
+				if (scanline==3'd7)
+					vmndxStart <= vmndx;
+				else
+					vmndx <= vmndxStart;
+			end
+		end
+	end
+	else begin
+		if (phi02 && enaData) begin
+			if (rasterY==rasterYMax)
+				vmndx <= 11'd0;
+			if ((vicCycle==VIC_CHAR||vicCycle==VIC_G) && badline)
+				vmndx <= vmndx + 1;
+			if (rasterX2[10:4]==7'h3E) begin	// was 2c
+				if (scanline==3'd7)
+					vmndxStart <= vmndx;
+				else
+					vmndx <= vmndxStart;
+			end
+		end
+	end
+end
 
-parameter TRUE = 1'b1;
-parameter FALSE = 1'b0;
-parameter SIM = 1'b0;
-
-parameter BUS_IDLE = 0;
-parameter BUS_SPRITE = 1;
-parameter BUS_REF = 2;
-parameter BUS_CG = 3;
-parameter BUS_G = 4;
-parameter BUS_LS = 5;
-parameter BUS_CHARBMP = 7;
-
-// VIC state machine states
-parameter VIC_IDLE = 0;   // idle cycle
-parameter VIC_SPRITE = 1; // sprite cycle
-parameter VIC_REF = 2;   // refresh cycle
-parameter VIC_RC = 3;
-parameter VIC_CHAR = 4;  // character acccess cycle
-parameter VIC_G = 5;
-parameter VIC_PAL = 6;	// palette initialization
-parameter VIC_CHARBMP = 7;
-
-endpackage
+endmodule

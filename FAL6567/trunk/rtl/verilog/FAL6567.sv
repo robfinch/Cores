@@ -1,129 +1,136 @@
 // ============================================================================
-// (C) 2016 Robert Finch
-// rob<remove>@finitron.ca
-// All Rights Reserved.
+//        __
+//   \\__/ o\    (C) 2016-2022  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
-//	FAL6567.v
+//	FAL6567.sv
 //
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                                
+// Requires 134kB of block RAM
 // ============================================================================
 //
-// An 800x480 display format is created for VGA using the 640x480 standard VGA
-// timing. The dot clock is faster though at 33.333MHz. This allows a 640x400
-// display area with a border to be created. This is double the horizontal and
-// vertical resolution of the VIC-II. 
-//
-module FAL6567(chip, clk100, phi02, irq, aec, ba, cs_n, rw, ad, db, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
-parameter CHIP6567R8 = 2'd0;
-parameter CHIP6567OLD = 2'd1;
-parameter CHIP6569 = 2'd2;
-parameter CHIP6572 = 2'd3;
+import FAL6567_pkg::*;
+`define TRUE  1'b1
+`define FALSE 1'b0
+`define LOW   1'b0
+`define HIGH  1'b1
 
-// Constants multiplied by 1.333 for 33.33MHz clock
-parameter phSyncOn  = 21;     //   16 front porch
-parameter phSyncOff = 146;		//   96 sync
-parameter phBlankOff = 208;		//   48 back porch
-parameter phBorderOff = 304;	//    0 border
-parameter phBorderOn = 944;	  //  640 display
-parameter phBlankOn = 1040;		//    0 border
-parameter phTotal = 1040; 		//  800 total clocks
+
+// There are two clock generators used. One for DVI / HDMI VGA timing and a 
+// second one for bus interfacing.
+// 800x600 standard VGA timing is used. The VGA dot clock is 40.0 MHz (40.00142 NTSC
+// and 39.99124 PAL).
+// A five times clock (200MHz) is needed to drive the DVI interface.
+// For bus timing:
+// The 32.71705MHz clock was carefully selected as being on the high side of 32MHz
+// given an input clock of 14.318MHz. Dividing 32.71705 by 32 gives a phi02 clock
+// of 1.022MHz, really close to that normally supplied by the VIC-II.
+//
+module FAL6567(sysclk, phi02, rst_o, irq, aec, ba,
+	cs_n, rw, ad, db, db811, den_n, dir, ras_n, cas_n, lp_n,
+	TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
+	luma, chroma
+);
+parameter pSymRasterEnable = 48;
+parameter SIM = 0;
+
+// Constants multiplied by 1.299... for 32.71705MHz clock
+parameter phSyncOn  = 16;       //   16 front porch
+parameter phSyncOff = 112;		//   96 sync
+parameter phBlankOff = 160;		//   48 back porch
+parameter phBorderOff = 288;	//    0 border
+parameter phBorderOn = 928;	    //  640 display
+parameter phBlankOn = 1056;		//    0 border
+parameter phTotal = 1056; 		//  800 total clocks
 parameter phSyncPol = 1;
 //
-parameter pvSyncOn  = 10;		//   10 front porch
-parameter pvSyncOff = 12;		//    2 vertical sync
-parameter pvBlankOff = 45;		//   33 back porch
-parameter pvBorderOff = 85;		//    0 border	0
-parameter pvBorderOn = 485;		//  480 display
-parameter pvBlankOn = 525;  	//    0 border	0
-parameter pvTotal = 525;		//  525 total scan lines
+parameter pvSyncOn  = 1;		//   1 front porch
+parameter pvSyncOff = 5;		//    4 vertical sync
+parameter pvBlankOff = 28;		//   23 back porch
+parameter pvBorderOff = 128;		//  100 border	0
+parameter pvBorderOn = 528;		//  400 display
+parameter pvBlankOn = 628;  	//    100 border	0
+parameter pvTotal = 628;		//  628 total scan lines
 parameter pvSyncPol = 1;        // neg. polarity
 
-parameter MIB0P  = 9'd58;
-parameter MIB0S0 = 9'd59;
-parameter MIB0S1 = 9'd60;
-parameter MIB0S2 = 9'd61;
-parameter MIB1P  = 9'd62;
-parameter MIB1S0 = 9'd63;
-parameter MIB1S1 = 9'd64;
-parameter MIB1S2 = 9'd65;
-parameter MIB2P  = 9'd1;
-parameter MIB2S0 = 9'd2;
-parameter MIB2S1 = 9'd3;
-parameter MIB2S2 = 9'd4;
-parameter MIB3P  = 9'd5;
-parameter MIB3S0 = 9'd6;
-parameter MIB3S1 = 9'd7;
-parameter MIB3S2 = 9'd8;
-parameter MIB4P  = 9'd8;
-parameter MIB4S0 = 9'd10;
-parameter MIB4S1 = 9'd11;
-parameter MIB4S2 = 9'd12;
-parameter MIB5P  = 9'd13;
-parameter MIB5S0 = 9'd14;
-parameter MIB5S1 = 9'd15;
-parameter MIB5S2 = 9'd16;
-parameter MIB6P  = 9'd17;
-parameter MIB6S0 = 9'd18;
-parameter MIB6S1 = 9'd19;
-parameter MIB6S2 = 9'd20;
-parameter MIB7P  = 9'd21;
-parameter MIB7S0 = 9'd22;
-parameter MIB7S1 = 9'd23;
-parameter MIB7S2 = 9'd24;
-
-parameter REFRSH1 = 9'd25;
-parameter REFRSH2 = 9'd26;
-parameter REFRSH3 = 9'd27;
-parameter REFRSH4 = 9'd28;
-parameter REFRSH5 = 9'd29;
-
-parameter TRUE = 1'b1;
-parameter FALSE = 1'b0;
-parameter SIM = 1'b1;
-
-input [1:0] chip;
-input clk100;
+input sysclk;           // color reference clcck (14.31818)
 output phi02;
+output rst_o;
 output irq;
 output reg aec;
-output reg ba;
+output ba;
 input cs_n;
 input rw;
-inout [13:0] ad;
-inout tri [11:0] db;
+inout [7:0] ad;
+inout tri [7:0] db;
+input [3:0] db811;
+output den_n;
+output dir;
 output ras_n;
 output cas_n;
 input lp_n;
-output reg hSync, vSync;	// sync outputs
-output [3:0] red;
-output [3:0] green;
-output [3:0] blue;
+
+output TMDS_OUT_clk_p;
+output TMDS_OUT_clk_n;
+output [2:0] TMDS_OUT_data_p;
+output [2:0] TMDS_OUT_data_n;
+
+output [3:0] luma;
+output [3:0] chroma;
+
+reg [3:0] p;
+reg blank_n;
+reg synclk;		// sync+lum clocking
+reg colclk;		// color clocking
+reg hSync, vSync;	// sync outputs
 
 integer n;
-wire clk33;
-wire irq_n;
-assign irq = !irq_n;
-reg [13:0] ado;
-reg [13:0] ado1;
-reg [7:0] p;
-reg vSync8,hSync8;
-reg [3:0] color8;
-wire [3:0] color33;
+wire cs = !cs_n;
+wire clk164;	// 163.58525 MHz
+wire clk33;		//  32.71705 MHz
+wire clk200;
+wire clk40;
+wire clk16xBurst;
+wire colorBurst;
+wire colorBurstWindow;
+wire cSync;
+reg [7:0] regShadow [127:0];
+
+reg [7:0] ado;
+wire vSync8,hSync8;
+wire [3:0] pixelColor;
+wire [3:0] color8;
+wire [3:0] color40;
+wire [23:0] RGB, RGB8;
 reg blank;			// blanking output
 reg border;
-reg [7:0] regno;
 wire vBlank, hBlank;
 wire vBorder, hBorder;
 wire hSync1,vSync1;
@@ -141,64 +148,105 @@ reg vSyncPol;
 wire wr = !rw;
 wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
+reg col80 = 1'b0;
 
-reg [8:0] state;
-reg den;
+reg [1:0] chip;
+wire locked1, locked2, locked3;
+wire dotclk_en;
+
+wire phi0,phi1;
+wire phi02,phis;
+wire [31:0] phi02r;
+wire mux;
+wire enaData,enaSData;
+wire vicRefresh;
+wire vicAddrValid;
+reg [7:0] dbo8;
+wire [7:0] dbo33 = 8'h00;
+
+wire badline;                   // flag bad line condition
+reg optNoBadlines;
+reg den;                        // display enable
 reg rsel, bmm, ecm;
 reg csel, mcm, res;
-reg mcmff;
-reg [7:0] refcntr;
-reg [31:0] phi02r;
-reg [31:0] rasr;
-reg [31:0] casr;
-reg [31:0] hce;
-reg [10:0] rasterX;
-wire [7:0] column = rasterX[10:3];
+wire [10:0] preRasterX;
+wire [10:0] rasterX;
 reg [10:0] rasterXMax;
-reg [8:0] rasterY;
-reg [8:0] nextRasterY;
+wire [8:0] preRasterY;
+wire [8:0] rasterY;
+wire [8:0] nextRasterY;
 reg [8:0] rasterCmp;
 reg [8:0] rasterYMax;
 reg [8:0] nextRaster;
 reg [2:0] yscroll;
 reg [2:0] xscroll;
-reg [9:0] charCount;
-reg [5:0] charCountX;
-reg [2:0] charRow;
-reg [7:0] charBmp;
-wire [15:0] selp;
-wire [15:0] sels;
-wire [15:0] selsa;
-wire [15:0] selsb;
-wire [15:0] selsc;
-wire [15:0] selsd;
-wire [15:0] sprrst;
-reg [7:0] mbuf [0:15][0:63];
-reg [15:0] mactive;
-reg [5:0] mcnt [0:15];
-reg [8:0] mx [0:15];
-reg [7:0] my [0:15];
-reg [15:0] me;
-reg [15:0] mye;
-reg [15:0] myeff;
-reg [15:0] mxe;
-reg [15:0] mxeff;
-reg [7:0] mdp;
-reg [15:0] mmc;
-reg [3:0] mc [0:15];
-reg [3:0] mm0;
-reg [3:0] mm1;
-reg [23:0] mshift [0:7];
-reg [13:11] cb;
-reg [13:10] vm;
-reg [15:0] charbuf [0:63];
-wire locked;
-wire balo;
-// Interrupt enable
-reg erst;
-reg embc;
-reg emmc;
-reg elpc;
+reg [7:0] lpx, lpy;
+
+// color regs
+reg [3:0] ec, ec1;
+reg [3:0] mm0,mm1;
+reg [3:0] b0c,b1c,b2c,b3c;
+
+reg [2:0] vicCycleNext,vicCycle;  // cycle the VIC state machine is in
+reg [2:0] busCycle;              // BUS cycle type
+wire [7:0] refcntr;
+reg ref5;
+
+reg pixelBgFlag;
+
+// Character mode vars
+wire [10:0] vmndx;                  // video matrix index
+wire [11:0] nextChar;
+wire [11:0] charbuf [78:0];
+wire [2:0] scanline;
+
+reg [3:0] sprite;
+reg [MIBCNT-1:0] MActive;
+wire [7:0] MPtr [MIBCNT-1:0];
+reg [5:0] MCnt [MIBCNT-1:0];
+reg [8:0] mx [MIBCNT-1:0];
+reg [7:0] my [MIBCNT-1:0];
+reg [3:0] mc [MIBCNT-1:0];
+reg [MIBCNT-1:0] mmc;
+reg [MIBCNT-1:0] me;
+reg [MIBCNT-1:0] mye, mye_ff;
+reg [MIBCNT-1:0] mxe, mClkShift;
+reg [MIBCNT-1:0] mdp;
+reg [MIBCNT-1:0] MShift;
+reg [23:0] MPixels [MIBCNT-1:0];
+reg [1:0] MCurrentPixel [MIBCNT-1:0];
+reg [MIBCNT-1:0] m2m, m2d;
+reg m2mhit, m2dhit;
+reg [13:0] cb;
+reg [13:0] vm;
+reg [5:0] regno;
+reg [1:0] regpg;  // register set page for sprites
+
+reg [4:0] ram_page;
+reg [13:0] addr;
+wire [13:0] vicAddr;
+wire [31:0] stc;
+wire stCycle = stc[31];
+wire stCycle1 = stc[0];
+wire stCycle2 = stc[1];
+wire stCycle3 = stc[2];
+wire [18:0] sc_ram_wadr, sc_ram_radr;
+wire [7:0] sc_ram_dato;
+reg sc_ram_rlatch;
+
+reg [8:0] sprite1;
+reg [3:0] sprite2,sprite3,sprite4,sprite5;
+reg [10:0] rasterX3;
+
+reg [11:0] shiftingChar,waitingChar,readChar;
+wire [7:0] shiftingPixels;
+reg [7:0] waitingPixels,readPixels;
+
+// Interrupt bits
+reg irst;
+reg ilp;
+reg immc;
+reg imbc;
 
 reg irst_clr;
 reg imbc_clr;
@@ -206,695 +254,1178 @@ reg immc_clr;
 reg ilp_clr;
 reg irq_clr;
 
-// colors
-reg [3:0] ec;
-reg [3:0] b0c, b1c, b2c, b3c;
-reg [3:0] colorChar;
-reg [4:0] mcolor [0:15];
+reg erst;
+reg embc;
+reg emmc;
+reg elp;
 
-reg [31:0] clk1r;
-reg [31:0] clk2r;
-reg [31:0] clk8r;
-wire clken1, clken1x;
-wire clken2;
-wire clken8;
-reg [31:0] muxr;
-wire vicRefresh;
-wire [7:0] dbo8;
-wire [7:0] dbo33 = 8'h00;
+assign irq = (ilp & elp) | (immc & emmc) | (imbc & embc) | (irst & erst); 
+ 
+reg rasterIRQDone;
 
-assign db = (aec && !cs_n && rw) ? (ad[5:0] < 6'h30 ? {4'h0,dbo8} : {4'h0,dbo33}) : 12'bz;   
+// VIC-II timing
+wire hVicBlank;
+wire vVicBlank;
+wire vicBlank;
+wire hVicBorder;
+wire vVicBorder;
+wire vicBorder;
 
-reg [21:0] rstcntr;
-wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
+reg rst_pal = 0;
+wire pi_req;
+reg pi_ack;
+wire [7:0] pi_adr;
+wire [7:0] pi_dat;
+
+reg vwr;
+reg [18:0] vadr;
+reg [7:0] vdat;
+reg [7:0] vdatr;
+
+reg useimem = 1'b0;
+reg [7:0] imemout, imemout2;
+reg [3:0] icmemout, icmemout2;
+/*
+reg [13:0] imemAddr,imemAddrr,vicAddrr;
+reg [7:0] imemData;
+reg wrimem,wricmem;
+reg [7:0] imem [0:16383];
+reg [3:0] icmem [0:16383];
+always_ff @(posedge clk33)
+	vicAddrr <= vicAddr;
+always_ff @(posedge clk33)
+	imemAddrr <= imemAddr;
+always_ff @(posedge clk33)
+	imemout <= imem[vicAddrr];
+always_ff @(posedge clk33)
+	imemout2 <= imem[imemAddrr];
+always_ff @(posedge clk33)
+	if (wrimem)
+		imem[imemAddrr] <= imemData;
+always_ff @(posedge clk33)
+	icmemout <= icmem[vicAddrr];
+always_ff @(posedge clk33)
+	if (wricmem)
+		icmem[imemAddrr] <= imemData[3:0];
+*/
+reg [10:0] chargenAdr;
+reg [7:0] chargenROM [0:2047];
+reg [7:0] charbmpOut;
+reg charbmpFetchFlag = 1'b0;
+reg charbmpFetchDone = 1'b0;
 always @(posedge clk33)
+if (phi02==`LOW && enaData && vicCycle==VIC_CHARBMP)
+	if (vicAddr=={cb[13:11],8'hFF,3'h7})
+		charbmpFetchDone <= `TRUE;
+	else
+		charbmpFetchDone <= `FALSE;
+always @(posedge clk33)
+if (phi02==`LOW && enaData && vicCycle==VIC_CHARBMP)
+	chargenROM[vicAddr[10:0]] <= db;
+always @(posedge clk33)
+if (enaData)
+	chargenAdr <= {nextChar[7:0],scanline};
+always @(posedge clk33)
+	charbmpOut <= chargenROM[chargenAdr];
+
+reg [21:0] rstcntr = 0;
+wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
+always_ff @(posedge sysclk)
 if (xrst)
   rstcntr <= rstcntr + 4'd1;
 
-FAL6567_clkgen u1
-(
-  .rst(xrst),
-  .xclk(clk100),
-  .clk33(clk33),
-  .locked(locked)
-);
-
-wire rst = !locked;
-
 // Set Limits
+// Yes, this is clocked because we want the outputs to come from ff's not
+// combo logic.
 always_ff @(posedge clk33)
 case(chip)
-CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = {7'd64,3'b111}; end
-CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = {7'd63,3'b111}; end
-CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
-CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
+CHIP6567R8:   rasterYMax = 9'd262;
+CHIP6567OLD:  rasterYMax = 9'd261;
+CHIP6569:     rasterYMax = 9'd311;
+CHIP6572:     rasterYMax = 9'd311;
 endcase
+always_ff @(posedge clk33)
+if (col80)
+	case(chip)
+	CHIP6567R8:   rasterXMax = {8'd129,3'b111};
+	CHIP6567OLD:  rasterXMax = {8'd128,3'b111};
+	CHIP6569:     rasterXMax = {8'd126,3'b111};
+	CHIP6572:     rasterXMax = {8'd126,3'b111};
+	endcase
+else
+	case(chip)
+	CHIP6567R8:   rasterXMax = {8'd64,3'b111};
+	CHIP6567OLD:  rasterXMax = {8'd63,3'b111};
+	CHIP6569:     rasterXMax = {8'd62,3'b111};
+	CHIP6572:     rasterXMax = {8'd62,3'b111};
+	endcase
 
-// Raster counters
+FAL6567_clkwiz40 u1
+(
+  // Clock out ports
+  .clk200(clk200),     // output clk200
+  .clk40(clk40),     // output clk40
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked1),       // output locked
+ // Clock in ports
+  .clk_in1(sysclk)
+);      // input clk_in1
 
-always @(posedge clk33)
-if (rst) begin
-  rasterX <= 11'd0;
-  rasterY <= 9'd0;
-  nextRasterY <= 9'd0;
+generate begin : gClkwiz
+if (PAL) begin
+FAL6567_clkwizPAL32 u2
+(
+  // Clock out ports
+  .clk33(clk33),     // output clk33
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked2),       // output locked
+ // Clock in ports
+  .clk_in1(sysclk)
+);      // input clk_in1
+FAL6567_clkwizBurstPAL u3
+(
+  // Clock out ports
+  .clk16xBurst(clk16xBurst),
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked3),       // output locked
+ // Clock in ports
+  .clk_in1(sysclk)
+);      // input clk_in1
 end
 else begin
-  if (clken8) begin
-    if (rasterX==10'd400)
-      nextRasterY <= rasterY + 9'd1;
-    if (rasterX==rasterXMax) begin
-      rasterX <= 10'd0;
-      if (rasterY==rasterYMax)
-        rasterY <= 9'd0;
-      else
-        rasterY <= rasterY + 9'd1;
-    end
-    else
-      rasterX <= rasterX + 3'd1;
-  end  
+FAL6567_clkgenwiz u2
+(
+  // Clock out ports
+  .clk33(clk33),     // output clk33
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked2),       // output locked
+ // Clock in ports
+  .clk_in1(sysclk)
+);      // input clk_in1
+FAL6567_clkwizBurstNTSC u3
+(
+  // Clock out ports
+  .clk16xBurst(clk16xBurst),
+  // Status and control signals
+  .reset(xrst), // input reset
+  .locked(locked3),       // output locked
+ // Clock in ports
+  .clk_in1(sysclk)
+);      // input clk_in1
 end
-wire hSync8p = rasterX >= 10'd415 && rasterX <= 10'd450;
-wire vSync8p = rasterY >= 9'd17 && rasterY <= 9'd20; 
-assign vBorder = rsel ? rasterY < 9'd52 || rasterY > 9'd243 : rasterY < 9'd48 || rasterY > 9'd247;
-assign hBorder = csel ? rasterX < {8'd32,2'b00} || rasterX > {8'd107,2'b00} : rasterX < {8'd30,2'b00} || rasterX > {8'd109,2'b00};
-wire vBorder1 = SIM ? 1'b0 : rasterY < 9'd47 || rasterY > 9'd247;
-wire BadLine = rasterY[2:0]==yscroll && den && !vBorder1;
+end
+endgenerate
 
-always @(posedge clk33)
-  hSync8 <= hSync8p;
-always @(posedge clk33)
-  vSync8 <= vSync8p;
- 
-FAL6567_ScanConverter u2
+reg [3:0] burstcnt;
+reg burstClk;
+always_ff @(posedge clk16xBurst)
+if (rst)
+	burstcnt <= 4'd0;
+else
+	burstcnt <= burstcnt + 2'd1;
+always_ff @(posedge clk16xBurst)
+	burstClk <= burstcnt[3];
+
+wire rst = !(locked1 & locked2 & locked3);
+assign rst_o = rst;
+
+// We can put the tri-state logic in this module assuming it is the top one.
+assign den_n = aec ? cs_n : 1'b0;
+assign dir = aec ? ~rw : 1'b1;
+assign db = rst ? 8'bz : (aec && !cs_n && rw) ? dbo8 : 8'bz;
+
+always_ff @(posedge clk33)
+	if (rst)
+		chip <= db811[1:0];
+always_ff @(negedge clk33)
+if (rst)
+	ado <= 8'hFF;
+else
+	ado <= mux ? vicAddr[7:0] : {2'b11,vicAddr[13:8]};
+assign ad = aec ? 8'bz : ado;
+
+wire ras_nne;
+wire phi02_pe;
+edge_det ued2 (.rst(rst), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
+edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
+
+//------------------------------------------------------------------------------
+// Bus cycle type
+//------------------------------------------------------------------------------
+
+always_comb
+begin
+	case(vicCycle)
+	VIC_SPRITE:
+		if (MActive[sprite2])
+			busCycle <= BUS_SPRITE;
+		else
+			busCycle <= BUS_IDLE;
+	VIC_REF,VIC_RC:
+		busCycle <= BUS_REF;
+	VIC_CHAR,VIC_G,VIC_PAL:
+		if (badline)
+			busCycle <= BUS_CG;
+		else
+			busCycle <= BUS_G;
+	VIC_CHARBMP:
+		busCycle <= BUS_G;
+	VIC_IDLE:
+		busCycle <= BUS_IDLE;
+	default:
+		busCycle <= BUS_IDLE;
+	endcase
+end
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+FAL6567_Timing utim1 (
+	.rst(rst),
+	.clk33(clk33),
+	.dotclk_en(dotclk_en),
+	.col80(col80),
+	.stc(stc),
+	.phi02(phi02),
+	.phi02r(phi02r),
+	.busCycle(busCycle),
+	.ras_n(ras_n),
+	.mux(mux),
+	.cas_n(cas_n),
+	.enaData(enaData),
+	.enaMCnt()
+);
+
+//------------------------------------------------------------------------------
+// Raster / Refresh counters
+//------------------------------------------------------------------------------
+
+FAL6567_RefCntr urefc1
+(
+	.rst(rst),
+	.clk33(clk33),
+	.stCycle(stCycle),
+	.vicCycle(vicCycle),
+	.refcntr(refcntr)
+);
+
+//------------------------------------------------------------------------------
+// VIC-II cycling machine.
+//
+// VIC-II is very simple with only four types of cycles. The timing is adjusted
+// in various chip versions by adding a varying number of IDLE cycles after the
+// CHAR fetches. The total number of cycles varies from 63 to 65.
+// The cycles are synchronized to the raster timing.
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Create an advanced raster signal.
+//
+// Complicated by the fact that bus available must go low three cycles before
+// the cpu gives up the bus. On a bad line this would place the ba starting
+// low on the line previous scanline. So that the ba low doesn't cross a
+// complicated counter boundary we fudge things by having the counter count
+// in advance of the normal rasterX. This mean we need to delay the signal
+// to get back where we should be.
+//------------------------------------------------------------------------------
+
+FAL6567_RasterXY urxy1
+(
+	.rst(rst),
+	.clk(clk33),
+	.dotclk_en(dotclk_en),
+	.rasterXMax(rasterXMax),
+	.rasterYMax(rasterYMax),
+	.preRasterX(preRasterX),
+	.rasterX(rasterX),
+	.preRasterY(preRasterY),
+	.rasterY(rasterY),
+	.nextRasterY(nextRasterY)
+);
+
+//------------------------------------------------------------------------------
+// Decode cycles
+//------------------------------------------------------------------------------
+
+FAL6567_CycleDecode ucycd1
+(
+	.rst(rst),
+	.clk(clk33),
+	.delay(7'd12),
+	.phi02(phi02),
+	.enaData(enaData),
+	.chip(chip),
+	.preRasterX(preRasterX),
+	.vicCycle(vicCycle)
+);
+
+wire [11:0] rasterX2 = {preRasterX,1'b0};
+always_ff @(posedge clk33)
+if (dotclk_en) begin
+	if (col80)
+	  case(chip)
+	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h58E;
+	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h57E;
+	  default:      sprite1 <= rasterX2 - 11'h56E;
+	  endcase
+	else
+	  case(chip)
+	  CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
+	  CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
+	  default:      sprite1 <= rasterX2 - 11'h2DE;
+	  endcase
+	sprite2 <= col80 ? sprite1[8:5] : {1'b0,sprite1[7:5]};
+end
+
+// Centre sprite number according to RAM timing.
+always_ff @(posedge clk33)
+begin
+	sprite3 <= sprite2;
+	sprite4 <= sprite3;
+	sprite5 <= sprite4;
+	sprite <= sprite5;
+end
+
+//wire ref5 = rasterX2[10:4]==7'h03;
+always_ff @(posedge clk33)
+	ref5 <= rasterX2[11:4]+2'd1==7'h03;
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// register this?
+//always_ff @(posedge clk33)
+assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 : 9'h30) && preRasterY <= 9'hF7);
+
+//------------------------------------------------------------------------------
+// Bus available generator
+//------------------------------------------------------------------------------
+
+FAL6567_BusAvailGen uba1
+(
+	.chip(chip),
+	.rst(rst),
+	.clk(clk33),
+	.me(me),
+	.my(my),
+	.badline(badline),
+	.rasterX2(rasterX2),
+	.nextRasterY(nextRasterY),
+	.MActive(MActive),
+	.stCycle2(stCycle2),
+	.ba(ba)
+);
+
+//------------------------------------------------------------------------------
+// AEC
+//
+// AEC follows BA by three clock cycles.
+//------------------------------------------------------------------------------
+reg ba1,ba2,ba3;
+
+always_ff @(posedge clk33)
+if (rst) begin
+	ba1 <= `LOW;
+	ba2 <= `LOW;
+	ba3 <= `LOW;
+end
+else begin
+	if (stCycle2) begin
+		ba1 <= ba;
+		ba2 <= ba1 | ba;
+		ba3 <= ba2 | ba;
+	end
+end
+
+always_ff @(negedge clk33)
+	aec <= ba ? phi02 : ba3 & phi02;
+
+//------------------------------------------------------------------------------
+// Databus loading
+//------------------------------------------------------------------------------
+always_ff @(posedge clk33)
+	startFetchCharCmp <= rasterY=9'd0 && rasterX < 11'd8;
+always_ff @(posedge clk33)
+	fetchCharBmp <= rasterY < 9'd33;
+
+FAL6567_LoadChar uldch1
+(
+	.rst(rst),
+	.clk(clk33),
+	.col80(col80),
+	.phi02(phi02),
+	.enaData(enaData),
+	.vicCycle(vicCycle),
+	.badline(badline),
+	.startFetchCharBmp(startFetchCharBmp),
+	.fetchCharBmp(fetchCharBmp),
+	.db(useimem ? {icmemout,imemout} : {db811,db}),
+	.propChar(col80 ? charbuf[78] : charbuf[38]),
+	.char(nextChar)
+);
+
+FAL6567_ShiftChar ushftch1
+(
+	.rst(rst),
+	.clk(clk33),
+	.col80(col80),
+	.phi02(phi02),
+	.enaData(enaData),
+	.vicCycle(vicCycle),
+	.char(nextChar),
+	.charbuf(charbuf)
+);
+
+always_ff @(posedge clk33)
+if (col80) begin
+	if (enaData) begin
+		if (vicCycle==VIC_CHAR) begin
+			readPixels <= charbmpOut;
+			readChar <= nextChar;
+		end
+		waitingPixels <= readPixels;
+		waitingChar <= readChar;
+	end
+end
+else begin
+	if (phi02==`LOW && enaData) begin
+		if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
+			readPixels <= useimem ? imemout : db;
+			readChar <= nextChar;
+		end
+		waitingPixels <= readPixels;
+		waitingChar <= readChar;
+	end
+end
+
+FAL6567_LoadMPtr ulmp1
+(
+	.rst(rst),
+	.clk(clk33),
+	.phi02(phi02),
+	.enaData(enaData),
+	.busCycle(busCycle),
+	.MActive(MActive),
+	.sprite(sprite),
+	.db(useimem ? imemout : db),
+	.MPtr(MPtr)
+);
+
+//------------------------------------------------------------------------------
+// Video matrix counter
+//------------------------------------------------------------------------------
+
+FAL6567_VMCounter uvmc1
+(
+	.rst(rst),
+	.clk(clk33),
+	.col80(col80),
+	.phi02(phi02),
+	.enaData(enaData),
+	.badline(badline),
+	.vicCycle(vicCycle), 
+	.scanline(scanline),
+	.rasterX2(rasterX2),
+	.rasterY(rasterY),
+	.rasterYMax(rasterYMax),
+	.vmndx(vmndx)
+);
+
+//------------------------------------------------------------------------------
+// Scanline counter
+//
+// The scanline counter provides the three LSB's of the character bitmap data
+// or the bitmapped mode address.
+//------------------------------------------------------------------------------
+
+FAL6567_ScanlineCounter uslc1
+(
+	.rst(rst),
+	.clk33(clk33),
+	.phi02(phi02),
+	.enaData(enaData),
+	.ref5(ref5),
+	.badline(badline),
+	.rasterX2(rasterX2),
+	.scanline(scanline)
+);
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+integer n3;
+always_comb
+	for (n3 = 0; n3 < MIBCNT; n3 = n3 + 1)
+		MActive[n3] <= MCnt[n3] != 6'd63;
+
+reg [MIBCNT-1:0] collision;
+integer n4;
+always_comb
+	for (n4 = 0; n4 < MIBCNT; n4 = n4 + 1)
+		collision[n4] = MCurrentPixel[n4][1];
+
+// Sprite-sprite collision logic
+always_ff @(posedge clk33)
+if (rst)
+	m2mhit <= `FALSE;
+else begin
+	if (immc_clr)
+		immc <= `FALSE;
+	if (ad[7:0]==8'h1E && regpg==2'b01 && phi02 && aec && cs && enaData) begin
+		m2m[15:8] <= 8'h0;
+	end
+	if (ad[7:0]==8'h1E && regpg==2'b00 && phi02 && aec && cs && enaData) begin
+		m2m[7:0] <= 8'h0;
+		m2mhit <= `FALSE;
+	end
+	case(collision)
+	16'b0000000000000000,
+	16'b0000000000000001,
+	16'b0000000000000010,
+	16'b0000000000000100,
+	16'b0000000000001000,
+	16'b0000000000010000,
+	16'b0000000000100000,
+	16'b0000000001000000,
+	16'b0000000010000000,
+	16'b0000000100000000,
+	16'b0000001000000000,
+	16'b0000010000000000,
+	16'b0000100000000000,
+	16'b0001000000000000,
+	16'b0010000000000000,
+	16'b0100000000000000,
+	16'b1000000000000000:
+	;
+	default:
+		begin
+			m2m <= m2m | collision;
+			if (!m2mhit) begin
+				immc <= `TRUE;
+				m2mhit <= `TRUE;
+			end
+		end
+	endcase
+end
+
+// Sprite-background collision logic
+integer n5;
+always_ff @(posedge clk33)
+if (rst)
+	m2dhit <= `FALSE;
+else begin
+	if (imbc_clr)
+		imbc <= `FALSE;
+	if (ad[7:0]==8'h1F && regpg==2'b01 && phi02 && aec && cs && enaData) begin
+		m2d[15:8] <= 8'h0;
+	end
+	if (ad[7:0]==8'h1F && regpg==2'b00 && phi02 && aec && cs && enaData) begin
+		m2d[7:0] <= 8'h0;
+		m2dhit <= `FALSE;
+	end
+	for (n5 = 0; n5 < MIBCNT; n5 = n5 + 1) begin
+		if (collision[n5] & pixelBgFlag & ~vicBorder) begin
+			m2d[n5] <= `TRUE;
+			if (!m2dhit) begin
+				m2dhit <= `TRUE;
+				imbc <= `TRUE;
+			end
+		end
+	end
+end
+
+integer n6;
+always_ff @(posedge clk33)
+begin
+	for (n6 = 0; n6 < MIBCNT; n6 = n6 + 1) begin
+		if (rasterX == 10)
+			MShift[n6] <= `FALSE;
+		else if (rasterX == (col80 ? {mx[n6],1'b0} : mx[n6]))
+			MShift[n6] <= `TRUE;
+	end
+end
+
+integer n7;
+always_ff @(posedge clk33)
+if (rst & SIM) begin
+	for (n7 = 0; n7 < MIBCNT; n7 = n7 + 1) begin
+		MCnt[n7] <= 6'd63;
+	end
+end
+else begin
+	// Trigger sprite accesses on the last character cycle
+	// if the sprite Y coordinate will match.
+	if (rasterX2==(col80 ? 11'h530 : 11'h2B0)) begin
+		for (n7 = 0; n7 < MIBCNT; n7 = n7 + 1) begin
+			if (!MActive[n7] && me[n7] && nextRasterY == my[n7])
+				MCnt[n7] <= 6'd0;
+		end    
+	end
+
+	// If Y expansion is on, backup the MIB data counter by three every
+	// other scanline.
+	if (enaData && ref5 && !phi02) begin
+		for (n = 0; n < MIBCNT; n = n + 1) begin
+			if (MActive[n] & mye[n]) begin
+				if (!mye_ff[n])
+					MCnt[n] <= MCnt[n] - 6'd3;
+			end
+		end  
+	end
+
+	if (sprite1[4]) begin
+		if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+			if (MActive[sprite])
+				MCnt[sprite] <= MCnt[sprite] + 6'd1;
+		end 
+	end
+	else begin
+		if (vicCycle==VIC_SPRITE && enaData) begin
+			if (MActive[sprite])
+				MCnt[sprite] <= MCnt[sprite] + 6'd1;
+		end
+	end
+end
+
+// X expansion - when to clock the shift register
+reg [1:0] mShiftCount[0:MIBCNT-1];
+
+integer n8;
+always_ff @(posedge clk33)
+if (dotclk_en) begin
+	for (n8 = 0; n8 < MIBCNT; n8 = n8 + 1) begin
+		if (MShift[n8]) begin
+			case({mxe,mc[n8]})
+			2'b00:	mShiftCount[n8] <= 2'd3;
+			2'b01:	mShiftCount[n8][0] <= ~mShiftCount[n8][0];
+			2'b10:	mShiftCount[n8][0] <= ~mShiftCount[n8][0];
+			2'b11:	mShiftCount[n8] <= mShiftCount[n8] + 2'd1;
+			endcase
+		end
+		else begin
+			case({mxe,mc[n8]})
+			2'b00:	mShiftCount[n8] <= 2'd3;
+			2'b01:	mShiftCount[n8] <= 2'd2;
+			2'b10:	mShiftCount[n8] <= 2'd2;
+			2'b11:	mShiftCount[n8] <= 2'd0;
+			endcase
+		end
+	end
+end
+
+// Y expansion
+integer n10;
+always_ff @(posedge clk33)
+begin
+	// Reset expansion flipflop once sprite becomes deactivated or
+	// if no sprite Y expansion.
+	for (n10 = 0; n10 < MIBCNT; n10 = n10 + 1) begin
+		if (!mye[n10] || !MActive[n10])
+			mye_ff[n10] <= 1'b0;
+	end
+	if (enaData && ref5 && !phi02) begin
+		for (n10 = 0; n10 < MIBCNT; n10 = n10 + 1) begin
+			if (MActive[n10] & mye[n10])
+				mye_ff[n10] <= !mye_ff[n10];
+		end  
+	end
+end
+
+
+integer n9;
+always_comb
+	for (n9 = 0; n9 < MIBCNT; n9 = n9 + 1)
+		mClkShift[n9] <= mShiftCount[n9]==2'd3;
+
+// Handle sprite pixel loading / shifting
+FAL6567_SpritePixelShifter usprps1
+(
+	.rst(rst),
+	.clk(clk33),
+	.dotclk_en(dotclk_en),
+	.phi02(phi02),
+	.enaData(enaData),
+	.sprite1(sprite1),
+	.vicCycle(vicCycle),
+	.MActive(MActive),
+	.MShift(MShift),
+	.mClkShift(mClkShift),
+	.mmc(mmc),
+	.db(useimem ? imemout : db),
+	.sprite(sprite),
+	.MCurrentPixel(MCurrentPixel)
+);
+
+//------------------------------------------------------------------------------
+// Address Generation
+//------------------------------------------------------------------------------
+
+FAL6567_AddressGen uag1
+(
+	.clk33(clk33),
+	.phi02(phi02),
+	.col80(col80),
+	.bmm(bmm),
+	.ecm(ecm),
+	.vicCycle(vicCycle),
+	.refcntr(refcntr),
+	.vm(vm),
+	.vmndx(vmndx),
+	.cb(cb),
+	.scanline(scanline),
+	.nextChar(nextChar),
+	.sprite(sprite),
+	.sprite1(sprite1),
+	.MCnt(MCnt),
+	.MPtr(MPtr),
+	.vicAddr(vicAddr)
+);
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+always_ff @(posedge clk33)
+begin
+	if (phi02 && enaData && vicCycle == VIC_SPRITE && sprite == 2)
+		rasterIRQDone <= `FALSE;
+	if (irst_clr)
+		irst <= 1'b0;
+	if (rasterIRQDone == 1'b0 && rasterY == rasterCmp) begin
+		rasterIRQDone <= `TRUE;
+		irst <= 1'b1;
+	end
+end
+
+//------------------------------------------------------------------------------
+// Light pen
+//
+// The light pen only allows one hit per frame. It's the first hit that counts.
+//------------------------------------------------------------------------------
+
+reg lightPenHit;
+always_ff @(posedge clk33)
+begin
+  if (ilp_clr)
+		ilp <= `LOW;
+  if (rasterY == rasterYMax)
+		lightPenHit <= `FALSE;
+  else if (!lightPenHit && lp_n == `LOW) begin
+		lightPenHit <= `TRUE; 
+		ilp <= `HIGH; 
+		lpx <= rasterX[9:2];
+		lpy <= rasterY[8:1];
+  end
+end
+
+//------------------------------------------------------------------------------
+// Video Sync Interval
+// - Video sync still needs to be generated as a reference point for the 
+//   scan converter. Although it's not otherwise used it may be in the future
+//   output, so it's generated accurately.
+//------------------------------------------------------------------------------
+
+FAL6567_sync usg1
+(
+	.chip(chip),
+	.rst(rst),
+	.clk(clk33),
+	.col80(col80),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.hSync(hSync8),
+	.vSync(vSync8),
+	.cSync(cSync),
+	.burstWindow(colorBurstWindow)
+);
+
+//------------------------------------------------------------------------------
+// Video Blank Interval
+//------------------------------------------------------------------------------
+
+FAL6567_blank ublnk
+(
+	.chip(chip),
+	.clk(clk33),
+	.col80(col80),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.vBlank(vVicBlank),
+	.hBlank(hVicBlank),
+	.blank(vicBlank)
+);
+
+always_ff @(posedge clk33)
+if (rst)
+	blank_n <= 1'b0;
+else
+	blank_n <= blank;
+
+//------------------------------------------------------------------------------
+// Borders
+//------------------------------------------------------------------------------
+
+FAL6567_borders ubrdr1
+(
+	.clk(clk33),
+	.col80(col80),
+	.den(den),
+	.vBorderOn(9'd251),
+	.vBorderOff(9'd51),
+	.hBorderOn(11'd452),
+	.hBorderOff(11'd132),
+	.rsel(rsel),
+	.csel(csel),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.hBorder(hVicBorder),
+	.vBorder(vVicBorder),
+	.border(vicBorder)
+);
+
+//------------------------------------------------------------------------------
+// Graphics mode pixel calc.
+//------------------------------------------------------------------------------
+reg loadPixels, shiftPixels;
+reg clkShift;
+wire ismc = mcm & (bmm | ecm | shiftingChar[11]);
+
+always_comb
+	loadPixels <= xscroll==rasterX[2:0];
+
+always_ff @(posedge clk33)
+if (dotclk_en) begin
+	if (loadPixels)
+		clkShift <= ~(mcm & (bmm | ecm | waitingChar[11]));
+	else
+		clkShift <= ismc ? ~clkShift : clkShift;
+end
+
+always_ff @(posedge clk33)
+if (dotclk_en) begin
+	if (loadPixels)
+		shiftingChar <= waitingChar;
+end
+
+FAL6567_PixelShifter ups1
+(
+	.clk(clk33),
+	.dotclk_en(dotclk_en),
+	.ismc(ismc),
+	.load(loadPixels),
+	.shift(clkShift),
+	.pixels_i(waitingPixels),
+	.pixels_o(shiftingPixels)
+);
+
+FAL6567_ComputePixelColor ucpc1
+(
+	.rst(rst),
+	.clk(clk33),
+	.dotclk_en(dotclk_en),
+	.ecm(ecm),
+	.bmm(bmm),
+	.mcm(mcm),
+	.pixelColor(pixelColor),
+	.shiftingPixels(shiftingPixels),
+	.shiftingChar(shiftingChar),
+	.b0c(b0c),
+	.b1c(b1c),
+	.b2c(b2c),
+	.b3c(b3c)
+);
+
+//------------------------------------------------------------------------------
+// Output
+//------------------------------------------------------------------------------
+
+always_ff @(posedge clk33)
+if (dotclk_en)
+	pixelBgFlag <= shiftingPixels[7];
+
+FAL6567_ColorSelect ucs1
+(
+	.clk(clk33),
+	.dotclk_en(dotclk_en),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.ecm(ecm),
+	.bmm(bmm),
+	.mcm(mcm),
+	.pixelColor(pixelColor),
+	.mdp(mdp), 
+	.mmc(mmc),
+	.pixelBgFlag(pixelBgFlag),
+	.MCurrentPixel(MCurrentPixel),
+	.mm0(mm0),
+	.mm1(mm1),
+	.mc(mc),
+	.ec(ec),
+	.ec1(ec1),
+	.vicBlank(vicBlank),
+	.vicBorder(vicBorder),
+	.color(color8)
+);
+
+FAL6567_ScanConverter usc1
 (
   .chip(chip),
   .clk33(clk33),
-  .clken8(clken8),
+  .dotclk_en(dotclk_en),
+  .col80(col80),
+  .clk40(clk40),
   .hSync8_i(hSync8),
   .vSync8_i(vSync8),
   .color_i(color8),
-  .hSync33_i(hSync),
-  .vSync33_i(vSync),
-  .color_o(color33)
+  .hSync40_i(hSync),
+  .vSync40_i(vSync),
+  .color_o(color40)
 );
-/*
-video_vicii_656x #(
-  .emulateRefresh(1'b1),
-  .emulateLightPen(1'b1)
-) u3
+
+FAL6567_ColorROM ucrom1
 (
-  .clk(clk8),
-  .phi(phi02),
-  .enaData(),
-  .enaPixel(1'b1),  // pixel clock enable
-  .baSync(),
-  .ba(ba),
-  .mode6569(chip==CHIP6569),
-  .mode6567old(chip==CHIP6567OLD),
-  .mode6567R8(chip==CHIP6567R8),
-  .mode6572(chip==CHIP6572),
-  .cs(!cs_n),
-  .we(wr),
-  .rd(rw),
-  .lp_n(lp_n),
-  .aRegisters(ad[5:0]),
-  .diRegisters(db[7:0]),
-  .di(db[7:0]),
-  .diColor(db[11:8]),
-  .do(dbo8),
-  .vicAddr(vicAddr),
-  .irq_n(irq_n),
-  // Video Outputs
-  .hSync(hSync8),
-  .vSync(vSync8),
-  .colorIndex(color8),
-  // Debug outputs
-  .debugX(),
-  .debugY(),
-  .vicRefresh(vicRefresh),
-  .addrValid()    
+	.clk(clk40),
+	.ce(1'b1),
+	.code(color40),
+	.color(RGB)
 );
-*/
-always @(posedge clk33)
-if (rst)
-  clk8r <= 32'b10001000100010001000100010001000;
-else
-  clk8r <= {clk8r[30:0],clk8r[31]};
-assign clken8 = clk8r[31];
 
-always @(posedge clk33)
-if (rst)
-  clk2r <= 32'b10000000000000001000000000000000;
-else
-  clk2r <= {clk2r[30:0],clk2r[31]};
-assign clken2 = clk2r[31];
+rgb2dvi #(
+	.kGenerateSerialClk(1'b0),
+	.kClkPrimitive("MMCM"),
+	.kClkRange(3),
+	.kRstActiveHigh(1'b1)
+)
+ur2d1 
+(
+	.TMDS_Clk_p(TMDS_OUT_clk_p),
+	.TMDS_Clk_n(TMDS_OUT_clk_n),
+	.TMDS_Data_p(TMDS_OUT_data_p),
+	.TMDS_Data_n(TMDS_OUT_data_n),
+	.aRst(rst),
+	.aRst_n(~rst),
+	.vid_pData({RGB[23:16],RGB[7:0],RGB[15:8]}),
+	.vid_pVDE(~blank),
+	.vid_pHSync(hSync),    // hSync is neg going for 1366x768
+	.vid_pVSync(vSync),
+	.PixelClk(clk40),
+	.SerialClk(clk200)
+);
 
-always @(posedge clk33)
-if (rst)
-  clk1r <= 32'b00000000000000001000000000000000;
-else
-  clk1r <= {clk1r[30:0],clk1r[31]};
-assign clken1 = clk1r[31];
-assign clken1x = clk1r[15];
+wire [16:0] lfsr_o;
+lfsr ulfsr1(.rst(rst), .clk(clk33), .ce(dotclk_en), .cyc(1'b0), .o(lfsr_o));
 
-always @(posedge clk33)
-if (rst)
-  phi02r <= 32'b00000000000000001111111111111111;
-else
-  phi02r <= {phi02r[30:0],phi02r[31]};
-assign phi02 = phi02r[31];
+FAL6567_ColorROM ucrom2
+(
+	.clk(clk33),
+	.ce(dotclk_en),
+	.code(color8),//lfsr_o[3:0]),
+	.color(RGB8)
+);
 
-always @(posedge clk33)
-if (rst)
-  rasr <= 32'b11111100000000001111110000000000;
-else
-  rasr <= {rasr[30:0],rasr[31]};
-assign ras_n = rasr[31];
-  
-always @(posedge clk33)
-if (rst)
-  muxr <= 32'b11111110000000001111111000000000;
-else
-  muxr <= {muxr[30:0],muxr[31]};
-assign mux = muxr[31];
-  
-assign vicRefresh = rasterX > {8'd19,2'b11} && rasterX <= {8'd29,2'b11};
+// Argh! There are not enough pins
+wire dummyl;
+RGB2Composite urgb2comp1
+(
+	.clk(clk16xBurst),
+	.ph(burstcnt),
+	.colorBurst(burstClk),
+	.colorBurstWindow(colorBurstWindow),
+	.cSync(cSync),
+	.cBlank(vicBlank),
+	.r(RGB8[23:16]),
+	.g(RGB8[15:8]),
+	.b(RGB8[7:0]),
+	.co({luma,dummyl}),
+	.yo(),
+	.iq(chroma)
+);
 
-always @(posedge clk33)
-if (rst)
-  casr <= 32'b11111111100000001111111110000000;
-else
-  casr <= {casr[30:0],casr[31]};
-assign cas_n = casr[31] | vicRefresh & !phi02;
 
-always @(posedge clk33)
-if (rst)
-  refcntr <= 8'h00;
-else begin
-  if (clken1) begin
-    if (vicRefresh)
-        refcntr <= refcntr + 8'd1;
-  end
-end
+//------------------------------------------------------------------------------
+// Register Interface
+//
+// VIC-II offers register feedback on all registers.
+//------------------------------------------------------------------------------
 
-// Active sprites
-always @*
-begin
-for (n = 0; n < 8; n = n + 1)
-begin
-  mactive[n] = FALSE;
-  if (mcnt[n] != 6'd63)
-    mactive[n] = TRUE;
-end
-  mactive[8] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[9] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[10] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[11] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[12] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[13] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[14] = rasterY >= 9'd2 && rasterY <= 9'd22;
-  mactive[15] = rasterY >= 9'd2 && rasterY <= 9'd22;
-end
-
-assign sprrst[0] = !mactive[0] && my[0]==nextRasterY && rasterX[9:2]==8'd115 && me[0];
-assign sprrst[1] = !mactive[1] && my[1]==nextRasterY && rasterX[9:2]==8'd119 && me[1];
-assign sprrst[2] = !mactive[2] && my[2]==nextRasterY && rasterX[9:2]==8'd123 && me[2];
-assign sprrst[3] = !mactive[3] && my[3]==nextRasterY && rasterX[9:2]==8'd127 && me[3];
-assign sprrst[4] = !mactive[4] && my[4]==rasterY && rasterX[9:2]==8'd1 && me[4];
-assign sprrst[5] = !mactive[5] && my[5]==rasterY && rasterX[9:2]==8'd5 && me[5];
-assign sprrst[6] = !mactive[6] && my[6]==rasterY && rasterX[9:2]==8'd9 && me[6];
-assign sprrst[7] = !mactive[7] && my[7]==rasterY && rasterX[9:2]==8'd13 && me[7];
-assign sprrst[8] = rasterY==9'd2 && rasterX[9:2]==8'd31 && me[8];
-assign sprrst[9] = rasterY==9'd2 && rasterX[9:2]==8'd35 && me[9];
-assign sprrst[10] = rasterY==9'd2 && rasterX[9:2]==8'd39 && me[10];
-assign sprrst[11] = rasterY==9'd2 && rasterX[9:2]==8'd43 && me[11];
-assign sprrst[12] = rasterY==9'd2 && rasterX[9:2]==8'd47 && me[12];
-assign sprrst[13] = rasterY==9'd2 && rasterX[9:2]==8'd51 && me[13];
-assign sprrst[14] = rasterY==9'd2 && rasterX[9:2]==8'd55 && me[14];
-assign sprrst[15] = rasterY==9'd2 && rasterX[9:2]==8'd59 && me[15];
-
-// cycle 'p' select
-assign selp[0] = mactive[0] && rasterX[9:2] == 8'd117 && me[0];
-assign selp[1] = mactive[1] && rasterX[9:2] == 8'd121 && me[1];
-assign selp[2] = mactive[2] && rasterX[9:2] == 8'd125 && me[2];
-assign selp[3] = mactive[3] && rasterX[9:2] == 8'd129 && me[3];
-assign selp[4] = mactive[4] && rasterX[9:2] == 8'd3 && me[4];
-assign selp[5] = mactive[5] && rasterX[9:2] == 8'd7 && me[5];
-assign selp[6] = mactive[6] && rasterX[9:2] == 8'd11 && me[6];
-assign selp[7] = mactive[7] && rasterX[9:2] == 8'd15 && me[7];
-assign selp[8] = mactive[8] && rasterX[9:2] == 8'd33 && me[8];
-assign selp[9] = mactive[9] && rasterX[9:2] == 8'd37 && me[9];
-assign selp[10] = mactive[10] && rasterX[9:2] == 8'd41 && me[10];
-assign selp[11] = mactive[11] && rasterX[9:2] == 8'd45 && me[11];
-assign selp[12] = mactive[12] && rasterX[9:2] == 8'd49 && me[12];
-assign selp[13] = mactive[13] && rasterX[9:2] == 8'd53 && me[13];
-assign selp[14] = mactive[14] && rasterX[9:2] == 8'd57 && me[14];
-assign selp[15] = mactive[15] && rasterX[9:2] == 8'd61 && me[15];
-
-// cycle 's' select
-assign sels[0] = mactive[0] && rasterX[9:2] >= 9'd118 && rasterX[9:2] <= 9'd120 && me[0];
-assign sels[1] = mactive[1] && rasterX[9:2] >= 9'd122 && rasterX[9:2] <= 9'd124 && me[1];
-assign sels[2] = mactive[2] && rasterX[9:2] >= 9'd126 && rasterX[9:2] <= 9'd128 && me[2];
-assign sels[3] = mactive[3] && rasterX[9:2] >= 9'd0 && rasterX[9:2] <= 9'd2 && me[3];
-assign sels[4] = mactive[4] && rasterX[9:2] >= 9'd4 && rasterX[9:2] <= 9'd6 && me[4];
-assign sels[5] = mactive[5] && rasterX[9:2] >= 9'd8 && rasterX[9:2] <= 9'd10 && me[5];
-assign sels[6] = mactive[6] && rasterX[9:2] >= 9'd12 && rasterX[9:2] <= 9'd14 && me[6];
-assign sels[7] = mactive[7] && rasterX[9:2] >= 9'd16 && rasterX[9:2] <= 9'd18 && me[7];
-assign sels[8] = mactive[8] && rasterX[9:2] >= 9'd34 && rasterX[9:2] <= 9'd36 && me[8];
-assign sels[9] = mactive[9] && rasterX[9:2] >= 9'd38 && rasterX[9:2] <= 9'd40 && me[9];
-assign sels[10] = mactive[10] && rasterX[9:2] >= 9'd42 && rasterX[9:2] <= 9'd44 && me[10];
-assign sels[11] = mactive[11] && rasterX[9:2] >= 9'd46 && rasterX[9:2] <= 9'd48 && me[11];
-assign sels[12] = mactive[12] && rasterX[9:2] >= 9'd50 && rasterX[9:2] <= 9'd52 && me[12];
-assign sels[13] = mactive[13] && rasterX[9:2] >= 9'd54 && rasterX[9:2] <= 9'd56 && me[13];
-assign sels[14] = mactive[14] && rasterX[9:2] >= 9'd58 && rasterX[9:2] <= 9'd60 && me[14];
-assign sels[15] = mactive[15] && rasterX[9:2] >= 9'd62 && rasterX[9:2] <= 9'd64 && me[15];
-
-assign selsa[0] = rasterX[9:2] == 8'd118;
-assign selsb[0] = rasterX[9:2] == 8'd119;
-assign selsc[0] = rasterX[9:2] == 8'd120;
-assign selsd[0] = rasterX[9:2] == 8'd121;
-
-assign selsa[1] = rasterX[9:2] == 8'd122;
-assign selsb[1] = rasterX[9:2] == 8'd123;
-assign selsc[1] = rasterX[9:2] == 8'd124;
-assign selsd[1] = rasterX[9:2] == 8'd125;
-
-assign selsa[2] = rasterX[9:2] == 8'd126;
-assign selsb[2] = rasterX[9:2] == 8'd127;
-assign selsc[2] = rasterX[9:2] == 8'd128;
-assign selsd[2] = rasterX[9:2] == 8'd129;
-
-assign selsa[3] = rasterX[9:2] == 8'd0;
-assign selsb[3] = rasterX[9:2] == 8'd1;
-assign selsc[3] = rasterX[9:2] == 8'd2;
-assign selsd[3] = rasterX[9:2] == 8'd3;
-
-assign selsa[4] = rasterX[9:2] == 8'd4;
-assign selsb[4] = rasterX[9:2] == 8'd5;
-assign selsc[4] = rasterX[9:2] == 8'd6;
-assign selsd[4] = rasterX[9:2] == 8'd7;
-
-assign selsa[5] = rasterX[9:2] == 8'd8;
-assign selsb[5] = rasterX[9:2] == 8'd9;
-assign selsc[5] = rasterX[9:2] == 8'd10;
-assign selsd[5] = rasterX[9:2] == 8'd11;
-
-assign selsa[6] = rasterX[9:2] == 8'd12;
-assign selsb[6] = rasterX[9:2] == 8'd13;
-assign selsc[6] = rasterX[9:2] == 8'd14;
-assign selsd[6] = rasterX[9:2] == 8'd15;
-
-assign selsa[7] = rasterX[9:2] == 8'd16;
-assign selsb[7] = rasterX[9:2] == 8'd17;
-assign selsc[7] = rasterX[9:2] == 8'd18;
-assign selsd[7] = rasterX[9:2] == 8'd19;
-
-wire selr =    rasterX[9:2] == 8'd20
-            || rasterX[9:2] == 8'd22
-            || rasterX[9:2] == 8'd24
-            || rasterX[9:2] == 8'd26
-            || rasterX[9:2] == 8'd28;
-
-assign selsa[8] = rasterX[9:2] == 8'd34;
-assign selsb[8] = rasterX[9:2] == 8'd35;
-assign selsc[8] = rasterX[9:2] == 8'd36;
-assign selsd[8] = rasterX[9:2] == 8'd37;
-
-assign selsa[9] = rasterX[9:2] == 8'd38;
-assign selsb[9] = rasterX[9:2] == 8'd39;
-assign selsc[9] = rasterX[9:2] == 8'd40;
-assign selsd[9] = rasterX[9:2] == 8'd41;
-
-assign selsa[10] = rasterX[9:2] == 8'd42;
-assign selsb[10] = rasterX[9:2] == 8'd43;
-assign selsc[10] = rasterX[9:2] == 8'd44;
-assign selsd[10] = rasterX[9:2] == 8'd45;
-
-wire balo0 = mactive[0] && rasterX[9:2] >= 9'd110 && rasterX[9:2] <= 9'd119;
-wire balo1 = mactive[1] && rasterX[9:2] >= 9'd114 && rasterX[9:2] <= 9'd123;
-wire balo2 = mactive[2] && rasterX[9:2] >= 9'd118 && rasterX[9:2] <= 9'd127;
-wire balo3 = mactive[3] && (rasterX[9:2] >= 9'd122 || rasterX[9:2] <= 9'd1);
-wire balo4 = mactive[4] && (rasterX[9:2] >= 9'd126 || rasterX[9:2] <= 9'd5);
-wire balo5 = mactive[5] && rasterX[9:2] >= 9'd0 && rasterX[9:2] <= 9'd9;
-wire balo6 = mactive[6] && rasterX[9:2] >= 9'd4 && rasterX[9:2] <= 9'd13;
-wire balo7 = mactive[7] && rasterX[9:2] >= 9'd8 && rasterX[9:2] <= 9'd17;
-wire baloc = BadLine && rasterX[9:2] >= 8'd22 && rasterX[9:2] <= 8'd107; 
-assign balo = balo0|balo1|balo2|balo3|balo4|balo5|balo6|balo7|baloc; 
-
-always @(posedge clk33)
-if (rst)
-  ba <= 1'b1;
-else begin
-  if (clken8)
-    ba <= !balo;
-end
-
-wire aelo0 = mactive[0] && rasterX[9:2] >= 8'd117 && rasterX[9:2] <= 8'd120;
-wire aelo1 = mactive[1] && rasterX[9:2] >= 8'd121 && rasterX[9:2] <= 8'd124;
-wire aelo2 = mactive[1] && rasterX[9:2] >= 8'd125 && rasterX[9:2] <= 8'd128;
-wire aelo3 = mactive[3] && (rasterX[9:2] >= 8'd129 || rasterX[9:2] <= 8'd2);
-wire aelo4 = mactive[4] && rasterX[9:2] >= 8'd3 && rasterX[9:2] <= 9'd6;
-wire aelo5 = mactive[5] && rasterX[9:2] >= 8'd7 && rasterX[9:2] <= 9'd10;
-wire aelo6 = mactive[6] && rasterX[9:2] >= 8'd11 && rasterX[9:2] <= 8'd14;
-wire aelo7 = mactive[7] && rasterX[9:2] >= 8'd15 && rasterX[9:2] <= 9'd18;
-wire aeloc = BadLine && rasterX[9:2] >= 8'd28 && rasterX[9:2] <= 8'd108; 
-assign aelo = aelo0|aelo1|aelo2|aelo3|aelo4|aelo5|aelo6|aelo7|aeloc|phi02r[15]; 
-
-wire selc = BadLine && rasterX[9:2] >= 8'd29 && rasterX[9:2] <= 8'd107 && rasterX[2];
-wire selg = rasterX[9:2] >= 8'd30 && rasterX[9:2] <= 8'd110 && !rasterX[2] && den && !vBorder1;
-wire ldg = rasterX[9:2] >= 8'd31 && rasterX[9:2] <= 8'd111 && rasterX[2] && den && !vBorder1;
-
-always @(posedge clk33)
-if (rst)
-  aec <= 1'b1;
-else begin
-  if (clken8)//(!phi02r[30]&phi02r[31])||(!phi02r[14]&phi02r[15]))
-    aec <= !aelo;
-end
-
-// Video matrix counter
-
-always @(posedge clk33)
-if (rst)
-  charCount <= 10'd0;
-else begin
-  if (clken8) begin
-    if (rasterY==9'd8)
-      charCount <= 10'd0;
-    if (selc && rasterX[2:0]==3'b100)
-      charCount <= charCount + 10'd1;
-  end
-end
-
-// Address generation
-
-always @(posedge clk33)
+integer n14;
+always_ff @(posedge clk33)
 if (rst) begin
-  ado <= 14'h3FFF;
+	regpg <= 2'd0;
+	col80 <= 1'b0;
+	hSyncOn <= phSyncOn;
+	hSyncOff <= phSyncOff;
+	hBlankOff <= phBlankOff;
+	hBorderOff <= phBorderOff;
+	hBorderOn <= phBorderOn;
+	hBlankOn <= phBlankOn;
+	hTotal <= phTotal;
+	hSyncPol <= phSyncPol;
+	vSyncOn <= pvSyncOn;
+	vSyncOff <= pvSyncOff;
+	vBlankOff <= pvBlankOff;
+	vBorderOff <= pvBorderOff;
+	vBorderOn <= pvBorderOn;
+	vBlankOn <= pvBlankOn;
+	vTotal <= pvTotal;
+	vSyncPol <= pvSyncPol;
+	vm[13:0] <= 14'd0;
+	cb[13:0] <= 14'b0;
+	ecm <= 1'b0;
+	bmm <= 1'b0;
+	mcm <= 1'b0;
+	ec <= 4'h6;
+	ec1 <= 4'hF;
+	mm0 <= 4'h0;
+	mm1 <= 4'h0;
+	mmc <= 16'h0;
+	b0c <= 4'h0;
+	b1c <= 4'h0;
+	b2c <= 4'h0;
+	b3c <= 4'h0;
+	yscroll <= 3'd0;
+	xscroll <= 3'd0;
+	den <= `TRUE;
+	csel <= 1'b1;
+	rsel <= 1'b1;
+	me <= 16'h0;
+	for (n14 = 0; n14 < MIBCNT; n14 = n14 + 1) begin
+		mx[n14] = 9'd200;
+		my[n14] = 8'd5;
+		mc[n14] <= 4'h0;
+	end
+	charbmpFetchFlag <= 1'b0;
 end
 else begin
-  if (clken2) begin
-    ado <= 14'h3FFF;
-    for (n = 0; n < 8; n = n + 1)
-    begin
-      if (selp[n])
-        ado <= vm + {7'b1111111,n[2:0]};
-      if (sels[n]) begin
-         if (selsa[n]) begin p <= db; ado <= {db[7:0],mcnt[n]}; end
-         if (selsb[n]) ado <= {p,mcnt[n]+6'd1}; 
-         if (selsc[n]) ado <= {p,mcnt[n]+6'd2}; 
-      end
-    end
-    if (selc) ado <= {vm,charCount};
-    if (BadLine && selg) begin
-      ado <= {cb,ecm ? {2'b00,db[5:0]} : db,charRow};
-    end
-    else if (selg) begin
-      if (bmm)
-        ado <= {cb[2],charCount,charRow};
-      else
-        ado <= {cb,charbuf[charCountX],charRow};
-    end
-  end
-end
-
-// Character pointer and color capture
-
-always @(posedge clk33)
-if (rst) begin
-end
-else begin
-  if (clken2) begin
-    if (BadLine && selg) begin
-      if (ecm) begin
-        case(ado[10:9])
-        2'b00:  charbuf[charCountX] <= {b0c,db};
-        2'b01:  charbuf[charCountX] <= {b1c,db};
-        2'b10:  charbuf[charCountX] <= {b2c,db};
-        2'b11:  charbuf[charCountX] <= {b3c,db};
-        endcase
-      end
-      else
-        charbuf[charCountX] <= {b0c,db};
-    end
-  end
-end
-
-reg selrd1;
-always @(posedge clk33)
-  if (clken2)
-    selrd1 <= selr;
-
-always @(posedge clk33)
-if (rst)
-  ado1 <= 14'h3FFF;
-else
-  ado1 <= selrd1 ? {6'h3F,refcntr} : mux ? {ado[13:8],2'b11,ado[13:8]} : ado[13:0];
-assign ad = aec ? 14'bz : ado1;
-
-always @(posedge clk33)
-begin
-  if (clken2) begin
-    for (n = 0; n < 8; n = n + 1)
-    begin
-      if (sels[n]) begin
-         if (selsb[n]) mshift[n][23:16] <= db[7:0];
-         else if (selsc[n]) mshift[n][15:8] <= db[7:0]; 
-         else if (selsd[n]) mshift[n][7:0] <= db[7:0]; 
-      end
-    end
-  end
-  if (clken8) begin
-    for (n = 0; n < 8; n = n + 1)
-    begin
-      if (mx[n]<=rasterX[n]) begin
-        if ((mxe[n] && mxeff[n]) || !mxe[n]) begin
-          if (mmc[n])
-            mshift[n] <= mshift[n] << 2;
-          else
-            mshift[n] <= mshift[n] << 1;
+	vwr <= 1'b0;
+	rst_pal <= 1'b0;
+	if (charBmpFetchDone)
+		charbmpFetchFlag <= 1'b0;
+  if (phi02 && cs_n==`LOW) begin
+    dbo8 <= 8'hFF;
+    case(ad[7:0])
+    8'h00:  dbo8 <= mx[{regpg,3'd0}][7:0];
+    8'h01:  dbo8 <= my[{regpg,3'd0}];
+    8'h02:  dbo8 <= mx[{regpg,3'd1}][7:0];
+    8'h03:  dbo8 <= my[{regpg,3'd1}];
+    8'h04:  dbo8 <= mx[{regpg,3'd2}][7:0];
+    8'h05:  dbo8 <= my[{regpg,3'd2}];
+    8'h06:  dbo8 <= mx[{regpg,3'd3}][7:0];
+    8'h07:  dbo8 <= my[{regpg,3'd3}];
+    8'h08:  dbo8 <= mx[{regpg,3'd4}][7:0];
+    8'h09:  dbo8 <= my[{regpg,3'd4}];
+    8'h0A:  dbo8 <= mx[{regpg,3'd5}][7:0];
+    8'h0B:  dbo8 <= my[{regpg,3'd5}];
+    8'h0C:  dbo8 <= mx[{regpg,3'd6}][7:0];
+    8'h0D:  dbo8 <= my[{regpg,3'd6}];
+    8'h0E:  dbo8 <= mx[{regpg,3'd7}][7:0];
+    8'h0F:  dbo8 <= my[{regpg,3'd7}];
+    8'h10:  begin
+        dbo8[0] <= mx[{regpg,3'd0}][8];
+        dbo8[1] <= mx[{regpg,3'd1}][8];
+        dbo8[2] <= mx[{regpg,3'd2}][8];
+        dbo8[3] <= mx[{regpg,3'd3}][8];
+        dbo8[4] <= mx[{regpg,3'd4}][8];
+        dbo8[5] <= mx[{regpg,3'd5}][8];
+        dbo8[6] <= mx[{regpg,3'd6}][8];
+        dbo8[7] <= mx[{regpg,3'd7}][8];
         end
-      end
-    end
-  end
-end
-
-always @(posedge clk33)
-if (clken8)
-  for (n = 0; n < 16; n = n + 1)
-  begin
-    if (mmc[n])
-      case(mshift[n][23:22])
-      2'd0: mcolor[n] <= 5'b10000;
-      2'd1: mcolor[n] <= mm0;
-      2'd2: mcolor[n] <= mc[n];
-      2'd3: mcolor[n] <= mm1;
-      endcase
-    else
-      mcolor[n] <= mshift[n][23] ? mc[n] : 5'b10000;
-  end 
-  
-// Counters
-always @(posedge clk33)
-if (rst) begin
-  if (SIM) begin
-    for (n = 0; n < 8; n = n + 1)
-      mcnt[n] <= 6'h3F;
-  end
-end
-else begin
-  for (n = 0; n < 8; n = n + 1)
-  if (clken2) begin
-    if (sprrst[n])
-      mcnt[n] <= 6'd0;
-    if (selsd[n] && mactive[n]) begin
-      if (mye[n] && !myeff[n])
-        mcnt[n] <= mcnt[n] + 6'd0;
-      else
-        mcnt[n] <= mcnt[n] + 6'd3;
-    end
-  end
-end
-
-// Y-Expand FF
-always @(posedge clk33)
-if (rst)
-  myeff <= 8'h00;
-else begin
-  for (n = 0; n < 8; n = n + 1)
-  if (clken2) begin
-    if (sprrst[n])
-      myeff[n] <= 1'b0;
-    if (selsd[n]) begin
-      if (mye[n] && !myeff[n])
-        myeff[n] <= 1'b1;
-      else
-        myeff[n] <= 1'b0;
-    end
-  end
-end
-
-// X-Expand FF
-always @(posedge clk33)
-if (rst)
-  mxeff <= 8'h00;
-else begin
-  for (n = 0; n < 8; n = n + 1)
-  begin
-    if (clken2) begin
-      if (sprrst[n])
-        mxeff[n] <= 1'b0;
-    end
-    if (clken8) begin
-      if (mx[n]<=rasterX[n]) begin
-        if (mxe[n] && !mxeff[n])
-          mxeff[n] <= 1'b1;
-        else
-          mxeff[n] <= 1'b0;
-      end
-    end
-  end
-end
-
-reg [7:0] charBmp1;
-always @(posedge clk33)
-if (clken8) begin
-  if (ldg && rasterX[1:0]==2'b11) begin
-    charBmp1 <= db[7:0];
-  end
-  if (rasterX[2:0]==xscroll) begin
-    mcmff <= 1'b0;
-    charBmp <= charBmp1;
-  end
-  else begin
-    if (mcm) begin
-      if (mcmff) begin
-        mcmff <= 1'b0;
-        charBmp <= {charBmp[5:0],2'b0};
-      end
-      else
-        mcmff <= 1'b1;
-    end
-    else
-      charBmp <= {charBmp[6:0],1'b0};
-  end
-end
-
-always @(posedge clk33)
-if (clken8) begin
-  if (mcm)
-    case(charBmp[7:6])
-    2'b00:  colorChar <= charbuf[charCountX-6'd1][15:12];
-    2'b01:  colorChar <= charbuf[charCountX-6'd1][7:4];
-    2'b10:  colorChar <= charbuf[charCountX-6'd1][3:0];
-    2'b11:  colorChar <= charbuf[charCountX-6'd1][11:8];
+    8'h11:  begin
+            dbo8[2:0] <= yscroll;
+            dbo8[3] <= rsel;
+            dbo8[4] <= den;
+            dbo8[5] <= bmm;
+            dbo8[6] <= ecm;
+            end
+    8'h12:  dbo8 <= rasterY[7:0];
+    8'h13:  dbo8 <= lpx;
+    8'h14:  dbo8 <= lpy;
+    8'h15:  case(regpg)
+            1'd0: dbo8 <= me[7:0];
+            1'd1: dbo8 <= me[15:8];
+            endcase
+    8'h16:  dbo8 <= {2'b11,res,mcm,csel,xscroll};
+    8'h17:  case(regpg[0])
+            1'd0: dbo8 <= mye[7:0];
+            1'd1: dbo8 <= mye[15:8];
+            endcase
+    8'h18:  begin
+            	dbo8[0] <= 1'b1;
+            	dbo8[3:1] <= cb[13:11];
+            	dbo8[7:4] <= vm[13:10];
+            end
+    8'h19:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
+    8'h1A:  dbo8 <= {4'b1111,elp,emmc,embc,erst};
+    8'h1B:  dbo8 <= mdp;
+    8'h1C:  case(regpg[0])
+            1'd0: dbo8 <= mmc[7:0];
+            1'd1: dbo8 <= mmc[15:8];
+            endcase
+    8'h1D:  case(regpg[0])
+            1'd0: dbo8 <= mxe[7:0];
+            1'd1: dbo8 <= mxe[15:8];
+            endcase
+    8'h1E:  case(regpg[0])
+            1'd0: dbo8 <= m2m[7:0];
+            1'd1: dbo8 <= m2m[15:8];
+            endcase
+    8'h1F:  case(regpg[0])
+            1'd0: dbo8 <= m2d[7:0];
+            1'd1: dbo8 <= m2d[15:0];
+            endcase
+    8'h20:  dbo8[7:0] <= {ec1,ec};
+    8'h21:  dbo8[3:0] <= b0c;
+    8'h22:  dbo8[3:0] <= b1c;
+    8'h23:  dbo8[3:0] <= b2c;
+    8'h24:  dbo8[3:0] <= b3c;
+    8'h25:  dbo8[3:0] <= mm0;
+    8'h26:  dbo8[3:0] <= mm1;
+    8'h27:  dbo8[3:0] <= mc[{regpg,3'd0}];
+    8'h28:  dbo8[3:0] <= mc[{regpg,3'd1}];
+    8'h29:  dbo8[3:0] <= mc[{regpg,3'd2}];
+    8'h2A:  dbo8[3:0] <= mc[{regpg,3'd3}];
+    8'h2B:  dbo8[3:0] <= mc[{regpg,3'd4}];
+    8'h2C:  dbo8[3:0] <= mc[{regpg,3'd5}];
+    8'h2D:  dbo8[3:0] <= mc[{regpg,3'd6}];
+    8'h2E:  dbo8[3:0] <= mc[{regpg,3'd7}];
+    8'h32:  dbo8 <= {1'd0,col80,4'hF,regpg};
+    default:  dbo8 <= 8'hFF;
     endcase
-  else
-    colorChar <= charBmp[7] ? charbuf[charCountX-6'd1][11:8] : charbuf[charCountX-6'd1][15:12];
-end
-
-always @(posedge clk33)
-  if (vBorder|hBorder)
-    color8 <= ec;
-  else
-    color8 <= colorChar;
-
-always @(posedge clk33)
-if (rst) begin
-  charCountX <= 6'd1;
-end
-else begin
-  if (clken8) begin
-    if (rasterX==10'd0)
-      charCountX <= 6'd1;
-    if (selg && rasterX[2:0]==3'b011)
-      charCountX <= charCountX + 6'd1;
   end
-end
-
-always @(posedge clk33)
-if (clken8) begin
-  if (rasterX == 10'd456) // 58
-    charRow <= charRow + 3'd1;
-  if (BadLine && rasterX < 10'd114)
-    charRow <= 3'd0;
-end
-
-always @(posedge clk33)
-if (rst) begin
-  hSyncOn <= phSyncOn;
-  hSyncOff <= phSyncOff;
-  hBlankOff <= phBlankOff;
-  hBorderOff <= phBorderOff;
-  hBorderOn <= phBorderOn;
-  hBlankOn <= phBlankOn;
-  hTotal <= phTotal;
-  hSyncPol <= phSyncPol;
-  vSyncOn <= pvSyncOn;
-  vSyncOff <= pvSyncOff;
-  vBlankOff <= pvBlankOff;
-  vBorderOff <= pvBorderOff;
-  vBorderOn <= pvBorderOn;
-  vBlankOn <= pvBlankOn;
-  vTotal <= pvTotal;
-  vSyncPol <= pvSyncPol;
-  regno <= 6'h3F;
-  if (SIM) begin
-    for (n = 0; n < 8; n =  n + 1)
-    begin
-      mx[n] <= 9'h0;
-      my[n] <= 8'h00;
-      me[n] <= 1'b1;
-      yscroll <= 3'b0;
-      xscroll <= 3'b0;
-    end
-    b0c <= 4'd0;
-    b1c <= 4'd6;
-    b2c <= 4'd12;
-    b3c <= 4'd15;
-    ec <= 4'd6; // BLUE
-  end
-  vm <= 4'h2;
-  cb <= 3'h0;
-  mcm <= 1'b0;
-  den <= 1'b1;
-  bmm <= 1'b0;
-  ecm <= 1'b0;
-  rsel <= 1'b0;
-  csel <= 1'b0;
-end
-else begin
-  if (clken1x) begin
-    if (cs_n==1'b0) begin
+  if (phi02r[31] & ~phi02r[30]) begin // when phi02 transitions from high to low
+    irst_clr <= `FALSE;
+    imbc_clr <= `FALSE;
+    immc_clr <= `FALSE;
+    ilp_clr <= `FALSE;
+    if (cs_n==`LOW) begin
       if (wr) begin
-        case(ad[5:0])
-        6'h00:  mx[0][7:0] <= db;
-        6'h01:  my[0] <= db;
-        6'h02:  mx[1][7:0] <= db;
-        6'h03:  my[1] <= db;
-        6'h04:  mx[2][7:0] <= db;
-        6'h05:  my[2] <= db;
-        6'h06:  mx[3][7:0] <= db;
-        6'h07:  my[3] <= db;
-        6'h08:  mx[4][7:0] <= db;
-        6'h09:  my[4] <= db;
-        6'h0A:  mx[5][7:0] <= db;
-        6'h0B:  my[5] <= db;
-        6'h0C:  mx[6][7:0] <= db;
-        6'h0D:  my[6] <= db;
-        6'h0E:  mx[7][7:0] <= db;
-        6'h0F:  my[7] <= db;
-        6'h10:  begin
-                mx[0][8] <= db[0];
-                mx[1][8] <= db[1];
-                mx[2][8] <= db[2];
-                mx[3][8] <= db[3];
-                mx[4][8] <= db[4];
-                mx[5][8] <= db[5];
-                mx[6][8] <= db[6];
-                mx[7][8] <= db[7];
+        case(ad[7:0])
+        8'h00:  mx[{regpg,3'd0}][7:0] <= db;
+        8'h01:  my[{regpg,3'd0}] <= db;
+        8'h02:  mx[{regpg,3'd1}][7:0] <= db;
+        8'h03:  my[{regpg,3'd1}] <= db;
+        8'h04:  mx[{regpg,3'd2}][7:0] <= db;
+        8'h05:  my[{regpg,3'd2}] <= db;
+        8'h06:  mx[{regpg,3'd3}][7:0] <= db;
+        8'h07:  my[{regpg,3'd3}] <= db;
+        8'h08:  mx[{regpg,3'd4}][7:0] <= db;
+        8'h09:  my[{regpg,3'd4}] <= db;
+        8'h0A:  mx[{regpg,3'd5}][7:0] <= db;
+        8'h0B:  my[{regpg,3'd5}] <= db;
+        8'h0C:  mx[{regpg,3'd6}][7:0] <= db;
+        8'h0D:  my[{regpg,3'd6}] <= db;
+        8'h0E:  mx[{regpg,3'd7}][7:0] <= db;
+        8'h0F:  my[{regpg,3'd7}] <= db;
+        8'h10:  begin
+                mx[{regpg,3'd0}][8] <= db[0];
+                mx[{regpg,3'd1}][8] <= db[1];
+                mx[{regpg,3'd2}][8] <= db[2];
+                mx[{regpg,3'd3}][8] <= db[3];
+                mx[{regpg,3'd4}][8] <= db[4];
+                mx[{regpg,3'd5}][8] <= db[5];
+                mx[{regpg,3'd6}][8] <= db[6];
+                mx[{regpg,3'd7}][8] <= db[7];
                 end
-        6'h11:  begin
+        8'h11:  begin
                 yscroll <= db[2:0];
                 rsel <= db[3];
                 den <= db[4];
@@ -902,129 +1433,116 @@ else begin
                 ecm <= db[6];
                 rasterCmp[8] <= db[7];
                 end
-        6'h12:  rasterCmp[7:0] <= db;
-        6'h13:  ; // light pen x
-        6'h14:  ; // light pen y
-        6'h15:  me <= db;
-        6'h16:  begin
+        8'h12:  rasterCmp[7:0] <= db;
+        8'h13:  ; // light pen x
+        8'h14:  ; // light pen y
+        8'h15:  case(regpg[0])
+                1'd0: me[7:0] <= db;
+                1'd1: me[15:8] <= db;
+                endcase
+        8'h16:  begin
                 xscroll <= db[2:0];
                 csel <= db[3];
                 mcm <= db[4];
                 res <= db[5];
                 end  
-        6'd17:  mye <= db;
-        6'd18:  begin
-                cb <= db[3:1];
-                vm <= db[7:4];
+        8'h17:  case(regpg[0])
+                1'd0: mye[7:0] <= db;
+                1'd1: mye[15:8] <= db;
+                endcase
+        8'h18:  begin
+                	cb[13:11] <= db[3:1];
+                	vm[13:10] <= db[7:4];
+                	if (optNoBadlines)
+                		charbmpFetchFlag <= 1'b1;
                 end
-        6'd19:  begin
+        8'h19:  begin
                 irst_clr <= db[0];
                 imbc_clr <= db[1];
                 immc_clr <= db[2];
                 ilp_clr <= db[3];
                 irq_clr <= db[7];
                 end
-        6'h1A:  begin
+        8'h1A:  begin
                 erst <= db[0];
                 embc <= db[1];
                 emmc <= db[2];
-                elpc <= db[3];
+                elp <= db[3];
                 end
-        6'h1B:  mdp <= db;
-        6'h1C:  mmc <= db;
-        6'h1D:  mxe <= db;
-        6'h1E:  ; // mm collision
-        6'h1F:  ; // md collision
-        6'h20:  ec <= db[3:0];  // exterior (border color)
-        6'h21:  b0c <= db[3:0]; // background color #0
-        6'h22:  b1c <= db[3:0];
-        6'h23:  b2c <= db[3:0];
-        6'h24:  b3c <= db[3:0];
-        6'h25:  mm0 <= db[3:0];
-        6'h26:  mm1 <= db[3:0];
-        6'h27:  mc[0] <= db[3:0];
-        6'h28:  mc[1] <= db[3:0];
-        6'h29:  mc[2] <= db[3:0];
-        6'h2A:  mc[3] <= db[3:0];
-        6'h2B:  mc[4] <= db[3:0];
-        6'h2C:  mc[5] <= db[3:0];
-        6'h2D:  mc[6] <= db[3:0];
-        6'h2E:  mc[7] <= db[3:0];
-        6'h30:  regno <= db;
-        6'h31:
-          case(regno)
-          7'h0:  hSyncOn[7:0] <= db;
-          7'h1:  hSyncOn[11:8] <= db[3:0];
-          7'h2:  hSyncOff[7:0] <= db;
-          7'h3:  hSyncOff[11:8] <= db[3:0];
-          7'h4:  hBlankOff[7:0] <= db;
-          7'h5:  hBlankOff[11:8] <= db[3:0];
-          7'h6:  hBorderOff[7:0] <= db;
-          7'h7:  hBorderOff[11:8] <= db[3:0];
-          7'h8:  hBorderOn[7:0] <= db;
-          7'h9:  hBorderOn[11:8] <= db[3:0];
-          7'hA:  hBlankOn[7:0] <= db;
-          7'hB:  hBlankOn[11:8] <= db[3:0];
-          7'hC:  hTotal[7:0] <= db;
-          7'hD:  hTotal[11:8] <= db[3:0];
-          7'hF:  begin
-                  hSyncPol <= db[0];
-                  vSyncPol <= db[1];
-                  end
-          7'h10:  vSyncOn[7:0] <= db;
-          7'h11:  vSyncOn[11:8] <= db[3:0];
-          7'h12:  vSyncOff[7:0] <= db;
-          7'h13:  vSyncOff[11:8] <= db[3:0];
-          7'h14:  vBlankOff[7:0] <= db;
-          7'h15:  vBlankOff[11:8] <= db[3:0];
-          7'h16:  vBorderOff[7:0] <= db;
-          7'h17:  vBorderOff[11:8] <= db[3:0];
-          7'h18:  vBorderOn[7:0] <= db;
-          7'h19:  vBorderOn[11:8] <= db[3:0];
-          7'h1A:  vBlankOn[7:0] <= db;
-          7'h1B:  vBlankOn[11:8] <= db[3:0];
-          7'h1C:  vTotal[7:0] <= db;
-          7'h1D:  vTotal[11:8] <= db[3:0];
+        8'h1B:  mdp <= db;
+        8'h1C:  case(regpg)
+                1'd0: mmc[7:0] <= db;
+                1'd1: mmc[15:8] <= db;
+                endcase
+        8'h1D:  case(regpg)
+                1'd0: mxe[7:0] <= db;
+                1'd1: mxe[15:8] <= db;
+                endcase
+        8'h1E:  ; // mm collision
+        8'h1F:  ; // md collision
+        8'h20:  begin
+        				ec <= db[3:0];  // exterior (border color)
+        				ec1 <= db[7:4];
+        				end
+        8'h21:  b0c <= db[3:0]; // background color #0
+        8'h22:  b1c <= db[3:0];
+        8'h23:  b2c <= db[3:0];
+        8'h24:  b3c <= db[3:0];
+        8'h25:  mm0 <= db[3:0];
+        8'h26:  mm1 <= db[3:0];
+        8'h27:  mc[{regpg,3'd0}] <= db[3:0];
+        8'h28:  mc[{regpg,3'd1}] <= db[3:0];
+        8'h29:  mc[{regpg,3'd2}] <= db[3:0];
+        8'h2A:  mc[{regpg,3'd3}] <= db[3:0];
+        8'h2B:  mc[{regpg,3'd4}] <= db[3:0];
+        8'h2C:  mc[{regpg,3'd5}] <= db[3:0];
+        8'h2D:  mc[{regpg,3'd6}] <= db[3:0];
+        8'h2E:  mc[{regpg,3'd7}] <= db[3:0];
 
-          7'h20:  mx[8][7:0] <= db;
-          7'h21:  my[8] <= db;
-          7'h22:  mx[9][7:0] <= db;
-          7'h23:  my[9] <= db;
-          7'h24:  mx[10][7:0] <= db;
-          7'h25:  my[10] <= db;
-          7'h26:  mx[11][7:0] <= db;
-          7'h27:  my[11] <= db;
-          7'h28:  mx[12][7:0] <= db;
-          7'h29:  my[12] <= db;
-          7'h2A:  mx[13][7:0] <= db;
-          7'h2B:  my[13] <= db;
-          7'h2C:  mx[14][7:0] <= db;
-          7'h2D:  my[14] <= db;
-          7'h2E:  mx[15][7:0] <= db;
-          7'h2F:  my[16] <= db;
-          7'h30:  begin
-                  mx[8][8] <= db[0];
-                  mx[9][8] <= db[1];
-                  mx[10][8] <= db[2];
-                  mx[11][8] <= db[3];
-                  mx[12][8] <= db[4];
-                  mx[13][8] <= db[5];
-                  mx[14][8] <= db[6];
-                  mx[15][8] <= db[7];
-                  end
-          7'h35:  me[15:8] <= db;
-          7'd37:  mye[15:8] <= db;
-          7'h3C:  mmc[15:8] <= db;
-          7'h3D:  mxe[15:8] <= db;
-          7'h47:  mc[8] <= db[3:0];
-          7'h48:  mc[9] <= db[3:0];
-          7'h49:  mc[10] <= db[3:0];
-          7'h4A:  mc[11] <= db[3:0];
-          7'h4B:  mc[12] <= db[3:0];
-          7'h4C:  mc[13] <= db[3:0];
-          7'h4D:  mc[14] <= db[3:0];
-          7'h4E:  mc[15] <= db[3:0];
-          endcase
+        8'h30:  regno <= db[5:0];
+        8'h32:  begin
+                regpg <= db[1:0];
+                //col80 <= db[6];
+                end
+        8'h31:
+          case(regno)
+	        6'h00:  hSyncOn[7:0] <= db;
+	        6'h01:  hSyncOn[11:8] <= db[3:0];
+	        6'h02:  hSyncOff[7:0] <= db;
+	        6'h03:  hSyncOff[11:8] <= db[3:0];
+	        6'h04:  hBlankOff[7:0] <= db;
+	        6'h05:  hBlankOff[11:8] <= db[3:0];
+	        6'h06:  hBorderOff[7:0] <= db;
+	        6'h07:  hBorderOff[11:8] <= db[3:0];
+	        6'h08:  hBorderOn[7:0] <= db;
+	        6'h09:  hBorderOn[11:8] <= db[3:0];
+	        6'h0A:  hBlankOn[7:0] <= db;
+	        6'h0B:  hBlankOn[11:8] <= db[3:0];
+	        6'h0C:  hTotal[7:0] <= db;
+	        6'h0D:  hTotal[11:8] <= db[3:0];
+	        6'h0F:  begin
+	                hSyncPol <= db[0];
+	                vSyncPol <= db[1];
+	                end
+	        6'h10:  vSyncOn[7:0] <= db;
+	        6'h11:  vSyncOn[11:8] <= db[3:0];
+	        6'h12:  vSyncOff[7:0] <= db;
+	        6'h13:  vSyncOff[11:8] <= db[3:0];
+	        6'h14:  vBlankOff[7:0] <= db;
+	        6'h15:  vBlankOff[11:8] <= db[3:0];
+	        6'h16:  vBorderOff[7:0] <= db;
+	        6'h17:  vBorderOff[11:8] <= db[3:0];
+	        6'h18:  vBorderOn[7:0] <= db;
+	        6'h19:  vBorderOn[11:8] <= db[3:0];
+	        6'h1A:  vBlankOn[7:0] <= db;
+	        6'h1B:  vBlankOn[11:8] <= db[3:0];
+	        6'h1C:  vTotal[7:0] <= db;
+	        6'h1D:  vTotal[11:8] <= db[3:0];
+	        endcase
+	      8'h38:	useimem <= db[7:4]==db[3:0];
+//	      8'h39:	imemAddr[7:0] <= db;
+//	      8'h3A:	imemAddr[15:8] <= db;
+//	      8'h3B:	imemData <= db;
         endcase
       end
     end
@@ -1038,29 +1556,17 @@ assign hBlank = hCtr >= hBlankOn || hCtr < hBlankOff;
 assign vBorder = vCtr >= vBorderOn || vCtr < vBorderOff;
 assign hBorder = hCtr >= hBorderOn || hCtr < hBorderOff;
 
-counter #(12) u4 (.rst(rst), .clk(clk33), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr) );
-counter #(12) u5 (.rst(rst), .clk(clk33), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr) );
+counter #(12) u4 (.rst(rst), .clk(clk40), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr) );
+counter #(12) u5 (.rst(rst), .clk(clk40), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr) );
 
-always @(posedge clk33)
-    blank <= #1 hBlank|vBlank;
-always @(posedge clk33)
-    border <= #1 hBorder|vBorder;
-always @(posedge clk33)
+always_ff @(posedge clk40)
+  blank <= #1 hBlank|vBlank;
+always_ff @(posedge clk40)
+  border <= #1 hBorder|vBorder;
+always_ff @(posedge clk40)
 	hSync <= #1 hSync1;
-always @(posedge clk33)
+always_ff @(posedge clk40)
 	vSync <= #1 vSync1;
 
-wire [23:0] color24;
-
-FAL6567_ColorROM u6
-(
-  .clk(clk33),
-  .ce(1'b1),
-  .code(color33),
-  .color(color24)
-);
-assign red = color24[23:20];
-assign green = color24[15:12];
-assign blue = color24[7:4];
-
 endmodule
+

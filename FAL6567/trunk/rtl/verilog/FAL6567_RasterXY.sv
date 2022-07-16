@@ -35,13 +35,13 @@
 //                                                                
 // ============================================================================
 //
-module FAL6567_RasterXY(rst, clk33, clken8,
+module FAL6567_RasterXY(rst, clk, dotclk_en,
 	rasterXMax, rasterYMax, preRasterX, rasterX,
 	preRasterY, rasterY, nextRasterY
 );
 input rst;
-input clk33;
-input clken8;
+input clk;
+input dotclk_en;
 input [10:0] rasterXMax;
 input [8:0] rasterYMax;
 output reg [10:0] preRasterX;
@@ -50,12 +50,12 @@ output reg [8:0] preRasterY;
 output reg [8:0] rasterY;
 output reg [8:0] nextRasterY;
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	preRasterX <= 11'd0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		if (preRasterX==rasterXMax)
 			preRasterX <= 11'd0;
 		else
@@ -63,12 +63,12 @@ else begin
 	end  
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	rasterX <= 11'd0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		if (preRasterX==11'h14)
 			rasterX <= 11'h0;
 		else
@@ -76,12 +76,12 @@ else begin
 	end  
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	preRasterY <= 9'd0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		if (preRasterX==rasterXMax) begin
 			if (preRasterY==rasterYMax)
 				preRasterY <= 9'd0;
@@ -91,24 +91,24 @@ else begin
 	end  
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	rasterY <= 9'd0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		if (preRasterX==11'h14) begin
 			rasterY <= preRasterY;
 		end
 	end  
 end
 
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	nextRasterY <= 9'd0;
 end
 else begin
-	if (clken8) begin
+	if (dotclk_en) begin
 		if (rasterX==11'd0) begin
 			nextRasterY <= rasterY + 2'd1;
 		end

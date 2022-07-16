@@ -72,7 +72,7 @@ end
 always #41.667 clk = ~clk;
 always #5 clk100 <= ~clk100;
 
-FAL6567j #(
+FAL6567 #(
   .pSimRasterEnable(1),
   .SIM(1'b1)
 ) u1

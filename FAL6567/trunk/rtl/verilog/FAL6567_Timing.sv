@@ -37,11 +37,12 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_Timing(rst, clk33, clken8, stc, phi02, phi02r, busCycle, ras_n, mux, cas_n,
+module FAL6567_Timing(rst, clk33, dotclk_en, col80, stc, phi02, phi02r, busCycle, ras_n, mux, cas_n,
 	enaData, enaMCnt);
 input rst;
 input clk33;
-output clken8;
+output dotclk_en;
+input col80;
 output reg [31:0] stc;
 output reg phi02;
 output reg [31:0] phi02r;
@@ -68,12 +69,16 @@ if (rst) begin
 	clk8r <= 32'b10001000100010001000100010001000;
 end
 else begin
-	if (stCycle)
-		clk8r <= 32'b00010001000100010001000100010001;
+	if (stCycle) begin
+		if (col80)
+			clk8r <= 32'b01010101010101010101010101010101;
+		else
+			clk8r <= 32'b00010001000100010001000100010001;
+	end
 	else
 		clk8r <= {clk8r[30:0],clk8r[31]};
 end
-assign clken8 = clk8r[31];
+assign dotclk_en = clk8r[31];
 
 // 1.022 MHz enable
 always_ff @(posedge clk33)

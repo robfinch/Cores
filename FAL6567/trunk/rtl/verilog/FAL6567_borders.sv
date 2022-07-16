@@ -37,12 +37,12 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_borders(clk, den, col80, 
+module FAL6567_borders(clk, col80, den,
 	vBorderOn, vBorderOff, hBorderOff, hBorderOn,
 	rsel, csel, rasterX, rasterY, hBorder, vBorder, border);
 input clk;
-input den;
 input col80;
+input den;
 input [8:0] vBorderOn;
 input [8:0] vBorderOff;
 input [10:0] hBorderOn;
@@ -76,11 +76,11 @@ begin
 	if (den) begin
 		if (col80) begin
 			if (csel) begin
-				if (rasterX >= hBorderOff && rasterX <= hBorderOn + 11'd320)
+				if (rasterX >= {hBorderOff,1'b0} && rasterX <= {hBorderOn,1'b0})
 					hBorder <= `FALSE;
 			end
 			else begin
-				if (rasterX >= hBorderOff + 3'd7 && rasterX <= hBorderOn + 11'd312)
+				if (rasterX >= {hBorderOff + 3'd7,1'b0} && rasterX <= {hBorderOn - 4'd9,1'b0});
 					hBorder <= `FALSE;
 			end
 		end

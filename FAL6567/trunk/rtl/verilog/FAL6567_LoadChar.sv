@@ -37,9 +37,11 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_LoadChar(rst, clk, phi02, enaData, vicCycle, badline, db, propChar, char);
+module FAL6567_LoadChar(rst, clk, col80, phi02, enaData, vicCycle, badline, 
+	startFetchCharBmp, fetchCharBmp, db, propChar, char);
 input rst;
 input clk;
+input col80;
 input phi02;
 input enaData;
 input [2:0] vicCycle;
@@ -53,11 +55,27 @@ always_ff @(posedge clk)
 if (rst)
 	char <= 12'h000;
 else begin
-	if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
-		if (badline)
-			char <= db;
-		else
-			char <= propChar;
+	if (startFetchCharBmp)
+		char <= 12'h000;
+	else if (enaData) begin
+		if (phi02==`LOW && fetchCharBmp)
+			char <= char + 2'd1;
+		else if (col80) begin
+			if (vicCycle==VIC_CHAR) begin
+				if (badline)
+					char <= db;
+				else
+					char <= propChar;
+			end
+		end
+		else begin
+			if (phi02==`HIGH && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
+				if (badline)
+					char <= db;
+				else
+					char <= propChar;
+			end
+		end
 	end
 end
 

@@ -38,7 +38,7 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module FAL6567_sync(chip, rst, clk, rasterX, rasterY, 
+module FAL6567_sync(chip, rst, clk, col80, rasterX, rasterY, 
 	hSync, vSync, cSync, burstWindow);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
@@ -47,6 +47,7 @@ parameter CHIP6572 = 2'd3;
 input [1:0] chip;
 input rst;
 input clk;
+input col80;
 input [10:0] rasterX;
 input [8:0] rasterY;
 output reg hSync;
@@ -83,7 +84,11 @@ endcase
 always_ff @(posedge clk)
 begin
 	hSync <= `FALSE;
-	if (rasterX < hSyncWidth)	// 8%
+	if (col80) begin
+		if (rasterX < {hSyncWidth,1'b0})
+			hSync <= `TRUE;
+	end
+	else if (rasterX < hSyncWidth)	// 8%
 		hSync <= `TRUE;
 end
 
@@ -92,7 +97,7 @@ wire EQ, SE;
 EqualizationPulse ueqp1
 (
 	.chip(chip),
-	.rasterX(rasterX),
+	.rasterX(col80 ? rasterX[10:1] : rasterX),
 	.EQ(EQ)
 );
 
@@ -100,7 +105,7 @@ EqualizationPulse ueqp1
 SerrationPulse usep1
 (
 	.chip(chip),
-	.rasterX(rasterX),
+	.rasterX(col80 ? rasterX[10:1] : rasterX),
 	.SE(SE)
 );
 
@@ -150,10 +155,18 @@ endcase
 reg burstWindow;
 always @(posedge clk)
 begin
-	if (rasterX >= burstWindowBegin && rasterX < burstWindowEnd && rasterY > 8)
-		burstWindow <= `TRUE;
-	else
-		burstWindow <= `FALSE;
+	if (col80) begin
+		if (rasterX >= {burstWindowBegin,1'b0} && rasterX < {burstWindowEnd,1'b0} && rasterY > 8)
+			burstWindow <= `TRUE;
+		else
+			burstWindow <= `FALSE;
+	end
+	else begin
+		if (rasterX >= burstWindowBegin && rasterX < burstWindowEnd && rasterY > 8)
+			burstWindow <= `TRUE;
+		else
+			burstWindow <= `FALSE;
+	end
 end
 
 endmodule

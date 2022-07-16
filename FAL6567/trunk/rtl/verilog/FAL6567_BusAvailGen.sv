@@ -37,12 +37,11 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_BusAvailGen(chip, rst, clk33, col80, me, my, badline,
+module FAL6567_BusAvailGen(chip, rst, clk, me, my, badline,
 	rasterX2, nextRasterY, MActive, stCycle2, ba);
 input [1:0] chip;
 input rst;
-input clk33;
-input col80;
+input clk;
 input [MIBCNT-1:0] me;
 input [7:0] my [MIBCNT-1:0];
 input badline;
@@ -56,23 +55,14 @@ reg [MIBCNT-1:0] balos = 16'h0000;
 
 //always @(chip,n,me,my,nextRasterY,rasterX2,MActive,leg)
 integer n1;
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 	for (n1 = 0; n1 < MIBCNT; n1 = n1 + 1) begin
 		if (me[n1] && ((my[n1]==nextRasterY[7:0])||MActive[n1])) begin
-			if (col80) begin
-				case(chip)
-				CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h550 + {n1,5'b0}) && (rasterX2 < 12'h5A0 + {n1,5'b0});
-				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h540 + {n1,5'b0}) && (rasterX2 < 12'h590 + {n1,5'b0});
-				default:      balos[n1] <= (rasterX2 >= 12'h530 + {n1,5'b0}) && (rasterX2 < 12'h580 + {n1,5'b0}); 
-				endcase
-			end
-			else begin
-				case(chip)
-				CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,5'b0}) && (rasterX2 < 12'h320 + {n1,5'b0});
-				CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,5'b0}) && (rasterX2 < 12'h310 + {n1,5'b0});
-				default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,5'b0}) && (rasterX2 < 12'h300 + {n1,5'b0}); 
-				endcase
-			end
+			case(chip)
+			CHIP6567R8:   balos[n1] <= (rasterX2 >= 12'h2D0 + {n1,5'b0}) && (rasterX2 < 12'h320 + {n1,5'b0});
+			CHIP6567OLD:  balos[n1] <= (rasterX2 >= 12'h2C0 + {n1,5'b0}) && (rasterX2 < 12'h310 + {n1,5'b0});
+			default:      balos[n1] <= (rasterX2 >= 12'h2B0 + {n1,5'b0}) && (rasterX2 < 12'h300 + {n1,5'b0}); 
+			endcase
 		end
 		else begin
 			balos[n1] <= `FALSE;
@@ -80,15 +70,7 @@ always_ff @(posedge clk33)
 	end
 
 reg [10:0] baloff;
-always_ff @(posedge clk33)
-if (col80)
-	case(chip)
-	2'b00:	baloff <= 11'h540;
-	2'b01:	baloff <= 11'h530;
-	2'b10:	baloff <= 11'h520;
-	2'b11:	baloff <= 11'h520;
-	endcase
-else
+always_ff @(posedge clk)
 	case(chip)
 	2'b00:	baloff <= 11'h2C0;
 	2'b01:	baloff <= 11'h2B0;
@@ -104,7 +86,7 @@ wire balo = |balos | (badline && rasterX2 < baloff);
 //------------------------------------------------------------------------------
 
 reg ba1;
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 if (rst) begin
 	ba1 <= `LOW;
 end
@@ -112,7 +94,7 @@ else begin
 	if (stCycle2)
   	ba1 <= !balo;
 end
-always_ff @(posedge clk33)
+always_ff @(posedge clk)
 	ba <= ba1;
 
 endmodule

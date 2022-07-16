@@ -37,9 +37,10 @@
 //
 import FAL6567_pkg::*;
 
-module FAL6567_ShiftChar(rst, clk, phi02, enaData, vicCycle, char, charbuf);
+module FAL6567_ShiftChar(rst, clk, col80, phi02, enaData, vicCycle, char, charbuf);
 input rst;
 input clk;
+input col80;
 input phi02;
 input enaData;
 input [2:0] vicCycle;
@@ -53,10 +54,19 @@ if (rst) begin
 		charbuf[n2] <= 12'h000;
 end
 else begin
-	if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
-		for (n2 = 78; n2 > 0; n2 = n2 -1)
-			charbuf[n2] = charbuf[n2-1];
-		charbuf[0] <= char;
+	if (col80) begin
+		if (enaData && vicCycle==VIC_CHAR) begin
+			for (n2 = 78; n2 > 0; n2 = n2 -1)
+				charbuf[n2] = charbuf[n2-1];
+			charbuf[0] <= char;
+		end
+	end
+	else begin
+		if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
+			for (n2 = 78; n2 > 0; n2 = n2 -1)
+				charbuf[n2] = charbuf[n2-1];
+			charbuf[0] <= char;
+		end
 	end
 end
 

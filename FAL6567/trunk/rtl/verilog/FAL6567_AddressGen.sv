@@ -71,7 +71,7 @@ begin
 			addr <= {6'b111111,refcntr};
 	VIC_CHAR,VIC_G:
 		begin
-			if (phi02==`HIGH)
+			if (phi02==`HIGH || col80)
 				addr <= vm + vmndx;
 			else begin
 				if (bmm)
@@ -82,12 +82,12 @@ begin
 					addr[10:9] <= 2'b00;
 			end
 		end
+	VIC_CHARBMP:
+		if (phi02==`LOW)
+			addr <= {cb[13:11],nextChar[7:0],scanline};
 	VIC_SPRITE:
 		if (phi02==`LOW && sprite1[4]) begin
-			if (col80)
-				addr <= vm + {14'b0001111111,sprite[3:0]};
-			else
-				addr <= vm + {14'b00001111111,sprite[2:0]};
+			addr <= vm + {14'b00001111111,sprite[2:0]};
 		end
 		else
 			addr <= {MPtr[sprite],MCnt[sprite]};

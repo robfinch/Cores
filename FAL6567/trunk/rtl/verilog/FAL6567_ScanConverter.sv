@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FAL6567j_ScanConverter.sv
+//	FAL6567_ScanConverter.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@
 // Requires 162kB of block RAM          
 // ============================================================================
 
-module FAL6567j_ScanConverter(chip, clk33, clken8, clk40, col80, hSync8_i, vSync8_i, color_i, hSync40_i, vSync40_i, color_o);
+module FAL6567_ScanConverter(chip, clk33, dotclk_en, clk40, col80, hSync8_i, vSync8_i, color_i, hSync40_i, vSync40_i, color_o);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -44,7 +44,7 @@ parameter CHIP6572 = 2'd3;
 
 input [1:0] chip;
 input clk33;
-input clken8;
+input dotclk_en;
 input clk40;
 input col80;
 input hSync8_i;
@@ -77,10 +77,10 @@ reg [17:0] adr40;
 always_ff @(posedge clk33)
 if (col80)
 	case(chip)
-	CHIP6567R8:   raster8XMax = 11'd1048;
-	CHIP6567OLD:  raster8XMax = 11'd1032;
-	CHIP6569:     raster8XMax = 11'd1016;
-	CHIP6572:     raster8XMax = 11'd1016;
+	CHIP6567R8:   raster8XMax = 11'd1056;
+	CHIP6567OLD:  raster8XMax = 11'd1040;
+	CHIP6569:     raster8XMax = 11'd1024;
+	CHIP6572:     raster8XMax = 11'd1024;
 	endcase
 else
 	case(chip)
@@ -91,7 +91,7 @@ else
 	endcase
 
 always_ff @(posedge clk33)
-if (clken8) begin
+if (dotclk_en) begin
 	phSync8 <= hSync8_i;
 	pvSync8 <= vSync8_i;
 	if (hSync8_i && !phSync8)
@@ -119,20 +119,17 @@ begin
 end
 
 always_ff @(posedge clk33)
-if (clken8)
+if (dotclk_en)
 	adr8 <= raster8Y * raster8XMax + raster8X;
 always_ff @(posedge clk33)
-if (clken8)
+if (dotclk_en)
  	color_ir <= color_i;
 always_ff @(posedge clk33)
-if (clken8)
+if (dotclk_en)
   mem[adr8] <= color_ir;
 
 always_ff @(posedge clk40)
-	if (col80)
-		adr40 <= raster40Y[9:1] * raster8XMax + raster40X[11:0];
-	else
-		adr40 <= raster40Y[9:1] * raster8XMax + raster40X[11:1];
+	adr40 <= raster40Y[9:1] * raster8XMax + raster40X[11:1];
 always_ff @(posedge clk40)
 	color_ou <= mem[adr40];
 always_ff @(posedge clk40)
