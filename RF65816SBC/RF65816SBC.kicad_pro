@@ -328,6 +328,18 @@
     [
       "f72289ac-fcae-4bbd-9550-3fd67ca134c9",
       "Clkgen2"
+    ],
+    [
+      "4e41507e-31dc-43c7-b2fe-56277f56ee60",
+      "SerialIO"
+    ],
+    [
+      "0e5fd631-95a1-4677-ac12-df53b8e8dd52",
+      "VGAIO"
+    ],
+    [
+      "2a2671c7-b293-4f4b-b272-50270a5d2ce2",
+      "SRAM"
     ]
   ],
   "text_variables": {}
