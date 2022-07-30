@@ -1,6 +1,6 @@
 (kicad_sch (version 20211123) (generator eeschema)
 
-  (uuid 4e44cd5a-f925-4ac6-b639-67ea6128e65b)
+  (uuid b3d13cf6-e852-489e-b31b-c8351bd1fc75)
 
   (paper "A4")
 
@@ -1986,7 +1986,7 @@
   (symbol (lib_id "MyLib:CModA7") (at 93.98 74.93 0) (unit 1)
     (in_bom yes) (on_board yes) (fields_autoplaced)
     (uuid 888b1b8a-1bbc-47b8-bb97-54e72012c510)
-    (property "Reference" "U?" (id 0) (at 95.885 42.071 0))
+    (property "Reference" "U40" (id 0) (at 95.885 42.071 0))
     (property "Value" "CModA7" (id 1) (at 95.885 44.6079 0))
     (property "Footprint" "" (id 2) (at 95.25 41.91 0)
       (effects (font (size 1.27 1.27)) hide)
