@@ -323,14 +323,6 @@
     [
       "62b4011a-9afe-4552-abc9-e5b417cab4d3",
       "Clkgen"
-    ],
-    [
-      "c77cb015-9df9-492d-b1f3-bbef62a27fc4",
-      "IRQ"
-    ],
-    [
-      "d3015e76-d178-4b91-b547-d0e3a4cb0cfb",
-      "IRQFPGA"
     ]
   ],
   "text_variables": {}
