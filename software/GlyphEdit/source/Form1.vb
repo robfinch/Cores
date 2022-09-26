@@ -8,70 +8,71 @@ Public Class Form1
 	Friend WithEvents CheckBox1 As CheckBox
 	Friend WithEvents CheckBox2 As CheckBox
 	Friend WithEvents Label4 As Label
+	Friend WithEvents CheckBox3 As CheckBox
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
 	Public Sub New()
-        MyBase.New()
+		MyBase.New()
 
-        'This call is required by the Windows Form Designer.
-        InitializeComponent()
+		'This call is required by the Windows Form Designer.
+		InitializeComponent()
 
-        'Add any initialization after the InitializeComponent() call
-        Dim n As Integer
-        For n = 0 To 511
-            glyphs(n) = New Glyph
-            glyphs(n).index = n
-            glyphs(n).scanlines = 8
-            glyphs(n).horizDots = 8
-        Next
-        For n = 0 To 16
-            sprites(n) = New Sprite
-            sprites(n).index = n
-            sprites(n).scanlines = 48
-            sprites(n).horizDots = 42
-        Next
-    End Sub
+		'Add any initialization after the InitializeComponent() call
+		Dim n As Integer
+		For n = 0 To 511
+			glyphs(n) = New Glyph
+			glyphs(n).index = n
+			glyphs(n).scanlines = 8
+			glyphs(n).horizDots = 8
+		Next
+		For n = 0 To 16
+			sprites(n) = New Sprite
+			sprites(n).index = n
+			sprites(n).scanlines = 48
+			sprites(n).horizDots = 42
+		Next
+	End Sub
 
-    'Form overrides dispose to clean up the component list.
-    Protected Overloads Overrides Sub Dispose(ByVal disposing As Boolean)
-        If disposing Then
-            If Not (components Is Nothing) Then
-                components.Dispose()
-            End If
-        End If
-        MyBase.Dispose(disposing)
-    End Sub
+	'Form overrides dispose to clean up the component list.
+	Protected Overloads Overrides Sub Dispose(ByVal disposing As Boolean)
+		If disposing Then
+			If Not (components Is Nothing) Then
+				components.Dispose()
+			End If
+		End If
+		MyBase.Dispose(disposing)
+	End Sub
 
-    'Required by the Windows Form Designer
-    Private components As System.ComponentModel.IContainer
+	'Required by the Windows Form Designer
+	Private components As System.ComponentModel.IContainer
 
-    'NOTE: The following procedure is required by the Windows Form Designer
-    'It can be modified using the Windows Form Designer.  
-    'Do not modify it using the code editor.
-    Friend WithEvents OpenFileDialog1 As System.Windows.Forms.OpenFileDialog
-    Friend WithEvents Label1 As System.Windows.Forms.Label
-    Friend WithEvents txtInstName As System.Windows.Forms.TextBox
-    Friend WithEvents Button3 As System.Windows.Forms.Button
-    Friend WithEvents ListBox1 As System.Windows.Forms.ListBox
-    Friend WithEvents PictureBox1 As System.Windows.Forms.PictureBox
-    Friend WithEvents MainMenu1 As System.Windows.Forms.MainMenu
-    Friend WithEvents MenuItem1 As System.Windows.Forms.MenuItem
-    Friend WithEvents MenuItem2 As System.Windows.Forms.MenuItem
-    Friend WithEvents MenuItem3 As System.Windows.Forms.MenuItem
-    Friend WithEvents MenuItem4 As System.Windows.Forms.MenuItem
-    Friend WithEvents Label2 As System.Windows.Forms.Label
-    Friend WithEvents lblHeight As System.Windows.Forms.Label
-    Friend WithEvents ToolTip1 As System.Windows.Forms.ToolTip
-    Friend WithEvents ToolTip2 As System.Windows.Forms.ToolTip
-    Friend WithEvents NumericUpDown1 As System.Windows.Forms.NumericUpDown
-    Friend WithEvents NumericUpDown2 As System.Windows.Forms.NumericUpDown
-    Friend WithEvents PictureBox2 As System.Windows.Forms.PictureBox
-    Friend WithEvents MenuItem5 As System.Windows.Forms.MenuItem
-    Friend WithEvents Label3 As System.Windows.Forms.Label
-    Friend WithEvents MenuItem6 As System.Windows.Forms.MenuItem
-    Friend WithEvents MenuItem7 As System.Windows.Forms.MenuItem
-    <System.Diagnostics.DebuggerStepThrough()> Private Sub InitializeComponent()
+	'NOTE: The following procedure is required by the Windows Form Designer
+	'It can be modified using the Windows Form Designer.  
+	'Do not modify it using the code editor.
+	Friend WithEvents OpenFileDialog1 As System.Windows.Forms.OpenFileDialog
+	Friend WithEvents Label1 As System.Windows.Forms.Label
+	Friend WithEvents txtInstName As System.Windows.Forms.TextBox
+	Friend WithEvents Button3 As System.Windows.Forms.Button
+	Friend WithEvents ListBox1 As System.Windows.Forms.ListBox
+	Friend WithEvents PictureBox1 As System.Windows.Forms.PictureBox
+	Friend WithEvents MainMenu1 As System.Windows.Forms.MainMenu
+	Friend WithEvents MenuItem1 As System.Windows.Forms.MenuItem
+	Friend WithEvents MenuItem2 As System.Windows.Forms.MenuItem
+	Friend WithEvents MenuItem3 As System.Windows.Forms.MenuItem
+	Friend WithEvents MenuItem4 As System.Windows.Forms.MenuItem
+	Friend WithEvents Label2 As System.Windows.Forms.Label
+	Friend WithEvents lblHeight As System.Windows.Forms.Label
+	Friend WithEvents ToolTip1 As System.Windows.Forms.ToolTip
+	Friend WithEvents ToolTip2 As System.Windows.Forms.ToolTip
+	Friend WithEvents NumericUpDown1 As System.Windows.Forms.NumericUpDown
+	Friend WithEvents NumericUpDown2 As System.Windows.Forms.NumericUpDown
+	Friend WithEvents PictureBox2 As System.Windows.Forms.PictureBox
+	Friend WithEvents MenuItem5 As System.Windows.Forms.MenuItem
+	Friend WithEvents Label3 As System.Windows.Forms.Label
+	Friend WithEvents MenuItem6 As System.Windows.Forms.MenuItem
+	Friend WithEvents MenuItem7 As System.Windows.Forms.MenuItem
+	<System.Diagnostics.DebuggerStepThrough()> Private Sub InitializeComponent()
 		Me.components = New System.ComponentModel.Container()
 		Me.OpenFileDialog1 = New System.Windows.Forms.OpenFileDialog()
 		Me.Label1 = New System.Windows.Forms.Label()
@@ -98,6 +99,7 @@ Public Class Form1
 		Me.CheckBox1 = New System.Windows.Forms.CheckBox()
 		Me.CheckBox2 = New System.Windows.Forms.CheckBox()
 		Me.Label4 = New System.Windows.Forms.Label()
+		Me.CheckBox3 = New System.Windows.Forms.CheckBox()
 		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -272,10 +274,23 @@ Public Class Form1
 		Me.Label4.TabIndex = 180
 		Me.Label4.Text = "Verilog output"
 		'
+		'CheckBox3
+		'
+		Me.CheckBox3.AutoSize = True
+		Me.CheckBox3.Checked = True
+		Me.CheckBox3.CheckState = System.Windows.Forms.CheckState.Checked
+		Me.CheckBox3.Location = New System.Drawing.Point(132, 266)
+		Me.CheckBox3.Name = "CheckBox3"
+		Me.CheckBox3.Size = New System.Drawing.Size(71, 17)
+		Me.CheckBox3.TabIndex = 181
+		Me.CheckBox3.Text = "8-bit mem"
+		Me.CheckBox3.UseVisualStyleBackColor = True
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.CheckBox3)
 		Me.Controls.Add(Me.Label4)
 		Me.Controls.Add(Me.CheckBox2)
 		Me.Controls.Add(Me.CheckBox1)
@@ -307,18 +322,18 @@ Public Class Form1
 
 
 	Private Sub Button1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        Dim n As Integer
-        Dim ofl As File
-        Dim strm As Stream
-        Dim ofs As TextWriter
-        Dim path As String
-        Dim fd As SaveFileDialog
-        Dim s As String
-        Dim gcnt As Integer
-        Dim row As Integer
-        Dim inst As Integer
+		Dim n As Integer
+		Dim ofl As File
+		Dim strm As Stream
+		Dim ofs As TextWriter
+		Dim path As String
+		Dim fd As SaveFileDialog
+		Dim s As String
+		Dim gcnt As Integer
+		Dim row As Integer
+		Dim inst As Integer
 
-        fd = New SaveFileDialog
+		fd = New SaveFileDialog
 		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
 		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
@@ -359,32 +374,32 @@ Public Class Form1
 				Next
 			Else
 				ofs.WriteLine("always @(bmndx)")
-                ofs.WriteLine("case(bmndx)")
-                For n = 0 To 511
-                    glyphs(n).SerializeToV(ofs)
-                Next
-                ofs.WriteLine("endcase")
-            End If
-            ofs.Close()
-        End If
-    End Sub
+				ofs.WriteLine("case(bmndx)")
+				For n = 0 To 511
+					glyphs(n).SerializeToV(ofs)
+				Next
+				ofs.WriteLine("endcase")
+			End If
+			ofs.Close()
+		End If
+	End Sub
 
 
-    Private Sub Button2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        OpenFile()
-    End Sub
+	Private Sub Button2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+		OpenFile()
+	End Sub
 
-    Private Sub Button3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button3.Click
-        Dim j As Integer
+	Private Sub Button3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button3.Click
+		Dim j As Integer
 
-        For j = 0 To 511
-            glyphs(j).FlipHoriz()
-        Next
+		For j = 0 To 511
+			glyphs(j).FlipHoriz()
+		Next
 
-    End Sub
+	End Sub
 
 
-    Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
+	Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 		Dim j As Integer
 
 		For j = 0 To 511
@@ -393,22 +408,22 @@ Public Class Form1
 		Next
 	End Sub
 
-    Private Sub PictureBox1_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox1.Paint
-        Dim n As Integer
-        n = ListBox1.SelectedIndex()
-        If n >= 0 Then
-            glyphs(n).Draw(e)
-        End If
-    End Sub
+	Private Sub PictureBox1_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox1.Paint
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		If n >= 0 Then
+			glyphs(n).Draw(e)
+		End If
+	End Sub
 
-    Private Sub ListBox1_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ListBox1.SelectedIndexChanged
-        PictureBox1.Invalidate()
-        PictureBox2.Invalidate()
-    End Sub
+	Private Sub ListBox1_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ListBox1.SelectedIndexChanged
+		PictureBox1.Invalidate()
+		PictureBox2.Invalidate()
+	End Sub
 
-    Private Sub PictureBox1_MouseDown(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles PictureBox1.MouseDown
-        Dim wx As Integer
-        Dim wy As Integer
+	Private Sub PictureBox1_MouseDown(ByVal sender As Object, ByVal e As System.Windows.Forms.MouseEventArgs) Handles PictureBox1.MouseDown
+		Dim wx As Integer
+		Dim wy As Integer
 		Dim n As Integer
 		Dim sc As Integer
 
@@ -422,48 +437,49 @@ Public Class Form1
 		If (wx < 0 Or wx > glyphs(0).horizDots - 1) Or (wy < 0 Or wy > gheight) Then
 		Else
 			n = ListBox1.SelectedIndex()
-            If n >= 0 Then
-                glyphs(n).FlipBit(wx, wy)
-                PictureBox1.Invalidate()
-                PictureBox2.Invalidate()
-            End If
-        End If
-    End Sub
+			If n >= 0 Then
+				glyphs(n).FlipBit(wx, wy)
+				PictureBox1.Invalidate()
+				PictureBox2.Invalidate()
+			End If
+		End If
+	End Sub
 
-    Private Sub MenuItem2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem2.Click
-        OpenFile()
-    End Sub
+	Private Sub MenuItem2_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem2.Click
+		OpenFile()
+	End Sub
 
-    Private Sub OpenFile()
-        Dim n As Integer
-        Dim ifl As File
-        Dim strm As Stream
-        Dim ifs As TextReader
-        Dim path As String
-        Dim fd As OpenFileDialog
-        Dim text As String
-        Dim lines() As String
-        Dim line As String
-        Dim strs() As String
-        Dim data() As String
-        Dim j As Integer
-        Dim ch1 As Char
-        Dim ch2 As Char
+	Private Sub OpenFile()
+		Dim n As Integer
+		Dim ifl As File
+		Dim strm As Stream
+		Dim ifs As TextReader
+		Dim path As String
+		Dim fd As OpenFileDialog
+		Dim text As String
+		Dim lines() As String
+		Dim line As String
+		Dim strs() As String
+		Dim data() As String
+		Dim j As Integer
+		Dim ch1 As Char
+		Dim ch2 As Char
 		Dim byt As String
 		Dim s As String
 		Dim bcnt As Integer
 		Dim radix As Integer
 		Dim gcnt As Integer
 		Dim readingVector As Boolean
+		Dim sz As Integer
 		fd = New OpenFileDialog
 		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
 		fd.FilterIndex = 2
 		If fd.ShowDialog() = DialogResult.OK Then
-            ifs = ifl.OpenText(fd.FileName)
-            text = ifs.ReadToEnd()
+			ifs = ifl.OpenText(fd.FileName)
+			text = ifs.ReadToEnd()
 			lines = text.Split(vbLf)
 			gcnt = 0
-            bcnt = 0
+			bcnt = 0
 			If fd.FileName.EndsWith(".coe") Then
 				readingVector = False
 				radix = 16
@@ -502,10 +518,14 @@ Public Class Form1
 			ElseIf fd.FileName.EndsWith(".mem") Then
 				readingVector = False
 				radix = 16
+				sz = 0
+				If CheckBox3.Checked Then
+					sz = 8
+				End If
 				For Each line In lines
 					s = line.Trim
 					If (s <> "") Then
-						glyphs(gcnt).SerializeFromMem(s)
+						glyphs(gcnt).SerializeFromMem(s, sz)
 						gcnt = gcnt + 1
 						If gcnt = 512 Then GoTo x1
 					End If
@@ -538,33 +558,34 @@ Public Class Form1
 				Next
 			End If
 x1:
-            For n = 0 To 511
-                '                glyphs(n).SerializeTo(ofs)
-            Next
-            ifs.Close()
-        End If
-    End Sub
+			For n = 0 To 511
+				'                glyphs(n).SerializeTo(ofs)
+			Next
+			ifs.Close()
+		End If
+	End Sub
 
-    Sub SaveFile()
-        Dim n As Integer
-        Dim ofl As File
-        Dim strm As Stream
-        Dim ofs As TextWriter
-        Dim path As String
-        Dim fd As SaveFileDialog
-        Dim s As String
-        Dim gcnt As Integer
-        Dim row As Integer
-        Dim inst As Integer
-        Dim s1 As String
-        Dim s2 As String
-        Dim s3 As String
+	Sub SaveFile()
+		Dim n As Integer
+		Dim ofl As File
+		Dim strm As Stream
+		Dim ofs As TextWriter
+		Dim path As String
+		Dim fd As SaveFileDialog
+		Dim s As String
+		Dim gcnt As Integer
+		Dim row As Integer
+		Dim inst As Integer
+		Dim s1 As String
+		Dim s2 As String
+		Dim s3 As String
+		Dim sz As Integer
 
-        fd = New SaveFileDialog
+		fd = New SaveFileDialog
 		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
 		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
-            ofs = ofl.CreateText(fd.FileName)
+			ofs = ofl.CreateText(fd.FileName)
 			If fd.FileName.EndsWith(".coe") Then
 				s = "memory_initialization_radix=10;" & vbLf
 				ofs.Write(s)
@@ -622,12 +643,16 @@ x1:
 				ofs.Write(s2)
 			ElseIf fd.FileName.EndsWith(".mem") Then
 				s = ""
+				sz = 0
+				If CheckBox3.Checked Then
+					sz = 8
+				End If
 				For n = 0 To 511
 					glyphs(n).index = n
 					If (n = 0) Then
-						s = glyphs(n).SerializeToMem()
+						s = glyphs(n).SerializeToMem(sz)
 					Else
-						s = s & vbLf & glyphs(n).SerializeToMem()
+						s = s & vbLf & glyphs(n).SerializeToMem(sz)
 					End If
 				Next
 				ofs.Write(s)
@@ -655,68 +680,72 @@ x1:
 				'ofs.WriteLine("endcase")
 			End If
 			ofs.Close()
-        End If
-    End Sub
+		End If
+	End Sub
 
-    Private Sub MenuItem3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem3.Click
-        SaveFile()
-    End Sub
+	Private Sub MenuItem3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem3.Click
+		SaveFile()
+	End Sub
 
-    Private Sub NumericUpDown2_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown2.ValueChanged
-        Dim n As Integer
-        gwidth = NumericUpDown2.Value
-        For n = 0 To 511
-            If Not glyphs(n) Is Nothing Then
-                glyphs(n).horizDots = gwidth
-            End If
-        Next
-        PictureBox1.Invalidate()
-        PictureBox2.Invalidate()
-    End Sub
+	Private Sub NumericUpDown2_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown2.ValueChanged
+		Dim n As Integer
+		gwidth = NumericUpDown2.Value
+		For n = 0 To 511
+			If Not glyphs(n) Is Nothing Then
+				glyphs(n).horizDots = gwidth
+			End If
+		Next
+		PictureBox1.Invalidate()
+		PictureBox2.Invalidate()
+	End Sub
 
-    Private Sub NumericUpDown1_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown1.ValueChanged
-        Dim n As Integer
-        gheight = NumericUpDown1.Value
-        For n = 0 To 511
-            If Not glyphs(n) Is Nothing Then
-                glyphs(n).scanlines = gheight
-            End If
-        Next
-        PictureBox1.Invalidate()
-        PictureBox2.Invalidate()
-    End Sub
+	Private Sub NumericUpDown1_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown1.ValueChanged
+		Dim n As Integer
+		gheight = NumericUpDown1.Value
+		For n = 0 To 511
+			If Not glyphs(n) Is Nothing Then
+				glyphs(n).scanlines = gheight
+			End If
+		Next
+		PictureBox1.Invalidate()
+		PictureBox2.Invalidate()
+	End Sub
 
-    Private Sub PictureBox1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles PictureBox1.Click
+	Private Sub PictureBox1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles PictureBox1.Click
 
-    End Sub
+	End Sub
 
-    Private Sub PictureBox2_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox2.Paint
-        Dim n As Integer
-        n = ListBox1.SelectedIndex()
-        '        If n > 0 Then
-        For n = 0 To 511
-            glyphs(n).DrawSmall(e)
-        Next n
-        '        End If
-    End Sub
+	Private Sub PictureBox2_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox2.Paint
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		'        If n > 0 Then
+		For n = 0 To 511
+			glyphs(n).DrawSmall(e)
+		Next n
+		'        End If
+	End Sub
 
-    Private Sub MenuItem5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem5.Click
-        End
-    End Sub
+	Private Sub MenuItem5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem5.Click
+		End
+	End Sub
 
-    Private Sub MenuItem4_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem4.Click
-        Dim f As New frmAbout
-        f.ShowDialog()
-    End Sub
+	Private Sub MenuItem4_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem4.Click
+		Dim f As New frmAbout
+		f.ShowDialog()
+	End Sub
 
-    Private Sub Button5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
-        Dim dlgcolor As New ColorDialog
-        dlgcolor.ShowDialog(Form1.ActiveForm)
-        spriteColor = dlgcolor.Color
-    End Sub
+	Private Sub Button5_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+		Dim dlgcolor As New ColorDialog
+		dlgcolor.ShowDialog(Form1.ActiveForm)
+		spriteColor = dlgcolor.Color
+	End Sub
 
-    Private Sub MenuItem7_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem7.Click
-        frmSprite0 = New frmSprite
-        frmSprite0.ShowDialog()
-    End Sub
+	Private Sub MenuItem7_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MenuItem7.Click
+		frmSprite0 = New frmSprite
+		frmSprite0.ShowDialog()
+	End Sub
+
+	Private Sub CheckBox3_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox3.CheckedChanged
+
+	End Sub
 End Class

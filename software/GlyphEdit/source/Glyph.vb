@@ -10,7 +10,7 @@ Public Class Glyph
 
   Public Sub SetBitmap(ByVal r As Integer, ByVal b As Integer)
     Dim j As Integer
-    For j = 0 To horizDots
+    For j = 0 To horizDots - 1
       bitmap(r, j) = (b >> j) And 1
     Next
   End Sub
@@ -82,16 +82,35 @@ Public Class Glyph
     Next
 
   End Function
-  Public Function SerializeFromMem(str As String)
+  Public Function SerializeFromMem(str As String, ByVal sz As Integer)
     Dim j As Integer
     Dim k As Integer
+    Dim w As Integer
     Dim n As Integer
     Dim scnlns() As String
 
     scnlns = Split(str, " ")
+    w = 0
     For j = 0 To scanlines - 1
-      n = Convert.ToUInt64(scnlns(j), 16)
+      n = Convert.ToUInt64(scnlns(w), 16)
+      If horizDots < 9 Then
+      ElseIf horizDots < 17 Then
+        If sz = 8 Then
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
+        End If
+      Else
+        If sz = 8 Then
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 16)
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 24)
+        End If
+      End If
       SetBitmap(j, n)
+      w = w + 1
     Next
   End Function
   Public Function SerializeToCoe() As String
@@ -117,13 +136,15 @@ Public Class Glyph
 
   End Function
 
-  Public Function SerializeToMem() As String
+  Public Function SerializeToMem(ByVal sz As Integer) As String
     Dim j As Integer
     Dim k As Integer
+    Dim w As Integer
     Dim n As Integer
     Dim s As String
     Dim b As Integer
     Dim ss As String
+    Dim ts As String
 
     s = ""
     For j = 0 To scanlines - 1
@@ -132,7 +153,6 @@ Public Class Glyph
         b = bitmap(j, k) And 1
         n = n Or (b << k)
       Next
-      ss = "00000000" & Hex(n)
       If (horizDots < 9) Then
         ss = Hex(n).PadLeft(2, "0")
       ElseIf (horizDots < 17) Then
@@ -140,10 +160,22 @@ Public Class Glyph
       Else
         ss = Hex(n).PadLeft(8, "0")
       End If
-      If j = 0 Then
-        s = ss
+      If (sz = 8) Then
+        ts = ""
+        For w = 0 To ss.Length - 1 Step 2
+          If w = 0 Then
+            ts = ss.Substring(w, 2)
+          Else
+            ts = ss.Substring(w, 2) & " " & ts
+          End If
+        Next
       Else
-        s = s & " " & ss
+        ts = ss
+      End If
+      If j = 0 Then
+        s = ts
+      Else
+        s = s & " " & ts
       End If
     Next
     Return s
