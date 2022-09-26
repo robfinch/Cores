@@ -82,6 +82,18 @@ Public Class Glyph
     Next
 
   End Function
+  Public Function SerializeFromMem(str As String)
+    Dim j As Integer
+    Dim k As Integer
+    Dim n As Integer
+    Dim scnlns() As String
+
+    scnlns = Split(str, " ")
+    For j = 0 To scanlines - 1
+      n = Convert.ToUInt64(scnlns(j), 16)
+      SetBitmap(j, n)
+    Next
+  End Function
   Public Function SerializeToCoe() As String
     Dim j As Integer
     Dim k As Integer
@@ -103,6 +115,38 @@ Public Class Glyph
     Next
     Return s
 
+  End Function
+
+  Public Function SerializeToMem() As String
+    Dim j As Integer
+    Dim k As Integer
+    Dim n As Integer
+    Dim s As String
+    Dim b As Integer
+    Dim ss As String
+
+    s = ""
+    For j = 0 To scanlines - 1
+      n = 0
+      For k = 0 To horizDots - 1
+        b = bitmap(j, k) And 1
+        n = n Or (b << k)
+      Next
+      ss = "00000000" & Hex(n)
+      If (horizDots < 9) Then
+        ss = Hex(n).PadLeft(2, "0")
+      ElseIf (horizDots < 17) Then
+        ss = Hex(n).PadLeft(4, "0")
+      Else
+        ss = Hex(n).PadLeft(8, "0")
+      End If
+      If j = 0 Then
+        s = ss
+      Else
+        s = s & " " & ss
+      End If
+    Next
+    Return s
   End Function
   Public Sub SerializeToV(ByVal ofs As TextWriter)
     Dim j As Integer
@@ -126,27 +170,13 @@ Public Class Glyph
     ofs.Write(s)
   End Sub
 
-  Public Sub WriteByte(ByVal ofs As TextWriter, str As String, k As Integer)
-    Count = index * scanlines + k
-    If (Count Mod 8) = 0 Then
-      If (Count > 0) Then
-        ofs.Write(";" & vbCrLf)
-      End If
-      ofs.Write("mem[" & Count / 8 & "] = 64'b")
-    End If
+
+  ' ws = word size
+  Public Sub WriteScanline(ByVal ofs As TextWriter, ByVal str As String, k As Integer, spw As Integer, ws As Integer)
+    Count = (index * scanlines + k) * ws
+    ofs.Write("mem[" & Count + spw & "] = 8'b")
     ofs.Write(str)
-    Count = Count + 1
-  End Sub
-  Public Sub WriteWyde(ByVal ofs As TextWriter, str As String, k As Integer)
-    Count = index * scanlines + k
-    If (Count Mod 4) = 0 Then
-      If (Count > 0) Then
-        ofs.Write(";" & vbCrLf)
-      End If
-      ofs.Write("mem[" & Count / 4 & "] = 64'b")
-    End If
-    ofs.Write(str)
-    Count = Count + 1
+    ofs.Write(";" & vbCrLf)
   End Sub
 
 
@@ -176,7 +206,101 @@ Public Class Glyph
         For k = horizDots To 7
           s = s & "0"
         Next
-        WriteByte(ofs, s, j)
+        WriteScanline(ofs, s, j, 1, 1)
+      Next
+    ElseIf horizDots < 17 Then
+      For j = 0 To scanlines - 1
+        s = ""
+        For k = 0 To 7
+          If bitmap(j, k) Then
+            s = s & "1"
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 0, 2)
+        s = ""
+        For k = 8 To 15
+          If k < horizDots Then
+            If bitmap(j, k) Then
+              s = s & "1"
+            Else
+              s = s & "0"
+            End If
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 1, 2)
+      Next
+    ElseIf horizDots < 33 Then
+      For j = 0 To scanlines - 1
+        s = ""
+        For k = 0 To 7
+          If bitmap(j, k) Then
+            s = s & "1"
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 0, 4)
+        s = ""
+        For k = 8 To 15
+          If bitmap(j, k) Then
+            s = s & "1"
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 1, 4)
+        For k = 16 To 23
+          If k < horizDots Then
+            If bitmap(j, k) Then
+              s = s & "1"
+            Else
+              s = s & "0"
+            End If
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 2, 4)
+        For k = 24 To 31
+          If k < horizDots Then
+            If bitmap(j, k) Then
+              s = s & "1"
+            Else
+              s = s & "0"
+            End If
+          Else
+            s = s & "0"
+          End If
+        Next
+        WriteScanline(ofs, s, j, 3, 4)
+      Next
+    End If
+  End Sub
+  Public Sub SerializeToV32(ByVal ofs As TextWriter)
+    Dim j As Integer
+    Dim k As Integer
+    Dim n As Integer
+    Dim s As String
+
+    REM    s = "// Glpyh: " & index & vbCrLf
+    If (horizDots < 9) Then
+      For j = 0 To scanlines - 1
+        s = ""
+        For k = 0 To horizDots - 1
+          If bitmap(j, k) Then
+            s = s & "1"
+          Else
+            s = s & "0"
+          End If
+        Next
+        For k = horizDots To 7
+          s = s & "0"
+        Next
+        WriteScanline(ofs, s, j, 4, 32)
       Next
     ElseIf horizDots < 17 Then
       For j = 0 To scanlines - 1
@@ -191,7 +315,22 @@ Public Class Glyph
         For k = horizDots To 15
           s = s & "0"
         Next
-        WriteWyde(ofs, s, j)
+        WriteScanline(ofs, s, j, 2, 32)
+      Next
+    ElseIf horizDots < 33 Then
+      For j = 0 To scanlines - 1
+        s = ""
+        For k = 0 To horizDots - 1
+          If bitmap(j, k) Then
+            s = s & "1"
+          Else
+            s = s & "0"
+          End If
+        Next
+        For k = horizDots To 31
+          s = s & "0"
+        Next
+        WriteScanline(ofs, s, j, 1, 32)
       Next
     End If
   End Sub
@@ -211,7 +350,7 @@ Public Class Glyph
     For j = 0 To scanlines - 1
       For k = 0 To horizDots - 1
         If bitmap(j, k) Then
-          REM          e.Graphics.FillRectangle(Brushes.Black, k * sc, j * sc, sc, sc)
+          e.Graphics.FillRectangle(Brushes.Black, k * sc, j * sc, sc, sc)
         Else
           e.Graphics.FillRectangle(Brushes.White, k * sc, j * sc, sc, sc)
         End If

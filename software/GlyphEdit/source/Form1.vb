@@ -6,6 +6,8 @@ Public Class Form1
     Dim gheight As Integer
     Dim workingGlyph(32, 32) As Boolean
 	Friend WithEvents CheckBox1 As CheckBox
+	Friend WithEvents CheckBox2 As CheckBox
+	Friend WithEvents Label4 As Label
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -94,6 +96,8 @@ Public Class Form1
 		Me.PictureBox2 = New System.Windows.Forms.PictureBox()
 		Me.Label3 = New System.Windows.Forms.Label()
 		Me.CheckBox1 = New System.Windows.Forms.CheckBox()
+		Me.CheckBox2 = New System.Windows.Forms.CheckBox()
+		Me.Label4 = New System.Windows.Forms.Label()
 		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -242,17 +246,38 @@ Public Class Form1
 		Me.CheckBox1.AutoSize = True
 		Me.CheckBox1.Checked = True
 		Me.CheckBox1.CheckState = System.Windows.Forms.CheckState.Checked
-		Me.CheckBox1.Location = New System.Drawing.Point(33, 255)
+		Me.CheckBox1.Location = New System.Drawing.Point(33, 266)
 		Me.CheckBox1.Name = "CheckBox1"
 		Me.CheckBox1.Size = New System.Drawing.Size(72, 17)
 		Me.CheckBox1.TabIndex = 178
 		Me.CheckBox1.Text = "64-bit ram"
 		Me.CheckBox1.UseVisualStyleBackColor = True
 		'
+		'CheckBox2
+		'
+		Me.CheckBox2.AutoSize = True
+		Me.CheckBox2.Location = New System.Drawing.Point(33, 289)
+		Me.CheckBox2.Name = "CheckBox2"
+		Me.CheckBox2.Size = New System.Drawing.Size(72, 17)
+		Me.CheckBox2.TabIndex = 179
+		Me.CheckBox2.Text = "32-bit ram"
+		Me.CheckBox2.UseVisualStyleBackColor = True
+		'
+		'Label4
+		'
+		Me.Label4.AutoSize = True
+		Me.Label4.Location = New System.Drawing.Point(33, 250)
+		Me.Label4.Name = "Label4"
+		Me.Label4.Size = New System.Drawing.Size(72, 13)
+		Me.Label4.TabIndex = 180
+		Me.Label4.Text = "Verilog output"
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.Label4)
+		Me.Controls.Add(Me.CheckBox2)
 		Me.Controls.Add(Me.CheckBox1)
 		Me.Controls.Add(Me.Label3)
 		Me.Controls.Add(Me.PictureBox2)
@@ -267,7 +292,7 @@ Public Class Form1
 		Me.Controls.Add(Me.Label1)
 		Me.Menu = Me.MainMenu1
 		Me.Name = "Form1"
-		Me.Text = "8x8 Glyph Editor"
+		Me.Text = "6x6 to 32x32 Glyph Editor"
 		Me.ToolTip1.SetToolTip(Me, "Number of scanlines for each glyph")
 		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).EndInit()
@@ -431,7 +456,7 @@ Public Class Form1
 		Dim gcnt As Integer
 		Dim readingVector As Boolean
 		fd = New OpenFileDialog
-		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
+		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
 		fd.FilterIndex = 2
 		If fd.ShowDialog() = DialogResult.OK Then
             ifs = ifl.OpenText(fd.FileName)
@@ -472,6 +497,17 @@ Public Class Form1
 								If gcnt = 512 Then GoTo x1
 							End If
 						End If
+					End If
+				Next
+			ElseIf fd.FileName.EndsWith(".mem") Then
+				readingVector = False
+				radix = 16
+				For Each line In lines
+					s = line.Trim
+					If (s <> "") Then
+						glyphs(gcnt).SerializeFromMem(s)
+						gcnt = gcnt + 1
+						If gcnt = 512 Then GoTo x1
 					End If
 				Next
 			Else
@@ -525,7 +561,7 @@ x1:
         Dim s3 As String
 
         fd = New SaveFileDialog
-		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
+		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
 		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
             ofs = ofl.CreateText(fd.FileName)
@@ -546,45 +582,56 @@ x1:
 				Next
 			ElseIf fd.FileName.EndsWith(".ucf") Then
 				gcnt = 0
-                s = ""
-                row = 0
-                inst = 0
-                For n = 0 To 511
-                    s = glyphs(n).SerializeToUCF() & s
-                    'gcnt = gcnt + 1
-                    'If gcnt > 32 / gheight Then
+				s = ""
+				row = 0
+				inst = 0
+				For n = 0 To 511
+					s = glyphs(n).SerializeToUCF() & s
+					'gcnt = gcnt + 1
+					'If gcnt > 32 / gheight Then
 
-                    'ElseIf gcnt >= 32 / gheight Then
-                    '    gcnt = 0
-                    '    s = "INST " & txtInstName.Text & inst & " INIT_" & Hex(row).PadLeft(2, "0") & "=" & s & ";" & vbCrLf
-                    '    ofs.Write(s)
-                    '    s = ""
-                    '    row = row + 1
-                    '    If row = 64 Then
-                    '        row = 0
-                    '        inst = inst + 1
-                    '    End If
-                    'End If
-                Next
-                s = "".PadLeft(64, "0") & s
-                s2 = ""
-                Do
-                    If s.Length < 64 Then
-                        s3 = s.PadLeft(64, "0")
-                    Else
-                        s3 = s.Substring(s.Length - 64)
-                    End If
-                    s1 = "INST " & txtInstName.Text & inst & " INIT_" & Hex(row).PadLeft(2, "0") & "=" & s3 & ";" & vbCrLf
-                    s2 = s2 & s1
-                    s = s.Substring(0, s.Length - 64)
-                    row = row + 1
-                    If row = 64 Then
-                        row = 0
-                        inst = inst + 1
-                    End If
-                Loop While s.Length > 0
-                ofs.Write(s2)
-            Else
+					'ElseIf gcnt >= 32 / gheight Then
+					'    gcnt = 0
+					'    s = "INST " & txtInstName.Text & inst & " INIT_" & Hex(row).PadLeft(2, "0") & "=" & s & ";" & vbCrLf
+					'    ofs.Write(s)
+					'    s = ""
+					'    row = row + 1
+					'    If row = 64 Then
+					'        row = 0
+					'        inst = inst + 1
+					'    End If
+					'End If
+				Next
+				s = "".PadLeft(64, "0") & s
+				s2 = ""
+				Do
+					If s.Length < 64 Then
+						s3 = s.PadLeft(64, "0")
+					Else
+						s3 = s.Substring(s.Length - 64)
+					End If
+					s1 = "INST " & txtInstName.Text & inst & " INIT_" & Hex(row).PadLeft(2, "0") & "=" & s3 & ";" & vbCrLf
+					s2 = s2 & s1
+					s = s.Substring(0, s.Length - 64)
+					row = row + 1
+					If row = 64 Then
+						row = 0
+						inst = inst + 1
+					End If
+				Loop While s.Length > 0
+				ofs.Write(s2)
+			ElseIf fd.FileName.EndsWith(".mem") Then
+				s = ""
+				For n = 0 To 511
+					glyphs(n).index = n
+					If (n = 0) Then
+						s = glyphs(n).SerializeToMem()
+					Else
+						s = s & vbLf & glyphs(n).SerializeToMem()
+					End If
+				Next
+				ofs.Write(s)
+			Else
 				'ofs.WriteLine("always @(bmndx)")
 				'ofs.WriteLine("case(bmndx)")
 				For n = 0 To 511
@@ -594,6 +641,8 @@ x1:
 					End If
 					If CheckBox1.Checked Then
 						glyphs(n).SerializeToV64(ofs)
+					ElseIf CheckBox2.Checked Then
+						glyphs(n).SerializeToV32(ofs)
 					Else
 						glyphs(n).SerializeToV(ofs)
 					End If
@@ -605,7 +654,7 @@ x1:
 				Next
 				'ofs.WriteLine("endcase")
 			End If
-            ofs.Close()
+			ofs.Close()
         End If
     End Sub
 
