@@ -7,7 +7,17 @@ Public Class Glyph
   Public scanlines As Integer
   Public horizDots As Integer
   Private bitmap(32, 32) As Boolean
+  Public Sub Clone(g As Glyph)
+    Dim j As Integer
+    Dim b As Boolean
+    Dim k As Integer
 
+    For j = 0 To scanlines - 1
+      For k = 0 To horizDots / 2 - 1
+        bitmap(j, k) = g.bitmap(j, k)
+      Next
+    Next
+  End Sub
   Public Sub SetBitmap(ByVal r As Integer, ByVal b As Integer)
     Dim j As Integer
     For j = 0 To horizDots - 1
@@ -24,14 +34,25 @@ Public Class Glyph
     Dim k As Integer
 
     For j = 0 To scanlines - 1
-      For k = 0 To horizDots / 2
+      For k = 0 To horizDots / 2 - 1
         b = bitmap(j, k)
         bitmap(j, k) = bitmap(j, horizDots - k - 1)
         bitmap(j, horizDots - k - 1) = b
       Next
     Next
   End Sub
+  Public Sub ShiftLeft()
+    Dim j As Integer
+    Dim b As Boolean
+    Dim k As Integer
 
+    For j = 0 To scanlines - 1
+      For k = horizDots - 1 To 1 Step -1
+        bitmap(j, k) = bitmap(j, k - 1)
+      Next
+      bitmap(j, 0) = 0
+    Next
+  End Sub
   Public Function SerializeToUCF() As String
     Dim j As Integer
     Dim k As Integer
@@ -66,7 +87,7 @@ Public Class Glyph
     Next
     Return s
   End Function
-  Public Function SerializeFromCoe(str As String)
+  Public Sub SerializeFromCoe(str As String)
     Dim j As Integer
     Dim k As Integer
     Dim n As Integer
@@ -76,13 +97,13 @@ Public Class Glyph
     For j = 0 To scanlines - 1
       n = Convert.ToUInt64(scnlns(j))
       For k = 0 To horizDots - 1
-        bitmap(j, k) = n & 1
+        bitmap(j, k) = n And 1
         n = n >> 1
       Next
     Next
 
-  End Function
-  Public Function SerializeFromMem(str As String, ByVal sz As Integer)
+  End Sub
+  Public Sub SerializeFromMem(str As String, ByVal sz As Integer)
     Dim j As Integer
     Dim k As Integer
     Dim w As Integer
@@ -99,6 +120,13 @@ Public Class Glyph
           w = w + 1
           n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
         End If
+      ElseIf horizDots < 25 Then
+        If sz = 8 Then
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
+          w = w + 1
+          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 16)
+        End If
       Else
         If sz = 8 Then
           w = w + 1
@@ -109,10 +137,14 @@ Public Class Glyph
           n = n Or (Convert.ToUInt64(scnlns(w), 16) << 24)
         End If
       End If
-      SetBitmap(j, n)
+      For k = horizDots - 1 To 0 Step -1
+        bitmap(j, k) = n And 1
+        n = n >> 1
+      Next
+      '      SetBitmap(j, n)
       w = w + 1
     Next
-  End Function
+  End Sub
   Public Function SerializeToCoe() As String
     Dim j As Integer
     Dim k As Integer
@@ -151,12 +183,14 @@ Public Class Glyph
       n = 0
       For k = 0 To horizDots - 1
         b = bitmap(j, k) And 1
-        n = n Or (b << k)
+        n = n Or (b << (horizDots - k - 1))
       Next
       If (horizDots < 9) Then
         ss = Hex(n).PadLeft(2, "0")
       ElseIf (horizDots < 17) Then
         ss = Hex(n).PadLeft(4, "0")
+      ElseIf (horizDots < 25) Then
+        ss = Hex(n).PadLeft(6, "0")
       Else
         ss = Hex(n).PadLeft(8, "0")
       End If

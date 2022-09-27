@@ -4,11 +4,15 @@ Public Class Form1
     Inherits System.Windows.Forms.Form
     Dim gwidth As Integer
     Dim gheight As Integer
-    Dim workingGlyph(32, 32) As Boolean
+	Dim workingGlyph(32, 32) As Boolean
+	Dim copyGlyph As Glyph
 	Friend WithEvents CheckBox1 As CheckBox
 	Friend WithEvents CheckBox2 As CheckBox
 	Friend WithEvents Label4 As Label
 	Friend WithEvents CheckBox3 As CheckBox
+	Friend WithEvents Button1 As Button
+	Friend WithEvents Button2 As Button
+	Friend WithEvents Button4 As Button
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -91,6 +95,9 @@ Public Class Form1
 		Me.Label2 = New System.Windows.Forms.Label()
 		Me.lblHeight = New System.Windows.Forms.Label()
 		Me.ToolTip1 = New System.Windows.Forms.ToolTip(Me.components)
+		Me.Button1 = New System.Windows.Forms.Button()
+		Me.Button2 = New System.Windows.Forms.Button()
+		Me.Button4 = New System.Windows.Forms.Button()
 		Me.ToolTip2 = New System.Windows.Forms.ToolTip(Me.components)
 		Me.NumericUpDown1 = New System.Windows.Forms.NumericUpDown()
 		Me.NumericUpDown2 = New System.Windows.Forms.NumericUpDown()
@@ -124,9 +131,9 @@ Public Class Form1
 		'
 		'Button3
 		'
-		Me.Button3.Location = New System.Drawing.Point(33, 83)
+		Me.Button3.Location = New System.Drawing.Point(36, 68)
 		Me.Button3.Name = "Button3"
-		Me.Button3.Size = New System.Drawing.Size(127, 49)
+		Me.Button3.Size = New System.Drawing.Size(127, 28)
 		Me.Button3.TabIndex = 167
 		Me.Button3.Text = "Flip bits horizontally"
 		Me.ToolTip1.SetToolTip(Me.Button3, "Switch bits from left to right in the entire character set.")
@@ -203,6 +210,33 @@ Public Class Form1
 		Me.lblHeight.Size = New System.Drawing.Size(60, 20)
 		Me.lblHeight.TabIndex = 173
 		Me.lblHeight.Text = "Height"
+		'
+		'Button1
+		'
+		Me.Button1.Location = New System.Drawing.Point(36, 102)
+		Me.Button1.Name = "Button1"
+		Me.Button1.Size = New System.Drawing.Size(127, 28)
+		Me.Button1.TabIndex = 182
+		Me.Button1.Text = "Shift to Left"
+		Me.ToolTip1.SetToolTip(Me.Button1, "Switch bits from left to right in the entire character set.")
+		'
+		'Button2
+		'
+		Me.Button2.Location = New System.Drawing.Point(169, 68)
+		Me.Button2.Name = "Button2"
+		Me.Button2.Size = New System.Drawing.Size(54, 28)
+		Me.Button2.TabIndex = 183
+		Me.Button2.Text = "Copy"
+		Me.ToolTip1.SetToolTip(Me.Button2, "Switch bits from left to right in the entire character set.")
+		'
+		'Button4
+		'
+		Me.Button4.Location = New System.Drawing.Point(169, 102)
+		Me.Button4.Name = "Button4"
+		Me.Button4.Size = New System.Drawing.Size(54, 28)
+		Me.Button4.TabIndex = 184
+		Me.Button4.Text = "Paste"
+		Me.ToolTip1.SetToolTip(Me.Button4, "Switch bits from left to right in the entire character set.")
 		'
 		'NumericUpDown1
 		'
@@ -290,6 +324,9 @@ Public Class Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.Button4)
+		Me.Controls.Add(Me.Button2)
+		Me.Controls.Add(Me.Button1)
 		Me.Controls.Add(Me.CheckBox3)
 		Me.Controls.Add(Me.Label4)
 		Me.Controls.Add(Me.CheckBox2)
@@ -406,6 +443,7 @@ Public Class Form1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
 			ListBox1.Items.Add(CStr(j))
 		Next
+		copyGlyph = New Glyph()
 	End Sub
 
 	Private Sub PictureBox1_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox1.Paint
@@ -652,10 +690,10 @@ x1:
 					If (n = 0) Then
 						s = glyphs(n).SerializeToMem(sz)
 					Else
-						s = s & vbLf & glyphs(n).SerializeToMem(sz)
+						s = vbLf & glyphs(n).SerializeToMem(sz)
 					End If
+					ofs.Write(s)
 				Next
-				ofs.Write(s)
 			Else
 				'ofs.WriteLine("always @(bmndx)")
 				'ofs.WriteLine("case(bmndx)")
@@ -747,5 +785,31 @@ x1:
 
 	Private Sub CheckBox3_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox3.CheckedChanged
 
+	End Sub
+
+	Private Sub Button1_Click_1(sender As Object, e As EventArgs) Handles Button1.Click
+		Dim j As Integer
+
+		For j = 0 To 511
+			glyphs(j).ShiftLeft()
+		Next
+	End Sub
+
+	Private Sub Button2_Click_1(sender As Object, e As EventArgs) Handles Button2.Click
+		Dim n As Integer
+		Dim sz As Integer
+
+		If CheckBox3.Checked Then sz = 8 Else sz = 0
+		n = ListBox1.SelectedIndex()
+		Clipboard.SetText(glyphs(n).SerializeToMem(sz))
+	End Sub
+
+	Private Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
+		Dim n As Integer
+		Dim sz As Integer
+
+		If CheckBox3.Checked Then sz = 8 Else sz = 0
+		n = ListBox1.SelectedIndex()
+		glyphs(n).SerializeFromMem(Clipboard.GetText(), sz)
 	End Sub
 End Class
