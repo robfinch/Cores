@@ -3,9 +3,9 @@ Imports System.IO
 Public Class Form1
     Inherits System.Windows.Forms.Form
     Dim gwidth As Integer
-    Dim gheight As Integer
+	Dim gheight As Integer
+	Public Const nGlyphs As Integer = 512
 	Dim workingGlyph(32, 32) As Boolean
-	Dim copyGlyph As Glyph
 	Friend WithEvents CheckBox1 As CheckBox
 	Friend WithEvents CheckBox2 As CheckBox
 	Friend WithEvents Label4 As Label
@@ -13,6 +13,9 @@ Public Class Form1
 	Friend WithEvents Button1 As Button
 	Friend WithEvents Button2 As Button
 	Friend WithEvents Button4 As Button
+	Friend WithEvents Panel2 As Panel
+	Friend WithEvents PictureBox2 As PictureBox
+	Friend WithEvents PictureBox1 As PictureBox
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -24,13 +27,13 @@ Public Class Form1
 
 		'Add any initialization after the InitializeComponent() call
 		Dim n As Integer
-		For n = 0 To 511
+		For n = 0 To nGlyphs - 1
 			glyphs(n) = New Glyph
 			glyphs(n).index = n
 			glyphs(n).scanlines = 8
 			glyphs(n).horizDots = 8
 		Next
-		For n = 0 To 16
+		For n = 0 To 31
 			sprites(n) = New Sprite
 			sprites(n).index = n
 			sprites(n).scanlines = 48
@@ -59,7 +62,6 @@ Public Class Form1
 	Friend WithEvents txtInstName As System.Windows.Forms.TextBox
 	Friend WithEvents Button3 As System.Windows.Forms.Button
 	Friend WithEvents ListBox1 As System.Windows.Forms.ListBox
-	Friend WithEvents PictureBox1 As System.Windows.Forms.PictureBox
 	Friend WithEvents MainMenu1 As System.Windows.Forms.MainMenu
 	Friend WithEvents MenuItem1 As System.Windows.Forms.MenuItem
 	Friend WithEvents MenuItem2 As System.Windows.Forms.MenuItem
@@ -71,7 +73,6 @@ Public Class Form1
 	Friend WithEvents ToolTip2 As System.Windows.Forms.ToolTip
 	Friend WithEvents NumericUpDown1 As System.Windows.Forms.NumericUpDown
 	Friend WithEvents NumericUpDown2 As System.Windows.Forms.NumericUpDown
-	Friend WithEvents PictureBox2 As System.Windows.Forms.PictureBox
 	Friend WithEvents MenuItem5 As System.Windows.Forms.MenuItem
 	Friend WithEvents Label3 As System.Windows.Forms.Label
 	Friend WithEvents MenuItem6 As System.Windows.Forms.MenuItem
@@ -83,7 +84,6 @@ Public Class Form1
 		Me.txtInstName = New System.Windows.Forms.TextBox()
 		Me.Button3 = New System.Windows.Forms.Button()
 		Me.ListBox1 = New System.Windows.Forms.ListBox()
-		Me.PictureBox1 = New System.Windows.Forms.PictureBox()
 		Me.MainMenu1 = New System.Windows.Forms.MainMenu(Me.components)
 		Me.MenuItem1 = New System.Windows.Forms.MenuItem()
 		Me.MenuItem2 = New System.Windows.Forms.MenuItem()
@@ -101,16 +101,19 @@ Public Class Form1
 		Me.ToolTip2 = New System.Windows.Forms.ToolTip(Me.components)
 		Me.NumericUpDown1 = New System.Windows.Forms.NumericUpDown()
 		Me.NumericUpDown2 = New System.Windows.Forms.NumericUpDown()
-		Me.PictureBox2 = New System.Windows.Forms.PictureBox()
 		Me.Label3 = New System.Windows.Forms.Label()
 		Me.CheckBox1 = New System.Windows.Forms.CheckBox()
 		Me.CheckBox2 = New System.Windows.Forms.CheckBox()
 		Me.Label4 = New System.Windows.Forms.Label()
 		Me.CheckBox3 = New System.Windows.Forms.CheckBox()
-		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
+		Me.Panel2 = New System.Windows.Forms.Panel()
+		Me.PictureBox2 = New System.Windows.Forms.PictureBox()
+		Me.PictureBox1 = New System.Windows.Forms.PictureBox()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
+		Me.Panel2.SuspendLayout()
 		CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).BeginInit()
+		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.SuspendLayout()
 		'
 		'Label1
@@ -144,15 +147,6 @@ Public Class Form1
 		Me.ListBox1.Name = "ListBox1"
 		Me.ListBox1.Size = New System.Drawing.Size(74, 251)
 		Me.ListBox1.TabIndex = 168
-		'
-		'PictureBox1
-		'
-		Me.PictureBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-		Me.PictureBox1.Location = New System.Drawing.Point(319, 21)
-		Me.PictureBox1.Name = "PictureBox1"
-		Me.PictureBox1.Size = New System.Drawing.Size(273, 277)
-		Me.PictureBox1.TabIndex = 169
-		Me.PictureBox1.TabStop = False
 		'
 		'MainMenu1
 		'
@@ -260,15 +254,6 @@ Public Class Form1
 		Me.NumericUpDown2.TextAlign = System.Windows.Forms.HorizontalAlignment.Center
 		Me.NumericUpDown2.Value = New Decimal(New Integer() {8, 0, 0, 0})
 		'
-		'PictureBox2
-		'
-		Me.PictureBox2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-		Me.PictureBox2.Location = New System.Drawing.Point(20, 312)
-		Me.PictureBox2.Name = "PictureBox2"
-		Me.PictureBox2.Size = New System.Drawing.Size(873, 451)
-		Me.PictureBox2.TabIndex = 176
-		Me.PictureBox2.TabStop = False
-		'
 		'Label3
 		'
 		Me.Label3.Location = New System.Drawing.Point(33, 208)
@@ -320,10 +305,39 @@ Public Class Form1
 		Me.CheckBox3.Text = "8-bit mem"
 		Me.CheckBox3.UseVisualStyleBackColor = True
 		'
+		'Panel2
+		'
+		Me.Panel2.AutoScroll = True
+		Me.Panel2.Controls.Add(Me.PictureBox2)
+		Me.Panel2.Location = New System.Drawing.Point(24, 312)
+		Me.Panel2.Name = "Panel2"
+		Me.Panel2.Size = New System.Drawing.Size(869, 446)
+		Me.Panel2.TabIndex = 188
+		'
+		'PictureBox2
+		'
+		Me.PictureBox2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
+		Me.PictureBox2.Location = New System.Drawing.Point(3, 3)
+		Me.PictureBox2.Name = "PictureBox2"
+		Me.PictureBox2.Size = New System.Drawing.Size(844, 1024)
+		Me.PictureBox2.TabIndex = 190
+		Me.PictureBox2.TabStop = False
+		'
+		'PictureBox1
+		'
+		Me.PictureBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
+		Me.PictureBox1.Location = New System.Drawing.Point(331, 21)
+		Me.PictureBox1.Name = "PictureBox1"
+		Me.PictureBox1.Size = New System.Drawing.Size(269, 251)
+		Me.PictureBox1.TabIndex = 190
+		Me.PictureBox1.TabStop = False
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.PictureBox1)
+		Me.Controls.Add(Me.Panel2)
 		Me.Controls.Add(Me.Button4)
 		Me.Controls.Add(Me.Button2)
 		Me.Controls.Add(Me.Button1)
@@ -332,12 +346,10 @@ Public Class Form1
 		Me.Controls.Add(Me.CheckBox2)
 		Me.Controls.Add(Me.CheckBox1)
 		Me.Controls.Add(Me.Label3)
-		Me.Controls.Add(Me.PictureBox2)
 		Me.Controls.Add(Me.NumericUpDown2)
 		Me.Controls.Add(Me.NumericUpDown1)
 		Me.Controls.Add(Me.lblHeight)
 		Me.Controls.Add(Me.Label2)
-		Me.Controls.Add(Me.PictureBox1)
 		Me.Controls.Add(Me.ListBox1)
 		Me.Controls.Add(Me.Button3)
 		Me.Controls.Add(Me.txtInstName)
@@ -346,10 +358,11 @@ Public Class Form1
 		Me.Name = "Form1"
 		Me.Text = "6x6 to 32x32 Glyph Editor"
 		Me.ToolTip1.SetToolTip(Me, "Number of scanlines for each glyph")
-		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).EndInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).EndInit()
+		Me.Panel2.ResumeLayout(False)
 		CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).EndInit()
+		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
 		Me.ResumeLayout(False)
 		Me.PerformLayout()
 
@@ -394,7 +407,7 @@ Public Class Form1
 				s = ""
 				row = 0
 				inst = 0
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					s = glyphs(n).SerializeToUCF() & s
 					gcnt = gcnt + 1
 					If gcnt = 4 Then
@@ -412,7 +425,7 @@ Public Class Form1
 			Else
 				ofs.WriteLine("always @(bmndx)")
 				ofs.WriteLine("case(bmndx)")
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					glyphs(n).SerializeToV(ofs)
 				Next
 				ofs.WriteLine("endcase")
@@ -429,7 +442,7 @@ Public Class Form1
 	Private Sub Button3_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button3.Click
 		Dim j As Integer
 
-		For j = 0 To 511
+		For j = 0 To nGlyphs - 1
 			glyphs(j).FlipHoriz()
 		Next
 
@@ -439,11 +452,10 @@ Public Class Form1
 	Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 		Dim j As Integer
 
-		For j = 0 To 511
+		For j = 0 To nGlyphs - 1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
 			ListBox1.Items.Add(CStr(j))
 		Next
-		copyGlyph = New Glyph()
 	End Sub
 
 	Private Sub PictureBox1_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox1.Paint
@@ -548,7 +560,7 @@ Public Class Form1
 							If bcnt = gheight Then
 								bcnt = 0
 								gcnt = gcnt + 1
-								If gcnt = 512 Then GoTo x1
+								If gcnt = nGlyphs Then GoTo x1
 							End If
 						End If
 					End If
@@ -565,7 +577,7 @@ Public Class Form1
 					If (s <> "") Then
 						glyphs(gcnt).SerializeFromMem(s, sz)
 						gcnt = gcnt + 1
-						If gcnt = 512 Then GoTo x1
+						If gcnt = nGlyphs Then GoTo x1
 					End If
 				Next
 			Else
@@ -586,7 +598,7 @@ Public Class Form1
 										If bcnt = gheight Then
 											bcnt = 0
 											gcnt = gcnt + 1
-											If gcnt = 512 Then GoTo x1
+											If gcnt = nGlyphs Then GoTo x1
 										End If
 									Next
 								End If
@@ -596,7 +608,7 @@ Public Class Form1
 				Next
 			End If
 x1:
-			For n = 0 To 511
+			For n = 0 To nGlyphs - 1
 				'                glyphs(n).SerializeTo(ofs)
 			Next
 			ifs.Close()
@@ -630,9 +642,9 @@ x1:
 				s = "memory_initialization_vector=" & vbLf
 				ofs.Write(s)
 				s = ""
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					s1 = glyphs(n).SerializeToCoe()
-					If n = 511 Then
+					If n = nGlyphs - 1 Then
 						s = s1 & ";" & vbLf
 					Else
 						s = s1 & "," & vbLf
@@ -644,7 +656,7 @@ x1:
 				s = ""
 				row = 0
 				inst = 0
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					s = glyphs(n).SerializeToUCF() & s
 					'gcnt = gcnt + 1
 					'If gcnt > 32 / gheight Then
@@ -685,7 +697,7 @@ x1:
 				If CheckBox3.Checked Then
 					sz = 8
 				End If
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					glyphs(n).index = n
 					If (n = 0) Then
 						s = glyphs(n).SerializeToMem(sz)
@@ -697,7 +709,7 @@ x1:
 			Else
 				'ofs.WriteLine("always @(bmndx)")
 				'ofs.WriteLine("case(bmndx)")
-				For n = 0 To 511
+				For n = 0 To nGlyphs - 1
 					glyphs(n).index = n
 					If n = 0 Then
 						glyphs(n).Count = 0
@@ -728,7 +740,7 @@ x1:
 	Private Sub NumericUpDown2_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown2.ValueChanged
 		Dim n As Integer
 		gwidth = NumericUpDown2.Value
-		For n = 0 To 511
+		For n = 0 To nGlyphs - 1
 			If Not glyphs(n) Is Nothing Then
 				glyphs(n).horizDots = gwidth
 			End If
@@ -740,7 +752,7 @@ x1:
 	Private Sub NumericUpDown1_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown1.ValueChanged
 		Dim n As Integer
 		gheight = NumericUpDown1.Value
-		For n = 0 To 511
+		For n = 0 To nGlyphs - 1
 			If Not glyphs(n) Is Nothing Then
 				glyphs(n).scanlines = gheight
 			End If
@@ -755,9 +767,9 @@ x1:
 
 	Private Sub PictureBox2_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox2.Paint
 		Dim n As Integer
-		n = ListBox1.SelectedIndex()
-		'        If n > 0 Then
-		For n = 0 To 511
+
+		'		n = ListBox1.SelectedIndex()
+		For n = 0 To nGlyphs - 1
 			glyphs(n).DrawSmall(e)
 		Next n
 		'        End If
@@ -790,7 +802,7 @@ x1:
 	Private Sub Button1_Click_1(sender As Object, e As EventArgs) Handles Button1.Click
 		Dim j As Integer
 
-		For j = 0 To 511
+		For j = 0 To nGlyphs - 1
 			glyphs(j).ShiftLeft()
 		Next
 	End Sub
@@ -811,5 +823,10 @@ x1:
 		If CheckBox3.Checked Then sz = 8 Else sz = 0
 		n = ListBox1.SelectedIndex()
 		glyphs(n).SerializeFromMem(Clipboard.GetText(), sz)
+		Refresh()
+	End Sub
+
+	Private Sub TrackBar1_ValueChanged(sender As Object, e As EventArgs)
+		Refresh()
 	End Sub
 End Class
