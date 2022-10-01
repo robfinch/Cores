@@ -16,6 +16,8 @@ Public Class Form1
 	Friend WithEvents Panel2 As Panel
 	Friend WithEvents PictureBox2 As PictureBox
 	Friend WithEvents PictureBox1 As PictureBox
+	Friend WithEvents CheckBox4 As CheckBox
+	Friend WithEvents Label5 As Label
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -109,6 +111,8 @@ Public Class Form1
 		Me.Panel2 = New System.Windows.Forms.Panel()
 		Me.PictureBox2 = New System.Windows.Forms.PictureBox()
 		Me.PictureBox1 = New System.Windows.Forms.PictureBox()
+		Me.CheckBox4 = New System.Windows.Forms.CheckBox()
+		Me.Label5 = New System.Windows.Forms.Label()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.Panel2.SuspendLayout()
@@ -245,9 +249,10 @@ Public Class Form1
 		'
 		'NumericUpDown2
 		'
+		Me.NumericUpDown2.Increment = New Decimal(New Integer() {2, 0, 0, 0})
 		Me.NumericUpDown2.Location = New System.Drawing.Point(107, 153)
-		Me.NumericUpDown2.Maximum = New Decimal(New Integer() {18, 0, 0, 0})
-		Me.NumericUpDown2.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		Me.NumericUpDown2.Maximum = New Decimal(New Integer() {32, 0, 0, 0})
+		Me.NumericUpDown2.Minimum = New Decimal(New Integer() {6, 0, 0, 0})
 		Me.NumericUpDown2.Name = "NumericUpDown2"
 		Me.NumericUpDown2.Size = New System.Drawing.Size(53, 20)
 		Me.NumericUpDown2.TabIndex = 175
@@ -296,8 +301,6 @@ Public Class Form1
 		'CheckBox3
 		'
 		Me.CheckBox3.AutoSize = True
-		Me.CheckBox3.Checked = True
-		Me.CheckBox3.CheckState = System.Windows.Forms.CheckState.Checked
 		Me.CheckBox3.Location = New System.Drawing.Point(132, 266)
 		Me.CheckBox3.Name = "CheckBox3"
 		Me.CheckBox3.Size = New System.Drawing.Size(71, 17)
@@ -332,10 +335,33 @@ Public Class Form1
 		Me.PictureBox1.TabIndex = 190
 		Me.PictureBox1.TabStop = False
 		'
+		'CheckBox4
+		'
+		Me.CheckBox4.AutoSize = True
+		Me.CheckBox4.Checked = True
+		Me.CheckBox4.CheckState = System.Windows.Forms.CheckState.Checked
+		Me.CheckBox4.Location = New System.Drawing.Point(132, 289)
+		Me.CheckBox4.Name = "CheckBox4"
+		Me.CheckBox4.Size = New System.Drawing.Size(77, 17)
+		Me.CheckBox4.TabIndex = 191
+		Me.CheckBox4.Text = "64-bit mem"
+		Me.CheckBox4.UseVisualStyleBackColor = True
+		'
+		'Label5
+		'
+		Me.Label5.AutoSize = True
+		Me.Label5.Location = New System.Drawing.Point(124, 250)
+		Me.Label5.Name = "Label5"
+		Me.Label5.Size = New System.Drawing.Size(50, 13)
+		Me.Label5.TabIndex = 192
+		Me.Label5.Text = ".mem out"
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.Label5)
+		Me.Controls.Add(Me.CheckBox4)
 		Me.Controls.Add(Me.PictureBox1)
 		Me.Controls.Add(Me.Panel2)
 		Me.Controls.Add(Me.Button4)
@@ -522,7 +548,7 @@ Public Class Form1
 		Dim readingVector As Boolean
 		Dim sz As Integer
 		fd = New OpenFileDialog
-		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
+		fd.Filter = "MEM files (*.mem)|*.mem|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
 		fd.FilterIndex = 2
 		If fd.ShowDialog() = DialogResult.OK Then
 			ifs = ifl.OpenText(fd.FileName)
@@ -569,7 +595,9 @@ Public Class Form1
 				readingVector = False
 				radix = 16
 				sz = 0
-				If CheckBox3.Checked Then
+				If CheckBox4.Checked Then
+					sz = 64
+				ElseIf CheckBox3.Checked Then
 					sz = 8
 				End If
 				For Each line In lines
@@ -613,6 +641,7 @@ x1:
 			Next
 			ifs.Close()
 		End If
+		Refresh()
 	End Sub
 
 	Sub SaveFile()
@@ -632,7 +661,7 @@ x1:
 		Dim sz As Integer
 
 		fd = New SaveFileDialog
-		fd.Filter = "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|MEM files (*.mem)|*.mem|All files (*.*)|*.*"
+		fd.Filter = "MEM files (*.mem)|*.mem|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
 		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
 			ofs = ofl.CreateText(fd.FileName)
@@ -694,7 +723,9 @@ x1:
 			ElseIf fd.FileName.EndsWith(".mem") Then
 				s = ""
 				sz = 0
-				If CheckBox3.Checked Then
+				If CheckBox4.Checked Then
+					sz = 64
+				ElseIf CheckBox3.Checked Then
 					sz = 8
 				End If
 				For n = 0 To nGlyphs - 1
@@ -811,7 +842,13 @@ x1:
 		Dim n As Integer
 		Dim sz As Integer
 
-		If CheckBox3.Checked Then sz = 8 Else sz = 0
+		If CheckBox4.Checked Then
+			sz = 64
+		ElseIf CheckBox3.Checked Then
+			sz = 8
+		Else
+			sz = 0
+		End If
 		n = ListBox1.SelectedIndex()
 		Clipboard.SetText(glyphs(n).SerializeToMem(sz))
 	End Sub
@@ -820,7 +857,13 @@ x1:
 		Dim n As Integer
 		Dim sz As Integer
 
-		If CheckBox3.Checked Then sz = 8 Else sz = 0
+		If CheckBox4.Checked Then
+			sz = 64
+		ElseIf CheckBox3.Checked Then
+			sz = 8
+		Else
+			sz = 0
+		End If
 		n = ListBox1.SelectedIndex()
 		glyphs(n).SerializeFromMem(Clipboard.GetText(), sz)
 		Refresh()

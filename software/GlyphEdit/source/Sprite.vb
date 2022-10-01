@@ -132,8 +132,56 @@ Public Class Sprite
             Next
         End If
     End Sub
+  Function SerializeToMem(ByVal n As Integer) As String
+    Dim j As Integer
+    Dim nm As String
+    Dim s As String
+    Dim c As Int16
 
-    Sub SerializeFromBin(ByVal n As Integer)
+    s = ""
+    If frmSprite0.BPP() = 8 Then
+      For j = 0 To 4095
+        If j Mod 16 = 0 And j > 0 Then
+          s = s & vbLf
+        End If
+        c = ((bitmap(j).R >> 5) And 7) << 5
+        c = c Or ((bitmap(j).G >> 5) And 7) << 2
+        c = c Or ((bitmap(j).B >> 6) And 3)
+        s = s & Hex(c).PadLeft(2, "0")
+        If j Mod 4 = 0 And j < 2044 Then
+          s = s & " "
+        End If
+      Next
+    ElseIf frmSprite0.BPP() = 16 Then
+      For j = 0 To 2047
+        If j Mod 16 = 0 And j > 0 Then
+          s = s & vbLf
+        End If
+        c = ((bitmap(j).R >> 3) And 31) << 10
+        c = c Or ((bitmap(j).G >> 3) And 31) << 5
+        c = c Or ((bitmap(j).B >> 3) And 31)
+        s = s & Hex(c).PadLeft(4, "0")
+        If j Mod 2 = 0 And j < 2046 Then
+          s = s & " "
+        End If
+      Next
+    Else
+      For j = 0 To 1023
+        If j Mod 16 = 0 And j > 0 Then
+          s = s & vbLf
+        End If
+        c = (bitmap(j).R) << 16
+        c = c Or (bitmap(j).G) << 8
+        c = c Or bitmap(j).B
+        s = s & Hex(c).PadLeft(8, "0")
+        If j < 1023 Then
+          s = s & " "
+        End If
+      Next
+    End If
+    Return s
+  End Function
+  Sub SerializeFromBin(ByVal n As Integer)
         Dim j As Integer
         Dim k As Integer
         Dim red As Integer
@@ -173,7 +221,7 @@ Public Class Sprite
     End Sub
 
     Public Sub New()
-        horizDots = 48
-        scanlines = 42
-    End Sub
+    horizDots = 56
+    scanlines = 36
+  End Sub
 End Class

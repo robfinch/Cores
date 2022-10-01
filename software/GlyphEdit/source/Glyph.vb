@@ -107,42 +107,64 @@ Public Class Glyph
     Dim j As Integer
     Dim k As Integer
     Dim w As Integer
-    Dim n As Integer
+    Dim n As UInt64
+    Dim shifts As Integer
     Dim scnlns() As String
+    Dim m As Integer
+    Dim sl(64) As UInt64
+    Dim bits As UInt64
+    Dim t As UInt64
 
     scnlns = Split(str, " ")
     w = 0
+    shifts = sz
+    bits = 0
+    If sz = 64 Then
+      For j = 0 To scnlns.Length - 1
+        sl(j) = Convert.ToUInt64(scnlns(j), 16)
+      Next
+      For j = 0 To scanlines - 1
+        For m = 0 To horizDots - 1 Step 8
+          t = (sl(w) >> bits) And 255
+          bits += 8
+          n = n Or (t << m)
+          If bits = 64 Then
+            w += 1
+            bits = 0
+          End If
+        Next
+        For k = horizDots - 1 To 0 Step -1
+          bitmap(j, k) = n And 1
+          n = n >> 1
+        Next
+      Next
+      Return
+    End If
     For j = 0 To scanlines - 1
-      n = Convert.ToUInt64(scnlns(w), 16)
-      If horizDots < 9 Then
-      ElseIf horizDots < 17 Then
-        If sz = 8 Then
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
-        End If
-      ElseIf horizDots < 25 Then
-        If sz = 8 Then
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 16)
-        End If
-      Else
-        If sz = 8 Then
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 8)
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 16)
-          w = w + 1
-          n = n Or (Convert.ToUInt64(scnlns(w), 16) << 24)
+      ' Grab next data item if shifts done
+      If shifts >= sz Then
+        shifts = 0
+        n = Convert.ToUInt64(scnlns(w), 16)
+        w += 1
+        If sz < horizDots Then
+          For m = sz To horizDots Step sz
+            n = n Or (Convert.ToUInt64(scnlns(w), 16) << m)
+            w += 1
+          Next
         End If
       End If
       For k = horizDots - 1 To 0 Step -1
         bitmap(j, k) = n And 1
         n = n >> 1
+        shifts = shifts + 1
       Next
-      '      SetBitmap(j, n)
-      w = w + 1
+      ' Shift out the remainder of the byte
+      If horizDots Mod 64 Then
+        For k = 0 To 64 - (horizDots Mod 64)
+          n = n >> 1
+          shifts = shifts + 1
+        Next
+      End If
     Next
   End Sub
   Public Function SerializeToCoe() As String
@@ -172,13 +194,47 @@ Public Class Glyph
     Dim j As Integer
     Dim k As Integer
     Dim w As Integer
-    Dim n As Integer
+    Dim n As UInt64
+    Dim m As UInt64
     Dim s As String
     Dim b As Integer
     Dim ss As String
+    Dim s1 As String
     Dim ts As String
+    Dim sl(64) As UInt64
+    Dim bits As UInt64
 
     s = ""
+    If sz = 64 Then
+      m = 0
+      For j = 0 To scanlines - 1
+        n = 0
+        For k = 0 To horizDots - 1
+          b = bitmap(j, k) And 1
+          n = n Or (b << (horizDots - k - 1))
+        Next
+        sl(j) = n
+      Next
+      bits = 0
+      For j = 0 To scanlines - 1
+        For k = 0 To horizDots - 1 Step 8
+          m = m Or (((sl(j) >> k) And 255) << bits)
+          bits += 8
+          If bits = 64 Then
+            ss = Hex(m).PadLeft(16, "0")
+            s = s & " " & ss
+            m = 0
+            bits = 0
+          End If
+        Next
+      Next
+      If bits <> 0 Then
+        ss = Hex(m).PadLeft(16, "0")
+        s = s & " " & ss
+      End If
+      Return s.Trim
+    End If
+    s1 = ""
     For j = 0 To scanlines - 1
       n = 0
       For k = 0 To horizDots - 1
@@ -206,12 +262,20 @@ Public Class Glyph
       Else
         ts = ss
       End If
-      If j = 0 Then
-        s = ts
+      If sz = 64 Then
+        If s1.Length < 16 Then
+          s1 = ts & s1
+        Else
+          s = s & " " & s1
+          s1 = ""
+        End If
       Else
-        s = s & " " & ts
+        s = s & " " & s1
       End If
     Next
+    If s1 <> "" Then
+      s = s & " " & s1
+    End If
     Return s
   End Function
   Public Sub SerializeToV(ByVal ofs As TextWriter)
