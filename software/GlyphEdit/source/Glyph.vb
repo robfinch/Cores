@@ -53,6 +53,34 @@ Public Class Glyph
       bitmap(j, 0) = 0
     Next
   End Sub
+  Public Sub ShiftUp()
+    Dim j As Integer
+    Dim b As Boolean
+    Dim k As Integer
+
+    For j = 0 To scanlines - 2
+      For k = 0 To horizDots - 1
+        bitmap(j, k) = bitmap(j + 1, k)
+      Next
+    Next
+    For k = 0 To horizDots - 1
+      bitmap(scanlines - 1, k) = 0
+    Next
+  End Sub
+  Public Sub ShiftDown()
+    Dim j As Integer
+    Dim b As Boolean
+    Dim k As Integer
+
+    For j = scanlines - 1 To 1 Step -1
+      For k = 0 To horizDots - 1
+        bitmap(j, k) = bitmap(j - 1, k)
+      Next
+    Next
+    For k = 0 To horizDots - 1
+      bitmap(0, k) = 0
+    Next
+  End Sub
   Public Function SerializeToUCF() As String
     Dim j As Integer
     Dim k As Integer
@@ -125,7 +153,7 @@ Public Class Glyph
       Next
       For j = 0 To scanlines - 1
         For m = 0 To horizDots - 1 Step 8
-          t = (sl(w) >> bits) And 255
+          t = (sl(w) >> bits) And 255UL
           bits += 8
           n = n Or (t << m)
           If bits = 64 Then
@@ -192,7 +220,7 @@ Public Class Glyph
 
   Public Function SerializeToMem(ByVal sz As Integer) As String
     Dim j As Integer
-    Dim k As Integer
+    Dim k As UInt64
     Dim w As Integer
     Dim n As UInt64
     Dim m As UInt64
@@ -217,8 +245,8 @@ Public Class Glyph
       Next
       bits = 0
       For j = 0 To scanlines - 1
-        For k = 0 To horizDots - 1 Step 8
-          m = m Or (((sl(j) >> k) And 255) << bits)
+        For k = 0 To horizDots - 1 Step 8UL
+          m = m Or (((sl(j) >> k) And 255UL) << bits)
           bits += 8
           If bits = 64 Then
             ss = Hex(m).PadLeft(16, "0")
