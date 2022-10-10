@@ -53,6 +53,18 @@ Public Class Glyph
       bitmap(j, 0) = 0
     Next
   End Sub
+  Public Sub ShiftRight()
+    Dim j As Integer
+    Dim b As Boolean
+    Dim k As Integer
+
+    For j = 0 To scanlines - 1
+      For k = 0 To horizDots - 2
+        bitmap(j, k) = bitmap(j, k + 1)
+      Next
+      bitmap(j, horizDots - 1) = 0
+    Next
+  End Sub
   Public Sub ShiftUp()
     Dim j As Integer
     Dim b As Boolean
@@ -195,6 +207,24 @@ Public Class Glyph
       End If
     Next
   End Sub
+  Sub SerializeFromBin(ary As Array)
+    Dim j As Integer
+    Dim k As Integer
+    Dim m As Integer
+    Dim b As Byte
+
+    m = 0
+    For j = 0 To scanlines - 1
+      For k = 0 To horizDots - 1
+        If k Mod 8 = 0 Then
+          b = ary(m)
+          m = m + 1
+        End If
+        bitmap(j, k) = (b And 128) <> 0
+        b <<= 1
+      Next
+    Next
+  End Sub
   Public Function SerializeToCoe() As String
     Dim j As Integer
     Dim k As Integer
@@ -306,6 +336,46 @@ Public Class Glyph
     End If
     Return s
   End Function
+
+  Function SerializeToBin() As Array
+    Dim j As Integer
+    Dim k As Integer
+    Dim m As Integer
+    Dim w As Double
+    Dim h As Double
+    Dim sz As Integer
+    Dim ary() As Byte
+    Dim b As Byte
+
+    w = Math.Floor((horizDots + 7) / 8)
+    h = scanlines
+    sz = (w * h + 7) And Not 7
+    ReDim ary(sz - 1)
+    m = 0
+    For j = 0 To scanlines - 1
+      For k = 0 To horizDots - 1
+        If k Mod 8 = 0 And k > 0 Then
+          ary(m) = b
+          m += 1
+        End If
+        If k Mod 8 = 0 Then b = 0
+        b = (b << 1) Or (bitmap(j, k) And 1)
+      Next
+      For k = k To w * 8 - 1
+        b = b << 1
+      Next
+      If horizDots Mod 8 <> 0 Then
+        ary(m) = b
+        m += 1
+      End If
+    Next
+    While m Mod 8 <> 0
+      ary(m) = 0
+      m += 1
+    End While
+    Return ary
+  End Function
+
   Public Sub SerializeToV(ByVal ofs As TextWriter)
     Dim j As Integer
     Dim k As Integer
@@ -525,18 +595,48 @@ Public Class Glyph
     Dim k As Integer
     Dim x As Integer
     Dim y As Integer
+    Dim w As Double
 
-    x = (index Mod 32) * horizDots * 2
-    y = (index >> 5)
-    y = y * (scanlines * 2)
+    x = (index Mod mapWidth) * horizDots * 2
+    w = Math.Floor(index / mapWidth)
+    y = w * (scanlines * 2)
 
     For j = 0 To scanlines - 1
       For k = 0 To horizDots - 1
         If bitmap(j, k) Then
+          'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
+          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.Black)
+          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.Black)
+          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.Black)
+          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.Black)
           e.Graphics.FillRectangle(Brushes.Black, k * 2 + x, j * 2 + y, 2, 2)
         Else
+          'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
+          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.White)
+          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.White)
+          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.White)
+          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.White)
           e.Graphics.FillRectangle(Brushes.White, k * 2 + x, j * 2 + y, 2, 2)
         End If
+      Next
+    Next
+  End Sub
+  Sub UndrawSmall()
+    Dim j As Integer
+    Dim k As Integer
+    Dim x As Integer
+    Dim y As Integer
+    Dim w As Double
+    Dim bm As Bitmap
+
+    bm = bmpGlyphs
+    x = (index Mod mapWidth) * horizDots * 2
+    w = Math.Floor(index / mapWidth)
+    y = w * (scanlines * 2)
+
+    For j = 0 To scanlines - 1
+      For k = 0 To horizDots - 1
+        bitmap(j, k) = bm.GetPixel(k * 2 + x, j * 2 + y) <> bm.GetPixel(0, 0)
       Next
     Next
   End Sub

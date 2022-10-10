@@ -1,8 +1,8 @@
 Imports System.IO
-
+Imports System.Reflection
 Public Class Form1
-    Inherits System.Windows.Forms.Form
-    Dim gwidth As Integer
+	Inherits System.Windows.Forms.Form
+	Dim gwidth As Integer
 	Dim gheight As Integer
 	Dim workingGlyph(32, 32) As Boolean
 	Friend WithEvents CheckBox1 As CheckBox
@@ -19,6 +19,14 @@ Public Class Form1
 	Friend WithEvents Label5 As Label
 	Friend WithEvents Button5 As Button
 	Friend WithEvents Button6 As Button
+	Friend WithEvents NumericUpDown3 As NumericUpDown
+	Friend WithEvents Label6 As Label
+	Friend WithEvents Button7 As Button
+	Friend WithEvents Button8 As Button
+	Friend WithEvents Button9 As Button
+	Friend WithEvents Button10 As Button
+	Friend WithEvents Button11 As Button
+	Friend WithEvents CheckBox5 As CheckBox
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -102,6 +110,12 @@ Public Class Form1
 		Me.Button2 = New System.Windows.Forms.Button()
 		Me.Button4 = New System.Windows.Forms.Button()
 		Me.Button5 = New System.Windows.Forms.Button()
+		Me.Button6 = New System.Windows.Forms.Button()
+		Me.Button7 = New System.Windows.Forms.Button()
+		Me.Button8 = New System.Windows.Forms.Button()
+		Me.Button9 = New System.Windows.Forms.Button()
+		Me.Button10 = New System.Windows.Forms.Button()
+		Me.Button11 = New System.Windows.Forms.Button()
 		Me.ToolTip2 = New System.Windows.Forms.ToolTip(Me.components)
 		Me.NumericUpDown1 = New System.Windows.Forms.NumericUpDown()
 		Me.NumericUpDown2 = New System.Windows.Forms.NumericUpDown()
@@ -115,12 +129,15 @@ Public Class Form1
 		Me.PictureBox1 = New System.Windows.Forms.PictureBox()
 		Me.CheckBox4 = New System.Windows.Forms.CheckBox()
 		Me.Label5 = New System.Windows.Forms.Label()
-		Me.Button6 = New System.Windows.Forms.Button()
+		Me.NumericUpDown3 = New System.Windows.Forms.NumericUpDown()
+		Me.Label6 = New System.Windows.Forms.Label()
+		Me.CheckBox5 = New System.Windows.Forms.CheckBox()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.Panel2.SuspendLayout()
 		CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
+		CType(Me.NumericUpDown3, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.SuspendLayout()
 		'
 		'Label1
@@ -150,9 +167,9 @@ Public Class Form1
 		'
 		'ListBox1
 		'
-		Me.ListBox1.Location = New System.Drawing.Point(240, 21)
+		Me.ListBox1.Location = New System.Drawing.Point(256, 21)
 		Me.ListBox1.Name = "ListBox1"
-		Me.ListBox1.Size = New System.Drawing.Size(74, 251)
+		Me.ListBox1.Size = New System.Drawing.Size(58, 251)
 		Me.ListBox1.TabIndex = 168
 		'
 		'MainMenu1
@@ -214,7 +231,7 @@ Public Class Form1
 		'
 		'Button1
 		'
-		Me.Button1.Location = New System.Drawing.Point(629, 89)
+		Me.Button1.Location = New System.Drawing.Point(747, 89)
 		Me.Button1.Name = "Button1"
 		Me.Button1.Size = New System.Drawing.Size(95, 28)
 		Me.Button1.TabIndex = 182
@@ -241,12 +258,66 @@ Public Class Form1
 		'
 		'Button5
 		'
-		Me.Button5.Location = New System.Drawing.Point(629, 55)
+		Me.Button5.Location = New System.Drawing.Point(747, 55)
 		Me.Button5.Name = "Button5"
 		Me.Button5.Size = New System.Drawing.Size(95, 28)
 		Me.Button5.TabIndex = 193
 		Me.Button5.Text = "Shift All Down"
 		Me.ToolTip1.SetToolTip(Me.Button5, "Switch bits from left to right in the entire character set.")
+		'
+		'Button6
+		'
+		Me.Button6.Location = New System.Drawing.Point(747, 21)
+		Me.Button6.Name = "Button6"
+		Me.Button6.Size = New System.Drawing.Size(95, 28)
+		Me.Button6.TabIndex = 194
+		Me.Button6.Text = "Shift All Up"
+		Me.ToolTip1.SetToolTip(Me.Button6, "Switch bits from left to right in the entire character set.")
+		'
+		'Button7
+		'
+		Me.Button7.Location = New System.Drawing.Point(747, 123)
+		Me.Button7.Name = "Button7"
+		Me.Button7.Size = New System.Drawing.Size(95, 28)
+		Me.Button7.TabIndex = 197
+		Me.Button7.Text = "Shift All Right"
+		Me.ToolTip1.SetToolTip(Me.Button7, "Switch bits from left to right in the entire character set.")
+		'
+		'Button8
+		'
+		Me.Button8.Location = New System.Drawing.Point(618, 21)
+		Me.Button8.Name = "Button8"
+		Me.Button8.Size = New System.Drawing.Size(103, 28)
+		Me.Button8.TabIndex = 198
+		Me.Button8.Text = "Shift Glyph Up"
+		Me.ToolTip1.SetToolTip(Me.Button8, "Switch bits from left to right in the entire character set.")
+		'
+		'Button9
+		'
+		Me.Button9.Location = New System.Drawing.Point(618, 55)
+		Me.Button9.Name = "Button9"
+		Me.Button9.Size = New System.Drawing.Size(103, 28)
+		Me.Button9.TabIndex = 199
+		Me.Button9.Text = "Shift Glyph Down"
+		Me.ToolTip1.SetToolTip(Me.Button9, "Switch bits from left to right in the entire character set.")
+		'
+		'Button10
+		'
+		Me.Button10.Location = New System.Drawing.Point(618, 89)
+		Me.Button10.Name = "Button10"
+		Me.Button10.Size = New System.Drawing.Size(103, 28)
+		Me.Button10.TabIndex = 200
+		Me.Button10.Text = "Shift Glyph Left"
+		Me.ToolTip1.SetToolTip(Me.Button10, "Switch bits from left to right in the entire character set.")
+		'
+		'Button11
+		'
+		Me.Button11.Location = New System.Drawing.Point(618, 123)
+		Me.Button11.Name = "Button11"
+		Me.Button11.Size = New System.Drawing.Size(103, 28)
+		Me.Button11.TabIndex = 201
+		Me.Button11.Text = "Shift Glyph Right"
+		Me.ToolTip1.SetToolTip(Me.Button11, "Switch bits from left to right in the entire character set.")
 		'
 		'NumericUpDown1
 		'
@@ -334,7 +405,7 @@ Public Class Form1
 		Me.PictureBox2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
 		Me.PictureBox2.Location = New System.Drawing.Point(3, 3)
 		Me.PictureBox2.Name = "PictureBox2"
-		Me.PictureBox2.Size = New System.Drawing.Size(844, 1024)
+		Me.PictureBox2.Size = New System.Drawing.Size(844, 970)
 		Me.PictureBox2.TabIndex = 190
 		Me.PictureBox2.TabStop = False
 		'
@@ -368,19 +439,49 @@ Public Class Form1
 		Me.Label5.TabIndex = 192
 		Me.Label5.Text = ".mem out"
 		'
-		'Button6
+		'NumericUpDown3
 		'
-		Me.Button6.Location = New System.Drawing.Point(629, 21)
-		Me.Button6.Name = "Button6"
-		Me.Button6.Size = New System.Drawing.Size(95, 28)
-		Me.Button6.TabIndex = 194
-		Me.Button6.Text = "Shift All Up"
-		Me.ToolTip1.SetToolTip(Me.Button6, "Switch bits from left to right in the entire character set.")
+		Me.NumericUpDown3.Location = New System.Drawing.Point(353, 286)
+		Me.NumericUpDown3.Maximum = New Decimal(New Integer() {256, 0, 0, 0})
+		Me.NumericUpDown3.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		Me.NumericUpDown3.Name = "NumericUpDown3"
+		Me.NumericUpDown3.Size = New System.Drawing.Size(51, 20)
+		Me.NumericUpDown3.TabIndex = 195
+		Me.NumericUpDown3.Value = New Decimal(New Integer() {32, 0, 0, 0})
+		'
+		'Label6
+		'
+		Me.Label6.AutoSize = True
+		Me.Label6.Location = New System.Drawing.Point(288, 290)
+		Me.Label6.Name = "Label6"
+		Me.Label6.Size = New System.Drawing.Size(59, 13)
+		Me.Label6.TabIndex = 196
+		Me.Label6.Text = "Map Width"
+		'
+		'CheckBox5
+		'
+		Me.CheckBox5.AutoSize = True
+		Me.CheckBox5.Checked = True
+		Me.CheckBox5.CheckState = System.Windows.Forms.CheckState.Checked
+		Me.CheckBox5.Location = New System.Drawing.Point(618, 240)
+		Me.CheckBox5.Name = "CheckBox5"
+		Me.CheckBox5.Size = New System.Drawing.Size(81, 17)
+		Me.CheckBox5.TabIndex = 202
+		Me.CheckBox5.Text = "Add header"
+		Me.CheckBox5.UseVisualStyleBackColor = True
 		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.CheckBox5)
+		Me.Controls.Add(Me.Button11)
+		Me.Controls.Add(Me.Button10)
+		Me.Controls.Add(Me.Button9)
+		Me.Controls.Add(Me.Button8)
+		Me.Controls.Add(Me.Button7)
+		Me.Controls.Add(Me.Label6)
+		Me.Controls.Add(Me.NumericUpDown3)
 		Me.Controls.Add(Me.Button6)
 		Me.Controls.Add(Me.Button5)
 		Me.Controls.Add(Me.Label5)
@@ -412,6 +513,7 @@ Public Class Form1
 		Me.Panel2.ResumeLayout(False)
 		CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).EndInit()
 		CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
+		CType(Me.NumericUpDown3, System.ComponentModel.ISupportInitialize).EndInit()
 		Me.ResumeLayout(False)
 		Me.PerformLayout()
 
@@ -505,6 +607,7 @@ Public Class Form1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
 			ListBox1.Items.Add(CStr(j))
 		Next
+		ResizePictureBox2()
 	End Sub
 
 	Private Sub PictureBox1_Paint(ByVal sender As Object, ByVal e As System.Windows.Forms.PaintEventArgs) Handles PictureBox1.Paint
@@ -540,6 +643,7 @@ Public Class Form1
 				glyphs(n).FlipBit(wx, wy)
 				PictureBox1.Invalidate()
 				PictureBox2.Invalidate()
+				Refresh()
 			End If
 		End If
 	End Sub
@@ -572,15 +676,34 @@ Public Class Form1
 		Dim sz As Integer
 		Dim hdr As String
 		fd = New OpenFileDialog
-		fd.Filter = "MEM files (*.mem)|*.mem|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
+		fd.Filter = "MEM files (*.mem)|*.mem|Raw Binary (*.bin)|*.bin|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
 		fd.FilterIndex = 2
 		If fd.ShowDialog() = DialogResult.OK Then
-			ifs = ifl.OpenText(fd.FileName)
+			If fd.FileName.EndsWith(".bmp") Then
+				bmpGlyphs = New Bitmap(fd.FileName)
+				'				PictureBox2.Load(fd.FileName)
+				For n = 0 To modGlobals.nGlyphs() - 1
+					If Not glyphs(n) Is Nothing Then
+						glyphs(n).index = n
+						glyphs(n).scanlines = gheight
+						glyphs(n).horizDots = gwidth
+					End If
+					glyphs(n).UndrawSmall()
+				Next
+				PictureBox2.Invalidate()
+				Refresh()
+				Return
+			End If
+			If Not fd.FileName.EndsWith(".bin") Then
+				ifs = ifl.OpenText(fd.FileName)
+			End If
 			If fd.FileName.EndsWith(".mem") Then
 				hdr = ifs.ReadLine()
 			End If
-			text = ifs.ReadToEnd()
-			lines = text.Split(vbLf)
+			If Not fd.FileName.EndsWith(".bin") Then
+				text = ifs.ReadToEnd()
+				lines = text.Split(vbLf)
+			End If
 			gcnt = 0
 			bcnt = 0
 			If fd.FileName.EndsWith(".coe") Then
@@ -618,6 +741,7 @@ Public Class Form1
 						End If
 					End If
 				Next
+				ifs.Close()
 			ElseIf fd.FileName.EndsWith(".mem") Then
 				readingVector = False
 				radix = 16
@@ -646,6 +770,58 @@ Public Class Form1
 						If gcnt = modGlobals.nGlyphs() Then GoTo x1
 					End If
 				Next
+				ifs.Close()
+			ElseIf fd.FileName.EndsWith(".bin") Then
+				Dim ary() As Byte
+				Dim jj As Integer
+				Dim kk As Integer
+				Dim mm As Integer
+				Dim nn As Integer
+				Dim ndx As Integer
+				Dim siz As Integer
+				Dim bwid As Integer
+				Dim bary() As Byte
+				ary = My.Computer.FileSystem.ReadAllBytes(fd.FileName)
+				jj = 0
+				mm = 0
+				If CheckBox5.Checked Then
+					gheight = ary(0)
+					gwidth = ary(1)
+					jj = 8
+					mm = 8
+				End If
+				siz = (gwidth + 7) And Not 7 ' round to a byte size
+				bwid = siz
+				siz >>= 3
+				siz *= gheight
+				siz = (siz + 7) And Not 7     ' round to multiple of eight bytes
+				ReDim bary(siz - 1)
+				nn = 0
+				For n = 0 To modGlobals.nGlyphs() - 1
+					If Not glyphs(n) Is Nothing Then
+						glyphs(n).scanlines = gheight
+						glyphs(n).horizDots = gwidth
+					End If
+				Next
+				While mm < ary.Length
+					ndx = 0
+					For jj = 0 To gheight - 1
+						For kk = 0 To gwidth - 1 Step 8
+							bary(ndx) = ary(mm)
+							mm += 1
+							If mm >= ary.Length Then GoTo x1
+							ndx = ndx + 1
+						Next
+					Next
+					While mm Mod 8 <> 0
+						bary(ndx) = ary(mm)
+						mm += 1
+						If mm >= ary.Length Then GoTo x1
+						ndx += 1
+					End While
+					glyphs(nn).SerializeFromBin(bary)
+					nn = nn + 1
+				End While
 			Else
 				For Each line In lines
 					line = line.Trim
@@ -672,12 +848,12 @@ Public Class Form1
 						End If
 					End If
 				Next
+				ifs.Close()
 			End If
 x1:
 			For n = 0 To nGlyphs() - 1
 				'                glyphs(n).SerializeTo(ofs)
 			Next
-			ifs.Close()
 		End If
 		ListBox1.Items.Clear()
 		For j = 0 To modGlobals.nGlyphs() - 1
@@ -692,6 +868,7 @@ x1:
 		Dim ofl As File
 		Dim strm As Stream
 		Dim ofs As TextWriter
+		Dim ofb As BinaryWriter
 		Dim path As String
 		Dim fd As SaveFileDialog
 		Dim s As String
@@ -705,10 +882,14 @@ x1:
 		Dim hdr As String
 
 		fd = New SaveFileDialog
-		fd.Filter = "MEM files (*.mem)|*.mem|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
+		s1 = "MEM files (*.mem)|*.mem|Raw Binary (*.bin)|*.bin|Bitmap (*.bmp)|*.bmp|PGN (*.png)|*.png|Jpeg (*.jpg)|*.jpg|"
+		fd.Filter = s1 & "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
 		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
-			ofs = ofl.CreateText(fd.FileName)
+			If fd.FileName.EndsWith(".bin") Or fd.FileName.EndsWith(".bmp") Then
+			Else
+				ofs = ofl.CreateText(fd.FileName)
+			End If
 			If fd.FileName.EndsWith(".coe") Then
 				s = "memory_initialization_radix=10;" & vbLf
 				ofs.Write(s)
@@ -724,6 +905,19 @@ x1:
 					End If
 					ofs.Write(s)
 				Next
+				ofs.Close()
+			ElseIf fd.FileName.EndsWith(".bmp") Then
+				bmpGlyphs.Save(fd.FileName, Imaging.ImageFormat.Bmp)
+				Return
+			ElseIf fd.FileName.EndsWith(".jpg") Then
+				bmpGlyphs.Save(fd.FileName, Imaging.ImageFormat.Jpeg)
+				Return
+			ElseIf fd.FileName.EndsWith(".png") Then
+				bmpGlyphs.Save(fd.FileName, Imaging.ImageFormat.Png)
+				Return
+			ElseIf fd.FileName.EndsWith(".gif") Then
+				bmpGlyphs.Save(fd.FileName, Imaging.ImageFormat.Gif)
+				Return
 			ElseIf fd.FileName.EndsWith(".ucf") Then
 				gcnt = 0
 				s = ""
@@ -764,6 +958,7 @@ x1:
 					End If
 				Loop While s.Length > 0
 				ofs.Write(s2)
+				ofs.Close()
 			ElseIf fd.FileName.EndsWith(".mem") Then
 				s = ""
 				sz = 0
@@ -783,6 +978,26 @@ x1:
 						s = vbLf & glyphs(n).SerializeToMem(sz)
 					End If
 					ofs.Write(s)
+				Next
+				ofs.Close()
+				' Saving raw byte output
+			ElseIf fd.FileName.EndsWith(".bin") Then
+				Dim bhdr As UInt64
+				Dim j As Integer
+				Dim bythdr(7) As Byte
+				Dim ary() As Byte
+				bhdr = (glyphs(0).horizDots << 8) Or glyphs(0).scanlines
+				If CheckBox5.Checked Then
+					For j = 0 To 7
+						bythdr(j) = bhdr And 255
+						bhdr >>= 8
+					Next
+					My.Computer.FileSystem.WriteAllBytes(fd.FileName, bythdr, False)
+				End If
+				For n = 0 To nGlyphs() - 1
+					glyphs(n).index = n
+					ary = glyphs(n).SerializeToBin()
+					My.Computer.FileSystem.WriteAllBytes(fd.FileName, ary, n <> 0 Or CheckBox5.Checked)
 				Next
 			Else
 				'ofs.WriteLine("always @(bmndx)")
@@ -806,8 +1021,8 @@ x1:
 					End If
 				Next
 				'ofs.WriteLine("endcase")
+				ofs.Close()
 			End If
-			ofs.Close()
 		End If
 	End Sub
 
@@ -824,9 +1039,7 @@ x1:
 				glyphs(n).horizDots = gwidth
 			End If
 		Next
-		If Not glyphs(0) Is Nothing Then
-			PictureBox2.Size = New Size(glyphs(0).horizDots * 2 * 32, glyphs(0).scanlines * 2 * modGlobals.nGlyphs() / 32)
-		End If
+		ResizePictureBox2()
 		ListBox1.Items.Clear()
 		For j = 0 To modGlobals.nGlyphs() - 1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
@@ -845,9 +1058,7 @@ x1:
 				glyphs(n).scanlines = gheight
 			End If
 		Next
-		If Not glyphs(0) Is Nothing Then
-			PictureBox2.Size = New Size(glyphs(0).horizDots * 2 * 32, glyphs(0).scanlines * 2 * modGlobals.nGlyphs() / 32)
-		End If
+		ResizePictureBox2()
 		ListBox1.Items.Clear()
 		For j = 0 To modGlobals.nGlyphs() - 1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
@@ -857,6 +1068,18 @@ x1:
 		PictureBox2.Invalidate()
 	End Sub
 
+	Sub ResizePictureBox2()
+		Dim w As Double
+		Dim wi As Integer
+
+		If Not glyphs(0) Is Nothing Then
+			w = Math.Floor(modGlobals.nGlyphs() / mapWidth)
+			PictureBox2.Size = New Size(glyphs(0).horizDots * 2 * mapWidth, glyphs(0).scanlines * 2 * w)
+			wi = glyphs(0).scanlines * 2 * (w + 1)
+			bmpGlyphs = New Bitmap(glyphs(0).horizDots * 2 * mapWidth, wi)
+			PictureBox2.Image = bmpGlyphs
+		End If
+	End Sub
 	Private Sub PictureBox1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles PictureBox1.Click
 
 	End Sub
@@ -901,6 +1124,7 @@ x1:
 		For j = 0 To modGlobals.nGlyphs() - 1
 			glyphs(j).ShiftLeft()
 		Next
+		Refresh()
 	End Sub
 
 	Private Sub Button2_Click_1(sender As Object, e As EventArgs) Handles Button2.Click
@@ -944,6 +1168,7 @@ x1:
 		For j = 0 To modGlobals.nGlyphs() - 1
 			glyphs(j).ShiftDown()
 		Next
+		Refresh()
 	End Sub
 
 	Private Sub Button6_Click(sender As Object, e As EventArgs) Handles Button6.Click
@@ -952,6 +1177,53 @@ x1:
 		For j = 0 To modGlobals.nGlyphs() - 1
 			glyphs(j).ShiftUp()
 		Next
+		Refresh()
+	End Sub
+
+	Private Sub NumericUpDown3_ValueChanged(sender As Object, e As EventArgs) Handles NumericUpDown3.ValueChanged
+		mapWidth = NumericUpDown3.Value
+		ResizePictureBox2()
+		PictureBox2.Invalidate()
+	End Sub
+
+	Private Sub Button7_Click(sender As Object, e As EventArgs) Handles Button7.Click
+		Dim j As Integer
+
+		For j = 0 To modGlobals.nGlyphs() - 1
+			glyphs(j).ShiftRight()
+		Next
+		Refresh()
+	End Sub
+
+	Private Sub Button8_Click(sender As Object, e As EventArgs) Handles Button8.Click
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		glyphs(n).ShiftUp()
+		Refresh()
+	End Sub
+
+	Private Sub Button9_Click(sender As Object, e As EventArgs) Handles Button9.Click
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		glyphs(n).ShiftDown()
+		Refresh()
+	End Sub
+
+	Private Sub Button10_Click(sender As Object, e As EventArgs) Handles Button10.Click
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		glyphs(n).ShiftLeft()
+		Refresh()
+	End Sub
+
+	Private Sub Button11_Click(sender As Object, e As EventArgs) Handles Button11.Click
+		Dim n As Integer
+		n = ListBox1.SelectedIndex()
+		glyphs(n).ShiftRight()
+		Refresh()
+	End Sub
+
+	Private Sub CheckBox5_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox5.CheckedChanged
 
 	End Sub
 End Class

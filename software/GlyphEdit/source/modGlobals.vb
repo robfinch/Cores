@@ -3,11 +3,14 @@ Module modGlobals
   Public sprites(32) As Sprite
   Public spriteColor As New System.Drawing.Color
     Public frmSprite0 As frmSprite
-    Public baseSpriteFileName As String
+  Public baseSpriteFileName As String
+  Public mapWidth As Integer
+  Public bmpGlyphs As Bitmap
 
   Sub main()
     Dim frm As New Form1
 
+    mapWidth = 32
     frm.ShowDialog()
   End Sub
 
