@@ -27,6 +27,13 @@ Public Class Glyph
   Public Sub FlipBit(ByVal x As Integer, ByVal y As Integer)
     bitmap(y, x) = Not bitmap(y, x)
   End Sub
+  Public Sub SetBit(ByVal x As Integer, ByVal y As Integer)
+    bitmap(y, x) = True
+  End Sub
+  Public Sub ClearBit(ByVal x As Integer, ByVal y As Integer)
+    bitmap(y, x) = False
+  End Sub
+
 
   Public Sub FlipHoriz()
     Dim j As Integer
@@ -566,22 +573,45 @@ Public Class Glyph
   Sub Draw(ByVal e As System.Windows.Forms.PaintEventArgs)
     Dim j As Integer
     Dim k As Integer
+    Dim kk As Integer
     Dim sc As Integer
     Dim fnt As Font
+    Dim pix As Integer
+    Dim stp As Integer
 
+    If aam Then stp = 2 Else stp = 1
     fnt = New Font("Courier New", 36)
     If horizDots < 9 And scanlines < 9 Then
       sc = 20
     ElseIf horizDots < 17 And scanlines < 25 Then
       sc = 10
+    Else
+      sc = 5
     End If
     For j = 0 To scanlines - 1
-      For k = 0 To horizDots - 1
-        If bitmap(j, k) Then
-          e.Graphics.FillRectangle(Brushes.Black, k * sc, j * sc, sc, sc)
+      kk = 0
+      For k = 0 To horizDots - 1 Step stp
+        If stp = 1 Then
+          pix = ((bitmap(j, k) And 1) << 1) Or (bitmap(j, k) And 1)
         Else
-          e.Graphics.FillRectangle(Brushes.White, k * sc, j * sc, sc, sc)
+          pix = ((bitmap(j, k) And 1) << 1) Or (bitmap(j, k + 1) And 1)
         End If
+        Select Case pix
+          Case 0
+            e.Graphics.FillRectangle(Brushes.White, kk * sc, j * sc, sc, sc)
+          Case 1
+            e.Graphics.FillRectangle(Brushes.LightGray, kk * sc, j * sc, sc, sc)
+          Case 2
+            e.Graphics.FillRectangle(Brushes.DarkGray, kk * sc, j * sc, sc, sc)
+          Case 3
+            e.Graphics.FillRectangle(Brushes.Black, kk * sc, j * sc, sc, sc)
+        End Select
+        '        If bitmap(j, k) Then
+        '       e.Graphics.FillRectangle(Brushes.Black, k * sc, j * sc, sc, sc)
+        '      Else
+        '     e.Graphics.FillRectangle(Brushes.White, k * sc, j * sc, sc, sc)
+        '    End If
+        kk += 1
       Next
     Next
     If index < 256 Then
@@ -593,31 +623,76 @@ Public Class Glyph
   Sub DrawSmall(ByVal e As System.Windows.Forms.PaintEventArgs)
     Dim j As Integer
     Dim k As Integer
+    Dim kk As Integer
     Dim x As Integer
     Dim y As Integer
     Dim w As Double
+    Dim pix As Integer
+    Dim stp As Integer
 
-    x = (index Mod mapWidth) * horizDots * 2
+    If aam Then
+      x = (index Mod mapWidth) * horizDots
+      stp = 2
+    Else
+      x = (index Mod mapWidth) * horizDots * 2
+      stp = 1
+    End If
     w = Math.Floor(index / mapWidth)
     y = w * (scanlines * 2)
 
     For j = 0 To scanlines - 1
-      For k = 0 To horizDots - 1
-        If bitmap(j, k) Then
-          'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
-          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.Black)
-          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.Black)
-          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.Black)
-          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.Black)
-          e.Graphics.FillRectangle(Brushes.Black, k * 2 + x, j * 2 + y, 2, 2)
+      kk = 0
+      For k = 0 To horizDots - 1 Step stp
+        If stp = 1 Then
+          pix = ((bitmap(j, k) And 1) << 1) Or (bitmap(j, k) And 1)
         Else
-          'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
-          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.White)
-          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.White)
-          bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.White)
-          bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.White)
-          e.Graphics.FillRectangle(Brushes.White, k * 2 + x, j * 2 + y, 2, 2)
+          pix = ((bitmap(j, k) And 1) << 1) Or (bitmap(j, k + 1) And 1)
         End If
+        If x < bmpGlyphs.Width - horizDots Then
+          Select Case pix
+            Case 3
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y, Color.Black)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y, Color.Black)
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y + 1, Color.Black)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y + 1, Color.Black)
+              e.Graphics.FillRectangle(Brushes.Black, k * 2 + x, j * 2 + y, 2, 2)
+            Case 2
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y, Color.DarkGray)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y, Color.DarkGray)
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y + 1, Color.DarkGray)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y + 1, Color.DarkGray)
+              e.Graphics.FillRectangle(Brushes.DarkGray, k * 2 + x, j * 2 + y, 2, 2)
+            Case 1
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y, Color.LightGray)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y, Color.LightGray)
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y + 1, Color.LightGray)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y + 1, Color.LightGray)
+              e.Graphics.FillRectangle(Brushes.LightGray, k * 2 + x, j * 2 + y, 2, 2)
+            Case 0
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y, Color.White)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y, Color.White)
+              bmpGlyphs.SetPixel(kk * 2 + x, j * 2 + y + 1, Color.White)
+              bmpGlyphs.SetPixel(kk * 2 + x + 1, j * 2 + y + 1, Color.White)
+              e.Graphics.FillRectangle(Brushes.White, k * 2 + x, j * 2 + y, 2, 2)
+          End Select
+        End If
+
+        'If bitmap(j, k) Then
+        'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
+        'bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.Black)
+        'bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.Black)
+        'bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.Black)
+        'bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.Black)
+        'e.Graphics.FillRectangle(Brushes.Black, k * 2 + x, j * 2 + y, 2, 2)
+        'Else
+        'Form1.DrawToBitmap(Form1.PictureBox2.Image, New Rectangle(k * 2 + x, j * 2 + y, 2, 2))
+        'bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y, Color.White)
+        'bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y, Color.White)
+        'bmpGlyphs.SetPixel(k * 2 + x, j * 2 + y + 1, Color.White)
+        'bmpGlyphs.SetPixel(k * 2 + x + 1, j * 2 + y + 1, Color.White)
+        'e.Graphics.FillRectangle(Brushes.White, k * 2 + x, j * 2 + y, 2, 2)
+        'End If
+        kk += 1
       Next
     Next
   End Sub

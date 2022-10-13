@@ -2,15 +2,21 @@ Module modGlobals
   Public glyphs(8192) As Glyph
   Public sprites(32) As Sprite
   Public spriteColor As New System.Drawing.Color
-    Public frmSprite0 As frmSprite
+  Public frmSprite0 As frmSprite
+  Public sprIndex As Integer
+  Public sprScale As Integer
   Public baseSpriteFileName As String
   Public mapWidth As Integer
   Public bmpGlyphs As Bitmap
+  Public bmpSprites(32) As Bitmap
+  Public dotColor As Color
+  Public aam As Boolean
 
   Sub main()
     Dim frm As New Form1
 
     mapWidth = 32
+    aam = False
     frm.ShowDialog()
   End Sub
 

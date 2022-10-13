@@ -1,5 +1,7 @@
 Imports System.IO
 Imports System.Reflection
+Imports System.Windows.Forms.LinkLabel
+
 Public Class Form1
 	Inherits System.Windows.Forms.Form
 	Dim gwidth As Integer
@@ -27,6 +29,12 @@ Public Class Form1
 	Friend WithEvents Button10 As Button
 	Friend WithEvents Button11 As Button
 	Friend WithEvents CheckBox5 As CheckBox
+	Friend WithEvents CheckBox6 As CheckBox
+	Friend WithEvents RadioButton1 As RadioButton
+	Friend WithEvents RadioButton2 As RadioButton
+	Friend WithEvents RadioButton3 As RadioButton
+	Friend WithEvents RadioButton4 As RadioButton
+	Friend WithEvents MenuItem8 As MenuItem
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -50,6 +58,7 @@ Public Class Form1
 			sprites(n).scanlines = 48
 			sprites(n).horizDots = 42
 		Next
+		aam = False
 	End Sub
 
 	'Form overrides dispose to clean up the component list.
@@ -132,6 +141,12 @@ Public Class Form1
 		Me.NumericUpDown3 = New System.Windows.Forms.NumericUpDown()
 		Me.Label6 = New System.Windows.Forms.Label()
 		Me.CheckBox5 = New System.Windows.Forms.CheckBox()
+		Me.CheckBox6 = New System.Windows.Forms.CheckBox()
+		Me.RadioButton1 = New System.Windows.Forms.RadioButton()
+		Me.RadioButton2 = New System.Windows.Forms.RadioButton()
+		Me.RadioButton3 = New System.Windows.Forms.RadioButton()
+		Me.RadioButton4 = New System.Windows.Forms.RadioButton()
+		Me.MenuItem8 = New System.Windows.Forms.MenuItem()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.Panel2.SuspendLayout()
@@ -174,7 +189,7 @@ Public Class Form1
 		'
 		'MainMenu1
 		'
-		Me.MainMenu1.MenuItems.AddRange(New System.Windows.Forms.MenuItem() {Me.MenuItem1, Me.MenuItem6, Me.MenuItem4})
+		Me.MainMenu1.MenuItems.AddRange(New System.Windows.Forms.MenuItem() {Me.MenuItem1, Me.MenuItem6, Me.MenuItem8, Me.MenuItem4})
 		'
 		'MenuItem1
 		'
@@ -210,7 +225,7 @@ Public Class Form1
 		'
 		'MenuItem4
 		'
-		Me.MenuItem4.Index = 2
+		Me.MenuItem4.Index = 3
 		Me.MenuItem4.Text = "&About"
 		'
 		'Label2
@@ -470,10 +485,87 @@ Public Class Form1
 		Me.CheckBox5.Text = "Add header"
 		Me.CheckBox5.UseVisualStyleBackColor = True
 		'
+		'CheckBox6
+		'
+		Me.CheckBox6.AutoSize = True
+		Me.CheckBox6.Enabled = False
+		Me.CheckBox6.Location = New System.Drawing.Point(618, 217)
+		Me.CheckBox6.Name = "CheckBox6"
+		Me.CheckBox6.Size = New System.Drawing.Size(194, 17)
+		Me.CheckBox6.TabIndex = 203
+		Me.CheckBox6.Text = "Anit-alias mode (under construction)"
+		Me.CheckBox6.UseVisualStyleBackColor = True
+		'
+		'RadioButton1
+		'
+		Me.RadioButton1.Appearance = System.Windows.Forms.Appearance.Button
+		Me.RadioButton1.AutoSize = True
+		Me.RadioButton1.BackColor = System.Drawing.Color.Black
+		Me.RadioButton1.Enabled = False
+		Me.RadioButton1.Location = New System.Drawing.Point(618, 177)
+		Me.RadioButton1.Name = "RadioButton1"
+		Me.RadioButton1.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton1.TabIndex = 208
+		Me.RadioButton1.TabStop = True
+		Me.RadioButton1.Text = "        "
+		Me.RadioButton1.UseVisualStyleBackColor = False
+		'
+		'RadioButton2
+		'
+		Me.RadioButton2.Appearance = System.Windows.Forms.Appearance.Button
+		Me.RadioButton2.AutoSize = True
+		Me.RadioButton2.BackColor = System.Drawing.SystemColors.ControlDark
+		Me.RadioButton2.Enabled = False
+		Me.RadioButton2.Location = New System.Drawing.Point(665, 177)
+		Me.RadioButton2.Name = "RadioButton2"
+		Me.RadioButton2.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton2.TabIndex = 209
+		Me.RadioButton2.TabStop = True
+		Me.RadioButton2.Text = "        "
+		Me.RadioButton2.UseVisualStyleBackColor = False
+		'
+		'RadioButton3
+		'
+		Me.RadioButton3.Appearance = System.Windows.Forms.Appearance.Button
+		Me.RadioButton3.AutoSize = True
+		Me.RadioButton3.BackColor = System.Drawing.SystemColors.ControlLight
+		Me.RadioButton3.Enabled = False
+		Me.RadioButton3.Location = New System.Drawing.Point(712, 177)
+		Me.RadioButton3.Name = "RadioButton3"
+		Me.RadioButton3.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton3.TabIndex = 210
+		Me.RadioButton3.TabStop = True
+		Me.RadioButton3.Text = "        "
+		Me.RadioButton3.UseVisualStyleBackColor = False
+		'
+		'RadioButton4
+		'
+		Me.RadioButton4.Appearance = System.Windows.Forms.Appearance.Button
+		Me.RadioButton4.AutoSize = True
+		Me.RadioButton4.BackColor = System.Drawing.SystemColors.ControlLightLight
+		Me.RadioButton4.Enabled = False
+		Me.RadioButton4.Location = New System.Drawing.Point(760, 177)
+		Me.RadioButton4.Name = "RadioButton4"
+		Me.RadioButton4.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton4.TabIndex = 211
+		Me.RadioButton4.TabStop = True
+		Me.RadioButton4.Text = "        "
+		Me.RadioButton4.UseVisualStyleBackColor = False
+		'
+		'MenuItem8
+		'
+		Me.MenuItem8.Index = 2
+		Me.MenuItem8.Text = "Icon"
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.Controls.Add(Me.RadioButton4)
+		Me.Controls.Add(Me.RadioButton3)
+		Me.Controls.Add(Me.RadioButton2)
+		Me.Controls.Add(Me.RadioButton1)
+		Me.Controls.Add(Me.CheckBox6)
 		Me.Controls.Add(Me.CheckBox5)
 		Me.Controls.Add(Me.Button11)
 		Me.Controls.Add(Me.Button10)
@@ -640,7 +732,26 @@ Public Class Form1
 		Else
 			n = ListBox1.SelectedIndex()
 			If n >= 0 Then
-				glyphs(n).FlipBit(wx, wy)
+				If aam Then
+					If RadioButton1.Checked Then
+						glyphs(n).ClearBit(wx * 2, wy * 2)
+						glyphs(n).ClearBit(wx * 2 + 1, wy * 2)
+					End If
+					If RadioButton2.Checked Then
+						glyphs(n).ClearBit(wx * 2, wy * 2)
+						glyphs(n).SetBit(wx * 2 + 1, wy * 2)
+					End If
+					If RadioButton3.Checked Then
+						glyphs(n).SetBit(wx * 2, wy * 2)
+						glyphs(n).ClearBit(wx * 2 + 1, wy * 2)
+					End If
+					If RadioButton4.Checked Then
+						glyphs(n).SetBit(wx * 2, wy * 2)
+						glyphs(n).SetBit(wx * 2 + 1, wy * 2)
+					End If
+				Else
+					glyphs(n).FlipBit(wx, wy)
+				End If
 				PictureBox1.Invalidate()
 				PictureBox2.Invalidate()
 				Refresh()
@@ -652,12 +763,183 @@ Public Class Form1
 		OpenFile()
 	End Sub
 
+	Sub Undraw()
+		Dim n As Integer
+		For n = 0 To modGlobals.nGlyphs() - 1
+			glyphs(n).UndrawSmall()
+		Next
+	End Sub
+	Private Sub OpenBitmap(ByVal nm As String)
+		Dim n As Integer
+		bmpGlyphs = New Bitmap(nm)
+		'				PictureBox2.Load(fd.FileName)
+		For n = 0 To modGlobals.nGlyphs() - 1
+			If Not glyphs(n) Is Nothing Then
+				glyphs(n).index = n
+				glyphs(n).scanlines = gheight
+				glyphs(n).horizDots = gwidth
+			End If
+		Next
+		Undraw()
+		PictureBox2.Invalidate()
+		Refresh()
+	End Sub
+	Sub SerializeFromCoe(ByVal nm As String)
+		Dim n As Integer
+		Dim j As Integer
+		Dim readingVector As Boolean
+		Dim radix As Integer
+		Dim txt As String
+		Dim lines() As String
+		Dim line As String
+		Dim s As String
+		Dim strs() As String
+		Dim gcnt As Integer
+		Dim bcnt As Integer
+		Dim ifs As TextReader
+		Dim ifl As File
+
+		gcnt = 0
+		bcnt = 0
+		ifs = ifl.OpenText(nm)
+		txt = ifs.ReadToEnd()
+		ifs.Close()
+		lines = txt.Split(vbLf)
+		readingVector = False
+		radix = 16
+		For Each line In lines
+			s = line.Trim.Substring(0, 1)
+			If (s <> ";") Then
+				strs = line.Split("=")
+				If (strs(0).Trim.ToLower = "memory_initialization_radix") Then
+					radix = CInt(strs(1).Trim(";"))
+				ElseIf (strs(0).Trim.ToLower = "memory_initialization_vector") Then
+					readingVector = True
+				ElseIf readingVector Then
+					s = line.Trim
+					s = s.Substring(0, s.Length - 1)
+					n = 0
+					Select Case radix
+						Case 2, 3, 4, 5, 6, 7, 8, 9
+							For j = 0 To s.Length - 1
+								n = n * radix + CInt(s.Substring(j, 1))
+							Next
+						Case 10
+							n = CInt(s)
+						Case 16
+							n = CInt("&h" & s)
+					End Select
+					glyphs(gcnt).SetBitmap(bcnt, n)
+					bcnt = bcnt + 1
+					If bcnt = gheight Then
+						bcnt = 0
+						gcnt = gcnt + 1
+						If gcnt = nGlyphs() Then Return
+					End If
+				End If
+			End If
+		Next
+	End Sub
+	Sub SerializeFromMem(ByVal nm As String)
+		Dim n As Integer
+		Dim sz As Integer
+		Dim txt As String
+		Dim lines() As String
+		Dim line As String
+		Dim ifs As TextReader
+		Dim ifl As File
+		Dim s As String
+		Dim hdr As String
+		Dim gcnt As Integer
+
+		sz = 0
+		If CheckBox4.Checked Then
+			sz = 64
+		ElseIf CheckBox3.Checked Then
+			sz = 8
+		End If
+		ifs = ifl.OpenText(nm)
+		hdr = ifs.ReadLine()
+		txt = ifs.ReadToEnd()
+		ifs.Close()
+		lines = txt.Split(vbLf)
+		gwidth = Convert.ToInt32(hdr.Substring(12, 2), 16)
+		gheight = Convert.ToInt32(hdr.Substring(14, 2), 16)
+		NumericUpDown1.Value = gheight
+		NumericUpDown2.Value = gwidth
+		Refresh()
+		For n = 0 To modGlobals.nGlyphs() - 1
+			If Not glyphs(n) Is Nothing Then
+				glyphs(n).scanlines = gheight
+				glyphs(n).horizDots = gwidth
+			End If
+		Next
+		For Each line In lines
+			s = line.Trim
+			If (s <> "") Then
+				glyphs(gcnt).SerializeFromMem(s, sz)
+				gcnt = gcnt + 1
+				If gcnt = modGlobals.nGlyphs() Then Return
+			End If
+		Next
+	End Sub
+	Sub SerializeFromBin(ByVal nm As String)
+		Dim n As Integer
+		Dim ary() As Byte
+		Dim jj As Integer
+		Dim kk As Integer
+		Dim mm As Integer
+		Dim nn As Integer
+		Dim ndx As Integer
+		Dim siz As Integer
+		Dim bwid As Integer
+		Dim bary() As Byte
+		ary = My.Computer.FileSystem.ReadAllBytes(nm)
+		jj = 0
+		mm = 0
+		If CheckBox5.Checked Then
+			gheight = ary(0)
+			gwidth = ary(1)
+			jj = 8
+			mm = 8
+		End If
+		siz = (gwidth + 7) And Not 7 ' round to a byte size
+		bwid = siz
+		siz >>= 3
+		siz *= gheight
+		siz = (siz + 7) And Not 7     ' round to multiple of eight bytes
+		ReDim bary(siz - 1)
+		nn = 0
+		For n = 0 To modGlobals.nGlyphs() - 1
+			If Not glyphs(n) Is Nothing Then
+				glyphs(n).scanlines = gheight
+				glyphs(n).horizDots = gwidth
+			End If
+		Next
+		While mm < ary.Length
+			ndx = 0
+			For jj = 0 To gheight - 1
+				For kk = 0 To gwidth - 1 Step 8
+					bary(ndx) = ary(mm)
+					mm += 1
+					If mm >= ary.Length Then Return
+					ndx = ndx + 1
+				Next
+			Next
+			While mm Mod 8 <> 0
+				bary(ndx) = ary(mm)
+				mm += 1
+				If mm >= ary.Length Then Return
+				ndx += 1
+			End While
+			glyphs(nn).SerializeFromBin(bary)
+			nn = nn + 1
+		End While
+	End Sub
 	Private Sub OpenFile()
 		Dim n As Integer
 		Dim ifl As File
-		Dim strm As Stream
 		Dim ifs As TextReader
-		Dim path As String
 		Dim fd As OpenFileDialog
 		Dim text As String
 		Dim lines() As String
@@ -665,40 +947,41 @@ Public Class Form1
 		Dim strs() As String
 		Dim data() As String
 		Dim j As Integer
-		Dim ch1 As Char
-		Dim ch2 As Char
 		Dim byt As String
 		Dim s As String
 		Dim bcnt As Integer
-		Dim radix As Integer
 		Dim gcnt As Integer
-		Dim readingVector As Boolean
-		Dim sz As Integer
-		Dim hdr As String
 		fd = New OpenFileDialog
-		fd.Filter = "MEM files (*.mem)|*.mem|Raw Binary (*.bin)|*.bin|Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
-		fd.FilterIndex = 2
+		s = "MEM files (*.mem)|*.mem|Raw Binary (*.bin)|*.bin|Bitmap (*.bmp)|*.bmp|Png (*.png)|*.png|Jpeg (*.jpg)|*.jpg|"
+		fd.Filter = s & "Verilog files (*.v)|*.v|UCF files (*.ucf)|*.ucf|COE files (*.coe)|*.coe|All files (*.*)|*.*"
+		fd.FilterIndex = 1
 		If fd.ShowDialog() = DialogResult.OK Then
 			If fd.FileName.EndsWith(".bmp") Then
-				bmpGlyphs = New Bitmap(fd.FileName)
-				'				PictureBox2.Load(fd.FileName)
-				For n = 0 To modGlobals.nGlyphs() - 1
-					If Not glyphs(n) Is Nothing Then
-						glyphs(n).index = n
-						glyphs(n).scanlines = gheight
-						glyphs(n).horizDots = gwidth
-					End If
-					glyphs(n).UndrawSmall()
-				Next
-				PictureBox2.Invalidate()
-				Refresh()
-				Return
+				OpenBitmap(fd.FileName)
+				GoTo x2
+			End If
+			If fd.FileName.EndsWith(".png") Then
+				OpenBitmap(fd.FileName)
+				GoTo x2
+			End If
+			If fd.FileName.EndsWith(".jpg") Then
+				OpenBitmap(fd.FileName)
+				GoTo x2
+			End If
+			If fd.FileName.EndsWith(".mem") Then
+				SerializeFromMem(fd.FileName)
+				GoTo x2
+			End If
+			If fd.FileName.EndsWith(".bin") Then
+				SerializeFromBin(fd.FileName)
+				GoTo x2
+			End If
+			If fd.FileName.EndsWith(".coe") Then
+				SerializeFromCoe(fd.FileName)
+				GoTo x2
 			End If
 			If Not fd.FileName.EndsWith(".bin") Then
 				ifs = ifl.OpenText(fd.FileName)
-			End If
-			If fd.FileName.EndsWith(".mem") Then
-				hdr = ifs.ReadLine()
 			End If
 			If Not fd.FileName.EndsWith(".bin") Then
 				text = ifs.ReadToEnd()
@@ -706,155 +989,38 @@ Public Class Form1
 			End If
 			gcnt = 0
 			bcnt = 0
-			If fd.FileName.EndsWith(".coe") Then
-				readingVector = False
-				radix = 16
-				For Each line In lines
-					s = line.Trim.Substring(0, 1)
-					If (s <> ";") Then
-						strs = line.Split("=")
-						If (strs(0).Trim.ToLower = "memory_initialization_radix") Then
-							radix = CInt(strs(1).Trim(";"))
-						ElseIf (strs(0).Trim.ToLower = "memory_initialization_vector") Then
-							readingVector = True
-						ElseIf readingVector Then
-							s = line.Trim
-							s = s.Substring(0, s.Length - 1)
-							n = 0
-							Select Case radix
-								Case 2, 3, 4, 5, 6, 7, 8, 9
-									For j = 0 To s.Length - 1
-										n = n * radix + CInt(s.Substring(j, 1))
-									Next
-								Case 10
-									n = CInt(s)
-								Case 16
-									n = CInt("&h" & s)
-							End Select
-							glyphs(gcnt).SetBitmap(bcnt, n)
-							bcnt = bcnt + 1
-							If bcnt = gheight Then
-								bcnt = 0
-								gcnt = gcnt + 1
-								If gcnt = nGlyphs() Then GoTo x1
+			For Each line In lines
+				line = line.Trim
+				If line.Length <> 0 Then
+					If line.Chars(0) <> "#" Then    ' skip # lines
+						If line.Length > 0 Then
+							strs = line.Split(" ")
+							If (strs(0) = "INST") Then
+								data = strs(2).Split("=")
+								data(1) = data(1).TrimEnd(";")
+								For j = 63 To 0 Step -2
+									byt = "&h" & data(1).Substring(j - 1, 2)
+									n = CInt(byt)
+									glyphs(gcnt).SetBitmap(bcnt, n)
+									bcnt = bcnt + 1
+									If bcnt = gheight Then
+										bcnt = 0
+										gcnt = gcnt + 1
+										If gcnt = nGlyphs() Then GoTo x1
+									End If
+								Next
 							End If
 						End If
 					End If
-				Next
-				ifs.Close()
-			ElseIf fd.FileName.EndsWith(".mem") Then
-				readingVector = False
-				radix = 16
-				sz = 0
-				If CheckBox4.Checked Then
-					sz = 64
-				ElseIf CheckBox3.Checked Then
-					sz = 8
 				End If
-				gwidth = Convert.ToInt32(hdr.Substring(12, 2), 16)
-				gheight = Convert.ToInt32(hdr.Substring(14, 2), 16)
-				NumericUpDown1.Value = gheight
-				NumericUpDown2.Value = gwidth
-				Refresh()
-				For n = 0 To modGlobals.nGlyphs() - 1
-					If Not glyphs(n) Is Nothing Then
-						glyphs(n).scanlines = gheight
-						glyphs(n).horizDots = gwidth
-					End If
-				Next
-				For Each line In lines
-					s = line.Trim
-					If (s <> "") Then
-						glyphs(gcnt).SerializeFromMem(s, sz)
-						gcnt = gcnt + 1
-						If gcnt = modGlobals.nGlyphs() Then GoTo x1
-					End If
-				Next
-				ifs.Close()
-			ElseIf fd.FileName.EndsWith(".bin") Then
-				Dim ary() As Byte
-				Dim jj As Integer
-				Dim kk As Integer
-				Dim mm As Integer
-				Dim nn As Integer
-				Dim ndx As Integer
-				Dim siz As Integer
-				Dim bwid As Integer
-				Dim bary() As Byte
-				ary = My.Computer.FileSystem.ReadAllBytes(fd.FileName)
-				jj = 0
-				mm = 0
-				If CheckBox5.Checked Then
-					gheight = ary(0)
-					gwidth = ary(1)
-					jj = 8
-					mm = 8
-				End If
-				siz = (gwidth + 7) And Not 7 ' round to a byte size
-				bwid = siz
-				siz >>= 3
-				siz *= gheight
-				siz = (siz + 7) And Not 7     ' round to multiple of eight bytes
-				ReDim bary(siz - 1)
-				nn = 0
-				For n = 0 To modGlobals.nGlyphs() - 1
-					If Not glyphs(n) Is Nothing Then
-						glyphs(n).scanlines = gheight
-						glyphs(n).horizDots = gwidth
-					End If
-				Next
-				While mm < ary.Length
-					ndx = 0
-					For jj = 0 To gheight - 1
-						For kk = 0 To gwidth - 1 Step 8
-							bary(ndx) = ary(mm)
-							mm += 1
-							If mm >= ary.Length Then GoTo x1
-							ndx = ndx + 1
-						Next
-					Next
-					While mm Mod 8 <> 0
-						bary(ndx) = ary(mm)
-						mm += 1
-						If mm >= ary.Length Then GoTo x1
-						ndx += 1
-					End While
-					glyphs(nn).SerializeFromBin(bary)
-					nn = nn + 1
-				End While
-			Else
-				For Each line In lines
-					line = line.Trim
-					If line.Length <> 0 Then
-						If line.Chars(0) <> "#" Then    ' skip # lines
-							If line.Length > 0 Then
-								strs = line.Split(" ")
-								If (strs(0) = "INST") Then
-									data = strs(2).Split("=")
-									data(1) = data(1).TrimEnd(";")
-									For j = 63 To 0 Step -2
-										byt = "&h" & data(1).Substring(j - 1, 2)
-										n = CInt(byt)
-										glyphs(gcnt).SetBitmap(bcnt, n)
-										bcnt = bcnt + 1
-										If bcnt = gheight Then
-											bcnt = 0
-											gcnt = gcnt + 1
-											If gcnt = nGlyphs() Then GoTo x1
-										End If
-									Next
-								End If
-							End If
-						End If
-					End If
-				Next
-				ifs.Close()
-			End If
+			Next
+			ifs.Close()
 x1:
 			For n = 0 To nGlyphs() - 1
 				'                glyphs(n).SerializeTo(ofs)
 			Next
 		End If
+x2:
 		ListBox1.Items.Clear()
 		For j = 0 To modGlobals.nGlyphs() - 1
 			'ListBox1.Items.Add(Hex(j) & " " & CStr(j))
@@ -866,10 +1032,7 @@ x1:
 	Sub SaveFile()
 		Dim n As Integer
 		Dim ofl As File
-		Dim strm As Stream
 		Dim ofs As TextWriter
-		Dim ofb As BinaryWriter
-		Dim path As String
 		Dim fd As SaveFileDialog
 		Dim s As String
 		Dim gcnt As Integer
@@ -1033,6 +1196,11 @@ x1:
 	Private Sub NumericUpDown2_ValueChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles NumericUpDown2.ValueChanged
 		Dim n As Integer
 		Dim j As Integer
+		If aam Then
+			gwidth = NumericUpDown2.Value * 2
+		Else
+			gwidth = NumericUpDown2.Value
+		End If
 		gwidth = NumericUpDown2.Value
 		For n = 0 To nGlyphs() - 1
 			If Not glyphs(n) Is Nothing Then
@@ -1074,8 +1242,8 @@ x1:
 
 		If Not glyphs(0) Is Nothing Then
 			w = Math.Floor(modGlobals.nGlyphs() / mapWidth)
-			PictureBox2.Size = New Size(glyphs(0).horizDots * 2 * mapWidth, glyphs(0).scanlines * 2 * w)
 			wi = glyphs(0).scanlines * 2 * (w + 1)
+			PictureBox2.Size = New Size(glyphs(0).horizDots * 2 * mapWidth, glyphs(0).scanlines * 2 * w)
 			bmpGlyphs = New Bitmap(glyphs(0).horizDots * 2 * mapWidth, wi)
 			PictureBox2.Image = bmpGlyphs
 		End If
@@ -1122,6 +1290,9 @@ x1:
 		Dim j As Integer
 
 		For j = 0 To modGlobals.nGlyphs() - 1
+			If aam Then
+				glyphs(j).ShiftLeft()
+			End If
 			glyphs(j).ShiftLeft()
 		Next
 		Refresh()
@@ -1190,6 +1361,9 @@ x1:
 		Dim j As Integer
 
 		For j = 0 To modGlobals.nGlyphs() - 1
+			If aam Then
+				glyphs(j).ShiftRight()
+			End If
 			glyphs(j).ShiftRight()
 		Next
 		Refresh()
@@ -1212,6 +1386,9 @@ x1:
 	Private Sub Button10_Click(sender As Object, e As EventArgs) Handles Button10.Click
 		Dim n As Integer
 		n = ListBox1.SelectedIndex()
+		If aam Then
+			glyphs(n).ShiftLeft()
+		End If
 		glyphs(n).ShiftLeft()
 		Refresh()
 	End Sub
@@ -1219,11 +1396,45 @@ x1:
 	Private Sub Button11_Click(sender As Object, e As EventArgs) Handles Button11.Click
 		Dim n As Integer
 		n = ListBox1.SelectedIndex()
+		If aam Then
+			glyphs(n).ShiftRight()
+		End If
 		glyphs(n).ShiftRight()
 		Refresh()
 	End Sub
 
 	Private Sub CheckBox5_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox5.CheckedChanged
+	End Sub
 
+	Private Sub RadioButton1_CheckedChanged(sender As Object, e As EventArgs) Handles RadioButton1.CheckedChanged
+		dotColor = Color.Black
+	End Sub
+
+	Private Sub RadioButton4_CheckedChanged(sender As Object, e As EventArgs) Handles RadioButton4.CheckedChanged
+		dotColor = Color.White
+	End Sub
+
+	Private Sub RadioButton2_CheckedChanged(sender As Object, e As EventArgs) Handles RadioButton2.CheckedChanged
+		dotColor = Color.DarkGray
+	End Sub
+
+	Private Sub RadioButton3_CheckedChanged(sender As Object, e As EventArgs) Handles RadioButton3.CheckedChanged
+		dotColor = Color.LightGray
+	End Sub
+
+	Private Sub CheckBox6_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox6.CheckedChanged
+		Dim j As Integer
+		aam = CheckBox6.Checked
+		If aam Then
+			gwidth = NumericUpDown2.Value * 2
+		Else
+			gwidth = NumericUpDown2.Value
+		End If
+		For j = 0 To modGlobals.nGlyphs() - 1
+			If Not glyphs(j) Is Nothing Then
+				glyphs(j).horizDots = gwidth
+			End If
+		Next
+		Refresh()
 	End Sub
 End Class
