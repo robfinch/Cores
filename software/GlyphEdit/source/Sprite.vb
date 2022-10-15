@@ -23,7 +23,7 @@ Public Class Sprite
     Return sz
   End Function
 
-  Sub Draw(ByVal e As System.Windows.Forms.PaintEventArgs, ByVal si As Integer)
+  Sub Draw(ByVal e As System.Windows.Forms.PaintEventArgs, ByVal si As Integer, ByVal OneSprite As Boolean)
     Dim g As Integer
     Dim j As Integer
     Dim k As Integer
@@ -36,6 +36,7 @@ Public Class Sprite
     Dim gx1 As Integer
     Dim gy1 As Integer
     Dim szsp As Integer
+    Dim ni As Integer
 
     On Error GoTo xit
     If bmpSprites(index) Is Nothing Then
@@ -45,8 +46,13 @@ Public Class Sprite
     gy = 0
     gx1 = 0
     gy1 = 0
+    If OneSprite Then
+      ni = 1
+    Else
+      ni = nImages()
+    End If
     szsp = scanlines * horizDots
-    For g = 0 To nImages() - 1
+    For g = 0 To ni - 1
       For j = 0 To scanlines - 1
         For k = 0 To horizDots - 1
           gx = g * horizDots * sprScale
@@ -69,7 +75,7 @@ Public Class Sprite
     Next
     gx = 0
     gy = 0
-    For g = 0 To nImages() - 1
+    For g = 0 To ni - 1
       gx = g * horizDots * sprScale
       e.Graphics.DrawRectangle(System.Drawing.Pens.Blue, gx, gy, gx + horizDots * sprScale, gy + scanlines * sprScale)
       'If gx + horizDots * 10 > frmSprite0.PictureBox3.Size.Width Then
@@ -278,6 +284,7 @@ xit:
     Dim hi As Integer
 
     On Error GoTo xit
+    s = s.Trim()
     If ndx = -1 Then
       Select Case frmSprite0.BPP()
         Case 8

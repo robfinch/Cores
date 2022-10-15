@@ -3,7 +3,7 @@ Imports System.IO
 Public Class frmSprite
   Inherits System.Windows.Forms.Form
 
-
+  Dim sprFrame As Integer
   Dim gwidth As Integer
   Dim gheight As Integer
   Dim mouseDwn As Boolean
@@ -19,6 +19,13 @@ Public Class frmSprite
   Friend WithEvents Button6 As Button
   Friend WithEvents Button7 As Button
   Friend WithEvents TrackBar2 As TrackBar
+  Friend WithEvents Button8 As Button
+  Friend WithEvents PictureBox1 As PictureBox
+  Friend WithEvents CheckBox1 As CheckBox
+  Friend WithEvents TrackBar3 As TrackBar
+  Friend WithEvents Timer1 As Timer
+  Friend WithEvents NumericUpDown1 As NumericUpDown
+  Friend WithEvents Label1 As Label
   Dim fillOverColor As System.Drawing.Color
 
 #Region " Windows Form Designer generated code "
@@ -101,12 +108,22 @@ Public Class frmSprite
     Me.Button6 = New System.Windows.Forms.Button()
     Me.Button7 = New System.Windows.Forms.Button()
     Me.TrackBar2 = New System.Windows.Forms.TrackBar()
+    Me.Button8 = New System.Windows.Forms.Button()
+    Me.PictureBox1 = New System.Windows.Forms.PictureBox()
+    Me.CheckBox1 = New System.Windows.Forms.CheckBox()
+    Me.TrackBar3 = New System.Windows.Forms.TrackBar()
+    Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
+    Me.NumericUpDown1 = New System.Windows.Forms.NumericUpDown()
+    Me.Label1 = New System.Windows.Forms.Label()
     CType(Me.NumericUpDown4, System.ComponentModel.ISupportInitialize).BeginInit()
     CType(Me.NumericUpDown3, System.ComponentModel.ISupportInitialize).BeginInit()
     Me.Panel1.SuspendLayout()
     CType(Me.PictureBox3, System.ComponentModel.ISupportInitialize).BeginInit()
     CType(Me.TrackBar1, System.ComponentModel.ISupportInitialize).BeginInit()
     CType(Me.TrackBar2, System.ComponentModel.ISupportInitialize).BeginInit()
+    CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
+    CType(Me.TrackBar3, System.ComponentModel.ISupportInitialize).BeginInit()
+    CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
     Me.SuspendLayout()
     '
     'ListBox2
@@ -220,18 +237,18 @@ Public Class frmSprite
     '
     Me.Button1.Location = New System.Drawing.Point(19, 16)
     Me.Button1.Name = "Button1"
-    Me.Button1.Size = New System.Drawing.Size(60, 23)
+    Me.Button1.Size = New System.Drawing.Size(60, 60)
     Me.Button1.TabIndex = 194
-    Me.Button1.Text = "Copy"
+    Me.Button1.Text = "Copy Image Cache"
     Me.Button1.UseVisualStyleBackColor = True
     '
     'Button2
     '
-    Me.Button2.Location = New System.Drawing.Point(19, 45)
+    Me.Button2.Location = New System.Drawing.Point(19, 82)
     Me.Button2.Name = "Button2"
-    Me.Button2.Size = New System.Drawing.Size(60, 23)
+    Me.Button2.Size = New System.Drawing.Size(60, 52)
     Me.Button2.TabIndex = 195
-    Me.Button2.Text = "Paste"
+    Me.Button2.Text = "Paste Image Cache"
     Me.Button2.UseVisualStyleBackColor = True
     '
     'Panel1
@@ -240,7 +257,7 @@ Public Class frmSprite
     Me.Panel1.Controls.Add(Me.PictureBox3)
     Me.Panel1.Location = New System.Drawing.Point(209, 45)
     Me.Panel1.Name = "Panel1"
-    Me.Panel1.Size = New System.Drawing.Size(592, 650)
+    Me.Panel1.Size = New System.Drawing.Size(592, 352)
     Me.Panel1.TabIndex = 196
     '
     'PictureBox3
@@ -249,7 +266,7 @@ Public Class frmSprite
     Me.PictureBox3.ContextMenu = Me.ContextMenu1
     Me.PictureBox3.Location = New System.Drawing.Point(3, 0)
     Me.PictureBox3.Name = "PictureBox3"
-    Me.PictureBox3.Size = New System.Drawing.Size(589, 650)
+    Me.PictureBox3.Size = New System.Drawing.Size(589, 348)
     Me.PictureBox3.TabIndex = 187
     Me.PictureBox3.TabStop = False
     '
@@ -281,20 +298,20 @@ Public Class frmSprite
     '
     'Button6
     '
-    Me.Button6.Location = New System.Drawing.Point(19, 74)
+    Me.Button6.Location = New System.Drawing.Point(19, 153)
     Me.Button6.Name = "Button6"
     Me.Button6.Size = New System.Drawing.Size(60, 41)
     Me.Button6.TabIndex = 202
-    Me.Button6.Text = "Image Copy"
+    Me.Button6.Text = "Copy"
     Me.Button6.UseVisualStyleBackColor = True
     '
     'Button7
     '
-    Me.Button7.Location = New System.Drawing.Point(19, 121)
+    Me.Button7.Location = New System.Drawing.Point(19, 200)
     Me.Button7.Name = "Button7"
     Me.Button7.Size = New System.Drawing.Size(60, 41)
     Me.Button7.TabIndex = 203
-    Me.Button7.Text = "Image Paste"
+    Me.Button7.Text = "Paste"
     Me.Button7.UseVisualStyleBackColor = True
     '
     'TrackBar2
@@ -307,10 +324,75 @@ Public Class frmSprite
     Me.TrackBar2.TabIndex = 204
     Me.TrackBar2.Value = 10
     '
+    'Button8
+    '
+    Me.Button8.Location = New System.Drawing.Point(26, 557)
+    Me.Button8.Name = "Button8"
+    Me.Button8.Size = New System.Drawing.Size(75, 39)
+    Me.Button8.TabIndex = 205
+    Me.Button8.Text = "Flip Horizontally"
+    Me.Button8.UseVisualStyleBackColor = True
+    '
+    'PictureBox1
+    '
+    Me.PictureBox1.Location = New System.Drawing.Point(510, 429)
+    Me.PictureBox1.Name = "PictureBox1"
+    Me.PictureBox1.Size = New System.Drawing.Size(232, 216)
+    Me.PictureBox1.TabIndex = 206
+    Me.PictureBox1.TabStop = False
+    '
+    'CheckBox1
+    '
+    Me.CheckBox1.AutoSize = True
+    Me.CheckBox1.Location = New System.Drawing.Point(309, 458)
+    Me.CheckBox1.Name = "CheckBox1"
+    Me.CheckBox1.Size = New System.Drawing.Size(64, 17)
+    Me.CheckBox1.TabIndex = 207
+    Me.CheckBox1.Text = "Animate"
+    Me.CheckBox1.UseVisualStyleBackColor = True
+    '
+    'TrackBar3
+    '
+    Me.TrackBar3.Location = New System.Drawing.Point(309, 481)
+    Me.TrackBar3.Maximum = 1000
+    Me.TrackBar3.Minimum = 10
+    Me.TrackBar3.Name = "TrackBar3"
+    Me.TrackBar3.Size = New System.Drawing.Size(104, 45)
+    Me.TrackBar3.TabIndex = 208
+    Me.TrackBar3.Value = 10
+    '
+    'Timer1
+    '
+    '
+    'NumericUpDown1
+    '
+    Me.NumericUpDown1.Location = New System.Drawing.Point(430, 458)
+    Me.NumericUpDown1.Maximum = New Decimal(New Integer() {32, 0, 0, 0})
+    Me.NumericUpDown1.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+    Me.NumericUpDown1.Name = "NumericUpDown1"
+    Me.NumericUpDown1.Size = New System.Drawing.Size(49, 20)
+    Me.NumericUpDown1.TabIndex = 209
+    Me.NumericUpDown1.Value = New Decimal(New Integer() {8, 0, 0, 0})
+    '
+    'Label1
+    '
+    Me.Label1.AutoSize = True
+    Me.Label1.Location = New System.Drawing.Point(418, 440)
+    Me.Label1.Name = "Label1"
+    Me.Label1.Size = New System.Drawing.Size(41, 13)
+    Me.Label1.TabIndex = 210
+    Me.Label1.Text = "Frames"
+    '
     'frmSprite
     '
     Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
     Me.ClientSize = New System.Drawing.Size(824, 715)
+    Me.Controls.Add(Me.Label1)
+    Me.Controls.Add(Me.NumericUpDown1)
+    Me.Controls.Add(Me.TrackBar3)
+    Me.Controls.Add(Me.CheckBox1)
+    Me.Controls.Add(Me.PictureBox1)
+    Me.Controls.Add(Me.Button8)
     Me.Controls.Add(Me.TrackBar2)
     Me.Controls.Add(Me.Button7)
     Me.Controls.Add(Me.Button6)
@@ -338,6 +420,9 @@ Public Class frmSprite
     CType(Me.PictureBox3, System.ComponentModel.ISupportInitialize).EndInit()
     CType(Me.TrackBar1, System.ComponentModel.ISupportInitialize).EndInit()
     CType(Me.TrackBar2, System.ComponentModel.ISupportInitialize).EndInit()
+    CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
+    CType(Me.TrackBar3, System.ComponentModel.ISupportInitialize).EndInit()
+    CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).EndInit()
     Me.ResumeLayout(False)
     Me.PerformLayout()
 
@@ -414,7 +499,7 @@ Public Class frmSprite
     Dim n As Integer
     n = ListBox2.SelectedIndex()
     If n >= 0 Then
-      sprites(n).Draw(e, sprIndex)
+      sprites(n).Draw(e, sprIndex, False)
     End If
   End Sub
 
@@ -437,11 +522,12 @@ Public Class frmSprite
     'ny = sprites(n).nImages / nx
     nx = sprites(n).nImages
     ny = 0
-    wx = (e.X - sprScale / 2) / sprScale - sprIndex * sprites(n).horizDots
+    wx = (e.X - sprScale / 2) / sprScale '- sprIndex * sprites(n).horizDots
     wy = (e.Y - sprScale / 2) / sprScale
     wxm = wx Mod sprites(n).horizDots
     wym = wy Mod sprites(n).scanlines
-    ix = (wx - sprites(n).horizDots / 2 + 1) / sprites(n).horizDots
+    'ix = (wx - sprites(n).horizDots / 2 + 1) / sprites(n).horizDots
+    ix = sprIndex
     'iy = (wy - sprites(n).scanlines / 2 + 1) / sprites(n).scanlines
     iy = 0
     If ix < 0 Then ix = 0
@@ -713,6 +799,7 @@ Public Class frmSprite
     Dim s1 As String
     Dim wcnt As Integer
     Dim bcnt As Integer
+    Dim maxcnt As Integer
     Dim ofl As System.IO.File
     Dim ofs As System.IO.TextWriter
 
@@ -721,7 +808,15 @@ Public Class frmSprite
     s = "memory_initialization_radix=16;" & vbLf
     s = s & "memory_initialization_vector=" & vbLf
     bcnt = 0
-    While bcnt < sprites(gcnt).ImageSize()
+    Select Case frmSprite0.BPP()
+      Case 8
+        maxcnt = 4096
+      Case 16
+        maxcnt = 2048
+      Case 32
+        maxcnt = 1024
+    End Select
+    While bcnt < maxcnt 'sprites(gcnt).ImageSize()
       Select Case BPP()
         Case 8
           wcnt = 8
@@ -748,7 +843,7 @@ Public Class frmSprite
         End Select
         s = s & s1
         If nn = wcnt - 1 Then
-          If (bcnt = sprites(gcnt).ImageSize - 1) Then
+          If (bcnt = maxcnt - 1) Then 'sprites(gcnt).ImageSize - 1) Then
             s = s & ";"
           Else
             s = s & ","
@@ -769,6 +864,7 @@ Public Class frmSprite
     Dim j As Integer
     Dim wcnt As Integer
     Dim vcnt As Integer
+    Dim maxcnt As Integer
     Dim readingVector As Boolean
     Dim radix As Integer
     Dim txt As String
@@ -783,6 +879,14 @@ Public Class frmSprite
 
     bcnt = 0
     wcnt = 0
+    Select Case frmSprite0.BPP()
+      Case 8
+        maxcnt = 4096
+      Case 16
+        maxcnt = 2048
+      Case 32
+        maxcnt = 1024
+    End Select
     ifs = ifl.OpenText(nm)
     txt = ifs.ReadToEnd()
     ifs.Close()
@@ -822,19 +926,21 @@ Public Class frmSprite
               Case 10
                 n = CInt(s)
               Case 16
-                n = CInt("&h" & s)
+                n = Convert.ToUInt32(s1, radix)
             End Select
             Select Case BPP()
               Case 8
                 c = ((n And 3) << 6) Or (((n >> 2) And 7) << 13) Or (((n >> 5) And 7) << 21)
+                c = c Or &HFF000000
               Case 16
                 c = ((n And 31) << 3) Or (((n >> 5) And 31) << 11) Or (((n >> 10) And 31) << 19)
+                c = c Or &HFF000000
               Case 32
                 c = n
             End Select
             sprites(gcnt).bitmap(bcnt) = System.Drawing.Color.FromArgb(c)
             bcnt = bcnt + 1
-            If bcnt = sprites(gcnt).ImageSize Then
+            If bcnt = maxcnt Then  'sprites(gcnt).ImageSize Then
               Return
             End If
           Next
@@ -886,5 +992,54 @@ Public Class frmSprite
   Private Sub TrackBar2_Scroll(sender As Object, e As EventArgs) Handles TrackBar2.Scroll
     sprScale = TrackBar2.Value
     Refresh()
+  End Sub
+
+  Private Sub Button8_Click(sender As Object, e As EventArgs) Handles Button8.Click
+    Dim j As Integer
+    Dim k As Integer
+    Dim n As Integer
+    Dim tmp As System.Drawing.Color
+
+    n = ListBox2.SelectedIndex
+    For j = 0 To sprites(n).scanlines - 1
+      For k = 0 To sprites(n).horizDots / 2 - 1
+        tmp = sprites(n).getColor(k, j, 0)
+        spriteColor = sprites(n).getColor(sprites(n).horizDots - k - 1, j, 0)
+        sprites(n).setcolor(k, j, 0)
+        spriteColor = tmp
+        sprites(n).setcolor(sprites(n).horizDots - k - 1, j, 0)
+      Next
+    Next
+    Refresh()
+  End Sub
+
+  Private Sub CheckBox1_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox1.CheckedChanged
+    Timer1.Enabled = CheckBox1.Checked
+    Timer1.Interval = TrackBar3.Value
+  End Sub
+
+  Private Sub PictureBox1_Paint(sender As Object, e As PaintEventArgs) Handles PictureBox1.Paint
+    Dim n As Integer
+    n = ListBox2.SelectedIndex()
+    If n >= 0 Then
+      sprites(n).Draw(e, sprFrame, True)
+    End If
+  End Sub
+
+  Private Sub PictureBox1_Click(sender As Object, e As EventArgs) Handles PictureBox1.Click
+
+  End Sub
+
+  Private Sub Timer1_Tick(sender As Object, e As EventArgs) Handles Timer1.Tick
+    sprFrame = sprFrame + 1
+    If sprFrame > NumericUpDown1.Value Then
+      sprFrame = 0
+    End If
+    PictureBox1.Invalidate()
+    Refresh()
+  End Sub
+
+  Private Sub TrackBar3_Scroll(sender As Object, e As EventArgs) Handles TrackBar3.Scroll
+    Timer1.Interval = TrackBar3.Value
   End Sub
 End Class
