@@ -138,6 +138,7 @@ wire rst, rstn;
 wire xrst = ~cpu_resetn;
 wire clk20, clk40, clk80, clk100, clk200;
 wire xclk_bufg;
+wire node_clk = clk100;
 wb_write_request128_t ch7req;
 wb_read_response128_t ch7resp;
 reg ack;
@@ -151,9 +152,12 @@ reg [31:0] br1_dati;
 wire br1_cack;
 
 wire hSync, vSync;
-wire blank;
+wire blank, border;
 wire [7:0] red, blue, green;
-wire [39:0] fb_rgb;
+wire [39:0] fb_rgb, tc_rgb;
+assign red = tc_rgb[35:28];
+assign green = tc_rgb[23:16];
+assign blue = tc_rgb[11:4];
 
 // -----------------------------------------------------------------------------
 // Input debouncing
@@ -216,6 +220,8 @@ ur2d1
 	.SerialClk(clk200)
 );
 
+wire cs_tc = ch7req.adr[31:16]==16'hFD00 || ch7req.adr[31:16]==16'hFD01;
+wire cs_br1_tc = br1_adr[31:16]==16'hFD00 || br1_adr[31:16]==16'hFD01;
 wire cs_fb = ch7req.adr[31:16]==16'hFD04;
 wire cs_br1_fb = br1_adr[31:16]==16'hFD04;
 
@@ -223,7 +229,7 @@ rfFrameBuffer uframebuf1
 (
 	.rst_i(rst),
 	.irq_o(),
-	.s_clk_i(clk80),
+	.s_clk_i(clk100),
 	.s_cs_i(cs_br1_fb),
 	.s_cyc_i(br1_cyc),
 	.s_stb_i(br1_stb),
@@ -245,17 +251,41 @@ rfFrameBuffer uframebuf1
 	.hsync_o(hSync),
 	.vsync_o(vSync),
 	.blank_o(blank),
-	.border_o(),
+	.border_o(border),
 	.hctr_o(),
 	.vctr_o(),
 	.fctr_o(),
 	.vblank_o()
 );
 
+rfTextController utc1
+(
+	.rst_i(rst),
+	.clk_i(clk100),
+	.cs_i(cs_br1_tc),
+	.cti_i(3'd0),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
+	.ack_o(tc_ack),
+	.wr_i(br1_we),
+	.sel_i(br1_sel),
+	.adr_i(br1_adr[16:0]),
+	.dat_i(br1_dato),
+	.dat_o(tc_dato),
+	.dot_clk_i(clk40),
+	.hsync_i(hSync),
+	.vsync_i(vSync),
+	.blank_i(blank),
+	.border_i(border),
+	.zrgb_i(fb_rgb),
+	.zrgb_o(tc_rgb),
+	.xonoff_i(sw[1])
+);
+
 IOBridge ubridge1
 (
 	.rst_i(rst),
-	.clk_i(clk80),
+	.clk_i(clk100),
 	.s1_cyc_i(ch7req.cyc),
 	.s1_stb_i(ch7req.stb),
 	.s1_ack_o(br1_cack),
@@ -282,13 +312,13 @@ IOBridge ubridge1
 	.m_dat_o(br1_dato)
 );
 
-always_ff @(posedge clk80)
+always_ff @(posedge clk100)
 	if (cs_br1_fb)
 		br1_dati <= fb_dato;
 	else
 		br1_dati <= 'd0;
 
-always_ff @(posedge clk80)
+always_ff @(posedge clk100)
 	if (cs_br1_fb)
 		br1_ack <= fb_ack;
 	else
@@ -382,7 +412,7 @@ mpmc10_wb umpmc1
 	.ch4clk(),
 	.ch5clk(),
 	.ch6clk(),
-	.ch7clk(clk80),
+	.ch7clk(clk100),
 	.ch0i('d0),
 	.ch0o(),
 	.ch1i('d0),
@@ -407,9 +437,9 @@ ipacket_t [4:0] ipacket;
 
 rf68000_nic unic1
 (
-	.id({4'd15,1'b0}),
+	.id(6'd62),			// system node id
 	.rst_i(rst),
-	.clk_i(clk80),
+	.clk_i(node_clk),
 	.s_cti_i(3'd0),
 	.s_atag_o(),
 	.s_cyc_i(1'b0),
@@ -462,7 +492,7 @@ rf68000_node unode1
 (
 	.id(5'd1),
 	.rst(rst),
-	.clk(clk80),
+	.clk(node_clk),
 	.packet_i(packet[4]),
 	.packet_o(packet[0]),
 	.ipacket_i(ipacket[4]),
@@ -473,7 +503,7 @@ rf68000_node unode2
 (
 	.id(5'd2),
 	.rst(rst),
-	.clk(clk80),
+	.clk(node_clk),
 	.packet_i(packet[0]),
 	.packet_o(packet[1]),
 	.ipacket_i(ipacket[0]),
@@ -484,7 +514,7 @@ rf68000_node unode3
 (
 	.id(5'd3),
 	.rst(rst),
-	.clk(clk80),
+	.clk(node_clk),
 	.packet_i(packet[1]),
 	.packet_o(packet[2]),
 	.ipacket_i(ipacket[1]),
@@ -495,7 +525,7 @@ rf68000_node unode4
 (
 	.id(5'd4),
 	.rst(rst),
-	.clk(clk80),
+	.clk(node_clk),
 	.packet_i(packet[2]),
 	.packet_o(packet[3]),
 	.ipacket_i(ipacket[2]),

@@ -348,7 +348,7 @@ begin
 		packet_tx.sel <= s_sel_i;
 		packet_tx.adr <= s_adr_i;
 		packet_tx.dat <= s_dat_i;
-		casez(s_adr_i[23:16])
+		casez(s_adr_i[31:24])
 		// Read global ROM?
 		8'hF?:	
 			if (!s_we_i) begin
@@ -361,7 +361,8 @@ begin
 				rw_done <= TRUE;
 				s_ack_o <= TRUE;
 			end
-		8'hE?:
+		/* I/O area */
+		8'hFD:
 			begin
 				packet_tx.did <= 6'd62;
 				s_ack_o <= s_we_i | burst;
@@ -373,9 +374,10 @@ begin
 				packet_tx.age <= 6'd30;
 				s_ack_o <= s_we_i | burst;
 			end
-		8'hC?:
+		// C0xyyyyy
+		8'hC0:
 			begin
-				packet_tx.did <= {2'd0,s_adr_i[19:16]}+2'd2;
+				packet_tx.did <= {2'd0,s_adr_i[23:20]};
 				s_ack_o <= s_we_i | burst;
 			end
 		8'h4?,8'h5?,8'h6?,8'h7?,8'h8?,8'h9?,8'hA?,8'hB?:

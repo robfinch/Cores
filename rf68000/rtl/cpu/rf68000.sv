@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2008-2022  Robert Finch, Waterloo
@@ -5,27 +6,43 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rf68000.v
-//		
+//	rf68000.sv
 //
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
 //
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                                          
 // ============================================================================
 //
 // Uncomment the following to optimize for performance. Increases the core size.
 `define OPT_PERF    1'b1
+`define BIG_ENDIAN	1'b1
+
+//`define SUPPORT_MUL	1'b1
+//`define SUPPORT_DIV	1'b1
 
 `define TRUE        1'b1
 `define FALSE       1'b0
@@ -33,7 +50,7 @@
 `define LOW         1'b0
 `define BIG_ENDIAN  1'b1
 
-`define RESET_VECTOR	32'hFFFC0000
+`define RESET_VECTOR	32'h00000400
 `define CSR_CORENUM     32'hFFFFFFE0
 `define CSR_TICK        32'hFFFFFFE4
 `define CSR_TASK        32'hFFFFFFFC
@@ -493,46 +510,46 @@ endfunction
 
 task_mem utm1
 (
-    .clk(clk_i),
-    .wr(task_mem_wr),
-    .wa(tr),
-    .d0i(d0i),
-    .d1i(d1i),
-    .d2i(d2i),
-    .d3i(d3i),
-    .d4i(d4i),
-    .d5i(d5i),
-    .d6i(d6i),
-    .d7i(d7i),
-    .a0i(a0i),
-    .a1i(a1i),
-    .a2i(a2i),
-    .a3i(a3i),
-    .a4i(a4i),
-    .a5i(a5i),
-    .a6i(a6i),
-    .spi(spi),
-    .flagsi(sri),
-    .pci(pci),
-    .ra(tr),
-    .d0o(d0o),
-    .d1o(d1o),
-    .d2o(d2o),
-    .d3o(d3o),
-    .d4o(d4o),
-    .d5o(d5o),
-    .d6o(d6o),
-    .d7o(d7o),
-    .a0o(a0o),
-    .a1o(a1o),
-    .a2o(a2o),
-    .a3o(a3o),
-    .a4o(a4o),
-    .a5o(a5o),
-    .a6o(a6o),
-    .spo(spo),
-    .flagso(flagso),
-    .pco(pco)
+  .clk(clk_i),
+  .wr(task_mem_wr),
+  .wa(tr),
+  .d0i(d0i),
+  .d1i(d1i),
+  .d2i(d2i),
+  .d3i(d3i),
+  .d4i(d4i),
+  .d5i(d5i),
+  .d6i(d6i),
+  .d7i(d7i),
+  .a0i(a0i),
+  .a1i(a1i),
+  .a2i(a2i),
+  .a3i(a3i),
+  .a4i(a4i),
+  .a5i(a5i),
+  .a6i(a6i),
+  .spi(spi),
+  .flagsi(sri),
+  .pci(pci),
+  .ra(tr),
+  .d0o(d0o),
+  .d1o(d1o),
+  .d2o(d2o),
+  .d3o(d3o),
+  .d4o(d4o),
+  .d5o(d5o),
+  .d6o(d6o),
+  .d7o(d7o),
+  .a0o(a0o),
+  .a1o(a1o),
+  .a2o(a2o),
+  .a3o(a3o),
+  .a4o(a4o),
+  .a5o(a5o),
+  .a6o(a6o),
+  .spo(spo),
+  .flagso(flagso),
+  .pco(pco)
 );
 
 BCDAdd u1
@@ -563,7 +580,7 @@ BCDSub u3
 );
 
 
-always @(ir or cf or zf or nf or vf)
+always_comb
 case(ir[15:8])
 `BRA:	takb = 1'b1;
 `BSR:	takb = 1'b1;
@@ -600,7 +617,11 @@ case(ir[15:8])
 default:	takb = 1'b1;
 endcase
 
+`ifdef BIG_ENDIAN
+wire [15:0] iri = pc[1] ? {dat_i[23:16],dat_i[31:24]} : {dat_i[15:8],dat_i[7:0]};
+`else
 wire [15:0] iri = pc[1] ? dat_i[31:16] : dat_i[15:0];
+`endif
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -921,16 +942,17 @@ DECODE:
 							usp <= rfoAn;
 						end
 					end
-				4'b11??:	fs_data(mmm,rrr,FETCH_LWORD,JMP1,D);	// JMP
-				4'b10??:	fs_data(mmm,rrr,FETCH_LWORD,JSR1,D);	// JSR
 				4'h7:
 					case(ir[3:0])
 					4'h0:   begin state <= IFETCH; rst_o <= 1'b1; rst_cnt <= 5'd10; end  // 4E70 RESET
 					4'h1:	state <= IFETCH;					// 4E71	NOP
 					4'h2:	state <= STOP;						// 4E72 STOP
 					4'h3:	state <= RTE1;						// 4E73 RTE
+					4'h5:	state <= RTS1;						// 4E75 RTS
 					4'h6:	state <= vf ? TRAPV : IFETCH;		// 4E76 TRAPV
 					endcase
+				4'b10??:	fs_data(mmm,rrr,FETCH_LWORD,JSR1,D);	// JSR
+				4'b11??:	fs_data(mmm,rrr,FETCH_LWORD,JMP1,D);	// JMP
 				endcase
 		endcase
 //***		4'hF:	state <= RTD1;	// 4Fxx = rtd
@@ -1017,6 +1039,10 @@ DECODE:
 	4'h8:
 		begin
 			casez(ir)
+`ifdef SUPPORT_DIV			
+			16'b1000_????_11??_????:	// DIVU / DIVS
+				;
+`endif				
 			16'b1000_???1_0000_????:	// SBCD
 				if (ir[3])
 					fs_data(3'b100,rrr,FETCH_BYTE,SBCD,S);
@@ -1032,35 +1058,35 @@ DECODE:
 // SUB / SUBA
 //-----------------------------------------------------------------------------
     4'h9:
-        begin
-            if (ir[8])
-                s <= rfoDn;
-            else
-                d <= rfoDn;
-            case(sz)
-            2'b00:    fs_data(mmm,rrr,FETCH_BYTE,SUB,ir[8]?D:S);
-            2'b01:    fs_data(mmm,rrr,FETCH_WORD,SUB,ir[8]?D:S);
-            2'b10:    fs_data(mmm,rrr,FETCH_LWORD,SUB,ir[8]?D:S);
-            2'b11:
-                begin
-                d <= rfoAna;
-                if (ir[8]) fs_data(mmm,rrr,FETCH_LWORD,SUB,S);
-                else fs_data(mmm,rrr,FETCH_WORD,SUB,S);
-                end
-            endcase
-        end
+      begin
+        if (ir[8])
+          s <= rfoDn;
+        else
+          d <= rfoDn;
+        case(sz)
+        2'b00:    fs_data(mmm,rrr,FETCH_BYTE,SUB,ir[8]?D:S);
+        2'b01:    fs_data(mmm,rrr,FETCH_WORD,SUB,ir[8]?D:S);
+        2'b10:    fs_data(mmm,rrr,FETCH_LWORD,SUB,ir[8]?D:S);
+        2'b11:
+          begin
+          d <= rfoAna;
+          if (ir[8]) fs_data(mmm,rrr,FETCH_LWORD,SUB,S);
+          else fs_data(mmm,rrr,FETCH_WORD,SUB,S);
+          end
+        endcase
+      end
 //-----------------------------------------------------------------------------
 // LDT
 //-----------------------------------------------------------------------------
     4'hA:
-        begin
-            if (ir[11:6]==6'h0)
-                state <= LDT1;
-            else if (ir[11:6]==6'h1)
-                state <= SDT1;
-            else
-                state <= ILLEGAL;
-        end
+      begin
+        if (ir[11:6]==6'h0)
+          state <= LDT1;
+        else if (ir[11:6]==6'h1)
+          state <= SDT1;
+        else
+          state <= ILLEGAL;
+      end
 //-----------------------------------------------------------------------------
 // CMP / EOR
 //-----------------------------------------------------------------------------
@@ -1250,6 +1276,7 @@ STOP1:
 MUL:
 	begin
 		state <= MUL1;
+`ifdef SUPPORT_MUL		
 		if (ir[8]) begin
 			rfwrL <= 1'b1;
 			Rt <= {1'b0,DDD};
@@ -1260,6 +1287,7 @@ MUL:
 			Rt <= {1'b0,DDD};
 			resL <= rfoDn[15:0] * s[15:0];
 		end
+`endif		
 	end
 MUL1:
 	begin
@@ -1392,7 +1420,7 @@ LINK:
 		we_o <= 1'b1;
 		adr_o <= sp - 32'd4;
 `ifdef BIG_ENDIAN
-        dat_o <= rbo(rfoAn);
+    dat_o <= rbo(rfoAn);
 `else
 		dat_o <= rfoAn;
 `endif
@@ -1438,7 +1466,7 @@ PEA1:
 		sel_o <= 4'b1111;
 		adr_o <= sp - 32'd4;
 `ifdef BIG_ENDIAN
-        dat_o <= rbo(ea);
+    dat_o <= rbo(ea);
 `else		
 		dat_o <= ea;
 `endif		
@@ -2324,12 +2352,20 @@ FETCH_IMM32:
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
 		if (pc[1]) begin
-          imm[15:0] <= dat_i[31:16];
+`ifdef BIG_ENDIAN
+			imm[31:16] <= {dat_i[23:16],dat_i[31:24]};
+`else			
+      imm[15:0] <= dat_i[31:16];
+`endif      
 		  pc <= pc + 32'd2;
 		  state <= FETCH_IMM32a;
 		end
 		else begin
-          imm <= dat_i;
+`ifdef BIG_ENDIAN
+			imm <= rbo(dat_i);
+`else
+      imm <= dat_i;
+`endif      
 		  cyc_o <= 1'b0;
 		  pc <= pc + 32'd4;
 		  state <= ret_state;
@@ -2345,7 +2381,11 @@ FETCH_IMM32a:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
+`ifdef BIG_ENDIAN
+		imm[15:0] <= {dat_i[7:0],dat_i[15:8]};
+`else
 		imm[31:16] <= dat_i[15:0];
+`endif
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2361,20 +2401,28 @@ FETCH_D32:
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
-	    if (pc[1]) begin
-            stb_o <= 1'b0;
-            sel_o <= 4'b0000;
-            disp[15:0] <= dat_i[31:16];
-            pc <= pc + 32'd2;
-    		state <= FETCH_D32a;
+    if (pc[1]) begin
+      stb_o <= 1'b0;
+      sel_o <= 4'b0000;
+`ifdef BIG_ENDIAN
+			disp[31:16] <= {dat_i[23:16],dat_i[31:24]};
+`else
+      disp[15:0] <= dat_i[31:16];
+`endif        
+      pc <= pc + 32'd2;
+  		state <= FETCH_D32a;
 		end
 		else begin
-		    cyc_o <= `LOW;
-            stb_o <= 1'b0;
-            sel_o <= 4'b0000;
-            disp <= dat_i;
-            pc <= pc + 32'd4;
-            state <= FETCH_D32b;
+	    cyc_o <= `LOW;
+      stb_o <= 1'b0;
+      sel_o <= 4'b0000;
+`ifdef BIG_ENDIAN
+			disp <= rbo(dat_i);
+`else      
+      disp <= dat_i;
+`endif      
+      pc <= pc + 32'd4;
+      state <= FETCH_D32b;
 		end
 	end
 FETCH_D32a:
@@ -2384,10 +2432,14 @@ FETCH_D32a:
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
-	    cyc_o <= `LOW;
+    cyc_o <= `LOW;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
+`ifdef BIG_ENDIAN
+		disp[15:0] <= {dat_i[7:0],dat_i[15:8]};
+`else		
 		disp[31:16] <= dat_i[15:0];
+`endif		
 		pc <= pc + 32'd2;
 		state <= FETCH_D32b;
 	end
@@ -2464,22 +2516,22 @@ FETCH_BYTE:
 		stb_o <= `LOW;
 		sel_o <= 4'b0000;
 		if (ds==D) begin
-		    case(sel_o)
-		    4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
-		    4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
-		    4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
-		    4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
-		    default:  ;
-		    endcase
+	    case(sel_o)
+	    4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
+	    4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
+	    4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
+	    4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
+	    default:  ;
+	    endcase
 		end
 		else begin
-		    case(sel_o)
-            4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
-            default:    ;
-            endcase
+	    case(sel_o)
+      4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
+      4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
+      4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
+      4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
+      default:    ;
+      endcase
 		end
 		state <= ret_state;
 	end
@@ -2499,23 +2551,23 @@ LFETCH_BYTE:
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
 		if (ds==D) begin
-            case(sel_o)
-            4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
-            default:    ;
-            endcase
-        end
-        else begin
-            case(sel_o)
-            4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
-            default:    ;
-            endcase
-        end
+      case(sel_o)
+      4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
+      4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
+      4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
+      4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
+      default:    ;
+      endcase
+    end
+    else begin
+      case(sel_o)
+      4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
+      4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
+      4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
+      4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
+      default:    ;
+      endcase
+    end
 		state <= ret_state;
 	end
 
@@ -2531,33 +2583,40 @@ FETCH_WORD:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
+`ifdef BIG_ENDIAN
+		if (ds==D)
+		  d <= ea[1] ? {{16{dat_i[23]}},dat_i[23:16],dat_i[31:24]} : {{16{dat_i[7]}},dat_i[7:0],dat_i[15:8]};
+		else
+		  s <= ea[1] ? {{16{dat_i[23]}},dat_i[23:16],dat_i[31:24]} : {{16{dat_i[7]}},dat_i[7:0],dat_i[15:8]};
+`else
 		if (ds==D)
 		  d <= ea[1] ? {{16{dat_i[31]}},dat_i[31:16]} : {{16{dat_i[15]}},dat_i[15:0]};
 		else
 		  s <= ea[1] ? {{16{dat_i[31]}},dat_i[31:16]} : {{16{dat_i[15]}},dat_i[15:0]};
+`endif		  
 		state <= ret_state;
 	end
 
 FETCH_LWORD:
     case(ea)
     `CSR_TICK:
-        begin
-            if (ds==D)
-                d <= tick;
-            else
-                s <= tick;
-            state <= ret_state;
-        end
+      begin
+        if (ds==D)
+          d <= tick;
+        else
+          s <= tick;
+        state <= ret_state;
+      end
     `CSR_TASK:
-        begin
-            if (ds==D)
-                d <= tr;
-            else
-                s <= tr;
-            state <= ret_state;
-        end
+      begin
+        if (ds==D)
+          d <= tr;
+        else
+          s <= tr;
+        state <= ret_state;
+      end
     default:
-    if (!cyc_o) begin
+  if (!cyc_o) begin
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
@@ -2568,19 +2627,33 @@ FETCH_LWORD:
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
 		if (ea[1]) begin
-            if (ds==D)
-                d[15:0] <= dat_i[31:16];
-            else
-                s[15:0] <= dat_i[31:16];
+`ifdef BIG_ENDIAN
+        if (ds==D)
+          d[31:16] <= {dat_i[23:16],dat_i[31:24]};
+        else
+          s[31:16] <= {dat_i[23:16],dat_i[31:24]};
+`else			
+        if (ds==D)
+          d[15:0] <= dat_i[31:16];
+        else
+          s[15:0] <= dat_i[31:16];
+`endif          
     		state <= FETCH_LWORDa;
 	    end
 	    else begin
-	        cyc_o <= `LOW;
-            if (ds==D)
-                d <= dat_i;
-            else
-                s <= dat_i;
-            state <= ret_state;
+        cyc_o <= `LOW;
+`ifdef BIG_ENDIAN
+        if (ds==D)
+            d <= rbo(dat_i);
+        else
+            s <= rbo(dat_i);
+`else        
+        if (ds==D)
+            d <= dat_i;
+        else
+            s <= dat_i;
+`endif            
+        state <= ret_state;
 	    end
 	end
 	endcase
@@ -2595,10 +2668,17 @@ FETCH_LWORDa:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
+`ifdef BIG_ENDIAN
+		if (ds==D)
+			d[15:0] <= {dat_i[7:0],dat_i[15:8]};
+		else
+			s[15:0] <= {dat_i[7:0],dat_i[15:8]};
+`else		
 		if (ds==D)
 			d[31:16] <= dat_i[15:0];
 		else
 			s[31:16] <= dat_i[15:0];
+`endif			
 		state <= ret_state;
 	end
 
@@ -2650,7 +2730,11 @@ STORE_WORD:
 		we_o <= 1'b1;
 		adr_o <= ea;
 		sel_o <= ea[1] ? 4'b1100 : 4'b0011;
+`ifdef BIG_ENDIAN
+		dat_o <= {2{resW[7:0],resW[15:8]}};
+`else		
 		dat_o <= {2{resW[15:0]}};
+`endif		
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2662,12 +2746,12 @@ STORE_WORD:
 STORE_LWORD:
     case(ea)
     `CSR_TASK:
-        begin
-            set_regs();
-            fork_task <= resW[15];
-            task_mem_wr <= 1'b1;
-            state <= TASK1;
-        end
+      begin
+        set_regs();
+        fork_task <= resW[15];
+        task_mem_wr <= 1'b1;
+        state <= TASK1;
+      end
     default:
 	if (!cyc_o) begin
 		fc_o <= {sf,2'b01};
@@ -2676,21 +2760,25 @@ STORE_LWORD:
 		we_o <= 1'b1;
 		adr_o <= ea;
 		sel_o <= ea[1] ? 4'b1100 : 4'b1111;
+`ifdef BIG_ENDIAN
+		dat_o <= ea[1] ? {resL[23:16],resL[31:24],resL[7:0],resL[15:8]} : rbo(resL);
+`else		
 		dat_o <= ea[1] ? {resL[15:0],resL[31:16]} : resL;
+`endif		
 	end
 	else if (ack_i) begin
-	    if (ea[1]) begin
-            stb_o <= 1'b0;
-            we_o <= 1'b0;
-            sel_o <= 4'b00;
-            state <= STORE_LWORDa;
+    if (ea[1]) begin
+      stb_o <= 1'b0;
+      we_o <= 1'b0;
+      sel_o <= 4'b00;
+      state <= STORE_LWORDa;
 		end
 		else begin
-		    cyc_o <= `LOW;
-            stb_o <= 1'b0;
-            we_o <= 1'b0;
-            sel_o <= 4'b00;
-            state <= ret_state;
+	    cyc_o <= `LOW;
+      stb_o <= 1'b0;
+      we_o <= 1'b0;
+      sel_o <= 4'b00;
+      state <= ret_state;
 		end
 	end
 	endcase
@@ -2740,83 +2828,83 @@ MOVE2SR:
 //----------------------------------------------------
 //----------------------------------------------------
 RESET:
-    begin
-        tr <= `RESET_TASK;
-        pc <= `RESET_VECTOR;
+  begin
+    tr <= `RESET_TASK;
+    pc <= `RESET_VECTOR;
 		state <= IFETCH;
 	end
 
 //----------------------------------------------------
 //----------------------------------------------------
 ILLEGAL:
-    begin
-        set_regs();
-        task_mem_wr <= `TRUE;
-        vecno <= `ILLEGAL_VEC;
-        state <= TRAP3;
-    end
+  begin
+    set_regs();
+    task_mem_wr <= `TRUE;
+    vecno <= `ILLEGAL_VEC;
+    state <= TRAP3;
+  end
 
 
 //----------------------------------------------------
 //----------------------------------------------------
 TRAP:
-    begin
-        set_regs();
-        task_mem_wr <= `TRUE;
-        state <= TRAP3;
-        /*
-        if (is_nmi)
-            vecno <= `NMI_VEC;
-        else
-        */
-        if (is_irq) begin
-            vecno <= `IRQ_VEC + ipl_i;
-            im <= ipl_i;
-        end
-        else begin
-            if (ir[3:0]==4'hF)
-                state <= TRAP2;
-            else
-                vecno <= `TRAP_VEC + ir[3:0];
-        end
+  begin
+    set_regs();
+    task_mem_wr <= `TRUE;
+    state <= TRAP3;
+    /*
+    if (is_nmi)
+        vecno <= `NMI_VEC;
+    else
+    */
+    if (is_irq) begin
+      vecno <= `IRQ_VEC + ipl_i;
+      im <= ipl_i;
     end
+    else begin
+      if (ir[3:0]==4'hF)
+        state <= TRAP2;
+      else
+        vecno <= `TRAP_VEC + ir[3:0];
+    end
+  end
 TRAP2:
-    if (!cyc_o) begin
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        sel_o <= pc[1] ? 4'b1100: 4'b0011;
-        adr_o <= pc;
-    end
-    else if (ack_i) begin
-        cyc_o <= `LOW;
-        stb_o <= `LOW;
-        sel_o <= 4'b0;
-        pc <= pc + 32'd2;
-        vecno <= iri[8:0];
-        state <= TRAP3;
-    end
+  if (!cyc_o) begin
+    cyc_o <= `HIGH;
+    stb_o <= `HIGH;
+    sel_o <= pc[1] ? 4'b1100: 4'b0011;
+    adr_o <= pc;
+  end
+  else if (ack_i) begin
+    cyc_o <= `LOW;
+    stb_o <= `LOW;
+    sel_o <= 4'b0;
+    pc <= pc + 32'd2;
+    vecno <= iri[8:0];
+    state <= TRAP3;
+  end
 TRAP3:
-    if (!cyc_o) begin
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        sel_o <= vecno[0] ? 4'b1100 : 4'b0011;
-        adr_o <= {vecno,1'b0};
-    end
-    else if (ack_i) begin
-        otr <= tr;
-        tr <= vecno[0] ? dat_i[24:16] : dat_i[8:0];
-        state <= TASK2;        
-    end
+  if (!cyc_o) begin
+    cyc_o <= `HIGH;
+    stb_o <= `HIGH;
+    sel_o <= vecno[0] ? 4'b1100 : 4'b0011;
+    adr_o <= {vecno,1'b0};
+  end
+  else if (ack_i) begin
+    otr <= tr;
+    tr <= vecno[0] ? dat_i[24:16] : dat_i[8:0];
+    state <= TASK2;        
+  end
 
 //----------------------------------------------------
 //----------------------------------------------------
 TRAPV:
-    begin
-        set_regs();
-        task_mem_wr <= `TRUE;
-        vecno <= `TRAPV_VEC;
-        state <= TRAP3;
-    end
+  begin
+    set_regs();
+    task_mem_wr <= `TRUE;
+    vecno <= `TRAPV_VEC;
+    state <= TRAP3;
+  end
 /*
 JMP_VECTOR:
 	if (!cyc_o) begin
@@ -2863,7 +2951,11 @@ UNLNK:
 		sel_o <= 2'b00;
 		rfwrL <= 1'b1;
 		Rt <= {1'b1,rrr};
+`ifdef BIG_ENDIAN
+		resL <= rbo(dat_i);
+`else
 		resL <= dat_i;
+`endif		
 		sp <= sp + 32'd4;
 		state <= IFETCH;
 	end
@@ -2883,7 +2975,11 @@ JSR1:
 		we_o <= 1'b1;
 		sel_o <= 4'b1111;
 		adr_o <= sp - 32'd4;
+`ifdef BIG_ENDIAN
+		dat_o <= rbo(pc);
+`else		
 		dat_o <= pc;
+`endif		
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2911,6 +3007,18 @@ RTE1:
 		stb_o <= 1'b0;
 		sel_o <= 4'b0000;
 		sp <= sp + 32'd4;
+`ifdef BIG_ENDIAN
+		cf <= dat_i[8];
+		vf <= dat_i[9];
+		zf <= dat_i[10];
+		nf <= dat_i[11];
+		xf <= dat_i[12];
+		im[0] <= dat_i[0];
+		im[1] <= dat_i[1];
+		im[2] <= dat_i[2];
+		sf <= dat_i[5];
+		tf <= dat_i[7];
+`else		
 		cf <= dat_i[0];
 		vf <= dat_i[1];
 		zf <= dat_i[2];
@@ -2921,6 +3029,7 @@ RTE1:
 		im[2] <= dat_i[10];
 		sf <= dat_i[13];
 		tf <= dat_i[15];
+`endif		
 		state <= RTE2;
 	end
 RTE2:
@@ -2934,7 +3043,11 @@ RTE2:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
+`ifdef BIG_ENDIAN
+		pc <= rbo(dat_i);
+`else		
 		pc <= dat_i;
+`endif		
 		sp <= sp + 32'd4;
 		state <= IFETCH;
 	end
@@ -2953,10 +3066,14 @@ RTS1:
 		adr_o <= sp;
 	end
 	else if (ack_i) begin
-	    cyc_o <= `LOW;
+    cyc_o <= `LOW;
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
+`ifdef BIG_ENDIAN
+		pc <= rbo(dat_i);
+`else		
 		pc <= dat_i;
+`endif		
 		sp <= sp + 32'd4;
 		state <= IFETCH;
 	end
@@ -3214,162 +3331,216 @@ MOVEM_s2Xn3:
 	end
 //----------------------------------------------------
 TASK1:
-    begin
-        otr <= tr;
-        tr <= resW[7:0];
-        state <= fork_task ? TASK4: TASK2;
-    end
+  begin
+    otr <= tr;
+    tr <= resW[7:0];
+    state <= fork_task ? TASK4: TASK2;
+  end
 TASK2:
-    state <= TASK3;
+  state <= TASK3;
 TASK3:
-    begin
-        d0 <= d0o;
-        d1 <= d1o;
-        d2 <= d2o;
-        d3 <= d3o;
-        d4 <= d4o;
-        d5 <= d5o;
-        d6 <= d6o;
-        d7 <= d7o;
-        a0 <= a0o;
-        a1 <= a1o;
-        a2 <= a2o;
-        a3 <= a3o;
-        a4 <= a4o;
-        a5 <= a5o;
-        a6 <= a6o;
-        sp <= spo;
-        cf <= flagso[0];
-        vf <= flagso[1];
-        zf <= flagso[2];
-        nf <= flagso[3];
-        xf <= flagso[4];
-        im <= flagso[10:8];
-        sf <= flagso[11];
-        tf <= flagso[13];
-        pc <= pco;
-        state <= TASK4;
-    end
+  begin
+    d0 <= d0o;
+    d1 <= d1o;
+    d2 <= d2o;
+    d3 <= d3o;
+    d4 <= d4o;
+    d5 <= d5o;
+    d6 <= d6o;
+    d7 <= d7o;
+    a0 <= a0o;
+    a1 <= a1o;
+    a2 <= a2o;
+    a3 <= a3o;
+    a4 <= a4o;
+    a5 <= a5o;
+    a6 <= a6o;
+    sp <= spo;
+    cf <= flagso[0];
+    vf <= flagso[1];
+    zf <= flagso[2];
+    nf <= flagso[3];
+    xf <= flagso[4];
+    im <= flagso[10:8];
+    sf <= flagso[11];
+    tf <= flagso[13];
+    pc <= pco;
+    state <= TASK4;
+  end
 TASK4:
-    if (!cyc_o) begin
+  if (!cyc_o) begin
 		fc_o <= {3'b101};
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        we_o <= `HIGH;
-        sel_o <= 4'b1111;
-        adr_o <= sp - 32'd4;
-        dat_o <= otr;
-    end
-    else if (ack_i) begin
-        cyc_o <= `LOW;
-        stb_o <= `LOW;
-        we_o <= `LOW;
-        sel_o <= 4'b00;
-        sp <= sp - 32'd4;
-        state <= IFETCH;
-    end
+    cyc_o <= `HIGH;
+    stb_o <= `HIGH;
+    we_o <= `HIGH;
+    sel_o <= 4'b1111;
+    adr_o <= sp - 32'd4;
+`ifdef BIG_ENDIAN
+		dat_o <= rbo(otr);
+`else    
+    dat_o <= otr;
+`endif    
+  end
+  else if (ack_i) begin
+    cyc_o <= `LOW;
+    stb_o <= `LOW;
+    we_o <= `LOW;
+    sel_o <= 4'b00;
+    sp <= sp - 32'd4;
+    state <= IFETCH;
+  end
 //----------------------------------------------------
 LDT1:
-    begin
-        cnt <= 6'd0;
-        otr <= tr;
-        fs_data(mmm,rrr,FETCH_NOP,LDT2,S);
-    end
+  begin
+    cnt <= 6'd0;
+    otr <= tr;
+    fs_data(mmm,rrr,FETCH_NOP,LDT2,S);
+  end
 LDT2:
     if (!stb_o) begin
-        fc_o <= 3'b101;
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        we_o <= `LOW;
-        sel_o <= 4'b1111;
-        adr_o <= ea;
+      fc_o <= 3'b101;
+      cyc_o <= `HIGH;
+      stb_o <= `HIGH;
+      we_o <= `LOW;
+      sel_o <= 4'b1111;
+      adr_o <= ea;
     end
     else if (ack_i) begin
-        stb_o <= `LOW;
-        cnt <= cnt + 6'd1;
-        ea <= ea + 32'd4;
-        if (cnt >= 6'd17) begin
-            cyc_o <= `LOW;
-            sel_o <= 4'b00;
-            task_mem_wr <= `TRUE;
-            tr <= d0[8:0];
-            state <= LDT3;
-        end
-        case(cnt)
-        6'd0:   d0i <= dat_i;
-        6'd1:   d1i <= dat_i;
-        6'd2:   d2i <= dat_i;
-        6'd3:   d3i <= dat_i;
-        6'd4:   d4i <= dat_i;
-        6'd5:   d5i <= dat_i;
-        6'd6:   d6i <= dat_i;
-        6'd7:   d7i <= dat_i;
-        6'd8:   a0i <= dat_i;
-        6'd9:   a1i <= dat_i;
-        6'd10:  a2i <= dat_i;
-        6'd11:  a3i <= dat_i;
-        6'd12:  a4i <= dat_i;
-        6'd13:  a5i <= dat_i;
-        6'd14:  a6i <= dat_i;
-        6'd15:  spi <= dat_i;
-        6'd16:  flagsi <= dat_i;
-        6'd17:  pci <= dat_i;
-        endcase
+      stb_o <= `LOW;
+      cnt <= cnt + 6'd1;
+      ea <= ea + 32'd4;
+      if (cnt >= 6'd17) begin
+        cyc_o <= `LOW;
+        sel_o <= 4'b00;
+        task_mem_wr <= `TRUE;
+        tr <= d0[8:0];
+        state <= LDT3;
+      end
+`ifdef BIG_ENDIAN
+      case(cnt)
+      6'd0:   d0i <= rbo(dat_i);
+      6'd1:   d1i <= rbo(dat_i);
+      6'd2:   d2i <= rbo(dat_i);
+      6'd3:   d3i <= rbo(dat_i);
+      6'd4:   d4i <= rbo(dat_i);
+      6'd5:   d5i <= rbo(dat_i);
+      6'd6:   d6i <= rbo(dat_i);
+      6'd7:   d7i <= rbo(dat_i);
+      6'd8:   a0i <= rbo(dat_i);
+      6'd9:   a1i <= rbo(dat_i);
+      6'd10:  a2i <= rbo(dat_i);
+      6'd11:  a3i <= rbo(dat_i);
+      6'd12:  a4i <= rbo(dat_i);
+      6'd13:  a5i <= rbo(dat_i);
+      6'd14:  a6i <= rbo(dat_i);
+      6'd15:  spi <= rbo(dat_i);
+      6'd16:  flagsi <= rbo(dat_i);
+      6'd17:  pci <= rbo(dat_i);
+      default:	;
+      endcase
+`else      
+      case(cnt)
+      6'd0:   d0i <= dat_i;
+      6'd1:   d1i <= dat_i;
+      6'd2:   d2i <= dat_i;
+      6'd3:   d3i <= dat_i;
+      6'd4:   d4i <= dat_i;
+      6'd5:   d5i <= dat_i;
+      6'd6:   d6i <= dat_i;
+      6'd7:   d7i <= dat_i;
+      6'd8:   a0i <= dat_i;
+      6'd9:   a1i <= dat_i;
+      6'd10:  a2i <= dat_i;
+      6'd11:  a3i <= dat_i;
+      6'd12:  a4i <= dat_i;
+      6'd13:  a5i <= dat_i;
+      6'd14:  a6i <= dat_i;
+      6'd15:  spi <= dat_i;
+      6'd16:  flagsi <= dat_i;
+      6'd17:  pci <= dat_i;
+      default:	;
+      endcase
+`endif      
     end
 LDT3:
-    begin
-        tr <= otr;
-        state <= IFETCH;
-    end
+  begin
+    tr <= otr;
+    state <= IFETCH;
+  end
 //----------------------------------------------------
 SDT1:
-    begin
-        cnt <= 6'd0;
-        otr <= tr;
-        tr <= d0;
-        fs_data(mmm,rrr,FETCH_NOP,SDT2,D);
-    end
+  begin
+    cnt <= 6'd0;
+    otr <= tr;
+    tr <= d0;
+    fs_data(mmm,rrr,FETCH_NOP,SDT2,D);
+  end
 SDT2:
-    if (!stb_o) begin
-        fc_o <= 3'b101;
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        we_o <= `HIGH;
-        sel_o <= 4'b1111;
-        adr_o <= ea;
-        case(cnt)
-        6'd0:   dat_o <= d0o;
-        6'd1:   dat_o <= d1o;
-        6'd2:   dat_o <= d2o;
-        6'd3:   dat_o <= d3o;
-        6'd4:   dat_o <= d4o;
-        6'd5:   dat_o <= d5o;
-        6'd6:   dat_o <= d6o;
-        6'd7:   dat_o <= d7o;
-        6'd8:   dat_o <= a0o;
-        6'd9:   dat_o <= a1o;
-        6'd10:  dat_o <= a2o;
-        6'd11:  dat_o <= a3o;
-        6'd12:  dat_o <= a4o;
-        6'd13:  dat_o <= a5o;
-        6'd14:  dat_o <= a6o;
-        6'd15:  dat_o <= spo;
-        6'd16:  dat_o <= flagso;
-        6'd17:  dat_o <= pco;
-        endcase
+  if (!stb_o) begin
+    fc_o <= 3'b101;
+    cyc_o <= `HIGH;
+    stb_o <= `HIGH;
+    we_o <= `HIGH;
+    sel_o <= 4'b1111;
+    adr_o <= ea;
+`ifdef BIG_ENDIAN
+    case(cnt)
+    6'd0:   dat_o <= rbo(d0o);
+    6'd1:   dat_o <= rbo(d1o);
+    6'd2:   dat_o <= rbo(d2o);
+    6'd3:   dat_o <= rbo(d3o);
+    6'd4:   dat_o <= rbo(d4o);
+    6'd5:   dat_o <= rbo(d5o);
+    6'd6:   dat_o <= rbo(d6o);
+    6'd7:   dat_o <= rbo(d7o);
+    6'd8:   dat_o <= rbo(a0o);
+    6'd9:   dat_o <= rbo(a1o);
+    6'd10:  dat_o <= rbo(a2o);
+    6'd11:  dat_o <= rbo(a3o);
+    6'd12:  dat_o <= rbo(a4o);
+    6'd13:  dat_o <= rbo(a5o);
+    6'd14:  dat_o <= rbo(a6o);
+    6'd15:  dat_o <= rbo(spo);
+    6'd16:  dat_o <= rbo(flagso);
+    6'd17:  dat_o <= rbo(pco);
+    default:	;
+    endcase
+`else      
+    case(cnt)
+    6'd0:   dat_o <= d0o;
+    6'd1:   dat_o <= d1o;
+    6'd2:   dat_o <= d2o;
+    6'd3:   dat_o <= d3o;
+    6'd4:   dat_o <= d4o;
+    6'd5:   dat_o <= d5o;
+    6'd6:   dat_o <= d6o;
+    6'd7:   dat_o <= d7o;
+    6'd8:   dat_o <= a0o;
+    6'd9:   dat_o <= a1o;
+    6'd10:  dat_o <= a2o;
+    6'd11:  dat_o <= a3o;
+    6'd12:  dat_o <= a4o;
+    6'd13:  dat_o <= a5o;
+    6'd14:  dat_o <= a6o;
+    6'd15:  dat_o <= spo;
+    6'd16:  dat_o <= flagso;
+    6'd17:  dat_o <= pco;
+    default:	;
+    endcase
+`endif      
+  end
+  else if (ack_i) begin
+    stb_o <= `LOW;
+    we_o <= `LOW;
+    cnt <= cnt + 6'd1;
+    ea <= ea + 32'd4;
+    if (cnt >= 6'd17) begin
+      cyc_o <= `LOW;
+      sel_o <= 4'b00;
+      tr <= otr;
+      state <= IFETCH;
     end
-    else if (ack_i) begin
-        stb_o <= `LOW;
-        we_o <= `LOW;
-        cnt <= cnt + 6'd1;
-        ea <= ea + 32'd4;
-        if (cnt >= 6'd17) begin
-            cyc_o <= `LOW;
-            sel_o <= 4'b00;
-            tr <= otr;
-            state <= IFETCH;
-        end
-    end
+  end
 endcase
 end
 	
@@ -3484,37 +3655,37 @@ endtask
 
 task set_regs;
 begin
-    d0i <= d0;
-    d1i <= d1;
-    d2i <= d2;
-    d3i <= d3;
-    d4i <= d4;
-    d5i <= d5;
-    d6i <= d6;
-    d7i <= d7;
-    a0i <= a0;
-    a1i <= a1;
-    a2i <= a2;
-    a3i <= a3;
-    a4i <= a4;
-    a5i <= a5;
-    a6i <= a6;
-    spi <= sp;
-    flagsi <= sr;
-    pci <= pc;
+  d0i <= d0;
+  d1i <= d1;
+  d2i <= d2;
+  d3i <= d3;
+  d4i <= d4;
+  d5i <= d5;
+  d6i <= d6;
+  d7i <= d7;
+  a0i <= a0;
+  a1i <= a1;
+  a2i <= a2;
+  a3i <= a3;
+  a4i <= a4;
+  a5i <= a5;
+  a6i <= a6;
+  spi <= sp;
+  flagsi <= sr;
+  pci <= pc;
 end
 endtask
 
 endmodule
 
 module task_mem(clk, wr, wa,
-    d0i,d1i,d2i,d3i,d4i,d5i,d6i,d7i,
-    a0i,a1i,a2i,a3i,a4i,a5i,a6i,spi,
-    flagsi,pci,
-    ra,
-    d0o,d1o,d2o,d3o,d4o,d5o,d6o,d7o,
-    a0o,a1o,a2o,a3o,a4o,a5o,a6o,spo,
-    flagso,pco
+  d0i,d1i,d2i,d3i,d4i,d5i,d6i,d7i,
+  a0i,a1i,a2i,a3i,a4i,a5i,a6i,spi,
+  flagsi,pci,
+  ra,
+  d0o,d1o,d2o,d3o,d4o,d5o,d6o,d7o,
+  a0o,a1o,a2o,a3o,a4o,a5o,a6o,spo,
+  flagso,pco
 );
 input clk;
 input wr;
@@ -3557,22 +3728,22 @@ output [31:0] spo;
 output [31:0] flagso;
 output [31:0] pco;
 
-reg [575:0] mem [0:511];
+reg [575:0] mem [0:15];
 reg [8:0] rra;
 
-always @(posedge clk)
-    if (wr)
-        mem[wa] <= {
-            d0i,d1i,d2i,d3i,d4i,d5i,d6i,d7i,
-            a0i,a1i,a2i,a3i,a4i,a5i,a6i,spi,
-            flagsi,pci
-        };
-always @(posedge clk)
-    rra <= ra;
+always_ff @(posedge clk)
+  if (wr)
+    mem[wa] <= {
+      d0i,d1i,d2i,d3i,d4i,d5i,d6i,d7i,
+      a0i,a1i,a2i,a3i,a4i,a5i,a6i,spi,
+      flagsi,pci
+    };
+always_ff @(posedge clk)
+  rra <= ra;
 
 assign {
-    d0o,d1o,d2o,d3o,d4o,d5o,d6o,d7o,
-    a0o,a1o,a2o,a3o,a4o,a5o,a6o,spo,
-    flagso,pco } = mem[rra];
+  d0o,d1o,d2o,d3o,d4o,d5o,d6o,d7o,
+  a0o,a1o,a2o,a3o,a4o,a5o,a6o,spo,
+  flagso,pco } = mem[rra];
 
 endmodule
