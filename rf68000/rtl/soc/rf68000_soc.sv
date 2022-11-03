@@ -141,6 +141,8 @@ wire xclk_bufg;
 wire node_clk = clk100;
 wb_write_request128_t ch7req;
 wb_read_response128_t ch7resp;
+wb_write_request128_t fb_req;
+wb_read_response128_t fb_resp;
 reg ack;
 wire [3:0] sel;
 reg [31:0] dati;
@@ -198,6 +200,7 @@ NexysVideoClkgen ucg1
 
 assign rst = !locked;
 
+/*
 rgb2dvi #(
 	.kGenerateSerialClk(1'b0),
 	.kClkPrimitive("MMCM"),
@@ -219,7 +222,7 @@ ur2d1
 	.PixelClk(clk40),
 	.SerialClk(clk200)
 );
-
+*/
 wire cs_tc = ch7req.adr[31:16]==16'hFD00 || ch7req.adr[31:16]==16'hFD01;
 wire cs_br1_tc = br1_adr[31:16]==16'hFD00 || br1_adr[31:16]==16'hFD01;
 wire cs_fb = ch7req.adr[31:16]==16'hFD04;
@@ -413,8 +416,8 @@ mpmc10_wb umpmc1
 	.ch5clk(),
 	.ch6clk(),
 	.ch7clk(clk100),
-	.ch0i('d0),
-	.ch0o(),
+	.ch0i(fb_req),
+	.ch0o(fb_resp),
 	.ch1i('d0),
 	.ch1o(),
 	.ch2i('d0),
