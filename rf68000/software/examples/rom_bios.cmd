@@ -9,18 +9,18 @@ MEMORY {
 }
 
 MEMORY {
-	BIOS_CODE : ORIGIN = 0x00000800, LENGTH = 2k
+	BIOS_CODE : ORIGIN = 0x00000800, LENGTH = 20k
 }
 
 MEMORY {
-	BIOS_RODATA : ORIGIN = 0x00001000, LENGTH = 28K
+	BIOS_RODATA : ORIGIN = 0x00008000, LENGTH = 16K
 }
 
 PHDRS {
 	bios_hdr PT_LOAD AT (0x00000000);
 	bios_bss PT_LOAD AT (0x00000400);
 	bios_code PT_LOAD AT (0x00000800);
-	bios_rodata PT_LOAD AT (0x00001000);
+	bios_rodata PT_LOAD AT (0x00008000);
 }
 
 SECTIONS {
@@ -45,7 +45,7 @@ SECTIONS {
 		_etext = .;
 	} >BIOS_CODE
 	rodata: {
-		. = 0x00001000;
+		. = 0x00008000;
 		_start_rodata = .;
 		*(rodata);
 		. = ALIGN(2);
