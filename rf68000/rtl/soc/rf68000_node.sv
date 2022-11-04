@@ -78,7 +78,7 @@ rf68000_nic unic1
 	.id({id,1'b0}),
 	.rst_i(rst),
 	.clk_i(clk),
-	.s_cti_i(),
+	.s_cti_i(3'd0),
 	.s_atag_o(),
 	.s_cyc_i(cyc1),
 	.s_stb_i(stb1),
@@ -118,7 +118,7 @@ rf68000_nic unic2
 	.id({id,1'b1}),
 	.rst_i(rst),
 	.clk_i(clk),
-	.s_cti_i(),
+	.s_cti_i(3'd0),
 	.s_atag_o(),
 	.s_cyc_i(cyc2),
 	.s_stb_i(stb2),
@@ -213,6 +213,7 @@ rf68000_node_arbiter undarb2
 
 rf68000 ucpu1
 (
+	.coreno_i({26'd0,id,1'b0}),
 	.rst_i(rst),
 	.rst_o(),
 	.clk_i(clk),
@@ -233,6 +234,7 @@ rf68000 ucpu1
 
 rf68000 ucpu2
 (
+	.coreno_i({26'd0,id,1'b1}),
 	.rst_i(rst),
 	.rst_o(),
 	.clk_i(clk),

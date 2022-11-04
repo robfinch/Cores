@@ -22,16 +22,18 @@ clk160_NexysVideoClkgen \
 clk200_NexysVideoClkgen \
 clk20_NexysVideoClkgen \
 clk40_NexysVideoClkgen \
+} \
+-group { \
 clk80_NexysVideoClkgen \
-} \
--group { \
-clk400_NexysVideoClkgen2 \
-clk57_NexysVideoClkgen2 \
-clk19_NexysVideoClkgen2 \
-} \
--group { \
-clk14_NexysVideoClkgen \
 }
+#-group { \
+#clk400_NexysVideoClkgen2 \
+#clk57_NexysVideoClkgen2 \
+#clk19_NexysVideoClkgen2 \
+#} \
+#-group { \
+#clk14_NexysVideoClkgen \
+#}
 # \
 #-group { \
 #clk100_NexysVideoClkgen \

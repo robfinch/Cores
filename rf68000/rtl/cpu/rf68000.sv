@@ -51,7 +51,7 @@
 `define BIG_ENDIAN  1'b1
 
 `define RESET_VECTOR	32'h00000400
-`define CSR_CORENUM     32'hFFFFFFE0
+`define CSR_CORENO    32'hFFFFFFE0
 `define CSR_TICK        32'hFFFFFFE4
 `define CSR_TASK        32'hFFFFFFFC
 
@@ -125,7 +125,7 @@
 // 2 MULTS
 // 8 BRAMs
 
-module rf68000(rst_i, rst_o, clk_i, nmi_i, ipl_i, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, fc_o, adr_o, dat_i, dat_o);
+module rf68000(coreno_i, rst_i, rst_o, clk_i, nmi_i, ipl_i, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, fc_o, adr_o, dat_i, dat_o);
 typedef enum logic [7:0] {
 	IFETCH = 8'd1,
 	DECODE,
@@ -147,8 +147,7 @@ typedef enum logic [7:0] {
 	FETCH_IMM32,
 	FETCH_IMM32a,
 	JSR1,
-	JSR2,
-	JSR3,
+	BSR,
 	JMP1,
 	DBRA,
 	
@@ -296,6 +295,7 @@ typedef enum logic [4:0] {
 parameter S = 1'b0;
 parameter D = 1'b1;
 
+input [31:0] coreno_i;
 input rst_i;
 output reg rst_o;
 input clk_i;
@@ -330,7 +330,7 @@ state_t state_stk2;
 state_t state_stk3;
 state_t state_stk4;
 state_t sz_state;
-flag_udate_t flag_update;
+flag_update_t flag_update;
 reg [3:0] tr, otr;
 reg fork_task;
 reg [31:0] d0;
@@ -390,6 +390,7 @@ reg [2:0] im;
 wire [15:0] sr = {tf,1'b0,sf,2'b00,im,3'b000,xf,nf,zf,vf,cf};
 reg [15:0] isr;
 reg [31:0] pc;
+reg [31:0] opc;			// pc for branch references
 reg [31:0] ssp,usp;
 reg [31:0] disp;
 reg [31:0] s,d,imm;
@@ -625,22 +626,22 @@ case(ir[15:8])
 `BLT:	takb = (nf & !vf)|(!nf & vf);
 `BGT:	takb = (nf & vf & !zf)|(!nf & !vf & zf);
 `BLE:	takb = zf | (nf & !vf) | (!nf & vf);
-`DBRA:	takb = 1'b0;
+`DBRA:	takb = 1'b1;
 `DBSR:	takb = 1'b0;
-`DBHI:	takb = !(!cf & !zf);
-`DBLS:	takb = !(cf | zf);
-`DBHS:	takb = cf;
-`DBLO:	takb = !cf;
-`DBNE:	takb = zf;
-`DBEQ:	takb = !zf;
-`DBVC:	takb = vf;
-`DBVS:	takb = !vf;
-`DBPL:	takb = nf;
-`DBMI:	takb = !nf;
-`DBGE:	takb = !((nf & vf)|(!nf & !vf));
-`DBLT:	takb = !((nf & !vf)|(!nf & vf));
-`DBGT:	takb = !((nf & vf & !zf)|(!nf & !vf & zf));
-`DBLE:	takb = !(zf | (nf & !vf) | (!nf & vf));
+`DBHI:	takb = !cf & !zf;
+`DBLS:	takb = cf | zf;
+`DBHS:	takb = !cf;
+`DBLO:	takb =  cf;
+`DBNE:	takb = !zf;
+`DBEQ:	takb =  zf;
+`DBVC:	takb = !vf;
+`DBVS:	takb =  vf;
+`DBPL:	takb = !nf;
+`DBMI:	takb =  nf;
+`DBGE:	takb = ((nf & vf)|(!nf & !vf));
+`DBLT:	takb = ((nf & !vf)|(!nf & vf));
+`DBGT:	takb = ((nf & vf & !zf)|(!nf & !vf & zf));
+`DBLE:	takb = (zf | (nf & !vf) | (!nf & vf));
 default:	takb = 1'b1;
 endcase
 
@@ -1109,7 +1110,8 @@ IFETCH:
 			stb_o <= 1'b0;
 			sel_o <= 2'b00;
 			ir <= iri;
-			pc <= pc + 32'd2;
+			pc <= pc + 4'd2;
+			opc <= pc + 4'd2;
 			mmm <= iri[5:3];
 			rrr <= iri[2:0];
 			rrrr <= iri[3:0];
@@ -1245,6 +1247,7 @@ DECODE:
 								resL <= {rfoRnn[15:0],rfoRnn[31:16]};
 								Rt <= {1'b0,rrr};
 								rfwrL <= 1'b1;
+								ret();
 							end
 					4'b01??:		// PEA
 						state <= PEA1;
@@ -1256,6 +1259,7 @@ DECODE:
 								rfwrW <= 1'b1;
 								Rt <= ir[3:0];
 								resW <= {rfoRnn[31:16],{8{rfoRnn[7]}},rfoRnn[7:0]};
+								ret();
 							end
 							else begin
 								call(FETCH_IMM16,MOVEM_Xn2D);
@@ -1268,6 +1272,7 @@ DECODE:
 								rfwrL <= 1'b1;
 								Rt <= ir[3:0];
 								resL <= {{16{rfoRnn[15]}},rfoRnn[15:0]};
+								ret();
 							end
 							else begin
 								call(FETCH_IMM16,MOVEM_Xn2D);
@@ -1344,7 +1349,7 @@ DECODE:
 		begin
 			casez(ir[7:4])
 			4'b1100:					// DBRA
-				if (takb) begin
+				if (~takb) begin
 					call(FETCH_IMM16,DBRA);
 				end
 				else begin
@@ -1385,11 +1390,19 @@ DECODE:
 //-----------------------------------------------------------------------------
 	4'h6:
 		if (takb) begin
-			if (ir[7:0]==8'h00 || ir[0])
-				state <= FETCH_BRDISP;
+			if (ir[7:0]==8'h00 || ir[0]) begin
+				if (ir[15:8]==8'h61)
+					call(FETCH_BRDISP,BSR);
+				else
+					goto(FETCH_BRDISP);
+			end
 			else begin
 				pc <= pc + {{24{ir[7]}},ir[7:1],1'b0};
-				ret();
+				opc <= pc;
+				if (ir[15:8]==8'h61)
+					goto(BSR);
+				else
+					ret();
 			end
 		end
 		else begin
@@ -1864,7 +1877,7 @@ DBRA:
 		Rt <= {1'b0,rrr};
 		rfwrW <= 1'b1;
 		if (rfoDnn[15:0]!=0)
-			pc <= pc + {imm,1'b0};
+			pc <= opc + imm;
 		ret();
 	end
 
@@ -2434,6 +2447,7 @@ FETCH_BRDISP:
 		else
 			disp <= {{16{iri[15]}},iri};
 		state <= FETCH_BRDISPa;
+		opc <= pc + 4'd2;
 	end
 FETCH_BRDISPa:
 	begin
@@ -2748,6 +2762,14 @@ FETCH_WORD:
 
 FETCH_LWORD:
     case(ea)
+    `CSR_CORENO:
+      begin
+        if (ds==D)
+          d <= coreno_i;
+        else
+          s <= coreno_i;
+        ret();
+    	end
     `CSR_TICK:
       begin
         if (ds==D)
@@ -3048,7 +3070,7 @@ TRAP3:
     tr <= vecno[0] ? dat_i[24:16] : dat_i[8:0];
     state <= TASK2;        
   end
-// Load SSP from vector table
+// Load SP from vector table
 TRAP4:
 	if (!cyc_o) begin
     cyc_o <= `HIGH;
@@ -3062,9 +3084,9 @@ TRAP4:
 		stb_o <= 1'b0;
 		sel_o <= 4'b0000;
 `ifdef BIG_ENDIAN
-		ssp <= rbo(dat_i);
+		sp <= rbo(dat_i);
 `else		
-		ssp <= dat_i;
+		sp <= dat_i;
 `endif
 		state <= TRAP5;		
 	end
@@ -3181,6 +3203,28 @@ JSR1:
 		sel_o <= 4'b00;
 		sp <= sp - 32'd4;
 		pc <= d;
+		ret();
+	end
+BSR:
+	if (!cyc_o) begin
+		fc_o <= {sf,2'b01};
+		cyc_o <= 1'b1;
+		stb_o <= 1'b1;
+		we_o <= 1'b1;
+		sel_o <= 4'b1111;
+		adr_o <= sp - 32'd4;
+`ifdef BIG_ENDIAN
+		dat_o <= rbo(opc);
+`else		
+		dat_o <= opc;
+`endif		
+	end
+	else if (ack_i) begin
+		cyc_o <= 1'b0;
+		stb_o <= 1'b0;
+		we_o <= 1'b0;
+		sel_o <= 4'b00;
+		sp <= sp - 32'd4;
 		ret();
 	end
 

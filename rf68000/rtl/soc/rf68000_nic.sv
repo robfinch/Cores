@@ -350,7 +350,7 @@ begin
 		packet_tx.dat <= s_dat_i;
 		casez(s_adr_i[31:24])
 		// Read global ROM?
-		8'hF?:	
+		8'hFF:	
 			if (!s_we_i) begin
 				packet_tx.did <= 6'd62;
 				s_ack_o <= burst;
