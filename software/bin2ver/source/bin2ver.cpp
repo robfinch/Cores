@@ -17,6 +17,7 @@ int main(int argc, char* argv[])
 	int n, kk, binlen, binndx, checksum;
 	FILE* vfp;
 	int start_address = 0xFFFC0000;
+	bool memfile = false;
 
 	if (argv[1] == nullptr) {
 		printf("bin2ver <filename> [<bits>]\n");
@@ -29,6 +30,8 @@ int main(int argc, char* argv[])
 		printf("Bad number of bits.");
 		exit(0);
 	}
+	if (*argv[3] == 'm')
+		memfile = true;
 
 	std::ifstream::pos_type fs = filesize(argv[1]);
 	binndx = fs;
@@ -46,9 +49,9 @@ int main(int argc, char* argv[])
 	printf("Checksum: %08X\r\n", checksum);
 	binlen = binndx;
 
-	fopen_s(&vfp, "rom.ver", "wb");
+	fopen_s(&vfp, memfile ? "rom.mem" : "rom.ver", "wb");
 	if (vfp == nullptr) {
-		printf("Can't open %s\n", "rom.ver");
+		printf("Can't open %s\n", memfile ? "rom.mem" : "rom.ver");
 		exit(0);
 	}
 	if (vebits == 256) {
@@ -93,18 +96,24 @@ int main(int argc, char* argv[])
 	}
 	else if (vebits == 32) {
 		for (kk = 0; kk < binndx; kk += 4) {
-			fprintf(vfp, "\trommem[%d] = 32'h%02X%02X%02X%02X;\n",
-				((((unsigned int)start_address + kk) / 4) % 32768), //checksum64((int64_t *)&binfile[kk]),
-				binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+			if (memfile)
+				fprintf(vfp, "%02X%02X%02X%02X\n",
+					binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+			else
+				fprintf(vfp, "\trommem[%d] = 32'h%02X%02X%02X%02X;\n",
+					((((unsigned int)start_address + kk) / 4) % 32768), //checksum64((int64_t *)&binfile[kk]),
+					binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
 		}
-		fprintf(vfp, "\trommem[49144] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49145] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49146] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49147] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49148] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49149] = 32'h00000000;\n");
-		fprintf(vfp, "\trommem[49150] = 32'h%08X;\n", binlen);
-		fprintf(vfp, "\trommem[49151] = 32'h%08X;\n", checksum);
+		if (!memfile) {
+			fprintf(vfp, "\trommem[49144] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49145] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49146] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49147] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49148] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49149] = 32'h00000000;\n");
+			fprintf(vfp, "\trommem[49150] = 32'h%08X;\n", binlen);
+			fprintf(vfp, "\trommem[49151] = 32'h%08X;\n", checksum);
+		}
 	}
 	fclose(vfp);
 }
