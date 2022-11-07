@@ -4,52 +4,57 @@ Sections:
 
 
 Source: "LEDTest.asm"
-                            	     1: 	data
-00:00000000 0001FFFC        	     2: 	dc.l		$0001FFFC
-00:00000004 00000000        	     3: 	dc.l		start
-                            	     4: 
-                            	     5: 	code
-                            	     6: start:
-01:00000000 2038FFE0        	     7: 	move.l	$FFFFFFE0,d0		; get core number
-01:00000004 0C000002        	     8: 	cmpi.b	#2,d0
-01:00000008 6630            	     9: 	bne			do_nothing
-01:0000000A 6130            	    10: 	bsr			Delay3s
-01:0000000C 41F9FD000000    	    11: 	lea			$FD000000,a0
-01:00000012 203C00000800    	    12: 	move.l	#64*32,d0
-01:00000018 7220            	    13: 	move.l	#32,d1
-01:0000001A 243C43FFFFE0    	    14: 	move.l	#$43FFFFE0,d2
-                            	    15: loop3:
-01:00000020 20C1            	    16: 	move.l	d1,(a0)+
-01:00000022 20C2            	    17: 	move.l	d2,(a0)+
-01:00000024 51C8FFFA        	    18: 	dbra		d0,loop3
-                            	    19: loop2:
-01:00000028 203C000000FF    	    20: 	move.l	#$FF,d0
-                            	    21: loop1:
-01:0000002E 13C0FD0FFF00    	    22: 	move.b	d0,$FD0FFF00
-01:00000034 51C8FFF8        	    23: 	dbra		d0,loop1
-01:00000038 60EE            	    24: 	bra			loop2
-                            	    25: do_nothing:
-01:0000003A 60FE            	    26: 	bra			do_nothing
-                            	    27: 
-                            	    28: ; -----------------------------------------------------------------------------
-                            	    29: ; Delay for a few seconds to allow some I/O reset operations to take place.
-                            	    30: ; -----------------------------------------------------------------------------
-                            	    31: 	
-                            	    32: Delay3s:
-01:0000003C 203C001E8480    	    33: 	move.l	#2000000,d0
-01:00000042 41F9FD0FFF00    	    34: 	lea			$FD0FFF00,a0
-01:00000048 6002            	    35: 	bra			dly3s1
-                            	    36: dly3s2:	
-01:0000004A 4840            	    37: 	swap		d0
-                            	    38: dly3s1:
-01:0000004C 2200            	    39: 	move.l	d0,d1
-01:0000004E E199            	    40: 	rol.l		#8,d1
-01:00000050 1081            	    41: 	move.b	d1,(a0)
-01:00000052 51C8FFF8        	    42: 	dbra		d0,dly3s1
-01:00000056 4840            	    43: 	swap		d0
-01:00000058 51C8FFF0        	    44: 	dbra		d0,dly3s2
-01:0000005C 4E75            	    45: 	rts
-                            	    46: 
+                            	     1: txtscreen	EQU	$FD000000
+                            	     2: leds			EQU	$FD0FFF00
+                            	     3: keybd			EQU	$FD0FFE00
+                            	     4: rand			EQU	$FD0FFD00
+                            	     5: 
+                            	     6: 	data
+00:00000000 0001FFFC        	     7: 	dc.l		$0001FFFC
+00:00000004 00000000        	     8: 	dc.l		start
+                            	     9: 
+                            	    10: 	code
+                            	    11: start:
+01:00000000 2038FFE0        	    12: 	move.l	$FFFFFFE0,d0		; get core number
+01:00000004 0C000002        	    13: 	cmpi.b	#2,d0
+01:00000008 6630            	    14: 	bne			do_nothing
+01:0000000A 6130            	    15: 	bsr			Delay3s
+01:0000000C 41F9FD000000    	    16: 	lea			txtscreen,a0
+01:00000012 203C00000800    	    17: 	move.l	#64*32,d0
+01:00000018 7220            	    18: 	move.l	#32,d1
+01:0000001A 243C43FFFFE0    	    19: 	move.l	#$43FFFFE0,d2
+                            	    20: loop3:
+01:00000020 20C1            	    21: 	move.l	d1,(a0)+
+01:00000022 20C2            	    22: 	move.l	d2,(a0)+
+01:00000024 51C8FFFA        	    23: 	dbra		d0,loop3
+                            	    24: loop2:
+01:00000028 203C000000FF    	    25: 	move.l	#$FF,d0
+                            	    26: loop1:
+01:0000002E 13C0FD0FFF00    	    27: 	move.b	d0,leds
+01:00000034 51C8FFF8        	    28: 	dbra		d0,loop1
+01:00000038 60EE            	    29: 	bra			loop2
+                            	    30: do_nothing:
+01:0000003A 60FE            	    31: 	bra			do_nothing
+                            	    32: 
+                            	    33: ; -----------------------------------------------------------------------------
+                            	    34: ; Delay for a few seconds to allow some I/O reset operations to take place.
+                            	    35: ; -----------------------------------------------------------------------------
+                            	    36: 	
+                            	    37: Delay3s:
+01:0000003C 203C001E8480    	    38: 	move.l	#2000000,d0
+01:00000042 41F9FD0FFF00    	    39: 	lea			leds,a0
+01:00000048 6002            	    40: 	bra			dly3s1
+                            	    41: dly3s2:	
+01:0000004A 4840            	    42: 	swap		d0
+                            	    43: dly3s1:
+01:0000004C 2200            	    44: 	move.l	d0,d1
+01:0000004E E199            	    45: 	rol.l		#8,d1
+01:00000050 1081            	    46: 	move.b	d1,(a0)
+01:00000052 51C8FFF8        	    47: 	dbra		d0,dly3s1
+01:00000056 4840            	    48: 	swap		d0
+01:00000058 51C8FFF0        	    49: 	dbra		d0,dly3s2
+01:0000005C 4E75            	    50: 	rts
+                            	    51: 
 
 
 Symbols by name:
@@ -57,12 +62,16 @@ Delay3s                         01:0000003C
 dly3s1                          01:0000004C
 dly3s2                          01:0000004A
 do_nothing                      01:0000003A
+leds                             E:FD0FFF00
 loop1                           01:0000002E
 loop2                           01:00000028
 loop3                           01:00000020
 start                           01:00000000
+txtscreen                        E:FD000000
 
 Symbols by value:
+FD000000 txtscreen
+FD0FFF00 leds
 00000000 start
 00000020 loop3
 00000028 loop2

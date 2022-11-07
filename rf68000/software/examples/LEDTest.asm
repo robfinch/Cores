@@ -1,3 +1,8 @@
+txtscreen	EQU	$FD000000
+leds			EQU	$FD0FFF00
+keybd			EQU	$FD0FFE00
+rand			EQU	$FD0FFD00
+
 	data
 	dc.l		$0001FFFC
 	dc.l		start
@@ -8,7 +13,7 @@ start:
 	cmpi.b	#2,d0
 	bne			do_nothing
 	bsr			Delay3s
-	lea			$FD000000,a0
+	lea			txtscreen,a0
 	move.l	#64*32,d0
 	move.l	#32,d1
 	move.l	#$43FFFFE0,d2
@@ -19,7 +24,7 @@ loop3:
 loop2:
 	move.l	#$FF,d0
 loop1:
-	move.b	d0,$FD0FFF00
+	move.b	d0,leds
 	dbra		d0,loop1
 	bra			loop2
 do_nothing:
@@ -31,7 +36,7 @@ do_nothing:
 	
 Delay3s:
 	move.l	#2000000,d0
-	lea			$FD0FFF00,a0
+	lea			leds,a0
 	bra			dly3s1
 dly3s2:	
 	swap		d0

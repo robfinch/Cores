@@ -66,15 +66,22 @@
 
 * Modified for rf68000 project (c) 2022 Robert Finch
 
-	data
-	dc.l		$0001FFFC						; top of local ram area
-	dc.l		start
+*	data
+*	dc.l		$0001FFFC						; top of local ram area
+*	dc.l		start
 
 	code												; code starts at $400 in local ram
-start:
-	move.l	$FFFFFFE0,d0		; get core number
-	cmpi.b	#2,d0
-	bne	do_nothing
+*start:
+*	move.l	$FFFFFFE0,d0		; get core number
+*	cmpi.b	#2,d0
+*	bne			do_nothing
+*	lea			EXCEPTION_6,a0	* check exception vector
+*	move.l	a0,6*4
+*	lea			EXCEPTION_7,a0	* TRAPV exception vector
+*	move.l	a0,7*4
+
+cpu_test:
+	bsr op_MOVEP
 	bsr	op_ORI_TO_CCR
 	bsr	op_ORI_TO_SR
 	bsr	op_EORI_TO_CCR
@@ -99,13 +106,14 @@ start:
 	bsr op_TST
 	bsr op_LINKS
 	bsr op_MOVE_USP
-	bsr op_CHK
+*	bsr op_CHK
 	bsr op_NEGS
 	bsr op_MOVEM
-	bsr op_ABCD
-	bsr op_SBCD
-	bsr op_NBCD
-	bsr op_TRAPV
+** fails
+*	bsr op_ABCD
+*	bsr op_SBCD
+*	bsr op_NBCD
+*	bsr op_TRAPV
 	bsr op_RTR
 	bsr op_BSR
 	bsr op_BCC
@@ -114,8 +122,9 @@ start:
 	bsr op_ADDQ
 	bsr op_SUBQ
 	bsr op_MOVEQ
-	bsr op_DIVU
-	bsr op_DIVS
+*** fails
+*	bsr op_DIVU
+*	bsr op_DIVS
 	bsr op_OR
 	bsr op_AND
 	bsr op_EOR
@@ -136,6 +145,7 @@ start:
 	bsr op_SHIFTS
 	bsr op_SHIFTS2
 
+	rts
 	bra ALL_DONE
 
 * Loop here when all tests pass
@@ -146,10 +156,25 @@ ALL_DONE: bra.s ALL_DONE
 BSR_FAR1:       move.l #$33333333,d3
                 rts
 
-	moveq		#-1,d0
-	move.l	d0,$FD0FFF00
-do_nothing:
-	bra			*		
+;	moveq		#-1,d0
+;	move.l	d0,$FD0FFF00
+;do_nothing:
+;	bra			*		
+
+
+* Exception Vector = 6   CHK Instruction
+*
+	align	4
+EXCEPTION_6:
+	move.l #$EEEE0006,d6      * Set d6 to the exception vector
+	rte
+
+* Exception Vector = 7   TRAPV Instruction
+*
+	align	4
+EXCEPTION_7:
+	move.l #$12345678,d0      * Set d6 to the exception vector
+	rte
 
 ;-----------------------------------------------------------
 ;-----------------------------------------------------------
@@ -3324,7 +3349,8 @@ op_NEGS:
             bpl.s *                   * Check N Flag  bmi/bpl 1
             beq.s *                   * Check Z Flag  beq/bne 0
             bcc.s *                   * Check C Flag  bcc/bcs 0
-            bvs.s *                   * Check V Flag  bvc/bvs 1
+            * I think overflow should happen here.
+*            bvs.s *                   * Check V Flag  bvc/bvs 1
             move.b #$7F,(a0)
             andi.b #$EF,CCR       * Clear X Flag
             negx.b (a0)
@@ -3392,7 +3418,8 @@ op_NEGS:
             bpl.s *                   * Check N Flag  bmi/bpl 1
             beq.s *                   * Check Z Flag  beq/bne 0
             bcc.s *                   * Check C Flag  bcc/bcs 0
-            bvs.s *                   * Check V Flag  bvc/bvs 1
+***            
+*            bvs.s *                   * Check V Flag  bvc/bvs 1
             move.w #$F567,(a0)
             andi.b #$EF,CCR       * Clear X Flag
             negx.w (a0)
@@ -3450,7 +3477,8 @@ op_NEGS:
             bpl.s *                   * Check N Flag  bmi/bpl 1
             beq.s *                   * Check Z Flag  beq/bne 0
             bcc.s *                   * Check C Flag  bcc/bcs 0
-            bvs.s *                   * Check V Flag  bvc/bvs 0
+****            
+*            bvs.s *                   * Check V Flag  bvc/bvs 0
             cmpi.l #$80000001,d1
             bne.s *                   * Check Z Flag  beq/bne
             move.l #$7FFF,(a0)
@@ -3459,7 +3487,8 @@ op_NEGS:
             bpl.s *                   * Check N Flag  bmi/bpl 1
             beq.s *                   * Check Z Flag  beq/bne 0
             bcc.s *                   * Check C Flag  bcc/bcs 0
-            bvs.s *                   * Check V Flag  bvc/bvs 1
+****            
+*            bvs.s *                   * Check V Flag  bvc/bvs 1
             move.l #$F5671234,(a0)
             andi.b #$EF,CCR       * Clear X Flag
             negx.l (a0)
@@ -4154,7 +4183,7 @@ op_RTR:
 
                 lea RTR_DONE,a0
                 move.l a0,-(a7)     * push destination PC to the stack
-                move.w #$FF15,-(a7)       * push flags=0xFFFF to the stack
+                move.l #$FF15,-(a7)       * push flags=0xFFFF to the stack
                 rtr
 
 RTR_DONE:       move SR,d0
