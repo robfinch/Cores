@@ -36,12 +36,15 @@
 
 import nic_pkg::*;
 
-module rf68000_node(id, rst, clk, packet_i, packet_o, ipacket_i, ipacket_o);
+module rf68000_node(id, rst, clk, packet_i, packet_o, 
+	rpacket_i, rpacket_o, ipacket_i, ipacket_o);
 input [4:0] id;
 input rst;
 input clk;
 input packet_t packet_i;
 output packet_t packet_o;
+input packet_t rpacket_i;
+output packet_t rpacket_o;
 input ipacket_t ipacket_i;
 output ipacket_t ipacket_o;
 
@@ -64,14 +67,19 @@ wire [31:0] nic1_dato, nic2_dato, nic1_dati, nic2_dati;
 wire [3:0] nic1_sel, nic2_sel;
 wire [31:0] nic1_adr, nic2_adr;
 wire nic1_sack, nic2_sack;
+wire [31:0] nic1_sdato, nic2_sdato;
 
 packet_t packet_x;
+packet_t rpacket_x;
 ipacket_t ipacket_x;
 
 assign ack1 = nic1_sack|ram1_ack;
 assign ack2 = nic2_sack|ram2_ack;
-assign dati1 = adr1[31:20]==12'h0 ? ram1_dat : nic1_dato;
-assign dati2 = adr2[31:20]==12'h0 ? ram2_dat : nic2_dato;
+assign dati1 = adr1[31:20]==12'h0 ? ram1_dat : nic1_sdato;
+assign dati2 = adr2[31:20]==12'h0 ? ram2_dat : nic2_sdato;
+
+wire [2:0] irq;
+wire firq0;
 
 rf68000_nic unic1
 (
@@ -89,7 +97,7 @@ rf68000_nic unic1
 	.s_sel_i(sel1),
 	.s_adr_i(adr1),
 	.s_dat_i(dato1),
-	.s_dat_o(nic1_dato),
+	.s_dat_o(nic1_sdato),
 	.m_cyc_o(nic1_cyc),
 	.m_stb_o(nic1_stb),
 	.m_ack_i(nic1_ack),
@@ -102,13 +110,13 @@ rf68000_nic unic1
 	.packet_o(packet_x),
 	.ipacket_i(ipacket_i),
 	.ipacket_o(ipacket_x),
-	.rpacket_i(),
-	.rpacket_o(),
+	.rpacket_i(rpacket_i),
+	.rpacket_o(rpacket_x),
 	.irq_i(),
 	.firq_i(),
 	.cause_i(),
 	.iserver_i(),
-	.irq_o(),
+	.irq_o(firq0),
 	.firq_o(),
 	.cause_o()
 );
@@ -129,7 +137,7 @@ rf68000_nic unic2
 	.s_sel_i(sel2),
 	.s_adr_i(adr2),
 	.s_dat_i(dato2),
-	.s_dat_o(nic2_dato),
+	.s_dat_o(nic2_sdato),
 	.m_cyc_o(nic2_cyc),
 	.m_stb_o(nic2_stb),
 	.m_ack_i(nic2_ack),
@@ -142,8 +150,8 @@ rf68000_nic unic2
 	.packet_o(packet_o),
 	.ipacket_i(ipacket_x),
 	.ipacket_o(ipacket_o),
-	.rpacket_i(),
-	.rpacket_o(),
+	.rpacket_i(rpacket_x),
+	.rpacket_o(rpacket_o),
 	.irq_i(),
 	.firq_i(),
 	.cause_i(),
@@ -218,12 +226,14 @@ rf68000 ucpu1
 	.rst_o(),
 	.clk_i(clk),
 	.nmi_i(),
-	.ipl_i(),
+	.ipl_i(firq0 ? 3'd6 : 3'd0),
+	.vpa_i(1'b1),
 	.lock_o(),
 	.cyc_o(cyc1),
 	.stb_o(stb1),
 	.ack_i(ack1),
 	.err_i(),
+	.rty_i(1'b0),
 	.we_o(we1),
 	.sel_o(sel1),
 	.fc_o(),
@@ -240,11 +250,13 @@ rf68000 ucpu2
 	.clk_i(clk),
 	.nmi_i(),
 	.ipl_i(),
+	.vpa_i(1'b1),
 	.lock_o(),
 	.cyc_o(cyc2),
 	.stb_o(stb2),
 	.ack_i(ack2),
 	.err_i(),
+	.rty_i(1'b0),
 	.we_o(we2),
 	.sel_o(sel2),
 	.fc_o(),

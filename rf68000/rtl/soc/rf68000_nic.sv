@@ -75,11 +75,11 @@ output packet_t rpacket_o;
 
 input ipacket_t ipacket_i;
 output ipacket_t ipacket_o;
-input irq_i;
+input [2:0] irq_i;
 input firq_i;
-input [7:01] cause_i;
+input [7:0] cause_i;
 input [5:0] iserver_i;
-output reg irq_o;
+output reg [2:0] irq_o;
 output reg firq_o;
 output reg [7:0] cause_o;
 
@@ -106,7 +106,7 @@ begin
 	seen_gbl = FALSE;
 	for (n = 0; n < 8; n = n + 1)
 		if (gbl_packets[n]==packet_i)
-			seen_gbl <= TRUE;
+			seen_gbl = TRUE;
 end
 
 reg rcv;
@@ -167,8 +167,8 @@ else begin
 		s_rty_o <= FALSE;
 	end
 
-	if (firq_i|irq_i) begin
-		ipacket_o.sid = id;
+	if (firq_i| |irq_i) begin
+		ipacket_o.sid <= id;
 		ipacket_o.did <= iserver_i;
 		ipacket_o.age <= 6'd0;
 		ipacket_o.firq <= firq_i;

@@ -125,12 +125,50 @@ else begin
 			end
 		end
 	// Three cycle read latency.
-	ST_RD1:	state <= ST_RD2;
-	ST_RD2:	state <= ST_RD3;
+	ST_RD1:
+		begin
+			ram_en <= TRUE;
+			if (w1) begin
+				ram_adr <= cpu_adr;
+				ram_we <= {4{cpu_we}} & cpu_sel;
+				ram_dati <= cpu_dato;
+			end
+			else begin
+				ram_adr <= nic_adr;
+				ram_we <= {4{nic_we}} & nic_sel;
+				ram_dati <= nic_dato;
+			end
+			state <= ST_RD2;
+		end
+	ST_RD2:
+		begin
+			ram_en <= TRUE;
+			if (w1) begin
+				ram_adr <= cpu_adr;
+				ram_we <= {4{cpu_we}} & cpu_sel;
+				ram_dati <= cpu_dato;
+			end
+			else begin
+				ram_adr <= nic_adr;
+				ram_we <= {4{nic_we}} & nic_sel;
+				ram_dati <= nic_dato;
+			end
+			state <= ST_RD3;
+		end
 	ST_RD3:
 		begin
 			state <= ST_ACK;
-			ram_we <= 4'h0;
+			ram_en <= TRUE;
+			if (w1) begin
+				ram_adr <= cpu_adr;
+				ram_we <= {4{cpu_we}} & cpu_sel;
+				ram_dati <= cpu_dato;
+			end
+			else begin
+				ram_adr <= nic_adr;
+				ram_we <= {4{nic_we}} & nic_sel;
+				ram_dati <= nic_dato;
+			end
 			if (w1) begin
 				cpu_dati <= ram_dato;
 				cpu_ack <= 1'b1;
@@ -144,6 +182,7 @@ else begin
 	ST_ACK:
 		begin
 			ram_en <= FALSE;
+			ram_we <= 4'h0;
 			if ((nic_ack & nic_cyc & nic_stb) || (cpu_ack & cpu_cyc & cpu_stb))
 				;
 			else

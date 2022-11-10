@@ -24,7 +24,7 @@ clk20_NexysVideoClkgen \
 clk40_NexysVideoClkgen \
 } \
 -group { \
-clk80_NexysVideoClkgen \
+clk50_NexysVideoClkgen \
 }
 #-group { \
 #clk400_NexysVideoClkgen2 \

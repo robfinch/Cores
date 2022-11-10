@@ -64,6 +64,10 @@ SC_TAB      EQU		$0D
 
 TEXTREG		EQU	$FD01FF00
 txtscreen	EQU	$FD000000
+semamem		EQU	$FD050000
+ACIA			EQU	$FD060000
+ACIA_RX		EQU	0
+ACIA_STAT	EQU	1
 leds			EQU	$FD0FFF00
 keybd			EQU	$FD0FFE00
 KEYBD			EQU	$FD0FFE00
@@ -74,10 +78,41 @@ rand			EQU	$FD0FFD00
 	dc.l		start
 	dc.l		0
 	dc.l		0
-	dc.l		0
+	dc.l		illegal_trap		* ILLEGAL instruction
 	dc.l		0
 	dc.l		EXCEPTION_6			* CHK
 	dc.l		EXCEPTION_7			* TRAPV
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
+	dc.l		irq_rout					* IRQ 30 - timer
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
 
 	align		10
 	dc.l		0
@@ -99,6 +134,8 @@ TextCurpos
 	dc.w		0
 TextScr
 	dc.l		$FD000000
+S19StartAddress
+	dc.l		$10000000
 KeybdEcho
 	dc.b		0
 KeybdWaitFlag
@@ -113,8 +150,6 @@ CmdBuf:
 	dc.b		0
 CmdBufEnd:
 	dc.b		0
-DisplayMem:
-	dc.b		0
 
 
 ;-------------------------------------------------------------------------------
@@ -122,9 +157,13 @@ DisplayMem:
 
 	code
 start:
+	move.w	#$2500,sr				; enable level 6 and higher interrupts
 	move.l	$FFFFFFE0,d0		; get core number
 	cmpi.b	#2,d0
-	bne			do_nothing
+	bne			start_other
+	bsr			InitSemaphores
+	moveq		#1,d1
+	bsr			LockSemaphore
 	bsr			Delay3s					; give devices time to reset
 	bsr			clear_screen
 	clr.b		CursorCol
@@ -135,6 +174,8 @@ start:
 
 	lea			msg_start,a1
 	bsr			DisplayString
+	moveq		#1,d1
+	bsr			UnlockSemaphore	; allow another cpu access
 	move.w	#$A4A4,leds			; diagnostics
 	bra			Monitor
 	bsr			cpu_test
@@ -150,8 +191,127 @@ loop1:
 	move.b	d1,leds
 	dbra		d0,loop1
 	bra			loop2
-do_nothing:
+start_other:
+	bsr			Delay3s					; give time for monitor core to reset things
+	moveq		#1,d1
+	bsr			LockSemaphore
+	move.l	$FFFFFFE0,d1
+	bsr			DisplayByte
+	lea			msg_core_start,a1
+	bsr			DisplayString
+	moveq		#1,d1
+	bsr			UnlockSemaphore
+do_nothing:	
 	bra			do_nothing
+
+;------------------------------------------------------------------------------
+; Initialize semaphores
+; - all semaphores are set to one.
+;
+; Parameters:
+;		<none>
+; Modifies:
+;		<none>
+; Returns:
+;		<none>
+;------------------------------------------------------------------------------
+
+InitSemaphores:
+	movem.l	d0/d1/a0,-(a7)
+	lea			semamem,a0
+	move.w	#255,d1
+	moveq		#1,d0
+.0001:
+	move.b	d0,$4000(a0)
+	lea			16(a0),a0
+	dbra		d1,.0001
+	movem.l	(a7)+,d0/d1/a0
+	rts
+
+; -----------------------------------------------------------------------------
+; Test a semaphore to see if it is non-zero.
+;
+; Parameters:
+;		d1 semaphore number
+; -----------------------------------------------------------------------------
+
+TestSemaphore:
+	movem.l	d1/a0,-(a7)			; save registers
+	lea			semamem,a0			; point to semaphore memory
+	ext.w		d1							; make d1 word value
+	asl.w		#4,d1						; align to memory
+	addi.w	#$4000,d1				; point to read / write memory
+	tst.b		(a0,d1.w)				; read (test) value for zero
+	movem.l	(a7)+,a0/d1			; restore regs
+	rts
+
+; -----------------------------------------------------------------------------
+; Parameters:
+;		d1 semaphore number
+;
+; Side Effects:
+;		increments semaphore, saturates at 255
+;
+; Returns:	
+; 	z flag set if semaphore was zero
+; -----------------------------------------------------------------------------
+
+IncrementSemaphore:
+	movem.l	d1/a0,-(a7)			; save registers
+	lea			semamem,a0			; point to semaphore memory
+	ext.w		d1							; make d1 word value
+	asl.w		#4,d1						; align to memory
+	tst.b		1(a0,d1.w)			; read (test) value for zero
+	movem.l	(a7)+,a0/d1			; restore regs
+	rts
+	
+; -----------------------------------------------------------------------------
+; Parameters:
+;		d1 semaphore number
+;
+; Side Effects:
+;		decrements semaphore, saturates at zero
+;
+; Returns:	
+; 	z flag set if semaphore was zero
+; -----------------------------------------------------------------------------
+
+DecrementSemaphore:
+	movem.l	d1/a0,-(a7)			; save registers
+	lea			semamem,a0			; point to semaphore memory
+	ext.w		d1							; make d1 word value
+	asl.w		#4,d1						; align to memory
+	tst.b		1(a0,d1.w)			; read (test) value for zero
+	movem.l	(a7)+,a0/d1			; restore regs
+	rts
+
+; -----------------------------------------------------------------------------
+; Parameters:
+;		d1 semaphore number
+; -----------------------------------------------------------------------------
+
+LockSemaphore:
+.0001:
+	bsr			DecrementSemaphore
+	beq.s		.0001
+	rts
+	
+; -----------------------------------------------------------------------------
+; Test a semaphore to see if it is non-zero.
+;
+; Parameters:
+;		d1 semaphore number
+; -----------------------------------------------------------------------------
+
+UnlockSemaphore:
+	movem.l	d1/a0,-(a7)			; save registers
+	lea			semamem,a0			; point to semaphore memory
+	andi.l	#255,d1					; make d1 word value
+	asl.w		#4,d1						; align to memory
+	addi.w	#$4000,d1				; point to read / write memory
+	move.b	#1,(a0,d1.w)		; write one to unlock
+	movem.l	(a7)+,a0/d1			; restore regs
+	rts
 
 ; -----------------------------------------------------------------------------
 ; Delay for a few seconds to allow some I/O reset operations to take place.
@@ -251,14 +411,15 @@ CalcScreenLoc:
 ; Display a character on the screen
 ; d1.b = char to display
 ;------------------------------------------------------------------------------
-;
+
 DisplayChar:
-	movem.l	d2/d3,-(a7)
-	cmpi.b	#13,d1			; carriage return ?
+	movem.l	d1/d2/d3,-(a7)
+	andi.l	#$ff,d1				; zero out upper bytes of d1
+	cmpi.b	#13,d1				; carriage return ?
 	bne.s		dccr
 	clr.b		CursorCol			; just set cursor column to zero on a CR
 	bsr			SyncCursor		; set position in text controller
-	movem.l	(a7)+,d2/d3
+	movem.l	(a7)+,d1/d2/d3
 	rts
 dccr:
 	cmpi.b	#$91,d1			; cursor right ?
@@ -271,7 +432,7 @@ dccr:
 dcx14:
 	bsr		SyncCursor
 dcx7:
-	movem.l	(a7)+,d2/d3
+	movem.l	(a7)+,d1/d2/d3
 	rts
 dcx6:
 	cmpi.b	#$90,d1			; cursor up ?
@@ -332,16 +493,14 @@ dcx11:
 	move.l	d0,4(a0)
 	bsr			IncCursorPos
 	bsr			SyncCursor
-	movem.l	(a7)+,d0/d1/d2/a0
-	movem.l	(a7)+,d2/d3
-	rts
+	bra			dcx4
 dclf:
 	bsr			IncCursorRow
 dcx16:
 	bsr			SyncCursor
 dcx4:
 	movem.l	(a7)+,d0/d1/d2/a0		; get back a0
-	movem.l	(a7)+,d2/d3
+	movem.l	(a7)+,d1/d2/d3
 	rts
 
 	;---------------------------
@@ -397,7 +556,7 @@ doCtrlX:
 ;------------------------------------------------------------------------------
 ; Increment the cursor position, scroll the screen if needed.
 ;------------------------------------------------------------------------------
-;
+
 IncCursorPos:
 	addi.w	#1,TextCurpos
 	addi.b	#1,CursorCol
@@ -435,6 +594,7 @@ ScrollUp:
 	asl.w		#3,d0								; make into cell index
 	lea			0(a5,d0.w),a0				; a0 = pointer to second row of text screen
 	lsr.w		#3,d0								; get back d0
+	subq		#1,d1								; number of rows-1
 	mulu		d1,d0								; d0 = count of characters to move
 .0001:
 	move.l	(a0)+,(a5)+					; each char is 64 bits
@@ -450,9 +610,17 @@ ScrollUp:
 BlankLastLine:
 	movem.l	d0/d1/d2/a5,-(a7)
 	move.l	TextScr,a5
-	lea			31*64(a5),a5
-	move.b	TextCols,d2
+	move.b	TextRows,d0					; d0 = columns
+	move.b	TextCols,d1					; d1 = rows
+	ext.w		d0
+	ext.w		d1
+	subq		#1,d1								; last row = #rows-1
+	mulu		d1,d0								; d0 = index of last line
+	asl.w		#3,d0								; *8 bytes per char
+	lea			(a5,d0.w),a5				; point a5 to last row
+	move.b	TextCols,d2					; number of text cells to clear
 	ext.w		d2
+	subi.w	#1,d2
 	bsr			get_screen_color
 	ori.w		#32,d1		
 .0001:
@@ -465,7 +633,7 @@ BlankLastLine:
 ;------------------------------------------------------------------------------
 ; Display a string on the screen.
 ;------------------------------------------------------------------------------
-;
+
 DisplayString:
 	movem.l	d0/d1/a1,-(a7)
 dspj1:
@@ -482,10 +650,27 @@ dsret:
 ;------------------------------------------------------------------------------
 ; Display a string on the screen followed by carriage return / linefeed.
 ;------------------------------------------------------------------------------
-;
+
 DisplayStringCRLF:
-		bsr		DisplayString
-		bra		CRLF
+	bsr		DisplayString
+	bra		CRLF
+
+;------------------------------------------------------------------------------
+; Set cursor position to top left of screen.
+;
+; Parameters:
+;		<none>
+; Returns:
+;		<none>
+; Registers Affected:
+;		<none>
+;------------------------------------------------------------------------------
+
+HomeCursor:
+	clr.b		CursorRow
+	clr.b		CursorCol
+	clr.w		TextPos
+	; fall through
 
 ;------------------------------------------------------------------------------
 ; SyncCursor:
@@ -617,6 +802,14 @@ gk1:
 ;	move.l	d7,d1
 	rts
 
+CheckForCtrlC
+	bsr			CheckForKey
+	beq.s		.0001
+	bsr			KeybdGetChar
+	cmp.b		#CTRLC,d1
+	beq			Monitor
+.0001:
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -928,6 +1121,8 @@ FromScreen:
 
 StartMon:
 Monitor:
+	moveq	#1,d1
+	bsr		UnlockSemaphore
 ;	lea		STACK,a7		; reset the stack pointer
 	clr.b	KeybdEcho		; turn off keyboard echo
 PromptLn:
@@ -958,32 +1153,34 @@ Prompt1:
 ;
 Prompt2:
 	cmpi.b	#'a',d1
-	beq		AudioInputTest
+	beq			AudioInputTest
 	cmpi.b	#'b',d1
-	beq		BouncingBalls
+	beq			BouncingBalls
 	cmpi.b	#'g',d1
-	beq		GraphicsDemo
+	beq			GraphicsDemo
 	cmpi.b	#':',d1			; $: - edit memory
-	beq		EditMem
+	beq			EditMem
 	cmpi.b	#'D',d1			; $D - dump memory
-	beq		DumpMem
+	beq			DumpMem
 	cmpi.b	#'F',d1
-	beq		FillMem
+	beq			FillMem
 	cmpi.b	#'B',d1			; $B - start tiny basic
 	bne.s	.0001
-	jmp		$FFFCC000
+	jmp			$FFFCC000
 .0001:
 	cmpi.b	#'J',d1			; $J - execute code
-	beq		ExecuteCode
+	beq			ExecuteCode
 	cmpi.b	#'L',d1			; $L - load S19 file
-	beq		LoadS19
+	beq			LoadS19
 	cmpi.b	#'?',d1			; $? - display help
-	beq		DisplayHelp
+	beq			DisplayHelp
 	cmpi.b	#'C',d1			; $C - clear screen
-	beq		TestCLS
-	bra		Monitor
+	beq			TestCLS
+	bra			Monitor
 
 TestCLS:
+	moveq		#1,d1
+	bsr			LockSemaphore
 	bsr			FromScreen
 	addq		#1,d2
 	cmpi.b	#'L',d1
@@ -993,11 +1190,14 @@ TestCLS:
 	cmpi.b	#'S',d1
 	bne			Monitor
 	bsr			ClearScreen
+	bsr			HomeCursor
 	bra			Monitor
 	
 DisplayHelp:
+	moveq		#1,d1
+	bsr			LockSemaphore
 	lea			HelpMsg,a1
-	jsr			DisplayString
+	bsr			DisplayString
 	bra			Monitor
 
 HelpMsg:
@@ -1168,53 +1368,96 @@ edtmem1:
 ;------------------------------------------------------------------------------
 ; Execute code at the specified address.
 ;------------------------------------------------------------------------------
-;
+
 ExecuteCode:
-	bsr		ignBlanks
-	bsr		GetHexNumber
+	bsr			ignBlanks
+	bsr			GetHexNumber
 	move.l	d1,a0
-	jsr		(a0)
+	jsr			(a0)
 	bra     Monitor
 
 ;------------------------------------------------------------------------------
 ; Do a memory dump of the requested location.
+; D 0800 0850
 ;------------------------------------------------------------------------------
-;
+
 DumpMem:
-	bsr		ignBlanks
-	bsr		GetHexNumber
-	tst.b	d0				; was there a number ?
-	beq		Monitor			; no, other garbage, just ignore
-	move.l	d1,d3			; save off start of range
-	bsr		ignBlanks
-	bsr		GetHexNumber
-	tst.b	d0
-	bne.s	DumpMem1
-	move	d3,d1
+	moveq		#1,d1
+	bsr			LockSemaphore
+	bsr			ignBlanks
+	bsr			GetHexNumber
+	beq			Monitor			; was there a number ? no, other garbage, just ignore
+	move.l	d1,d3				; save off start of range
+	bsr			ignBlanks
+	bsr			GetHexNumber
+	bne.s		DumpMem1
+	move.l	d3,d1
 	addi.l	#64,d1			; no end specified, just dump 64 bytes
 DumpMem1:
 	move.l	d3,a0
 	move.l	d1,a1
-	jsr		CRLF
+	bsr			CRLF
 .0001:
 	cmpa.l	a0,a1
-	bhi		Monitor
-	bsr		DisplayMem
-	bra.s	.0001
+	bls			Monitor
+	bsr			DisplayMem
+	bra.s		.0001
 
+;------------------------------------------------------------------------------
+; Display memory dump in a format suitable for edit.
+;
+;	:12345678 00 11 22 33 44 55 66 77  "........"
+;
+; Modifies:
+;		d1,d2,a0
+;------------------------------------------------------------------------------
+
+DisplayMem:
+	move.b	#':',d1
+	bsr			DisplayChar
+	move.l	a0,d1
+	bsr			DisplayTetra
+	moveq		#7,d2
+dspmem1:
+	move.b	#' ',d1
+	bsr			DisplayChar
+	move.b	(a0)+,d1
+	bsr			DisplayByte
+	dbra		d2,dspmem1
+	bsr			DisplayTwoSpaces
+	move.b	#34,d1
+	bsr			DisplayChar
+	lea			-8(a0),a0
+	moveq		#7,d2
+.0002:	
+	move.b	(a0)+,d1
+	cmp.b		#' ',d1
+	blo.s		.0003
+	cmp.b		#127,d1
+	bls.s		.0001
+.0003:
+	move.b	#'.',d1
+.0001:
+	bsr			DisplayChar
+	dbra		d2,.0002
+	move.b	#34,d1
+	bsr			DisplayChar
+	bsr			CheckForCtrlC
+	bra			CRLF
 
 ;------------------------------------------------------------------------------
 ; Get a hexidecimal number. Maximum of eight digits.
 ;
 ; Returns:
-;	d0 = number of digits
-;	d1 = value of number
+;		d0 = number of digits
+;		d1 = value of number
+;		zf = number of digits == 0
 ;------------------------------------------------------------------------------
 ;
 GetHexNumber:
 	move.l	d2,-(a7)
-	clr.l	d2
-	moveq	#0,d0
+	clr.l		d2
+	moveq		#0,d0
 .0002:
 	bsr			FromScreen
 	bsr			AsciiToHexNybble
@@ -1229,79 +1472,98 @@ GetHexNumber:
 .0001:
 	move.l	d2,d1
 	move.l	(a7)+,d2
+	tst.b		d0
 	rts	
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character in the range '0' to '9', 'a' tr 'f' or 'A' to 'F'
 ; to a hex nybble.
 ;------------------------------------------------------------------------------
-;
+
 AsciiToHexNybble:
 	cmpi.b	#'0',d1
-	blo.s	gthx3
+	blo.s		gthx3
 	cmpi.b	#'9',d1
-	bhi.s	gthx5
+	bhi.s		gthx5
 	subi.b	#'0',d1
 	rts
 gthx5:
 	cmpi.b	#'A',d1
-	blo.s	gthx3
+	blo.s		gthx3
 	cmpi.b	#'F',d1
-	bhi.s	gthx6
-	subi.b	#'A',d1
-	addi.b	#10,d1
+	bhi.s		gthx6
+	addi.b	#10-'A',d1
 	rts
 gthx6:
 	cmpi.b	#'a',d1
-	blo.s	gthx3
+	blo.s		gthx3
 	cmpi.b	#'f',d1
-	bhi.s	gthx3
-	subi.b	#'a',d1
-	addi.b	#10,d1
+	bhi.s		gthx3
+	addi.b	#10-'a',d1
 	rts
 gthx3:
 	moveq	#-1,d1		; not a hex number
 	rts
 
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DisplayTwoSpaces:
+	move.l	d1,-(a7)
+	move.b	#' ',d1
+	bsr			DisplayChar
+dspspc1:
+	bsr			DisplayChar
+	move.l	(a7)+,d1
+	rts
+
+DisplaySpace:
+	move.l	d1,-(a7)
+	move.b	#' ',d1
+	bra			dspspc1
+
+;------------------------------------------------------------------------------
+; Display the 32 bit word in D1.L
+;------------------------------------------------------------------------------
+
+DisplayTetra:
+	swap	d1
+	bsr		DisplayWyde
+	swap	d1
+
+;------------------------------------------------------------------------------
+; Display the byte in D1.W
+;------------------------------------------------------------------------------
+
+DisplayWyde:
+	ror.w		#8,d1
+	bsr			DisplayByte
+	rol.w		#8,d1
+
+;------------------------------------------------------------------------------
+; Display the byte in D1.B
+;------------------------------------------------------------------------------
+
+DisplayByte:
+	ror.b		#4,d1
+	bsr			DisplayNybble
+	rol.b		#4,d1
+
+;------------------------------------------------------------------------------
 ; Display nybble in D1.B
 ;------------------------------------------------------------------------------
-;
+
 DisplayNybble:
 	move.l	d1,-(a7)
 	andi.b	#$F,d1
 	addi.b	#'0',d1
 	cmpi.b	#'9',d1
-	bls.s		dispnyb1
+	bls.s		.0001
 	addi.b	#7,d1
-dispnyb1:
+.0001:
 	bsr			DisplayChar
 	move.l	(a7)+,d1
 	rts
-
-;------------------------------------------------------------------------------
-; Display the byte in D1.B
-;------------------------------------------------------------------------------
-;
-DisplayByte:
-	ror.b		#4,d1
-	bsr			DisplayNybble
-	rol.b		#4,d1
-	bra			DisplayNybble
-
-;------------------------------------------------------------------------------
-; Display the 32 bit word in D1.L
-;------------------------------------------------------------------------------
-;
-DisplayTetra:
-	rol.l	#8,d1
-	bsr		DisplayByte
-	rol.l	#8,d1
-	bsr		DisplayByte
-	rol.l	#8,d1
-	bsr		DisplayByte
-	rol.l	#8,d1
-	bra		DisplayByte
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1336,17 +1598,222 @@ DisplayTetra:
 ;	dbeq	d2,disphnum1
 ;	jmp		(a5)
 
+;==============================================================================
+; Load an S19 format file
+;==============================================================================
+;
+LoadS19:
+	bra			ProcessRec
+NextRec:
+	bsr			sGetChar
+	cmpi.b	#LF,d0
+	bne			NextRec
+ProcessRec
+	bsr			sGetChar
+	move.b	d0,d4
+	cmpi.b	#26,d4		; CTRL-Z ?
+	beq			Monitor
+	cmpi.b	#'S',d4
+	bne			NextRec
+	bsr			sGetChar
+	move.b	d0,d4
+	cmpi.b	#'0',d4
+	blo			NextRec
+	cmpi.b	#'9',d4		; d4 = record type
+	bhi			NextRec
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	move.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.b	#4,d2
+	or.b	d2,d1		; d1 = byte count
+	move.b	d1,d3		; d3 = byte count
+	cmpi.b	#'0',d4		; manufacturer ID record, ignore
+	beq		NextRec
+	cmpi.b	#'1',d4
+	beq		ProcessS1
+	cmpi.b	#'2',d4
+	beq		ProcessS2
+	cmpi.b	#'3',d4
+	beq		ProcessS3
+	cmpi.b	#'5',d4		; record count record, ignore
+	beq		NextRec
+	cmpi.b	#'7',d4
+	beq		ProcessS7
+	cmpi.b	#'8',d4
+	beq		ProcessS8
+	cmpi.b	#'9',d4
+	beq		ProcessS9
+	bra		NextRec
+
+pcssxa
+	andi.w	#$ff,d3
+	subi.w	#1,d3			; one less for dbra
+.0001
+	clr.l		d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	move.b	d2,(a1)+
+	dbra		d3,.0001
+; Get the checksum byte
+	clr.l		d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bra			NextRec
+
+ProcessS1:
+	bsr			S19Get16BitAddress
+	bra			pcssxa
+ProcessS2:
+	bsr			S19Get24BitAddress
+	bra			pcssxa
+ProcessS3:
+	bsr			S19Get32BitAddress
+	bra			pcssxa
+ProcessS7:
+	bsr			S19Get32BitAddress
+	move.l	a1,S19StartAddress
+	bra			Monitor
+ProcessS8:
+	bsr			S19Get24BitAddress
+	move.l	a1,S19StartAddress
+	bra			Monitor
+ProcessS9:
+	bsr			S19Get16BitAddress
+	move.l	a1,S19StartAddress
+	bra			Monitor
+
+S19Get16BitAddress:
+	clr.l		d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	move.b	d1,d2
+	bra			S1932b
+
+S19Get24BitAddress:
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	move.b	d1,d2
+	bra		S1932a
+
+S19Get32BitAddress:
+	clr.l	d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	move.b	d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+S1932a:
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+S1932b:
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	bsr			sGetChar
+	bsr			AsciiToHexNybble
+	lsl.l		#4,d2
+	or.b		d1,d2
+	clr.l		d4
+	move.l	d2,a1
+	rts
+
+;------------------------------------------------------------------------------
+; Get a character from auxillary input, checking the keyboard status for a
+; CTRL-C
+;------------------------------------------------------------------------------
+;
+sGetChar:
+	bsr			CheckForKey
+	beq			.0001
+	bsr			GetKey
+	cmpi.b	#CTRLC,d1
+	beq			Monitor
+.0001:
+	bsr			AUXIN
+	tst.l		d0
+	bmi			sGetChar
+	move.b	d0,d1
+	rts
+
 AudioInputTest:
 	rts
 BouncingBalls:
 	rts
 GraphicsDemo:
 	rts
-LoadS19:
-	rts
 ClearScreen:
 	bra		clear_screen
 	rts
+
+AUXIN:
+
+;------------------------------------------------------------------------------
+; SerialPeekChar
+;		Get a character directly from the I/O port. This bypasses the input
+; buffer.
+;
+; Stack Space:
+;		0 words
+; Parameters:
+;		none
+; Modifies:
+;		d
+; Returns:
+;		d0 = character or -1
+;------------------------------------------------------------------------------
+
+SerialPeekCharDirect:
+	; Disallow interrupts between status read and rx read.
+	move		sr,-(a7)					; save off SR
+	ori			#$7000,sr					; disable interrupts
+	move.b	ACIA+ACIA_STAT,d0	; get serial status
+	btst		#3,d0							; look for Rx not empty
+	beq.s		.0001
+	moveq		#0,d0							; clear upper bits of return value
+	move.b	ACIA+ACIA_RX,d0		; get data from ACIA
+	rte												; restore SR and return
+.0001:
+	moveq		#-1,d0
+	rte
+
+irq_rout:
+	move.l	a0,-(a7)
+	move.l	TextScr,a0
+	addi.l	#1,496(a0)
+	move.l	(a7)+,a0
+	rte
 
 brdisp_trap:
 	addq		#4,sp					; get rid of sr
@@ -1354,9 +1821,21 @@ brdisp_trap:
 	bsr			DisplayTetra	; and display it
 	stop		#$2700
 
+illegal_trap:
+	addq		#4,sp						; get rid of sr
+	move.l	(sp)+,d1				; pop exception address
+	bsr			DisplayTetra		; and display it
+	lea			msg_illegal,a1	; followed by message
+	bsr			DisplayString
+	bra			Monitor
+	
 ; -----------------------------------------------------------------------------
 ; -----------------------------------------------------------------------------
 
 msg_start:
 	dc.b	"rf68k System Starting",CR,LF,0
+msg_core_start:
+	dc.b	" core starting",CR,LF
+msg_illegal:
+	dc.b	" Illegal opcode",CR,LF,0
 

@@ -47,13 +47,12 @@
 `define SUPPORT_BCD	1'b1
 //`define SUPPORT_TASK	1'b1
 
-//`define SUPPORT_B24	1'b1		// To support 24-bit branch displacements
+//`define SUPPORT_B24	1'b1		// To support 23-bit branch displacements
 
 `define TRUE        1'b1
 `define FALSE       1'b0
 `define HIGH        1'b1
 `define LOW         1'b0
-`define BIG_ENDIAN  1'b1
 
 `define RESET_VECTOR	32'h00000400
 `define CSR_CORENO    32'hFFFFFFE0
@@ -1609,7 +1608,13 @@ DECODE:
 	4'h5:
 		begin
 			casez(ir[7:4])
+			// When optimizing DBRA for performance, the memory access cycle to fetch
+			// the displacement constant is not done, instead the PC is incremented by
+			// two if not doing the DBRA. This is an extra PC increment that increases
+			// the code size. It is slower, but more hardware efficient to just always
+			// fetch the displacement.
 			4'b1100:					// DBRA
+`ifdef OPT_PERF			
 				if (~takb) begin
 					call(FETCH_IMM16,DBRA);
 				end
@@ -1617,6 +1622,9 @@ DECODE:
 					pc <= pc + 32'd2;	// skip over displacement
 					ret();
 				end
+`else
+				call(FETCH_IMM16,DBRA);				
+`endif				
 			4'b11??:					// Scc
 				begin
 					resL <= {32{takb}};
@@ -2246,6 +2254,9 @@ PEA1:
 // DBRA
 //-----------------------------------------------------------------------------
 DBRA:
+`ifndef OPT_PERF
+	if (~takb)
+`endif
 	begin
 		resW <= rfoDnn - 4'd1;
 		Rt <= {1'b0,rrr};
@@ -2254,6 +2265,10 @@ DBRA:
 			pc <= opc + imm;
 		ret();
 	end
+`ifndef OPT_PERF
+	else
+		ret();
+`endif
 
 //-----------------------------------------------------------------------------
 // EXG
@@ -2759,7 +2774,7 @@ ADDI:
 	2'b00:	begin call(FETCH_IMM8,ADDI2); end
 	2'b01:	begin call(FETCH_IMM16,ADDI2); end
 	2'b10:	begin call(FETCH_IMM32,ADDI2); end
-	default:	;
+	default:	goto (ILLEGAL);
 	endcase
 ADDI2:
 	begin
@@ -2768,7 +2783,7 @@ ADDI2:
 	2'b00:	begin push(ADDI3); fs_data(mmm,rrr,FETCH_BYTE,D); end
 	2'b01:	begin push(ADDI3); fs_data(mmm,rrr,FETCH_WORD,D); end
 	2'b10:	begin push(ADDI3); fs_data(mmm,rrr,FETCH_LWORD,D); end
-	default:	;
+	default:	;	// Cant get here
 	endcase
 	end
 ADDI3:

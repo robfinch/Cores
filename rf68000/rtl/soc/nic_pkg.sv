@@ -69,9 +69,10 @@ typedef struct packed
 	logic [5:0] did;
 	logic [5:0] sid;
 	logic [5:0] age;
-	logic irq;
+	logic [2:0] irq;
+	logic [1:0] resv;
 	logic firq;
 	logic [7:0] cause;
-} ipacket_t;
+} ipacket_t;	// 32 bits
 
 endpackage

@@ -244,8 +244,8 @@ WAIT_NACK:
 		m_stb_o <= 1'b0;
 		m_we_o <= 1'b0;
 		s_ack <= 1'b0;
-		s1_dat_o <= 8'h0;
-		s2_dat_o <= 8'h0;
+		s1_dat_o <= 'h0;
+		s2_dat_o <= 'h0;
 		state <= IDLE;
 	end
 	else if (which ? !s2_stb_i : !s1_stb_i) begin
@@ -254,9 +254,9 @@ WAIT_NACK:
 		m_we_o <= 1'b0;
 		s_ack <= 1'b0;
 		if (!s1_stb_i)
-			s1_dat_o <= 8'h0;
+			s1_dat_o <= 'h0;
 		if (!s2_stb_i)
-			s2_dat_o <= 8'h0;
+			s2_dat_o <= 'h0;
 		state <= IDLE;
 	end
 default:	state <= IDLE;
