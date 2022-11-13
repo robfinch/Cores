@@ -81,7 +81,6 @@
 *	move.l	a0,7*4
 
 cpu_test:
-	bsr op_MOVEP
 	bsr	op_ORI_TO_CCR
 	bsr	op_ORI_TO_SR
 	bsr	op_EORI_TO_CCR
@@ -196,7 +195,7 @@ op_ORI_TO_CCR:
     bvs.s *                   ; branch if V set
     bcs.s *                   ; branch if C set
 
-    move #$2700,SR          ; Put flags back to initial value
+    move.l #$FF002700,SR          ; Put flags back to initial value
 
     rts
 
@@ -208,20 +207,20 @@ op_ORI_TO_CCR:
 
 op_ORI_TO_SR:
 
-    ori.w #$2FFF,SR
+    ori.l #$FF002FFF,SR
     bpl.s *                   * branch if Z clear
     bne.s *                   * branch if N clear
     bvc.s *                   * branch if V clear
     bcc.s *                   * branch if C clear
 
-    move #$2000,SR
-    ori.w #$0000,SR
+    move.l #$FF002000,SR
+    ori.l #$0000,SR
     beq.s *                   * branch if Z set
     bmi.s *                   * branch if N set
     bvs.s *                   * branch if V set
     bcs.s *                   * branch if C set
 
-    move #$2700,SR         * Put flags back to initial value
+    move.l #$FF002700,SR         * Put flags back to initial value
 
     rts
 ; 
@@ -246,7 +245,7 @@ op_EORI_TO_CCR:
     bvs.s *                   ; branch if V set
     bcs.s *                   ; branch if C set
 
-    move #$2700,SR           ; Put flags back to initial value
+    move.l #$FF002700,SR           ; Put flags back to initial value
 
     rts
 
@@ -259,21 +258,21 @@ op_EORI_TO_CCR:
 *-----------------------------------------------------------
 op_EORI_TO_SR:
 
-    move #$2000,SR
-    eori.w #$0FFF,SR
+    move.l #$FF002000,SR
+    eori.l #$0FFF,SR
     bpl.s *                   * branch if Z clear
     bne.s *                   * branch if N clear
     bvc.s *                   * branch if V clear
     bcc.s *                   * branch if C clear
 
-    move #$2000,SR
-    eori.w #$0000,SR
+    move.l #$FF002000,SR
+    eori.l #$0000,SR
     beq.s *                   * branch if Z set
     bmi.s *                   * branch if N set
     bvs.s *                   * branch if V set
     bcs.s *                   * branch if C set
 
-    move #$2700,SR          * Put flags back to initial value
+    move.l #$FF002700,SR          * Put flags back to initial value
 
     rts
 
@@ -312,21 +311,21 @@ op_ANDI_TO_CCR:
 *-----------------------------------------------------------
 *-----------------------------------------------------------
 op_ANDI_TO_SR:
-    move #$20FF,SR
-    andi.w #$FFFF,SR
+    move.l #$FF0020FF,SR
+    andi.l #$FFFFFFFF,SR
     bpl.s *                   * branch if Z clear
     bne.s *                   * branch if N clear
     bvc.s *                   * branch if V clear
     bcc.s *                   * branch if C clear
 
-    move #$20FF,SR
-    andi.w #$FF00,SR
+    move.l #$FF0020FF,SR
+    andi.l #$FFFFFF00,SR
     beq.s *                   * branch if Z set
     bmi.s *                   * branch if N set
     bvs.s *                   * branch if V set
     bcs.s *                   * branch if C set
 
-    move #$2700,SR           * Put flags back to initial value
+    move.l #$FF002700,SR           * Put flags back to initial value
 
     rts
 
@@ -2638,7 +2637,7 @@ op_MOVE_xxx_FLAGS:
 *     Dn
 
             move.w #$2FFF,d0
-            move d0,SR
+            move.l d0,SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
@@ -2651,7 +2650,7 @@ op_MOVE_xxx_FLAGS:
             bcs.s *           * branch if C set
 
             move.w #$2000,d0
-            move d0,SR
+            move.l d0,SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2660,14 +2659,14 @@ op_MOVE_xxx_FLAGS:
 *     (An)
             move.l #$00000100,a0
             move.w #$2FFF,(a0)
-            move (a0),SR
+            move.l (a0),SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,(a0)
-            move (a0),SR
+            move.l (a0),SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2676,14 +2675,14 @@ op_MOVE_xxx_FLAGS:
 *     (An)+
             move.l #$00000100,a0
             move.w #$2FFF,(a0)
-            move (a0)+,SR
+            move.l (a0)+,SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,(a0)
-            move (a0)+,SR
+            move.l (a0)+,SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2692,14 +2691,14 @@ op_MOVE_xxx_FLAGS:
 *     -(An)
             move.l #$00000102,a0
             move.w #$2FFF,(a0)
-            move (a0)+,SR
+            move.l (a0)+,SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,(a0)
-            move (a0)+,SR
+            move.l (a0)+,SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2708,14 +2707,14 @@ op_MOVE_xxx_FLAGS:
 *     n(An)
             move.l #$00000102,a0
             move.w #$2FFF,2(a0)
-            move 2(a0),SR
+            move.l 2(a0),SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,2(a0)
-            move 2(a0),SR
+            move.l 2(a0),SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2725,14 +2724,14 @@ op_MOVE_xxx_FLAGS:
             move.l #$00000100,a0
             moveq  #$00000002,d0
             move.w #$2FFF,2(a0,d0.l)
-            move 2(a0,d0.l),SR
+            move.l 2(a0,d0.l),SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,2(a0,d0.l)
-            move 2(a0,d0.l),SR
+            move.l 2(a0,d0.l),SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2740,14 +2739,14 @@ op_MOVE_xxx_FLAGS:
 
 *     x.W
             move.w #$2FFF,$0100
-            move $0100,SR
+            move.l $0100,SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
             move.w #$2000,$0100
-            move $0100,SR
+            move.l $0100,SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2755,21 +2754,21 @@ op_MOVE_xxx_FLAGS:
 
 *     x.L
             move.w #$2FFF,$00010100
-            move $00010100,SR
+            move.l $00010100,SR
             bpl.s *           * branch if Z clear
             bne.s *           * branch if N clear
             bvc.s *           * branch if V clear
             bcc.s *           * branch if C clear
 
 MOVE4:      move.w #$2000,$00010100
-            move $00010100,SR
+            move.l $00010100,SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
             bcs.s *           * branch if C set
 
 *     x(PC)
-            move MOVE4+2(pc),SR
+            move.l MOVE4+2(pc),SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2777,7 +2776,7 @@ MOVE4:      move.w #$2000,$00010100
 
 *     x(PC,d0.l)
             moveq  #$00000000,d0
-            move MOVE4+2(pc,d0.l),SR
+            move.l MOVE4+2(pc,d0.l),SR
             beq.s *           * branch if Z set
             bmi.s *           * branch if N set
             bvs.s *           * branch if V set
@@ -2789,7 +2788,7 @@ MOVE4:      move.w #$2000,$00010100
             bcs.s *           * branch if C set
 
 *     #x
-            move #$2FFF,SR
+            move.l #$FF002FFF,SR
             bne.s *           * branch if Z clear
             bpl.s *           * branch if N clear
             bvc.s *           * branch if V clear
@@ -2802,65 +2801,65 @@ MOVE4:      move.w #$2000,$00010100
 
 
 *     Dn
-            move #$275A,SR          * Initial value
-            move SR,d0
-            cmpi.w #$271A,d0
+            move.l #$FF00275A,SR          * Initial value
+            move.l SR,d0
+            cmpi.l #$FF00271A,d0
 * The following fails because sr bits are implemented and non-zero so later code works.           
 *            bne.s *                   * branch if Z set
 
 *     (An)
             move.l #$00000100,a0
-            move #$275A,SR          * Initial value
-            move SR,(a0)
-            cmpi.w #$275A,(a0)
+            move.l #$FF00275A,SR          * Initial value
+            move.l SR,(a0)
+            cmpi.l #$FF00275A,(a0)
             bne.s *                   * branch if Z set
 
 *     (An)+
             move.l #$00000100,a0
-            move #$257A,SR          * Initial value
-            move SR,(a0)+
+            move.l #$257A,SR          * Initial value
+            move.l SR,(a0)+
             move.l #$00000100,a0
-            cmpi.w #$257A,(a0)+
+            cmpi.l #$257A,(a0)+
             bne.s *                   * branch if Z set
 
 *     -(An)
             move.l #$00000102,a0
-            move #$2766,SR          * Initial value
-            move SR,-(a0)
+            move.l #$2766,SR          * Initial value
+            move.l SR,-(a0)
             move.l #$00000100,a0
-            cmpi.w #$2766,(a0)
+            cmpi.l #$2766,(a0)
             bne.s *                   * branch if Z set
 
 *     x(An)
             move.l #$00000102,a0
-            move #$2733,SR          * Initial value
-            move SR,4(a0)
-            cmpi.w #$2733,4(a0)
+            move.l #$2733,SR          * Initial value
+            move.l SR,4(a0)
+            cmpi.l #$2733,4(a0)
             bne.s *                   * branch if Z set
 
 *     x(An,rn)
             move.l #$00000102,a0
             moveq  #$00000004,d0
-            move #$275a,SR          * Initial value
-            move SR,4(a0,d0.l)
-            cmpi.w #$275a,4(a0,d0.l)
+            move.l #$275a,SR          * Initial value
+            move.l SR,4(a0,d0.l)
+            cmpi.l #$275a,4(a0,d0.l)
             bne.s *                   * branch if Z set
 
 *     x.W
-            move #$2777,SR          * Initial value
-            move SR,$0102
-            cmpi.w #$2777,$0102
+            move.l #$2777,SR          * Initial value
+            move.l SR,$0102
+            cmpi.l #$2777,$0102
             bne.s *                   * branch if Z set
 
 *     x.L
-            move #$2777,SR          * Initial value
-            move SR,$10102
-            cmpi.w #$2777,$10102
+            move.l #$2777,SR          * Initial value
+            move.l SR,$10102
+            cmpi.l #$2777,$10102
             bne.s *                   * branch if Z set
 
 
 
-            move #$2700,SR          * Put flags back to initial value
+            move.l #$2700,SR          * Put flags back to initial value
 
             rts
 
@@ -2995,10 +2994,10 @@ LEA1:       pea LEA1(pc)
 
 
 
-            move #$2700,SR          * Put flags back to initial value
+            move.l #$FF002700,SR          * Put flags back to initial value
 
             rts
-
+ 	
 
 
 *-----------------------------------------------------------
@@ -4186,7 +4185,7 @@ op_RTR:
                 move.l #$FF15,-(a7)       * push flags=0xFFFF to the stack
                 rtr
 
-RTR_DONE:       move SR,d0
+RTR_DONE:       move.l SR,d0
                 andi #$1F,d0
                 cmpi #$15,d0
                 bne.s *
@@ -4328,7 +4327,7 @@ op_ADDQ:
                 moveq  #$00000000,d7
 
 ADDQ_LOOP1:     addq.b #3,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4352,7 +4351,7 @@ ADDQ_LOOP1:     addq.b #3,d5
                 move.l #$00000100,a0
 
 ADDQ_LOOP2:     addq.w #5,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4375,7 +4374,7 @@ ADDQ_LOOP2:     addq.w #5,d5
                 moveq  #$00000000,d7
 
 ADDQ_LOOP3:     addq.l #1,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4415,7 +4414,7 @@ op_SUBQ:
                 moveq  #$00000000,d7
 
 SUBQ_LOOP1:     subq.b #1,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4439,7 +4438,7 @@ SUBQ_LOOP1:     subq.b #1,d5
                 move.l #$00000100,a0
 
 SUBQ_LOOP2:     subq.w #5,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4462,7 +4461,7 @@ SUBQ_LOOP2:     subq.w #5,d5
                 moveq  #$00000000,d7
 
 SUBQ_LOOP3:     subq.l #1,d5
-                move SR,d6
+                move.l SR,d6
                 andi.l #$1F,d6        * Isolate flags
                 add.l d6,d1           * Copy flag results into accumulator
                 add.l d5,d2           * Copy data results into data accumulator
@@ -4527,7 +4526,7 @@ op_DIVU:
 
 
 DIVU_OUTER1:    divu d1,d0               * !! Easy68K C not always cleared
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4570,7 +4569,7 @@ op_DIVS:
 
 
 DIVS_OUTER1:    divs d1,d0               * !! Easy68K C not always cleared
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4620,7 +4619,7 @@ OR_OUTER1:
 *     BYTE
                 move.l d1,(a0)
                 or.b (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4628,7 +4627,7 @@ OR_OUTER1:
 *     WORD
                 move.l d1,(a0)
                 or.w (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4636,7 +4635,7 @@ OR_OUTER1:
 *     LONG
                 move.l d1,(a0)
                 or.l (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4673,7 +4672,7 @@ OR_OUTER2:
 *     BYTE
                 move.l d0,(a0)
                 or.b d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4681,7 +4680,7 @@ OR_OUTER2:
 *     WORD
                 move.l d0,(a0)
                 or.w d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4689,7 +4688,7 @@ OR_OUTER2:
 *     LONG
                 move.l d0,(a0)
                 or.l d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4738,7 +4737,7 @@ AND_OUTER1:
 *     BYTE
                 move.l d1,(a0)
                 and.b (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4746,7 +4745,7 @@ AND_OUTER1:
 *     WORD
                 move.l d1,(a0)
                 and.w (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4754,7 +4753,7 @@ AND_OUTER1:
 *     LONG
                 move.l d1,(a0)
                 and.l (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4791,7 +4790,7 @@ AND_OUTER2:
 *     BYTE
                 move.l d0,(a0)
                 and.b d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4799,7 +4798,7 @@ AND_OUTER2:
 *     WORD
                 move.l d0,(a0)
                 and.w d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4807,7 +4806,7 @@ AND_OUTER2:
 *     LONG
                 move.l d0,(a0)
                 and.l d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4856,7 +4855,7 @@ EOR_OUTER2:
 *     BYTE
                 move.l d0,(a0)
                 eor.b d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4864,7 +4863,7 @@ EOR_OUTER2:
 *     WORD
                 move.l d0,(a0)
                 eor.w d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4872,7 +4871,7 @@ EOR_OUTER2:
 *     LONG
                 move.l d0,(a0)
                 eor.l d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -4921,7 +4920,7 @@ CMP_OUTER1:
 *     BYTE
                 move.l d1,(a0)
                 cmp.b (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4929,7 +4928,7 @@ CMP_OUTER1:
 *     WORD
                 move.l d1,(a0)
                 cmp.w (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4937,7 +4936,7 @@ CMP_OUTER1:
 *     LONG
                 move.l d1,(a0)
                 cmp.l (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -4988,7 +4987,7 @@ CMPA_OUTER1:
 *     WORD
                 move.l d1,(a1)
                 cmpa.w (a1),a0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l a0,d4               * Copy data results into data accumulator
@@ -4996,7 +4995,7 @@ CMPA_OUTER1:
 *     LONG
                 move.l d1,(a1)
                 cmpa.l (a1),a0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l a0,d4               * Copy data results into data accumulator
@@ -5048,7 +5047,7 @@ op_CMPM:
                 move.l #$0000000F,d6       * Loop counter
 
 CMPM_LOOP1:     cmpm.b (a0)+,(a1)+
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 dbf d6,CMPM_LOOP1
@@ -5059,7 +5058,7 @@ CMPM_LOOP1:     cmpm.b (a0)+,(a1)+
                 moveq  #$00000007,d6       * Loop counter
 
 CMPM_LOOP2:     cmpm.w (a0)+,(a1)+
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d1               * Copy flag results into accumulator
                 dbf d6,CMPM_LOOP2
@@ -5070,7 +5069,7 @@ CMPM_LOOP2:     cmpm.w (a0)+,(a1)+
                 moveq  #$00000003,d6       * Loop counter
 
 CMPM_LOOP3:     cmpm.l (a0)+,(a1)+
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d2               * Copy flag results into accumulator
                 dbf d6,CMPM_LOOP3
@@ -5112,7 +5111,7 @@ ADD_OUTER1:
 *     BYTE
                 move.l d1,(a0)
                 add.b (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5120,7 +5119,7 @@ ADD_OUTER1:
 *     WORD
                 move.l d1,(a0)
                 add.w (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5128,7 +5127,7 @@ ADD_OUTER1:
 *     LONG
                 move.l d1,(a0)
                 add.l (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5164,7 +5163,7 @@ ADD_OUTER2:
 *     BYTE
                 move.l d0,(a0)
                 add.b d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5172,7 +5171,7 @@ ADD_OUTER2:
 *     WORD
                 move.l d0,(a0)
                 add.w d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5180,7 +5179,7 @@ ADD_OUTER2:
 *     LONG
                 move.l d0,(a0)
                 add.l d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5225,7 +5224,7 @@ SUB_OUTER1:
 *     BYTE
                 move.l d1,(a0)
                 sub.b (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5233,7 +5232,7 @@ SUB_OUTER1:
 *     WORD
                 move.l d1,(a0)
                 sub.w (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5241,7 +5240,7 @@ SUB_OUTER1:
 *     LONG
                 move.l d1,(a0)
                 sub.l (a0),d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5277,7 +5276,7 @@ SUB_OUTER2:
 *     BYTE
                 move.l d0,(a0)
                 sub.b d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5285,7 +5284,7 @@ SUB_OUTER2:
 *     WORD
                 move.l d0,(a0)
                 sub.w d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5293,7 +5292,7 @@ SUB_OUTER2:
 *     LONG
                 move.l d0,(a0)
                 sub.l d1,(a0)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l (a0),d4             * Copy data results into data accumulator
@@ -5439,7 +5438,7 @@ ADDX_OUTER1:
 *     BYTE
                 move.l d2,d0
                 addx.b d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5447,7 +5446,7 @@ ADDX_OUTER1:
 *     WORD
                 move.l d2,d0
                 addx.w d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5455,7 +5454,7 @@ ADDX_OUTER1:
 *     LONG
                 move.l d2,d0
                 addx.l d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5494,7 +5493,7 @@ ADDX_OUTER1:
                 move.l #$0000000F,d6       * Loop counter
 
 ADDX_LOOP3:     addx.b -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.b (a1),d1
@@ -5506,7 +5505,7 @@ ADDX_LOOP3:     addx.b -(a0),-(a1)
                 moveq  #$00000007,d6       * Loop counter
 
 ADDX_LOOP4:     addx.w -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.w (a1),d1
@@ -5518,7 +5517,7 @@ ADDX_LOOP4:     addx.w -(a0),-(a1)
                 moveq  #$00000003,d6       * Loop counter
 
 ADDX_LOOP5:     addx.l -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.l (a1),d1
@@ -5561,7 +5560,7 @@ SUBX_OUTER1:
 *     BYTE
                 move.l d2,d0
                 subx.b d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5569,7 +5568,7 @@ SUBX_OUTER1:
 *     WORD
                 move.l d2,d0
                 subx.w d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5577,7 +5576,7 @@ SUBX_OUTER1:
 *     LONG
                 move.l d2,d0
                 subx.l d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$1F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5616,7 +5615,7 @@ SUBX_OUTER1:
                 move.l #$0000000F,d6       * Loop counter
 
 SUBX_LOOP3:     subx.b -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.b (a1),d1
@@ -5628,7 +5627,7 @@ SUBX_LOOP3:     subx.b -(a0),-(a1)
                 moveq  #$00000007,d6       * Loop counter
 
 SUBX_LOOP4:     subx.w -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.w (a1),d1
@@ -5640,7 +5639,7 @@ SUBX_LOOP4:     subx.w -(a0),-(a1)
                 moveq  #$00000003,d6       * Loop counter
 
 SUBX_LOOP5:     subx.l -(a0),-(a1)
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d0               * Copy flag results into accumulator
                 add.l (a1),d1
@@ -5674,7 +5673,7 @@ op_MULU:
 
 
 MULU_OUTER1:    mulu d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5715,7 +5714,7 @@ op_MULS:
 
 
 MULS_OUTER1:    muls d1,d0
-                move SR,d3
+                move.l SR,d3
                 andi.l #$0C,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 add.l d0,d4               * Copy data results into data accumulator
@@ -5784,7 +5783,7 @@ op_EXG:
 *-----------------------------------------------------------
 
 *     Subroutine to check and accumulate the flags
-ROx_FLAGS:      move SR,d3
+ROx_FLAGS:      move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 rts
@@ -6010,7 +6009,7 @@ ROx_LOOP6:
 *-----------------------------------------------------------
 
 *     Subroutine to check and accumulate the flags
-ROXx_FLAGS:     move SR,d3
+ROXx_FLAGS:     move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 rts
@@ -6237,7 +6236,7 @@ ROXx_LOOP6:
 *-----------------------------------------------------------
 
 *     Subroutine to check and accumulate the flags
-SHIFTS_FLAGS:   move SR,d3
+SHIFTS_FLAGS:   move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 rts
@@ -6465,7 +6464,7 @@ SHIFTS_LOOP6:
 *-----------------------------------------------------------
 
 *     Subroutine to check and accumulate the flags
-SHIFTS2_FLAGS:  move SR,d3
+SHIFTS2_FLAGS:  move.l SR,d3
                 andi.l #$0F,d3            * Isolate flags
                 add.l d3,d5               * Copy flag results into accumulator
                 rts

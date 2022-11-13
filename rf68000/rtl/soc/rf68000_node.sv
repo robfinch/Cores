@@ -68,6 +68,9 @@ wire [3:0] nic1_sel, nic2_sel;
 wire [31:0] nic1_adr, nic2_adr;
 wire nic1_sack, nic2_sack;
 wire [31:0] nic1_sdato, nic2_sdato;
+wire [2:0] cpu1_irq, cpu2_irq;
+wire [7:0] cpu1_icause, cpu2_icause;
+reg [20*8-1:0] romname;
 
 packet_t packet_x;
 packet_t rpacket_x;
@@ -77,6 +80,18 @@ assign ack1 = nic1_sack|ram1_ack;
 assign ack2 = nic2_sack|ram2_ack;
 assign dati1 = adr1[31:20]==12'h0 ? ram1_dat : nic1_sdato;
 assign dati2 = adr2[31:20]==12'h0 ? ram2_dat : nic2_sdato;
+
+always_comb
+	case(id)
+	5'd1:	romname = "rom1.mem";
+	5'd2:	romname = "rom2.mem";
+	5'd3:	romname = "rom3.mem";
+	5'd4:	romname = "rom4.mem";
+	5'd5:	romname = "rom5.mem";
+	5'd6:	romname = "rom6.mem";
+	5'd7:	romname = "rom7.mem";
+	default:	romname = "rom1.mem";
+	endcase
 
 wire [2:0] irq;
 wire firq0;
@@ -116,9 +131,9 @@ rf68000_nic unic1
 	.firq_i(),
 	.cause_i(),
 	.iserver_i(),
-	.irq_o(firq0),
+	.irq_o(cpu1_irq),
 	.firq_o(),
-	.cause_o()
+	.cause_o(cpu1_icause)
 );
 
 rf68000_nic unic2
@@ -156,9 +171,9 @@ rf68000_nic unic2
 	.firq_i(),
 	.cause_i(),
 	.iserver_i(),
-	.irq_o(),
+	.irq_o(cpu2_irq),
 	.firq_o(),
-	.cause_o()
+	.cause_o(cpu2_icause)
 );
 
 rf68000_node_arbiter undarb1
@@ -167,7 +182,7 @@ rf68000_node_arbiter undarb1
 	.rst_i(rst),
 	.clk_i(clk),
 	.cpu_cyc(cyc1),
-	.cpu_stb(stb1 && adr1[31:20]==12'h0),
+	.cpu_stb(stb1 && adr1[31:24]==8'h00),
 	.cpu_ack(ram1_ack),
 	.cpu_aack(ram1_aack),
 	.cpu_we(we1),
@@ -196,7 +211,7 @@ rf68000_node_arbiter undarb2
 	.rst_i(rst),
 	.clk_i(clk),
 	.cpu_cyc(cyc2),
-	.cpu_stb(stb2 && adr2[31:20]==12'h0),
+	.cpu_stb(stb2 && adr2[31:24]==8'h00),
 	.cpu_ack(ram2_ack),
 	.cpu_aack(ram2_aack),
 	.cpu_we(we2),
@@ -226,7 +241,7 @@ rf68000 ucpu1
 	.rst_o(),
 	.clk_i(clk),
 	.nmi_i(),
-	.ipl_i(firq0 ? 3'd6 : 3'd0),
+	.ipl_i(cpu1_irq),
 	.vpa_i(1'b1),
 	.lock_o(),
 	.cyc_o(cyc1),
@@ -249,7 +264,7 @@ rf68000 ucpu2
 	.rst_o(),
 	.clk_i(clk),
 	.nmi_i(),
-	.ipl_i(),
+	.ipl_i(cpu2_irq),
 	.vpa_i(1'b1),
 	.lock_o(),
 	.cyc_o(cyc2),
@@ -305,7 +320,7 @@ rf68000 ucpu2
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("rom.mem"),      // String
+      .MEMORY_INIT_FILE("rom.mem"),    // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("block"),      // String

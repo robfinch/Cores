@@ -186,7 +186,16 @@ typedef enum logic [7:0] {
 	// 40
 	RTE3,
 	RTE4,
+	RTE5,
+	RTE6,
+	RTE7,
+	RTE8,
+	RTE9,
+	RTE10,
+	RTE11,
+
 	RTS1,
+	// 50
 	RTS2,
 	
 	LINK,
@@ -196,11 +205,12 @@ typedef enum logic [7:0] {
 	JMP_VECTOR2,
 	JMP_VECTOR3,
 	
-	// 50
 	LINK1,
 	LINK2,
 	
 	NEG,
+	
+	// 60
 	NEGX,
 	NEGX1,
 	NOT,
@@ -209,11 +219,11 @@ typedef enum logic [7:0] {
 	EXG1,
 
 	CMP,
-	
-	// 60
 	CMP1,
 	CMPA,
 	CMPM,
+	
+	// 70
 	CMPM1,
 
 	AND,
@@ -222,11 +232,11 @@ typedef enum logic [7:0] {
 	ANDI_CCR,
 	ANDI_CCR2,
 	ANDI_SR,
-	
-	// 70
 	ANDI_SRX,
 	EORI_CCR,
 	EORI_CCR2,
+	
+	//80
 	EORI_SR,
 	EORI_SRX,
 	ORI_CCR,
@@ -234,11 +244,10 @@ typedef enum logic [7:0] {
 	ORI_SR,
 	ORI_SRX,
 	FETCH_NOP_BYTE,
-	
-	// 80
 	FETCH_NOP_WORD,
 	FETCH_NOP_LWORD,
 	FETCH_IMM8,
+	// 90
 	FETCH_D32,
 	FETCH_D32a,
 	FETCH_D32b,
@@ -247,11 +256,11 @@ typedef enum logic [7:0] {
 	FETCH_NDX,
 	FETCH_NDXa,
 	
-	// 90
 	MOVE2CCR,
 	MOVE2SR,
 	MOVE2SRX,
 
+	// 100
 	TRAP,
 	TRAP3,
 	TRAP3a,
@@ -259,13 +268,20 @@ typedef enum logic [7:0] {
 	TRAP4,
 	TRAP5,
 	TRAP6,
-	
-	// 100
 	TRAP7,
 	TRAP7a,
 	TRAP8,
+	
+	// 110
 	TRAP9,
 	TRAP10,
+	TRAP20,
+	TRAP21,
+	TRAP22,
+	TRAP23,
+	TRAP24,
+	TRAP25,
+	TRAP26,
 	INTA,
 	
 	RETRY,
@@ -587,6 +603,9 @@ reg [4:0] rst_cnt;
 reg [2:0] shift_op;
 reg rtr;
 reg bsr;
+reg [31:0] dati_buf;	// input data from bus error
+reg [31:0] dato_buf;
+
 // CSR's
 reg [31:0] tick;	// FF0
 
@@ -820,6 +839,8 @@ if (rst_i) begin
 	vbr <= 'd0;
 	sfc <= 'd0;
 	dfc <= 'd0;
+	dati_buf <= 'd0;
+	dato_buf <= 'd0;
 end
 else begin
 
@@ -1666,7 +1687,13 @@ DECODE:
 					goto (RTE1);
 				else
 					tPrivilegeViolation();
-			3'b101: goto (RTS1); 
+			3'b101:
+				begin
+					ea <= sp;
+					sp <= sp + 4'd4;
+					ds <= S;
+					call (FETCH_LWORD,RTS1);
+				end
 			3'b110:
 				if (vf) begin
 			    vecno <= `TRAPV_VEC;
@@ -1777,15 +1804,9 @@ DECODE:
 	4'h6:
 		if (takb) begin
 			// If branch back to self, trap
-			/* causes too much congestion
-		  if (ir[7:0]==8'hFE) begin
-		    set_regs();
-		    task_mem_wr <= `TRUE;
-		    vecno <= `DISP_VEC;
-		    state <= TRAP3;
-		  end
+		  if (ir[7:0]==8'hFE)
+		  	tBadBranchDisp();
 			else
-			*/
 `ifdef SUPPORT_B24			
 			if (ir[7:0]==8'h00 || ir[0]) begin
 `else				
@@ -3737,13 +3758,70 @@ TRAP3:
 			usp <= sp;
 			sp <= ssp;
 		end
+`ifdef SUPPORT_010
+		if (is_bus_err | is_adr_err)
+			goto (TRAP20);
+		else
+`endif		
 		goto (TRAP3a);
+	end
+// First 16 words of internal state are stored
+TRAP20:
+	begin
+		sp <= sp - 6'd32;
+		goto (TRAP21);
+	end
+// Next instruction input buffer.
+TRAP21:
+	begin
+		d <= ir;
+		ea <= sp - 4'd2;
+		sp <= sp - 4'd2;
+		call (STORE_WORD, TRAP22);
+	end
+TRAP22:
+	begin
+		d <= dati_buf;
+		ea <= sp - 4'd4;
+		sp <= sp - 4'd4;
+		call (STORE_LWORD, TRAP23);
+	end
+TRAP23:
+	begin
+		d <= dato_buf;
+		ea <= sp - 4'd4;
+		sp <= sp - 4'd4;
+		call (STORE_LWORD, TRAP24);
+	end
+// 1 word Unused
+TRAP24:
+	begin
+		sp <= sp - 4'd2;
+		goto (TRAP25);
+	end
+TRAP25:
+	begin
+		d <= bad_addr;
+		ea <= sp - 4'd4;
+		sp <= sp - 4'd4;
+		call (STORE_LWORD, TRAP26);
+	end
+TRAP26:
+	begin
+		d <= mac_cycle_type;
+		ea <= sp - 4'd2;
+		sp <= sp - 4'd2;
+		s <= sp - 4'd2;
+		call (STORE_WORD, TRAP3a);
 	end
 // For the 68010 and above push the format word.
 TRAP3a:
 	begin
-`ifdef SUPPORT_010		
-		d <= {4'b0000,2'b00,vecno,2'b00};
+`ifdef SUPPORT_010
+		if (is_bus_err|is_adr_err)
+			d <= {4'b1000,2'b00,vecno,2'b00};
+		else		
+			d <= {4'b0000,2'b00,vecno,2'b00};
 		ea <= sp - 4'd2;
 		sp <= sp - 4'd2;
 		call (STORE_WORD, TRAP3b);
@@ -3766,7 +3844,11 @@ TRAP4:
 		ea <= sp - 4'd2;
 		sp <= sp - 4'd2;
 		s <= sp - 4'd2;
+`ifdef SUPPORT_010
+		call (STORE_WORD, TRAP7);
+`else		
 		call (STORE_WORD, is_bus_err|is_adr_err?TRAP8:TRAP7);
+`endif		
 	end
 // Push IR
 TRAP8:
@@ -3792,7 +3874,7 @@ TRAP10:
 		ea <= sp - 4'd2;
 		sp <= sp - 4'd2;
 		s <= sp - 4'd2;
-		call (STORE_LWORD, TRAP7);
+		call (STORE_WORD, TRAP7);
 	end
 // Load SP from vector table
 TRAP6:
@@ -3969,14 +4051,75 @@ RTE3:
 	begin
 		pc <= s;
 `ifdef SUPPORT_010
-		call (FETCH_WORD,RTE4);
+		ea <= sp;
+		sp <= sp + 4'd2;
+		if (!rtr)
+			call (FETCH_WORD,RTE4);
+		else
+			ret();
 `else		
 		ret();
 `endif		
 	end
 // The core might have been in supervisor mode already when the exception
 // occurred. Reset the working stack pointer accordingly.
+`ifdef SUPPORT_010
 RTE4:
+	begin
+		if (s[15:12]==4'b1000) begin
+			ea <= sp;
+			sp <= sp + 4'd2;
+			call(FETCH_WORD,RTE5);
+		end
+		else begin
+			if (!sf) begin
+				ssp <= sp;
+				sp <= usp;	// switch back to user stack
+			end
+			ret();
+		end
+	end
+RTE5:
+	begin
+		mac_cycle_type <= s;
+		ea <= sp;
+		sp <= sp + 4'd4;
+		call(FETCH_LWORD,RTE6);
+	end
+RTE6:
+	begin
+		bad_addr <= s;
+		ea <= sp;
+		sp <= sp + 4'd2;
+		call(FETCH_WORD,RTE7);
+	end
+RTE7:
+	begin
+		ea <= sp;
+		sp <= sp + 4'd4;
+		call(FETCH_LWORD,RTE8);
+	end
+RTE8:
+	begin
+		dato_buf <= s;
+		ea <= sp;
+		sp <= sp + 4'd4;
+		call(FETCH_LWORD,RTE9);
+	end
+RTE9:
+	begin
+		dati_buf <= s;
+		ea <= sp;
+		sp <= sp + 4'd2;
+		call(FETCH_WORD,RTE10);
+	end
+RTE10:
+	begin
+		ea <= sp;
+		sp <= sp + 6'd32;
+		goto (RTE11);
+	end
+RTE11:
 	begin
 		if (!sf) begin
 			ssp <= sp;
@@ -3984,20 +4127,13 @@ RTE4:
 		end
 		ret();
 	end
-
+`endif
 	
 //----------------------------------------------------
 // Return from subroutine.
 //----------------------------------------------------
 
 RTS1:
-	begin
-		ea <= sp;
-		sp <= sp + 4'd4;
-		ds <= S;
-		call (FETCH_LWORD,RTS2);
-	end
-RTS2:
 	begin
 		pc <= s;
 		ret();
@@ -4660,6 +4796,7 @@ MOVERn2Rc2:
 	case(imm[11:0])
 	12'h000:	begin sfc <= rfoRnn; ret(); end
 	12'h001:	begin dfc <= rfoRnn; ret(); end
+	12'h800:	begin usp <= rfoRnn; ret(); end
 	12'h801:	begin vbr <= rfoRnn; ret(); end
 	default:	tIllegal();
 	endcase
@@ -4667,6 +4804,7 @@ MOVERc2Rn:
 	case(imm[11:0])
 	12'h000:	begin resL <= sfc; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
 	12'h001:	begin resL <= dfc; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
+	12'h800:	begin resL <= usp; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
 	12'h801:	begin resL <= vbr; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
 	12'hFE0:	begin resL <= coreno_i; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
 	12'hFF0:	begin resL <= tick; Rt <= imm[15:12]; rfwrL <= 1'b1; ret(); end
@@ -4686,6 +4824,8 @@ endcase
 		mac_cycle_type <= {state[6:0],sel_o,~we_o,1'b0,fc_o};
 		bad_addr <= adr_o;
 		is_bus_err <= 1'b1;
+		dati_buf <= dat_i;
+		dato_buf <= dat_o;
 		goto (TRAP);
 	end
 
@@ -4956,6 +5096,16 @@ begin
 	is_priv <= 1'b1;
 	vecno <= `PRIV_VEC;
 	goto (TRAP);
+end
+endtask
+
+task tBadBranchDisp;
+begin
+	isr <= srx;
+	tf <= 1'b0;
+	sf <= 1'b1;
+	vecno <= `DISP_VEC;
+	goto (TRAP3);
 end
 endtask
 

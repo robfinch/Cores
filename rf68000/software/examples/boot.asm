@@ -62,16 +62,18 @@ SC_DEL		EQU		$71		; extend
 SC_LCTRL	EQU		$58
 SC_TAB      EQU		$0D
 
-TEXTREG		EQU	$FD01FF00
+TEXTREG		EQU	$FD03FF00
 txtscreen	EQU	$FD000000
 semamem		EQU	$FD050000
 ACIA			EQU	$FD060000
 ACIA_RX		EQU	0
-ACIA_STAT	EQU	1
+ACIA_STAT	EQU	4
 leds			EQU	$FD0FFF00
 keybd			EQU	$FD0FFE00
 KEYBD			EQU	$FD0FFE00
 rand			EQU	$FD0FFD00
+IOFocus		EQU	$00100000
+Keybuf		EQU	$00100004
 
 	data
 	dc.l		$0001FFFC
@@ -84,19 +86,8 @@ rand			EQU	$FD0FFD00
 	dc.l		EXCEPTION_7			* TRAPV
 	dc.l		0
 	dc.l		0
-	dc.l		0
-
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-	dc.l		0
-
+	
+	; 10
 	dc.l		0
 	dc.l		0
 	dc.l		0
@@ -107,15 +98,109 @@ rand			EQU	$FD0FFD00
 	dc.l		0
 	dc.l		0
 	dc.l		0
-
+	
+	; 20
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	
+	; 30
 	dc.l		irq_rout					* IRQ 30 - timer
 	dc.l		0
 	dc.l		0
 	dc.l		0
 	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
+	; 40
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		TRAP15
+	dc.l		0
+	dc.l		0
+
+	; 50	
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
+	; 60
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		brdisp_trap
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+	dc.l		0
+
 
 	align		10
-	dc.l		0
+;fgcolor:
+;	ds.l		1
+;bkcolor:
+;	ds.l		1
+;CursorRow
+;	ds.b		1
+;CursorCol
+;	ds.b		1
+;TextRows
+;	ds.b		1
+;TextCols
+;	ds.b		1
+;TextPos
+;TextCurpos
+;	ds.w		1
+;	ds.w		1
+;TextScr
+;	ds.l		1
+;S19StartAddress
+;	ds.l		1
+;KeybdEcho
+;	ds.b		1
+;KeybdWaitFlag
+;	ds.b		1
+;KeybdLEDs
+;	ds.b		1
+;_KeyState1
+;	ds.b		1
+;_KeyState2
+;	ds.b		1
+;CmdBuf:
+;	ds.b		1
+;CmdBufEnd:
+;	ds.b		1
+
+
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+
+const_tbl:
 fgcolor:
 	dc.l		$1fffff					; white
 bkcolor:
@@ -151,31 +236,26 @@ CmdBuf:
 CmdBufEnd:
 	dc.b		0
 
-
-;-------------------------------------------------------------------------------
-;-------------------------------------------------------------------------------
-
 	code
+	align		2
 start:
-	move.w	#$2500,sr				; enable level 6 and higher interrupts
-	move.l	$FFFFFFE0,d0		; get core number
+	move.l	#$FF002700,sr		* enable level 6 and higher interrupts
+	movec.l	coreno,d0				* get core number
 	cmpi.b	#2,d0
 	bne			start_other
-	bsr			InitSemaphores
-	moveq		#1,d1
-	bsr			LockSemaphore
-	bsr			Delay3s					; give devices time to reset
+	move.l	#$4,IOFocus			* Set the IO focus map in global memory
+;	bsr			InitSemaphores
+	bsr			Delay3s					* give devices time to reset
 	bsr			clear_screen
-	clr.b		CursorCol
-	clr.b		CursorRow
-	clr.w		TextCurpos
 
 	; Write startup message to screen
 
 	lea			msg_start,a1
 	bsr			DisplayString
-	moveq		#1,d1
+	moveq.l	#1,d1
 	bsr			UnlockSemaphore	; allow another cpu access
+	moveq.l	#0,d1
+	bsr			UnlockSemaphore	; allow other cpus to proceed
 	move.w	#$A4A4,leds			; diagnostics
 	bra			Monitor
 	bsr			cpu_test
@@ -192,21 +272,25 @@ loop1:
 	dbra		d0,loop1
 	bra			loop2
 start_other:
-	bsr			Delay3s					; give time for monitor core to reset things
-	moveq		#1,d1
-	bsr			LockSemaphore
-	move.l	$FFFFFFE0,d1
+	move.l	TextScr,d0
+	movec.l	coreno,d1					; get the core number
+	subi.l	#2,d1							; core numbers start at 2
+	asl.l		#8,d1							; * 16384 bytes per screen
+	asl.l		#6,d1
+	add.l		d0,d1							; adjust index to screen
+	move.l	d1,TextScr				; set new text screen location
+	bsr			clear_screen
+	movec		coreno,d1
 	bsr			DisplayByte
 	lea			msg_core_start,a1
 	bsr			DisplayString
-	moveq		#1,d1
-	bsr			UnlockSemaphore
 do_nothing:	
+	nop
 	bra			do_nothing
 
 ;------------------------------------------------------------------------------
 ; Initialize semaphores
-; - all semaphores are set to one.
+; - all semaphores are set to one except the first one, which is set to zero.
 ;
 ; Parameters:
 ;		<none>
@@ -219,11 +303,12 @@ do_nothing:
 InitSemaphores:
 	movem.l	d0/d1/a0,-(a7)
 	lea			semamem,a0
-	move.w	#255,d1
+	move.b	#0,$4000(a0)		; lock the first semaphore
+	move.w	#254,d1
 	moveq		#1,d0
 .0001:
-	move.b	d0,$4000(a0)
 	lea			16(a0),a0
+	move.b	d0,$4000(a0)
 	dbra		d1,.0001
 	movem.l	(a7)+,d0/d1/a0
 	rts
@@ -279,7 +364,7 @@ IncrementSemaphore:
 DecrementSemaphore:
 	movem.l	d1/a0,-(a7)			; save registers
 	lea			semamem,a0			; point to semaphore memory
-	ext.w		d1							; make d1 word value
+	andi.w	#255,d1					; make d1 word value
 	asl.w		#4,d1						; align to memory
 	tst.b		1(a0,d1.w)			; read (test) value for zero
 	movem.l	(a7)+,a0/d1			; restore regs
@@ -306,7 +391,7 @@ LockSemaphore:
 UnlockSemaphore:
 	movem.l	d1/a0,-(a7)			; save registers
 	lea			semamem,a0			; point to semaphore memory
-	andi.l	#255,d1					; make d1 word value
+	andi.w	#255,d1					; make d1 word value
 	asl.w		#4,d1						; align to memory
 	addi.w	#$4000,d1				; point to read / write memory
 	move.b	#1,(a0,d1.w)		; write one to unlock
@@ -373,7 +458,15 @@ clear_screen:
 	rol.w		#8,d0
 loop3:
 	move.l	d1,(a0)+					; copy char plus bkcolor to cell
+	nop	
+	nop
+	nop	
+	nop
 	move.l	d0,(a0)+					; copy fgcolor to cell
+	nop
+	nop
+	nop	
+	nop
 	dbra		d2,loop3
 	rts
 
@@ -387,11 +480,9 @@ CRLF:
 	rts
 
 ;------------------------------------------------------------------------------
-; Calculate screen memory location from CursorRow,CursorCol.
-; Destroys d0,d2,a0
 ;------------------------------------------------------------------------------
-;
-CalcScreenLoc:
+
+UpdateTextPos:
 	move.b	CursorRow,d0		; compute screen location
 	andi.w	#$7f,d0
 	move.b	TextCols,d2
@@ -400,7 +491,16 @@ CalcScreenLoc:
 	move.b	CursorCol,d2
 	andi.w	#$ff,d2
 	add.w		d2,d0
-	move.w	d0,TextCurpos		; save cursor pos
+	move.w	d0,TextPos			; save cursor pos
+	rts
+
+;------------------------------------------------------------------------------
+; Calculate screen memory location from CursorRow,CursorCol.
+; Destroys d0,d2,a0
+;------------------------------------------------------------------------------
+
+CalcScreenLoc:
+	bsr			UpdateTextPos
 	ext.l		d0							; make it into a long
 	asl.l		#3,d0						; 8 bytes per char
 	add.l		TextScr,d0
@@ -598,7 +698,7 @@ ScrollUp:
 	mulu		d1,d0								; d0 = count of characters to move
 .0001:
 	move.l	(a0)+,(a5)+					; each char is 64 bits
-	move.l	(a0)+,(a5)+
+	move.l	(a0)+,(a5)+	
 	dbra		d0,.0001
 	movem.l	(a7)+,d0/d1/a0/a5
 	; Fall through into blanking out last line
@@ -620,9 +720,9 @@ BlankLastLine:
 	lea			(a5,d0.w),a5				; point a5 to last row
 	move.b	TextCols,d2					; number of text cells to clear
 	ext.w		d2
-	subi.w	#1,d2
-	bsr			get_screen_color
-	ori.w		#32,d1		
+	subi.w	#1,d2								; count must be one less than desired
+	bsr			get_screen_color		; d0,d1 = screen color
+	move.w	#32,d1							; set the character for display in low 16 bits
 .0001:
 	move.l	d1,(a5)+
 	move.l	d0,(a5)+
@@ -686,12 +786,75 @@ HomeCursor:
 ;------------------------------------------------------------------------------
 
 SyncCursor:
-	movem.l	d1/a6,-(a7)
-	move.l	#TEXTREG,a6
-	move.w	TextPos,d1
-	rol.w		#8,d1						; swap byte order
-	move.w	d1,$24(a6)
-	movem.l	(a7)+,d1/a6
+	movem.l	d0/d2,-(a7)
+	bsr			UpdateTextPos
+	rol.w		#8,d0						; swap byte order
+	move.w	d0,TEXTREG+$24
+	movem.l	(a7)+,d0/d2
+	rts
+
+;==============================================================================
+; TRAP #15 handler
+;==============================================================================
+
+TRAP15:
+	movem.l	d0/a0,-(a7)
+	lea			T15DispatchTable,a0
+	asl.l		#2,d0
+	move.l	(a0,d0.w),a0
+	jsr			(a0)
+	movem.l	(a7)+,d0/a0
+	rte
+
+		align	2
+T15DispatchTable:
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	GetKey
+	dc.l	DisplayChar
+	dc.l	CheckForKey
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	Cursor1
+	dc.l	SetKeyboardEcho
+	dc.l	DisplayStringCRLF
+	dc.l	DisplayString
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+	dc.l	StubRout
+
+;------------------------------------------------------------------------------
+; Stub routine for unimplemented functionality.
+;------------------------------------------------------------------------------
+
+Cursor1:
+StubRout:
 	rts
 
 ;==============================================================================
@@ -769,11 +932,18 @@ KeybdWaitTx:
 	moveq	#0,d1		; return 0
 	rts
 
+;------------------------------------------------------------------------------
+; d1.b 0=echo off, non-zero = echo on
+;------------------------------------------------------------------------------
+
+SetKeyboardEcho:
+	move.b	d1,KeybdEcho
+	rts
 
 ;------------------------------------------------------------------------------
 ; get key pending status into d1.b
 ;------------------------------------------------------------------------------
-;
+
 CheckForKey:
 	move.b	KEYBD+1,d1
 	bpl.s		cfk1
@@ -784,22 +954,68 @@ cfk1:
 	rts
 
 ;------------------------------------------------------------------------------
+; GetKey
+; 	Get a character from the keyboard. If Alt-tab is pressed then the screen
+; is switched to the next screen and -1 is returned.
+;
+; Modifies:
+;		d1
+; Returns:
+;		d1 = -1 if no key available or not in focus, otherwise key
 ;------------------------------------------------------------------------------
 
 GetKey:
-	bsr			KeybdGetCharWait
-	cmpi.b	#0,KeybdEcho	; is keyboard echo on ?
-	beq.s		gk1
-	cmpi.b	#CR,d1				; convert CR keystroke into CRLF
-	beq			CRLF
-	rts
-	bra			DisplayChar
-gk1:
-;	move.l	d1,d7
-;	bsr			DisplayByte
-;	moveq		#32,d1
-;	bsr			DisplayChar
-;	move.l	d7,d1
+	move.l	d0,-(a7)					* push d0
+	* Check for focus. Even if the core does not have the focus ALT-TAB still
+	* needs to be checked for.
+	move.l	IOFocus,d1				* Check if the core has the IO focus
+	movec.l	coreno,d0
+	btst		d0,d1
+	bne.s		.0007
+	* If the core does not have the focus then the keyboard scan code buffer
+	* must be read directly to determine if a tab character is pressed. A non-
+	* destructive buffer read is needed.
+	moveq		#0,d1
+	move.b	KEYBD,d1					* get the scan code non destructively
+	cmpi.b	#SC_TAB,d1				* is it the TAB key?
+	bne.s		.0004							* if not return no key available
+	btst		#1,_KeyState2			* is ALT down?
+	bne.s		.0008							* if ALT-TAB goto switch screens
+	bra.s		.0004							* otherwise return no key available
+.0007:	
+	bsr			KeybdGetCharWait	* get a character
+	cmpi.b	#9,d1							* tab pressed?
+	bne.s		.0006
+	btst		#1,_KeyState2			* is ALT down?
+	beq.s		.0006
+.0008:
+	* Got alt-tab, switch screens
+	move.w	TEXTREG+$28,d0
+	rol.w		#8,d0							* swap byte order
+	add.w		#2048,d0					* increment to next screen page
+	cmp.w		#16384,d0					* hit max screen page?
+	blo.s		.0002
+	moveq		#0,d0							* wrap around
+.0002:
+	ror.w		#8,d0							* swap byte order
+	move.w	d0,TEXTREG+$28
+	bra.s		.0004							* eat Alt-tab, return no key available
+.0006:
+	cmpi.b	#0,KeybdEcho			* is keyboard echo on ?
+	beq.s		.0003							* no echo, just return the key
+	cmpi.b	#CR,d1						* convert CR keystroke into CRLF
+	bne.s		.0005
+	bsr			CRLF
+	bra.s		.0003
+.0005:
+	bsr			DisplayChar
+.0003:
+	move.l	(a7)+,d0					* pop d0
+	rts												* return key
+* Return -1 indicating no char was available
+.0004:
+	move.l	(a7)+,d0					* pop d0
+	moveq		#-1,d1						* return no key available
 	rts
 
 CheckForCtrlC
@@ -1176,11 +1392,13 @@ Prompt2:
 	beq			DisplayHelp
 	cmpi.b	#'C',d1			; $C - clear screen
 	beq			TestCLS
+	cmpi.b	#'T',d1			; $T - run cpu test program
+	bne.s		.0002
+	bsr			cpu_test
+.0002:
 	bra			Monitor
 
 TestCLS:
-	moveq		#1,d1
-	bsr			LockSemaphore
 	bsr			FromScreen
 	addq		#1,d2
 	cmpi.b	#'L',d1
@@ -1194,8 +1412,6 @@ TestCLS:
 	bra			Monitor
 	
 DisplayHelp:
-	moveq		#1,d1
-	bsr			LockSemaphore
 	lea			HelpMsg,a1
 	bsr			DisplayString
 	bra			Monitor
@@ -1208,7 +1424,8 @@ HelpMsg:
 	dc.b	"L = Load S19 file",CR,LF
 	dc.b	"D = Dump memory",CR,LF
 	dc.b	"B = start tiny basic",CR,LF
-	dc.b	"J = Jump to code",CR,LF,0
+	dc.b	"J = Jump to code",CR,LF
+	dc.b	"T = cpu test program",CR,LF,0
 	even
 
 ;------------------------------------------------------------------------------
@@ -1382,8 +1599,6 @@ ExecuteCode:
 ;------------------------------------------------------------------------------
 
 DumpMem:
-	moveq		#1,d1
-	bsr			LockSemaphore
 	bsr			ignBlanks
 	bsr			GetHexNumber
 	beq			Monitor			; was there a number ? no, other garbage, just ignore
@@ -1796,13 +2011,13 @@ AUXIN:
 
 SerialPeekCharDirect:
 	; Disallow interrupts between status read and rx read.
-	move		sr,-(a7)					; save off SR
-	ori			#$7000,sr					; disable interrupts
-	move.b	ACIA+ACIA_STAT,d0	; get serial status
+	move.w	sr,-(a7)					; save off SR
+	ori.w		#$7000,sr					; disable interrupts
+	move.l	ACIA+ACIA_STAT,d0	; get serial status
 	btst		#3,d0							; look for Rx not empty
 	beq.s		.0001
-	moveq		#0,d0							; clear upper bits of return value
-	move.b	ACIA+ACIA_RX,d0		; get data from ACIA
+	moveq.l	#0,d0							; clear upper bits of return value
+	move.l	ACIA+ACIA_RX,d0		; get data from ACIA
 	rte												; restore SR and return
 .0001:
 	moveq		#-1,d0
@@ -1817,9 +2032,13 @@ irq_rout:
 
 brdisp_trap:
 	addq		#4,sp					; get rid of sr
+	lea			msg_bad_branch_disp,a1
+	bsr			DisplayString
+	bsr			DisplaySpace
 	move.l	(sp)+,d1			; pop exception address
 	bsr			DisplayTetra	; and display it
-	stop		#$2700
+	move.l	(sp)+,d1			; pop format word
+	bra			Monitor
 
 illegal_trap:
 	addq		#4,sp						; get rid of sr
@@ -1827,6 +2046,8 @@ illegal_trap:
 	bsr			DisplayTetra		; and display it
 	lea			msg_illegal,a1	; followed by message
 	bsr			DisplayString
+.0001:
+	bra			.0001
 	bra			Monitor
 	
 ; -----------------------------------------------------------------------------
@@ -1837,5 +2058,8 @@ msg_start:
 msg_core_start:
 	dc.b	" core starting",CR,LF
 msg_illegal:
-	dc.b	" Illegal opcode",CR,LF,0
+	dc.b	" illegal opcode",CR,LF,0
+msg_bad_branch_disp:
+	dc.b	" branch selfref: ",0
+
 

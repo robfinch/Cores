@@ -13,22 +13,37 @@ CFLAGS = -w -S -fno-exceptions
 BIOS:
 	del boot_rom.bin
 	del boot_rom.lst
+	del rom1.mem
+	del rom2.mem
+	del rom3.mem
+	del rom4.mem
+	del rom5.mem
+	del rom6.mem
+	del rom7.mem
 #	cc64 $(CFLAGS) SieveOfE.c
 #	cc64 $(CFLAGS) os_stub.c
 
 #	vasmrf68000_mot_win32.exe -Fvobj -L fibonacci.lst fibonacci.asm -o fibonacci.o
 	vasmrf68000_mot_win32.exe -Fvobj -L LEDTest.lst LEDTest.asm -o LEDTest.o
 	vasmrf68000_mot_win32.exe -Fvobj -L cputest.lst cputest.asm -o cputest.o
-	vasmrf68000_mot_win32.exe -Fvobj -L boot.lst boot.asm -o boot.o
+	vasmrf68000_mot_win32.exe -Fvobj -L boot.lst boot.asm -o boot.o -m68010
 #	vasmrfPhoenix_std_win32.exe -Fvobj -L add.lst add.asm -o add.o
 #	vlink -T rom_bios.cmd -brawbin1 fibonacci.o -o fibonacci.bin
-	vlink -T rom_bios.cmd -brawbin1 LEDTest.o -o LEDTest.bin
-	vlink -T rom_bios.cmd -brawbin1 cputest.o -o cputest.bin
+#	vlink -T rom_bios.cmd -brawbin1 LEDTest.o -o LEDTest.bin
+#	vlink -T rom_bios.cmd -brawbin1 cputest.o -o cputest.bin
+	vlink -T rom_bios.cmd -bsrec37 boot.o -o boot.s37
 	vlink -T rom_bios.cmd -brawbin1 boot.o -o boot.bin
 #	vlink -T rom_bios.cmd -brawbin1 add.o -o add.bin
 #	bin2ver fibonacci.bin 128
 #	bin2ver LEDTest.bin 32 m
 	bin2ver boot.bin 32 m
+	copy rom.mem rom1.mem
+	copy rom.mem rom2.mem
+	copy rom.mem rom3.mem
+	copy rom.mem rom4.mem
+	copy rom.mem rom5.mem
+	copy rom.mem rom6.mem
+	copy rom.mem rom7.mem
 #	bin2ver cputest.bin 32 m
 #	bin2ver add.bin 128
 

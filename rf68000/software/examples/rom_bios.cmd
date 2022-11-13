@@ -5,7 +5,7 @@ MEMORY {
 }
 
 MEMORY {
-	BIOS_CODE : ORIGIN = 0x00000800, LENGTH = 30k
+	BIOS_CODE : ORIGIN = 0x00001000, LENGTH = 28k
 }
 
 MEMORY {
@@ -13,14 +13,14 @@ MEMORY {
 }
 
 MEMORY {
-	BIOS_BSS : ORIGIN = 0x0000C000, LENGTH = 16k
+	BIOS_BSS : ORIGIN = 0x00000800, LENGTH = 2k
 }
 
 PHDRS {
 	bios_hdr PT_LOAD AT (0x00000000);
 	bios_code PT_LOAD AT (0x00000800);
 	bios_rodata PT_LOAD AT (0x00008000);
-	bios_bss PT_LOAD AT (0x0000C000);
+	bios_bss PT_LOAD AT (0x00000800);
 }
 
 SECTIONS {
@@ -32,7 +32,7 @@ SECTIONS {
 		_end_data = .;
 	} >BIOS_DATA
 	code: {
-		. = 0x00000800;
+		. = 0x00001000;
 		*(code);
 		. = ALIGN(2);
 		_etext = .;
@@ -45,7 +45,7 @@ SECTIONS {
 		_end_rodata = .;
 	} >BIOS_RODATA
 	bss: {
-		. = 0x0000C000
+		. = 0x00000800
 		_start_bss = .;
 		*(bss);
 		. = ALIGN(2);

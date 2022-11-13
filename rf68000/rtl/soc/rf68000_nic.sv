@@ -99,6 +99,8 @@ packet_t packet_rx, packet_tx;
 packet_t rpacket_rx, rpacket_tx;
 packet_t [7:0] gbl_packets;
 reg seen_gbl;
+reg s_ack1;
+
 integer n,n1,n2;
 
 always_comb
@@ -115,10 +117,12 @@ reg rw_done;
 reg burst;
 always_comb
 	burst = s_cti_i==3'b001||s_cti_i==3'b111;
+always_comb
+	s_ack_o <= s_ack1 & s_cyc_i & s_stb_i;
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
-	s_ack_o <= FALSE;
+	s_ack1 <= FALSE;
 	s_aack_o <= FALSE;
 	s_dat_o <= 12'h00;
 	s_atag_o <= 4'h0;
@@ -140,6 +144,9 @@ if (rst_i) begin
 	m_sel_o <= 4'h0;
 	m_adr_o <= 24'h0;
 	m_dat_o <= 12'h00;
+	irq_o <= 'd0;
+	firq_o <= 'd0;
+	cause_o <= 'd0;
 	state <= ST_IDLE;
 end
 else begin
@@ -160,11 +167,18 @@ else begin
 		rpacket_tx <= {$bits(packet_t){1'b0}};
 	end
 	
-	// Look for slave cycle termination.
-	if (~(s_cyc_i & s_stb_i)) begin
-		rw_done <= TRUE;
-		s_ack_o <= FALSE;
-		s_rty_o <= FALSE;
+	if (s_adr_i[31:24]!=8'h00) begin
+		// Acknowledge a write cycle or burst read right away.
+		if (s_cyc_i & s_stb_i && (s_we_i|burst)) begin
+			s_ack1 <= TRUE;
+			rw_done <= TRUE;
+		end
+		// Look for slave cycle termination.
+		if (~(s_cyc_i & s_stb_i)) begin
+			rw_done <= TRUE;
+			s_ack1 <= FALSE;
+			s_rty_o <= FALSE;
+		end
 	end
 
 	if (firq_i| |irq_i) begin
@@ -298,7 +312,7 @@ else begin
 		if (s_cyc_i & s_stb_i & ~s_we_i) begin
 			if (s_adr_i == rpacket_rx.adr) begin
 				s_dat_o <= rpacket_rx.dat;
-				s_ack_o <= TRUE;
+				s_ack1 <= TRUE;
 				state <= ST_ACK_ACK;
 			end
 			else begin
@@ -353,37 +367,39 @@ begin
 		8'hFF:	
 			if (!s_we_i) begin
 				packet_tx.did <= 6'd62;
-				s_ack_o <= burst;
+				s_ack1 <= burst;
 				rw_done <= burst;
 			end
 			else begin
 				packet_tx <= {$bits(packet_t){1'b0}};
-				rw_done <= TRUE;
-				s_ack_o <= TRUE;
 			end
 		/* I/O area */
 		8'hFD:
 			begin
 				packet_tx.did <= 6'd62;
-				s_ack_o <= s_we_i | burst;
 			end
 		// Global broadcast
 		8'hDF:
 			begin
 				packet_tx.did <= 6'd63;
 				packet_tx.age <= 6'd30;
-				s_ack_o <= s_we_i | burst;
 			end
 		// C0xyyyyy
 		8'hC0:
 			begin
 				packet_tx.did <= {2'd0,s_adr_i[23:20]};
-				s_ack_o <= s_we_i | burst;
 			end
 		8'h4?,8'h5?,8'h6?,8'h7?,8'h8?,8'h9?,8'hA?,8'hB?:
 			begin
 				packet_tx.did <= 6'd62;
-				s_ack_o <= s_we_i | burst;
+			end
+		8'h00:
+			if (s_adr_i[23:20]==4'h1) begin
+				packet_tx.did <= 6'd62;
+			end
+			else begin
+				packet_tx <= {$bits(packet_t){1'b0}};
+				rw_done <= TRUE;
 			end
 		default:
 			begin
