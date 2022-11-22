@@ -12,18 +12,24 @@ input [31:0] dat_i;
 output reg [31:0] dat_o;
 
 typedef enum logic [7:0] {
-	IFETCH = 8'd1,
+	RESET1 = 8'd1,RESET2,
+	IFETCH,
 	DECODE,
 	FETCH_IMM32,
 	FETCH_IMM64,
-	ADD,
-	SUB,
-	SHIFT,
+	FETCH_OCTA,
+	STORE_OCTA,
+	ADD,ADD1
+	SUB,SUB1,
+	SHIFT,SHIFT1,
 	BCC,
 	DBRA,
 	BSR,
 	BSR2,
-	BSR3
+	BSR3,
+	RTS,
+	DD1,
+	DD2
 } state_t;
 state_t state;
 state_t state_stk1;
@@ -35,19 +41,26 @@ reg [31:0] pc;
 reg [31:0] ea;
 reg [31:0] ir;
 reg [63:0] regs [0:31];
-reg [63:0] sp;
+reg [63:0] sp,usp,ssp;
 reg [63:0] lc;
 reg [7:0] Cr [0:7];
+reg sf,tf,df,fdf;
+reg [2:0] ipl;
+reg [7:0] cpl;
+wire [31:0] sr = {cpl, 8'h00, tf, 1'b0, sf, 2'b00, ipl, 4'b0, df, fdf, 2'b00};
+reg [31:0] isr;
 
 typedef enum logic [4:0] {
 	FU_NONE = 5'd0,
-	FU_ADD = 5'd1
+	FU_ADD,
+	FU_SHIFT
 } flag_update_t;
 flag_update_t flag_update;
 
 reg [2:0] Ct, Ca;
 reg [2:0] shift_op;
 
+reg [63:0] a,b,d;
 reg [63:0] rfoa, rfob;
 reg [ 8:0] resB;
 reg [16:0] resW;
@@ -98,9 +111,41 @@ else if (rfwrO) begin
 end
 
 always_comb
-	rfoa <= regs[Ra];
+	rfoa <= Ra==5'd31 ? sp : regs[Ra];
 always_comb
-	rfob <= regs[Rb];
+	rfob <= Rb==5'd31 ? sp : regs[Rb];
+
+function [7:0] fnBCDToBinary8
+input [7:0] bcd;
+	fnBCDToBinary8 = bcd[7:4] * 4'd10 + bcd[3:0];
+endfunction
+
+function [15:0] fnBCDToBinary16
+input [15:0] bcd;
+	fnBCDToBinary16 = bcd[15:12] * 10'd1000 + bcd[11:8] * 7'd100 + bcd[7:4] * 4'd10 + bcd[3:0];
+endfunction
+
+wire [9:0] dd8out;
+wire [19:0] dd16out;
+wire dd8done, dd16done;
+DDBinToBCD #(.WID(8)) udd1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(state==DD1),
+	.bin(resB),
+	.bcd(dd8out),
+	.done(dd8done)
+);
+DDBinToBCD #(.WID(16)) udd2
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(state==DD1),
+	.bin(resW),
+	.bcd(dd16out),
+	.done(dd16done)
+);
 
 always_comb
 	case(ir[9:5])
@@ -134,7 +179,8 @@ always_comb
 always_ff @(posedge clk)
 if (rst_i) begin
 	flag_update <= FU_NONE;
-	pc <= 32'h1000;
+	ea <= 'd0;
+	call (FETCH_OCTA,RESET1);
 end
 else begin
 case(state)
@@ -172,6 +218,13 @@ IFETCH:
 				2'b11:	Cr[Ct][3] <= resO[63];
 				endcase
 			end
+		FU_SHIFT:
+			begin
+				Cr[Ct][0] <= cf;
+				Cr[Ct][1] <= vf;
+				Cr[Ct][2] <= zf;
+				Cr[Ct][3] <= nf;
+			end
 		endcase
 		flag_update <= FU_NONE;
 		if (!cyc_o) begin
@@ -207,17 +260,17 @@ DECODE:
 				a <= rfoa;
 				if (ir[17]) begin
 					if (ir[28:24]==5'd16)
-						call(FETCH_IMM32,ADD);
+						call(FETCH_IMM32,df ? ADD1 : ADD);
 					else if (ir[28:24]==5'd17)
-						call(FETCH_IMM64,ADD);
+						call(FETCH_IMM64,df ? ADD1 : ADD);
 					else begin
 						b <= {{54{ir[28]}},ir[28:24],ir[22:18]};
-						goto (ADD);
+						goto (df ? ADD1 : ADD);
 					end
 				end
 				else begin
 					b <= rfob;
-					goto (ADD);
+					goto (df ? ADD1 : ADD);
 				end
 			end
 		5'd5:		// SUB
@@ -225,17 +278,17 @@ DECODE:
 				a <= rfoa;
 				if (ir[17]) begin
 					if (ir[28:24]==5'd16)
-						call(FETCH_IMM32,SUB);
+						call(FETCH_IMM32,df?SUB1:SUB);
 					else if (ir[28:24]==5'd17)
-						call(FETCH_IMM64,SUB);
+						call(FETCH_IMM64,df?SUB1:SUB);
 					else begin
 						b <= {{54{ir[28]}},ir[28:24],ir[22:18]};
-						goto (SUB);
+						goto (df?SUB1:SUB);
 					end
 				end
 				else begin
 					b <= rfob;
-					goto (SUB);
+					goto (df?SUB1:SUB);
 				end
 			end
 		5'd14:	// SHIFT
@@ -246,7 +299,18 @@ DECODE:
 				resT <= {1'b0,rfoa[31:0]};
 				resO <= {1'b0,rfoa[63:0]};
 				shift_op <= {ir[23],ir[28:27]};
-				goto (SHIFT);
+				if (df)
+					goto (SHIFT1);
+				else
+					goto (SHIFT);
+			end
+		5'd15:
+			begin
+				case(ir[28:24])
+				5'd0:	begin ea <= sp; call (FETCH_OCTA,RTS); end
+				5'd1: begin ea <= sp; call (FETCH_TETRA,RTI); end
+				default:	tUnimplemented();
+				endcase
 			end
 		5'd28:	// Bcc
 			begin
@@ -257,8 +321,15 @@ DECODE:
 				eq <= Cr[Ca][4];
 				lt <= Cr[Ca][5];
 				ord <= Cr[Ca][6];
-				if (ir[9:5]==5'd1)
-					goto (BSR);
+				if (ir[9:5]==5'd0) begin
+					pc <= pc + {{40{ir[12]}},ir[12:10],ir[31:13],2'b00};
+					goto (IFETCH);
+				end
+				else if (ir[9:5]==5'd1) begin
+					ea <= sp - 4'd8;
+					d <= pc + 4'd4;		// d = pointer to next instruction
+					call (STORE_OCTA,BSR);
+				end
 				else
 					goto (BCC);
 			end
@@ -274,6 +345,34 @@ DECODE:
 				goto (DBRA);
 			end
 		endcase
+	end
+
+//------------------------------------------------------------------------------
+// RESET
+// - reset sequence is to load the SSP from the vector table then the PC
+// - program execution begins at the PC location.
+// - system mode is set, trace is disabled, interrupt level 7 is set,
+//   privilege level 255 is set. decimal mode is cleared.
+// - all other registers are in an undefined state.
+//------------------------------------------------------------------------------
+
+RESET1:
+	begin
+		ssp <= b;
+		sp <= b;
+		sf <= TRUE;
+		tf <= FALSE;
+		df <= FALSE;
+		fdf <= FALSE;
+		ipl <= 3'd7;
+		cpl <= 8'hFF;
+		ea <= 4'd8;
+		call (FETCH_OCTA,RESET2);
+	end
+RESET2:
+	begin
+		pc <= b;
+		goto (IFETCH);
 	end
 
 //------------------------------------------------------------------------------
@@ -333,9 +432,544 @@ FETCH_IMM64b:
 		ret();
 	end
 
+FETCH_BYTE:
+	if (!cyc_o) begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+		sel_o <= 4'b1111;
+		adr_o <= ea;
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		sel_o <= 4'h0;
+		b[7:0] <= dat_i >> {ea[1:0],3'b0};
+		ret();
+	end
+
+FETCH_WYDE:
+	case(ea[1:0])
+	2'b00:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[15:0] <= dat_i[15:0];
+			ret();
+		end
+	2'b01:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[15:0] <= dat_i[23:8];
+			ret();
+		end
+	2'b10:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[15:0] <= dat_i[31:16];
+			ret();
+		end
+	2'b11:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[7:0] <= dat_i[31:24];
+			goto(FETCH_WYDE2);
+		end
+	endcase
+FETCH_WYDE2:
+	if (!stb_o) begin
+		stb_o <= HIGH;
+		sel_o <= 4'b1111;
+		adr_o <= ea + 2'd1;
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		sel_o <= 4'h0;		
+		b[15:8] <= dat_i[7:0];
+		ret();
+	end
+
+FETCH_TETRA:
+	case(ea[1:0])
+	2'b00:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			we_o <= LOW;
+			b[31:0] <= dat_i;
+			b[63:32] <= {32{dat_i[31]}};
+			ret();
+		end
+	2'b01:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[23:0] <= dat_i[31:8];
+			goto (FETCH_TETRA2);
+		end
+	2'b10:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[15:0] <= dat_i[31:16];
+			goto (FETCH_TETRA2);
+		end
+	2'b11:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[7:0] <= dat_i[31:24];
+			goto (FETCH_TETRA2);
+		end
+	endcase
+FETCH_TETRA2:
+	case(ea[1:0])
+	2'b00:	ret();
+	2'b01:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd3;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[31:24] <= dat_i[7:0];
+			b[63:32] <= {32{dat_i[7]}};
+			ret();
+		end
+	2'b10:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd2;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[31:16] <= dat_i[15:0];
+			b[63:32] <= {32{dat_i[15]}};
+			ret();
+		end
+	2'b11:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd1;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[31:8] <= dat_i[23:0];
+			b[63:32] <= {32{dat_i[23]}};
+			ret();
+		end
+	endcase
+
+FETCH_OCTA:
+	case(ea[1:0])
+	2'b00:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[31:0] <= dat_i;
+			goto (FETCH_OCTA2);
+		end
+	2'b01:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[23:0] <= dat_i >> 4'd8;
+			goto (FETCH_OCTA2);
+		end
+	2'b10:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[15:0] <= dat_i >> 5'd16;
+			goto (FETCH_OCTA2);
+		end
+	2'b11:
+		if (!cyc_o) begin
+			cyc_o <= HIGH;
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[7:0] <= dat_i >> 6'd24;
+			goto (FETCH_OCTA2);
+		end
+	endcase
+FETCH_OCTA2:
+	case(ea[1:0])
+	2'b00:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd4;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[63:32] <= dat_i;
+			ret();
+		end
+	2'b01:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd3;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[55:24] <= dat_i;
+			goto (FETCH_OCTA3);
+		end
+	2'b10:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd2;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[47:16] <= dat_i;
+			goto (FETCH_OCTA3);
+		end
+	2'b11:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd1;
+		end
+		else if (ack_i) begin
+			stb_o <= LOW;
+			b[39:8] <= dat_i;
+			goto (FETCH_OCTA3);
+		end
+	endcase
+FETCH_OCTA3:
+	case(ea[1:0])
+	2'b00:	ret();
+	2'b01:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd4;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[63:56] <= dat_i[7:0];
+			ret();
+		end
+	2'b10:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd4;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[63:48] <= dat_i[15:0];
+			ret();
+		end
+	2'b11:
+		if (!stb_o) begin
+			stb_o <= HIGH;
+			sel_o <= 4'b1111;
+			adr_o <= ea + 4'd4;
+		end
+		else if (ack_i) begin
+			cyc_o <= LOW;
+			stb_o <= LOW;
+			sel_o <= 4'h0;
+			b[63:40] <= dat_i[23:0];
+			ret();
+		end
+	endcase
+
+STORE_BYTE:
+	if (!cyc_o) begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'd1 << ea[1:0];
+		adr_o <= ea;
+		dat_o <= {4{d[7:0]}};
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		we_o <= LOW;
+		ret();
+	end
+
+STORE_WYDE:
+	if (!cyc_o) begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'd3 << ea[1:0];
+		adr_o <= ea;
+		dat_o <= d[15:0] << {ea[1:0],3'b0};
+	end
+	else if (ack_i) begin
+		stb_o <= LOW;
+		we_o <= LOW;
+		if (ea[1:0]==2'b11)
+			goto (STORE_WYDE2);
+		else begin
+			cyc_o <= LOW;
+			sel_o <= 4'h0;
+			ret();
+		end
+	end
+STORE_WYDE2:
+	if (!stb_o) begin
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'd1;
+		adr_o <= ea + 2'd1;
+		dat_o <= d[15:8];
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		we_o <= LOW;
+		sel_o <= 4'd0;
+		ret();
+	end	
+	
+STORE_TETRA:
+	if (!cyc_o) begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'd15 << ea[1:0];
+		adr_o <= ea;
+		dat_o <= d[31:0] << {ea[1:0],3'b0};
+	end
+	else if (ack_i) begin
+		stb_o <= LOW;
+		we_o <= LOW;
+		if (ea[1:0]!=2'b00)
+			goto (STORE_TETRA2);
+		else begin
+			cyc_o <= LOW;
+			sel_o <= 4'h0;
+			ret();
+		end
+	end
+STORE_TETRA2:
+	if (!stb_o) begin
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= ~(4'd15 << ea[1:0]);
+		case(ea[1:0])
+		2'b00:	;
+		2'b01:
+			begin
+				adr_o <= ea + 4'd3;
+				dat_o <= d[31:24];
+			end
+		2'b10:
+			begin
+				adr_o <= ea + 4'd2;
+				dat_o <= d[31:16];
+			end
+		2'b11:
+			begin
+				adr_o <= ea + 4'd1;
+				dat_o <= d[31:8];
+			end
+		endcase
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		we_o <= LOW;
+		sel_o <= 4'd0;
+		ret();
+	end	
+
+STORE_OCTA:
+	if (!cyc_o) begin
+		cyc_o <= HIGH;
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'd15 << ea[1:0];
+		adr_o <= ea;
+		dat_o <= d[31:0] << {ea[1:0],3'b0};
+	end
+	else if (ack_i) begin
+		stb_o <= LOW;
+		we_o <= LOW;
+		goto (STORE_OCTA2);
+	end
+STORE_OCTA2:
+	if (!stb_o) begin
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		sel_o <= 4'b1111;
+		case(ea[1:0])
+		2'b00:	
+			begin
+				adr_o <= ea + 4'd4;
+				dat_o <= d[63:32];
+			end
+		2'b01:
+			begin
+				adr_o <= ea + 4'd3;
+				dat_o <= d[55:24];
+			end
+		2'b10:
+			begin
+				adr_o <= ea + 4'd2;
+				dat_o <= d[47:16];
+			end
+		2'b11:
+			begin
+				adr_o <= ea + 4'd1;
+				dat_o <= d[39:8];
+			end
+		endcase
+	end
+	else if (ack_i) begin
+		case(ea[1:0])
+		2'b00:
+			begin
+				cyc_o <= LOW;
+				stb_o <= LOW;
+				we_o <= LOW;
+				sel_o <= 4'd0;
+				ret();
+			end
+		default:
+			begin
+				stb_o <= LOW;
+				we_o <= LOW;
+				goto(STORE_OCTA3);
+			end
+		endcase
+	end	
+STORE_OCTA3:
+	if (!stb_o) begin
+		stb_o <= HIGH;
+		we_o <= HIGH;
+		case(ea[1:0])
+		2'b00:	;
+		2'b01:	
+			begin
+				sel_o <= 4'b0001;
+				adr_o <= ea + 4'd7;
+				dat_o <= d[63:56];
+			end
+		2'b10:
+			begin
+				sel_o <= 4'b0011;
+				adr_o <= ea + 4'd6;
+				dat_o <= d[63:48];
+			end
+		2'b11:
+			begin
+				sel_o <= 4'b0111;
+				adr_o <= ea + 4'd5;
+				dat_o <= d[63:40];
+			end
+		endcase
+	end
+	else if (ack_i) begin
+		cyc_o <= LOW;
+		stb_o <= LOW;
+		we_o <= LOW;
+		sel_o <= 4'd0;
+		ret();
+	end
+
 //------------------------------------------------------------------------------
 // ADD / ADC
 //------------------------------------------------------------------------------
+ADD1:
+	begin
+		b <= fnBCDToBinary8(b);
+		resB <= fnBCDToBinary8(resB);
+		resW <= fnBCDToBinary16(resW);
+		goto (ADD);
+	end
 ADD:
 	begin
 		flag_update <= FU_ADD;
@@ -345,12 +979,22 @@ ADD:
 		2'b10:	resT <= a[31:0] + b[31:0] + (ir[23] & cf);
 		2'b11:	resO <= a[63:0] + b[63:0] + (ir[23] & cf);
 		endcase
-		goto (IFETCH);
+		if (df)
+			goto (DD1);
+		else
+			goto (IFETCH);
 	end
 
 //------------------------------------------------------------------------------
 // SUB
 //------------------------------------------------------------------------------
+SUB1:
+	begin
+		b <= fnBCDToBinary8(b);
+		resB <= fnBCDToBinary8(resB);
+		resW <= fnBCDToBinary16(resW);
+		goto (SUB);
+	end
 SUB:
 	begin
 		flag_update <= FU_SUB;
@@ -360,12 +1004,22 @@ SUB:
 		2'b10:	resT <= ir[23] ? b[31:0] - a[31:0] : a[31:0] + b[31:0];
 		2'b11:	resO <= ir[23] ? b[63:0] - a[63:0] : a[63:0] + b[63:0];
 		endcase
-		goto (IFETCH);
+		if (df)
+			goto (DD1);
+		else
+			goto (IFETCH);
 	end
 
 //------------------------------------------------------------------------------
 // ASL / LSL / ROL / ASR / LSR / ROR
 //------------------------------------------------------------------------------
+SHIFT1:
+	begin
+		b <= fnBCDToBinary8(b);
+		resB <= fnBCDToBinary8(resB);
+		resW <= fnBCDToBinary16(resW);
+		goto (SHIFT);
+	end
 SHIFT:
 	begin
 		if (|b) begin
@@ -395,7 +1049,7 @@ SHIFT:
 			endcase
 		end
 		else begin
-			flag_update <= TRUE;
+			flag_update <= FU_SHIFT;
 			case(sz)
 			2'b00:	nf <= resB[ 7];
 			2'b01:	nf <= resW[15];
@@ -414,9 +1068,38 @@ SHIFT:
 			2'b10:	rfwrT <= TRUE;
 			2'b11:	rfwrO <= TRUE;
 			endcase
-			goto (IFETCH);
+			if (df)
+				goto (DD1);
+			else
+				goto (IFETCH);
 		end
 	end
+
+//------------------------------------------------------------------------------
+// Convert binary result to BCD.
+//------------------------------------------------------------------------------
+
+DD1:	goto(DD2);
+DD2:
+	case(sz)
+	2'b00:
+		if (dd8done) begin
+			resB <= dd8out[7:0];
+			rfwrB <= TRUE;
+			cf <= |dd8out[9:8];
+			resB[8] <= |dd8out[9:8];
+			goto (IFETCH);
+		end
+	2'b01:
+		if (dd16done) begin
+			resW <= dd16out[15:0];
+			rfwrW <= TRUE;
+			cf <= |dd16out[19:16];
+			resW[16] <= |dd8out[19:16];
+			goto (IFETCH);
+		end
+	default:	goto (IFETCH);
+	endcase
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -442,47 +1125,79 @@ DBRA:
 	end
 
 //------------------------------------------------------------------------------
+// BSR
+// - after pushing the return address decrement the SP and add the branch
+//   displacement to the PC.
 //------------------------------------------------------------------------------
 
 BSR:
-	if (!cyc_o) begin
-		cyc_o <= HIGH;
-		stb_o <= HIGH;
-		we_o <= HIGH;
-		sel_o <= 4'b1111;
-		adr_o <= sp - 4'd4;
-		dat_o <= pc[31:0];
-	end
-	else if (ack_i) begin
-		stb_o <= LOW;
-		we_o <= LOW;
-		goto (BSR2);
-	end
-BSR2:
-	if (!stb_o) begin
-		stb_o <= HIGH;
-		we_o <= HIGH;
-		sel_o <= 4'b1111;
-		adr_o <= sp - 4'd8;
-		dat_o <= pc[63:32];
-	end
-	else if (ack_i) begin
-		cyc_o <= LOW;
-		stb_o <= LOW;
-		we_o <= LOW;
-		sel_o <= 'd0;
-		goto (BSR3);
-	end
-BSR3:
 	begin
-		pc <= pc + {{43{ir[31]}},ir[31:13],2'b00};
+		pc <= pc + {{40{ir[12]}},ir[12:10],ir[31:13],2'b00};
 		sp <= sp - 4'd8;
 		goto (IFETCH);
 	end
 
+//------------------------------------------------------------------------------
+// RTS
+// - after popping the return address add the amount of inline arguments to 
+//   skip over to the PC and the amount of stacked arguments to pop to the SP.
+//------------------------------------------------------------------------------
 
+RTS:
+	begin
+		pc <= b + {ir[11:7],2'd0};
+		sp <= sp + 4'd8 + {ir[22:18],ir[16:12],2'd0};
+		goto (IFETCH);
+	end
+
+//------------------------------------------------------------------------------
+// RTI
+// - after popping the return address add the amount of inline arguments to 
+//   skip over to the PC and the amount of stacked arguments to pop to the SP.
+//------------------------------------------------------------------------------
+
+RTI:
+	begin
+		isr <= b[31:0];
+		ea <= sp + 4'd4;
+		call (FETCH_OCTA,RTI2);
+	end
+RTI2:
+	begin
+		fdf <= isr[2];
+		df <= isr[3];
+		ipl <= isr[10:8];
+		sf <= isr[13];
+		tf <= isr[15];
+		cpl <= isr[31:24];
+		pc <= b;
+		pc <= b + {ir[11:7],2'd0};
+		sp <= sp + 4'd12 + {ir[22:18],ir[16:12],2'd0};
+		goto (IFETCH);
+	end
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+TRAP:
+	begin
+		isr <= sr;
+		sf <= 1'b1;		// switch to system mode
+		if (!sf) begin
+			usp <= sp;
+			sp <= ssp;
+		end
+	end
+	
 endcase
 end
+
+task tUnimplemented;
+begin
+	vecno <= 8'd4;
+	goto (TRAP);
+end
+endtask
 
 task goto;
 input state_t nst;
