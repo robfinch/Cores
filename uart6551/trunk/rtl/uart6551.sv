@@ -280,7 +280,7 @@ assign irqStatusReg = {irq_o,2'b00,irqenc,2'b00};
 
 // mux the reg outputs
 always @(posedge clk_i)
-begin
+if (cs) begin
 	case(adr_i)
 	`UART_TRB:	dat_o <= accessCD ? {8'h0,clkdiv} : {24'h0,rx_do};	// receiver holding register
 	`UART_STAT:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
@@ -288,6 +288,8 @@ begin
 	`UART_CTRL:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
 	endcase
 end
+else
+	dat_o <= 'd0;
 
 
 // register updates
