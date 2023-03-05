@@ -130,7 +130,7 @@ input [31:0] dat_i,	// data input
 output reg [31:0] dat_o,	// data output
 
 input tod,			// tod pulse (eg 60 Hz)
-output irq_o		// alarm match
+output [31:0] irq_o		// alarm match
 );
 parameter MARS_TIME = 1'b0;
 parameter IO_ADDR = 32'hFEF30001;
@@ -152,7 +152,7 @@ parameter CFG_CLASS = 8'h08;						// 08 = Base system controller
 parameter CFG_CACHE_LINE_SIZE = 8'd8;		// 32-bit units
 parameter CFG_MIN_GRANT = 8'h00;
 parameter CFG_MAX_LATENCY = 8'h00;
-parameter CFG_IRQ_LINE = 8'd16;
+parameter CFG_IRQ_LINE = 8'd3;
 
 localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
