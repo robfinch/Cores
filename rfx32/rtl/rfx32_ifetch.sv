@@ -1,14 +1,15 @@
 import rfx32pkg::*;
 
-module rfx32_ifetch(rst, clk, branchback, branchmiss, misspc, pc0, pc1, inst0, inst1, iq, tail0, tail1,
-	fetchbuf0_instr, fetchbuf0_v, fetchbuf0_pc, fetchbuf1_instr, fetchbuf1_v, fetchbuf1_pc);
+module rfx32_ifetch(rst, clk, branchback, backpc, branchmiss, misspc, pc, inst0, inst1, iq, tail0, tail1,
+	fetchbuf, fetchbuf0_instr, fetchbuf0_imm, fetchbuf0_v, fetchbuf0_pc, 
+	fetchbuf1_instr, fetchbuf1_imm, fetchbuf1_v, fetchbuf1_pc);
 input rst;
 input clk;
 input branchback;
+input address_t backpc;
 input branchmiss;
 input address_t misspc;
-output address_t pc0;
-output address_t pc1;
+output address_t pc;
 input instruction_t inst0;
 input instruction_t inst1;
 input iq_entry_t [7:0] iq;
@@ -16,13 +17,14 @@ input [2:0] tail0;
 input [2:0] tail1;
 output reg fetchbuf;
 output instruction_t fetchbuf0_instr;
+output reg [33:0] fetchbuf0_imm;
 output fetchbuf0_v;
 output address_t fetchbuf0_pc;
 output instruction_t fetchbuf1_instr;
+output reg [33:0] fetchbuf1_imm;
 output fetchbuf1_v;
 output address_t fetchbuf1_pc;
 
-address_t backpc;
 reg [3:0] panic;
 reg did_branchback;
 reg fetchbufA_v;
@@ -41,25 +43,33 @@ address_t fetchbufD_pc;
 
 always_ff @(posedge clk, posedge rst)
 if (rst) begin
+	pc <= 32'hFFFD0000;
 	did_branchback <= 'd0;
 	fetchbuf <= 'd0;
-	fetchbufA_v <= `INV;
-	fetchbufB_v <= `INV;
-	fetchbufC_v <= `INV;
-	fetchbufD_v <= `INV;
+	fetchbufA_v <= INV;
+	fetchbufB_v <= INV;
+	fetchbufC_v <= INV;
+	fetchbufD_v <= INV;
+	fetchbufA_pc <= 'd0;
+	fetchbufA_instr <= 'd0;
+	fetchbufB_pc <= 'd0;
+	fetchbufB_instr <= 'd0;
+	fetchbufC_pc <= 'd0;
+	fetchbufC_instr <= 'd0;
+	fetchbufD_pc <= 'd0;
+	fetchbufD_instr <= 'd0;
 end
 else begin
 
 	did_branchback <= branchback;
 
 	if (branchmiss) begin
-    pc0 <= misspc;
-    pc1 <= misspc + 4'd4;
+    pc <= misspc;
     fetchbuf <= 1'b0;
-    fetchbufA_v <= `INV;
-    fetchbufB_v <= `INV;
-    fetchbufC_v <= `INV;
-    fetchbufD_v <= `INV;
+    fetchbufA_v <= INV;
+    fetchbufB_v <= INV;
+    fetchbufC_v <= INV;
+    fetchbufD_v <= INV;
 	end
 	else if (branchback) begin
 
@@ -69,9 +79,9 @@ else begin
     if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, fetchbufC_v, fetchbufD_v})
 
 		4'b0000	: ;	// do nothing
-		4'b0001	: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0010	: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0011	: panic <= `PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
+		4'b0001	: panic <= PANIC_INVALIDFBSTATE;
+		4'b0010	: panic <= PANIC_INVALIDFBSTATE;
+		4'b0011	: panic <= PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
 
 		// because the first instruction has been enqueued, 
 		// we must have noted this in the previous cycle.
@@ -82,25 +92,23 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
 		4'b0100: 
 			begin
-				if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
+				if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
 			    fetchbufC_instr <= inst0;
-			    fetchbufC_v <= `VAL;
-			    fetchbufC_pc <= pc0;
+			    fetchbufC_v <= VAL;
+			    fetchbufC_pc <= pc;
 			    fetchbufD_instr <= inst1;
-			    fetchbufD_v <= `VAL;
-			    fetchbufD_pc <= pc1;
-			    pc0 <= pc0 + 2;
-			    pc1 <= pc1 + 2;
+			    fetchbufD_v <= VAL;
+			    fetchbufD_pc <= pc + fnInsLen(inst0);
+			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
 			    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 		  end
 
-		4'b0101: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0110: panic <= `PANIC_INVALIDFBSTATE;
+		4'b0101: panic <= PANIC_INVALIDFBSTATE;
+		4'b0110: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched an INSTR+BEQ, with fbB holding a branchback
@@ -112,24 +120,21 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b0111:
 			begin
-				if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
 		// this looks like the following:
@@ -138,25 +143,23 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufA_v appropriately
 		4'b1000:
 			begin
-				if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufC_instr <= inst0;
-				    fetchbufC_v <= `VAL;
-				    fetchbufC_pc <= pc0;
-				    fetchbufD_instr <= inst1;
-				    fetchbufD_v <= `VAL;
-				    fetchbufD_pc <= pc1;
-				    pc0 <= pc0 + 2;
-				    pc1 <= pc1 + 2;
+				if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
+			    fetchbufC_instr <= inst0;
+			    fetchbufC_v <= VAL;
+			    fetchbufC_pc <= pc;
+			    fetchbufD_instr <= inst1;
+			    fetchbufD_v <= VAL;
+			    fetchbufD_pc <= pc + fnInsLen(inst0);
+			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
-		4'b1001: panic <= `PANIC_INVALIDFBSTATE;
-		4'b1010: panic <= `PANIC_INVALIDFBSTATE;
+		4'b1001: panic <= PANIC_INVALIDFBSTATE;
+		4'b1010: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched a BEQ+INSTR, with fbA holding a branchback
@@ -168,24 +171,21 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b1011:
 			begin
-				if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
+				if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
 				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
 				    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
 		// if fbB has the branchback, can't immediately tell which of the following scenarios it is:
@@ -199,44 +199,39 @@ else begin
 		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100:
 			begin
-				if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // has to be first scenario
-				    pc0 <= backpc;
-				    pc1 <= backpc + 1;
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufB_v <= `INV;		// stomp on it
-				    if (~iq[tail0].v)	fetchbuf <= 1'b0;
+				if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
+			    // has to be first scenario
+			    pc <= backpc;
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufB_v <= INV;		// stomp on it
+			    if (~iq[tail0].v)	fetchbuf <= 1'b0;
 				end
-				else if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    if (did_branchback) begin
-					fetchbufC_instr <= inst0;
-					fetchbufC_v <= `VAL;
-					fetchbufC_pc <= pc0;
-					fetchbufD_instr <= inst1;
-					fetchbufD_v <= `VAL;
-					fetchbufD_pc <= pc1;
-					pc0 <= pc0 + 2;
-					pc1 <= pc1 + 2;
+				else if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    if (did_branchback) begin
+						fetchbufC_instr <= inst0;
+						fetchbufC_v <= VAL;
+						fetchbufC_pc <= pc;
+						fetchbufD_instr <= inst1;
+						fetchbufD_v <= VAL;
+						fetchbufD_pc <= pc + fnInsLen(inst0);
+						pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
-					fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-					fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
-					fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
-				    end
-				    else begin
-					pc0 <= backpc;
-					pc1 <= backpc + 1;
-					fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-					fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
-					if (~iq[tail0].v & ~iq[tail1].v)	fetchbuf <= 1'b0;
-				    end
+						fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+						fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+			    end
+			    else begin
+						pc <= backpc;
+						fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+						fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
+						if (~iq[tail0].v & ~iq[tail1].v)	fetchbuf <= 1'b0;
+			    end
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
-		4'b1101: panic <= `PANIC_INVALIDFBSTATE;
-		4'b1110: panic <= `PANIC_INVALIDFBSTATE;
+		4'b1101: panic <= PANIC_INVALIDFBSTATE;
+		4'b1110: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched an INSTR+BEQ, with fbB holding a branchback
@@ -248,36 +243,33 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b1111:
 			begin
-				if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				else if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				else if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
 	  endcase
     else case ({fetchbufC_v, fetchbufD_v, fetchbufA_v, fetchbufB_v})
 
 		4'b0000: ; // do nothing
-		4'b0001: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0010: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0011: panic <= `PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
+		4'b0001: panic <= PANIC_INVALIDFBSTATE;
+		4'b0010: panic <= PANIC_INVALIDFBSTATE;
+		4'b0011: panic <= PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
 
 		// because the first instruction has been enqueued, 
 		// we must have noted this in the previous cycle.
@@ -288,25 +280,23 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
 		4'b0100:
 			begin
-				if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufA_instr <= inst0;
-				    fetchbufA_v <= `VAL;
-				    fetchbufA_pc <= pc0;
-				    fetchbufB_instr <= inst1;
-				    fetchbufB_v <= `VAL;
-				    fetchbufB_pc <= pc1;
-				    pc0 <= pc0 + 2;
-				    pc1 <= pc1 + 2;
+				if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    fetchbufA_instr <= inst0;
+			    fetchbufA_v <= VAL;
+			    fetchbufA_pc <= pc;
+			    fetchbufB_instr <= inst1;
+			    fetchbufB_v <= VAL;
+			    fetchbufB_pc <= pc + fnInsLen(inst0);
+			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
-				    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+			    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
-		4'b0101: panic <= `PANIC_INVALIDFBSTATE;
-		4'b0110: panic <= `PANIC_INVALIDFBSTATE;
+		4'b0101: panic <= PANIC_INVALIDFBSTATE;
+		4'b0110: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched an INSTR+BEQ, with fbD holding a branchback
@@ -318,24 +308,21 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b0111:
 			begin
-				if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
 		// this looks like the following:
@@ -344,25 +331,23 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufC_v appropriately
 		4'b1000:
 			begin
-				if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufA_instr <= inst0;
-				    fetchbufA_v <= `VAL;
-				    fetchbufA_pc <= pc0;
-				    fetchbufB_instr <= inst1;
-				    fetchbufB_v <= `VAL;
-				    fetchbufB_pc <= pc1;
-				    pc0 <= pc0 + 2;
-				    pc1 <= pc1 + 2;
+				if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    fetchbufA_instr <= inst0;
+			    fetchbufA_v <= VAL;
+			    fetchbufA_pc <= pc;
+			    fetchbufB_instr <= inst1;
+			    fetchbufB_v <= VAL;
+			    fetchbufB_pc <= pc + fnInsLen(inst0);
+			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
-		4'b1001: panic <= `PANIC_INVALIDFBSTATE;
-		4'b1010: panic <= `PANIC_INVALIDFBSTATE;
+		4'b1001: panic <= PANIC_INVALIDFBSTATE;
+		4'b1010: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched a BEQ+INSTR, with fbC holding a branchback
@@ -374,24 +359,21 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b1011:
 			begin
-				if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + ~iq[tail0].v;
+				else if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
 		// if fbD has the branchback, can't immediately tell which of the following scenarios it is:
@@ -405,44 +387,39 @@ else begin
 		// if fbD has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100:
 			begin
-				if ({fetchbufC_v, fetchbufC_instr.br.opcode, fetchbufC_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // has to be first scenario
-				    pc0 <= backpc;
-				    pc1 <= backpc + 1;
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufD_v <= `INV;		// stomp on it
-				    if (~iq[tail0].v)	fetchbuf <= 1'b0;
+				if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
+			    // has to be first scenario
+			    pc <= backpc;
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufD_v <= INV;		// stomp on it
+			    if (~iq[tail0].v)	fetchbuf <= 1'b0;
 				end
-				else if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    if (did_branchback) begin
-					fetchbufA_instr <= inst0;
-					fetchbufA_v <= `VAL;
-					fetchbufA_pc <= pc0;
-					fetchbufB_instr <= inst1;
-					fetchbufB_v <= `VAL;
-					fetchbufB_pc <= pc1;
-					pc0 <= pc0 + 2;
-					pc1 <= pc1 + 2;
+				else if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    if (did_branchback) begin
+						fetchbufA_instr <= inst0;
+						fetchbufA_v <= VAL;
+						fetchbufA_pc <= pc;
+						fetchbufB_instr <= inst1;
+						fetchbufB_v <= VAL;
+						fetchbufB_pc <= pc + fnInsLen(inst0);
+						pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
 
-					fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-					fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
-					fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
-				    end
-				    else begin
-					pc0 <= backpc;
-					pc1 <= backpc + 1;
-					fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-					fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
-					if (~iq[tail0].v & ~iq[tail1].v)	fetchbuf <= 1'b0;
-				    end
+						fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+						fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+			    end
+			    else begin
+						pc <= backpc;
+						fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+						fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
+						if (~iq[tail0].v & ~iq[tail1].v)	fetchbuf <= 1'b0;
+			    end
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
 
-		4'b1101: panic <= `PANIC_INVALIDFBSTATE;
-		4'b1110: panic <= `PANIC_INVALIDFBSTATE;
+		4'b1101: panic <= PANIC_INVALIDFBSTATE;
+		4'b1110: panic <= PANIC_INVALIDFBSTATE;
 
 		// this looks like the following:
 		//   cycle 0 - fetched an INSTR+BEQ, with fbD holding a branchback
@@ -454,27 +431,24 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b1111:
 			begin
-				if ({fetchbufD_v, fetchbufD_instr.br.opcode, fetchbufD_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else if ({fetchbufA_v, fetchbufA_instr.br.opcode, fetchbufA_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				else if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else if ({fetchbufB_v, fetchbufB_instr.br.opcode, fetchbufB_instr.br.disp1703[14]} 
-					== {`VAL, OP_Bcc, `BACK_BRANCH}) begin
-				    // branchback is in later instructions ... do nothing
-				    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
-				    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
-				    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
+				else if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
+			    // branchback is in later instructions ... do nothing
+			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
+			    fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
+			    fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
 				end
-				else panic <= `PANIC_BRANCHBACK;
+				else panic <= PANIC_BRANCHBACK;
 	    end
     endcase
 
@@ -486,114 +460,114 @@ else begin
     // there are no backwards branches in the mix
     if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, ~iq[tail0].v, ~iq[tail1].v})
 		4'b00_00: ;	// do nothing
-		4'b00_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b00_01: panic <= PANIC_INVALIDIQSTATE;
 		4'b00_10: ;	// do nothing
 		4'b00_11: ;	// do nothing
 		4'b01_00: ;	// do nothing
-		4'b01_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b01_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b01_10,
 		4'b01_11:
 			begin	// enqueue fbB and flip fetchbuf
-				fetchbufB_v <= `INV;
+				fetchbufB_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 
 		4'b10_00: ;	// do nothing
-		4'b10_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b10_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b10_10,
 		4'b10_11:
 			begin	// enqueue fbA and flip fetchbuf
-				fetchbufA_v <= `INV;
+				fetchbufA_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 
 		4'b11_00: ;	// do nothing
-		4'b11_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b11_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b11_10:
 			begin	// enqueue fbA but leave fetchbuf
-				fetchbufA_v <= `INV;
+				fetchbufA_v <= INV;
 		  end
 
 		4'b11_11:
 			begin	// enqueue both and flip fetchbuf
-				fetchbufA_v <= `INV;
-				fetchbufB_v <= `INV;
+				fetchbufA_v <= INV;
+				fetchbufB_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 	  endcase
 	  else case ({fetchbufC_v, fetchbufD_v, ~iq[tail0].v, ~iq[tail1].v})
 		4'b00_00: ;	// do nothing
-		4'b00_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b00_01: panic <= PANIC_INVALIDIQSTATE;
 		4'b00_10: ;	// do nothing
 		4'b00_11: ;	// do nothing
 		4'b01_00: ;	// do nothing
-		4'b01_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b01_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b01_10,
 		4'b01_11:
 			begin	// enqueue fbD and flip fetchbuf
-				fetchbufD_v <= `INV;
+				fetchbufD_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 
 		4'b10_00: ;	// do nothing
-		4'b10_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b10_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b10_10,
 		4'b10_11:
 			begin	// enqueue fbC and flip fetchbuf
-				fetchbufC_v <= `INV;
+				fetchbufC_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 
 		4'b11_00: ;	// do nothing
-		4'b11_01: panic <= `PANIC_INVALIDIQSTATE;
+		4'b11_01: panic <= PANIC_INVALIDIQSTATE;
 
 		4'b11_10:
 			begin	// enqueue fbC but leave fetchbuf
-				fetchbufC_v <= `INV;
+				fetchbufC_v <= INV;
 		  end
 
 		4'b11_11:
 			begin	// enqueue both and flip fetchbuf
-				fetchbufC_v <= `INV;
-				fetchbufD_v <= `INV;
+				fetchbufC_v <= INV;
+				fetchbufD_v <= INV;
 				fetchbuf <= ~fetchbuf;
 		  end
 	  endcase
 	    //
 	    // get data iff the fetch buffers are empty
 	    //
-	  if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
+	  if (fetchbufA_v == INV && fetchbufB_v == INV) begin
 			fetchbufA_instr <= inst0;
-			fetchbufA_v <= `VAL;
-			fetchbufA_pc <= pc0;
+			fetchbufA_v <= VAL;
+			fetchbufA_pc <= pc;
 			fetchbufB_instr <= inst1;
-			fetchbufB_v <= `VAL;
-			fetchbufB_pc <= pc1;
-			pc0 <= pc0 + 2;
-			pc1 <= pc1 + 2;
+			fetchbufB_v <= VAL;
+			fetchbufB_pc <= pc + fnInsLen(inst0);
+			pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
     end
-    else if (fetchbufC_v == `INV && fetchbufD_v == `INV) begin
+    else if (fetchbufC_v == INV && fetchbufD_v == INV) begin
 			fetchbufC_instr <= inst0;
-			fetchbufC_v <= `VAL;
-			fetchbufC_pc <= pc0;
+			fetchbufC_v <= VAL;
+			fetchbufC_pc <= pc;
 			fetchbufD_instr <= inst1;
-			fetchbufD_v <= `VAL;
-			fetchbufD_pc <= pc1;
-			pc0 <= pc0 + 2;
-			pc1 <= pc1 + 2;
+			fetchbufD_v <= VAL;
+			fetchbufD_pc <= pc + fnInsLen(inst0);
+			pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
     end
 	end
 end
 
 assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
+assign fetchbuf0_imm	 = (fetchbuf == 1'b0) ? fnImm(fetchbufA_instr) : fnImm(fetchbufC_instr);
 assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
 assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
 assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
+assign fetchbuf1_imm	 = (fetchbuf == 1'b0) ? fnImm(fetchbufB_instr) : fnImm(fetchbufD_instr);
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 

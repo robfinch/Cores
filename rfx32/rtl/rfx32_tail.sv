@@ -1,9 +1,14 @@
 import rfx32pkg::*;
 
-module rfx32_tail(rst, clk, branchmiss, tail0, tail1);
+module rfx32_tail(rst, clk, branchmiss, fetchbuf0_v, fetchbuf1_v,fetchbuf0_instr, iqentry_stomp, iq, tail0, tail1);
 input rst;
 input clk;
 input branchmiss;
+input fetchbuf0_v;
+input fetchbuf1_v;
+input instruction_t fetchbuf0_instr;
+input [7:0] iqentry_stomp;
+input iq_entry_t [7:0] iq;
 output reg [2:0] tail0;
 output reg [2:0] tail1;
 
@@ -46,6 +51,38 @@ else begin
 			tail0 <= 7;
 			tail1 <= 0;
     end
+	end
+	else begin
+		case ({fetchbuf0_v, fetchbuf1_v})
+		2'b00:	;
+		2'b01:
+			if (iq[tail0].v == INV) begin
+				tail0 <= tail0 + 2'd1;
+				tail1 <= tail1 + 2'd1;
+			end
+		2'b10:
+			if (iq[tail0].v == INV) begin
+				tail0 <= tail0 + 2'd1;
+				tail1 <= tail1 + 2'd1;
+			end
+		2'b11:
+			if (iq[tail0].v == INV) begin
+				if (fnIsBackBranch(fetchbuf0_instr) == TRUE) begin
+					tail0 <= tail0 + 2'd1;
+					tail1 <= tail1 + 2'd1;
+				end
+				else begin
+			    if (iq[tail1].v == INV) begin
+						tail0 <= tail0 + 3'd2;
+						tail1 <= tail1 + 3'd2;
+			    end
+			    else begin
+						tail0 <= tail0 + 3'd1;
+						tail1 <= tail1 + 3'd1;
+					end				
+				end
+			end
+		endcase
 	end
 end
 
