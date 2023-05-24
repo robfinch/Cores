@@ -61,7 +61,7 @@ input clk;
 input dce;										// 1= data cache enabled
 input rfx32pkg::address_t snoop_adr;
 input snoop_v;								// 1= valid snoop taking place
-input [3:0] snoop_cid;
+input [5:0] snoop_cid;
 input cache_load;							// 1= load operation, 0=update
 output reg hit;
 output reg modified;

@@ -189,7 +189,6 @@ if (cs_rgn && wbs_req.cyc && wbs_req.stb)
 	2'd1:	dato <= pma_regions[wbs_req.padr[8:6]].cta;
 	2'd2:	dato <= pma_regions[wbs_req.padr[8:6]].at;
 	2'd3:	dato <= pma_regions[wbs_req.padr[8:6]].lock;
-	default:	dato <= 'd0;
 	endcase
 else
 	dato <= 'd0;

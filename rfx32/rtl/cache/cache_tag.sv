@@ -40,7 +40,7 @@ import rfx32pkg::*;
 import rfx32_cache_pkg::*;
 
 module rfx32_cache_tag(rst, clk, wr, vadr_i, padr_i, way, rclk, ndx, tag,
-	ptags0, ptags1, ptags2, ptags3);
+	sndx, ptag0, ptag1, ptag2, ptag3);
 parameter LINES=64;
 parameter WAYS=4;
 parameter LOBIT=6;
@@ -55,15 +55,20 @@ input [1:0] way;
 input rclk;
 input [$clog2(LINES)-1:0] ndx;
 output cache_tag_t [WAYS-1:0] tag;
-(* ram_style="distributed" *)
-output cache_tag_t ptags0 [0:LINES-1];	// physical tags
-(* ram_style="distributed" *)
-output cache_tag_t ptags1 [0:LINES-1];
-(* ram_style="distributed" *)
-output cache_tag_t ptags2 [0:LINES-1];
-(* ram_style="distributed" *)
-output cache_tag_t ptags3 [0:LINES-1];
+input [$clog2(LINES)-1:0] sndx;
+output cache_tag_t ptag0;
+output cache_tag_t ptag1;
+output cache_tag_t ptag2;
+output cache_tag_t ptag3;
 
+(* ram_style="distributed" *)
+cache_tag_t ptags0 [0:LINES-1];	// physical tags
+(* ram_style="distributed" *)
+cache_tag_t ptags1 [0:LINES-1];
+(* ram_style="distributed" *)
+cache_tag_t ptags2 [0:LINES-1];
+(* ram_style="distributed" *)
+cache_tag_t ptags3 [0:LINES-1];
 
 //typedef logic [$bits(code_address_t)-1:TAGBIT] tag_t;
 
@@ -79,33 +84,19 @@ cache_tag_t vtags3 [0:LINES-1];
 integer g,g1;
 integer n,n1;
 
-initial begin
-for (n = 0; n < LINES; n = n + 1) begin
-	vtags0[n] <= 'd1;
-	vtags1[n] <= 'd1;
-	vtags2[n] <= 'd1;
-	vtags3[n] <= 'd1;
-	ptags0[n] <= 'd1;
-	ptags1[n] <= 'd1;
-	ptags2[n] <= 'd1;
-	ptags3[n] <= 'd1;
-end
-end
-
 always_ff @(posedge clk)
+// Careful reset of tags. Must be done via the same addressing as is used while
+// active. The processor must output an incrementing address during reset to 
+// reset the tags.
 // Resetting all the tags will force implementation with FF's. Since tag values
 // do not matter to synthesis it is simply omitted.
-`ifdef IS_SIM
 if (rst) begin
-	for (n1 = 0; n1 < LINES; n1 = n1 + 1) begin
-		vtags0[n1] <= 'd1;
-		vtags1[n1] <= 'd1;
-		vtags2[n1] <= 'd1;
-		vtags3[n1] <= 'd1;
-	end
+	vtags0[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	vtags1[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	vtags2[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	vtags3[vadr_i[HIBIT:LOBIT]] <= 'd1;
 end
 else
-`endif
 begin
 	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(rfx32pkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(rfx32pkg::address_t)-1:TAGBIT]};
@@ -114,6 +105,13 @@ begin
 end
 
 always_ff @(posedge clk)
+if (rst) begin
+	ptags0[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	ptags1[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	ptags2[vadr_i[HIBIT:LOBIT]] <= 'd1;
+	ptags3[vadr_i[HIBIT:LOBIT]] <= 'd1;
+end
+else
 begin
 	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(rfx32pkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(rfx32pkg::address_t)-1:TAGBIT]};
@@ -125,5 +123,10 @@ assign tag[0] = vtags0[ndx];
 assign tag[1] = vtags1[ndx];
 assign tag[2] = vtags2[ndx];
 assign tag[3] = vtags3[ndx];
+
+assign ptag0 = ptags0[sndx];
+assign ptag1 = ptags1[sndx];
+assign ptag2 = ptags2[sndx];
+assign ptag3 = ptags3[sndx];
 
 endmodule

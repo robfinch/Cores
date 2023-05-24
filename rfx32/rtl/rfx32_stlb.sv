@@ -346,8 +346,6 @@ rfx32_stlb_active_region urgn
 	.err()
 );
 
-assign rgn_dato = 'd0;
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Arbitrate incoming requests.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1047,6 +1045,9 @@ else begin
 			end
 		end
 	end
+	fta_req_o <= fta_req;
+	fta_req_o.cache <= fta_cache_t'(cache_o);
+	fta_req_o.we <= fta_req.we & rwx_o[1];
 end
 
 always_comb
@@ -1081,12 +1082,5 @@ always_comb
 		endcase
 	default:	cache_o = NC_NB;
 	endcase
-
-always_comb
-begin
-	fta_req_o = fta_req;
-	fta_req_o.cache = fta_cache_t'(cache_o);
-	fta_req_o.we = fta_req.we & rwx_o[1];
-end
 
 endmodule

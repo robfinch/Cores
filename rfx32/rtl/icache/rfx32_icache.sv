@@ -49,7 +49,7 @@ module rfx32_icache(rst,clk,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
 	ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,miss_adr,miss_asid,
 	ic_line_i,wway,wr_ic
 	);
-parameter CID = 4'd2;
+parameter CID = 6'd2;
 parameter FALSE = 1'b0;
 parameter WAYS = 4;
 parameter LINES = 128;
@@ -64,7 +64,7 @@ input clk;
 input invce;
 input rfx32pkg::address_t snoop_adr;
 input snoop_v;
-input [3:0] snoop_cid;
+input [5:0] snoop_cid;
 input invall;
 input invline;
 input rfx32pkg::asid_t ip_asid;
@@ -100,14 +100,14 @@ cache_tag_t [WAYS-1:0] victago;
 reg [LINES-1:0] valide [0:WAYS-1];
 reg [LINES-1:0] valido [0:WAYS-1];
 wire [1:0] snoop_waye, snoop_wayo;
-cache_tag_t ptags0e [0:LINES-1];
-cache_tag_t ptags1e [0:LINES-1];
-cache_tag_t ptags2e [0:LINES-1];
-cache_tag_t ptags3e [0:LINES-1];
-cache_tag_t ptags0o [0:LINES-1];
-cache_tag_t ptags1o [0:LINES-1];
-cache_tag_t ptags2o [0:LINES-1];
-cache_tag_t ptags3o [0:LINES-1];
+cache_tag_t ptags0e;
+cache_tag_t ptags1e;
+cache_tag_t ptags2e;
+cache_tag_t ptags3e;
+cache_tag_t ptags0o;
+cache_tag_t ptags1o;
+cache_tag_t ptags2o;
+cache_tag_t ptags3o;
 reg [2:0] victim_count, vcne, vcno;
 ICacheLine [NVICTIM-1:0] victim_cache;
 ICacheLine victim_eline, victim_oline;
@@ -335,10 +335,11 @@ uictage
 	.rclk(clk),
 	.ndx(ip[HIBIT:LOBIT]+iel),	// virtual index (same bits as physical address)
 	.tag(victage),
-	.ptags0(ptags0e),
-	.ptags1(ptags1e),
-	.ptags2(ptags2e),
-	.ptags3(ptags3e)
+	.sndx(snoop_adr[HIBIT:LOBIT]),
+	.ptag0(ptags0e),
+	.ptag1(ptags1e),
+	.ptag2(ptags2e),
+	.ptag3(ptags3e)
 );
 
 rfx32_cache_tag 
@@ -360,10 +361,11 @@ uictago
 	.rclk(clk),
 	.ndx(ip[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
 	.tag(victago),
-	.ptags0(ptags0o),
-	.ptags1(ptags1o),
-	.ptags2(ptags2o),
-	.ptags3(ptags3o)
+	.sndx(snoop_adr[HIBIT:LOBIT]),
+	.ptag0(ptags0o),
+	.ptag1(ptags1o),
+	.ptag2(ptags2o),
+	.ptag3(ptags3o)
 );
 
 rfx32_cache_hit
@@ -449,22 +451,22 @@ else begin
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
 	if (snoop_v && snoop_cid != CID) begin
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags0e[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags0e)
 			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags1e[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags1e)
 			valide[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags2e[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags2e)
 			valide[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags3e[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags3e)
 			valide[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags0o[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags0o)
 			valido[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags1o[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags1o)
 			valido[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags2o[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags2o)
 			valido[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags3o[snoop_adr[HIBIT:LOBIT]])
+		if (snoop_adr[$bits(rfx32pkg::address_t)-1:TAGBIT]==ptags3o)
 			valido[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 	// Invalidate victim cache entries matching the snoop address
 		for (g = 0; g < NVICTIM; g = g + 1) begin

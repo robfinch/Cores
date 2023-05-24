@@ -59,7 +59,7 @@ output out2;
 input clk3;
 input gate3;
 output out3;
-parameter CHANNELS = 2;
+parameter CHANNELS = 8;
 
 fta_cmd_request128_t [CHANNELS-1:0] wbn_req;
 fta_cmd_response128_t [CHANNELS-1:0] wbn_resp;
@@ -94,8 +94,8 @@ fta_cmd_request128_t [NDATA_PORTS-1:0] cpu1_dreq;
 fta_cmd_response128_t [NDATA_PORTS-1:0] cpu1_dresp;
 fta_cmd_request128_t cpu2_ireq;
 fta_cmd_response128_t cpu2_iresp;
-fta_cmd_request128_t cpu2_dreq;
-fta_cmd_response128_t cpu2_dresp;
+fta_cmd_request128_t [NDATA_PORTS-1:0] cpu2_dreq;
+fta_cmd_response128_t [NDATA_PORTS-1:0] cpu2_dresp;
 
 rfx32_stlb
 #(
@@ -271,6 +271,30 @@ ucpu1
 );
 
 /*
+rfx32 
+#(
+	.CORENO(6'd2),
+	.CID(6'd2)
+)
+ucpu2
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.wr_o(),
+	.adr_o(),
+	.dat_i('d0),
+	.dat_o(),
+	.ftaim_req(cpu2_ireq),
+	.ftaim_resp(cpu2_iresp),
+	.ftadm_req(cpu2_dreq),
+	.ftadm_resp(cpu2_dresp),
+	.snoop_v(snoop_v),
+	.snoop_adr(snoop_adr),
+	.snoop_cid(snoop_cid)
+);
+*/
+
+/*
 rfx32seq
 #(
 	.CORENO(6'd2),
@@ -292,8 +316,6 @@ ucpu2
 	.snoop_cid(snoop_cid)
 );
 */
-assign cpu2_ireq = 'd0;
-assign cpu2_dreq = 'd0;
 
 always_comb wbn_req[0] = cpu1_ireq;
 always_comb cpu1_iresp = wbn_resp[0];
@@ -303,6 +325,20 @@ always_comb wbn_req[2] = cpu1_dreq[1];
 always_comb cpu1_dresp[1] = wbn_resp[2];
 always_comb wbn_req[3] = cpu1_dreq[2];
 always_comb cpu1_dresp[2] = wbn_resp[3];
+/*
+always_comb wbn_req[4] = cpu2_ireq;
+always_comb cpu2_iresp = wbn_resp[4];
+always_comb wbn_req[5] = cpu2_dreq[0];
+always_comb cpu2_dresp[0] = wbn_resp[5];
+always_comb wbn_req[6] = cpu2_dreq[1];
+always_comb cpu2_dresp[1] = wbn_resp[6];
+always_comb wbn_req[7] = cpu2_dreq[2];
+always_comb cpu2_dresp[2] = wbn_resp[7];
+*/
+always_comb wbn_req[4] = 'd0;
+always_comb wbn_req[5] = 'd0;
+always_comb wbn_req[6] = 'd0;
+always_comb wbn_req[7] = 'd0;
 /*
 always_comb cpu2_iresp = wbn_resp[2];
 always_comb cpu2_dresp = wbn_resp[3];

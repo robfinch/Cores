@@ -1,10 +1,13 @@
 import rfx32pkg::*;
 
-module rfx32_ifetch(rst, clk, branchback, backpc, branchmiss, misspc, pc, inst0, inst1, iq, tail0, tail1,
-	fetchbuf, fetchbuf0_instr, fetchbuf0_imm, fetchbuf0_v, fetchbuf0_pc, 
-	fetchbuf1_instr, fetchbuf1_imm, fetchbuf1_v, fetchbuf1_pc);
+module rfx32_ifetch(rst, clk, hit, irq, branchback, backpc, branchmiss, misspc,
+	pc, inst0, inst1, iq, tail0, tail1,
+	fetchbuf, fetchbuf0_instr, fetchbuf0_v, fetchbuf0_pc, 
+	fetchbuf1_instr, fetchbuf1_v, fetchbuf1_pc);
 input rst;
 input clk;
+input hit;
+input irq;
 input branchback;
 input address_t backpc;
 input branchmiss;
@@ -17,12 +20,10 @@ input [2:0] tail0;
 input [2:0] tail1;
 output reg fetchbuf;
 output instruction_t fetchbuf0_instr;
-output reg [33:0] fetchbuf0_imm;
-output fetchbuf0_v;
+output reg fetchbuf0_v;
 output address_t fetchbuf0_pc;
 output instruction_t fetchbuf1_instr;
-output reg [33:0] fetchbuf1_imm;
-output fetchbuf1_v;
+output reg fetchbuf1_v;
 output address_t fetchbuf1_pc;
 
 reg [3:0] panic;
@@ -93,14 +94,7 @@ else begin
 		4'b0100: 
 			begin
 				if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
-			    fetchbufC_instr <= inst0;
-			    fetchbufC_v <= VAL;
-			    fetchbufC_pc <= pc;
-			    fetchbufD_instr <= inst1;
-			    fetchbufD_v <= VAL;
-			    fetchbufD_pc <= pc + fnInsLen(inst0);
-			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+					tFetchCD();
 			    fetchbufB_v <= iq[tail0].v;	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
@@ -144,14 +138,7 @@ else begin
 		4'b1000:
 			begin
 				if ({fetchbufA_v, fnIsBackBranch(fetchbufA_instr)} == {VAL, TRUE}) begin
-			    fetchbufC_instr <= inst0;
-			    fetchbufC_v <= VAL;
-			    fetchbufC_pc <= pc;
-			    fetchbufD_instr <= inst1;
-			    fetchbufD_v <= VAL;
-			    fetchbufD_pc <= pc + fnInsLen(inst0);
-			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+					tFetchCD();
 			    fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
@@ -208,14 +195,7 @@ else begin
 				end
 				else if ({fetchbufB_v, fnIsBackBranch(fetchbufB_instr)} == {VAL, TRUE}) begin
 			    if (did_branchback) begin
-						fetchbufC_instr <= inst0;
-						fetchbufC_v <= VAL;
-						fetchbufC_pc <= pc;
-						fetchbufD_instr <= inst1;
-						fetchbufD_v <= VAL;
-						fetchbufD_pc <= pc + fnInsLen(inst0);
-						pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+			    	tFetchCD();
 						fetchbufA_v <= iq[tail0].v;	// if it can be queued, it will
 						fetchbufB_v <= iq[tail1].v;	// if it can be queued, it will
 						fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
@@ -281,14 +261,7 @@ else begin
 		4'b0100:
 			begin
 				if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
-			    fetchbufA_instr <= inst0;
-			    fetchbufA_v <= VAL;
-			    fetchbufA_pc <= pc;
-			    fetchbufB_instr <= inst1;
-			    fetchbufB_v <= VAL;
-			    fetchbufB_pc <= pc + fnInsLen(inst0);
-			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+					tFetchAB();
 			    fetchbufD_v <= iq[tail0].v;	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
@@ -332,14 +305,7 @@ else begin
 		4'b1000:
 			begin
 				if ({fetchbufC_v, fnIsBackBranch(fetchbufC_instr)} == {VAL, TRUE}) begin
-			    fetchbufA_instr <= inst0;
-			    fetchbufA_v <= VAL;
-			    fetchbufA_pc <= pc;
-			    fetchbufB_instr <= inst1;
-			    fetchbufB_v <= VAL;
-			    fetchbufB_pc <= pc + fnInsLen(inst0);
-			    pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+					tFetchAB();
 			    fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + ~iq[tail0].v;
 				end
@@ -396,14 +362,7 @@ else begin
 				end
 				else if ({fetchbufD_v, fnIsBackBranch(fetchbufD_instr)} == {VAL, TRUE}) begin
 			    if (did_branchback) begin
-						fetchbufA_instr <= inst0;
-						fetchbufA_v <= VAL;
-						fetchbufA_pc <= pc;
-						fetchbufB_instr <= inst1;
-						fetchbufB_v <= VAL;
-						fetchbufB_pc <= pc + fnInsLen(inst0);
-						pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-
+			    	tFetchAB();
 						fetchbufC_v <= iq[tail0].v;	// if it can be queued, it will
 						fetchbufD_v <= iq[tail1].v;	// if it can be queued, it will
 						fetchbuf <= fetchbuf + (~iq[tail0].v & ~iq[tail1].v);
@@ -542,33 +501,53 @@ else begin
 	    // get data iff the fetch buffers are empty
 	    //
 	  if (fetchbufA_v == INV && fetchbufB_v == INV) begin
-			fetchbufA_instr <= inst0;
-			fetchbufA_v <= VAL;
-			fetchbufA_pc <= pc;
-			fetchbufB_instr <= inst1;
-			fetchbufB_v <= VAL;
-			fetchbufB_pc <= pc + fnInsLen(inst0);
-			pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
+	  	tFetchAB();
+      // fetchbuf steering logic correction
+      if (fetchbufC_v==INV && fetchbufD_v==INV && hit)
+        fetchbuf <= 1'b0;
     end
-    else if (fetchbufC_v == INV && fetchbufD_v == INV) begin
-			fetchbufC_instr <= inst0;
-			fetchbufC_v <= VAL;
-			fetchbufC_pc <= pc;
-			fetchbufD_instr <= inst1;
-			fetchbufD_v <= VAL;
-			fetchbufD_pc <= pc + fnInsLen(inst0);
-			pc <= pc + fnInsLen(inst0) + fnInsLen(inst1);
-    end
+    else if (fetchbufC_v == INV && fetchbufD_v == INV)
+    	tFetchCD();
 	end
 end
 
-assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
-assign fetchbuf0_imm	 = (fetchbuf == 1'b0) ? fnImm(fetchbufA_instr) : fnImm(fetchbufC_instr);
-assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
-assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
-assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
-assign fetchbuf1_imm	 = (fetchbuf == 1'b0) ? fnImm(fetchbufB_instr) : fnImm(fetchbufD_instr);
-assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
-assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+always_comb
+	fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
+always_comb
+	fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
+always_comb
+	fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+always_comb
+	fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
+always_comb
+	fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
+always_comb
+	fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+
+task tFetchAB;
+begin
+  fetchbufA_instr <= inst0;
+  fetchbufA_v <= VAL;
+  fetchbufA_pc <= pc;
+  fetchbufB_instr <= inst1;
+  fetchbufB_v <= VAL;
+  fetchbufB_pc <= pc + 4'd4;
+  if (hit & ~irq)
+	  pc <= pc + 4'd8;
+end
+endtask
+
+task tFetchCD;
+begin
+  fetchbufC_instr <= inst0;
+  fetchbufC_v <= VAL;
+  fetchbufC_pc <= pc;
+  fetchbufD_instr <= inst1;
+  fetchbufD_v <= VAL;
+  fetchbufD_pc <= pc + 4'd4;
+  if (hit & ~irq)
+  	pc <= pc + 4'd8;
+end
+endtask
 
 endmodule

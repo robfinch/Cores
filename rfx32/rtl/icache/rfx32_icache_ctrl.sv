@@ -57,7 +57,7 @@ output [LOG_WAYS-1:0] way;
 output ICacheLine line_o;
 input fta_address_t snoop_adr;
 input snoop_v;
-input [3:0] snoop_cid;
+input [5:0] snoop_cid;
 parameter CORENO = 1;
 
 wire rfx32pkg::address_t [15:0] vtags;

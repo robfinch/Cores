@@ -12,12 +12,17 @@ set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets -of_objects [get_ports xcl
 #create_generated_clock -name clk40 -source [get_pins ucg1/clk_in1] -divide_by 16 -multiply_by 8 [get_pins ucg1/clk40]
 #create_generated_clock -name clk50 -source [get_pins ucg1/clk_in1] -divide_by 16 -multiply_by 8 [get_pins ucg1/clk50]
 #create_generated_clock -name clk80 -source [get_pins ucg1/clk_in1] -divide_by 10 -multiply_by 8 [get_pins ucg1/clk80]
+# CLKOUT0 = clk200
+# CLKOUT1 = clk100
+# CLKOUT2 = clk40
+# CLKOUT3 = clk33
+# CLKOUT4 = clk20
+
 set_clock_groups -asynchronous \
 -group { \
 clk_pll_i \
+clk200_NexysVideoClkgen \
 clk100_NexysVideoClkgen \
-clk160_NexysVideoClkgen \
-get_clocks -of_objects [get_pins mmcm_adv_inst.CLKOUT0] \
 clk20_NexysVideoClkgen \
 } \
 -group { \
@@ -25,7 +30,9 @@ clk40_NexysVideoClkgen \
 } \
 -group { \
 clk50_NexysVideoClkgen \
+clk33_NexysVideoClkgen \
 }
+
 #-group { \
 #clk400_NexysVideoClkgen2 \
 #clk57_NexysVideoClkgen2 \

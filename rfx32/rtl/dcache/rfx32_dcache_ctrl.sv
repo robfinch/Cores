@@ -70,10 +70,10 @@ input DCacheLine dump_i;
 output reg dump_ack;
 input fta_address_t snoop_adr;
 input snoop_v;
-input [3:0] snoop_cid;
+input [5:0] snoop_cid;
 
 genvar g;
-integer nn,nn1;
+integer nn,nn1,nn2;
 
 typedef enum logic [2:0] {
 	RESET = 0,
@@ -174,12 +174,12 @@ endgenerate
 
 always_comb
 begin
-	cpu_request_i2 = 'd0;
+	nn2 = 'd0;
 	for (nn1 = 0; nn1 < 16; nn1 = nn1 + 1)
 		if (cpu_req_queue[nn1].cyc)
-			cpu_request_i2 <= cpu_req_queue[nn1];
+			nn2 = nn1;
 end
-	
+
 always_ff @(posedge clk_i, posedge rst_i)
 if (rst_i) begin
 	req_state <= RESET;
@@ -197,8 +197,11 @@ if (rst_i) begin
 	cache_load <= 'd0;
 	cache_load_r <= 'd0;
 	cache_dump <= 'd0;
-	for (nn = 0; nn < 16; nn = nn + 1)
+	for (nn = 0; nn < 16; nn = nn + 1) begin
 		tran_req[nn] <= 'd0;
+		tran_load_data[nn] <= 'd0;
+		cpu_req_queue[nn] <= 'd0;
+	end
 	tran_active <= 'd0;
 	tran_out <= 'd0;
 	req_load <= 'd0;
@@ -208,6 +211,7 @@ if (rst_i) begin
 	ndx <= 'd0;
 	is_dump <= 'd0;
 	cpu_request_queued <= 'd1;
+	cpu_request_i2 <= 'd0;
 end
 else begin
 	dump_ack <= 1'd0;
@@ -444,7 +448,7 @@ else begin
 		tBusClear();
 		wr <= 1'b0;
 		// Force any transactions matching the snoop address to retry.
-		for (nn = 0; nn < 16; nn = nn + 1)
+		for (nn = 0; nn < 16; nn = nn + 1) begin
 			// Note: the tag bits are compared only for the addresses that would match
 			// between the virtual and physical. The cache line number. Need to match on 
 			// the physical address returning from snoop, but only have the virtual
@@ -457,9 +461,12 @@ else begin
 			if (cpu_request_i2.vadr[rfx32_cache_pkg::ITAG_BIT:rfx32_cache_pkg::ICacheTagLoBit]==
 				cpu_req_queue[nn].vadr[rfx32_cache_pkg::ITAG_BIT:rfx32_cache_pkg::ICacheTagLoBit])
 				cpu_req_queue[nn] <= 'd0;
+		end
 		req_state <= STATE1;		
 		resp_state <= STATE1;	
 	end
+	cpu_request_i2 <= cpu_req_queue[nn2[3:0]];
+	cpu_req_queue[nn2[3:0]].cyc <= 'd0;
 end
 
 task tBusClear;
@@ -506,7 +513,6 @@ begin
 	tran_req[tid_cnt & 4'hF].seg <= fta_bus_pkg::DATA;
 	tran_active[tid_cnt & 4'hF] <= 1'b1;
 	tran_load_data[tid_cnt & 4'hF].adr <= adr;
-	cpu_req_queue[cpu_request_i2.tid & 15] <= 'd0;
 end
 endtask
 
