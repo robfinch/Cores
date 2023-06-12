@@ -93,7 +93,7 @@ generate begin : gDdataEncoders
 			.SerialClk(SerialClk),
 			.pDataIn(pDataOutRaw[i]),
 			.sDataOut_p(TMDS_Data_p[i]),
-			.sDataOut_n(TMDS_Data_n[i]),
+			.sDataOut_n(TMDS_Data_n[i])
 		);
   end
 end

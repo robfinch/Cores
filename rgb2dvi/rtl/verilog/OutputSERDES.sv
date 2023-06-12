@@ -156,14 +156,14 @@ SerializerSlave
 // the output will be 3210, 7654, ...
 //-----------------------------------------------------------   
 
-genvar slice_count;
-generate begin : gSliceOSERDES
-	pDataIn_q <= 'd0;
+integer slice_count;
+always_comb
+begin
+	pDataIn_q = 'd0;
 	for (slice_count = 0; slice_count < kParallelWidth; slice_count = slice_count + 1)
   	// DVI sends least significant bit first 
    	// OSERDESE2 sends D1 bit first
-		pDataIn_q[14-slice_count-1] <= pDataIn[slice_count];
+		pDataIn_q[14-slice_count-1] = pDataIn[slice_count];
 end
-endgenerate
 
 endmodule
