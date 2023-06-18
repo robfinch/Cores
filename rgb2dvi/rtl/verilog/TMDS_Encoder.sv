@@ -130,38 +130,38 @@ always_comb
 
 always_comb
 	case({pC1_2,pC0_2})
-	2'b00:	control_token_2 <= kCtlTkn0;
-	2'b01:	control_token_2 <= kCtlTkn1;
-	2'b10:	control_token_2 <= kCtlTkn2;
-	2'b11:	control_token_2 <= kCtlTkn3;
+	2'b00:	control_token_2 = kCtlTkn0;
+	2'b01:	control_token_2 = kCtlTkn1;
+	2'b10:	control_token_2 = kCtlTkn2;
+	2'b11:	control_token_2 = kCtlTkn3;
 	endcase
 
 always_comb
 	if (de_2) begin
 		casez({cond_not_balanced_2,cond_balanced_2,q_m_2[8]})
-		3'b010:	q_out_2 <= {~q_m_2[8],q_m_2[8],~q_m_2[7:0]};
-		3'b011:	q_out_2 <= {~q_m_2[8],q_m_2[8], q_m_2[7:0]};
-		3'b1??:	q_out_2 <= {1'b1,q_m_2[8],~q_m_2[7:0]};
-		default:	q_out_2 <= {1'b0,q_m_2[8],~q_m_2[7:0]};		// DC balanced
+		3'b010:	q_out_2 = {~q_m_2[8],q_m_2[8],~q_m_2[7:0]};
+		3'b011:	q_out_2 = {~q_m_2[8],q_m_2[8], q_m_2[7:0]};
+		3'b1??:	q_out_2 = {1'b1,q_m_2[8],~q_m_2[7:0]};
+		default:	q_out_2 = {1'b0,q_m_2[8],q_m_2[7:0]};		// DC balanced
 		endcase
 	end
 	else
-		q_out_2 <= control_token_2;
+		q_out_2 = control_token_2;
 
 always_comb
-	dc_bias_2 <= {1'b0,n0q_m_2} - {1'b0,n1q_m_2};
+	dc_bias_2 = {1'b0,n0q_m_2} - {1'b0,n1q_m_2};
 
 always_comb
 	if (de_2) begin
 		casez({cond_not_balanced_2,cond_balanced_2,q_m_2[8]})
-		3'b010:	cnt_t_2 <= cnt_t_3 + dc_bias_2;
-		3'b011:	cnt_t_2 <= cnt_t_3 - dc_bias_2;
-		3'b1??:	cnt_t_2 <= {1'b0, q_m_2[8:0], 1'b0} + dc_bias_2;
-		default:	cnt_t_2 <= {1'b0, ~q_m_2[8:0], 1'b0} - dc_bias_2;
+		3'b010:	cnt_t_2 = cnt_t_3 + dc_bias_2;
+		3'b011:	cnt_t_2 = cnt_t_3 - dc_bias_2;
+		3'b1??:	cnt_t_2 = {1'b0, q_m_2[8], 1'b0} + dc_bias_2;
+		default:	cnt_t_2 = {1'b0, ~q_m_2[8], 1'b0} - dc_bias_2;
 		endcase
 	end
 	else
-		cnt_t_2 <= 'd0;
+		cnt_t_2 = 'd0;
 	
 //--------------------------------------------------------------------------------
 // Pipeline stage 3, registered output
