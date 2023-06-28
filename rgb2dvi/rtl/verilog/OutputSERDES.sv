@@ -47,6 +47,7 @@ output sDataOut_n;
 
 wire ocascade1, ocascade2;
 reg [13:0] pDataIn_q;
+wire sDataOut;
 
 // Differential output buffer for TMDS I/O standard 
 OBUFDS 
