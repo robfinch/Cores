@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2004-2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2004-2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -89,10 +89,12 @@ always_ff @(posedge clk)
 	if (awr) fdo2 <= {3'd0,din};
 
 always_ff @(posedge clk)
-	begin
-		if (awr) empty <= 0;
-		else if (rd) empty <= 1;
-	end
+if (rst)
+	empty <= 1;
+else begin
+	if (awr) empty <= 0;
+	else if (rd) empty <= 1;
+end
 
 assign full = ~empty;
 wire [7:0] fdo = fdo2;
@@ -103,13 +105,12 @@ always_ff @(posedge clk)
 // generate an empty signal for when the fifo is disabled
 reg fempty2;
 always_ff @(posedge clk)
-	if (rst)
-		fempty2 <= 1;
-	else begin
-		if (awr) fempty2 <= 0;
-		else if (rd) fempty2 <= 1;
-	end
-
+if (rst)
+	fempty2 <= 1;
+else begin
+	if (awr) fempty2 <= 0;
+	else if (rd) fempty2 <= 1;
+end
 
 wire [7:0] fdo1;		// fifo data output
 wire rdf = fifoEnable ? rd : awr;

@@ -129,7 +129,7 @@ else
 	halfLastBit <= 8'd8;
 
 // record a global error status
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	gerr <= 0;
 else begin
@@ -183,7 +183,7 @@ reg [5:0] rxdd          /* synthesis ramstyle = "logic" */; // synchronizer flop
 reg rxdsmp;             // majority samples
 reg rdxstart;           // for majority style sample solid 3tik-wide sample
 reg [1:0] rxdsum [0:1];
-always @(posedge clk)
+always_ff @(posedge clk)
 if (baud16x_ce) begin
 	rxdd <= {rxdd[4:0],rxd};
   if (SamplerStyle == 0) begin
@@ -199,7 +199,7 @@ if (baud16x_ce) begin
 end
 
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	state <= `IDLE;
 else begin
@@ -231,7 +231,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	cnt <= 8'h00;
 else begin
@@ -254,7 +254,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	wf <= 1'b0;
 else begin
@@ -276,7 +276,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	t5 <= 1'b0;
 else begin
@@ -284,7 +284,7 @@ else begin
 		t5 <= t4;
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	full1 <= 1'b0;
 else begin
@@ -294,7 +294,7 @@ else begin
 		full1 <= 1'b0;
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	didRd <= 1'b0;
 else begin
@@ -317,7 +317,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	rx_data <= 11'h0;
 else begin
@@ -338,7 +338,7 @@ else begin
 end
 
 // Overrun: trying to recieve data when recieve buffer is already full.
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	overrun <= 1'b0;
 else begin
@@ -358,7 +358,7 @@ else begin
 	end
 end
 
-always @(posedge clk)
+always_ff @(posedge clk)
 if (rst)
 	ferr <= 1'b0;
 else begin

@@ -81,7 +81,7 @@ localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
 parameter MSIX = 1'b0;
 input rst_i;
-input clk_i;			// eg 50.000MHz
+input clk_i;			// fta bus clock eg. 50.000MHz
 input cs_config_i;		// config region circuit select
 input cs_io_i;		// IO region circuit select
 // FTA -------------------------------
@@ -243,8 +243,8 @@ always_ff @(posedge clk_i)
 always_comb
 	cs_io = cs_io_ii & reqi.cyc & reqi.stb && cs_uart;
 
-wire rdrx = cs_io && adr_h==`UART_TRB && ~we && !accessCD;
-wire txrx = cs_io && we && adr_h==`UART_TRB && !accessCD;
+wire rdrx = cs_io && adr_h[3:2]==`UART_TRB && ~we && !accessCD;
+wire txrx = cs_io && we && adr_h[3:2]==`UART_TRB && !accessCD;
 
 vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_io|cs_config)&(erc|~we)), .q(resp.ack));
 vtdl #(.WID(6), .DEP(16)) urdyd3 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d(req.cid), .q(resp.cid));
@@ -299,7 +299,7 @@ uart6551Rx uart_rx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.cyc(cyc_i),
+	.cyc(cs_io),
 	.cs(rdrx),
 	.wr(we),
 	.dout(rx_do),
@@ -329,7 +329,7 @@ uart6551Tx uart_tx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.cyc(cyc_i),
+	.cyc(cs_io),
 	.cs(txrx),
 	.wr(we),
 	.din(dati[7:0]),
@@ -368,8 +368,6 @@ else if (cs_io) begin
 	`UART_CTRL:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
 	endcase
 end
-else
-	dat_o <= 'd0;
 
 
 // register updates

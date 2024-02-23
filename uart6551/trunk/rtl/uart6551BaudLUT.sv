@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,7 +43,35 @@ output reg [pCounterBits-1:0] o;
 // table for a 50.000MHz reference clock
 // value = 50,000,000 / (baud * 16)
 always_comb
-if (pClkFreq==40)
+case(pClkFreq)
+20:
+	case (a)	// synopsys full_case parallel_case
+	5'd0:	o <= 0;
+	5'd1:	o <= 24'd25000;	// 50 baud
+	5'd2:	o <= 24'd16667;	// 75 baud
+	5'd3:	o <= 24'd11372;	// 109.92 baud
+	5'd4:	o <= 24'd9270;	// 134.58 baud
+	5'd5:	o <= 24'd8333;	// 150 baud
+	5'd6:	o <= 24'd4167;	// 300 baud
+	5'd7:	o <= 24'd2083;	// 600 baud
+	5'd8:	o <= 24'd1042;	// 1200 baud
+	5'd9:	o <= 24'd694;	// 1800 baud
+	5'd10:	o <= 24'd521;	// 2400 baud
+	5'd11:	o <= 24'd347;	// 3600 baud
+	5'd12:	o <= 24'd260;	// 4800 baud
+	5'd13:	o <= 24'd174;	// 7200 baud
+	5'd14:	o <= 24'd130;	// 9600 baud
+	5'd15:	o <= 24'd65;	// 19200 baud
+
+	5'd16:	o <= 24'd33;	// 38400 baud
+	5'd17:	o <= 24'd22;	// 57600 baud
+	5'd18:	o <= 24'd11;	// 115200 baud
+	5'd19:	o <= 24'd5;	// 230400 baud
+	5'd20:	o <= 24'd3;	// 460800 baud
+	5'd21:	o <= 24'd1;	// 921600 baud
+	default:	o <= 24'd130;	// 9600 baud
+	endcase
+40:
 	case (a)	// synopsys full_case parallel_case
 	5'd0:	o <= 0;
 	5'd1:	o <= 24'd50000;	// 50 baud
@@ -70,7 +98,7 @@ if (pClkFreq==40)
 	5'd21:	o <= 24'd3;	// 921600 baud
 	default:	o <= 24'd260;	// 9600 baud
 	endcase
-else if (pClkFreq==50)
+50:
 	case (a)	// synopsys full_case parallel_case
 	5'd0:	o <= 0;
 	5'd1:	o <= 24'd62500;	// 50 baud
@@ -97,7 +125,7 @@ else if (pClkFreq==50)
 	5'd21:	o <= 24'd3;	// 921600 baud
 	default:	o <= 24'd326;	// 9600 baud
 	endcase
-else if (pClkFreq==80)
+80:
 	case (a)	// synopsys full_case parallel_case
 	5'd0:	o <= 0;
 	5'd1:	o <= 24'd100000;	// 50 baud
@@ -124,7 +152,7 @@ else if (pClkFreq==80)
 	5'd21:	o <= 24'd5;	// 921600 baud
 	default:	o <= 24'd521;	// 9600 baud
 	endcase
-else if (pClkFreq==100)
+100:
 	case (a)	// synopsys full_case parallel_case
 	5'd0:	o <= 0;
 	5'd1:	o <= 24'd125000;	// 50 baud
@@ -151,6 +179,34 @@ else if (pClkFreq==100)
 	5'd21:	o <= 24'd7;	// 921600 baud
 	default:	o <= 24'd651;	// 9600 baud
 	endcase
+default:
+	case (a)	// synopsys full_case parallel_case
+	5'd0:	o <= 0;
+	5'd1:	o <= (pClkFreq*1e6)/(16*50);	// 50 baud
+	5'd2:	o <= (pClkFreq*1e6)/(16*75);	// 75 baud
+	5'd3:	o <= (pClkFreq*1e6)/(16*109.92);	// 109.92 baud
+	5'd4:	o <= (pClkFreq*1e6)/(16*134.58);	// 134.58 baud
+	5'd5:	o <= (pClkFreq*1e6)/(16*150);	// 150 baud
+	5'd6:	o <= (pClkFreq*1e6)/(16*300);	// 300 baud
+	5'd7:	o <= (pClkFreq*1e6)/(16*600);	// 600 baud
+	5'd8:	o <= (pClkFreq*1e6)/(16*1200);	// 1200 baud
+	5'd9:	o <= (pClkFreq*1e6)/(16*1800);	// 1800 baud
+	5'd10:	o <= (pClkFreq*1e6)/(16*2400);	// 2400 baud
+	5'd11:	o <= (pClkFreq*1e6)/(16*3600);	// 3600 baud
+	5'd12:	o <= (pClkFreq*1e6)/(16*4800);	// 4800 baud
+	5'd13:	o <= (pClkFreq*1e6)/(16*7200);	// 7200 baud
+	5'd14:	o <= (pClkFreq*1e6)/(16*9600);	// 9600 baud
+	5'd15:	o <= (pClkFreq*1e6)/(16*19200);	// 19200 baud
+
+	5'd16:	o <= (pClkFreq*1e6)/(16*38400);	// 38400 baud
+	5'd17:	o <= (pClkFreq*1e6)/(16*57600);	// 57600 baud
+	5'd18:	o <= (pClkFreq*1e6)/(16*115200);	// 115200 baud
+	5'd19:	o <= (pClkFreq*1e6)/(16*230400);	// 230400 baud
+	5'd20:	o <= (pClkFreq*1e6)/(16*406800);	// 460800 baud
+	5'd21:	o <= (pClkFreq*1e6)/(16*921600);	// 921600 baud
+	default:	o <= (pClkFreq*1e6)/(16*9600);	// 9600 baud
+	endcase
+endcase
 
 endmodule
 
