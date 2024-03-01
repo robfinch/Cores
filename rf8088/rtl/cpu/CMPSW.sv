@@ -39,6 +39,7 @@ CMPSW:
 `include "check_for_ints.v"
 	else begin
 		tRead({seg_reg,`SEG_SHIFT} + si);
+		cyc_done <= FALSE;
 		tGoto(CMPSW1);
 	end
 
@@ -54,12 +55,15 @@ CMPSW1:
 		end
 		tGoto(CMPSW2);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead({seg_reg,`SEG_SHIFT} + si);
+	else
+		cyc_done <= TRUE;
 
 CMPSW2:
 	begin
 		tRead({seg_reg,`SEG_SHIFT} + si);
+		cyc_done <= FALSE;
 		tGoto(CMPSW3);
 	end
 
@@ -75,12 +79,15 @@ CMPSW3:
 		end
 		tGoto(CMPSW4);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead({seg_reg,`SEG_SHIFT} + si);
+	else
+		cyc_done <= TRUE;
 
 CMPSW4:
 	begin
 		tRead(esdi);
+		cyc_done <= FALSE;
 		tGoto(CMPSW5);
 	end
 
@@ -96,12 +103,15 @@ CMPSW5:
 		end
 		tGoto(CMPSW6);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead(esdi);
+	else
+		cyc_done <= TRUE;
 
 CMPSW6:
 	begin
 		tRead(esdi);
+		cyc_done <= FALSE;
 		tGoto(CMPSW7);
 	end
 
@@ -117,8 +127,10 @@ CMPSW7:
 		end
 		tGoto(CMPSW8);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead(esdi);
+	else
+		cyc_done <= TRUE;
 
 CMPSW8:
 	begin

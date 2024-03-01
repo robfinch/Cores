@@ -5,6 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  STOSB,STOSW
+//  Store string data to memory.
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +34,66 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
-	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
+// ============================================================================
+
+STOS:
+	if (pe_nmi) begin
+		rst_nmi <= 1'b1;
+		int_num <= 8'h02;
+		ir <= `NOP;
+		tGoto(INT2);
+	end
+	else if (irq_i & ie) begin
+		ir <= `NOP;
+		tGoto(INTA0);
+	end
+	else if (w && (di==16'hFFFF)) begin
+		ir <= `NOP;
+		int_num <= 8'd13;
+		tGoto(INT2);
+	end
+	else if (repdone)
+		tGoto(IFETCH);
+	else begin
+		tWrite(esdi,(w & df) ? ah : al);
 		cyc_done <= FALSE;
-		tGoto(CMPSB1);
+		tGoto(STOS1);
 	end
-CMPSB1:
+STOS1:
 	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
-	begin
-		tGoto(CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
-	end
-CMPSB3:
-	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
-	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
-		if (df) begin
-			si <= si_dec;
-			di <= di_dec;
-		end
-		else begin
-			si <= si_inc;
-			di <= di_inc;
-		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
+		if (repz|repnz) begin
+			tGoto(w ? STOS2 : STOS);
 			cx <= cx_dec;
-			ip <= ir_ip;
-			tGoto(IFETCH);
 		end
 		else
-			tGoto(IFETCH);
+			tGoto(w ? STOS2 : IFETCH);
+		if (df)
+			di <= di_dec;
+		else
+			di <= di_inc;
 	end
+	else if (rty_i && !cyc_done)
+		tWrite(esdi,(w & df) ? ah : al);
+	else
+		cyc_done <= TRUE;
+STOS2:
+	begin
+		tWrite(esdi,df ? al : ah);
+		cyc_done <= FALSE;
+		tGoto(STOS3);
+	end
+STOS3:
+	if (ack_i) begin
+		if (repz|repnz)
+			tGoto(STOS);
+		else
+			tGoto(IFETCH);
+		if (df)
+			di <= di_dec;
+		else
+			di <= di_inc;
+	end
+	else if (rty_i && !cyc_done)
+		tWrite(esdi,df ? al : ah);
+	else
+		cyc_done <= TRUE;

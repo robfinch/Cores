@@ -5,6 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  REGFETCHA
+//  - fetch register value into 'A' side ALU
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +34,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
+// ============================================================================
+
+REGFETCHA:
 	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
-		cyc_done <= FALSE;
-		tGoto(CMPSB1);
-	end
-CMPSB1:
-	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
-	begin
-		tGoto(CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
-	end
-CMPSB3:
-	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
-	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
-		if (df) begin
-			si <= si_dec;
-			di <= di_dec;
-		end
-		else begin
-			si <= si_inc;
-			di <= di_inc;
-		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
-			cx <= cx_dec;
-			ip <= ir_ip;
-			tGoto(IFETCH);
-		end
-		else
-			tGoto(IFETCH);
+		a <= rrro;
+		tGoto(EXECUTE);
 	end

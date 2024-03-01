@@ -69,7 +69,7 @@ wire   busy_i;
 reg [1:0] seg_sel;			// segment selection	0=ES,1=SS,2=CS (or none), 3=DS
 
 e_8088state state;			// machine state
-reg [7:0] substate;
+e_8088state substate;
 reg hasFetchedModrm;
 reg hasFetchedDisp8;
 reg hasFetchedDisp16;
@@ -123,6 +123,7 @@ reg bus_cycle_started;
 reg [7:0] dat_i;
 reg ack_i;
 reg rty_i;
+reg cyc_done;
 
 reg nmi_armed;
 reg rst_nmi;				// reset the nmi flag
@@ -168,6 +169,7 @@ always @(posedge CLK)
 		ld_div32 <= 1'b0;
 		read_code <= 1'b0;
 		bus_cycle_started <= FALSE;
+		cyc_done <= TRUE;
 		tGoto(IFETCH);
 	end
 	else begin
@@ -184,33 +186,28 @@ always @(posedge CLK)
 `include "DECODE.sv"
 `include "DECODER2.sv"
 `include "XLAT.sv"
-		REGFETCHA:
-			begin
-				a <= rrro;
-				tGoto(EXECUTE);
-			end
+`include "REGFETCHA.sv"
 `include "EACALC.sv"
 `include "CMPSB.sv"
 `include "CMPSW.sv"
 `include "MOVS.sv"
+`include "LODS.sv"
+`include "STOS.sv"
+`include "SCASB.sv"
+`include "SCASW.sv"
+`include "EXECUTE.sv"
+`include "FETCH_DATA.sv"
+`include "FETCH_DISP8.sv"
+`include "FETCH_DISP16.sv"
+`include "FETCH_IMMEDIATE.sv"
+`include "FETCH_OFFSET_AND_SEGMENT.sv"
+`include "MOV_I2BYTREG.sv"
+`include "STORE_DATA.sv"
+`include "BRANCH.sv"
+`include "CALL.sv"
+`include "CALLF.sv"
+`include "CALL_IN.sv"
 
-`include "LODS.v"
-`include "STOS.v"
-`include "SCASB.v"
-`include "SCASW.v"
-`include "EXECUTE.v"
-`include "FETCH_DATA.v"
-`include "FETCH_DISP8.v"
-		FETCH_DISP16B:
-			tFetchDisp16b();
-`include "FETCH_IMMEDIATE.v"
-`include "FETCH_OFFSET_AND_SEGMENT.v"
-`include "MOV_I2BYTREG.v"
-`include "STORE_DATA.v"
-`include "BRANCH.v"
-`include "CALL.v"
-`include "CALLF.v"
-`include "CALL_IN.v"
 `include "INTA.v"
 `include "INT.v"
 `include "FETCH_STK_ADJ.v"

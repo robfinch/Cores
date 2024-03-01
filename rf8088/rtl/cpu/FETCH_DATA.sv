@@ -5,6 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  FETCH_DATA
+//  Fetch data from memory.
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +34,76 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
+// ============================================================================
+
+FETCH_DATA:
 	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
+		tRead(ea);
 		cyc_done <= FALSE;
-		tGoto(CMPSB1);
+		tGoto(FETCH_DATA1);
 	end
-CMPSB1:
+FETCH_DATA1:
 	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
-	begin
-		tGoto(CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
-	end
-CMPSB3:
-	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
-	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
-		if (df) begin
-			si <= si_dec;
-			di <= di_dec;
+		if (d) begin
+			a <= rrro;
+			b[ 7:0] <= dat_i;
+			b[15:8] <= {8{dat_i[7]}};
 		end
 		else begin
-			si <= si_inc;
-			di <= di_inc;
+			b <= rrro;
+			a[ 7:0] <= dat_i;
+			a[15:8] <= {8{dat_i[7]}};
 		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
-			cx <= cx_dec;
-			ip <= ir_ip;
-			tGoto(IFETCH);
+		if (w)
+			tGoto(FETCH_DATA2);
+		else begin
+			case(ir)
+			8'h80:	tGoto(FETCH_IMM8);
+			8'h81:	tGoto(FETCH_IMM16);
+			8'h83:	tGoto(FETCH_IMM8);
+			8'hC0:	tGoto(FETCH_IMM8);
+			8'hC1:	tGoto(FETCH_IMM8);
+			8'hC6:	tGoto(FETCH_IMM8);
+			8'hC7:	tGoto(FETCH_IMM16);
+			8'hF6:	tGoto(FETCH_IMM8);
+			8'hF7:	tGoto(FETCH_IMM16);
+			default: tGoto(EXECUTE);
+			endcase
+			hasFetchedData <= 1'b1;
 		end
-		else
-			tGoto(IFETCH);
 	end
+	else if (rty_i && !cyc_done)
+		tRead(ea);
+	else
+		cyc_done <= TRUE;
+FETCH_DATA2:
+	begin
+		cyc_type <= `CT_RDMEM;
+		tRead(ea_inc);
+		cyc_done <= FALSE;
+		tGoto(FETCH_DATA3);
+	end
+FETCH_DATA3:
+	if (ack_i) begin
+		if (d)
+			b[15:8] <= dat_i;
+		else
+			a[15:8] <= dat_i;
+		case(ir)
+		8'h80:	state <= FETCH_IMM8;
+		8'h81:	state <= FETCH_IMM16;
+		8'h83:	state <= FETCH_IMM8;
+		8'hC0:	state <= FETCH_IMM8;
+		8'hC1:	state <= FETCH_IMM8;
+		8'hC6:	state <= FETCH_IMM8;
+		8'hC7:	state <= FETCH_IMM16;
+		8'hF6:	state <= FETCH_IMM8;
+		8'hF7:	state <= FETCH_IMM16;
+		default: state <= EXECUTE;
+		endcase
+		hasFetchedData <= 1'b1;
+	end
+	else if (rty_i && !cyc_done)
+		tRead(ea_inc);
+	else
+		cyc_done <= TRUE;

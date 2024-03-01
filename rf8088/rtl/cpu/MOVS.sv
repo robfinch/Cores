@@ -47,6 +47,7 @@ MOVS:
 		tGoto(IFETCH);
 	else begin
 		tRead(dssi);
+		cyc_done <= FALSE;
 		tGoto(MOVS1);
 	end
 MOVS1:
@@ -55,24 +56,29 @@ MOVS1:
 		a[7:0] <= dat_i;
 		si <= df ? si_dec : si_inc;
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead(dssi);
+	else
+		cyc_done <= TRUE;
 	
 MOVS2:
 	begin
 		tWrite(esdi,a[7:0]);
+		cyc_done <= FALSE;
 		tGoto(MOVS3);
 	end
 MOVS3:
-	if (rty_i)
+	if (rty_i && !cyc_done)
 		tWrite(esdi,a[7:0]);
 	else begin
+		cyc_done <= TRUE;
 		di <= df ? di_dec : di_inc;
 		tGoto(MOVS4);
 	end
 MOVS4:
 	begin
 		tRead(dssi);
+		cyc_done <= FALSE;
 		tGoto(MOVS5);
 	end
 MOVS5:
@@ -81,17 +87,21 @@ MOVS5:
 		si <= df ? si_dec : si_inc;
 		tGoto(MOVS6);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead(dssi);
+	else
+		cyc_done <= TRUE;
 MOVS6:
 	begin
 		tWrite(esdi,a[7:0]);
+		cyc_done <= FALSE;
 		tGoto(MOVS7);
 	end
 MOVS7:
-	if (rty_i)
+	if (rty_i && !cyc_done)
 		tWrite(esdi,a[7:0]);
 	else begin
+		cyc_done <= TRUE;
 		di <= df ? di_dec : di_inc;
 		if (repz|repnz) begin
 			cx <= cx_dec;

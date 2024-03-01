@@ -5,6 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  SCASW
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +33,74 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
-	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
-		cyc_done <= FALSE;
-		tGoto(CMPSB1);
+// ============================================================================
+
+SCASW:
+`include "check_for_ints.v"
+	else if (w && (di==16'hFFFF) && !df) begin
+		ir <= `NOP;
+		int_num <= 8'd13;
+		tGoto(INT1);	// ??? INT2?
 	end
-CMPSB1:
-	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
-	begin
-		tGoto(CMPSB3);
+	else if ((repz|repnz) & cxz)
+		tGoto(IFETCH);
+	else begin
 		tRead(esdi);
 		cyc_done <= FALSE;
+		tGoto(SCASW1);
 	end
-CMPSB3:
+SCASW1:
 	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
-	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
+		tGoto(SCASW2);
+		a <= ax;
 		if (df) begin
-			si <= si_dec;
+			b[15:8] <= dat_i;
 			di <= di_dec;
 		end
 		else begin
-			si <= si_inc;
+			b[7:0] <= dat_i;
 			di <= di_inc;
 		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
-			cx <= cx_dec;
-			ip <= ir_ip;
-			tGoto(IFETCH);
+	end
+	else if (rty_i && !cyc_done)
+		tRead(esdi);
+	else
+		cyc_done <= TRUE;
+SCASW2:
+	begin
+		tRead(esdi);
+		cyc_done <= FALSE;
+		tGoto(SCASW3);
+	end
+SCASW3:
+	if (ack_i) begin
+		tGoto(SCASW4);
+		a <= ax;
+		if (df) begin
+			b <= dat_i;
+			di <= di_dec;
 		end
+		else begin
+			b[15:8] <= dat_i;
+			di <= di_inc;
+		end
+	end
+	else if (rty_i && !cyc_done)
+		tRead(esdi);
+	else
+		cyc_done <= TRUE;
+SCASW4:
+	begin
+		pf <= pres;
+		af <= carry   (1'b0,a[3],b[3],alu_o[3]);
+		cf <= carry   (1'b0,a[15],b[15],alu_o[15]);
+		vf <= overflow(1'b0,a[15],b[15],alu_o[15]);
+		sf <= resnw;
+		zf <= reszw;
+		if (repz|repnz)
+			cx <= cx_dec;
+		if ((repz & reszw) | (repnz & !reszw))
+			tGoto(SCASW);
 		else
 			tGoto(IFETCH);
 	end

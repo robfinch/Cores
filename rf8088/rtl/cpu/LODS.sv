@@ -44,6 +44,7 @@ LODS:
 	end
 	else begin
 		tRead({seg_reg,`SEG_SHIFT} + si);
+		cyc_done <= FALSE;
 		tGoto(LODS_NACK);
 	end
 LODS_NACK:
@@ -64,22 +65,18 @@ LODS_NACK:
 		end
 		tGoto(w ? LODS1 : EXECUTE);
 	end
-	else if (rty_i)
+	else if (rty_i && !cyc_done)
 		tRead({seg_reg,`SEG_SHIFT} + si);
+	else
+		cyc_done <= TRUE;
 
 LODS1:
 	begin
-		cyc_type <= `CT_RDMEM;
-		stb_o <= 1'b1;
-		adr_o <= {seg_reg,`SEG_SHIFT} + si;
-		state <= LODS1_NACK;
+		tRead({seg_reg,`SEG_SHIFT} + si);
+		tGoto(LODS1_NACK);
 	end
 LODS1_NACK:
 	if (ack_i) begin
-		cyc_type <= `CT_PASSIVE;
-		lock_o <= 1'b0;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
 		if (df) begin
 			si <= si_dec;
 			b[7:0] <= dat_i;
@@ -90,4 +87,8 @@ LODS1_NACK:
 		end
 		state <= EXECUTE;
 	end
-
+	else if (rty_i && !cyc_done)
+		tRead({seg_reg,`SEG_SHIFT} + si);
+	else
+		cyc_done <= TRUE;
+	

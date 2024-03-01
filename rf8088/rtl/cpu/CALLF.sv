@@ -5,6 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  CALL FAR and CALL FAR indirect
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +33,59 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
+// ============================================================================
+
+CALLF:
 	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
-		cyc_done <= FALSE;
-		tGoto(CMPSB1);
+		tWrite(sssp,cs[15:8]);
+		tGoto(CALLF1);
 	end
-CMPSB1:
-	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
+CALLF1:
+	if (rty_i)
+		tWrite(sssp,cs[15:8]);
+	else begin
+		sp <= sp_dec;
+		tGoto(CALLF2);
 	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
+CALLF2:
 	begin
-		tGoto(CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
+		tWrite(sssp,cs[7:0]);
+		tGoto(CALLF3);
 	end
-CMPSB3:
-	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
+CALLF3:
+	if (rty_i)
+		tWrite(sssp,cs[7:0]);
+	else begin
+		sp <= sp_dec;
+		tGoto(CALLF4);
 	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
+CALLF4:
 	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
-		if (df) begin
-			si <= si_dec;
-			di <= di_dec;
-		end
+		tWrite(sssp,ip[15:8]);
+		tGoto(CALLF5);
+	end
+CALLF5:
+	if (rty_i)
+		tWrite(sssp,ip[15:8]);
+	else begin
+		sp <= sp_dec;
+		tGoto(CALLF6);
+	end
+CALLF6:
+	begin
+		tWrite(sssp,ip[7:0]);
+		tGoto(CALLF7);
+	end
+CALLF7:
+	if (rty_i)
+		tWrite(sssp,ip[7:0]);
+	else begin
+		sp <= sp_dec;
+		if (ir==8'hFF && rrr==3'b011)	// CALL FAR indirect
+			tGoto(JUMP_VECTOR1);
 		else begin
-			si <= si_inc;
-			di <= di_inc;
-		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
-			cx <= cx_dec;
-			ip <= ir_ip;
+			cs <= selector;
+			ip <= offset;
 			tGoto(IFETCH);
 		end
-		else
-			tGoto(IFETCH);
 	end

@@ -5,6 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//  FETCH_DISP16
+//  - fetch 16 bit displacement
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,64 +34,60 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-//  CMPSB
-//
-//=============================================================================
-//
-CMPSB:
+// ============================================================================
+
+FETCH_DISP16:
 	begin
-		tRead({seg_reg,`SEG_SHIFT} + si);
-		cyc_done <= FALSE;
-		tGoto(CMPSB1);
+		disp16 <= bundle[15:0];
+		bundle <= bundle[127:16];
+		tGoto(FETCH_DISP16b);
 	end
-CMPSB1:
-	if (ack_i) begin
-		tGoto(CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		read({seg_reg,`SEG_SHIFT} + si);
-	else
-		cyc_done <= TRUE;
-CMPSB2:
-	begin
-		tGoto(CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
-	end
-CMPSB3:
-	if (ack_i) begin
-		tGoto(CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[15:8] <= {8{dat_i[7]}};
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
-	begin
-		pf <= pres;
-		zf <= reszb;
-		sf <= resnb;
-		af <= carry   (1'b1,a[3],b[3],alu_o[3]);
-		cf <= carry   (1'b1,a[7],b[7],alu_o[7]);
-		vf <= overflow(1'b1,a[7],b[7],alu_o[7]);
-		if (df) begin
-			si <= si_dec;
-			di <= di_dec;
+
+FETCH_DISP16b:
+	casez(ir)
+
+	//-----------------------------------------------------------------
+	// Flow control operations
+	//-----------------------------------------------------------------
+	`CALL: tGoto(CALL);
+	`JMP: begin ip <= ip + disp16; tGoto(IFETCH); end
+	`JMPS: begin ip <= ip + disp16; tGoto(IFETCH); end
+
+	//-----------------------------------------------------------------
+	// Memory Operations
+	//-----------------------------------------------------------------
+	
+	`MOV_AL2M,`MOV_AX2M:
+		begin
+			res <= ax;
+			ea <= {seg_reg,`SEG_SHIFT} + disp16;
+			tGoto(STORE_DATA);
 		end
-		else begin
-			si <= si_inc;
-			di <= di_inc;
+	`MOV_M2AL,`MOV_M2AX:
+		begin
+			d <= 1'b0;
+			rrr <= 3'd0;
+			ea <= {seg_reg,`SEG_SHIFT} + disp16;
+			tGoto(FETCH_DATA);
 		end
-		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
-			cx <= cx_dec;
-			ip <= ir_ip;
-			tGoto(IFETCH);
+
+	`MOV_MA:
+		case(substate)
+		FETCH_DATA:
+			if (hasFetchedData) begin
+				ir <= {4'b0,w,3'b0};
+				wrregs <= 1'b1;
+				res <= disp16;
+				tGoto(IFETCH);
+			end
+		endcase
+
+	`MOV_AM:
+		begin
+			w <= ir[0];
+			tGoto(STORE_DATA);
+			ea  <= {ds,`SEG_SHIFT} + disp16;
+			res <= ir[0] ? {ah,al} : {al,al};
 		end
-		else
-			tGoto(IFETCH);
-	end
+	default:	tGoto(IFETCH);
+	endcase
