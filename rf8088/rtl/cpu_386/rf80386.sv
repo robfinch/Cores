@@ -5,8 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rf8088.sv
-//	- 8088 compatible CPU
+//	rf80386.sv
+//	- 80386 compatible CPU
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -42,34 +42,38 @@
 //
 //  Webpack 14.3  xc6slx45 3-csg324
 //  884 ff's 5064 LUTs / 79.788 MHz
+//
+//  Vivado 2022.2
+//	4886 LUTs / 835 FFs / 3 DSPs
 // ============================================================================
 
 import const_pkg::*;
 import fta_bus_pkg::*;
-import rf8088_pkg::*;
+import rf80386_pkg::*;
 
-`include "cycle_types.v"
-
-module rtf8088(rst_i, clk_i, nmi_i, irq_i, csip, bundle, ihit, ftam_req, ftam_resp);
-
+module rf80386(rst_i, clk_i, nmi_i, irq_i, csip, ibundle, ihit, ftam_req, ftam_resp);
+parameter CORENO = 6'd1;
+parameter CID = 3'd1;
 input rst_i;
 input clk_i;
 input nmi_i;	
 input irq_i;
 output [31:0] csip;
-input [127:0] bundle;
+input [127:0] ibundle;
 input ihit;
 
 output fta_cmd_request128_t ftam_req;
 input fta_cmd_response128_t ftam_resp;
 
+reg [127:0] bundle;
 reg    mio_o;
 wire   busy_i;
+reg [19:0] adr_o;
 
 reg [1:0] seg_sel;			// segment selection	0=ES,1=SS,2=CS (or none), 3=DS
 
-e_8088state state;			// machine state
-e_8088state substate;
+e_80386state state;			// machine state
+e_80386state stk_state;	// stacked machine state
 reg hasFetchedModrm;
 reg hasFetchedDisp8;
 reg hasFetchedDisp16;
@@ -77,7 +81,7 @@ reg hasFetchedData;
 reg hasStoredData;
 reg hasFetchedVector;
 
-reg [15:0] res;				// result bus
+reg [31:0] res;				// result bus
 wire pres;					// parity result
 wire reszw;					// zero word
 wire reszb;					// zero byte
@@ -105,9 +109,11 @@ reg [7:0] int_num;			// interrupt number to execute
 reg [15:0] seg_reg;			// segment register value for memory access
 reg [15:0] data16;			// caches data
 reg [15:0] disp16;			// caches displacement
+reg [31:0] data32;
+reg [31:0] disp32;
 reg [15:0] offset;			// caches offset
 reg [15:0] selector;		// caches selector
-reg [`AMSB:0] ea;				// effective address
+reg [31:0] ea;				// effective address
 reg [39:0] desc;			// buffer for sescriptor
 reg [6:0] cnt;				// counter
 reg [1:0] S43;
@@ -124,6 +130,8 @@ reg [7:0] dat_i;
 reg ack_i;
 reg rty_i;
 reg cyc_done;
+reg [31:0] tsp;
+reg [31:0] sndx;		// scaled index
 
 reg nmi_armed;
 reg rst_nmi;				// reset the nmi flag
@@ -138,7 +146,7 @@ wire NMI = nmi_i;
 `include "WHICH_SEG.sv"
 evaluate_branch u4 (ir,cx,zf,cf,sf,vf,pf,take_br);
 `include "ALU.sv"
-nmi_detector u6 (RESET, CLK, NMI, rst_nmi, pe_nmi);
+nmi_detector u6 (rst_i, clk_i, nmi_i, rst_nmi, pe_nmi);
 
 always_comb
 	ack_i = ftam_resp.ack;
@@ -147,8 +155,11 @@ always_comb
 always_comb
 	dat_i = ftam_resp.dat >> {ea[3:0],3'd0};
 
-always @(posedge CLK)
-	if (RESET) begin
+wire [30:0] lfsr31o;
+lfsr31 ulfsr1(rst_i, clk_i, 1'b1, 1'b0, lfsr31o);
+
+always_ff @(posedge CLK)
+	if (rst_i) begin
 		pf <= 1'b0;
 		cf <= 1'b0;
 		df <= 1'b0;
@@ -157,8 +168,16 @@ always @(posedge CLK)
 		ie <= 1'b0;
 		hasFetchedModrm <= 1'b0;
 		cs <= `CS_RESET;
-		ip <= 16'hFFF0;
-		ftam_req <= {`bits(fta_cmd_request128_t){1'b0}};
+		cd_desc <= {$bits(desc386_t){1'b0}};
+		cs_desc.db <= 1'b1;							// 32-bit mode
+		cs_desc.base_lo <= 24'hFF0000;	// base = 0
+		cs_desc.base_hi <= 8'hFF;			
+		cs_desc.limit_lo <= 16'hFFFF;		// limit = max
+		cs_desc.limit_hi <= 4'hF;
+		cs_desc.g <= 1'b1;							// 4096 bytes granularity
+		cs_desc.p <= 1'b1;							// segment is present
+		eip <= 32'h0000FFF0;
+		ftam_req <= {$bits(fta_cmd_request128_t){1'b0}};
 		ir <= `NOP;
 		prefix1 <= 8'h00;
 		prefix2 <= 8'h00;
@@ -170,7 +189,24 @@ always @(posedge CLK)
 		read_code <= 1'b0;
 		bus_cycle_started <= FALSE;
 		cyc_done <= TRUE;
-		tGoto(IFETCH);
+		ftam_req.tid.core <= CORENO;
+		ftam_req.tid.channel <= CID;
+		ftam_req.tid.tranid <= 4'd1;
+		mod <= 2'd0;
+		rm <= 3'd0;
+		rrr <= 3'd0;
+		sxi <= 1'b0;
+		hasFetchedModrm <= 1'b0;
+		hasFetchedDisp8 <= 1'b0;
+		hasFetchedDisp16 <= 1'b0;
+		hasFetchedVector <= 1'b0;
+		hasStoredData <= 1'b0;
+		hasFetchedData <= 1'b0;
+		data16 <= 16'h0000;
+		cnt <= 7'd0;
+		tsp <= 16'd0;
+		tClearBus();
+		tGoto(rf8088_pkg::IFETCH);
 	end
 	else begin
 		rst_nmi <= 1'b0;
@@ -179,9 +215,12 @@ always @(posedge CLK)
 		ld_div16 <= 1'b0;
 		ld_div32 <= 1'b0;
 
+		tClearBus();
+
 `include "WRITEBACK.sv"
 
 		case(state)
+
 `include "IFETCH.sv"
 `include "DECODE.sv"
 `include "DECODER2.sv"
@@ -201,6 +240,7 @@ always @(posedge CLK)
 `include "FETCH_DISP16.sv"
 `include "FETCH_IMMEDIATE.sv"
 `include "FETCH_OFFSET_AND_SEGMENT.sv"
+
 `include "MOV_I2BYTREG.sv"
 `include "STORE_DATA.sv"
 `include "BRANCH.sv"
@@ -226,14 +266,45 @@ always @(posedge CLK)
 `include "DIVIDE.sv"
 
 			default:
-				state <= IFETCH;
+				state <= rf8088_pkg::IFETCH;
 			endcase
 		end
+
+task nack_ir;
+begin
+	ir <= ibundle[7:0];
+	bundle <= ibundle[127:8];
+	eip <= ip_inc;
+end
+endtask
+
+task nack_ir2;
+begin
+	ir2 <= bundle[7:0];
+	bundle <= bundle[127:8];
+	eip <= ip_inc;
+end
+endtask
 
 task tGoto;
 input e_8088state nst;
 begin
 	state <= nst;
+end
+endtask
+
+task tGosub;
+input e_80386state tgt;
+input e_80386state rts;
+begin
+	stk_state <= rts;
+	tGoto(tgt);
+end
+endtask
+
+task tReturn;
+begin
+	state <= stk_state;
 end
 endtask
 
@@ -263,7 +334,8 @@ begin
 	ftam_req.stb <= HIGH;
 	ftam_req.sel <= 16'h0001 << ad[3:0];
 	ftam_req.we <= LOW;
-	ftam_req.adr <= {12'd0,ad};
+	ftam_req.vadr <= {lfsr31o[11:0],ad};
+	ftam_req.padr <= {lfsr31o[11:0],ad};
 	adr_o <= {12'd0,ad};
 end
 endtask
@@ -280,7 +352,8 @@ begin
 	ftam_req.stb <= HIGH;
 	ftam_req.sel <= 16'h0001 << ad[3:0];
 	ftam_req.we <= HIGH;
-	ftam_req.adr <= {12'd0,ad};
+	ftam_req.vadr <= {lfsr31o[11:0],ad};
+	ftam_req.padr <= {lfsr31o[11:0],ad};
 	ftam_req.data1 <= {16{dat}};
 	adr_o <= {12'd0,ad};
 end
