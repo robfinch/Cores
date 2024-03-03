@@ -130,6 +130,45 @@ rf80386_pkg::EXECUTE:
 				sf <= resn;
 				zf <= resz;
 			end
+			
+		`ARPL:
+			begin
+				if (a[1:0] < b[1:0]) begin
+					res <= {a[15:2],b[1:0]};
+					zf <= 1'b1;
+					if (mod==2'b11) begin
+						wrregs <= 1'b1;
+						tGoto(rf80386_pkg::IFETCH);
+					end
+					else
+						tGoto(rf80386_pkg::STORE_DATA);
+				end
+				else
+					zf <= 1'b0;
+			end
+
+		`BOUND:
+			if (c < a || c > b) begin
+				int_num <= 8'h05;
+				tGoto(rf80386_pkg::INT2);
+			end
+
+		`IMULI8,`IMULI:
+			begin
+				if (cs_desc.db) begin
+					eax <= sp64[31:0];
+					edx <= sp64[63:32];
+					cf <= sp64[63:32]!=32'd0;
+					vf <= sp64[63:32]!=32'd0;
+				end
+				else begin
+					eax[15:0] <= sp32[15:0];
+					edx[15:0] <= sp32[31:16];
+					cf <= sp32[31:16]!=16'd0;
+					vf <= sp32[31:16]!=16'd0;
+				end
+				tGoto(rf80386_pkg::IFETCH);
+			end
 
 		8'hF6,8'hF7:
 			begin
@@ -331,7 +370,7 @@ rf80386_pkg::EXECUTE:
 			begin
 				wrsregs <= 1'b1;
 				res <= alu_o;
-				tGoto(rf80386_pkg::IFETCH);
+				tGosub(rf80386_pkg::LOAD_DESC,rf80386_pkg::IFETCH);
 			end
 		`LODSB:
 			begin
@@ -360,7 +399,7 @@ rf80386_pkg::EXECUTE:
 				end
 			end
 
-		8'hD0,8'hD1,8'hD2,8'hD3,8'hC0,8'hC1:
+		8'hD0,8'hD1,8'hD2,8'hD3,`SHI8,`SHI16:
 			begin
 				tGoto(rf80386_pkg::IFETCH);
 				wrregs <= 1'b1;

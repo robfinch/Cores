@@ -35,16 +35,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //
-//  Verilog 
-//  Webpack 9.2i xc3s1000 4-ft256
-//  2550 slices / 4900 LUTs / 61 MHz
-//  650 ff's / 2 MULTs
-//
-//  Webpack 14.3  xc6slx45 3-csg324
-//  884 ff's 5064 LUTs / 79.788 MHz
+//  System Verilog 
 //
 //  Vivado 2022.2
-//	4886 LUTs / 835 FFs / 3 DSPs
+//	6941 LUTs / 1206 FFs / 7 DSPs
 // ============================================================================
 
 import const_pkg::*;
@@ -91,7 +85,8 @@ wire resn;
 wire resz;
 
 reg [2:0] cyc_type;			// type of bus sycle
-reg lidt, lgdt;
+reg lidt, lgdt, lmsw;
+reg lsl, ltr;
 reg w;						// 0=8 bit, 1=16 bit
 reg d;
 reg v;						// 1=count in cl, 0 = count is one
@@ -120,6 +115,7 @@ reg [31:0] disp32;
 reg [31:0] offset;			// caches offset
 reg [15:0] selector;		// caches selector
 reg [31:0] ea;				// effective address
+reg [31:0] ftmp;			// temporary frame pointer (ENTER)
 reg [39:0] desc;			// buffer for sescriptor
 reg [6:0] cnt;				// counter
 reg [1:0] S43;
@@ -169,6 +165,9 @@ always_ff @(posedge CLK)
 	if (rst_i) begin
 		lidt <= 1'b0;
 		lgdt <= 1'b0;
+		lmsw <= 1'b0;
+		lsl <= 1'b0;
+		ltr <= 1'b0;
 		pf <= 1'b0;
 		cf <= 1'b0;
 		df <= 1'b0;
@@ -214,6 +213,7 @@ always_ff @(posedge CLK)
 		data16 <= 16'h0000;
 		cnt <= 7'd0;
 		tsp <= 16'd0;
+		ftmp <= 32'h0;
 		tClearBus();
 		tGoto(rf80386_pkg::IFETCH);
 	end
@@ -274,6 +274,7 @@ always_ff @(posedge CLK)
 `include "OUTSB.sv"
 `include "XCHG_MEM.sv"
 `include "DIVIDE.sv"
+`include "ENTER.sv"
 			default:
 				state <= rf80386_pkg::IFETCH;
 			endcase
@@ -336,42 +337,6 @@ begin
 	ftam_req.stb <= LOW;
 	ftam_req.we <= LOW;
 	ftam_req.sel <= 16'h0;
-end
-endtask
-
-task tRead;
-input [19:0] ad;
-begin
-	ea <= ad;
-	ftam_req.blen <= 6'd0;
-	ftam_req.bte <= fta_bus_pkg::LINEAR;
-	ftam_req.cti <= fta_bus_pkg::CLASSIC;
-	ftam_req.cyc <= HIGH;
-	ftam_req.stb <= HIGH;
-	ftam_req.sel <= 16'h0001 << ad[3:0];
-	ftam_req.we <= LOW;
-	ftam_req.vadr <= {lfsr31o[11:0],ad};
-	ftam_req.padr <= {lfsr31o[11:0],ad};
-	adr_o <= {12'd0,ad};
-end
-endtask
-
-task tWrite;
-input [19:0] ad;
-input [7:0] dat;
-begin
-	ea <= ad;
-	ftam_req.blen <= 6'd0;
-	ftam_req.bte <= fta_bus_pkg::LINEAR;
-	ftam_req.cti <= fta_bus_pkg::CLASSIC;
-	ftam_req.cyc <= HIGH;
-	ftam_req.stb <= HIGH;
-	ftam_req.sel <= 16'h0001 << ad[3:0];
-	ftam_req.we <= HIGH;
-	ftam_req.vadr <= {lfsr31o[11:0],ad};
-	ftam_req.padr <= {lfsr31o[11:0],ad};
-	ftam_req.data1 <= {16{dat}};
-	adr_o <= {12'd0,ad};
 end
 endtask
 

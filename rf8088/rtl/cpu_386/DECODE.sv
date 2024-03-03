@@ -177,12 +177,40 @@ rf80386_pkg::DECODE:
 				esp <= esp - 4'd2;
 			tGoto(rf80386_pkg::PUSHA);
 		end
+	`PUSHI,`PUSHI8:
+		begin
+			if (cs_desc.db)
+				esp <= esp - 4'd4;
+			else
+				esp <= esp - 4'd2;
+			tGoto(rf80386_pkg::PUSH);
+		end
 	`POP_REG: tGoto(rf80386_pkg::POP);
 	`POP_DS: tGoto(rf80386_pkg::POP);
 	`POP_ES: tGoto(rf80386_pkg::POP);
 	`POP_SS: tGoto(rf80386_pkg::POP);
 	`POPF: tGoto(rf80386_pkg::POP);
 	`POPA:	tGoto(rf80386_pkg::POPA);
+	`ENTER:	
+		begin
+			if (cs_desc.db)
+				esp <= esp - 4'd4;
+			else
+				esp <= esp - 4'd2;
+			tGoto(rf80386_pkg::ENTER);
+		end
+	`LEAVE:
+		begin
+			if (cs_desc.db) begin
+				esp <= ebp;
+				ad <= ebp;
+			end
+			else begin
+				esp[15:0] <= ebp[15:0];
+				ad <= ebp[15:0];
+			end
+			tGoto(rf80386_pkg::LEAVE);
+		end
 
 	//-----------------------------------------------------------------
 	// Flow controls
@@ -285,8 +313,15 @@ rf80386_pkg::DECODE:
 
 	default:
 		begin
-		if (v) shftamt <= cl[3:0];
+		if (v) shftamt <= cl[4:0];
 		else shftamt <= 4'd1;
+		case(ir)
+		8'hC0,8'hC1:
+			begin
+				shftamt <= bundle[7:0];
+				eip <= eip + 2'd1;
+			end
+		endcase
 		//-----------------------------------------------------------------
 		// MOD/RM instructions
 		//-----------------------------------------------------------------

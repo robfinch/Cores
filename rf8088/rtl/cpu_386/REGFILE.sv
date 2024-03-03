@@ -35,6 +35,7 @@
 //
 // ============================================================================
 
+reg [31:0] cr0;
 reg [31:0] rrro;			
 reg [31:0] rmo;				// register output (controlled by mod r/m byte)
 reg [31:0] rfso;
@@ -68,6 +69,7 @@ reg [15:0] es;				// extra segment
 reg [15:0] fs;				// extra segment
 reg [15:0] gs;				// extra segment
 reg [15:0] ss;				// stack segment
+reg [15:0] tr;				// task register
 
 desc386_t cs_desc;
 desc386_t ds_desc;
@@ -75,6 +77,7 @@ desc386_t es_desc;
 desc386_t fs_desc;
 desc386_t gs_desc;
 desc386_t ss_desc;
+desc386_t tr_desc;
 desc386_t idt_desc;
 desc386_t gdt_desc;
 desc386_t ldt_desc;

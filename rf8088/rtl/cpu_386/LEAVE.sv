@@ -5,9 +5,6 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//  STORE_DATA
-//  - store data to memory.
-//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -36,15 +33,23 @@
 //
 // ============================================================================
 
-rf80386_pkg::STORE_DATA:
+rf80386_pkg::LEAVE:
 	begin
-		ad <= ea;
-		if (ir==`ARPL)
-			sel <= 16'h0003;
-		else if (cs_desc.db)
-			sel <= w ? 16'h000F : 16'h0001;
+		if (cs_desc.db)
+			sel <= 16'h000F;
 		else
-			sel <= w ? 16'h0003 : 16'h0001;
-		dat <= res;
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::LEAVE1);
+	end
+rf80386_pkg::LEAVE1:
+	begin
+		if (cs_desc.db) begin
+			ebp <= dat[31:0];
+			esp <= esp + 4'd4;
+		end
+		else begin
+			ebp[15:0] <= dat[15:0];
+			esp[15:0] <= esp[15:0] + 4'd2;
+		end
+		tGoto(rf80386_pkg::IFETCH);
 	end

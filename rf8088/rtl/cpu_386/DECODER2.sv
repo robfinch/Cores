@@ -72,6 +72,20 @@ rf80386_pkg::DECODER2:
 			endcase
 		`EXTOP:
 			casez(ir2)
+			`CLTS:
+				begin
+					cr0[3] <= 1'b0;
+					tGoto(rf80386_pkg::IFETCH);
+				end
+			`LSL:
+				begin
+					lsl <= 1'b1;
+					tGosub(rf80386_pkg::LAR,rf80386_pkg::IFETCH);
+				end
+			`LAR:
+				begin
+					tGosub(rf80386_pkg::LAR,rf80386_pkg::IFETCH);
+				end
 			`LSS,`LFS,`LGS:
 				begin
 					w <= 1'b1;
@@ -100,17 +114,32 @@ rf80386_pkg::DECODER2:
 				end
 			`LxDT:
 				begin
-					lgdt <= bundle[7:0]==8'h02;
-					lidt <= bundle[7:0]==8'h03;
+					lgdt <= bundle[5:3]==3'h2;
+					lidt <= bundle[5:3]==3'h3;
+					lmsw <= bundle[5:3]==3'h6;
 					w <= 1'b1;
-					mod   <= bundle[15:14];
-					rrr   <= bundle[13:11];
-					sreg3 <= bundle[13:11];
-					TTT   <= bundle[13:11];
-					rm    <= bundle[10: 8];
+					mod   <= bundle[7:6];
+					rrr   <= bundle[5:3];
+					sreg3 <= bundle[5:3];
+					TTT   <= bundle[5:3];
+					rm    <= bundle[2:0];
 					$display("Mod/RM=%b_%b_%b", dat_i[7:6],dat_i[5:3],dat_i[2:0]);
-					bundle <= bundle[127:16];
-					eip <= eip + 4'd2;
+					bundle <= bundle[127:8];
+					eip <= eip + 4'd1;
+					tGoto(rf80386_pkg::EACALC);		// override state transition
+				end
+			`LLDT:
+				begin
+					ltr <= bundle[5:3]==3'h3;
+					w <= 1'b1;
+					mod   <= bundle[7:6];
+					rrr   <= bundle[5:3];
+					sreg3 <= bundle[5:3];
+					TTT   <= bundle[5:3];
+					rm    <= bundle[2:0];
+					$display("Mod/RM=%b_%b_%b", dat_i[7:6],dat_i[5:3],dat_i[2:0]);
+					bundle <= bundle[127:8];
+					eip <= eip + 4'd1;
 					tGoto(rf80386_pkg::EACALC);		// override state transition
 				end
 			`BSWAP:
@@ -130,6 +159,8 @@ rf80386_pkg::DECODER2:
 					3'd7:	res <= {edi[7:0],edi[15:8],edi[23:16],edi[31:24]};
 					endcase
 				end
+			`PUSH_FS,`PUSH_GS:
+				begin esp <= esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
 			default:	;
 			endcase
 		default:	;

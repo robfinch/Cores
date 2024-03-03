@@ -144,6 +144,10 @@ package rf80386_pkg;
 `define ARPL	8'h63
 `define FS		8'h64
 `define GS		8'h65
+`define PUSHI	8'h68
+`define IMULI	8'h69
+`define PUSHI8	8'h6A
+`define IMULI8	8'h6B
 `define INSB	8'h6C
 `define INSW	8'h6D
 `define OUTSB	8'h6E
@@ -240,12 +244,15 @@ package rf80386_pkg;
 `define MOV_I2SI	8'hBE
 `define MOV_I2DI	8'hBF
 
+`define SHI8		8'hC0
+`define SHI16		8'hC1
 `define RETPOP		8'hC2
 `define RET			8'hC3
 `define LES			8'hC4
 `define LDS			8'hC5
 `define MOV_I8M		8'hC6
 `define MOV_I16M	8'hC7
+`define ENTER		8'hC8
 `define LEAVE		8'hC9
 `define RETFPOP		8'hCA
 `define RETF		8'hCB
@@ -656,7 +663,9 @@ typedef enum logic [8:0] {
 	LOAD_ES_DESC,
 	LOAD_ES_DESC1,
 	LOAD_SS_DESC,
-	LOAD_sS_DESC1,
+	LOAD_SS_DESC1,
+	LOAD_DESC,
+	LOAD_DESC1,
 	
 	LxDT,
 	LxDT1,
@@ -664,7 +673,18 @@ typedef enum logic [8:0] {
 	LLDT,
 	LLDT1,
 	LLDT2,
-	LLDT3
+	LLDT3,
+	
+	ENTER,
+	ENTER0,
+	ENTER1,
+	ENTERN,
+	
+	LEAVE,
+	LEAVE1,
+	
+	LAR,
+	LAR1
 	
 } e_80386state;
 

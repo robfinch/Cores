@@ -5,8 +5,6 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//  STORE_DATA
-//  - store data to memory.
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -34,17 +32,59 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// ============================================================================
+//
+//=============================================================================
 
-rf80386_pkg::STORE_DATA:
+rf80386_pkg::ENTER:
 	begin
-		ad <= ea;
-		if (ir==`ARPL)
+		eip <= eip + 4'd3;
+		ad <= sssp;
+		ftmp <= esp;
+		if (cs_desc.db) begin
+			sel <= 16'h000F;
+			dat <= ebp;
+		end
+		else begin
 			sel <= 16'h0003;
-		else if (cs_desc.db)
-			sel <= w ? 16'h000F : 16'h0001;
-		else
-			sel <= w ? 16'h0003 : 16'h0001;
-		dat <= res;
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+			dat <= bp;
+		end
+		if (bundle[23:16]==8'h00)
+			tGosub(rf80386_pkg::STORE,rf80386_pkg::ENTER0);
+		else if (bundle[23:16]==8'h01) begin
+			if (cs_desc.db)
+				esp <= esp - 4'd4;
+			else
+				esp <= esp - 4'd2;
+			tGosub(rf80386_pkg::STORE,rf80386_pkg::ENTER1);
+		end
+		else begin
+			if (cs_desc.db)
+				esp <= esp - 4'd4;
+			else
+				esp <= esp - 4'd2;
+			tGosub(rf80386_pkg::STORE,rf80386_pkg::ENTERN);
+		end
+	end
+rf80386_pkg::ENTER0:
+	begin
+		ebp <= ftmp;
+		esp <= esp - bundle[15:0];
+		tGoto(rf80386_pkg::IFETCH);
+	end
+rf80386_pkg::ENTER1:
+	begin
+		ad <= sssp;
+		if (cs_desc.db) begin
+			sel <= 16'h000F;
+			dat <= ftmp;
+		end
+		else begin
+			sel <= 16'h0003;
+			dat <= ftmp[15:0];
+		end
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::ENTER0);
+	end
+rf80386_pkg::ENTERN:
+	begin
+		tGoto(rf80386_pkg::ENTER1);
 	end

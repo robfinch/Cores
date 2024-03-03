@@ -63,6 +63,7 @@ endfunction
 reg [31:0] alu_o;
 reg [31:0] a;
 reg [31:0] b;
+reg [31:0] c;
 wire amsb = w ? (cs_desc.db ? a[31] : a[15]) : a[7];
 wire bmsb = w ? (cs_desc.db ? b[31] : b[15]) : b[7];
 wire [31:0] as = cs_desc.db ? {!a[31],a[30:0]}: {!a[15],a[14:0]};
@@ -76,6 +77,9 @@ wire signed [63:0] wp = sa * sb;
 wire [31:0] p16 = a[7:0] * b[7:0];
 wire [31:0] p32 = a[15:0] * b[15:0];
 wire [63:0] p64 = a * b;
+wire signed [31:0] sp8x16 = sa[15:0] * sb[15:0];
+wire signed [31:0] sp8x32 = sa * sb;
+wire signed [63:0] sp32x32 = sa * sb;
 
 // Compute AL/10
 // - multiply by 1/10 = 26/256

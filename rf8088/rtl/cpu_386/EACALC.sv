@@ -271,7 +271,7 @@ rf80386_pkg::EACALC1:
 				begin
 					case(rrr)
 					3'b010: tGoto(rf80386_pkg::LLDT);	// LLDT
-					3'b011: tGoto(rf80386_pkg::FETCH_DATA);	// LTR
+					3'b011: begin ltr <= 1'b1; tGoto(rf80386_pkg::FETCH_DATA); end// LTR
 					default: tGoto(rf80386_pkg::FETCH_DATA);
 					endcase
 					if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
@@ -284,6 +284,7 @@ rf80386_pkg::EACALC1:
 					case(rrr)
 					3'b010: begin lgdt <= 1'b1; tGoto(rf80386_pkg::LxDT); end
 					3'b011: begin lidt <= 1'b1; tGoto(rf80386_pkg::LxDT); end
+					3'b110:	begin lmsw <= 1'b1;	tGoto(rf80386_pkg::FETCH_DATA); end
 					default: tGoto(rf80386_pkg::FETCH_DATA);
 					endcase
 					if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin

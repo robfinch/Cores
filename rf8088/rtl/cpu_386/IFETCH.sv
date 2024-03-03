@@ -69,6 +69,9 @@ rf80386_pkg::IFETCH:
 		hasFetchedData <= 1'b0;
 		lidt <= 1'b0;
 		lgdt <= 1'b0;
+		lmsw <= 1'b0;
+		lsl <= 1'b0;
+		ltr <= 1'b0;
 		data16 <= 16'h0000;
 		cnt <= 7'd0;
 //		if (prefix1!=8'h00 && prefix2 !=8'h00 && is_prefix)

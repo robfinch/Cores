@@ -39,16 +39,31 @@
 rf80386_pkg::FETCH_DATA:
 	begin
 		ad <= ea;
-		if (cs_desc.db)
-			sel <= w ? 16'h000F : 16'h0001;
-		else
-			sel <= w ? 16'h0003 : 16'h0001;
+		if (ltr)
+			sel <= 16'h0003;
+		else if (ir==`BOUND) begin
+			if (cs_desc.db)
+				sel <= 16'h00FF;
+			else
+				sel <= 16'h000F;
+		end
+		else begin
+			if (cs_desc.db)
+				sel <= w ? 16'h000F : 16'h0001;
+			else
+				sel <= w ? 16'h0003 : 16'h0001;
+		end
 		tGosub(rf80386_pkg::LOAD,rf80386_pkg::FETCH_DATA1);
 	end
 rf80386_pkg::FETCH_DATA1:
 	begin
 		if (cs_desc.db) begin
-			if (w) begin
+			if (ir==`BOUND) begin
+				a <= dat[31:0];
+				b <= dat[63:32];
+				c <= rrro;
+			end
+			else if (w) begin
 				if (d) begin
 					a <= rrro;
 					b[31:0] <= dat[31:0];
@@ -72,7 +87,12 @@ rf80386_pkg::FETCH_DATA1:
 			end
 		end
 		else begin
-			if (w) begin
+			if (ir==`BOUND) begin
+				a <= {{16{dat[15]}},dat[15:0]};
+				b <= {[16{dat[31]}},dat[31:16]};
+				c <= {{16{rrro[15]}},rrro[15:0]};
+			end
+			else if (w) begin
 				if (d) begin
 					a <= rrro;
 					b[15:0] <= dat[15:0];
@@ -98,6 +118,8 @@ rf80386_pkg::FETCH_DATA1:
 			end
 		end
 		case(ir)
+		`IMULI8:tGoto(rf80386_pkg::FETCH_IMM8);
+		`IMULI:	tGoto(rf80386_pkg::FETCH_IMM16);
 		8'h80:	tGoto(rf80386_pkg::FETCH_IMM8);
 		8'h81:	tGoto(rf80386_pkg::FETCH_IMM16);
 		8'h83:	tGoto(rf80386_pkg::FETCH_IMM8);
