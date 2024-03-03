@@ -36,33 +36,22 @@
 //
 // ============================================================================
 
-INB:
+rf80386_pkg::INB:
 	begin
-		ip <= ip_inc;
+		eip <= eip + 2'd1;
 		ea <= {12'h00,bundle[7:0]};
-		tRead({12'h00,bundle[7:0]});
-		ftam_req.cti <= fta_bus_pkg::IO;
-		cyc_done <= FALSE;
-		tGoto(INB3);
+		tGoto(rf80386_pkg::INB2);
 	end
-INB2:	// Alternate entry point
+rf80386_pkg::INB2:	// Alternate entry point
 	begin
-		tRead(ea);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		cyc_done <= FALSE;
-		tGoto(INB3);
+		ad <= ea;
+		tGosub(rf80386_pkg::LOAD_IO,rf80386_pkg::INB3);
 	end
-INB3:
-	if (ack_i) begin
-		res[7:0] <= dat_i;
+rf80386_pkg::INB3:
+	begin
+		res[7:0] <= dat;
 		w <= 1'b0;
 		rrr <= 3'd0;
 		wrregs <= 1'b1;
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	end
-	else if (rty_i && !cyc_done) begin
-		tRead(ea);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else
-		cyc_done <= TRUE;

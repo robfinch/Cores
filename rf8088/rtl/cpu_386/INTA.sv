@@ -35,21 +35,14 @@
 //
 // ============================================================================
 
-INTA0:
+rf80386_pkg::INTA0:
 	begin
-		tRead(20'hFFFFF);
-		ftam_req.cti <= fta_bus_pkg::IRQA;
-		cyc_done <= FALSE;
-		tGoto(INTA1);
+		ad <= 32'hFFFFFFFF;
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::IRQ_LOAD,rf80386_pkg::INTA1);
 	end
-INTA1:
-	if (ack_i) begin
-		int_num <= dat_i;
-		tGoto(INT2);
+rf80386_pkg::INTA1:
+	begin
+		int_num <= dat;
+		tGoto(rf80386_pkg::INT2);
 	end
-	else if (rty_i && !cyc_done) begin
-		tRead(20'hFFFFF);
-		ftam_req.cti <= fta_bus_pkg::IRQA;
-	end
-	else
-		cyc_done <= TRUE;

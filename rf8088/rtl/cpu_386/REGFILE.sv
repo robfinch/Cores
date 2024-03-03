@@ -75,6 +75,9 @@ desc386_t es_desc;
 desc386_t fs_desc;
 desc386_t gs_desc;
 desc386_t ss_desc;
+desc386_t idt_desc;
+desc386_t gdt_desc;
+desc386_t ldt_desc;
 reg [31:0] gdtr, ldtr;
 
 // renamed byte registers for convenience
@@ -97,6 +100,9 @@ wire [31:0] ds_base = cs_desc.db ? {ds_desc.base_hi, ds_desc.base_lo} : {ds_desc
 wire [31:0] es_base = cs_desc.db ? {es_desc.base_hi, es_desc.base_lo} : {es_desc.base_hi, es_desc.base_lo} + {es,`SEG_SHIFT};
 wire [31:0] fs_base = cs_desc.db ? {fs_desc.base_hi, fs_desc.base_lo} : {fs_desc.base_hi, fs_desc.base_lo} + {fs,`SEG_SHIFT};
 wire [31:0] gs_base = cs_desc.db ? {gs_desc.base_hi, gs_desc.base_lo} : {gs_desc.base_hi, gs_desc.base_lo} + {gs,`SEG_SHIFT};
+wire [31:0] idt_base = {idt_desc.base_hi, idt_desc.base_lo};
+wire [31:0] gdt_base = {gdt_desc.base_hi, gdt_desc.base_lo};
+wire [31:0] ldt_base = {ldt_desc.base_hi, ldt_desc.base_lo};
 
 wire [31:0] csip = cs_base + ip;
 wire [31:0] sssp = ss_base + (cs_desc.db ? esp : sp);

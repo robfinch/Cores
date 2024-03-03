@@ -35,69 +35,64 @@
 //
 // ============================================================================
 
-CALL_IN:
+rf80386_pkg::CALL_IN:
 	begin
-		tWrite(sssp,ip[15:8]);
-		tGoto(CALL_IN1);
+		if (cs_desc.db)
+			esp <= esp - 4'd4;
+		else
+			esp <= esp - 4'd2;
+		tGoto(rf80386_pkg::CALL_IN1);
 	end
-CALL_IN1:
-	if (rty_i)
-		tWrite(sssp,ip[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(CALL_IN2);
-	end
-CALL_IN2:
+rf80386_pkg::CALL_IN1:
 	begin
-		tWrite(sssp,ip[7:0]);
-		tGoto(CALL_IN3);
+		ad <= sssp;
+		dat <= ip;
+		sel <= cs_desc.db ? 16'h000F: 16'h0003;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::CALL_IN2);
 	end
-CALL_IN3:
-	if (rty_i)
-		tWrite(sssp,ip[7:0]);
-	else begin
-		sp <= sp_dec;
-		ea <= {cs,`SEG_SHIFT}+b;
-		if (mod==2'b11) begin
-			ip <= b;
-			tGoto(rf8088_pkg::IFETCH);
+rf80386_pkg::CALL_IN2:
+	begin
+		if (cs_desc.db) begin
+			ea <= cs_base + b;
+			if (mod==2'b11) begin
+				ip <= b;
+				tGoto(rf80386_pkg::IFETCH);
+			end
+			else 
+				tGoto(rf80386_pkg::CALL_IN3);
 		end
-		else 
-			tGoto(CALL_IN4);
+		else begin
+			ea <= cs_base + b[15:0];
+			if (mod==2'b11) begin
+				ip <= b[15:0];
+				tGoto(rf80386_pkg::IFETCH);
+			end
+			else 
+				tGoto(rf80386_pkg::CALL_IN3);
+		end
 	end
-CALL_IN4:
+rf80386_pkg::CALL_IN3:
 	begin
-		tRead(ea);
-		cyc_done <= FALSE;
-		tGoto(CALL_IN5);
+		ad <= ea;
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CALL_IN4);
 	end
-CALL_IN5:
-	if (ack_i) begin
-		b[7:0] <= dat_i;
-		tGoto(CALL_IN6);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(ea);
-	else
-		cyc_done <= TRUE;
-CALL_IN6:
+rf80386_pkg::CALL_IN4:
 	begin
-		tRead(ea_inc);
-		cyc_done <= FALSE;
-		tGoto(CALL_IN7);
+		if (cs_desc.db)
+			b[31:0] <= dat[31:0];
+		else
+			b[15:0] <= dat[15:0];
+		tGoto(rf80386_pkg::CALL_IN5);
 	end
-CALL_IN7:
-	if (ack_i) begin
-		tGoto(CALL_IN8);
-		b[15:8] <= dat_i;
-	end
-	else if (rty_i && !cyc_done)
-		tRead(ea_inc);
-	else
-		cyc_done <= TRUE;
-CALL_IN8:
+rf80386_pkg::CALL_IN5:
 	begin
-		ip <= b;
-		tGoto(rf8088_pkg::IFETCH);
+		if (cs_desc.db)
+			eip <= b;
+		else
+			eip <= b[15:0];
+		tGoto(rf80386_pkg::IFETCH);
 	end
-

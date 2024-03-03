@@ -35,68 +35,80 @@
 //
 // ============================================================================
 
-POP:
+rf80386_pkg::POP:
 	begin
-		tRead(sssp);
-		w <= 1'b1;
-		rrr <= ir[2:0];
-		cyc_done <= FALSE;
-		tGoto(POP1);
-	end
-POP1:
-	if (ack_i) begin
-		sp <= sp_inc;
-		res[7:0] <= dat_i;
-		case(ir)
-		`POP_SS: begin rrr <= 3'd2; end
-		`POP_ES: begin rrr <= 3'd0; end
-		`POP_DS: begin rrr <= 3'd3; end
-		`POPF:
-			begin
-				cf <= dat_i[0];
-				pf <= dat_i[2];
-				af <= dat_i[4];
-				zf <= dat_i[6];
-				sf <= dat_i[7];
-			end
-		default: ;
-		endcase
-		tGoto(POP2);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-POP2:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(POP3);
-	end
-POP3:
-	if (ack_i) begin
-		tGoto(rf8088_pkg::IFETCH);
-		sp <= sp_inc;
-		res[15:8] <= dat_i;
+		ad <= sssp;
 		case(ir)
 		`POP_AX,`POP_CX,`POP_BX,`POP_DX,
 		`POP_SI,`POP_DI,`POP_BP,`POP_SP:
-			wrregs <= 1'b1;
+			sel <= cs_desc.db ? 16'h000F : 16'h0003;
 		`POP_SS,`POP_ES,`POP_DS:
-			wrsregs <= 1'b1;
+			sel <= 16'h0003;
+		`POPF:
+			sel <= cs_desc.db ? 16'h000F : 16'h0003;
+		`POP_MEM:
+			sel <= cs_desc.db ? 16'h000F : 16'h0003;
+		default: ;
+		endcase
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POP1);
+		w <= 1'b1;
+		rrr <= ir[2:0];
+	end
+rf80386_pkg::POP1:
+	begin
+		tGoto(rf80386_pkg::IFETCH);
+		res[31:0] <= dat[31:0];
+		selector <= dat[15:0];
+		case(ir)
+		`POP_AX,`POP_CX,`POP_BX,`POP_DX,
+		`POP_SI,`POP_DI,`POP_BP,`POP_SP:
+			begin
+				esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+				wrregs <= 1'b1;
+			end
+		`POP_SS:
+			begin
+				esp <= esp + 4'd2;
+				if (dat[15:0] != ss)
+					tGosub(rf80386_pkg::LOAD_SS_DESC,rf80386_pkg::IFETCH);
+			end
+		`POP_ES:
+			begin
+				esp <= esp + 4'd2;
+				if (dat[15:0] != es)
+					tGosub(rf80386_pkg::LOAD_ES_DESC,rf80386_pkg::IFETCH);
+			end
+		`POP_DS:
+			begin
+				esp <= esp + 4'd2;
+				if (dat[15:0] != ds)
+					tGosub(rf80386_pkg::LOAD_DS_DESC,rf80386_pkg::IFETCH);
+			end
+		`POPF:
+			esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+		`POP_MEM:
+			begin
+				esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+				tGoto(rf80386_pkg::STORE_DATA);
+			end
+		default: ;
+		endcase
+		case(ir)
+		`POP_SS: begin rrr <= 3'd2; wrsregs <= 1'b1; end
+		`POP_ES: begin rrr <= 3'd0; wrsregs <= 1'b1; end
+		`POP_DS: begin rrr <= 3'd3; wrsregs <= 1'b1; end
 		`POPF:
 			begin
-				tf <= dat_i[0];
-				ie <= dat_i[1];
-				df <= dat_i[2];
-				vf <= dat_i[3];
+				cf <= dat[0];
+				pf <= dat[2];
+				af <= dat[4];
+				zf <= dat[6];
+				sf <= dat[7];
+				tf <= dat[8];
+				ie <= dat[9];
+				df <= dat[10];
+				vf <= dat[11];
 			end
-		`POP_MEM:
-			tGoto(STORE_DATA);
 		default: ;
 		endcase
 	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;

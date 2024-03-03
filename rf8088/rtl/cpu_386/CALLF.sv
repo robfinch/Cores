@@ -35,57 +35,46 @@
 //
 // ============================================================================
 
-CALLF:
+rf80386_pkg::CALLF:
 	begin
-		tWrite(sssp,cs[15:8]);
-		tGoto(CALLF1);
+		esp <= esp - 4'd2;
+		tGoto(rf80386_pkg::CALLF1);
 	end
-CALLF1:
-	if (rty_i)
-		tWrite(sssp,cs[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(CALLF2);
-	end
-CALLF2:
+rf80386_pkg::CALLF1:
 	begin
-		tWrite(sssp,cs[7:0]);
-		tGoto(CALLF3);
+		ad <= sssp;
+		dat <= cs;
+		sel <= 16'h0003;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::CALLF2);
 	end
-CALLF3:
-	if (rty_i)
-		tWrite(sssp,cs[7:0]);
-	else begin
-		sp <= sp_dec;
-		tGoto(CALLF4);
-	end
-CALLF4:
+rf80386_pkg::CALLF2:
 	begin
-		tWrite(sssp,ip[15:8]);
-		tGoto(CALLF5);
+		if (cs_desc.db)
+			esp <= esp - 4'd4;
+		else
+			esp <= esp - 4'd2;
+		tGoto(rf80386_pkg::CALLF3);
 	end
-CALLF5:
-	if (rty_i)
-		tWrite(sssp,ip[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(CALLF6);
-	end
-CALLF6:
+rf80386_pkg::CALLF3:
 	begin
-		tWrite(sssp,ip[7:0]);
-		tGoto(CALLF7);
+		ad <= sssp;
+		dat <= eip;
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::CALLF4);
 	end
-CALLF7:
-	if (rty_i)
-		tWrite(sssp,ip[7:0]);
-	else begin
-		sp <= sp_dec;
+rf80386_pkg::CALLF4:
+	begin
 		if (ir==8'hFF && rrr==3'b011)	// CALL FAR indirect
-			tGoto(JUMP_VECTOR1);
+			tGoto(rf80386_pkg::JUMP_VECTOR1);
 		else begin
 			cs <= selector;
-			ip <= offset;
-			tGoto(rf8088_pkg::IFETCH);
+			eip <= offset;
+			if (selector != cs)
+				tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
+			else
+				tGoto(rf80386_pkg::IFETCH);
 		end
 	end

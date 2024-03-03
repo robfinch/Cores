@@ -35,94 +35,43 @@
 //
 // ============================================================================
 
-PUSH:
+rf80386_pkg::PUSH:
 	begin
 		// Note SP is predecremented at the decode stage
-		case(ir)
-		`PUSH_AX: tWrite(sssp,ah);
-		`PUSH_BX: tWrite(sssp,bh);
-		`PUSH_CX: tWrite(sssp,ch);
-		`PUSH_DX: tWrite(sssp,dh);
-		`PUSH_SP: tWrite(sssp,sp[15:8]);
-		`PUSH_BP: tWrite(sssp,bp[15:8]);
-		`PUSH_SI: tWrite(sssp,si[15:8]);
-		`PUSH_DI: tWrite(sssp,di[15:8]);
-		`PUSH_CS: tWrite(sssp,cs[15:8]);
-		`PUSH_DS: tWrite(sssp,ds[15:8]);
-		`PUSH_SS: tWrite(sssp,ss[15:8]);
-		`PUSH_ES: tWrite(sssp,es[15:8]);
-		`PUSHF:   tWrite(sssp,flags[15:8]);
-		8'hFF:	tWrite(sssp,a[15:8]);
-		default:	tWrite(sssp,8'hFF);	// only gets here if there's a hardware error
-		endcase
-		tGoto(PUSH1);
+		if (cs_desc.db)
+			case(ir)
+			`PUSH_AX: begin ad <= sssp; sel <= 16'h000F; dat <= eax; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_BX: begin ad <= sssp; sel <= 16'h000F; dat <= ebx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_CX: begin ad <= sssp; sel <= 16'h000F; dat <= ecx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DX: begin ad <= sssp; sel <= 16'h000F; dat <= edx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SP: begin ad <= sssp; sel <= 16'h000F; dat <= esp; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_BP: begin ad <= sssp; sel <= 16'h000F; dat <= ebp; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SI: begin ad <= sssp; sel <= 16'h000F; dat <= esi; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DI: begin ad <= sssp; sel <= 16'h000F; dat <= edi; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_CS: begin ad <= sssp; sel <= 16'h0003; dat <= cs; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DS: begin ad <= sssp; sel <= 16'h0003; dat <= ds; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SS: begin ad <= sssp; sel <= 16'h0003; dat <= ss; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_ES: begin ad <= sssp; sel <= 16'h0003; dat <= es; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSHF:   begin ad <= sssp; sel <= 16'h000F; dat <= flags[31:0]; tGosub(STORE,rf80386_pkg::IFETCH); end
+			8'hFF:	begin ad <= sssp; sel <= 16'h000F; dat <= a[31:0]; tGosub(STORE,rf80386_pkg::IFETCH); end
+			default:	tGoto(rf80386_pkg::RESET);	// only gets here if there's a hardware error
+			endcase
+		else
+			case(ir)
+			`PUSH_AX: begin ad <= sssp; sel <= 16'h0003; dat <= ax; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_BX: begin ad <= sssp; sel <= 16'h0003; dat <= bx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_CX: begin ad <= sssp; sel <= 16'h0003; dat <= cx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DX: begin ad <= sssp; sel <= 16'h0003; dat <= dx; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SP: begin ad <= sssp; sel <= 16'h0003; dat <= sp; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_BP: begin ad <= sssp; sel <= 16'h0003; dat <= bp; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SI: begin ad <= sssp; sel <= 16'h0003; dat <= si; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DI: begin ad <= sssp; sel <= 16'h0003; dat <= di; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_CS: begin ad <= sssp; sel <= 16'h0003; dat <= cs; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_DS: begin ad <= sssp; sel <= 16'h0003; dat <= ds; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_SS: begin ad <= sssp; sel <= 16'h0003; dat <= ss; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSH_ES: begin ad <= sssp; sel <= 16'h0003; dat <= es; tGosub(STORE,rf80386_pkg::IFETCH); end
+			`PUSHF:   begin ad <= sssp; sel <= 16'h0003; dat <= flags[15:0]; tGosub(STORE,rf80386_pkg::IFETCH); end
+			8'hFF:	begin ad <= sssp; sel <= 16'h0003; dat <= a[15:0]; tGosub(STORE,rf80386_pkg::IFETCH); end
+			default:	tGoto(rf80386_pkg::RESET);	// only gets here if there's a hardware error
+			endcase
 	end
-PUSH1:
-	if (rty_i) begin
-		case(ir)
-		`PUSH_AX: tWrite(sssp,ah);
-		`PUSH_BX: tWrite(sssp,bh);
-		`PUSH_CX: tWrite(sssp,ch);
-		`PUSH_DX: tWrite(sssp,dh);
-		`PUSH_SP: tWrite(sssp,sp[15:8]);
-		`PUSH_BP: tWrite(sssp,bp[15:8]);
-		`PUSH_SI: tWrite(sssp,si[15:8]);
-		`PUSH_DI: tWrite(sssp,di[15:8]);
-		`PUSH_CS: tWrite(sssp,cs[15:8]);
-		`PUSH_DS: tWrite(sssp,ds[15:8]);
-		`PUSH_SS: tWrite(sssp,ss[15:8]);
-		`PUSH_ES: tWrite(sssp,es[15:8]);
-		`PUSHF:   tWrite(sssp,flags[15:8]);
-		8'hFF:	tWrite(sssp,a[15:8]);
-		default:	tWrite(sssp,8'hFF);	// only gets here if there's a hardware error
-		endcase
-	end
-	else begin
-		sp <= sp_dec;
-		tGoto(PUSH2);
-	end
-PUSH2:
-	begin
-		case(ir)
-		`PUSH_AX: tWrite(sssp,al);
-		`PUSH_BX: tWrite(sssp,bl);
-		`PUSH_CX: tWrite(sssp,cl);
-		`PUSH_DX: tWrite(sssp,dl);
-		`PUSH_SP: tWrite(sssp,sp[7:0]);
-		`PUSH_BP: tWrite(sssp,bp[7:0]);
-		`PUSH_SI: tWrite(sssp,si[7:0]);
-		`PUSH_DI: tWrite(sssp,di[7:0]);
-		`PUSH_CS: tWrite(sssp,cs[7:0]);
-		`PUSH_DS: tWrite(sssp,ds[7:0]);
-		`PUSH_SS: tWrite(sssp,ss[7:0]);
-		`PUSH_ES: tWrite(sssp,es[7:0]);
-		`PUSHF:   tWrite(sssp,flags[7:0]);
-		8'hFF:	tWrite(sssp,a[7:0]);
-		default:	tWrite(sssp,8'hFF);	// only gets here if there's a hardware error
-		endcase
-		tGoto(PUSH3);
-	end
-// Note stack pointer is decrement already in DECODE
-//
-PUSH3:
-	if (rty_i) begin
-		case(ir)
-		`PUSH_AX: tWrite(sssp,al);
-		`PUSH_BX: tWrite(sssp,bl);
-		`PUSH_CX: tWrite(sssp,cl);
-		`PUSH_DX: tWrite(sssp,dl);
-		`PUSH_SP: tWrite(sssp,sp[7:0]);
-		`PUSH_BP: tWrite(sssp,bp[7:0]);
-		`PUSH_SI: tWrite(sssp,si[7:0]);
-		`PUSH_DI: tWrite(sssp,di[7:0]);
-		`PUSH_CS: tWrite(sssp,cs[7:0]);
-		`PUSH_DS: tWrite(sssp,ds[7:0]);
-		`PUSH_SS: tWrite(sssp,ss[7:0]);
-		`PUSH_ES: tWrite(sssp,es[7:0]);
-		`PUSHF:   tWrite(sssp,flags[7:0]);
-		8'hFF:	tWrite(sssp,a[7:0]);
-		default:	tWrite(sssp,8'hFF);	// only gets here if there's a hardware error
-		endcase
-	end
-	else
-		tGoto(rf8088_pkg::IFETCH);

@@ -35,34 +35,26 @@
 //
 // ============================================================================
 
-CALL:
+rf80386_pkg::CALL:
 	begin
-		tWrite(sssp,ip[15:8]);
-		cyc_done <= FALSE;
-		tGoto(CALL1);
+		if (cs_desc.db)
+			esp <= esp - 4'd4;
+		else
+			esp <= esp - 4'd2;
+		tGoto(rf80386_pkg::CALL1);
 	end
-CALL1:
-	if (ack_i) begin
-		sp <= sp_dec;
-		tGoto(CALL2);
-	end
-	else if (rty_i && !cyc_done)
-		tWrite(sssp,ip[15:8]);
-	else
-		cyc_done <= TRUE;
-CALL2:
+rf80386_pkg::CALL1:
 	begin
-		tWrite(sssp,ip[7:0]);
-		cyc_done <= FALSE;
-		tGoto(CALL3);
+		ad <= sssp;
+		dat <= ip;
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::CALL2);
 	end
-CALL3:
-	if (ack_i) begin
-		sp <= sp_dec;
-		ip <= ip + disp16;
-		tGoto(rf8088_pkg::IFETCH);
+rf80386_pkg::CALL2:
+	begin
+		eip <= eip + disp16;
+		tGoto(rf80386_pkg::IFETCH);
 	end
-	else if (rty_i && !cyc_done)
-		tWrite(sssp,ip[7:0]);
-	else
-		cyc_done <= TRUE;

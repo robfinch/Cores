@@ -39,39 +39,29 @@
 //  Fetch ip from stack
 // ============================================================================
 
-RETPOP:
+rf80386_pkg::RETPOP:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETPOP_NACK);
+		ad <= sssp;
+		sel <= cs_desc.db ? 16'h000F : 16'h0003;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::RETPOP_NACK);
 	end
-RETPOP_NACK:
-	if (ack_i) begin
-		sp <= sp_inc;
-		ip[7:0] <= dat_i;
-		tGoto(RETPOP1);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-RETPOP1:
+rf80386_pkg::RETPOP_NACK:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETPOP1_NACK);
+		if (cs_desc.db) begin
+			esp <= esp + 4'd4;
+			eip <= dat[31:0];
+		end
+		else begin
+			esp <= esp + 4'd2;
+			eip <= dat[15:0];
+		end
+		tGoto(rf80386_pkg::RETPOP1);
 	end
-RETPOP1_NACK:
-	if (ack_i) begin
-		tGoto(rf8088_pkg::IFETCH);
+rf80386_pkg::RETPOP1:
+	begin
+		tGoto(rf80386_pkg::IFETCH);
 		wrregs <= 1'b1;
 		w <= 1'b1;
 		rrr <= 3'd4;
-		res <= sp_inc + data16;
-//		sp    <= sp_inc + data16;
-		ip[15:8] <= dat_i;
+		res <= esp + data32;
 	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;

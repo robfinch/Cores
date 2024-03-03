@@ -43,106 +43,33 @@
 //  pop flags
 // ============================================================================
 //
-IRET1:
+rf80386_pkg::IRET1:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET2);
+		ad <= sssp;
+		sel <= 16'h03FF;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::IRET2);
 	end
-IRET2:
-	if (ack_i) begin
-		sp <= sp_inc;
-		ip[7:0] <= dat_i;
-		tGoto(IRET3);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-IRET3:
+rf80386_pkg::IRET2:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET4);
+		esp <= esp + 4'd10;
+		eip <= dat[31:0];
+		selector <= dat[47:32];
+		cf <= dat_i[48];
+		pf <= dat_i[50];
+		af <= dat_i[52];
+		zf <= dat_i[54];
+		sf <= dat_i[55];
+		tf <= dat_i[56];
+		ie <= dat_i[57];
+		df <= dat_i[58];
+		vf <= dat_i[59];
+		tGoto(rf80386_pkg::IRET3);
 	end
-IRET4:
-	if (ack_i) begin
-		sp <= sp_inc;
-		ip[15:8] <= dat_i;
-		tGoto(IRET5);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-IRET5:
+rf80386_pkg::IRET3:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET6);
+		cs <= selector;
+		if (cs != selector)
+			tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
+		else
+			tGoto(rf80386_pkg::IFETCH);
 	end
-IRET6:
-	if (ack_i) begin
-		sp <= sp_inc;
-		cs[7:0] <= dat_i;
-		tGoto(IRET5);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-IRET7:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET8);
-	end
-IRET8:
-	if (ack_i) begin
-		sp <= sp_inc;
-		cs[15:8] <= dat_i;
-		tGoto(IRET9);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-IRET9:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET10);
-	end
-IRET10:
-	if (ack_i) begin
-		sp <= sp_inc;
-		cf <= dat_i[0];
-		pf <= dat_i[2];
-		af <= dat_i[4];
-		zf <= dat_i[6];
-		sf <= dat_i[7];
-		tGoto(IRET11);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-IRET11:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(IRET12);
-	end
-IRET12:
-	if (ack_i) begin
-		sp <= sp_inc;
-		tf <= dat_i[0];
-		ie <= dat_i[1];
-		df <= dat_i[2];
-		vf <= dat_i[3];
-		tGoto(rf8088_pkg::IFETCH);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;

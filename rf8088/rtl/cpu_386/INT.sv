@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//  INT.v
+//  INT.sv
 //  - Interrupt handling
 //
 // BSD 3-Clause License
@@ -38,143 +38,60 @@
 //
 // Fetch interrupt number from instruction stream
 
-INT:
+rf80386_pkg::INT:
 	begin
-		sp <= sp_dec;		// pre-decrement
-		ip <= ip + 2'd1;
+		eip <= eip + 2'd1;
 		int_num <= bundle[7:0];
-		state <= INT2;
+		tGoto(rf80386_pkg::INT2);
 	end
-INT2:
+rf80386_pkg::INT2:
 	begin
-		tRead({int_num,2'b00});
-		cyc_done <= FALSE;
-		tGoto(INT3);
+		ad <= idt_base + {int_num,3'd0};
+		sel <= 16'h00FF;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::INT3);
 	end
-INT3:
-	if (ack_i) begin
-		offset[7:0] <= dat_i;
-		tGoto(INT4);
-	end
-	else if (rty_i && !cyc_done)
-		tRead({int_num,2'b00});
-	else
-		cyc_done <= TRUE;
-INT4:
+rf80386_pkg::INT3:
 	begin
-		tRead(adr_o_inc);
-		cyc_done <= FALSE;
-		tGoto(INT5);
+		offset[15: 0] <= igate.offset_lo;
+		offset[31:16] <= igate.offset_hi;
+		selector <= igate.selector;
+		esp <= esp - 4'd4;
+		tGoto(rf80386_pkg::INT4);
 	end
-INT5:
-	if (ack_i) begin
-		offset[15:8] <= dat_i;
-		tGoto(INT6);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(adr_o);
-	else
-		cyc_done <= TRUE;
-INT6:
+rf80386_pkg::INT4:
 	begin
-		tRead(adr_o_inc);
-		cyc_done <= FALSE;
-		tGoto(INT7);
+		ad <= sssp;
+		sel <= 16'h000F;
+		dat <= flags[31:0];
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::INT5);
 	end
-INT7:
-	if (ack_i) begin
-		selector[7:0] <= dat_i;
-		tGoto(INT8);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(adr_o);
-	else
-		cyc_done <= TRUE;
-INT8:
+rf80386_pkg::INT5:
 	begin
-		tRead(adr_o_inc);
-		cyc_done <= FALSE;
-		tGoto(INT9);
+		esp <= esp - 4'd2;
+		tGoto(rf80386_pkg::INT6);
 	end
-INT9:
-	if (ack_i) begin
-		selector[15:8] <= dat_i;
-		tGoto(INT10);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(adr_o);
-	else
-		cyc_done <= TRUE;
-INT10:
+rf80386_pkg::INT6:
 	begin
-		tWrite(sssp,flags[15:8]);
-		tGoto(INT11);
+		ad <= sssp;
+		sel <= 16'h0003;
+		dat <= cs;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::INT7);
 	end
-INT11:
-	if (rty_i)
-		tWrite(sssp,flags[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(INT12);
-	end
-INT12:
+rf80386_pkg::INT7:
 	begin
-		tWrite(sssp,flags[7:0]);
-		tGoto(INT13);
+		esp <= esp - 4'd4;
+		tGoto(rf80386_pkg::INT8);
 	end
-INT13:
-	if (rty_i)
-		tWrite(sssp,flags[7:0]);
-	else begin
-		sp <= sp_dec;
-		tGoto(INT14);
-	end
-INT14:
+rf80386_pkg::INT8:
 	begin
-		tWrite(sssp,cs[15:8]);
-		tGoto(INT15);
+		ad <= sssp;
+		sel <= 16'h000F;
+		dat <= ir_ip;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::INT9);
 	end
-INT15:
-	if (rty_i)
-		tWrite(sssp,cs[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(INT16);
-	end
-INT16:
+rf80386_pkg::INT9:
 	begin
-		tWrite(sssp,cs[7:0]);
-		tGoto(INT17);
-	end
-INT17:
-	if (rty_i)
-		tWrite(sssp,cs[7:0]);
-	else begin
-		sp <= sp_dec;
-		tGoto(INT18);
-	end
-INT18:
-	begin
-		tWrite(sssp,ir_ip[15:8]);
-		tGoto(INT19);
-	end
-INT19:
-	if (rty_i)
-		tWrite(sssp,ir_ip[15:8]);
-	else begin
-		sp <= sp_dec;
-		tGoto(INT20);
-	end
-INT20:
-	begin
-		tWrite(sssp,ir_ip[7:0]);
-		tGoto(INT21);
-	end
-INT21:
-	if (rty_i)
-		tWrite(sssp,ir_ip[7:0]);
-	else begin
 		cs <= selector;
 		ip <= offset;
-		tGoto(rf8088_pkg::IFETCH);
+		tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
 	end

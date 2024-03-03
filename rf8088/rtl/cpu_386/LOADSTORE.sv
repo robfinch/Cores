@@ -37,7 +37,7 @@
 
 // Run two bus cycles if the data is badly aligned.
 
-LOAD:
+rf80386_pkg::LOAD:
 	begin
 		ea <= ad;
 		ftam_req.blen <= 6'd0;
@@ -51,13 +51,13 @@ LOAD:
 		ftam_req.padr <= ad;
 		adr_o <= ad;
 		cyc_done <= FALSE;
-		tGoto(LOAD_ACK);
+		tGoto(rf80386_pkg::LOAD_ACK);
 	end
-LOAD_ACK:
+rf80386_pkg::LOAD_ACK:
 	if (ftam_resp.ack) begin
 		dat <= (ftam_resp.dat >> {ad[3:0],3'b0}) & ls_mask;
 		if (|sel_shift[19:16])
-			tGoto(LOAD2);
+			tGoto(rf80386_pkg::LOAD2);
 		else
 			tReturn();
 	end
@@ -77,7 +77,7 @@ LOAD_ACK:
 	end
 	else
 		cyc_done <= TRUE;
-LOAD2:
+rf80386_pkg::LOAD2:
 	begin
 		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		ftam_req.blen <= 6'd0;
@@ -91,9 +91,9 @@ LOAD2:
 		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		cyc_done <= FALSE;
-		tGoto(LOAD2_ACK);
+		tGoto(rf80386_pkg::LOAD2_ACK);
 	end
-LOAD2_ACK:
+rf80386_pkg::LOAD2_ACK:
 	if (ftam_resp.ack) begin
 		dat <= (dat | (ftam_resp.dat << {5'd16-ad[3:0],3'b0})) & ls_mask;
 		tReturn();
@@ -115,7 +115,7 @@ LOAD2_ACK:
 	else
 		cyc_done <= TRUE;
 
-STORE:
+rf80386_pkg::STORE:
 	begin
 		ea <= ad;
 		ftam_req.blen <= 6'd0;
@@ -130,9 +130,9 @@ STORE:
 		ftam_req.data1 <= {128'd0,dat} << {adr[3:0],3'd0};
 		adr_o <= ad;
 		cyc_done <= FALSE;
-		tGoto(STORE_ACK);
+		tGoto(rf80386_pkg::STORE_ACK);
 	end
-STORE_ACK:
+rf80386_pkg::STORE_ACK:
 	if (rty_i) begin
 		ea <= ad;
 		ftam_req.blen <= 6'd0;
@@ -150,11 +150,11 @@ STORE_ACK:
 	end
 	else begin
 		if (|sel_shift[19:16])
-			tGoto(STORE2);
+			tGoto(rf80386_pkg::STORE2);
 		else
 			tReturn();
 	end
-STORE2:
+rf80386_pkg::STORE2:
 	begin
 		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		ftam_req.blen <= 6'd0;
@@ -168,14 +168,203 @@ STORE2:
 		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		ftam_req.data1 <= {128'd0,dat} << {adr[3:0],3'd0};
 		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
-		tGoto(STORE2_ACK);
+		tGoto(rf80386_pkg::STORE2_ACK);
 	end
-STORE2_ACK:
+rf80386_pkg::STORE2_ACK:
 	if (rty_i) begin
 		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
 		ftam_req.blen <= 6'd0;
 		ftam_req.bte <= fta_bus_pkg::LINEAR;
 		ftam_req.cti <= fta_bus_pkg::CLASSIC;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= {12'h0,sel_shift[19:16]};
+		ftam_req.we <= HIGH;
+		ftam_req.vadr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.data1 <= {128'd0,dat} >> {5'd16-adr[3:0],3'd0};
+		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+	end
+	else
+		tReturn();
+
+rf80386_pkg::IRQ_LOAD:
+	begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IRQA;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= 16'hFFFF;
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		adr_o <= ad;
+		cyc_done <= FALSE;
+		tGoto(rf80386_pkg::IRQ_LOAD_ACK);
+	end
+rf80386_pkg::IRQ_LOAD_ACK:
+	if (ftam_resp.ack) begin
+		dat <= ftam_resp.dat[7:0];
+		tReturn();
+	end
+	else if (rty_i && !cyc_done) begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IRQA;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= 16'hFFFF;
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		adr_o <= ad;
+		cyc_done <= FALSE;
+	end
+	else
+		cyc_done <= TRUE;
+
+rf80386_pkg::LOAD_IO:
+	begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= sel_shift[15:0];
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		adr_o <= ad;
+		cyc_done <= FALSE;
+		tGoto(rf80386_pkg::LOAD_IO_ACK);
+	end
+rf80386_pkg::LOAD_IO_ACK:
+	if (ftam_resp.ack) begin
+		dat <= (ftam_resp.dat >> {ad[3:0],3'b0}) & ls_mask;
+		if (|sel_shift[19:16])
+			tGoto(rf80386_pkg::LOAD2);
+		else
+			tReturn();
+	end
+	else if (rty_i && !cyc_done) begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= sel_shift[15:0];
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		adr_o <= ad;
+		cyc_done <= FALSE;
+	end
+	else
+		cyc_done <= TRUE;
+rf80386_pkg::LOAD_IO2:
+	begin
+		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= {12'h0,sel_shift[19:16]};
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		cyc_done <= FALSE;
+		tGoto(rf80386_pkg::LOAD_IO2_ACK);
+	end
+rf80386_pkg::LOAD_IO2_ACK:
+	if (ftam_resp.ack) begin
+		dat <= (dat | (ftam_resp.dat << {5'd16-ad[3:0],3'b0})) & ls_mask;
+		tReturn();
+	end
+	else if (rty_i && !cyc_done) begin
+		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= {12'h0,sel_shift[19:16]};
+		ftam_req.we <= LOW;
+		ftam_req.vadr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		cyc_done <= FALSE;
+	end
+	else
+		cyc_done <= TRUE;
+
+rf80386_pkg::STORE_IO:
+	begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= sel_shift[15:0];
+		ftam_req.we <= HIGH;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		ftam_req.data1 <= {128'd0,dat} << {adr[3:0],3'd0};
+		adr_o <= ad;
+		cyc_done <= FALSE;
+		tGoto(rf80386_pkg::STORE_IO_ACK);
+	end
+rf80386_pkg::STORE_IO_ACK:
+	if (rty_i) begin
+		ea <= ad;
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= sel_shift[15:0];
+		ftam_req.we <= HIGH;
+		ftam_req.vadr <= ad;
+		ftam_req.padr <= ad;
+		ftam_req.data1 <= {128'd0,dat} << {adr[3:0],3'd0};
+		adr_o <= ad;
+		cyc_done <= FALSE;
+	end
+	else begin
+		if (|sel_shift[19:16])
+			tGoto(rf80386_pkg::STORE_IO2);
+		else
+			tReturn();
+	end
+rf80386_pkg::STORE_IO2:
+	begin
+		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
+		ftam_req.cyc <= HIGH;
+		ftam_req.stb <= HIGH;
+		ftam_req.sel <= {12'h0,sel_shift[19:16]};
+		ftam_req.we <= HIGH;
+		ftam_req.vadr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.padr <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.data1 <= {128'd0,dat} << {adr[3:0],3'd0};
+		adr_o <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		tGoto(rf80386_pkg::STORE_IO2_ACK);
+	end
+rf80386_pkg::STORE_IO2_ACK:
+	if (rty_i) begin
+		ea <= {ad[$bits(ad)-1:6]+2'd1,6'd0};
+		ftam_req.blen <= 6'd0;
+		ftam_req.bte <= fta_bus_pkg::LINEAR;
+		ftam_req.cti <= fta_bus_pkg::IO;
 		ftam_req.cyc <= HIGH;
 		ftam_req.stb <= HIGH;
 		ftam_req.sel <= {12'h0,sel_shift[19:16]};

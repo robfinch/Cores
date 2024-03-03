@@ -40,17 +40,18 @@
 
 // Fetch branch displacement if taking branch, otherwise skip
 
-BRANCH1:
+rf80386_pkg::BRANCH1:
 	if (take_br) begin
 		disp16 <= {{8{bundle[7]}},bundle[7:0]};
-		tGoto(BRANCH2);
+		eip <= eip + 4'd1;
+		tGoto(rf80386_pkg::BRANCH2);
 	end
 	else begin
-		ip <= ip_inc;
-		tGoto(rf8088_pkg::IFETCH);
+		eip <= eip + 4'd1;
+		tGoto(rf80386_pkg::IFETCH);
 	end
 BRANCH2:
 	begin
-		ip <= ip + disp16;
-		tGoto(rf8088_pkg::IFETCH);
+		eip <= eip + disp16;
+		tGoto(rf80386_pkg::IFETCH);
 	end

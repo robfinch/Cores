@@ -36,25 +36,16 @@
 //
 // ============================================================================
 
-OUTB:	// Entry point for OUTB port,AL
+rf80386_pkg::OUTB:	// Entry point for OUTB port,AL
 	begin
-		ip <= ip_inc;
+		eip <= eip + 2'd1;
 		ea <= {12'h000,bundle[7:0]};
-		tWrite({12'h000,bundle[7:0]},al);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		tGoto(OUTB1_NACK);
+		tGoto(rf80386_pkg::OUTB1);
 	end
-OUTB1:	// Entry point for OUTB [DX],AL
+rf80386_pkg::OUTB1:	// Entry point for OUTB [DX],AL
 	begin
-		tWrite(ea,al);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		tGoto(OUTB1_NACK);
-	end
-OUTB1_NACK:
-	if (rty_i) begin
-		tWrite(ea,al);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else begin
-		tGoto(rf8088_pkg::IFETCH);
+		ad <= ea;
+		sel <= 16'h0001;
+		dat <= al;
+		tGosub(rf80386_pkg::STORE_IO,rf80386_pkg::IFETCH);
 	end

@@ -36,52 +36,29 @@
 //
 // ============================================================================
 
-INW:
+rf80386_pkg::INW:
 	begin
-		ip <= ip_inc;
+		eip <= eip + 2'd1;
 		ea <= {12'h000,bundle[7:0]};
-		tRead({12'h000,bundle[7:0]});
-		ftam_req.cti <= fta_bus_pkg::IO;
-		cyc_done <= FALSE;
-		tGoto(INW3);
+		tGoto(rf80386_pkg::INW2);
 	end
-INW2:	// alternate entry point
+rf80386_pkg::INW2:	// alternate entry point
 	begin
-		tRead(ea);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		cyc_done <= FALSE;
-		tGoto(INW3);
+		ad <= ea;
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::LOAD_IO,rf80386_pkg::INW3);
 	end
-INW3:
-	if (ack_i) begin
-		res[7:0] <= dat_i;
-		tGoto(INW4);
-	end
-	else if (rty_i && !cyc_done) begin
-		tRead(ea);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else
-		cyc_done <= TRUE;
-INW4:
+rf80386_pkg::INW3:
 	begin
-		ea <= ea_inc;
-		tRead(ea_inc);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		cyc_done <= FALSE;
-		tGoto(INW5);
-	end
-INW5:
-	if (ack_i) begin
+		if (cs_desc.db)
+			res[31:0] <= dat[31:0];
+		else
+			res[15:0] <= dat[15:0];
 		wrregs <= 1'b1;
 		w <= 1'b1;
 		rrr <= 3'd0;
-		res[15:8] <= dat_i;
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	end
-	else if (rty_i && !cyc_done) begin
-		tRead(ea);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else
-		cyc_done <= TRUE;

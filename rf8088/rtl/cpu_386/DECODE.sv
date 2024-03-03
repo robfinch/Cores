@@ -162,12 +162,12 @@ DECODE:
 	//-----------------------------------------------------------------
 	// Stack Operations
 	//-----------------------------------------------------------------
-	`PUSH_REG: begin esp <= sp_dec; tGoto(PUSH); end
-	`PUSH_DS: begin esp <= sp_dec; tGoto(PUSH); end
-	`PUSH_ES: begin esp <= sp_dec; tGoto(PUSH); end
-	`PUSH_SS: begin esp <= sp_dec; tGoto(PUSH); end
-	`PUSH_CS: begin esp <= sp_dec; tGoto(PUSH); end
-	`PUSHF: begin esp <= sp_dec; tGoto(PUSH); end
+	`PUSH_REG: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(PUSH); end
+	`PUSH_DS: begin esp <= esp - 4'd2; tGoto(PUSH); end
+	`PUSH_ES: begin esp <= esp - 4'd2; tGoto(PUSH); end
+	`PUSH_SS: begin esp <= esp - 4'd2; tGoto(PUSH); end
+	`PUSH_CS: begin esp <= esp - 4'd2; tGoto(PUSH); end
+	`PUSHF: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(PUSH); end
 	`PUSHA:	begin tsp <= esp; esp <= sp_dec; tGoto(PUSHA); end
 	`POP_REG: tGoto(POP);
 	`POP_DS: tGoto(POP);

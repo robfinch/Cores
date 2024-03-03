@@ -36,6 +36,7 @@
 //
 // ============================================================================
 
+reg [63:0] igate;
 reg [19:0] sel_shift;
 reg [127:0] ls_mask;
 wire [31:0] sp_dec = esp - 16'd1;
@@ -257,3 +258,6 @@ always_comb
 	16'h000F:	ls_mask <= 128'hFFFFFFFF;
 	default:	ls_mask <= 128'h0;
 	endcase
+
+always_comb
+	igate = int_gate386_t'(dat[63:0]);

@@ -40,13 +40,12 @@
 //
 // ============================================================================
 //
-FETCH_STK_ADJ1:
+rf80386_pkg::FETCH_STK_ADJ1:
 	begin
 		data16 <= bundle[15:0];
-		ip <= ip + 4'd2;
+		eip <= eip + 4'd2;
 		if(ir==`RETPOP)
-			tGoto(RETPOP);
+			tGoto(rf80386_pkg::RETPOP);
 		else
-			tGoto(RETFPOP);
+			tGoto(rf80386_pkg::RETFPOP);
 	end
-

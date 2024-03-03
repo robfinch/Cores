@@ -37,66 +37,99 @@
 
 // Check for divide by zero
 // Load the divider
-DIVIDE1:
+rf80386_pkg::DIVIDE1:
 	begin
-		tGoto(DIVIDE2);
+		tGoto(rf80386_pkg::DIVIDE2);
 		// Check for divide by zero
 		if (w) begin
-			if (b[15:0]==16'h0000) begin
+			if (cs_desc.db ? b]31:0]==32'h0000 : b[15:0]==16'h0000) begin
 				$display("Divide by zero");
 				int_num <= 8'h00;
-				tGoto(INT2);
+				tGoto(rf80386_pkg::INT2);
 			end
-			else
-				ld_div32 <= 1'b1;
+			else begin
+				if (cs_desc.db)
+					ld_div64 <= 1'b1;
+				else
+					ld_div32 <= 1'b1;
+			end
 		end
 		else begin
 			if (b[7:0]==8'h00) begin
 				$display("Divide by zero");
 				int_num <= 8'h00;
-				tGoto(INT2);
+				tGoto(rf80386_pkg::INT2);
 			end
 			else
 				ld_div16 <= 1'b1;
 		end
 	end
-DIVIDE2:
+rf80386_pkg::DIVIDE2:
 	begin
 		$display("DIVIDE2");
+		ld_div64 <= 1'b0;
 		ld_div32 <= 1'b0;
 		ld_div16 <= 1'b0;
-		tGoto(DIVIDE2a);
+		tGoto(rf80386_pkg::DIVIDE2a);
 	end
-DIVIDE2a:
+rf80386_pkg::DIVIDE2a:
 	begin
 		$display("DIVIDE2a");
-		if (w & div32_done)
-			tGoto(DIVIDE3);
+		if (w) begin
+			if (cs_desc.db && div64_done)
+				tGoto(rf80386_pkg::DIVIDE3);
+			else if (!cs_desc.db && div32_done)
+				tGoto(rf80386_pkg::DIVIDE3);
+		end
 		else if (!w & div16_done)
-			tGoto(DIVIDE3);
+			tGoto(rf80386_pkg::DIVIDE3);
 	end
 
 // Assign results to registers
 // Trap on divider overflow
-DIVIDE3:
+rf80386_pkg::DIVIDE3:
 	begin
 		$display("DIVIDE3 state <= IFETCH");
 		tGoto(rf8088_pkg::IFETCH);
 		if (w) begin
-			ax <= q32[15:0];
-			dx <= r32[15:0];
-			if (TTT[0]) begin
-				if (q32[31:16]!={16{q32[15]}}) begin
-					$display("DIVIDE Overflow");
-					int_num <= 8'h00;
-					tGoto(INT2);
+			if (cs_desc.db) begin
+				eax <= q64[31:0];
+				edx <= r64[31:0];
+			end
+			else begin
+				ax <= q32[15:0];
+				dx <= r32[15:0];
+			end
+			if (cs_desc.db) begin
+				if (TTT[0]) begin
+					if (q64[63:32]!={32{q64[31]}}) begin
+						$display("DIVIDE Overflow");
+						int_num <= 8'h00;
+						tGoto(rf80386_pkg::INT2);
+					end
+				end
+				else begin
+					if (q32[63:32]!=32'h0000) begin
+						$display("DIVIDE Overflow");
+						int_num <= 8'h00;
+						tGoto(rf80386_pkg::INT2);
+					end
 				end
 			end
 			else begin
-				if (q32[31:16]!=16'h0000) begin
-					$display("DIVIDE Overflow");
-					int_num <= 8'h00;
-					tGoto(INT2);
+				if (TTT[0]) begin
+					if (q32[31:16]!={16{q32[15]}}) begin
+						$display("DIVIDE Overflow");
+						int_num <= 8'h00;
+						tGoto(rf80386_pkg::INT2);
+					end
+				end
+				else begin
+					if (q32[31:16]!=16'h0000) begin
+						$display("DIVIDE Overflow");
+						int_num <= 8'h00;
+						tGoto(rf80386_pkg::INT2);
+					end
 				end
 			end
 		end
@@ -107,14 +140,14 @@ DIVIDE3:
 				if (q16[15:8]!={8{q16[7]}}) begin
 					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 			end
 			else begin
 				if (q16[15:8]!=8'h00) begin
 					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 			end
 		end

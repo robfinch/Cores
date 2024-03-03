@@ -36,72 +36,33 @@
 //
 // ============================================================================
 
-JUMP_VECTOR1:
+rf80386_pkg::JUMP_VECTOR1:
 	begin
-		tRead(ea);	// ea set by EACALC
-		cyc_done <= FALSE;
-		tGoto(JUMP_VECTOR2);
+		ad <= ea;
+		if (cs_desc.db)
+			sel <= 16'h003F;
+		else
+			sel <= 16'h000F;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::JUMP_VECTOR2);
 	end
-JUMP_VECTOR2:
-	if (ack_i) begin
-		ea <= ea_inc;
-		offset[7:0] <= dat_i;
-		tGoto(JUMP_VECTOR3);
+rf80386_pkg::JUMP_VECTOR2:
+	begin
+		if (cs_desc.db) begin
+			offset <= dat[31:0];
+			selector <= dat[47:32];
+		end
+		else begin
+			offset <= dat[15:0];
+			selector <= dat[31:16];
+		end
+		tGoto(rf80386_pkg::JUMP_VECTOR3);
 	end
-	else if (rty_i && !cyc_done)
-		tRead(ea);
-	else
-		cyc_done <= TRUE;
 JUMP_VECTOR3:
 	begin
-		tRead(ea);
-		cyc_done <= FALSE;
-		tGoto(JUMP_VECTOR4);
-	end
-JUMP_VECTOR4:
-	if (ack_i) begin
-		ea <= ea_inc;
-		offset[15:8] <= dat_i;
-		tGoto(JUMP_VECTOR5);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(ea);
-	else
-		cyc_done <= TRUE;
-JUMP_VECTOR5:
-	begin
-		tRead(ea);
-		cyc_done <= FALSE;
-		tGoto(JUMP_VECTOR6);
-	end
-JUMP_VECTOR6:
-	if (ack_i) begin
-		ea <= ea_inc;
-		selector[7:0] <= dat_i;
-		tGoto(JUMP_VECTOR7);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(ea);
-	else
-		cyc_done <= TRUE;
-JUMP_VECTOR7:
-	begin
-		tRead(ea);
-		cyc_done <= FALSE;
-		tGoto(JUMP_VECTOR8);
-	end
-JUMP_VECTOR8:
-	if (ack_i) begin
-		selector[15:8] <= dat_i;
-		tGoto(JUMP_VECTOR9);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(ea);
-	else
-		cyc_done <= TRUE;
-JUMP_VECTOR9:
-	begin
-		ip <= offset;
+		eip <= offset;
 		cs <= selector;
-		tGoto(rf8088_pkg::IFETCH);
+		if (cs != selector)
+			tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
+		else
+			tGoto(rf80386_pkg::IFETCH);
 	end

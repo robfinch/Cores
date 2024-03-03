@@ -36,27 +36,13 @@
 //
 // ============================================================================
 
-STORE_DATA:
+rf80386_pkg::STORE_DATA:
 	begin
-		tWrite(ea,res[7:0]);
-		tGoto(STORE_DATA1);
-	end
-STORE_DATA1:
-	if (rty_i)
-		tWrite(ea,res[7:0]);
-	else begin
-		if (w)
-			tGoto(STORE_DATA2);
+		ad <= ea;
+		if (cs_desc.db) begin
+			sel <= w ? 16'h000F : 16'h0001;
 		else
-			tGoto(rf8088_pkg::IFETCH);
+			sel <= w ? 16'h0003 : 16'h0001;
+		dat <= res;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
 	end
-STORE_DATA2:
-	begin
-		tWrite(ea_inc,res[15:8]);
-		tGoto(STORE_DATA3);
-	end
-STORE_DATA3:
-	if (rty_i)
-		tWrite(ea_inc,res[15:8]);
-	else
-		tGoto(rf8088_pkg::IFETCH);

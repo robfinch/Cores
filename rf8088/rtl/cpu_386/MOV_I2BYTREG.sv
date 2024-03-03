@@ -35,12 +35,12 @@
 //
 // ============================================================================
 
-MOV_I2BYTREG:
+rf80386_pkg::MOV_I2BYTREG:
 	begin
 		w <= 1'b0;				// select byte size
 		rrr <= ir[2:0];
-		res <= {8'h00,bundle[7:0]};
+		res <= {24'h00,bundle[7:0]};
 		wrregs <= 1'b1;
-		ip <= ip_inc;
-		tGoto(rf8088_pkg::IFETCH);
+		eip <= ip_inc;
+		tGoto(rf80386_pkg::IFETCH);
 	end

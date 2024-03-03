@@ -40,75 +40,37 @@
 //  Fetch ip from stack
 // ============================================================================
 
-RETFPOP:
+rf80386_pkg::RETFPOP:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETFPOP1);
+		ad <= sssp;
+		if (cs_desc.db)
+			sel <= 16'h003F;
+		else
+			sel <= 16'h000F;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::RETFPOP1);
 	end
-RETFPOP1:
-	if (ack_i) begin
-		sp <= sp_inc;
-		ip[7:0] <= dat_i;
-		tGoto(RETFPOP2);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-RETFPOP2:
+rf80386_pkg::RETFPOP1:
 	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETFPOP3);
+		if (cs_desc.db) begin
+			esp <= esp + 4'd6;
+			{selector,eip} <= dat[47:0];
+		end
+		else begin
+			esp <= esp + 4'd4;
+			{selector,eip[15:0]} <= dat[31:0];
+			eip[31:16] <= 16'h0;
+		end
+		tGoto(rf80386_pkg::RETFPOP2);
 	end
-RETFPOP3:
-	if (ack_i) begin
-		sp <= sp_inc;
-		ip[15:8] <= dat_i;
-		tGoto(RETFPOP4);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-RETFPOP4:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETFPOP5);
-	end
-RETFPOP5:
-	if (ack_i) begin
-		sp <= sp_inc;
-		cs[7:0] <= dat_i;
-		tGoto(RETFPOP6);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-RETFPOP6:
-	begin
-		tRead(sssp);
-		cyc_done <= FALSE;
-		tGoto(RETFPOP7);
-	end
-RETFPOP7:
-	if (ack_i) begin
-		sp <= sp_inc;
-		cs[15:8] <= dat_i;
-		tGoto(RETFPOP8);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(sssp);
-	else
-		cyc_done <= TRUE;
-RETFPOP8:
+rf80386_pkg::RETFPOP2:
 	begin
 		wrregs <= 1'b1;
 		w <= 1'b1;
 		rrr <= 3'd4;
-		res <= sp + data16;
-		tGoto(rf8088_pkg::IFETCH);
+		res <= esp + data32;
+		cs <= selector;
+		if (cs != selector)
+			tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
+		else
+			tGoto(rf80386_pkg::IFETCH);
 	end

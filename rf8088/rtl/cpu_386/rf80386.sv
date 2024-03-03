@@ -73,7 +73,7 @@ reg [19:0] adr_o;
 reg [1:0] seg_sel;			// segment selection	0=ES,1=SS,2=CS (or none), 3=DS
 
 e_80386state state;			// machine state
-e_80386state stk_state;	// stacked machine state
+e_80386state [3:0] stk_state;	// stacked machine state
 reg hasFetchedModrm;
 reg hasFetchedDisp8;
 reg hasFetchedDisp16;
@@ -106,6 +106,7 @@ reg [7:0] lock_insn;
 reg [7:0] prefix1;
 reg [7:0] prefix2;
 reg [7:0] int_num;			// interrupt number to execute
+reg [63:0] dat;
 reg [15:0] seg_reg;			// segment register value for memory access
 reg [15:0] data16;			// caches data
 reg [15:0] disp16;			// caches displacement
@@ -240,7 +241,6 @@ always_ff @(posedge CLK)
 `include "FETCH_DISP16.sv"
 `include "FETCH_IMMEDIATE.sv"
 `include "FETCH_OFFSET_AND_SEGMENT.sv"
-
 `include "MOV_I2BYTREG.sv"
 `include "STORE_DATA.sv"
 `include "BRANCH.sv"
@@ -260,13 +260,15 @@ always_ff @(posedge CLK)
 `include "INW.sv"
 `include "OUTB.sv"
 `include "OUTW.sv"
+
 `include "INSB.sv"
 `include "OUTSB.sv"
+
 `include "XCHG_MEM.sv"
 `include "DIVIDE.sv"
 
 			default:
-				state <= rf8088_pkg::IFETCH;
+				state <= rf80386_pkg::IFETCH;
 			endcase
 		end
 
@@ -287,7 +289,7 @@ end
 endtask
 
 task tGoto;
-input e_8088state nst;
+input e_80386state nst;
 begin
 	state <= nst;
 end
@@ -297,14 +299,21 @@ task tGosub;
 input e_80386state tgt;
 input e_80386state rts;
 begin
-	stk_state <= rts;
+	stk_state[0] <= rts;
+	stk_state[1] <= stk_state[0];
+	stk_state[2] <= stk_state[1];
+	stk_state[3] <= stk_state[2];
 	tGoto(tgt);
 end
 endtask
 
 task tReturn;
 begin
-	state <= stk_state;
+	state <= stk_state[0];
+	stk_state[0] <= stk_state[1];
+	stk_state[1] <= stk_state[2];
+	stk_state[2] <= stk_state[3];
+	stk_state[3] <= rf80386::RESET;
 end
 endtask
 

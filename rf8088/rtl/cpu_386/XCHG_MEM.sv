@@ -1,5 +1,5 @@
-XCHG_MEM:
+rf80386_pkg::XCHG_MEM:
 begin
 	res <= b;
-	tGoto(STORE_DATA);
+	tGoto(rf80386_pkg::STORE_DATA);
 end

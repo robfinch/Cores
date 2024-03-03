@@ -36,31 +36,16 @@
 //
 // ============================================================================
 
-OUTW:	// Entry point for OUT port,AX
+rf80386_pkg::OUTW:	// Entry point for OUT port,AX
 	begin
 		ea <= {12'h000,bundle[7:0]};
-		tWrite({12'h000,bundle[7:0]},al);
-		ip <= ip_inc;
-		tGoto(OUTW1_NACK);
+		eip <= eip + 2'd1;
+		tGoto(rf80386_pkg::OUTW1);
 	end
-OUTW1:	// Entry point for OUT [DX],AX
+rf80386_pkg::OUTW1:	// Entry point for OUT [DX],AX
 	begin
-		tWrite(ea,al);
-		tGoto(OUTW1_NACK);
+		ad <= ea;
+		sel <= cs_desc.db ? 16'h000F : 16'h0003;
+		dat <= eax;
+		tGosub(rf80386_pkg::STORE_IO,rf80386_pkg::IFETCH);
 	end
-OUTW1_NACK:
-	if (rty_i)
-		tWrite(ea,al);
-	else
-		tGoto(OUTW2);
-OUTW2:
-	begin
-		tWrite(ea_inc,ah);
-		tGoto(OUTW2_NACK);
-	end
-OUTW2_NACK:
-	if (rty_i)
-		tWrite(ea,ah);
-	else
-		tGoto(rf8088_pkg::IFETCH);
-
