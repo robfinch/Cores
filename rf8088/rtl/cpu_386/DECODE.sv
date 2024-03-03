@@ -38,7 +38,7 @@
 //
 //=============================================================================
 
-DECODE:
+rf80386_pkg::DECODE:
 	casez(ir)
 	`MORE1: tGoto(rf80386_pkg::XI_FETCH);
 	`MORE2: tGoto(rf80386_pkg::XI_FETCH);
@@ -64,7 +64,7 @@ DECODE:
 		begin
 			w <= 1'b1;
 			rrr <= ir[2:0];
-			if (cs_desc.db ? ip > 32'hFFFFFFFC : ip==32'hFFFF) begin
+			if (cs_desc.db ? eip > 32'hFFFFFFFC : eip==32'hFFFF) begin
 				int_num <= 8'h0d;
 				tGoto(rf80386_pkg::INT2);
 			end
@@ -73,7 +73,7 @@ DECODE:
 		end
 	
 	`XLAT:
-		tGoto(XLAT);
+		tGoto(rf80386_pkg::XLAT);
 
 	//-----------------------------------------------------------------
 	// Arithmetic Operations
@@ -100,7 +100,7 @@ DECODE:
 			w <= 1'b1;
 			a <= ax;
 			rrr <= 3'd0;
-			if (csdesc.db ? ip > 32'hFFFFFFFC : ip==32'hFFFF) begin
+			if (cs_desc.db ? eip > 32'hFFFFFFFC : eip==32'hFFFF) begin
 				int_num <= 8'h0d;
 				tGoto(rf80386_pkg::INT2);
 			end
@@ -148,32 +148,41 @@ DECODE:
 	//-----------------------------------------------------------------
 	// String Operations
 	//-----------------------------------------------------------------
-	`LODSB: tGoto(LODS);
-	`LODSW: tGoto(LODS);
-	`STOSB: tGoto(STOS);
-	`STOSW: tGoto(STOS);
-	`MOVSB: tGoto(MOVS);
-	`MOVSW: tGoto(MOVS);
-	`CMPSB: tGoto(CMPSB);
-	`CMPSW: tGoto(CMPSW);
-	`SCASB: tGoto(SCASB);
-	`SCASW: tGoto(SCASW);
+	`LODSB: tGoto(rf80386_pkg::LODS);
+	`LODSW: tGoto(rf80386_pkg::LODS);
+	`STOSB: tGoto(rf80386_pkg::STOS);
+	`STOSW: tGoto(rf80386_pkg::STOS);
+	`MOVSB: tGoto(rf80386_pkg::MOVS);
+	`MOVSW: tGoto(rf80386_pkg::MOVS);
+	`CMPSB: tGoto(rf80386_pkg::CMPSB);
+	`CMPSW: tGoto(rf80386_pkg::CMPSW);
+	`SCASB: tGoto(rf80386_pkg::SCASB);
+	`SCASW: tGoto(rf80386_pkg::SCASW);
 
 	//-----------------------------------------------------------------
 	// Stack Operations
 	//-----------------------------------------------------------------
-	`PUSH_REG: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(PUSH); end
-	`PUSH_DS: begin esp <= esp - 4'd2; tGoto(PUSH); end
-	`PUSH_ES: begin esp <= esp - 4'd2; tGoto(PUSH); end
-	`PUSH_SS: begin esp <= esp - 4'd2; tGoto(PUSH); end
-	`PUSH_CS: begin esp <= esp - 4'd2; tGoto(PUSH); end
-	`PUSHF: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(PUSH); end
-	`PUSHA:	begin tsp <= esp; esp <= sp_dec; tGoto(PUSHA); end
-	`POP_REG: tGoto(POP);
-	`POP_DS: tGoto(POP);
-	`POP_ES: tGoto(POP);
-	`POP_SS: tGoto(POP);
-	`POPF: tGoto(POP);
+	`PUSH_REG: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSH_DS: begin esp <= esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSH_ES: begin esp <= esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSH_SS: begin esp <= esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSH_CS: begin esp <= esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSHF: begin esp <= cs_desc.db ? esp - 4'd4 : esp - 4'd2; tGoto(rf80386_pkg::PUSH); end
+	`PUSHA:
+		begin
+			tsp <= esp; 
+			if (cs_desc.db)
+				esp <= esp - 4'd4;
+			else
+				esp <= esp - 4'd2;
+			tGoto(rf80386_pkg::PUSHA);
+		end
+	`POP_REG: tGoto(rf80386_pkg::POP);
+	`POP_DS: tGoto(rf80386_pkg::POP);
+	`POP_ES: tGoto(rf80386_pkg::POP);
+	`POP_SS: tGoto(rf80386_pkg::POP);
+	`POPF: tGoto(rf80386_pkg::POP);
+	`POPA:	tGoto(rf80386_pkg::POPA);
 
 	//-----------------------------------------------------------------
 	// Flow controls
@@ -181,26 +190,26 @@ DECODE:
 	`NOP: tGoto(rf80386_pkg::IFETCH);
 	`HLT: if (pe_nmi | (irq_i & ie)) tGoto(rf80386_pkg::IFETCH);
 	`WAI: if (!busy_i) tGoto(rf80386_pkg::IFETCH);
-	`LOOP: begin ecx <= cx_dec; tGoto(BRANCH1); end
-	`LOOPZ: begin ecx <= cx_dec; tGoto(BRANCH1); end
-	`LOOPNZ: begin ecx <= cx_dec; tGoto(BRANCH1); end
-	`Jcc: tGoto(BRANCH1);
-	`JCXZ: tGoto(BRANCH1);
-	`JMPS: tGoto(BRANCH1);
-	`JMPF: tGoto(FETCH_OFFSET);
-	`CALL: begin esp <= sp_dec; tGoto(FETCH_DISP16); end
-	`CALLF: begin esp <= sp_dec; tGoto(FETCH_OFFSET); end
-	`RET: tGoto(RETPOP);		// data16 is zero
-	`RETPOP: tGoto(FETCH_STK_ADJ1);
-	`RETF: tGoto(RETFPOP);	// data16 is zero
-	`RETFPOP: tGoto(FETCH_STK_ADJ1);
-	`IRET: tGoto(IRET1);
-	`INT: tGoto(INT);
-	`INT3: begin int_num <= 8'd3; tGoto(INT2); end
+	`LOOP: begin ecx <= cx_dec; tGoto(rf80386_pkg::BRANCH1); end
+	`LOOPZ: begin ecx <= cx_dec; tGoto(rf80386_pkg::BRANCH1); end
+	`LOOPNZ: begin ecx <= cx_dec; tGoto(rf80386_pkg::BRANCH1); end
+	`Jcc: tGoto(rf80386_pkg::BRANCH1);
+	`JCXZ: tGoto(rf80386_pkg::BRANCH1);
+	`JMPS: tGoto(rf80386_pkg::BRANCH1);
+	`JMPF: tGoto(rf80386_pkg::FETCH_OFFSET);
+	`CALL: begin esp <= sp_dec; tGoto(rf80386_pkg::FETCH_DISP16); end
+	`CALLF: begin esp <= sp_dec; tGoto(rf80386_pkg::FETCH_OFFSET); end
+	`RET: tGoto(rf80386_pkg::RETPOP);		// data16 is zero
+	`RETPOP: tGoto(rf80386_pkg::FETCH_STK_ADJ1);
+	`RETF: tGoto(rf80386_pkg::RETFPOP);	// data16 is zero
+	`RETFPOP: tGoto(rf80386_pkg::FETCH_STK_ADJ1);
+	`IRET: tGoto(rf80386_pkg::IRET1);
+	`INT: tGoto(rf80386_pkg::INT);
+	`INT3: begin int_num <= 8'd3; tGoto(rf80386_pkg::INT2); end
 	`INTO:
 		if (vf) begin
 			int_num <= 8'd4;
-			tGoto(INT2);
+			tGoto(rf80386_pkg::INT2);
 		end
 		else
 			tGoto(rf80386_pkg::IFETCH);
@@ -217,11 +226,11 @@ DECODE:
 	`CMC: begin cf <=  !cf; tGoto(rf80386_pkg::IFETCH); end
 	`LAHF:
 		begin
-			ax[15] <= sf;
-			ax[14] <= zf;
-			ax[12] <= af;
-			ax[10] <= pf;
-			ax[8] <= cf;
+			eax[15] <= sf;
+			eax[14] <= zf;
+			eax[12] <= af;
+			eax[10] <= pf;
+			eax[8] <= cf;
 			tGoto(rf80386_pkg::IFETCH);
 		end
 	`SAHF:
@@ -238,17 +247,17 @@ DECODE:
 	// IO instructions
 	// - fetch port number, then vector
 	//-----------------------------------------------------------------
-	`INB: tGoto(INB);
-	`INW: tGoto(INW);
-	`OUTB: tGoto(OUTB);
-	`OUTW: tGoto(OUTW);
-	`INB_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(INB1); end
-	`INW_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(INW1); end
-	`OUTB_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(OUTB1); end
-	`OUTW_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(OUTW1); end
-	`INSB: tGoto(INSB);
-	`OUTSB: tGoto(OUTSB);
-	`OUTSW: tGoto(OUTSW);
+	`INB: tGoto(rf80386_pkg::INB);
+	`INW: tGoto(rf80386_pkg::INW);
+	`OUTB: tGoto(rf80386_pkg::OUTB);
+	`OUTW: tGoto(rf80386_pkg::OUTW);
+	`INB_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(rf80386_pkg::INB1); end
+	`INW_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(rf80386_pkg::INW1); end
+	`OUTB_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(rf80386_pkg::OUTB1); end
+	`OUTW_DX: begin ea <= {`SEG_SHIFT,dx}; tGoto(rf80386_pkg::OUTW1); end
+	`INSB: tGoto(rf80386_pkg::INSB);
+	`OUTSB: tGoto(rf80386_pkg::OUTSB);
+	`OUTSW: tGoto(rf80386_pkg::OUTSW);
 
 	//-----------------------------------------------------------------
 	// Control Prefix
@@ -271,7 +280,7 @@ DECODE:
 				bundle <= bundle[127:16];
 				eip <= eip + 4'd2;
 			end
-			tGoto(FETCH_DISP16b);
+			tGoto(rf80386_pkg::FETCH_DISP16b);
 		end
 
 	default:
@@ -295,7 +304,7 @@ DECODE:
 			$display("Mod/RM=%b_%b_%b", dat_i[7:6],dat_i[5:3],dat_i[2:0]);
 			bundle <= bundle[127:8];
 			eip <= eip + 2'd1;
-			tGoto(EACALC);
+			tGoto(rf80386_pkg::EACALC);
 		end
 		else
 			tGoto(rf80386_pkg::IFETCH);

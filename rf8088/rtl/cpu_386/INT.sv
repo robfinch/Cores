@@ -92,6 +92,6 @@ rf80386_pkg::INT8:
 rf80386_pkg::INT9:
 	begin
 		cs <= selector;
-		ip <= offset;
+		eip <= offset;
 		tGosub(rf80386_pkg::LOAD_CS_DESC,rf80386_pkg::IFETCH);
 	end

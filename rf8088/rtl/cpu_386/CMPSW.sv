@@ -47,209 +47,76 @@ rf80386_pkg::CMPSW:
     tGoto(rf80386_pkg::INTA0);
   end
 	else begin
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW1);
+		ad <= seg_reg + (cs_desc.db ? esi : si);
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CMPSW1);
 	end
 
 rf80386_pkg::CMPSW1:
-	if (ack_i) begin
+	begin
 		if (df) begin
-			esi <= si_dec;
-			if (cs_desc.db)
-				a[31:24] <= dat_i;
-			else
-				a[15:8] <= dat_i;
+			if (cs_desc.db) begin
+				a <= dat[31:0];
+				esi <= esi - 4'd4;
+			end
+			else begin
+				esi <= esi - 4'd2;
+				a <= {{16{dat[15]}},dat[15:0]};
+			end
 		end
 		else begin
-			esi <= si_inc;
-			a[ 7:0] <= dat_i;
+			if (cs_desc.db) begin
+				a <= dat[31:0];
+				esi <= esi + 4'd4;
+			end
+			else begin
+				esi <= esi + 4'd2;
+				a <= {{16{dat[15]}},dat[15:0]};
+			end
 		end
 		tGoto(rf80386_pkg::CMPSW2);
 	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-	else
-		cyc_done <= TRUE;
 
 rf80386_pkg::CMPSW2:
 	begin
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW3);
+		ad <= esdi;
+		if (cs_desc.db)
+			sel <= 16'h000F;
+		else
+			sel <= 16'h0003;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CMPSW3);
+		tRead(esdi);
 	end
 
 rf80386_pkg::CMPSW3:
-	if (ack_i) begin
-		if (df) begin
-			si <= si_dec;
-			if (cs_desc.db)
-				a[23:16] <= dat_i;
-			else
-				a[7:0] <= dat_i;
-		end
-		else begin
-			si <= si_inc;
-			a[15:8] <= dat_i;
-		end
-		tGoto(cd_desc.db ? CMPSW4 : CMPSW8);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-	else
-		cyc_done <= TRUE;
-
-CMPSW4:
 	begin
-		tRead(seg_reg + esi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW5);
-	end
-
-rf80386_pkg::CMPSW5:
-	if (ack_i) begin
 		if (df) begin
-			si <= si_dec;
-			a[15:8] <= dat_i;
+			if (cs_desc.db) begin
+				b <= dat[31:0];
+				edi <= edi - 4'd4;
+			end
+			else begin
+				edi <= edi - 4'd2;
+				b <= {{16{dat[15]}},dat[15:0]};
+			end
 		end
 		else begin
-			si <= si_inc;
-			a[23:16] <= dat_i;
+			if (cs_desc.db) begin
+				b <= dat[31:0];
+				edi <= edi + 4'd4;
+			end
+			else begin
+				edi <= edi + 4'd2;
+				b <= {{16{dat[15]}},dat[15:0]};
+			end
 		end
-		tGoto(rf80386_pkg::CMPSW6);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + esi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW6:
-	begin
-		tRead(seg_reg + esi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW7);
+		tGoto(rf80386_pkg::CMPSW4);
 	end
 
-rf80386_pkg::CMPSW7:
-	if (ack_i) begin
-		if (df) begin
-			si <= si_dec;
-			a[7:0] <= dat_i;
-		end
-		else begin
-			si <= si_inc;
-			a[31:24] <= dat_i;
-		end
-		tGoto(rf80386_pkg::CMPSW8);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + esi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW8:
-	begin
-		tRead(esdi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW9);
-	end
-
-rf80386_pkg::CMPSW9:
-	if (ack_i) begin
-		if (df) begin
-			di <= di_dec;
-			if (cs_desc.db)
-				b[31:24] <= dat_i;
-			else
-				b[15:8] <= dat_i;
-		end
-		else begin
-			di <= di_inc;
-			b[ 7:0] <= dat_i;
-		end
-		tGoto(rf80386_pkg::CMPSW10);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW10:
-	begin
-		tRead(esdi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW11);
-	end
-
-rf80386_pkg::CMPSW11:
-	if (ack_i) begin
-		if (df) begin
-			di <= di_dec;
-			if (cs_desc.db)
-				b[23:16] <= dat_i;
-			else
-				b[7:0] <= dat_i;
-		end
-		else begin
-			di <= di_inc;
-			b[15:8] <= dat_i;
-		end
-		tGoto(cs_desc.db ? rf80386_pkg::CMPSW12 : rf80386_pkg::CMPSW16);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW12:
-	begin
-		tRead(esdi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW13);
-	end
-
-rf80386_pkg::CMPSW13:
-	if (ack_i) begin
-		if (df) begin
-			di <= di_dec;
-			b[15:8] <= dat_i;
-		end
-		else begin
-			di <= di_inc;
-			b[23:16] <= dat_i;
-		end
-		tGoto(rf80386_pkg::CMPSW14);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW14:
-	begin
-		tRead(esdi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSW15);
-	end
-
-rf80386_pkg::CMPSW15:
-	if (ack_i) begin
-		if (df) begin
-			di <= di_dec;
-			b[7:0] <= dat_i;
-		end
-		else begin
-			di <= di_inc;
-			b[31:24] <= dat_i;
-		end
-		tGoto(rf80386_pkg::CMPSW16);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-
-rf80386_pkg::CMPSW16:
+rf80386_pkg::CMPSW4:
 	begin
 		pf <= pres;
 		zf <= reszw;
@@ -268,5 +135,5 @@ rf80386_pkg::CMPSW16:
 			tGoto(rf80386_pkg::CMPSW);
 		end
 		else
-			tGoto(rf8088_pkg::IFETCH);
+			tGoto(rf80386_pkg::IFETCH);
 	end

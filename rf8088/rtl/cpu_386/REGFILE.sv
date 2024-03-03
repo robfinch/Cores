@@ -93,6 +93,10 @@ wire [15:0] ax = eax[15:0];
 wire [15:0] bx = ebx[15:0];
 wire [15:0] cx = ecx[15:0];
 wire [15:0] dx = edx[15:0];
+wire [15:0] sp = esp[15:0];
+wire [15:0] bp = ebp[15:0];
+wire [15:0] si = esi[15:0];
+wire [15:0] di = edi[15:0];
 
 wire [31:0] cs_base = cs_desc.db ? {cs_desc.base_hi, cs_desc.base_lo} : {cs_desc.base_hi, cs_desc.base_lo} + {cs,`SEG_SHIFT};
 wire [31:0] ss_base = cs_desc.db ? {ss_desc.base_hi, ss_desc.base_lo} : {ss_desc.base_hi, ss_desc.base_lo} + {ss,`SEG_SHIFT};
@@ -104,7 +108,7 @@ wire [31:0] idt_base = {idt_desc.base_hi, idt_desc.base_lo};
 wire [31:0] gdt_base = {gdt_desc.base_hi, gdt_desc.base_lo};
 wire [31:0] ldt_base = {ldt_desc.base_hi, ldt_desc.base_lo};
 
-wire [31:0] csip = cs_base + ip;
+wire [31:0] csip = cs_base + eip;
 wire [31:0] sssp = ss_base + (cs_desc.db ? esp : sp);
 wire [31:0] dssi = ds_base + (cs_desc.db ? esi : si);
 wire [31:0] esdi = es_base + (cs_desc.db ? edi : di);
@@ -136,14 +140,14 @@ always_comb
 //
 always_comb
 	case({w,rm})
-	4'd0:	rmo <= {{8{eax[7]}},eax[7:0]};
-	4'd1:	rmo <= {{8{ecx[7]}},ecx[7:0]};
-	4'd2:	rmo <= {{8{edx[7]}},edx[7:0]};
-	4'd3:	rmo <= {{8{ebx[7]}},ebx[7:0]};
-	4'd4:	rmo <= {{8{eax[15]}},eax[15:8]};
-	4'd5:	rmo <= {{8{ecx[15]}},ecx[15:8]};
-	4'd6:	rmo <= {{8{edx[15]}},edx[15:8]};
-	4'd7:	rmo <= {{8{ebx[15]}},ebx[15:8]};
+	4'd0:	rmo <= {{24{eax[7]}},eax[7:0]};
+	4'd1:	rmo <= {{24{ecx[7]}},ecx[7:0]};
+	4'd2:	rmo <= {{24{edx[7]}},edx[7:0]};
+	4'd3:	rmo <= {{24{ebx[7]}},ebx[7:0]};
+	4'd4:	rmo <= {{24{eax[15]}},eax[15:8]};
+	4'd5:	rmo <= {{24{ecx[15]}},ecx[15:8]};
+	4'd6:	rmo <= {{24{edx[15]}},edx[15:8]};
+	4'd7:	rmo <= {{24{ebx[15]}},ebx[15:8]};
 	4'd8:	rmo <= eax;
 	4'd9:	rmo <= ecx;
 	4'd10:	rmo <= edx;
@@ -164,6 +168,6 @@ always_comb
 	3'd2:	rfso <= ss;
 	3'd3:	rfso <= ds;
 	3'd4:	rfso <= fs;
-	3'd5:	rfos <= gs;
+	3'd5:	rfso <= gs;
 	default:	rfso <= 16'h0000;
 	endcase

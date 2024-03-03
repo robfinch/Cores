@@ -91,12 +91,17 @@ wire resn;
 wire resz;
 
 reg [2:0] cyc_type;			// type of bus sycle
+reg lidt, lgdt;
 reg w;						// 0=8 bit, 1=16 bit
 reg d;
 reg v;						// 1=count in cl, 0 = count is one
+reg [7:0] modrm1;				// for bit scan instructions
 reg [1:0] mod;
 reg [2:0] rrr;
 reg [2:0] rm;
+reg [7:0] sib;
+reg [31:0] ad;
+reg [19:0] sel;
 reg sxi;
 reg [2:0] sreg;
 reg [1:0] sreg2;
@@ -112,7 +117,7 @@ reg [15:0] data16;			// caches data
 reg [15:0] disp16;			// caches displacement
 reg [31:0] data32;
 reg [31:0] disp32;
-reg [15:0] offset;			// caches offset
+reg [31:0] offset;			// caches offset
 reg [15:0] selector;		// caches selector
 reg [31:0] ea;				// effective address
 reg [39:0] desc;			// buffer for sescriptor
@@ -122,7 +127,7 @@ reg wrregs;
 reg wrsregs;
 wire take_br;
 reg [3:0] shftamt;
-reg ld_div16,ld_div32;		// load divider
+reg ld_div16,ld_div32,ld_div64;		// load divider
 reg div_sign;
 reg read_code;
 reg [31:0] xlat_adr;
@@ -133,6 +138,7 @@ reg rty_i;
 reg cyc_done;
 reg [31:0] tsp;
 reg [31:0] sndx;		// scaled index
+int_gate386_t igate;
 
 reg nmi_armed;
 reg rst_nmi;				// reset the nmi flag
@@ -161,6 +167,8 @@ lfsr31 ulfsr1(rst_i, clk_i, 1'b1, 1'b0, lfsr31o);
 
 always_ff @(posedge CLK)
 	if (rst_i) begin
+		lidt <= 1'b0;
+		lgdt <= 1'b0;
 		pf <= 1'b0;
 		cf <= 1'b0;
 		df <= 1'b0;
@@ -169,7 +177,7 @@ always_ff @(posedge CLK)
 		ie <= 1'b0;
 		hasFetchedModrm <= 1'b0;
 		cs <= `CS_RESET;
-		cd_desc <= {$bits(desc386_t){1'b0}};
+		cs_desc <= {$bits(desc386_t){1'b0}};
 		cs_desc.db <= 1'b1;							// 32-bit mode
 		cs_desc.base_lo <= 24'hFF0000;	// base = 0
 		cs_desc.base_hi <= 8'hFF;			
@@ -207,7 +215,7 @@ always_ff @(posedge CLK)
 		cnt <= 7'd0;
 		tsp <= 16'd0;
 		tClearBus();
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	end
 	else begin
 		rst_nmi <= 1'b0;
@@ -255,18 +263,17 @@ always_ff @(posedge CLK)
 `include "IRET.sv"
 `include "JUMP_VECTOR.sv"
 `include "PUSH.sv"
+`include "PUSHA.sv"
 `include "POP.sv"
+`include "POPA.sv"
 `include "INB.sv"
 `include "INW.sv"
 `include "OUTB.sv"
 `include "OUTW.sv"
-
 `include "INSB.sv"
 `include "OUTSB.sv"
-
 `include "XCHG_MEM.sv"
 `include "DIVIDE.sv"
-
 			default:
 				state <= rf80386_pkg::IFETCH;
 			endcase
@@ -313,7 +320,7 @@ begin
 	stk_state[0] <= stk_state[1];
 	stk_state[1] <= stk_state[2];
 	stk_state[2] <= stk_state[3];
-	stk_state[3] <= rf80386::RESET;
+	stk_state[3] <= rf80386_pkg::RESET;
 end
 endtask
 

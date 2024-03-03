@@ -67,6 +67,8 @@ rf80386_pkg::IFETCH:
 		hasFetchedVector <= 1'b0;
 		hasStoredData <= 1'b0;
 		hasFetchedData <= 1'b0;
+		lidt <= 1'b0;
+		lgdt <= 1'b0;
 		data16 <= 16'h0000;
 		cnt <= 7'd0;
 //		if (prefix1!=8'h00 && prefix2 !=8'h00 && is_prefix)
@@ -98,7 +100,7 @@ rf80386_pkg::IFETCH:
 		end
 	end
 
-IFETCH_ACK:
+rf80386_pkg::IFETCH_ACK:
 	begin
 		$display("CSIP: %h IR: %h",csip,bundle[7:0]);
 		bundle <= ibundle;

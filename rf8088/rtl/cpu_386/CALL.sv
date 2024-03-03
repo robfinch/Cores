@@ -46,7 +46,7 @@ rf80386_pkg::CALL:
 rf80386_pkg::CALL1:
 	begin
 		ad <= sssp;
-		dat <= ip;
+		dat <= eip;
 		if (cs_desc.db)
 			sel <= 16'h000F;
 		else

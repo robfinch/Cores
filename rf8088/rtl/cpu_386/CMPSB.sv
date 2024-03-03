@@ -37,39 +37,31 @@
 //
 //=============================================================================
 //
-CMPSB:
+rf80386_pkg::CMPSB:
 	begin
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::CMPSB1);
+		ad <= seg_reg + (cs_desc.db ? esi : si);
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CMPSB1);
 	end
-CMPSB1:
-	if (ack_i) begin
+rf80386_pkg::CMPSB1:
+	begin
 		tGoto(rf80386_pkg::CMPSB2);
-		a[ 7:0] <= dat_i[7:0];
-		a[31:8] <= {24{dat_i[7]}};
+		a[ 7:0] <= dat[7:0];
+		a[31:8] <= {24{dat[7]}};
 	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + (cs_desc.db ? esi : si));
-	else
-		cyc_done <= TRUE;
-CMPSB2:
+rf80386_pkg::CMPSB2:
 	begin
-		tGoto(rf80386_pkg::CMPSB3);
-		tRead(esdi);
-		cyc_done <= FALSE;
+		ad <= esdi;
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CMPSB3);
 	end
-CMPSB3:
-	if (ack_i) begin
+rf80386_pkg::CMPSB3:
+	begin
 		tGoto(rf80386_pkg::CMPSB4);
-		b[ 7:0] <= dat_i[7:0];
-		b[31:8] <= {24{dat_i[7]}};
+		b[ 7:0] <= dat[7:0];
+		b[31:8] <= {24{dat[7]}};
 	end
-	else if (rty_i && !cyc_done)
-		tRead(esdi);
-	else
-		cyc_done <= TRUE;
-CMPSB4:
+rf80386_pkg::CMPSB4:
 	begin
 		pf <= pres;
 		zf <= reszb;
@@ -87,7 +79,7 @@ CMPSB4:
 		end
 		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
 			ecx <= cx_dec;
-			ip <= ir_ip;
+			eip <= ir_ip;
 			tGoto(rf80386_pkg::IFETCH);
 		end
 		else

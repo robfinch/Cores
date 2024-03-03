@@ -46,122 +46,54 @@ rf80386_pkg::MOVS:
 	else if ((repz|repnz) & cxz)
 		tGoto(rf80386_pkg::IFETCH);
 	else begin
-		tRead(dssi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::MOVS1);
+		ad <= dssi;
+		if (w)
+			sel <= cs_desc.db ? 16'h000F : 16'h0003;
+		else
+			sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::MOVS1);
 	end
 rf80386_pkg::MOVS1:
-	if (ack_i) begin
+	begin
 		tGoto(rf80386_pkg::MOVS2);
-		a[7:0] <= dat_i;
-		si <= df ? si_dec : si_inc;
+		if (w) begin
+			if (cs_desc.db) begin
+				a[31:0] <= dat[31:0];
+				esi <= df ? esi - 4'd4 : esi + 4'd4;
+			end
+			else begin
+				a[15:0] <= dat[15:0];
+				esi <= df ? esi - 4'd2 : esi + 4'd2;
+			end
+		end
+		else begin
+			a[7:0] <= dat;
+			esi <= df ? esi - 4'd1 : esi + 4'd1;
+		end
 	end
-	else if (rty_i && !cyc_done)
-		tRead(dssi);
-	else
-		cyc_done <= TRUE;
-	
 rf80386_pkg::MOVS2:
 	begin
-		tWrite(esdi,a[7:0]);
-		tGoto(rf80386_pkg::MOVS3);
+		ad <= esdi;
+		if (w) begin
+			sel <= cs_desc.db ? 16'h000F : 16'h0003;
+			dat <= cs_desc.db ? a[31:0] : {2{a[15:0]}};
+		end
+		else begin
+			sel <= 16'h0001;
+			dat <= {4{a[7:0]}};
+		end
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::MOVS3);
 	end
 rf80386_pkg::MOVS3:
-	if (rty_i)
-		tWrite(esdi,a[7:0]);
-	else begin
-		di <= df ? di_dec : di_inc;
-		tGoto(w ? rf80386_pkg::MOVS4 : rf80386_pkg::MOVS16);
+	begin
+		if (w)
+			edi <= df ? (cs_desc.db ? edi - 4'd4 : edi - 4'd2): 
+									(cs_desc.db ? edi + 4'd4 : edi + 4'd2);
+		else
+			edi <= df ? edi - 4'd1 : edi + 4'd1;
+		tGoto(rf80386_pkg::MOVS4);
 	end
-// read/write 2nd byte
 rf80386_pkg::MOVS4:
-	begin
-		tRead(dssi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::MOVS5);
-	end
-rf80386_pkg::MOVS5:
-	if (ack_i) begin
-		a[7:0] <= dat_i;
-		si <= df ? si_dec : si_inc;
-		tGoto(rf80386_pkg::MOVS6);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(dssi);
-	else
-		cyc_done <= TRUE;
-rf80386_pkg::MOVS6:
-	begin
-		tWrite(esdi,a[7:0]);
-		tGoto(rf80386_pkg::MOVS7);
-	end
-rf80386_pkg::MOVS7:
-	if (rty_i)
-		tWrite(esdi,a[7:0]);
-	else begin
-		di <= df ? di_dec : di_inc;
-		tGoto(cs_desc.db ? rf80386_pkg::MOVS8 : rf80386_pkg::MOVS16);
-	end
-// read/write 3rd byte
-rf80386_pkg::MOVS8:
-	begin
-		tRead(dssi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::MOVS9);
-	end
-rf80386_pkg::MOVS9:
-	if (ack_i) begin
-		a[7:0] <= dat_i;
-		si <= df ? si_dec : si_inc;
-		tGoto(rf80386_pkg::MOVS10);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(dssi);
-	else
-		cyc_done <= TRUE;
-rf80386_pkg::MOVS10:
-	begin
-		tWrite(esdi,a[7:0]);
-		tGoto(rf80386_pkg::MOVS11);
-	end
-rf80386_pkg::MOVS11:
-	if (rty_i)
-		tWrite(esdi,a[7:0]);
-	else begin
-		di <= df ? di_dec : di_inc;
-		tGoto(rf80386_pkg::MOVS12);
-	end
-// read/write 4th byte
-rf80386_pkg::MOVS12:
-	begin
-		tRead(dssi);
-		cyc_done <= FALSE;
-		tGoto(rf80386_pkg::MOVS13);
-	end
-rf80386_pkg::MOVS13:
-	if (ack_i) begin
-		a[7:0] <= dat_i;
-		si <= df ? si_dec : si_inc;
-		tGoto(rf80386_pkg::MOVS14);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(dssi);
-	else
-		cyc_done <= TRUE;
-rf80386_pkg::MOVS14:
-	begin
-		tWrite(esdi,a[7:0]);
-		tGoto(rf80386_pkg::MOVS15);
-	end
-rf80386_pkg::MOVS15:
-	if (rty_i)
-		tWrite(esdi,a[7:0]);
-	else begin
-		di <= df ? di_dec : di_inc;
-		tGoto(rf80386_pkg::MOVS16);
-	end
-
-rf80386_pkg::MOVS16:
 	begin
 		if (repz|repnz) begin
 			ecx <= cx_dec;

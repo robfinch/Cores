@@ -36,24 +36,24 @@
 //
 // ============================================================================
 
-STOS:
+rf80386_pkg::STOS:
 	if (pe_nmi) begin
 		rst_nmi <= 1'b1;
 		int_num <= 8'h02;
 		ir <= `NOP;
-		tGoto(INT2);
+		tGoto(rf80386_pkg::INT2);
 	end
 	else if (irq_i & ie) begin
 		ir <= `NOP;
-		tGoto(INTA0);
+		tGoto(rf80386_pkg::INTA0);
 	end
 	else if (w && (di==16'hFFFF)) begin
 		ir <= `NOP;
 		int_num <= 8'd13;
-		tGoto(INT2);
+		tGoto(rf80386_pkg::INT2);
 	end
 	else if (repdone)
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	else begin
 		ad <= esdi;
 		if (cs_desc.db) begin
@@ -64,16 +64,16 @@ STOS:
 			dat <= w ? ax : al;
 			sel <= w ? 16'h0003 : 16'h0001;
 		end
-		tGosub(STORE,STOS1);
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::STOS1);
 	end
-STOS1:
+rf80386_pkg::STOS1:
 	begin
 		if (repz|repnz) begin
-			tGoto(STOS);
-			cx <= cx_dec;
+			tGoto(rf80386_pkg::STOS);
+			ecx <= cx_dec;
 		end
 		else
-			tGoto(rf8088_pkg::IFETCH);
+			tGoto(rf80386_pkg::IFETCH);
 		if (w) begin
 			if (cs_desc.db) begin
 				if (df)

@@ -40,9 +40,9 @@ rf80386_pkg::INW:
 	begin
 		eip <= eip + 2'd1;
 		ea <= {12'h000,bundle[7:0]};
-		tGoto(rf80386_pkg::INW2);
+		tGoto(rf80386_pkg::INW1);
 	end
-rf80386_pkg::INW2:	// alternate entry point
+rf80386_pkg::INW1:	// alternate entry point
 	begin
 		ad <= ea;
 		if (cs_desc.db)

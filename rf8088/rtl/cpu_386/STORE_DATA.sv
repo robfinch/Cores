@@ -39,7 +39,7 @@
 rf80386_pkg::STORE_DATA:
 	begin
 		ad <= ea;
-		if (cs_desc.db) begin
+		if (cs_desc.db)
 			sel <= w ? 16'h000F : 16'h0001;
 		else
 			sel <= w ? 16'h0003 : 16'h0001;

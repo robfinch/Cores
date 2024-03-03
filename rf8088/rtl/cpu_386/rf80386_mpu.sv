@@ -1,7 +1,7 @@
 import const_pkg::*;
 import fta_bus_pkg::*;
 
-module rf8088_mpu(rst, clk, fta_req, fta_resp);
+module rf80386_mpu(rst, clk, fta_req, fta_resp);
 parameter CORENO = 1;
 parameter CID=1;
 input rst;
@@ -108,7 +108,7 @@ icctrl1
 	.snoop_cid(snoop_cid)
 );
 
-rf8088 #(.CORENO(CORENO), .CID(1)) ucpu1
+rf80386 #(.CORENO(CORENO), .CID(1)) ucpu1
 (
 	.rst_i(rst),
 	.clk_i(clk),

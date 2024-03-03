@@ -36,18 +36,19 @@
 //
 // ============================================================================
 
-LODS:
+rf80386_pkg::LODS:
 	if (w && (cs_desc.db ? esi>32'hFFFFFFFC : si==16'hFFFF) && !df) begin
 		ir <= `NOP;
 		int_num <= 8'd13;
-		tGoto(INT2);
+		tGoto(rf80386_pkg::INT2);
 	end
 	else begin
-		ad <= seg_reg + (cs_desc.sb ? esi : si);
+		ad <= seg_reg + (cs_desc.db ? esi : si);
 		sel <= w ? (cs_desc.db ? 16'h000F : 16'h0003) : 16'h0001;
-		tGosub(LOAD,LODS_NACK);
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::LODS_NACK);
 	end
-LODS_NACK:
+rf80386_pkg::LODS_NACK:
+begin
 	if (df) begin
 		if (w) begin
 			if (cs_desc.db) begin
@@ -55,7 +56,7 @@ LODS_NACK:
 				b[31:0] <= dat;
 			end
 			else begin
-				b[15:0] <= {16{dat[15]}},dat[15:0]};
+				b[15:0] <= {{16{dat[15]}},dat[15:0]};
 				esi <= esi - 4'd2;
 			end
 		end
@@ -66,7 +67,7 @@ LODS_NACK:
 		end
 	end
 	else begin
-		si <= si_inc;
+		esi <= si_inc;
 		if (w) begin
 			if (cs_desc.db) begin
 				esi <= esi + 4'd4;
@@ -84,6 +85,6 @@ LODS_NACK:
 			b[15:8] <= {8{dat[7]}};
 		end
 	end
-	tGoto(rf8088_pkg::EXECUTE);
+	tGoto(rf80386_pkg::EXECUTE);
 end
 	

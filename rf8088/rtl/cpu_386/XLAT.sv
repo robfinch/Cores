@@ -35,22 +35,18 @@
 //
 // ============================================================================
 
-XLAT:
+rf80386_pkg::XLAT:
 	begin
-		tRead(seg_reg + (cs_desc.db ? ebx : bx) + al);
-		cyc_done <= FALSE;
-		tGoto(XLAT_ACK);
+		ad <= seg_reg + (cs_desc.db ? ebx : bx) + al;
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::XLAT_ACK);
 	end
-XLAT_ACK:
-	if (ack_i) begin
-		res <= dat_i;
+rf80386_pkg::XLAT_ACK:
+	begin
+		res <= dat;
 		wrregs <= 1'b1;
 		w <= 1'b0;
 		rrr <= 3'd0;
 		tGoto(rf80386_pkg::IFETCH);
 	end
-	else if (rty_i && !cyc_done)
-		tRead(seg_reg + (cs_desc.db ? ebx : bx) + al);
-	else
-		cyc_done <= TRUE;
 

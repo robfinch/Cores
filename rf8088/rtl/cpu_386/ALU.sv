@@ -282,7 +282,7 @@ always_comb	//(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 				alu_o <= 32'h0000;
 			endcase
 		`MORE2:
-			casex(ir2)
+			casez(ir2)
 			`AAD:
 				begin
 					alu_o[ 7:0] <= {ah,3'b0} + {ah,1'b0} + al;
@@ -290,6 +290,13 @@ always_comb	//(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 				end
 			default:
 				alu_o <= 32'h0000;
+			endcase
+		`EXTOP:
+			casez(ir2)
+			`LSS,`LFS,`LGS:
+				alu_o <= a;
+			default:
+				alu_o <= 32'h0;
 			endcase
 		default: alu_o <= 32'h0000;
 		endcase

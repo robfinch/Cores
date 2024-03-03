@@ -63,7 +63,7 @@ rf80386_pkg::POP1:
 		`POP_AX,`POP_CX,`POP_BX,`POP_DX,
 		`POP_SI,`POP_DI,`POP_BP,`POP_SP:
 			begin
-				esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+				esp <= cs_desc.db ? esp + 4'd4 : esp + 4'd2;
 				wrregs <= 1'b1;
 			end
 		`POP_SS:
@@ -85,10 +85,10 @@ rf80386_pkg::POP1:
 					tGosub(rf80386_pkg::LOAD_DS_DESC,rf80386_pkg::IFETCH);
 			end
 		`POPF:
-			esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+			esp <= cs_desc.db ? esp + 4'd4 : esp + 4'd2;
 		`POP_MEM:
 			begin
-				esp <= cs_desc.db ? esp + 4d4 : esp + 4'd2;
+				esp <= cs_desc.db ? esp + 4'd4 : esp + 4'd2;
 				tGoto(rf80386_pkg::STORE_DATA);
 			end
 		default: ;

@@ -40,9 +40,9 @@ rf80386_pkg::INB:
 	begin
 		eip <= eip + 2'd1;
 		ea <= {12'h00,bundle[7:0]};
-		tGoto(rf80386_pkg::INB2);
+		tGoto(rf80386_pkg::INB1);
 	end
-rf80386_pkg::INB2:	// Alternate entry point
+rf80386_pkg::INB1:	// Alternate entry point
 	begin
 		ad <= ea;
 		tGosub(rf80386_pkg::LOAD_IO,rf80386_pkg::INB3);

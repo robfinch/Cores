@@ -34,41 +34,37 @@
 //
 // ============================================================================
 
-OUTSB:
+rf80386_pkg::OUTSB:
 `include "check_for_ints.sv"
 	else if (repdone)
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	else begin
-		tRead(dssi);
-		cyc_done <= FALSE;
-		tGoto(OUTSB1);
+		ad <= dssi;
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::OUTSB1);
 	end
-OUTSB1:
-	if (ack_i) begin
-		res[7:0] <= dat_i;
-		tGoto(OUTSB2);
-	end
-	else if (rty_i && !cyc_done)
-		tRead(dssi);
-	else
-		cyc_done <= TRUE;
-OUTSB2:
+rf80386_pkg::OUTSB1:
 	begin
-		tWrite({`SEG_SHIFT,dx},res[7:0]);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		tGoto(OUTSB3);
+		res[7:0] <= dat;
+		tGoto(rf80386_pkg::OUTSB2);
 	end
-OUTSB3:
-	if (rty_i) begin
-		tWrite({`SEG_SHIFT,dx},res[7:0]);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else begin
-		if (df)
-			si <= si - 16'd1;
+rf80386_pkg::OUTSB2:
+	begin
+		if (cs_desc.db)
+			ad <= edx;
 		else
-			si <= si + 16'd1;
+			ad <= dx;
+		dat <= res[7:0];
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::STORE_IO,rf80386_pkg::OUTSB3);
+	end
+rf80386_pkg::OUTSB3:
+	begin
+		if (df)
+			esi <= esi - 16'd1;
+		else
+			esi <= esi + 16'd1;
 		if (repz|repnz)
-			cx <= cx_dec;
-		tGoto(repz|repnz ? OUTSB : rf8088_pkg::IFETCH);
+			ecx <= cx_dec;
+		tGoto(repz|repnz ? rf80386_pkg::OUTSB : rf80386_pkg::IFETCH);
 	end

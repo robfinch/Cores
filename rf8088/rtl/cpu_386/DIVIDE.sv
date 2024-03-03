@@ -42,7 +42,7 @@ rf80386_pkg::DIVIDE1:
 		tGoto(rf80386_pkg::DIVIDE2);
 		// Check for divide by zero
 		if (w) begin
-			if (cs_desc.db ? b]31:0]==32'h0000 : b[15:0]==16'h0000) begin
+			if (cs_desc.db ? b[31:0]==32'h0000 : b[15:0]==16'h0000) begin
 				$display("Divide by zero");
 				int_num <= 8'h00;
 				tGoto(rf80386_pkg::INT2);
@@ -90,15 +90,15 @@ rf80386_pkg::DIVIDE2a:
 rf80386_pkg::DIVIDE3:
 	begin
 		$display("DIVIDE3 state <= IFETCH");
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 		if (w) begin
 			if (cs_desc.db) begin
 				eax <= q64[31:0];
 				edx <= r64[31:0];
 			end
 			else begin
-				ax <= q32[15:0];
-				dx <= r32[15:0];
+				eax <= q32[15:0];
+				edx <= r32[15:0];
 			end
 			if (cs_desc.db) begin
 				if (TTT[0]) begin
@@ -109,7 +109,7 @@ rf80386_pkg::DIVIDE3:
 					end
 				end
 				else begin
-					if (q32[63:32]!=32'h0000) begin
+					if (q64[63:32]!=32'h0000) begin
 						$display("DIVIDE Overflow");
 						int_num <= 8'h00;
 						tGoto(rf80386_pkg::INT2);
@@ -134,8 +134,8 @@ rf80386_pkg::DIVIDE3:
 			end
 		end
 		else begin
-			ax[ 7:0] <= q16[7:0];
-			ax[15:8] <= r16;
+			eax[ 7:0] <= q16[7:0];
+			eax[15:8] <= r16;
 			if (TTT[0]) begin
 				if (q16[15:8]!={8{q16[7]}}) begin
 					$display("DIVIDE Overflow");

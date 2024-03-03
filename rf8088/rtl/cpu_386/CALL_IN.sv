@@ -46,7 +46,7 @@ rf80386_pkg::CALL_IN:
 rf80386_pkg::CALL_IN1:
 	begin
 		ad <= sssp;
-		dat <= ip;
+		dat <= eip;
 		sel <= cs_desc.db ? 16'h000F: 16'h0003;
 		tGosub(rf80386_pkg::STORE,rf80386_pkg::CALL_IN2);
 	end
@@ -55,7 +55,7 @@ rf80386_pkg::CALL_IN2:
 		if (cs_desc.db) begin
 			ea <= cs_base + b;
 			if (mod==2'b11) begin
-				ip <= b;
+				eip <= b;
 				tGoto(rf80386_pkg::IFETCH);
 			end
 			else 
@@ -64,7 +64,7 @@ rf80386_pkg::CALL_IN2:
 		else begin
 			ea <= cs_base + b[15:0];
 			if (mod==2'b11) begin
-				ip <= b[15:0];
+				eip <= b[15:0];
 				tGoto(rf80386_pkg::IFETCH);
 			end
 			else 

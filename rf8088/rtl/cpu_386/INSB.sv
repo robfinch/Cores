@@ -35,44 +35,37 @@
 //
 // ============================================================================
 
-INSB:
+rf80386_pkg::INSB:
 `include "check_for_ints.sv"
 	else if (repdone)
-		tGoto(rf8088_pkg::IFETCH);
+		tGoto(rf80386_pkg::IFETCH);
 	else begin
-		tRead({`SEG_SHIFT,dx});
-		cyc_done <= FALSE;
-		ftam_req.cti <= fta_bus_pkg::IO;
-		tGoto(INSB1);
-	end
-INSB1:
-	if (ack_i) begin
-		res[7:0] <= dat_i;
-		tGoto(INSB2);
-	end
-	else if (rty_i && !cyc_done) begin
-		tRead({`SEG_SHIFT,dx});
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else
-		cyc_done <= TRUE;
-INSB2:
-	begin
-		tWrite(esdi,res[7:0]);
-		ftam_req.cti <= fta_bus_pkg::IO;
-		tGoto(INSB3);
-	end
-INSB3:
-	if (rty_i) begin
-		tWrite(esdi,res[7:0]);
-		ftam_req.cti <= fta_bus_pkg::IO;
-	end
-	else begin
-		if (df)
-			di <= di - 16'd1;
+		if (cs_desc.db)
+			ea <= edx;
 		else
-			di <= di + 16'd1;
+			ea <= dx;
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::LOAD_IO,rf80386_pkg::INSB1);
+	end
+rf80386_pkg::INSB1:
+	begin
+		res[7:0] <= dat;
+		tGoto(rf80386_pkg::INSB2);
+	end
+rf80386_pkg::INSB2:
+	begin
+		ea <= esdi;
+		dat <= res[7:0];
+		sel <= 16'h0001;
+		tGosub(rf80386_pkg::STORE,rf80386_pkg::INSB3);
+	end
+rf80386_pkg::INSB3:
+	begin
+		if (df)
+			edi <= edi - 16'd1;
+		else
+			edi <= edi + 16'd1;
 		if (repz|repnz)
-			cx <= cx_dec;
-		tGoto(repz|repnz ? INSB : rf8088_pkg::IFETCH);
+			ecx <= cx_dec;
+		tGoto(repz|repnz ? rf80386_pkg::INSB : rf80386_pkg::IFETCH);
 	end

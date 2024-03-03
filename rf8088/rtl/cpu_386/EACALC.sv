@@ -44,7 +44,7 @@
 //   used for both the fetch and the store when memory is the target.
 // ============================================================================
 //
-EACALC:
+rf80386_pkg::EACALC:
 	begin
 
 		disp16 <= 32'h0000;
@@ -53,7 +53,7 @@ EACALC:
 
 		2'b00:
 			begin
-				tGoto(EACALC1);
+				tGoto(rf80386_pkg::EACALC1);
 				// ToDo: error on stack state
 				case({cs_desc.db,rm})
 				4'd0:	offset <= {16'h0,bx + si};
@@ -64,7 +64,7 @@ EACALC:
 				4'd5:	offset <= {16'h0,di};
 				4'd6:	
 					begin
-						tGoto(EACALC_DISP16);
+						tGoto(rf80386_pkg::EACALC_DISP16);
 						offset <= 32'h0000;
 					end
 				4'd7:	offset <= {16'h0,bx};
@@ -72,7 +72,7 @@ EACALC:
 				4'd9:	offset <= ecx;
 				4'd10:	offset <= edx;
 				4'd11:	offset <= ebx;
-				4'd12:	tGoto(EACALC_SIB);
+				4'd12:	tGoto(rf80386_pkg::EACALC_SIB);
 				4'd13:	offset <= disp32;
 				4'd14:	offset <= esi;
 				4'd15:	offset <= edi;
@@ -81,30 +81,7 @@ EACALC:
 
 		2'b01:
 			begin
-				tGoto(EACALC_DISP8);
-				case(cs_desc.db,rm})
-				4'd0:	offset <= bx + si;
-				4'd1:	offset <= bx + di;
-				4'd2:	offset <= bp + si;
-				4'd3:	offset <= bp + di;
-				4'd4:	offset <= si;
-				4'd5:	offset <= di;
-				4'd6:	offset <= bp;
-				4'd7:	offset <= bx;
-				4'd8:	offset <= eax;
-				4'd9:	offset <= ecx;
-				4'd10:	offset <= edx;
-				4'd11:	offset <= ebx;
-				4'd12:	tGoto(EACALC_SIB);
-				4'd13:	offset <= ebp;
-				4'd14:	offset <= esi;
-				4'd15:	offset <= edi;
-				endcase
-			end
-
-		2'b10:
-			begin
-				tGoto(EACALC_DISP16);
+				tGoto(rf80386_pkg::EACALC_DISP8);
 				case({cs_desc.db,rm})
 				4'd0:	offset <= bx + si;
 				4'd1:	offset <= bx + di;
@@ -118,7 +95,30 @@ EACALC:
 				4'd9:	offset <= ecx;
 				4'd10:	offset <= edx;
 				4'd11:	offset <= ebx;
-				4'd12:	tGoto(EACALC_SIB);
+				4'd12:	tGoto(rf80386_pkg::EACALC_SIB);
+				4'd13:	offset <= ebp;
+				4'd14:	offset <= esi;
+				4'd15:	offset <= edi;
+				endcase
+			end
+
+		2'b10:
+			begin
+				tGoto(rf80386_pkg::EACALC_DISP16);
+				case({cs_desc.db,rm})
+				4'd0:	offset <= bx + si;
+				4'd1:	offset <= bx + di;
+				4'd2:	offset <= bp + si;
+				4'd3:	offset <= bp + di;
+				4'd4:	offset <= si;
+				4'd5:	offset <= di;
+				4'd6:	offset <= bp;
+				4'd7:	offset <= bx;
+				4'd8:	offset <= eax;
+				4'd9:	offset <= ecx;
+				4'd10:	offset <= edx;
+				4'd11:	offset <= ebx;
+				4'd12:	tGoto(rf80386_pkg::EACALC_SIB);
 				4'd13:	offset <= ebp;
 				4'd14:	offset <= esi;
 				4'd15:	offset <= edi;
@@ -127,17 +127,17 @@ EACALC:
 
 		2'b11:
 			begin
-				tGoto(rf8088_pkg::EXECUTE);
+				tGoto(rf80386_pkg::EXECUTE);
 				case(ir)
 				`MOV_I8M:
 					begin
 						rrr <= rm;
-						if (rrr==3'd0) tGoto(FETCH_IMM8);
+						if (rrr==3'd0) tGoto(rf80386_pkg::FETCH_IMM8);
 					end
 				`MOV_I16M:
 					begin
 						rrr <= rm;
-						if (rrr==3'd0) tGoto(FETCH_IMM16);
+						if (rrr==3'd0) tGoto(rf80386_pkg::FETCH_IMM16);
 					end
 				`MOV_S2R:
 					begin
@@ -176,7 +176,7 @@ EACALC:
 					// 111 = IDIV
 					if (rrr==3'b000) begin	// TEST
 						a <= rmo;
-						tGoto(w ? FETCH_IMM16 : FETCH_IMM8);
+						tGoto(w ? rf80386_pkg::FETCH_IMM16 : rf80386_pkg::FETCH_IMM8);
 					end
 					else
 						b <= rmo;
@@ -197,21 +197,21 @@ EACALC:
 		endcase
 	end
 
-EACALC_SIB:
+rf80386_pkg::EACALC_SIB:
 	begin
 		sib <= bundle[7:0];
 		bundle <= bundle[127:8];
 		eip <= ip_inc;
-		tGoto(EACALC_SIB1);
+		tGoto(rf80386_pkg::EACALC_SIB1);
 	end
-EACALC_SIB1:
+rf80386_pkg::EACALC_SIB1:
 	begin
 		offset <= sndx;
 		case(mod)
-		2'b00:	tGoto(EACALC1);
-		2'b01:	tGoto(EACALC_DISP8);
-		2'b10:	tGoto(EACALC_DISP16);
-		2'b11:	tGoto(RESET);	// Should not be able to get here
+		2'b00:	tGoto(rf80386_pkg::EACALC1);
+		2'b01:	tGoto(rf80386_pkg::EACALC_DISP8);
+		2'b10:	tGoto(rf80386_pkg::EACALC_DISP16);
+		2'b11:	tGoto(rf80386_pkg::RESET);	// Should not be able to get here
 		endcase
 	end
 
@@ -219,7 +219,7 @@ EACALC_SIB1:
 // Fetch 16 bit displacement
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-EACALC_DISP16:
+rf80386_pkg::EACALC_DISP16:
 	begin
 		disp32[15:0] <= bundle[15:0];
 		if (cs_desc.db) begin
@@ -232,19 +232,19 @@ EACALC_DISP16:
 			bundle <= bundle[127:16];
 			eip <= eip + 4'd2;
 		end
-		tGoto(EACALC1);
+		tGoto(rf80386_pkg::EACALC1);
 	end
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Fetch 8 bit displacement
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-EACALC_DISP8:
+rf80386_pkg::EACALC_DISP8:
 	begin
 		disp32 <= {{24{bundle[7]}},bundle[7:0]};
 		bundle <= bundle[127:8];
 		eip <= ip_inc;
-		tGoto(EACALC1);
+		tGoto(rf80386_pkg::EACALC1);
 	end
 
 
@@ -252,77 +252,87 @@ EACALC_DISP8:
 // Add the displacement into the effective address
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-EACALC1:
+rf80386_pkg::EACALC1:
 	begin
 		casez(ir)
 		`EXTOP:
 			casez(ir2)
+			`LSS,`LFS,`LGS:
+				begin
+					$display("EACALC1: tGoto(FETCH_DATA");
+					if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
+						int_num <= 8'h0d;
+						tGoto(rf80386_pkg::INT2);
+					end
+					else	
+						tGoto(rf80386_pkg::FETCH_DATA);
+				end
 			8'h00:
 				begin
 					case(rrr)
-					3'b010: tGoto(FETCH_DESC);	// LLDT
-					3'b011: tGoto(FETCH_DATA);	// LTR
-					default: tGoto(FETCH_DATA);
+					3'b010: tGoto(rf80386_pkg::LLDT);	// LLDT
+					3'b011: tGoto(rf80386_pkg::FETCH_DATA);	// LTR
+					default: tGoto(rf80386_pkg::FETCH_DATA);
 					endcase
 					if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 						int_num <= 8'h0d;
-						tGoto(INT2);
+						tGoto(rf80386_pkg::INT2);
 					end
 				end
 			8'h01:
 				begin
 					case(rrr)
-					3'b010: tGoto(FETCH_DESC);
-					3'b011: tGoto(FETCH_DESC);
-					default: tGoto(FETCH_DATA);
+					3'b010: begin lgdt <= 1'b1; tGoto(rf80386_pkg::LxDT); end
+					3'b011: begin lidt <= 1'b1; tGoto(rf80386_pkg::LxDT); end
+					default: tGoto(rf80386_pkg::FETCH_DATA);
 					endcase
 					if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 						int_num <= 8'h0d;
-						tGoto(INT2);
+						tGoto(rf80386_pkg::INT2);
 					end
 				end
 			8'h03:
 				if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 					int_num <= 8'h0d;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 				else
-					tGoto(FETCH_DATA);
+					tGoto(rf80386_pkg::FETCH_DATA);
 			default:
 				if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 					int_num <= 8'h0d;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 				else
-					tGoto(FETCH_DATA);
+					tGoto(rf80386_pkg::FETCH_DATA);
 			endcase
-		`MOV_I8M: tGoto(FETCH_IMM8);
+		`MOV_I8M: tGoto(rf80386_pkg::FETCH_IMM8);
 		`MOV_I16M:
-			if (cs_desc.db ? ip > 32'hFFFFFFFC : ip==32'h0000FFFF) begin
+			if (cs_desc.db ? eip > 32'hFFFFFFFC : eip==32'h0000FFFF) begin
 				int_num <= 8'h0d;
-				tGoto(INT2);
+				tGoto(rf80386_pkg::INT2);
 			end
 			else
-				tGoto(FETCH_IMM16);
+				tGoto(rf80386_pkg::FETCH_IMM16);
 		`POP_MEM:
 			begin
-				tGoto(POP);
+				tGoto(rf80386_pkg::POP);
 			end
 		`XCHG_MEM:
 			begin
 //				bus_locked <= 1'b1;
-				tGoto(FETCH_DATA);
+				tGoto(rf80386_pkg::FETCH_DATA);
 			end
 		8'b1000100?:	// Move to memory
 			begin
 				$display("EACALC1: tGoto(STORE_DATA");
 				if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 					int_num <= 8'h0d;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 				else begin	
 					res <= rrro;
-					tGoto(STORE_DATA);
+					tGoto(rf80386_pkg::STORE_DATA);
 				end
 			end
 		default:
@@ -330,15 +340,15 @@ EACALC1:
 				$display("EACALC1: tGoto(FETCH_DATA");
 				if (w && (cs_desc.db ? offsdisp > 32'hFFFFFFFC : offsdisp==32'h0000FFFF)) begin
 					int_num <= 8'h0d;
-					tGoto(INT2);
+					tGoto(rf80386_pkg::INT2);
 				end
 				else	
-					tGoto(FETCH_DATA);
+					tGoto(rf80386_pkg::FETCH_DATA);
 				if (ir==8'hff) begin
 					case(rrr)
-					3'b011: tGoto(CALLF);	// CAll FAR indirect
-					3'b101: tGoto(JUMP_VECTOR1);	// JMP FAR indirect
-					3'b110:	begin d <= 1'b0; tGoto(FETCH_DATA); end// for a push
+					3'b011: tGoto(rf80386_pkg::CALLF);	// CAll FAR indirect
+					3'b101: tGoto(rf80386_pkg::JUMP_VECTOR1);	// JMP FAR indirect
+					3'b110:	begin d <= 1'b0; tGoto(rf80386_pkg::FETCH_DATA); end// for a push
 					default: ;
 					endcase
 				end

@@ -42,7 +42,29 @@ rf80386_pkg::EXECUTE:
 
 		`EXTOP:
 			casez(ir2)
-			`LxDT: tGoto(rf80386_pkg::FETCH_DESC);
+			`LSS:
+				begin
+					wrsregs <= 1'b1;
+					res <= alu_o;
+					rrr <= 3'd2;
+					tGoto(rf80386_pkg::IFETCH);
+				end
+			`LFS:
+				begin
+					wrsregs <= 1'b1;
+					res <= alu_o;
+					rrr <= 3'd4;
+					tGoto(rf80386_pkg::IFETCH);
+				end
+			`LGS:
+				begin
+					wrsregs <= 1'b1;
+					res <= alu_o;
+					rrr <= 3'd5;
+					tGoto(rf80386_pkg::IFETCH);
+				end
+			`LLDT: tGoto(rf80386_pkg::LLDT);
+			`LxDT: tGoto(rf80386_pkg::LxDT);
 			default:	;
 			endcase
 
@@ -165,8 +187,8 @@ rf80386_pkg::EXECUTE:
 					begin
 						if (w) begin
 							if (cs_desc.db) begin
-								eax <= wp64[31:0];
-								edx <= wp64[63:32];
+								eax <= wp[31:0];
+								edx <= wp[63:32];
 								cf <= p64[63:32]!=16'd0;
 								vf <= p64[63:32]!=16'd0;
 							end
@@ -525,7 +547,7 @@ rf80386_pkg::EXECUTE:
 						sf <= resnw;
 						zf <= reszw;
 					end
-				3'b010:	begin sp <= sp_dec; tGoto(rf80386_pkg::CALL_IN); end
+				3'b010:	begin esp <= sp_dec; tGoto(rf80386_pkg::CALL_IN); end
 				// These two should not be reachable here, as they would
 				// be trapped by the EACALC.
 				3'b011:	tGoto(rf80386_pkg::CALL_FIN);	// CALL FAR indirect
@@ -535,7 +557,7 @@ rf80386_pkg::EXECUTE:
 						cs <= selector;
 						tGoto(rf80386_pkg::IFETCH);
 					end
-				3'b110:	begin sp <= sp_dec; tGoto(PUSH); end
+				3'b110:	begin esp <= sp_dec; tGoto(PUSH); end
 				default:
 					begin
 						af <= carry   (1'b0,a[3],b[3],alu_o[3]);

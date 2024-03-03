@@ -108,16 +108,12 @@ always_comb
 		rf80386_pkg::IFETCH,rf80386_pkg::XI_FETCH,rf80386_pkg::DECODE,
 		rf80386_pkg::FETCH_IMM8,rf80386_pkg::FETCH_IMM16,rf80386_pkg::FETCH_DISP8:
 			S43 <= 2'b10;	// code segment
-		rf80386_pkg::PUSH,rf80386_pkg::PUSH1,rf80386_pkg::PUSH2,
-		rf80386_pkg::PUSH3,rf80386_pkg::POP,rf80386_pkg::POP1,
-		rf80386_pkg::POP2,rf80386_pkg::POP3,
-		rf80386_pkg::IRET,rf80386_pkg::IRET1,rf80386_pkg::IRET2,
-		rf80386_pkg::IRET3,rf80386_pkg::IRET4,rf80386_pkg::IRET5,
-		rf80386_pkg::IRET6,rf80386_pkg::IRET7,rf80386_pkg::IRET8,rf80386_pkg::IRET9,
-		rf80386_pkg::IRET10,rf80386_pkg::IRET11,rf80386_pkg::IRET12,
-		rf80386_pkg::RETFPOP,rf80386_pkg::RETFPOP1,rf80386_pkg::RETFPOP2,rf80386_pkg::RETFPOP3,
-		rf80386_pkg::RETFPOP4,rf80386_pkg::RETFPOP5,rf80386_pkg::RETFPOP6,rf80386_pkg::RETFPOP7,
-		rf80386_pkg::RETPOP,RETPOP_NACK,rf80386_pkg::RETPOP1,rf80386_pkg::RETPOP1_NACK:
+		rf80386_pkg::PUSH,
+		rf80386_pkg::POP,rf80386_pkg::POP1,
+		rf80386_pkg::IRET1,rf80386_pkg::IRET2,
+		rf80386_pkg::IRET3,
+		rf80386_pkg::RETFPOP,rf80386_pkg::RETFPOP1,rf80386_pkg::RETFPOP2,
+		rf80386_pkg::RETPOP,RETPOP_NACK,rf80386_pkg::RETPOP1:
 			S43 <= 2'b01;	// stack
 		default:
 			case(prefix1)

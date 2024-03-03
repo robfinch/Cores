@@ -64,7 +64,7 @@ rf80386_pkg::SCASB2:
 		sf <= alu_o[7];
 		zf <= reszb;
 		if (repz|repnz)
-			cx <= cx_dec;
+			ecx <= cx_dec;
 		if ((repz & reszb) | (repnz & !reszb))
 			tGoto(rf80386_pkg::SCASB);
 	end

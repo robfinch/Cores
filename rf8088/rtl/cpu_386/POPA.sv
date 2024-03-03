@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//  PUSHA push all registers to stack
+//  POPA pop all registers from stack
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -35,123 +35,152 @@
 //
 // ============================================================================
 
-PUSHA:
+rf80386_pkg::POPA:
 	begin
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= eax;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{ax}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA1);
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA1);
 	end
-PUSHA1:
+rf80386_pkg::POPA1:
 	begin
+		if (cs_desc.db)
+			edi <= dat[31:0];
+		else
+			edi[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= ecx;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{cx}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA2);
-	end	
-PUSHA2:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA2);
+	end
+rf80386_pkg::POPA2:
 	begin
+		if (cs_desc.db)
+			esi <= dat[31:0];
+		else
+			esi[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= edx;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{dx}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA3);
-	end	
-PUSHA3:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA3);
+	end
+rf80386_pkg::POPA3:
 	begin
+		if (cs_desc.db)
+			ebp <= dat[31:0];
+		else
+			ebp[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= ebx;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{bx}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA4);
-	end	
-// Push the starting SP value before all the pushes.	
-PUSHA4:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA4);
+	end
+rf80386_pkg::POPA4:
 	begin
+		if (cs_desc.db)
+			eax <= dat[31:0];
+		else
+			eax[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= tsp;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{tsp[15:0]}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA5);
-	end	
-PUSHA5:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA5);
+	end
+rf80386_pkg::POPA5:
 	begin
+		if (cs_desc.db)
+			ebx <= dat[31:0];
+		else
+			ebx[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= ebp;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{ebp[15:0]}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA6);
-	end	
-PUSHA6:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA6);
+	end
+rf80386_pkg::POPA6:
 	begin
+		if (cs_desc.db)
+			edx <= dat[31:0];
+		else
+			edx[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= esi;
-			esp <= esp - 4'd4;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{esi[15:0]}};
-			esp <= esp - 4'd2;
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::PUSHA7);
-	end	
-PUSHA7:
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA7);
+	end
+rf80386_pkg::POPA7:
 	begin
+		if (cs_desc.db)
+			ecx <= dat[31:0];
+		else
+			ecx[15:0] <= dat[15:0];
 		ad <= sssp;
 		if (cs_desc.db) begin
 			sel <= 16'h000F;
-			dat <= edi;
+			esp <= esp + 4'd4;
 		end
 		else begin
 			sel <= 16'h0003;
-			dat <= {2{edi[15:0]}};
+			esp <= esp + 4'd2;
 		end
-		tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
-	end	
-
+		tGosub(rf80386_pkg::LOAD,rf80386_pkg::POPA8);
+	end
+rf80386_pkg::POPA8:
+	begin
+		if (cs_desc.db)
+			eax <= dat[31:0];
+		else
+			eax[15:0] <= dat[15:0];
+		ad <= sssp;
+		if (cs_desc.db) begin
+			sel <= 16'h000F;
+			esp <= esp + 4'd4;
+		end
+		else begin
+			sel <= 16'h0003;
+			esp <= esp + 4'd2;
+		end
+		tGoto(rf80386_pkg::IFETCH);
+	end
