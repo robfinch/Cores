@@ -72,6 +72,13 @@ rf80386_pkg::IFETCH:
 		lmsw <= 1'b0;
 		lsl <= 1'b0;
 		ltr <= 1'b0;
+		sidt <= 1'b0;
+		sgdt <= 1'b0;
+		sldt <= 1'b0;
+		smsw <= 1'b0;
+		str <= 1'b0;
+		verr <= 1'b0;
+		verw <= 1'b0;
 		data16 <= 16'h0000;
 		cnt <= 7'd0;
 //		if (prefix1!=8'h00 && prefix2 !=8'h00 && is_prefix)

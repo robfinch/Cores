@@ -156,16 +156,16 @@ rf80386_pkg::EXECUTE:
 		`IMULI8,`IMULI:
 			begin
 				if (cs_desc.db) begin
-					eax <= sp64[31:0];
-					edx <= sp64[63:32];
-					cf <= sp64[63:32]!=32'd0;
-					vf <= sp64[63:32]!=32'd0;
+					eax <= sp32x32[31:0];
+					edx <= sp32x32[63:32];
+					cf <= sp32x32[63:32]!=32'd0;
+					vf <= sp32x32[63:32]!=32'd0;
 				end
 				else begin
-					eax[15:0] <= sp32[15:0];
-					edx[15:0] <= sp32[31:16];
-					cf <= sp32[31:16]!=16'd0;
-					vf <= sp32[31:16]!=16'd0;
+					eax[15:0] <= sp16x16[15:0];
+					edx[15:0] <= sp16x16[31:16];
+					cf <= sp16x16[31:16]!=16'd0;
+					vf <= sp16x16[31:16]!=16'd0;
 				end
 				tGoto(rf80386_pkg::IFETCH);
 			end

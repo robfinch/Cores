@@ -92,11 +92,33 @@ rf80386_pkg::LOAD_DESC1:
 rf80386_pkg::LxDT:
 	begin
 		ad <= ea;
-		if (lmsw)
+		if (lmsw|smsw)
 			sel <= 16'h0003;
 		else
 			sel <= 16'h003F;
-		tGosub(rf80386_pkg::LOAD,rf80386_pkg::LxDT1);
+		if (smsw) begin
+			dat <= cr0[15:0];
+			res <= cr0[15:0];
+			if (mod==2'b11) begin
+				w <= 1'b0;
+				wrregs <= 1'b1;
+				tGoto(rf80386_pkg::IFETCH);
+			end
+			else
+				tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+		end
+		else if (sgdt) begin
+			sel <= 16'h003F;
+			dat <= {gdt_desc.base_hi,gdt_desc.base_lo,gdt_desc.limit};
+			tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+		end
+		else if (sidt) begin
+			sel <= 16'h003F;
+			dat <= {idt_desc.base_hi,idt_desc.base_lo,idt_desc.limit};
+			tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+		end
+		else
+			tGosub(rf80386_pkg::LOAD,rf80386_pkg::LxDT1);
 	end
 rf80386_pkg::LxDT1:
 	begin
@@ -118,7 +140,30 @@ rf80386_pkg::LLDT:
 	begin
 		ad <= ea;
 		sel <= 16'h0003;
-		tGosub(rf80386_pkg::LOAD,rf80386_pkg::LLDT1);
+		dat <= ldt;
+		if (sldt) begin
+			if (mod==2'b11) begin
+				res <= ldt;
+				w <= 1'b0;
+				wrregs <= 1'b1;
+				tGoto(rf80386_pkg::IFETCH);
+			end
+			else
+				tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+		end
+		else if (str) begin
+			dat <= tr;
+			if (mod==2'b11) begin
+				w <= cs_desc.db;
+				wrregs <= 1'b1;
+				res <= {16'd0,tr};
+				tGoto(rf80386_pkg::IFETCH);
+			end
+			else
+				tGosub(rf80386_pkg::STORE,rf80386_pkg::IFETCH);
+		end
+		else
+			tGosub(rf80386_pkg::LOAD,rf80386_pkg::LLDT1);
 	end
 rf80386_pkg::LLDT1:
 	begin
@@ -136,7 +181,29 @@ rf80386_pkg::LOAD_LLDT2:
 	end
 rf80386_pkg::LLDT3:
 	begin
-		if (ltr) begin
+		if (verr) begin
+			zf <= 1'b0;
+			if (!(cs_desc.pl > dat[46:45] || selector[1:0] > dat[46:45])) begin
+				if (dat[44]==1'b1) begin	// data or executable, 0=system
+					if (dat[43]==1'b0)	// 0=data segment
+						zf <= 1'b1;				// always readable
+					else								// 1=code segment
+						zf <= dat[41];
+				end
+			end
+		end
+		else if (verw) begin
+			zf <= 1'b0;
+			if (!(cs_desc.pl > dat[46:45] || selector[1:0] > dat[46:45])) begin
+				if (dat[44]==1'b1) begin
+					if (dat[43]==1'b0)
+						zf <= dat[41];
+					else
+						zf <= 1'b0;				// code is never writable
+				end
+			end
+		end
+		else if (ltr) begin
 			tr <= selector;
 			tr_desc <= dat;
 		end

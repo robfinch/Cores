@@ -77,7 +77,7 @@ wire signed [63:0] wp = sa * sb;
 wire [31:0] p16 = a[7:0] * b[7:0];
 wire [31:0] p32 = a[15:0] * b[15:0];
 wire [63:0] p64 = a * b;
-wire signed [31:0] sp8x16 = sa[15:0] * sb[15:0];
+wire signed [31:0] sp16x16 = sa[15:0] * sb[15:0];
 wire signed [31:0] sp8x32 = sa * sb;
 wire signed [63:0] sp32x32 = sa * sb;
 

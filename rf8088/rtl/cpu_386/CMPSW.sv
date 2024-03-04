@@ -88,7 +88,6 @@ rf80386_pkg::CMPSW2:
 		else
 			sel <= 16'h0003;
 		tGosub(rf80386_pkg::LOAD,rf80386_pkg::CMPSW3);
-		tRead(esdi);
 	end
 
 rf80386_pkg::CMPSW3:

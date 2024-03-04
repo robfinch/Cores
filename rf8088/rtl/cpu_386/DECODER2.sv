@@ -114,8 +114,11 @@ rf80386_pkg::DECODER2:
 				end
 			`LxDT:
 				begin
+					sgdt <= bundle[5:3]==3'h0;
+					sidt <= bundle[5:3]==3'h1;
 					lgdt <= bundle[5:3]==3'h2;
 					lidt <= bundle[5:3]==3'h3;
+					smsw <= bundle[5:3]==3'h4;
 					lmsw <= bundle[5:3]==3'h6;
 					w <= 1'b1;
 					mod   <= bundle[7:6];
@@ -130,7 +133,11 @@ rf80386_pkg::DECODER2:
 				end
 			`LLDT:
 				begin
+					sldt <= bundle[5:3]==3'h0;
+					str <= bundle[5:3]==3'h1;
 					ltr <= bundle[5:3]==3'h3;
+					verr <= bundle[5:3]==3'h4;
+					verw <= bundle[5:3]==3'h5;
 					w <= 1'b1;
 					mod   <= bundle[7:6];
 					rrr   <= bundle[5:3];

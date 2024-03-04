@@ -38,7 +38,7 @@
 //  System Verilog 
 //
 //  Vivado 2022.2
-//	6941 LUTs / 1206 FFs / 7 DSPs
+//	7616 LUTs / 1192 FFs / 7 DSPs
 // ============================================================================
 
 import const_pkg::*;
@@ -87,6 +87,9 @@ wire resz;
 reg [2:0] cyc_type;			// type of bus sycle
 reg lidt, lgdt, lmsw;
 reg lsl, ltr;
+reg sidt, sgdt, smsw;
+reg sldt, str;
+reg verr, verw;
 reg w;						// 0=8 bit, 1=16 bit
 reg d;
 reg v;						// 1=count in cl, 0 = count is one
@@ -168,6 +171,13 @@ always_ff @(posedge CLK)
 		lmsw <= 1'b0;
 		lsl <= 1'b0;
 		ltr <= 1'b0;
+		sidt <= 1'b0;
+		sgdt <= 1'b0;
+		sldt <= 1'b0;
+		smsw <= 1'b0;
+		str <= 1'b0;
+		verr <= 1'b0;
+		verw <= 1'b0;
 		pf <= 1'b0;
 		cf <= 1'b0;
 		df <= 1'b0;
@@ -275,6 +285,7 @@ always_ff @(posedge CLK)
 `include "XCHG_MEM.sv"
 `include "DIVIDE.sv"
 `include "ENTER.sv"
+`include "LEAVE.sv"
 			default:
 				state <= rf80386_pkg::IFETCH;
 			endcase

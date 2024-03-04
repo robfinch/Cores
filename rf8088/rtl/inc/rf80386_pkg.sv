@@ -310,7 +310,9 @@ package rf80386_pkg;
 `define LFS		8'hB4
 `define LGS		8'hB5
 
+`define PUSH_FS	8'hA0
 `define BT		8'hA3
+`define PUSH_GS	8'hA8
 `define BTS		8'hAB
 `define BTR		8'hB3
 `define BTCI	8'hBA

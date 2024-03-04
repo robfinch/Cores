@@ -89,7 +89,7 @@ rf80386_pkg::FETCH_DATA1:
 		else begin
 			if (ir==`BOUND) begin
 				a <= {{16{dat[15]}},dat[15:0]};
-				b <= {[16{dat[31]}},dat[31:16]};
+				b <= {{16{dat[31]}},dat[31:16]};
 				c <= {{16{rrro[15]}},rrro[15:0]};
 			end
 			else if (w) begin
