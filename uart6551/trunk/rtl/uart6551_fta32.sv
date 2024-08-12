@@ -255,8 +255,8 @@ always_ff @(posedge clk_i)
 always_comb
 	cs_io = cs_io_ii & reqi.cyc & reqi.stb && cs_uart;
 
-wire rdrx = cs_io && adr_h[3:2]==`UART_TRB && ~we && !accessCD;
-wire txrx = cs_io && we && adr_h[3:2]==`UART_TRB && !accessCD;
+wire rdrx = cs_io && adr_h[4:2]==`UART_TRB && ~we && !accessCD;
+wire txrx = cs_io && we && adr_h[4:2]==`UART_TRB && !accessCD;
 
 vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_io|cs_config)&(erc|~we)), .q(respack));
 //vtdl #(.WID(6), .DEP(16)) urdyd3 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d(req.cid), .q(resp.cid));
@@ -391,7 +391,7 @@ else
 change_det ucd1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(irq), .cd(irq_cd));
 
 always_comb
-	if ((irq_cd|irq_cdr) & !respack) begin
+	if ((irq_cd|irq_cdr) & !respack)
 		irqa = 1'b1;
 	else
 		irqa = 1'b0;
@@ -466,7 +466,7 @@ else begin
 	ctrl2[2] <= 1'b0;
 
 	if (cs_io & we) begin
-		case (adr_h[3:2])	// synopsys full_case parallel_case
+		case (adr_h[4:2])	// synopsys full_case parallel_case
 
 	 	`UART_TRB:
 	 		if (accessCD) begin
@@ -651,7 +651,7 @@ edge_det ued3 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.ce(1'b1),
-	.i(cs_io && adr_h[3:2]==`UART_STAT && ~we && sel[2]),
+	.i(cs_io && adr_h[4:2]==`UART_STAT && ~we && sel[2]),
 	.pe(),
 	.ne(ne_stat),
 	.ee()
