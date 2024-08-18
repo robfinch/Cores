@@ -5,6 +5,7 @@
 #include <ht.h>
 #include "fpp.h"
 
+static long ConditionalExpr(void);
 static long OrExpr(void);
 static long Relational(void);
 static long Factor(void);
@@ -72,6 +73,11 @@ static long Constant()
          unNextCh();
          value = strtoul(inptr, &s, 0);
       }
+      // Allow a number to be followed directly by an 'L' or 'U'.
+      if (s[0] == 'L' || s[0]=='U')
+        s++;
+      if (s[0] == 'L')
+        s++;
       inptr = s;
    }
    else if (ch == '\'') {
@@ -132,7 +138,7 @@ static long Factor()
       case '!': value = !Factor(); break;
       case '-': value = -Factor(); break;
       case '~': value = ~Factor(); break;
-      case '(': value = OrExpr();
+      case '(': value = ConditionalExpr();
          ch = NextNonSpace(0);
          if (ch != ')') {
             unNextCh();
@@ -434,6 +440,31 @@ static long OrExpr()
    return value;
 }
 
+/* ---------------------------------------------------------------------------
+--------------------------------------------------------------------------- */
+
+static long ConditionalExpr()
+{
+  long value1, value2, value3;
+  int ch;
+
+  value2 = 0;
+  value1 = OrExpr();
+  ch = NextNonSpace(0);
+  if (ch != '?') {
+    unNextCh();
+    return (value1);
+  }
+  value2 = ConditionalExpr();
+  ch = NextNonSpace(0);
+  if (ch != ':') {
+    err(26);
+    unNextCh();
+    return (value2);
+  }
+  value3 = ConditionalExpr();
+  return ((value1 == 0) ? value3 : value2);
+}
 
 /* ---------------------------------------------------------------------------
 	expeval - evaluate the expression s and return a number.
@@ -441,5 +472,5 @@ static long OrExpr()
 
 long expeval()
 {
-   return OrExpr();
+   return ConditionalExpr();
 }

@@ -46,17 +46,17 @@ int NextCh()
 			}
 			ch = *inptr++;
 		}
-		if (ch == '/' && inptr[0] == '/') {
+		if (in_comment == 0 && ch == '/' && inptr[0] == '/') {
 			in_comment = 1;
 			inptr += 1;
 		}
 		if (in_comment == 1 && (ch == '\n' || ch=='\r'))
 			in_comment = 0;
-		if (ch == '/' && inptr[0] == '*') {
+		if (in_comment == 0 && ch == '/' && inptr[0] == '*') {
 			in_comment = 2;
 			inptr++;
 		}
-		if (ch == '*' && inptr[0] == '/') {
+		if (in_comment == 2 && ch == '*' && inptr[0] == '/') {
 			ch = inptr[1];
 			inptr += 2;
 			in_comment = 0;

@@ -13,7 +13,7 @@
 int SubParmMacro(SDef *p)
 {
    int c, nArgs, ArgCount, xx;
-   char *Args[10];
+   arg_t Args[MAX_MACRO_ARGS];
    char *arg, *bdy, *tp, *ptr;
    int st,nd;
 
@@ -38,13 +38,16 @@ int SubParmMacro(SDef *p)
 
    // get macro argument list
    nArgs = p->nArgs;
-   for (ArgCount = 0; ArgCount < nArgs; ArgCount++)
+   for (ArgCount = 0; ArgCount < nArgs && ArgCount < MAX_MACRO_ARGS; ArgCount++)
    {
       arg = GetMacroArg();
-      if (arg == NULL)
-         break;
+      if (arg == NULL) {
+        arg = p->parms[ArgCount]->def;
+        if (arg == NULL)
+          break;
+      }
 
-      Args[ArgCount] = _strdup(arg);
+      Args[ArgCount].def = _strdup(arg);
 
       // Search for next argument
       c = NextNonSpace(1);
@@ -67,11 +70,10 @@ int SubParmMacro(SDef *p)
 
    // Substitute arguments into macro body
    bdy = _strdup(p->body);                    // make a copy of the macro body
-   for(xx = 0; (xx < ArgCount) || (p->varg && Args[xx]); xx++)          // we don't want to change the original
+   for(xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
    {
-      tp = SubMacroArg(bdy, xx, Args[xx]);        // Substitute argument into body
+      tp = SubMacroArg(bdy, xx, Args[xx].def);        // Substitute argument into body
       free(bdy);                             // free old body
-      free(Args[xx]);                        // free space used by arg
       bdy = _strdup(tp);                      // copy new version of body
    }
 
@@ -82,7 +84,7 @@ int SubParmMacro(SDef *p)
    //}
    SubMacro(bdy, inptr-ptr+strlen(p->name));
    free(bdy);                                // free last strdup
-   return 0;
+   return (0);
 }
 
 

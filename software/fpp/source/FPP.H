@@ -32,11 +32,19 @@
 
 #define FALSE     0
 #define TRUE      1
-#define MAXLINE   300
+#define MAXLINE   4000
 #define STRAREA   640000
 #define MAXMACROS 4001
+#define MAX_MACRO_ARGS  100
 
 #define DIGITS "0123456789abcdefghijklmnopqrstuvwxyz"
+
+typedef struct
+{
+  int num;        // parameter number
+  char* name;     // parameter name
+  char* def;      // default value
+} arg_t;
 
 typedef struct
 {
@@ -46,6 +54,7 @@ typedef struct
    int varg;      // variable argument list indicator
    int line;      // line number macro is defined on
    char *file;    // file macro is defined in
+   arg_t** parms;
    char *st;		// start of definiton
    char *nd;		// end of definition
 } SDef;
@@ -57,6 +66,7 @@ typedef struct
    void (*func)(void);
 }  SDirective;
 
+size_t SymSpaceLeft();
 void ProcFile(char *);
 
 int icmp(const void *, const void *);
@@ -79,9 +89,9 @@ void unNextCh(void);
 char *GetIdentifier(void);
 void ScanPastEOL();
 
-char *GetMacroBody(char *[]);
+char *GetMacroBody(arg_t *[]);
 char *GetMacroArg(void);
-int GetMacroParmList(char *[]);
+int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
 char *SubMacroArg(char *, int, char *);
 

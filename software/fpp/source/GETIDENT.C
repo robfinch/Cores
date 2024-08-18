@@ -18,7 +18,7 @@ char *GetIdentifier()
    iptr = inptr;
    c = NextNonSpace(0);
    if (c == '.' && inptr[0] == '.' && inptr[1] == '.') {
-     strncpy(buf, "...", 3);
+     strncpy_s(buf, sizeof(buf), "...", 3);
      inptr += 2;
      return (buf);
    }

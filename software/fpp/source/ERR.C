@@ -33,7 +33,9 @@ char *error[] = {
    "WDuplicate macro definition '%s' ignored",
    "Eunterminated comment",
    "Eunterminated string constant",    // 25
-   "Emacro too large"
+// 25
+   "Emacro too large",
+   "EConditional operator missing ':'"
 };
 
 extern int InLineNo;

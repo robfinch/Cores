@@ -63,7 +63,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
    newline is removed from the macro.
 ---------------------------------------------------------------------------- */
 
-char *GetMacroBody(char *parmlist[])
+char *GetMacroBody(arg_t *parmlist[])
 {
    char *b, *id = NULL, *p1, *p2;
    static char buf[160000];
@@ -88,7 +88,7 @@ char *GetMacroBody(char *parmlist[])
          p2 = inptr;
          if (id) {
             for (found = ii = 0; parmlist[ii]; ii++)
-               if (strcmp(parmlist[ii], id) == 0) {
+               if (strcmp(parmlist[ii]->name, id) == 0) {
                   *b = '';
                   b++;
                   count--;
@@ -101,7 +101,7 @@ char *GetMacroBody(char *parmlist[])
             // if the identifier was not a parameter then just copy it to
             // the macro body
             if (!found) {
-               strncpy(b, p1, p2-p1);
+               strncpy_s(b, 1000, p1, p2-p1);
                count -= p2 -p1 - 1;
                if (count < 0)
                   goto jmp1;
@@ -235,25 +235,49 @@ char *GetMacroArg()
       pointer to first parameter in list.
 ---------------------------------------------------------------------------- */
 
-int GetMacroParmList(char *parmlist[])
+int GetMacroParmList(arg_t *parmlist[])
 {
    char *id;
    int Depth = 0, c, count;
    int vargs = 0;
+   char buf2[10000];
+   int nn;
 
    count = 0;
-   while(1)
+   while(count < MAX_MACRO_ARGS)
    {
-      id = GetIdentifier();
+     /*
+     if (PeekCh() == '"') {
+       memset(buf2, 0, sizeof(buf2));
+       NextCh();
+       // Copy parameter string to buffer.
+       for (nn = 0; nn < sizeof(buf2) - 1; nn++) {
+         if (PeekCh() == 0)
+           goto errxit;
+         if (PeekCh() == '"') {
+           NextCh();
+           parmlist[count]->num = count;
+           parmlist[count]->name = _strdup(buf2);
+           count++;
+           break;
+         }
+         buf2[nn] = PeekCh();
+         NextCh();
+       }
+       continue;
+     }
+     */
+     id = GetIdentifier();
       if (id) {
         if (strncmp(id, "...", 3) == 0) {
           vargs = 1;
         }
-         if (count >= 10) {
+         if (count >= MAX_MACRO_ARGS) {
             err(15);
             goto errxit;
          }
-         parmlist[count] = _strdup(id);
+         parmlist[count]->num = count;
+         parmlist[count]->name = _strdup(id);
          if (parmlist[count] == NULL)
             err(5);
          count++;
@@ -268,6 +292,9 @@ int GetMacroParmList(char *parmlist[])
          unNextCh();
          break;
       }
+      if (c == '=') {
+        parmlist[count-1]->def = _strdup(GetMacroArg());
+      }
       if (c != ',') {
          err(16);
          goto errxit;
@@ -275,7 +302,7 @@ int GetMacroParmList(char *parmlist[])
    }
 //   if (count < 1)
 //      err(17);
-   if (count < 10)
+   if (count < MAX_MACRO_ARGS)
       parmlist[count] = NULL;
 errxit:;
    return vargs ? -count : count;
@@ -310,9 +337,19 @@ void SubMacro(char *body, int slen)
 	  // for (nn = 0; nn < sizeof(inbuf)-500-nchars-dif; nn++)
 		 //  p[nn] = inptr[nn];
    //}
-   memmove(inptr+dif, inptr, sizeof(inbuf)-500-nchars-dif);  // shift open space in input buffer
+    // If the text is not changing, we want to advance the text pointer.
+    // Prevents the substitution from getting stuck in a loop.
+   if (strncmp(inptr-slen, body, mlen) == 0) {
+     inptr -= slen;           // reset input pointer to start of replaced text
+     inptr++;                 // and advance by one
+     return;
+   }
+   if (dif > 0)
+    memmove(inptr+dif, inptr, sizeof(inbuf)-500-nchars-dif);  // shift open space in input buffer
    inptr -= slen;                // reset input pointer to start of replaced text
    memcpy(inptr, body, mlen);    // copy macro body in place over identifier
+   if (dif < 0)
+     memmove(inptr + mlen, inptr - dif + mlen, sizeof(inbuf) - 500 - nchars - dif);
    //for (nn = 0; nn < mlen; nn++)
 	  // inptr[nn] = body[nn];
    //printf("inptr:%.60s\r\n", inptr);
