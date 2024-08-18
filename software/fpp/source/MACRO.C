@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include "fpp.h"
 
 //#include "fwstr.h"
@@ -22,7 +24,6 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 	static char buf[160000];
 	char *s = sub, *o = buf;
 	int stringize = 0;
-	SDef *p, tdef;
 
    memset(buf, 0, sizeof(buf));
    for (o = buf; *bdy; bdy++, o++)
@@ -53,6 +54,31 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 }
 
 
+static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
+{
+  int ii;
+  char mk[3];
+  char idbuf[500];
+
+  for (ii = 0; ii < def->nArgs; ii++)
+    if (def->parms[ii]->name)
+      if (strcmp(def->parms[ii]->name, id) == 0) {
+        mk[0] = '';
+        mk[1] = '0' + (char)ii;
+        mk[2] = 0;
+        insert_into_buf(buf, mk, 0);
+        return (1);
+      }
+  // if the identifier was not a parameter then just copy it to
+  // the macro body
+  if (p2 - p1 > sizeof(id))
+    exit(0);
+  strncpy_s(idbuf, sizeof(idbuf), p1, p2 - p1);
+  id[p2 - p1] = 0;
+  insert_into_buf(buf, idbuf, 0);
+  return (0);
+}
+
 /* ---------------------------------------------------------------------------
    Description :
       Gets the body of a macro. All macro bodies must be < 2k in size. Macro
@@ -63,53 +89,40 @@ char *SubMacroArg(char *bdy, int n, char *sub)
    newline is removed from the macro.
 ---------------------------------------------------------------------------- */
 
-char *GetMacroBody(arg_t *parmlist[])
+buf_t *GetMacroBody(SDef* def)
 {
-   char *b, *id = NULL, *p1, *p2;
-   static char buf[160000];
-   int ii, found, c;
+   char *id = NULL, *p2;
+   buf_t* buf;
+   int c, nparm;
    int InQuote = 0;
    int count = sizeof(buf)-1;
+   char ch[4];
+   int64_t ndx1;
+
+   buf = new_buf();
+
+   if (def->nArgs <= 0)
+     nparm = 0;
+   else
+     nparm = def->nArgs;
 
    SkipSpaces();
-   memset(buf, 0, sizeof(buf));
-   for (b = buf; count >= 0; b++, --count)
+   while(1)
    {
       // First search for an identifier to substitute with parameter
-      if (parmlist) {
+      if (def->nArgs > 0 && def->parms) {
          while (PeekCh() == ' ' || PeekCh() == '\t') {
-            *b++ = NextCh();
-            count--;
-            if (count < 0)
-               goto jmp1;
+           ch[0] = NextCh();
+           ch[1] = 0;
+           insert_into_buf(&buf, ch, 0);
          }
-         p1 = inptr;
+         ndx1 = inptr - inbuf->buf;
          id = GetIdentifier();
          p2 = inptr;
-         if (id) {
-            for (found = ii = 0; parmlist[ii]; ii++)
-               if (strcmp(parmlist[ii]->name, id) == 0) {
-                  *b = '';
-                  b++;
-                  count--;
-                  if (count < 0)
-                     goto jmp1;
-                  *b = '0' + (char)ii;
-                  found = 1;
-                  break;
-               }
-            // if the identifier was not a parameter then just copy it to
-            // the macro body
-            if (!found) {
-               strncpy_s(b, 1000, p1, p2-p1);
-               count -= p2 -p1 - 1;
-               if (count < 0)
-                  goto jmp1;
-               b += p2-p1-1;  // b will be incremented at end of loop
-            }
-         }
+         if (id) 
+           sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
          else
-            inptr = p1;    // reset inptr if no identifier found
+           inptr = inbuf->buf + ndx1;    // reset inptr if no identifier found
       }
       if (id == NULL) {
          c = NextCh();
@@ -130,7 +143,6 @@ char *GetMacroBody(arg_t *parmlist[])
                      }
                   }
                   if (c > 0) {
-                     --b;
                      continue;
                   }
                   else
@@ -140,8 +152,7 @@ char *GetMacroBody(arg_t *parmlist[])
                else if (c == '/') {
                   while(c != '\n' && c > 0) c = NextCh();
                   if (c > 0) {
-                     --b;
-                     ++count;
+                    unNextCh();
                      goto jmp1;
                   }
                }
@@ -154,8 +165,6 @@ char *GetMacroBody(arg_t *parmlist[])
             {
                while (c != '\n' && c > 0) c = NextCh();
                if (c > 0) {
-                  --b;           // b will be incremented but we haven't got a character
-                  ++count;
                   SkipSpaces();  // Skip leading spaces on next line
                   continue;
                }
@@ -166,15 +175,17 @@ char *GetMacroBody(arg_t *parmlist[])
                err(25);
             break;
          }
-         *b = c;
+         ch[0] = c;
+         ch[1] = 0;
+         insert_into_buf(&buf, ch, 0);
       }
    }
-jmp1:
-   if (count < 0)
-      err(26);
-   *b = 0;
-   rtrim(buf);    // Trim off trailing spaces.
-   return buf;
+ jmp1:
+   if (buf->buf)
+     rtrim(buf->buf);    // Trim off trailing spaces.
+   else
+     buf->buf = _strdup("");
+   return (buf);
 }
 
 
@@ -240,8 +251,6 @@ int GetMacroParmList(arg_t *parmlist[])
    char *id;
    int Depth = 0, c, count;
    int vargs = 0;
-   char buf2[10000];
-   int nn;
 
    count = 0;
    while(count < MAX_MACRO_ARGS)
@@ -319,13 +328,12 @@ errxit:;
 
 void SubMacro(char *body, int slen)
 {
-   int mlen, dif, nchars;
-   int nn;
-   char *p;
+   int64_t mlen, dif;
+   int64_t nchars;
 
    mlen = strlen(body);          // macro length
    dif = mlen - slen;
-   nchars = inptr-inbuf;         // calculate number of characters that could be remaining
+   nchars = inptr-inbuf->buf;         // calculate number of characters that could be remaining
    //p = inptr + dif;
    //if (dif==0)
 	  // ;
@@ -345,11 +353,11 @@ void SubMacro(char *body, int slen)
      return;
    }
    if (dif > 0)
-    memmove(inptr+dif, inptr, sizeof(inbuf)-500-nchars-dif);  // shift open space in input buffer
+    memmove(inptr+dif, inptr, inbuf->size-500-nchars-dif);  // shift open space in input buffer
    inptr -= slen;                // reset input pointer to start of replaced text
    memcpy(inptr, body, mlen);    // copy macro body in place over identifier
    if (dif < 0)
-     memmove(inptr + mlen, inptr - dif + mlen, sizeof(inbuf) - 500 - nchars - dif);
+     memmove(inptr + mlen, inptr - dif + mlen, inbuf->size - 500 - nchars - dif);
    //for (nn = 0; nn < mlen; nn++)
 	  // inptr[nn] = body[nn];
    //printf("inptr:%.60s\r\n", inptr);

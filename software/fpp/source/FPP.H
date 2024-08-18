@@ -48,8 +48,15 @@ typedef struct
 
 typedef struct
 {
+  int size;
+  int pos;
+  char* buf;
+} buf_t;
+
+typedef struct
+{
    char *name;    // name of the macro
-   char *body;    // test to substitute when macro name is encountered
+   buf_t *body;    // text to substitute when macro name is encountered
    int nArgs;     // Number of arguments passed to this macro
    int varg;      // variable argument list indicator
    int line;      // line number macro is defined on
@@ -66,6 +73,10 @@ typedef struct
    void (*func)(void);
 }  SDirective;
 
+
+buf_t* new_buf();
+buf_t* enlarge_buf(buf_t* b);
+void insert_into_buf(buf_t** buf, char* p, int pos);
 size_t SymSpaceLeft();
 void ProcFile(char *);
 
@@ -89,13 +100,13 @@ void unNextCh(void);
 char *GetIdentifier(void);
 void ScanPastEOL();
 
-char *GetMacroBody(arg_t *[]);
+buf_t *GetMacroBody(SDef*);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
 char *SubMacroArg(char *, int, char *);
 
-void SearchAndSub(void);
+void SearchAndSub(SDef* excld);
 void SearchForDefined(void);
 void DoPastes(char *);
 
@@ -118,8 +129,8 @@ SHashVal HashFnc(SDef *);
 
 E char *identchars I(= "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@?0123456789");
 extern SHashTbl HashInfo;
-E char *inptr;       // pointer to current character in input buffer
-E char inbuf[3000000];  // input buffer
+E char *inptr;      // pointer to current character in input buffer
+E buf_t* inbuf;     // input buffer
 extern int errors;
 E int warnings;
 E FILE *fin, *fout;

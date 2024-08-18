@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
+#include <ctype.h>
+#include <inttypes.h>
 #include "ht.h"
 #include "fpp.h"
 
@@ -15,7 +17,6 @@ int SubParmMacro(SDef *p)
    int c, nArgs, ArgCount, xx;
    arg_t Args[MAX_MACRO_ARGS];
    char *arg, *bdy, *tp, *ptr;
-   int st,nd;
 
    // look for opening bracket indicating start of parameters
    // if the bracket isn't present then there are no arguments
@@ -69,7 +70,7 @@ int SubParmMacro(SDef *p)
    collect = 0;
 
    // Substitute arguments into macro body
-   bdy = _strdup(p->body);                    // make a copy of the macro body
+   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
    for(xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
    {
       tp = SubMacroArg(bdy, xx, Args[xx].def);        // Substitute argument into body
@@ -109,7 +110,7 @@ int SubParmMacro(SDef *p)
 
 ----------------------------------------------------------------------------- */
 
-void SearchAndSub()
+void SearchAndSub(SDef* exc)
 {
 	static int InComment = 0;
    int c, InComment2 = 0;
@@ -117,11 +118,13 @@ void SearchAndSub()
 	 int Quote2 = 0;
    char *id, *ptr, *optr;
    SDef *p, tdef;
+   int64_t ondx;
+   int ex;
 
    // Check if we hit the end of the current input line we do this because
    // NextCh would read another line
 
-   optr = inptr;
+   ondx = inptr - inbuf->buf;
    while (1)
    {
       if ((c = PeekCh()) == 0)
@@ -190,21 +193,26 @@ void SearchAndSub()
 
 		 // Search and see if the identifier corresponds to a macro
 		 p = (SDef *)htFind(&HashInfo, &tdef);
-         if (p != (SDef *)NULL)
+     ex = 0;
+     if (p != NULL && exc) {
+       ex = strcmp(p->name, exc->name) == 0;
+     }
+
+         if (p != (SDef *)NULL && !ex)
          {
 			 if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy
             // the body directly to the input. Overwrite the identifier
             // string
-			 if (p->nArgs >= 0) {
-				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf);
+			 if (p->nArgs > 0) {
+				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
                  SubParmMacro(p);
-				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf);
+				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			 }
 			else {
-				if (fdbg) fprintf(fdbg, "bef:%s", inbuf);
-				SubMacro(p->body, strlen(p->name));
-				if (fdbg) fprintf(fdbg, "aft:%s", inbuf);
+				if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
+				SubMacro(p->body->buf, strlen(p->name));
+				if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			}
          }
          free(tdef.name);
@@ -214,7 +222,8 @@ void SearchAndSub()
       // failed to get identifier, so just continue with the next character
       c = NextCh();
    }
-   inptr = optr;
+   inptr = inbuf->buf + ondx;
+   optr = inbuf->buf + ondx;
 	 while (*optr) {
 		 if (*optr == '\x15')
 			 *optr = '\x22';
@@ -284,18 +293,19 @@ void DoPastes(char *buf)
 
 void SearchForDefined()
 {
-   char *ptr, *id, *sptr;
+   char *id;
    int c;
    SDef tdef, *p;
    int needClosePa = 0;
+   int64_t stndx = 0, pndx;
 
-   ptr = inptr;
+   pndx = inptr - inbuf->buf;
    while(1)
    {
       if (PeekCh() == 0)   // Stop at end of current input
          break;
       SkipSpaces();
-      sptr = inptr;
+      stndx = inptr - inbuf->buf;
       id = GetIdentifier();
       if (id)
       {
@@ -321,11 +331,11 @@ void SearchForDefined()
             }
             tdef.name = id;
             p = (SDef *)htFind(&HashInfo, &tdef);
-            SubMacro((char *)(p ? "1" : "0"), inptr-sptr);
+            SubMacro((char*)(p ? "1" : "0"), inptr - (inbuf->buf+stndx));
          }
       }
       else
          NextCh();
    }
-   inptr = ptr;
+   inptr = inbuf->buf + pndx;
 }

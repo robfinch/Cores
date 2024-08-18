@@ -39,7 +39,7 @@ char *error[] = {
 };
 
 extern int InLineNo;
-extern char inbuf[];
+extern buf_t* inbuf;
 
 // Generates error messages
 void err(int num, ...)
@@ -50,7 +50,7 @@ void err(int num, ...)
    fprintf(stderr, "FPP%c%03.3d(%d): ", error[num][0], num, InLineNo);
 	vfprintf(stderr, &error[num][1], ptr);
    fprintf(stderr, "\n");
-   fprintf(stderr, "%.60s", inbuf);
+   fprintf(stderr, "%.60s", inbuf->buf);
 	va_end(ptr);
    if (error[num][0] == 'E')
 	   errors++;

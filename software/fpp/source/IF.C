@@ -22,11 +22,11 @@ void difskip(int s)
    while(!feof(fin))
    {
       // Get a line and ignore it unless it's a preprocessor line
-      inptr = inbuf;
-      fgets(inbuf, MAXLINE, fin);
-		if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf);
+      inptr = inbuf->buf;
+      fgets(inbuf->buf, MAXLINE, fin);
+		if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf->buf);
       if (NextNonSpace(0) != '#') {
-         inptr = inbuf;
+         inptr = inbuf->buf;
          continue;
       }
 
@@ -63,7 +63,7 @@ void difskip(int s)
          else if (!strncmp(inptr, "elif", 4)) {
             inptr += 4;
             SearchForDefined();
-            SearchAndSub();
+            SearchAndSub(NULL);
             if (expeval())
                return;
          }
@@ -85,7 +85,7 @@ void dif()
 {
    IfLevel++;
    SearchForDefined();  // check for defined() operator
-   SearchAndSub();      // perform any macro substitutions
+   SearchAndSub(NULL);      // perform any macro substitutions
    if(!expeval())
       difskip(TRUE);
 }
