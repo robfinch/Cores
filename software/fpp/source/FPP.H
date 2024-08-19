@@ -14,6 +14,10 @@
 
 --------------------------------------------------------------------------- */
 
+#ifndef _INTTYPES
+#  include <inttypes.h>
+#endif
+
 #ifndef HT_H
 #  include <ht.h>
 #endif
@@ -33,7 +37,7 @@
 #define FALSE     0
 #define TRUE      1
 #define MAXLINE   4000
-#define STRAREA   640000
+#define STRAREA   1000000
 #define MAXMACROS 4001
 #define MAX_MACRO_ARGS  100
 
@@ -89,11 +93,20 @@ typedef struct
    int opt;
 }  SDirective;
 
+typedef struct
+{
+  FILE* file;
+  int64_t bufpos;
+} pos_t;
 
 buf_t* new_buf();
 buf_t* enlarge_buf(buf_t* b);
 buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
+
+
+pos_t* GetPos();
+void SetPos(pos_t*);
 size_t SymSpaceLeft();
 void ProcFile(char *);
 

@@ -19,7 +19,8 @@ int SubParmMacro(SDef* p, int opt)
   char* arg, * bdy, * tp, * ptr;
   int varg;
   int need_cb = 0;
-  int64_t pndx = 0, qndx = 0;
+  int64_t so;             // number of chars to substitute over
+  pos_t* pndx, * qndx;
 
   // look for opening bracket indicating start of parameters
   // if the bracket isn't present then there are no arguments
@@ -31,7 +32,7 @@ int SubParmMacro(SDef* p, int opt)
   // routine will occasionally reset the pointer for new lines.
   CharCount = 0;
   ptr = inptr;
-  qndx = inptr - inbuf->buf;
+  qndx = GetPos();
   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
   if (opt == 0) {
     collect = 1;
@@ -86,8 +87,9 @@ int SubParmMacro(SDef* p, int opt)
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
-    pndx = inptr - inbuf->buf;
-    pndx = pndx - qndx; // number of chars to substitute over
+    pndx = GetPos();
+    so = pndx->bufpos - qndx->bufpos;         // number of chars to substitute over
+    free(pndx);
   }
   else if (opt == 1) {
     for (xx = 0; xx < p->nArgs || (p->varg && p->parms[xx]->def); xx++) {
@@ -96,12 +98,17 @@ int SubParmMacro(SDef* p, int opt)
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
-    pndx = 0;
+    so = 0;
   }
+  // Now handle the instance var.
+  tp = SubMacroArg(bdy, -1, NULL);
+  free(bdy);
+  bdy = _strdup(tp);
 
   // Substitute macro into input stream
-  SubMacro(bdy, pndx);
+  SubMacro(bdy, so);
   free(bdy);                                // free last strdup
+  free(qndx);
   return (0);
 }
 
@@ -109,8 +116,6 @@ int SubParmMacro(SDef* p, int opt)
 /* -----------------------------------------------------------------------------
 
    Description :
-      This function makes two passes through the input buffer. The first
-   pass substitutes any macros, the second pass performs pasteing.
       Scan through input buffer performing macro substitutions where
    possible. A macro name must always begin with an alphabetic character or
    an underscore. The name can not span lines. A macro can not be contained
@@ -135,13 +140,13 @@ void SearchAndSub(SDef* exc)
 	 int Quote2 = 0;
    char *id, *ptr, *optr;
    SDef *p, tdef;
-   int64_t ondx;
+   pos_t* ondx;
    int ex;
 
    // Check if we hit the end of the current input line we do this because
    // NextCh would read another line
 
-   ondx = inptr - inbuf->buf;
+   ondx = GetPos();
    while (1)
    {
      if ((c = PeekCh()) == 0) {
@@ -240,8 +245,8 @@ void SearchAndSub(SDef* exc)
       // failed to get identifier, so just continue with the next character
       c = NextCh();
    }
-   inptr = inbuf->buf + ondx;
-   optr = inbuf->buf + ondx;
+   SetPos(ondx);
+   optr = inptr;
 	 while (*optr) {
 		 if (*optr == '\x15')
 			 *optr = '\x22';
@@ -315,9 +320,10 @@ void SearchForDefined()
    int c;
    SDef tdef, *p;
    int needClosePa = 0;
-   int64_t stndx = 0, pndx;
+   int64_t stndx = 0;
+   pos_t* pndx;
 
-   pndx = inptr - inbuf->buf;
+   pndx = GetPos();
    while(1)
    {
       if (PeekCh() == 0)   // Stop at end of current input
@@ -355,5 +361,6 @@ void SearchForDefined()
       else
          NextCh();
    }
-   inptr = inbuf->buf + pndx;
+   SetPos(pndx);
+   free(pndx);
 }

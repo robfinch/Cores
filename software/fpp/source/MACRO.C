@@ -25,33 +25,46 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 	static char buf[160000];
 	char *s = sub, *o = buf;
 	int stringize = 0;
+  char numbuf[20];
+  char* substr;
+  char ch;
 
-   memset(buf, 0, sizeof(buf));
-   for (o = buf; *bdy; bdy++, o++)
-   {
-		 stringize = 0;
-      if (*bdy == '' && *(bdy+1) == (char)n + '0') {  // we have found parameter to sub
-				if (bdy[-1] == '#') {
-					stringize = 1;
-					o[-1] = '\x15';
+  if (n < 0) {
+    sprintf_s(numbuf, sizeof(numbuf), "%5d", minst);
+    substr = numbuf;
+    ch = '@';
+  }
+  else {
+    substr = sub;
+    ch = n + '0';
+  }
+
+  memset(buf, 0, sizeof(buf));
+  for (o = buf; *bdy; bdy++, o++)
+  {
+		stringize = 0;
+    if (*bdy == '' && *(bdy+1) == ch) {  // we have found parameter to sub
+			if (bdy[-1] == '#') {
+				stringize = 1;
+				o[-1] = '\x15';
+			}
+        // Copy substitution to output buffer
+			for (s = substr; *s;) {
+				if (stringize) {
+					if (*s=='"')
+						*o++ = '\\';
 				}
-         // Copy substitution to output buffer
-				for (s = sub; *s;) {
-					if (stringize) {
-						if (*s=='"')
-							*o++ = '\\';
-					}
-					*o++ = *s++;
-				}
-				if (stringize)
-					*o++ = '\x15';
-         --o;
-         bdy++;
-         continue;
-      }
-      *o = *bdy;
-   }
-   return buf;
+				*o++ = *s++;
+			}
+			if (stringize)
+				*o++ = '\x15';
+        --o;
+        bdy++;
+        continue;
+    }
+    *o = *bdy;
+  }
+  return buf;
 }
 
 
@@ -82,13 +95,12 @@ static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
 
 static void proc_instvar(buf_t* buf)
 {
-  char mk[20];
+  char mk[4];
 
   inptr += 5;
   mk[0] = '';
   mk[1] = '@';
   mk[2] = 0;
-  sprintf_s(mk, sizeof(mk), "%05d", minst);
   insert_into_buf(buf, mk, 0);
 }
 

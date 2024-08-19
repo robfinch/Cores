@@ -136,9 +136,37 @@ rep_t* new_rept()
   return (p);
 }
 
+pos_t* GetPos()
+{
+  pos_t* pos;
+
+  pos = malloc(sizeof(pos_t));
+  if (pos == NULL) {
+    err(5);   // out of memory
+    exit(5);
+  }
+  pos->file = fin;
+  pos->bufpos = inptr - inbuf->buf;
+  return (pos);
+}
+
+void SetPos(pos_t* pos)
+{
+  fin = pos->file;
+  inptr = inbuf->buf + pos->bufpos;
+}
+
 /* ---------------------------------------------------------------------------
    Description :
-      Define a macro.
+      Define a macro. This is used by a couple of directives. It used used
+   by the usual 'define' and 'set' directives. However it is also used to
+   define multi-line macros with the '.macro' directive.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void ddefine(int opt)
@@ -250,6 +278,12 @@ void ddefine(int opt)
 /* ----------------------------------------------------------------------------
    Description :
       Cause preprocessor to stop and display a message on stderr.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void derror(int opt)
@@ -264,7 +298,7 @@ void derror(int opt)
       c = NextCh();
       if (c > 0)
          fputc(c, stderr);
-      if (c == '\n')
+      if (c == '\n' || c == 0)
          break;
    } while (1);
 //   exit(0);
@@ -273,7 +307,21 @@ void derror(int opt)
 
 /* ---------------------------------------------------------------------------
    Description :
-      Include another file within the current one.
+      Include another file within the current one. Locates the file in the
+   typical fashion using the 'INCLUDE' environment variable.
+
+   Nesting of Included Files:
+      The current file pointer is stacked on an internal stack and a new file
+   pointer allocated and used in opening the included file. The current file
+   is left open on the assumption it will be returned to. Files are closed
+   once the end of the file is reached. If the end of the current file is an
+   included file, then the file pointer stack is popped.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ----------------------------------------------------------------------------- */
 
 void dinclude(int opt)
@@ -285,17 +333,17 @@ void dinclude(int opt)
    char wpath[4096];
 	 char buf[4096];
    int ch;
-   int64_t ndx, ndx2;
    SDef *p;
+   pos_t* ndx;
 
-   ndx2 = inptr - inbuf->buf;
+   ndx = GetPos();
    SearchAndSub(NULL);
    DoPastes(inbuf->buf);
-   inptr = inbuf->buf + ndx2;
+   SetPos(ndx);
+   free(ndx);
    tname = bbfile.body->buf;
    name[0] = 0;
 
-   ndx = inptr - inbuf->buf;
    ch = NextNonSpace(0);
    if (ch == '"')  // search the path specified
    {
@@ -397,6 +445,11 @@ void dinclude(int opt)
    Description :
       Undefines a macro by removing its definition from the table.
 
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ----------------------------------------------------------------------------- */
 
 void dundef(int opt)
@@ -413,6 +466,12 @@ void dundef(int opt)
    Description :
       Sets line number equal to line number specified and file name to
    name specified.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void dline(int opt)
@@ -440,6 +499,11 @@ void dline(int opt)
 
 
 /* ----------------------------------------------------------------------------
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void dpragma(int opt)
@@ -450,6 +514,11 @@ void dpragma(int opt)
 
 
 /* ----------------------------------------------------------------------------
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void dendm(int opt)
@@ -459,10 +528,17 @@ void dendm(int opt)
 /* ---------------------------------------------------------------------------
    Description :
       Define a repeat block.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
-void* drept_helper(rep_t* dr, int opt)
+void* drept(int opt)
 {
+  rep_t* dr;
   int c, n = 0;
   SDef* dp1;
   arg_t pary[100];
@@ -476,8 +552,7 @@ void* drept_helper(rep_t* dr, int opt)
   int ri;
   SDef* dp;
 
-  if (dr == NULL)
-    return (NULL);
+  dr = new_rept();
   dp = dr->def;
   if (dp == NULL)
     return (NULL);
@@ -566,17 +641,17 @@ void* drept_helper(rep_t* dr, int opt)
   return ((void*)dr);
 }
 
-void drept(int opt)
-{
-  rep_t* rp;
-
-  rp = new_rept();
-  drept_helper(rp, opt);
-  return;
-}
-
-
 /* ----------------------------------------------------------------------------
+   Description:
+      Process end of repeat block marker. This marker should have been 
+   absorbed when the repeat body was collected. If it is encountered then
+   there must have been an end without a start. So spit out an error.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
 ---------------------------------------------------------------------------- */
 
 void dendr(int opt)
@@ -587,19 +662,16 @@ void dendr(int opt)
 
 /* -----------------------------------------------------------------------------
    Description :
-      Looks at line and determines if it is a preprocessor directive. If it
-   is then processing for the directive is executed.
-      Macro substitutions are optionally performed on the line before
-   processing the directive. Several directives such as else/endif can have
-   nothing else on the line so we save time by not performing susbtitutions.
 
-   Returns :
-      TRUE if preprocessor directive, otherwise FALSE.
-
+      This is a jump table of directive mnemonics and the addresses of the 
+   corresponding processing routine. This table is searched in a linear
+   fashion. So placing directives earlier in the table will result in them
+   being found the fastest.
 ----------------------------------------------------------------------------- */
 
 static SDirective dir[] =
 {
+   // Standard C directives
    "define",  6, ddefine, 0, 0,
    "error",   5, derror,  0, 0,
    "include", 7, dinclude,0, 0,
@@ -626,6 +698,21 @@ static SDirective dir[] =
    "rept",    4, drept,   1, 0,
    "endr",    4, dendr,   1, 0
 };
+
+/* -----------------------------------------------------------------------------
+   Description :
+      Looks at line and determines if it is a preprocessor directive. If it
+   is then processing for the directive is executed.
+      A directive begins with a pre-processor character (must have already
+   been fetched from input) followed by optional spaces then the directive
+   mnemonic.
+
+   Parameters
+    (char*) ptr  - pointer to text to check for directive.
+
+   Returns :
+      non-zero if preprocessor directive, otherwise zero.
+----------------------------------------------------------------------------- */
 
 int directive(char *p)
 {
@@ -659,10 +746,15 @@ int directive(char *p)
 
 /* -----------------------------------------------------------------------------
    Description :
-      Process files. Loops reading lines from input, performing macro
-   substitutions and processing preprocessor commands. Macro substitution
-   is done first to allow a macro to be defined in terms of another macro.
+      Process a line of text from the input. Tries to detect a directive
+   first and invokes directive processing if found. Otherwise looks for
+   macros that need to be substituted into the input and then performs
+   paste operations. Finally, the processed line is dumped to the output
+   file.
 
+   Returns:
+      (int) - indication to abort processing in the file processing loop.
+              not currently used and should be zero.
 ----------------------------------------------------------------------------- */
 
 int ProcLine()
@@ -670,14 +762,9 @@ int ProcLine()
    int ch;
    int def = 0;
    char* ptr, *ptr2;
-   int64_t ndx2, ndx3;
+   int64_t ndx3;
 
    //printf("Processing line: %d\r", InLineNo);
-//   inptr = inbuf->buf;
-//   ptr = inbuf->buf;
-//   ptr2 = inbuf->buf;
-//   ch = NextCh();          // get first character
-   ndx2 = SkipComments() - inbuf->buf;
    ch = NextNonSpace(0);
    if (ch == syntax_ch() && in_comment == 0) {
       if (ShowLines)
@@ -730,7 +817,19 @@ jmp1:
       Process files. Loops reading lines from input, performing macro
    substitutions and processing preprocessor commands. Macro substitution
    is done first to allow a macro to be defined in terms of another macro.
+   The input files may be processed in a loop multiple times to resolve
+   nested structures that may be part of the source text.
+   This function is called by the 'include' directive as well as being
+   called from the mainline routine.
 
+   Side Effects:
+      Creates temporary files with names based on the source text file.
+   These files are removed automatically at the end of processing.
+
+   Parameters:
+      (char *) - pointer to text string containing the file name to process.
+   Returns:
+      (none)
 ----------------------------------------------------------------------------- */
 
 void ProcFile(char *fname)
@@ -855,7 +954,11 @@ void ProcFile(char *fname)
 
 /* ----------------------------------------------------------------------------
    Description:
- 	   Parse command line switches.
+ 	   Parse command line switches. This routine parses one switch may be
+   specified in any order on the command line.
+
+   Parameters:
+      (char *) pointer to the command line switch
 ---------------------------------------------------------------------------- */
 
 void parsesw(char *s)
@@ -921,7 +1024,7 @@ void parsesw(char *s)
 
 /* -----------------------------------------------------------------------------
    Description :
-      Prints a table of macros defined.
+      Prints a table of macros defined. Mainly for debugging.
 ----------------------------------------------------------------------------- */
 
 void PrintDefines()
@@ -967,7 +1070,11 @@ void PrintDefines()
 
 /* -----------------------------------------------------------------------------
    Description :
-      Stores a string.
+      Stores a string. Currently uses a statically allocated string storage
+   area. Used mainly for storing the macro definition names.
+
+   ToDo:
+      Update to use buffer class.
 
    Returns :
       (char *) pointer to area where string is stored.
@@ -1058,9 +1165,22 @@ void SetStandardDefines(void)
 
 /* ----------------------------------------------------------------------------
    Description :
+      The mainline of the program. Displays help if no command line args
+   are present. Gets the ball rolling performing inializations then calls
+   ProcFile() to process the input files. After processing is complete
+   error status is reported.
+
+   Parameters:
+      (int) number of command line arguments.
+      (char *[]) - pointer to array of text strings containing command
+                   line arguments.
+
+   Returns:
+      (int) - normally zero if everything completed successfully, otherwise
+              an error code.
 ---------------------------------------------------------------------------- */
 
-main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
    int
       xx;
    SDef *p;
@@ -1071,7 +1191,7 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 2.52  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1102,7 +1222,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 2.52  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
