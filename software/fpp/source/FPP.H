@@ -65,9 +65,20 @@ typedef struct
    int line;      // line number macro is defined on
    char *file;    // file macro is defined in
    arg_t** parms;
+   buf_t* abody;  // text to substitute when macro name is encountered
    char *st;		// start of definiton
    char *nd;		// end of definition
 } SDef;
+
+typedef struct _tagRep_t
+{
+  int ino;      // repeat instance number
+  SDef* def;    // associated def
+  int rcnt;      // current repeat counter (.rept)
+  int orcnt;    // original repeat count
+  char* st;      
+  char* nd;
+} rep_t;
 
 typedef struct
 {
@@ -81,6 +92,7 @@ typedef struct
 
 buf_t* new_buf();
 buf_t* enlarge_buf(buf_t* b);
+buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
 size_t SymSpaceLeft();
 void ProcFile(char *);
@@ -110,6 +122,7 @@ char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
 char *SubMacroArg(char *, int, char *);
+int SubParmMacro(SDef* p, int opt);
 
 void SearchAndSub(SDef* excld);
 void SearchForDefined(void);
@@ -132,6 +145,7 @@ void searchenv(char *filename, char *envname, char *pathname, int pathsize);
 char* rtrim(char*);
 
 char syntax_ch();
+int GetReptArgList(arg_t* arglist[], int opt);
 
 SHashVal HashFnc(SDef *);
 
@@ -141,7 +155,7 @@ E char *inptr;      // pointer to current character in input buffer
 E buf_t* inbuf;     // input buffer
 extern int errors;
 E int warnings;
-E FILE *fin, *fout;
+E FILE *fin, *fout,* ofp;
 E FILE *fdbg;
 E int verbose I(=0);
 E int ShowLines I(=0);

@@ -33,6 +33,19 @@ buf_t* new_buf()
   return (b);
 }
 
+buf_t* clone_buf(buf_t* buf)
+{
+  buf_t* b;
+
+  b = new_buf();
+  b->pos = buf->pos;
+  if (buf->buf) {
+    b->buf = _strdup(buf->buf);
+    b->size = strlen(b->buf) + 1;
+  }
+  return (b);
+}
+
 buf_t* enlarge_buf(buf_t* b)
 {
   char* p;

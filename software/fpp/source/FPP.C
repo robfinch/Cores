@@ -41,6 +41,9 @@ int pass = 0;
 int keep_output = 0;
 FILE* ifps[20];
 int ifp_sp = 0;
+int rep_inst = 0;
+rep_t rept_array[2000];
+int minst=0;      // macro instance
 
 // Storage for standard #defines
 
@@ -116,6 +119,20 @@ SDef* new_def()
     exit(5);
   }
   memset(p, 0, sizeof(SDef));
+  return (p);
+}
+
+rep_t* new_rept()
+{
+  rep_t* p;
+
+  if (rep_inst > 1999)
+    exit(0);
+  p = &rept_array[rep_inst];
+  memset(p, 0, sizeof(rep_t));
+  p->ino = rep_inst;
+  p->def = new_def();
+  rep_inst++;
   return (p);
 }
 
@@ -227,6 +244,7 @@ void ddefine(int opt)
    dp->body->buf = StorePlainStr(dp->body->buf);
    free(ptr2);
    htInsert(&HashInfo, dp);
+   minst++;
 }
 
 /* ----------------------------------------------------------------------------
@@ -270,8 +288,10 @@ void dinclude(int opt)
    int64_t ndx, ndx2;
    SDef *p;
 
+   ndx2 = inptr - inbuf->buf;
    SearchAndSub(NULL);
    DoPastes(inbuf->buf);
+   inptr = inbuf->buf + ndx2;
    tname = bbfile.body->buf;
    name[0] = 0;
 
@@ -436,6 +456,134 @@ void dendm(int opt)
 {
 }
 
+/* ---------------------------------------------------------------------------
+   Description :
+      Define a repeat block.
+---------------------------------------------------------------------------- */
+
+void* drept_helper(rep_t* dr, int opt)
+{
+  int c, n = 0;
+  SDef* dp1;
+  arg_t pary[100];
+  arg_t* parms[100];
+  char* qp, * st;
+  int64_t stndx, qpndx, opndx;
+  int count = 0;
+  int ii;
+  int wd;
+  static int rep_dep = 0;
+  int ri;
+  SDef* dp;
+
+  if (dr == NULL)
+    return (NULL);
+  dp = dr->def;
+  if (dp == NULL)
+    return (NULL);
+
+  dp->varg = 0;
+  dp->nArgs = -1;          // no arguments or round brackets
+  dp->line = InLineNo;     // line number macro defined on
+  dp->file = bbfile.body->buf;  // file macro defined in
+  dp->name = NULL;
+
+  memset(pary, 0, sizeof(pary));
+  for (ii = 0; ii < 100; ii++)
+    parms[ii] = &pary[ii];
+
+  SearchAndSub(NULL);
+
+  // Skip over .rept
+//  inptr += 5;
+
+  // expeval() will eat a newline char
+  stndx = inptr - inbuf->buf;
+  dr->orcnt = dr->rcnt = expeval();
+  st = inptr;
+  /*
+  if (dr->rcnt) {
+    dp->inst = malloc(sizeof(SDef*) * dr->rcnt);
+    if (dp->inst == NULL) {
+      exit(0);
+    }
+    memset(dp->inst, 0, sizeof(SDef*) * dr->rcnt);
+  }
+  */
+  // Check for repeat parameters. There must be no space between the
+  // macro name and ')'.
+  SkipSpaces();
+  c = PeekCh();
+  if (c == ',') {
+    NextCh();
+    dp->varg = 0;
+    dp->nArgs = GetReptArgList(parms, opt);
+    if (dp->nArgs < 0) {
+      dp->nArgs = -dp->nArgs;
+      dp->varg = 1;
+    }
+    if (dp->nArgs) {
+      dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
+      if (dp->parms == NULL)
+        exit(0);
+      for (ii = 0; ii < dp->nArgs; ii++) {
+        dp->parms[ii] = malloc(sizeof(arg_t));
+        dp->parms[ii]->num = ii;
+        dp->parms[ii]->name = NULL;
+        dp->parms[ii]->def = _strdup(parms[ii]->def);
+      }
+    }
+    ScanPastEOL();
+  }
+  c = PeekCh();
+  if (c < 0) {
+    err(26);
+    return (NULL);
+  }
+  dp->body = GetMacroBody(dp, 1);
+
+  // Advance past the '.endr'
+  inptr += 5;
+
+  // Dump the repeat body to the input repeat count number of times.
+  opndx = inptr - inbuf->buf;
+  ri = rep_inst;
+  dp1 = new_def();
+  dp1->body = dp->body;
+
+  for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
+    dp1->abody = clone_buf(dp->body);
+    qp = inptr;
+    qpndx = qp - inbuf->buf;
+    // Substitute args into macro body and into the input.
+    wd = SubParmMacro(dp1,1);
+    free(dp1->abody);
+    inptr += strlen(inptr);
+  }
+
+  // Set the input point back to the start of the dump.
+  inptr = inbuf->buf + opndx;
+  return ((void*)dr);
+}
+
+void drept(int opt)
+{
+  rep_t* rp;
+
+  rp = new_rept();
+  drept_helper(rp, opt);
+  return;
+}
+
+
+/* ----------------------------------------------------------------------------
+---------------------------------------------------------------------------- */
+
+void dendr(int opt)
+{
+  err(29);    // .endr without .rept
+}
+
 
 /* -----------------------------------------------------------------------------
    Description :
@@ -450,42 +598,51 @@ void dendm(int opt)
 
 ----------------------------------------------------------------------------- */
 
-int directive()
+static SDirective dir[] =
+{
+   "define",  6, ddefine, 0, 0,
+   "error",   5, derror,  0, 0,
+   "include", 7, dinclude,0, 0,
+   "else",    4, delse,   0, 0,
+   "endif",   5, dendif,  0, 0,
+   "elif",    4, delif,   0, 0,
+   "ifdef",   5, difdef,  0, 0,
+   "ifndef",  6, difndef, 0, 0,
+   "if",      2, dif,     0, 0,  // must come after ifdef/ifndef
+   "undef",   5, dundef,  0, 0,
+   "line",    4, dline,   0, 0,
+   "pragma",  6, dpragma, 0, 0,
+   // Assembler directives
+   "define",  6, ddefine, 1, 0,
+   "include", 7, dinclude,1, 0,
+   "else",    4, delse,   1, 0,
+   "ifdef",   5, difdef,  1, 0,
+   "ifndef",  6, difndef, 1, 0,
+   "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
+   "endif",   5, dendif,  1, 0,
+   "undef",   5, dundef,  1, 0,
+   "macro",   5, ddefine, 1, 1,
+   "endm",    4, dendm,   1, 0,
+   "rept",    4, drept,   1, 0,
+   "endr",    4, dendr,   1, 0
+};
+
+int directive(char *p)
 {
    int i;
-   static SDirective dir[] =
-   {
-      "define",  6, ddefine, 0, 0,
-      "error",   5, derror,  0, 0,
-      "include", 7, dinclude,0, 0,
-      "else",    4, delse,   0, 0,
-      "endif",   5, dendif,  0, 0,
-      "elif",    4, delif,   0, 0,
-      "ifdef",   5, difdef,  0, 0,
-      "ifndef",  6, difndef, 0, 0,
-      "if",      2, dif,     0, 0,  // must come after ifdef/ifndef
-      "undef",   5, dundef,  0, 0,
-      "line",    4, dline,   0, 0,
-      "pragma",  6, dpragma, 0, 0,
-      // Assembler directives
-      "define",  6, ddefine, 1, 0,
-      "include", 7, dinclude,1, 0,
-      "else",    4, delse,   1, 0,
-      "ifdef",   5, difdef,  1, 0,
-      "ifndef",  6, difndef, 1, 0,
-      "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
-      "endif",   5, dendif,  1, 0,
-      "undef",   5, dundef,  1, 0,
-      "macro",   5, ddefine, 1, 1,
-      "endm",    4, dendm,   1, 0
-   };
+   char* q = inptr;
+
+   if (p)
+     q = p;
 
    // Skip any whitespace following '#'
-   NextNonSpace(0);
-   unNextCh();
+   if (p == NULL) {
+     NextNonSpace(0);
+     unNextCh();
+   }
    for(i = 0; i < sizeof(dir)/sizeof(SDirective); i++)
    {
-      if (!strncmp(inptr, dir[i].name, dir[i].len) && dir[i].syntax==syntax)
+      if (!strncmp(q, dir[i].name, dir[i].len) && dir[i].syntax==syntax)
       {
          inptr += dir[i].len;
          (*dir[i].func)(dir[i].opt);
@@ -525,18 +682,23 @@ int ProcLine()
    if (ch == syntax_ch() && in_comment == 0) {
       if (ShowLines)
          fprintf(stdout, "#line %5d\n", InLineNo);
-      def = directive()==1;
+      def = directive(NULL);
       if (def)
         ptr = inptr;
+      if (def == 23)  // rept
+        goto jmp1;
    }
    else {
 //     DoPastes(inbuf->buf);
      //      inptr = inbuf;
      unNextCh();
+jmp1:
      ndx3 = SkipComments() - inbuf->buf;
      inptr = inbuf->buf + ndx3;
      if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
+     collect = 1;
      SearchAndSub(NULL);
+     collect = 0;
      if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
      DoPastes(inbuf->buf + ndx3);
      // write out the current input buffer
@@ -547,8 +709,8 @@ int ProcLine()
        ptr2 = inbuf->buf + ndx3;
      else
        ptr2 = inbuf->buf + ndx3;
-     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
-     ptr2--;
+//     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
+//     ptr2--;
      if (fputs(ptr2, ofp) == EOF)
        printf("fputs failed.\n");
      fputs("\n", ofp);
@@ -573,10 +735,9 @@ int ProcLine()
 
 void ProcFile(char *fname)
 {
-  FILE* fp, * tofp;
+  FILE* fp;
 	char buf[500];
   static char OutName[500];
-  char* p;
   FILE* fpo[10];
   int nn;
 

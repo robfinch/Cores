@@ -12,37 +12,44 @@
       Substitute a macro with arguments.
 ----------------------------------------------------------------------------- */
 
-int SubParmMacro(SDef *p)
+int SubParmMacro(SDef* p, int opt)
 {
-   int c, nArgs, ArgCount, xx;
-   arg_t Args[MAX_MACRO_ARGS];
-   char *arg, *bdy, *tp, *ptr;
-   int varg;
+  int c, nArgs, ArgCount, xx;
+  arg_t Args[MAX_MACRO_ARGS];
+  char* arg, * bdy, * tp, * ptr;
+  int varg;
+  int need_cb = 0;
+  int64_t pndx = 0, qndx = 0;
 
-   // look for opening bracket indicating start of parameters
-   // if the bracket isn't present then there are no arguments
-   // being passed so don't expand the macro just give error
-   // and continue
-   ptr = inptr;         // record start of arguments
+  // look for opening bracket indicating start of parameters
+  // if the bracket isn't present then there are no arguments
+  // being passed so don't expand the macro just give error
+  // and continue
+  ptr = inptr;         // record start of arguments
 
-   // We can't just take a pointer difference because the input
-   // routine will occasionally reset the pointer for new lines.
-   CharCount = 0;
-   ptr = inptr;
-   collect = 1;
-   c = NextNonSpace(1);
-   if (c != '(') {
-//      printf("p->name:%s^, p->body:%s^, p->nArgs:%d\n", p->name, p->body, p->nArgs);// _getch();
-//      unNextCh();
-//      err(13);    // expecting parameters
+  // We can't just take a pointer difference because the input
+  // routine will occasionally reset the pointer for new lines.
+  CharCount = 0;
+  ptr = inptr;
+  qndx = inptr - inbuf->buf;
+  bdy = _strdup(p->body->buf);                    // make a copy of the macro body
+  if (opt == 0) {
+    collect = 1;
+    c = NextNonSpace(1);
+    if (c != '(') {
+      //      printf("p->name:%s^, p->body:%s^, p->nArgs:%d\n", p->name, p->body, p->nArgs);// _getch();
+      //      unNextCh();
+      //      err(13);    // expecting parameters
       return 1;
-   }
+    }
+    if (c == '(')
+      need_cb = 1;
 
-   // get macro argument list
-   nArgs = p->nArgs;
-   varg = p->varg;
-   for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; ArgCount++)
-   {
+    // get macro argument list
+    nArgs = p->nArgs;
+    varg = p->varg;
+    for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; ArgCount++)
+    {
       arg = GetMacroArg();
       if (arg == NULL) {
         arg = p->parms[ArgCount]->def;
@@ -55,39 +62,47 @@ int SubParmMacro(SDef *p)
       // Search for next argument
       c = NextNonSpace(1);
       if (c != ',') {
-         ArgCount++;
-         unNextCh();
-         break;
+        ArgCount++;
+        unNextCh();
+        break;
       }
-   }
+    }
 
-   c = NextNonSpace(1);                       // Skip past closing ')'
-   if (c != ')') {
-      unNextCh();
-      err(3);     // missing ')'
-   }
-   if (ArgCount != nArgs && !varg)                    // Check that argument count matches
+    c = NextNonSpace(1);                       // Skip past closing ')'
+    if (need_cb) {
+      if (c != ')') {
+        unNextCh();
+        err(3);     // missing ')'
+      }
+    }
+    if (ArgCount != nArgs && !varg)                    // Check that argument count matches
       err(14, nArgs);
+    collect = 0;
 
-   collect = 0;
-
-   // Substitute arguments into macro body
-   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
-   for(xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
-   {
+    // Substitute arguments into macro body
+    for (xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
+    {
       tp = SubMacroArg(bdy, xx, Args[xx].def);        // Substitute argument into body
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
-   }
+    }
+    pndx = inptr - inbuf->buf;
+    pndx = pndx - qndx; // number of chars to substitute over
+  }
+  else if (opt == 1) {
+    for (xx = 0; xx < p->nArgs || (p->varg && p->parms[xx]->def); xx++) {
+      // Substitute arguments into macro body
+      tp = SubMacroArg(bdy, xx, p->parms[xx]->def);    // Substitute argument into body
+      free(bdy);                             // free old body
+      bdy = _strdup(tp);                      // copy new version of body
+    }
+    pndx = 0;
+  }
 
-   // Substitute macro into input stream
-   //if (inptr-ptr != CharCount) {
-	  // printf("charcount:%d inptr-ptr=%d\r\n", CharCount, inptr-ptr);
-	  // getchar();
-   //}
-   SubMacro(bdy, inptr-ptr+strlen(p->name));
-   free(bdy);                                // free last strdup
-   return (0);
+  // Substitute macro into input stream
+  SubMacro(bdy, pndx);
+  free(bdy);                                // free last strdup
+  return (0);
 }
 
 
@@ -129,8 +144,9 @@ void SearchAndSub(SDef* exc)
    ondx = inptr - inbuf->buf;
    while (1)
    {
-      if ((c = PeekCh()) == 0)
-         break;
+     if ((c = PeekCh()) == 0) {
+       break;
+     }
 
       if (c == '\n') {
          c = NextCh();
@@ -202,13 +218,13 @@ void SearchAndSub(SDef* exc)
 
          if (p != (SDef *)NULL && !ex)
          {
-			 if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
+           if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy
             // the body directly to the input. Overwrite the identifier
             // string
 			 if (p->nArgs > 0) {
 				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-                 SubParmMacro(p);
+                 SubParmMacro(p,syntax==ASTD);
 				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			 }
 			else {

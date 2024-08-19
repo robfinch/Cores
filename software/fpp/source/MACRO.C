@@ -8,6 +8,7 @@
 //#include "fwstr.h"
 
 char *rtrim(char *str);
+extern int minst;
 
 /* ---------------------------------------------------------------------------
    char *SubArg(bdy, n, sub);
@@ -79,6 +80,42 @@ static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
   return (0);
 }
 
+static void proc_instvar(buf_t* buf)
+{
+  char mk[20];
+
+  inptr += 5;
+  mk[0] = '';
+  mk[1] = '@';
+  mk[2] = 0;
+  sprintf_s(mk, sizeof(mk), "%05d", minst);
+  insert_into_buf(buf, mk, 0);
+}
+
+static int proc_parm(buf_t* buf, int nparm)
+{
+  char c;
+  char* p1, * p2;
+  char mk[3];
+
+  p1 = inptr;
+  c = NextCh();
+  if (isdigit(p1[1])) {
+    while (isdigit(c = NextCh()));
+    c = (char)strtoul(&p1[1], &inptr, 10);
+    if (c <= nparm) {
+      p1++;
+      p2 = inptr;
+      mk[0] = '';
+      mk[1] = '0' + c;
+      mk[2] = 0;
+      insert_into_buf(buf, mk, 0);
+      return (1);
+    }
+  }
+  return (0);
+}
+
 /* ---------------------------------------------------------------------------
    Description :
       Gets the body of a macro. Macro parameters are matched up with their
@@ -105,6 +142,7 @@ buf_t *GetMacroBody(SDef* def, int opt)
   char ch[4];
   int64_t ndx1;
   int mac_depth = 0;
+  int rep_depth = 0;
 
   buf = new_buf();
 
@@ -181,6 +219,13 @@ buf_t *GetMacroBody(SDef* def, int opt)
               goto jmp1;
             }
           }
+          else if (c == '\\') {
+            if (PeekCh() == '@') {
+              proc_instvar(&buf);
+            }
+            else if (proc_parm(&buf, nparm))
+              continue;
+          }
         }
         if (c == '\\' && opt != 1)  // check for continuation onto next line
         {
@@ -205,7 +250,7 @@ buf_t *GetMacroBody(SDef* def, int opt)
       }
       // Processing a macro? Look for ".endm"
       if (opt == 1) {
-        if (c == syntax_ch()) {
+        if (c == syntax_ch() && !InQuote) {
           ndx1 = inptr - inbuf->buf;
           SkipSpaces();
           if (strncmp(inptr, "endm", 4) == 0) {
@@ -213,10 +258,28 @@ buf_t *GetMacroBody(SDef* def, int opt)
               break;
             else
               --mac_depth;
+            inptr = inbuf->buf + ndx1;
           }
-          if (strncmp(inptr, "macro", 4) == 0)
+          else if (strncmp(inptr, "macro", 5) == 0) {
             ++mac_depth;
-          inptr = inbuf->buf + ndx1;
+            inptr = inbuf->buf + ndx1;
+          }
+          else if (strncmp(inptr, "endr", 4) == 0) {
+            if (rep_depth == 0)
+              break;
+            else
+              --rep_depth;
+            inptr = inbuf->buf + ndx1;
+          }
+          else if (strncmp(inptr, "rept", 4) == 0) {
+            ++rep_depth;
+            inptr = inbuf->buf + ndx1;
+          }
+          else {
+            directive(inptr);
+            c = NextCh();
+            continue;
+          }
         }
       }
       ch[0] = c;
@@ -227,10 +290,10 @@ buf_t *GetMacroBody(SDef* def, int opt)
       if ((c = NextCh()) < 1)
         break;
    }
- jmp1:
+ jmp1:;
   if (buf->buf) {
-    rtrim(buf->buf);    // Trim off trailing spaces.
-    if (opt == 1) {
+//    rtrim(buf->buf);    // Trim off trailing spaces.
+    if (opt == 1 && 0) {
       ch[0] = '\n';
       ch[1] = 0;
       insert_into_buf(&buf, ch, 0);
@@ -374,6 +437,59 @@ errxit:;
    return vargs ? -count : count;
 }
 
+/* ---------------------------------------------------------------------------
+   Description :
+      Used during the definition of a repeat to get the associated parameter
+   list.
+
+   Parameters:
+      (arg_t *)[] - a pointer to an array of pointers to hold the parameters.
+                    The array should be large enough to hold the maximum
+                    number of parameters (MAX_MACRO_ARGS)
+      (int) - processing option. A value of 1 will allow variable argument
+              lists and treat a newline char as the end of the list.
+
+   Modifies:
+      The global text input pointer.
+
+   Returns
+      (int) - a count of the number of parameters. The count will be
+   negative to indicate a variable argument list is present.
+---------------------------------------------------------------------------- */
+
+int GetReptArgList(arg_t* arglist[], int opt)
+{
+  int Depth = 0, c, count;
+  int vargs = 0;
+
+  count = 0;
+  while (1)
+  {
+    do {
+      c = NextNonSpace(0);
+      if (c == '\\')
+        ScanPastEOL();
+    } while (c == '\\');
+    if (opt == 1 && c == '\n')
+      break;
+    if (c == ')') {   // we've gotten our last parameter
+      unNextCh();
+      break;
+    }
+    unNextCh();
+    arglist[count]->def = _strdup(GetMacroArg());
+    count++;
+    c = PeekCh();
+    if (c == '\n')
+      break;
+    if (c != ',') {
+      err(16);
+      goto errxit;
+    }
+  }
+errxit:;
+  return (count);
+}
 
 /* -----------------------------------------------------------------------------
    Description :
@@ -390,7 +506,7 @@ void SubMacro(char *body, int slen)
 
    mlen = strlen(body);          // macro length
    dif = mlen - slen;
-   nchars = inptr-inbuf->buf;         // calculate number of characters that could be remaining
+   nchars = inbuf->size - (inptr-inbuf->buf);         // calculate number of characters that could be remaining
    //p = inptr + dif;
    //if (dif==0)
 	  // ;
@@ -410,11 +526,11 @@ void SubMacro(char *body, int slen)
      return;
    }
    if (dif > 0)
-    memmove(inptr+dif, inptr, inbuf->size-500-nchars-dif);  // shift open space in input buffer
+    memmove(inptr+dif, inptr, nchars-dif);  // shift open space in input buffer
    inptr -= slen;                // reset input pointer to start of replaced text
    memcpy(inptr, body, mlen);    // copy macro body in place over identifier
    if (dif < 0)
-     memmove(inptr + mlen, inptr - dif + mlen, inbuf->size - 500 - nchars - dif);
+     memmove(inptr + mlen, inptr - dif + mlen, nchars - dif);
    //for (nn = 0; nn < mlen; nn++)
 	  // inptr[nn] = body[nn];
    //printf("inptr:%.60s\r\n", inptr);

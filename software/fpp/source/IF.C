@@ -47,6 +47,7 @@ void difskip(int s)
             IfLevel = 0;
             err(7);
          }
+         inptr += 5;
          if (Depth == 1)
             return;
          Depth--;
