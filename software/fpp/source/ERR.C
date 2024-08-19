@@ -35,7 +35,8 @@ char *error[] = {
    "Eunterminated string constant",    // 25
 // 25
    "Emacro too large",
-   "EConditional operator missing ':'"
+   "EConditional operator missing ':'",
+   "ECannot rename temp file to output filename: %s"
 };
 
 extern int InLineNo;

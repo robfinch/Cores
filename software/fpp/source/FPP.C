@@ -37,7 +37,10 @@ FILE* fout;
 int banner = 1;
 int ostdo = 1;
 int npass = 0;
+int pass = 0;
 int keep_output = 0;
+FILE* ifps[20];
+int ifp_sp = 0;
 
 // Storage for standard #defines
 
@@ -264,6 +267,7 @@ void dinclude(int opt)
    char wpath[4096];
 	 char buf[4096];
    int ch;
+   int64_t ndx, ndx2;
    SDef *p;
 
    SearchAndSub(NULL);
@@ -271,6 +275,7 @@ void dinclude(int opt)
    tname = bbfile.body->buf;
    name[0] = 0;
 
+   ndx = inptr - inbuf->buf;
    ch = NextNonSpace(0);
    if (ch == '"')  // search the path specified
    {
@@ -322,8 +327,17 @@ void dinclude(int opt)
 	  if (path[0]=='\0')
 		searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
    }
-   if (ch != '\n')
-	   ScanPastEOL();
+   if (pass == npass) {
+     if (ch != '\n')
+       ScanPastEOL();
+   }
+   else {
+     if (ch != '\n')
+       ScanPastEOL();
+//     sprintf_s(buf, sizeof(buf), ".include \"%s\"\n", path);
+//    if (fputs(buf, ofp) == EOF)
+//      printf("fputs failed.\n");
+   }
 
    if (path[0])
    {
@@ -332,7 +346,24 @@ void dinclude(int opt)
     p = (SDef *)htFind(&HashInfo, &bbfile);
     if (p)
         p->body = bbfile.body;
-    ProcFile(bbfile.body->buf);
+    ifps[ifp_sp] = fin;
+    ifp_sp++;
+    // Strip leading/trailing quotes from filename.
+    if (bbfile.body->buf[0] == '"')
+      strcpy_s(buf, sizeof(buf), bbfile.body->buf + 1);
+    else
+      strcpy_s(buf, sizeof(buf), bbfile.body->buf);
+    if (buf[strlen(buf) - 1] == '"')
+      buf[strlen(buf) - 1] = '\0';
+
+    fin = NULL;
+    if ((fopen_s(&fin, buf, "r")) != 0) {
+      err(9, buf);
+      fin = NULL;
+      return;
+    }
+
+//    ProcFile(bbfile.body->buf);
     bbfile.body->buf = tname;
     p = (SDef *)htFind(&HashInfo, &bbfile);
     if (p)
@@ -542,96 +573,123 @@ int ProcLine()
 
 void ProcFile(char *fname)
 {
-   FILE *fp;
-	 char buf[500];
-   char KeepOutputName[500];
-   int pass = 0;
-   char* p;
+  FILE* fp, * tofp;
+	char buf[500];
+  static char OutName[500];
+  char* p;
+  FILE* fpo[10];
+  int nn;
 
-	 // Strip leading/trailing quotes from filename.
-	 if (fname[0] == '"')
-		 strcpy_s(buf, sizeof(buf), fname + 1);
-	 else
-		 strcpy_s(buf, sizeof(buf), fname);
-	 if (buf[strlen(buf) - 1] == '"')
-		 buf[strlen(buf) - 1] = '\0';
+  memset(fpo, 0, sizeof(fpo));
 
-	 if((fopen_s(&fp, buf,"r")) != 0) {
+  fp = NULL;
+	// Strip leading/trailing quotes from filename.
+	if (fname[0] == '"')
+		strcpy_s(buf, sizeof(buf), fname + 1);
+	else
+		strcpy_s(buf, sizeof(buf), fname);
+	if (buf[strlen(buf) - 1] == '"')
+		buf[strlen(buf) - 1] = '\0';
+
+  strcpy_s(OutName, sizeof(OutName), buf);
+  strcat_s(OutName, sizeof(OutName), ".out0");
+
+  fin = NULL;
+  if ((fopen_s(&fin, buf, "r")) != 0) {
+    fprintf(stdout, "errno: %d\n", errno);
+    fprintf(stderr, "errno: %d\n", errno);
+    err(9, buf);
+    fin = NULL;
+    goto xit;
+  }
+
+  for (pass = 0; pass < npass; pass++) {
+
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    if (fpo[pass] == NULL) {
+      if (fopen_s(&fpo[pass], OutName, "w") != 0)
+        if (fpo[pass] == NULL) {
+          fprintf(stdout, "errno: %d\n", errno);
+          fprintf(stderr, "errno: %d\n", errno);
+          err(9, OutName);
+          fclose(fin);
+          fin = NULL;
+          goto xit;
+        }
+    }
+    ofp = fpo[pass];
+    NextCh();
+    unNextCh();
+    do {
+      while (!feof(fin)) {
+        if (ProcLine())
+          break;
+      }
+      fclose(fin);
+      ifp_sp--;
+      if (ifp_sp >= 0) {
+        fin = ifps[ifp_sp];
+        inptr = inbuf->buf;
+        inbuf->buf[0] = 0;
+        NextCh();
+        unNextCh();
+      }
+    }
+    while (ifp_sp >= 0);
+    fin = NULL;
+    fflush(fpo[pass]);
+    fclose(fpo[pass]);
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    fin = NULL;
+    if ((fopen_s(&fin, OutName, "r")) != 0) {
       err(9, buf);
-      return;
-   }
+      fin = NULL;
+      goto xit;
+    }
+  }
 
-   fin = fp;
-   NextCh();
-   unNextCh();
-   while(!feof(fp)) {
-     if (ProcLine())
-       break;
-      fin = fp;
-   }
-   fclose(fp);
-   if (ofp != stdout) {
-     fflush(ofp);
-     fclose(ofp);
-   }
-
-   for (pass = 0; pass < npass; pass++) {
-     OutputName[strlen(OutputName) - 1] = '0' + pass;
-     if ((fopen_s(&fp, OutputName, "r")) != 0) {
-       err(9, OutputName);
-       exit(9);
-     }
-     OutputName[strlen(OutputName) - 1] = '1' + pass;
-     if (fopen_s(&ofp, OutputName, "w") != 0)
-       if (ofp == NULL) {
-         err(9, OutputName);
-         exit(9);
-       }
-
-     fin = fp;
-     inptr = inbuf;
-     NextCh();
-     unNextCh();
-     while (!feof(fp)) {
-       if (ProcLine())
-         break;
-       fin = fp;
-     }
-     fclose(fp);
-     if (ofp != stdout) {
-       fflush(ofp);
-       fclose(ofp);
-     }
-     OutputName[strlen(OutputName) - 1] = '0' + pass;
-     remove(OutputName);
-   }
-   if (ostdo) {
-     ofp = stdout;
-     OutputName[strlen(OutputName) - 1] = '0' + pass;
-     if ((fopen_s(&fp, OutputName, "r")) != 0) {
-       err(9, OutputName);
-       exit(9);
-     }
-     fin = fp;
-     inptr = inbuf;
-     NextCh();
-     unNextCh();
-     while (!feof(fp)) {
-       if (ProcLine())
-         break;
-       fin = fp;
-     }
-     fclose(fp);
-     OutputName[strlen(OutputName) - 1] = '0' + pass;
-     remove(OutputName);
-   }
-   else {
-     strcpy_s(KeepOutputName, sizeof(KeepOutputName), OutputName);
-     p = strrchr(KeepOutputName, '.');
-     if (p)
-       p[0] = 0;
-     rename(OutputName, KeepOutputName);
-   }
+ xit:
+  if (fin)
+    fclose(fin);
+  for (nn = 0; nn < npass; nn++) {
+    if (fpo[nn]) {
+      if (fpo[nn] != stdout) {
+        fflush(fpo[nn]);
+        fclose(fpo[nn]);
+        fpo[nn] = NULL;
+      }
+    }
+  }
+  // Get rid of temp files.
+  for (pass = 0; pass < npass - 1; pass++) {
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    remove(OutName);
+  }
+  if (ostdo) {
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    if ((fopen_s(&fin, OutName, "r")) != 0) {
+      err(9, buf);
+      fin = NULL;
+    }
+    else {
+      while (!feof(fin)) {
+        fgets(buf, sizeof(buf), fin);
+        fputs(buf, stdout);
+      }
+      fclose(fin);
+      fin = NULL;
+    }
+    remove(OutName);
+  }
+  else {
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    remove(OutputName);
+    if (rename(OutName, OutputName) != 0) {
+      err(28, OutputName);
+      fprintf(stdout, "errno: %d\n", errno);
+      fprintf(stderr, "errno: %d\n", errno);
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -852,15 +910,15 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 2.50  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.52  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
 		fprintf(stderr, "/L                            - output #lines\n");
-		fprintf(stderr, "/V                            - verbose, outputs macro table\n\n");
-    fprintf(stderr, "/S<syntax>                    - select processing syntax\n\n");
-    fprintf(stderr, "   <syntax> = astd            - assembly language syntax\n\n");
-    fprintf(stderr, "   <syntax> = cstd            - 'C' language syntax (default)\n\n");
+		fprintf(stderr, "/V                            - verbose, outputs macro table\n");
+    fprintf(stderr, "/S<syntax>                    - select processing syntax\n");
+    fprintf(stderr, "   <syntax> = astd            - assembly language syntax\n");
+    fprintf(stderr, "   <syntax> = cstd            - 'C' language syntax (default)\n");
     fprintf(stderr, "/P<n>                         - number of passes (0=1 default)\n\n");
     exit(0);
    }
@@ -883,7 +941,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 2.50  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.52  (C) 1998-2024 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
@@ -937,22 +995,22 @@ main(int argc, char *argv[]) {
 	   fopen_s(&fdbg, "fpp_debug_log","w");
    else
 	   fdbg = NULL;
-   strcpy_s(OutputName, sizeof(OutputName), SourceName);
-   strcat_s(OutputName, sizeof(OutputName), ".p0");
-//   if (OutputName[0])
-   {
-      if (fopen_s(&ofp, OutputName, "w") != 0)
-      if (ofp == NULL) {
+//   strcpy_s(OutputName, sizeof(OutputName), SourceName);
+//   strcat_s(OutputName, sizeof(OutputName), ".pp");
+
+   if (OutputName[0]) {
+     /*
+     if (fopen_s(&ofp, OutputName, "w") != 0)
+       if (ofp == NULL) {
          err(9, OutputName);
-         exit(0);
-      }
+         exit(9);
+       }
+      */
    }
-   /*
    else {
      ostdo = 1;
      ofp = stdout;
    }
-   */
    errors = warnings = 0;
 	 sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
 	 bbfile.body->buf = StorePlainStr(buf);
@@ -960,10 +1018,12 @@ main(int argc, char *argv[]) {
    if (p)
       p->body = bbfile.body;
    ProcFile(SourceName);
+   /*
    if (ofp != stdout) {
 	   fflush(ofp);
       fclose(ofp);
    }
+   */
    if (fdbg)
 	   fclose(fdbg);
 
