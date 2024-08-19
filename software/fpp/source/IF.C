@@ -25,7 +25,7 @@ void difskip(int s)
       inptr = inbuf->buf;
       fgets(inbuf->buf, MAXLINE, fin);
 		if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf->buf);
-      if (NextNonSpace(0) != '#') {
+      if (NextNonSpace(0) != syntax_ch()) {
          inptr = inbuf->buf;
          continue;
       }
@@ -81,7 +81,7 @@ void difskip(int s)
 
 ----------------------------------------------------------------------------- */
 
-void dif()
+void dif(int opt)
 {
    IfLevel++;
    SearchForDefined();  // check for defined() operator
@@ -99,7 +99,7 @@ void dif()
    processed.
 ----------------------------------------------------------------------------- */
 
-void delse()
+void delse(int opt)
 {
    difskip(FALSE);
 }
@@ -110,7 +110,7 @@ void delse()
    statement.
 ---------------------------------------------------------------------------- */
 
-void dendif()
+void dendif(int opt)
 {
    IfLevel--;
    if (IfLevel < 0) {
@@ -126,7 +126,7 @@ void dendif()
    the remainder of the if statement follows and should not be processed.
 ---------------------------------------------------------------------------- */
 
-void delif()
+void delif(int opt)
 {
    difskip(FALSE);
 }
@@ -136,7 +136,7 @@ void delif()
       'ifdef' test if an identifier exists.
 ---------------------------------------------------------------------------- */
 
-void difdef()
+void difdef(int opt)
 {
 	SDef dp;
 
@@ -155,7 +155,7 @@ void difdef()
       'ifndef' test if an identifier doesn't exists.
 ---------------------------------------------------------------------------- */
 
-void difndef()
+void difndef(int opt)
 {
 	SDef dp;
 

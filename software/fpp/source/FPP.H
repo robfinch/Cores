@@ -39,6 +39,9 @@
 
 #define DIGITS "0123456789abcdefghijklmnopqrstuvwxyz"
 
+#define CSTD 0
+#define ASTD 1
+
 typedef struct
 {
   int num;        // parameter number
@@ -70,7 +73,9 @@ typedef struct
 {
    char *name;
    int len;
-   void (*func)(void);
+   void (*func)(int);
+   int syntax;
+   int opt;
 }  SDirective;
 
 
@@ -92,7 +97,7 @@ char *StoreStr(char *, ...);
 void err(int, ...);
 long expeval(void);
 
-void ProcLine(void);
+int ProcLine(void);
 int NextCh(void);
 int NextNonSpace(int);
 void SkipSpaces(void);
@@ -100,7 +105,7 @@ void unNextCh(void);
 char *GetIdentifier(void);
 void ScanPastEOL();
 
-buf_t *GetMacroBody(SDef*);
+buf_t *GetMacroBody(SDef*, int opt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
@@ -110,20 +115,23 @@ void SearchAndSub(SDef* excld);
 void SearchForDefined(void);
 void DoPastes(char *);
 
-void ddefine(void);
-void derror(void);
-void dinclude(void);
-void delse(void);
-void delif(void);
-void dendif(void);
-void difdef(void);
-void difndef(void);
-void dif(void);
-void dundef(void);
-void dline(void);
-void dpragma(void);
+void ddefine(int);
+void derror(int);
+void dinclude(int);
+void delse(int);
+void delif(int);
+void dendif(int);
+void difdef(int);
+void difndef(int);
+void dif(int);
+void dundef(int);
+void dline(int);
+void dpragma(int);
 
-void searchenv(char *filename, char *envname, char *pathname);
+void searchenv(char *filename, char *envname, char *pathname, int pathsize);
+char* rtrim(char*);
+
+char syntax_ch();
 
 SHashVal HashFnc(SDef *);
 
@@ -144,4 +152,5 @@ E int collect I(=0);
 E int debug I(=0);
 E int lasttk I(= 0);
 E int in_comment I(= 0);
+E int syntax I(= 0);
 extern char *SkipComments();

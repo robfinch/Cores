@@ -39,6 +39,8 @@ void searchenv(char *filename, char *envname, char *pathname, int pathsize)
       isn't set, return a NULL, else search for the file on the path.
    ---------------------------------------------------------------------- */
    
+   envbuf = NULL;
+   buflen = 0;
    if (_dupenv_s(&envbuf, &buflen, envname) != 0)
    {
       *pathname = '\0';

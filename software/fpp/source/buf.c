@@ -115,9 +115,11 @@ void insert_into_buf(buf_t** buf, char* p, int pos)
     q = realloc((*buf)->buf,mm);
     if (q == NULL)
       exit(0);
-    free((*buf)->buf);
+    if ((*buf)->buf != q) {
+      free((*buf)->buf);
+      (*buf)->buf = q;
+    }
     (*buf)->size = mm;
-    (*buf)->buf = q;
   }
   if ((*buf)->buf == NULL) {
     err(5);   // out of memory

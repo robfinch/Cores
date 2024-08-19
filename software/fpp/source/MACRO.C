@@ -81,108 +81,161 @@ static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
 
 /* ---------------------------------------------------------------------------
    Description :
-      Gets the body of a macro. All macro bodies must be < 2k in size. Macro
-   parameters are matched up with their positions in the macro. A $<number>
-   (as in $1, $2, etc) is substituted in the macro body in place of the
-   parameter name (we don't actually care what the parameter name is).
+      Gets the body of a macro. Macro parameters are matched up with their
+   positions in the macro. A $<number> (as in $1, $2, etc) is substituted
+   in the macro body in place of the parameter name (we don't actually
+   care what the parameter name is).
+
+   There are two options for processing macro definitions.
+   The first ends the macro when a newline is hit, unless the '\'
+   character is present on the line.
+   The second automatically includes newlines as part of the macro and
+   end when a ".endm" is encountered.
       Macros continued on the next line with '\' are also processed. The
-   newline is removed from the macro.
+   last newline is removed from the macro.
 ---------------------------------------------------------------------------- */
 
-buf_t *GetMacroBody(SDef* def)
+buf_t *GetMacroBody(SDef* def, int opt)
 {
-   char *id = NULL, *p2;
-   buf_t* buf;
-   int c, nparm;
-   int InQuote = 0;
-   int count = sizeof(buf)-1;
-   char ch[4];
-   int64_t ndx1;
+  char *id = NULL, *p2, * p3;
+  buf_t* buf;
+  int c = 0, nparm;
+  int InQuote = 0;
+  int count = sizeof(buf)-1;
+  char ch[4];
+  int64_t ndx1;
+  int mac_depth = 0;
 
-   buf = new_buf();
+  buf = new_buf();
 
-   if (def->nArgs <= 0)
-     nparm = 0;
-   else
-     nparm = def->nArgs;
+  if (def->nArgs <= 0)
+    nparm = 0;
+  else
+    nparm = def->nArgs;
 
-   SkipSpaces();
-   while(1)
-   {
-      // First search for an identifier to substitute with parameter
-      if (def->nArgs > 0 && def->parms) {
-         while (PeekCh() == ' ' || PeekCh() == '\t') {
-           ch[0] = NextCh();
-           ch[1] = 0;
-           insert_into_buf(&buf, ch, 0);
-         }
-         ndx1 = inptr - inbuf->buf;
-         id = GetIdentifier();
-         p2 = inptr;
-         if (id) 
-           sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
-         else
-           inptr = inbuf->buf + ndx1;    // reset inptr if no identifier found
+  if (opt==0)
+    SkipSpaces();
+  while(1)
+  {
+    p3 = inptr;
+    // First search for an identifier to substitute with parameter
+    id = NULL;
+    if (def->nArgs > 0 && def->parms) {
+      while (PeekCh() == ' ' || PeekCh() == '\t') {
+        ch[0] = NextCh();
+        ch[1] = 0;
+        insert_into_buf(&buf, ch, 0);
       }
-      if (id == NULL) {
-         c = NextCh();
-         if (c == '"')
-            InQuote = !InQuote;
-         if (!InQuote) {
-            if (c == '/') {
-               c = NextCh();
-               // Block comment ?
-               if (c == '*') {
-                  while(c > 0) {
-                     c = NextCh();
-                     if (c == '*') {
-                        c = NextCh();
-                        if (c == '/')
-                           break;
-                        unNextCh();
-                     }
-                  }
-                  if (c > 0) {
-                     continue;
-                  }
-                  else
-                     err(24);
-               }
-               // Comment to EOL ?
-               else if (c == '/') {
-                  while(c != '\n' && c > 0) c = NextCh();
-                  if (c > 0) {
-                    unNextCh();
-                     goto jmp1;
-                  }
-               }
-			   else {
-				   c = '/';
+      ndx1 = inptr - inbuf->buf;
+      id = GetIdentifier();
+      p2 = inptr;
+      if (id) 
+        sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
+      else
+        inptr = inbuf->buf + ndx1;    // reset inptr if no identifier found
+    }
+    if (id == NULL) {
+      c = NextCh();
+      if (c == '"')
+        InQuote = !InQuote;
+      if (!InQuote) {
+        if (syntax==CSTD) {
+          if (c == '/') {
+            c = NextCh();
+            // Block comment ?
+            if (c == '*') {
+              while (c > 0) {
+                c = NextCh();
+                if (c == '*') {
+                  c = NextCh();
+                  if (c == '/')
+                    break;
                   unNextCh();
-			   }
+                }
+              }
+              if (c > 0) {
+                continue;
+              }
+              else
+                err(24);
             }
-            else if (c == '\\')  // check for continuation onto next line
-            {
-               while (c != '\n' && c > 0) c = NextCh();
-               if (c > 0) {
-                  SkipSpaces();  // Skip leading spaces on next line
-                  continue;
-               }
+            // Comment to EOL ?
+            else if (c == '/') {
+              while (c != '\n' && c > 0) c = NextCh();
+              if (c > 0) {
+                unNextCh();
+                goto jmp1;
+              }
             }
-         }
-         if (c == '\n' || c < 1) {
-            if (InQuote)
-               err(25);
-            break;
-         }
-         ch[0] = c;
-         ch[1] = 0;
-         insert_into_buf(&buf, ch, 0);
+            else {
+              c = '/';
+              unNextCh();
+            }
+          }
+        }
+        else if (syntax == ASTD) {
+          if (c == '#') {
+            while (c != '\n' && c > 0) c = NextCh();
+            if (c > 0) {
+              unNextCh();
+              goto jmp1;
+            }
+          }
+        }
+        if (c == '\\' && opt != 1)  // check for continuation onto next line
+        {
+          while (c != '\n' && c > 0) c = NextCh();
+          if (c > 0) {
+            SkipSpaces();  // Skip leading spaces on next line
+            continue;
+          }
+        }
       }
+      if (opt == 0) {
+        if (c == '\n' || c < 1) {
+          if (InQuote)
+            err(25);
+          break;
+        }
+      }
+      else if (c < 1) {
+        if (InQuote)
+          err(25);
+        break;
+      }
+      // Processing a macro? Look for ".endm"
+      if (opt == 1) {
+        if (c == syntax_ch()) {
+          ndx1 = inptr - inbuf->buf;
+          SkipSpaces();
+          if (strncmp(inptr, "endm", 4) == 0) {
+            if (mac_depth == 0)
+              break;
+            else
+              --mac_depth;
+          }
+          if (strncmp(inptr, "macro", 4) == 0)
+            ++mac_depth;
+          inptr = inbuf->buf + ndx1;
+        }
+      }
+      ch[0] = c;
+      ch[1] = 0;
+      insert_into_buf(&buf, ch, 0);
+    }
+    if (inptr == p3)
+      if ((c = NextCh()) < 1)
+        break;
    }
  jmp1:
-   if (buf->buf)
-     rtrim(buf->buf);    // Trim off trailing spaces.
+  if (buf->buf) {
+    rtrim(buf->buf);    // Trim off trailing spaces.
+    if (opt == 1) {
+      ch[0] = '\n';
+      ch[1] = 0;
+      insert_into_buf(&buf, ch, 0);
+    }
+  }
    else
      buf->buf = _strdup("");
    return (buf);
@@ -276,6 +329,10 @@ int GetMacroParmList(arg_t *parmlist[])
        continue;
      }
      */
+     SkipSpaces();
+     if (PeekCh() == '\n' && syntax == ASTD) {
+        break;
+     }
      id = GetIdentifier();
       if (id) {
         if (strncmp(id, "...", 3) == 0) {
@@ -304,7 +361,7 @@ int GetMacroParmList(arg_t *parmlist[])
       if (c == '=') {
         parmlist[count-1]->def = _strdup(GetMacroArg());
       }
-      if (c != ',') {
+      if (c != ',' && count > 0) {
          err(16);
          goto errxit;
       }

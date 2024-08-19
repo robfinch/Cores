@@ -17,6 +17,7 @@ int SubParmMacro(SDef *p)
    int c, nArgs, ArgCount, xx;
    arg_t Args[MAX_MACRO_ARGS];
    char *arg, *bdy, *tp, *ptr;
+   int varg;
 
    // look for opening bracket indicating start of parameters
    // if the bracket isn't present then there are no arguments
@@ -39,7 +40,8 @@ int SubParmMacro(SDef *p)
 
    // get macro argument list
    nArgs = p->nArgs;
-   for (ArgCount = 0; ArgCount < nArgs && ArgCount < MAX_MACRO_ARGS; ArgCount++)
+   varg = p->varg;
+   for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; ArgCount++)
    {
       arg = GetMacroArg();
       if (arg == NULL) {
@@ -64,7 +66,7 @@ int SubParmMacro(SDef *p)
       unNextCh();
       err(3);     // missing ')'
    }
-   if (ArgCount != nArgs)                    // Check that argument count matches
+   if (ArgCount != nArgs && !varg)                    // Check that argument count matches
       err(14, nArgs);
 
    collect = 0;

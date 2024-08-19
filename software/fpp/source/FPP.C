@@ -33,8 +33,11 @@ char *SymSpace, *SymSpacePtr;
 SHashTbl HashInfo = { HashFnc, icmp, 0, sizeof(SDef), NULL };
 int MacroCount;
 FILE *ofp;
+FILE* fout;
 int banner = 1;
 int ostdo = 1;
+int npass = 0;
+int keep_output = 0;
 
 // Storage for standard #defines
 
@@ -91,6 +94,15 @@ int ecmp(SDef *aa)
    return (aa->name ? 1 : 0);
 }
 
+char syntax_ch()
+{
+  if (syntax == ASTD)
+    return '.';
+  else
+    return '#';
+}
+
+
 SDef* new_def()
 {
   SDef* p;
@@ -109,7 +121,7 @@ SDef* new_def()
       Define a macro.
 ---------------------------------------------------------------------------- */
 
-void ddefine()
+void ddefine(int opt)
 {
    int c, n = 0;
    SDef *dp, *p;
@@ -117,6 +129,7 @@ void ddefine()
    arg_t* pl[100];
    buf_t *ptr;
    char* ptr2;
+   int need_cb = 0;
 
    memset(parms, 0, 100 * sizeof(arg_t));
    for (n = 0; n < 100; n++)
@@ -141,19 +154,38 @@ void ddefine()
    // macro name and ')'.
    if (PeekCh() == '(') {
       NextCh();
-    dp->varg = 0;
-   	dp->nArgs = GetMacroParmList(pl);
-    if (dp->nArgs < 0) {
-      dp->nArgs = -dp->nArgs;
-      dp->varg = 1;
-    }
+      dp->varg = 0;
+   	  dp->nArgs = GetMacroParmList(pl);
+      if (dp->nArgs < 0) {
+        dp->nArgs = -dp->nArgs;
+        dp->varg = 1;
+      }
       c = NextNonSpace(0);
       if (c != ')') {
          err(16);
          unNextCh();
       }
    }
-   ptr = GetMacroBody(dp);
+   else if (syntax == ASTD) {
+     if (PeekCh() == '(') {
+       NextCh();
+       need_cb = 1;
+     }
+     dp->varg = 0;
+     dp->nArgs = GetMacroParmList(pl);
+     if (dp->nArgs < 0) {
+       dp->nArgs = -dp->nArgs;
+       dp->varg = 1;
+     }
+     c = NextNonSpace(0);
+     if (need_cb) {
+       if (c != ')') {
+         err(16);
+         unNextCh();
+       }
+     }
+   }
+   ptr = GetMacroBody(dp, opt);
    dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
    if (dp->parms == NULL) {
      err(5);    // out of memory
@@ -199,7 +231,7 @@ void ddefine()
       Cause preprocessor to stop and display a message on stderr.
 ---------------------------------------------------------------------------- */
 
-void derror()
+void derror(int opt)
 {
    int c;
 
@@ -223,14 +255,14 @@ void derror()
       Include another file within the current one.
 ----------------------------------------------------------------------------- */
 
-void dinclude()
+void dinclude(int opt)
 {
    char *tname;
    char *f;
-   char path[250];
-   char name[250];
-   char wpath[250];
-	 char buf[260];
+   char path[4096];
+   char name[4096];
+   char wpath[4096];
+	 char buf[4096];
    int ch;
    SDef *p;
 
@@ -316,7 +348,7 @@ void dinclude()
 
 ----------------------------------------------------------------------------- */
 
-void dundef()
+void dundef(int opt)
 {
 	SDef dp;
 
@@ -332,7 +364,7 @@ void dundef()
    name specified.
 ---------------------------------------------------------------------------- */
 
-void dline()
+void dline(int opt)
 {
    char *ptr;
    char name[MAXLINE];
@@ -359,10 +391,18 @@ void dline()
 /* ----------------------------------------------------------------------------
 ---------------------------------------------------------------------------- */
 
-void dpragma()
+void dpragma(int opt)
 {
    SearchAndSub(NULL);
    DoPastes(inbuf->buf);
+}
+
+
+/* ----------------------------------------------------------------------------
+---------------------------------------------------------------------------- */
+
+void dendm(int opt)
+{
 }
 
 
@@ -384,18 +424,29 @@ int directive()
    int i;
    static SDirective dir[] =
    {
-      "define",  6, ddefine, 
-      "error",   5, derror,  
-      "include", 7, dinclude,
-      "else",    4, delse,   
-      "endif",   5, dendif,  
-      "elif",    4, delif,   
-      "ifdef",   5, difdef,  
-      "ifndef",  6, difndef, 
-      "if",      2, dif,      // must come after ifdef/ifndef
-      "undef",   5, dundef,  
-      "line",    4, dline,   
-      "pragma",  6, dpragma,
+      "define",  6, ddefine, 0, 0,
+      "error",   5, derror,  0, 0,
+      "include", 7, dinclude,0, 0,
+      "else",    4, delse,   0, 0,
+      "endif",   5, dendif,  0, 0,
+      "elif",    4, delif,   0, 0,
+      "ifdef",   5, difdef,  0, 0,
+      "ifndef",  6, difndef, 0, 0,
+      "if",      2, dif,     0, 0,  // must come after ifdef/ifndef
+      "undef",   5, dundef,  0, 0,
+      "line",    4, dline,   0, 0,
+      "pragma",  6, dpragma, 0, 0,
+      // Assembler directives
+      "define",  6, ddefine, 1, 0,
+      "include", 7, dinclude,1, 0,
+      "else",    4, delse,   1, 0,
+      "ifdef",   5, difdef,  1, 0,
+      "ifndef",  6, difndef, 1, 0,
+      "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
+      "endif",   5, dendif,  1, 0,
+      "undef",   5, dundef,  1, 0,
+      "macro",   5, ddefine, 1, 1,
+      "endm",    4, dendm,   1, 0
    };
 
    // Skip any whitespace following '#'
@@ -403,10 +454,10 @@ int directive()
    unNextCh();
    for(i = 0; i < sizeof(dir)/sizeof(SDirective); i++)
    {
-      if (!strncmp(inptr, dir[i].name, dir[i].len))
+      if (!strncmp(inptr, dir[i].name, dir[i].len) && dir[i].syntax==syntax)
       {
          inptr += dir[i].len;
-         (*dir[i].func)();
+         (*dir[i].func)(dir[i].opt);
 		 // Including this causes #define to fail because it already
 		 // scans to the end of the line
 		 //ScanPastEOL();
@@ -426,12 +477,12 @@ int directive()
 
 ----------------------------------------------------------------------------- */
 
-void ProcLine()
+int ProcLine()
 {
    int ch;
    int def = 0;
    char* ptr, *ptr2;
-   int64_t ndx2;
+   int64_t ndx2, ndx3;
 
    //printf("Processing line: %d\r", InLineNo);
 //   inptr = inbuf->buf;
@@ -440,7 +491,7 @@ void ProcLine()
 //   ch = NextCh();          // get first character
    ndx2 = SkipComments() - inbuf->buf;
    ch = NextNonSpace(0);
-   if (ch == '#' && in_comment==0) {
+   if (ch == syntax_ch() && in_comment == 0) {
       if (ShowLines)
          fprintf(stdout, "#line %5d\n", InLineNo);
       def = directive()==1;
@@ -451,17 +502,20 @@ void ProcLine()
 //     DoPastes(inbuf->buf);
      //      inptr = inbuf;
      unNextCh();
-     ndx2 = SkipComments() - inbuf->buf;
-     inptr = inbuf->buf + ndx2;
-     if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx2);
+     ndx3 = SkipComments() - inbuf->buf;
+     inptr = inbuf->buf + ndx3;
+     if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
      SearchAndSub(NULL);
-     if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx2);
-     DoPastes(inbuf->buf + ndx2);
+     if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
+     DoPastes(inbuf->buf + ndx3);
      // write out the current input buffer
-     if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf->buf + ndx2);
-     rtrim(inbuf->buf + ndx2);
-     inptr = inbuf->buf + ndx2 + strlen(inbuf->buf + ndx2);
-     ptr2 = inbuf->buf + ndx2;
+     if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf->buf + ndx3);
+     rtrim(inbuf->buf + ndx3);
+     inptr = inbuf->buf + ndx3 + strlen(inbuf->buf + ndx3);
+     if (syntax==CSTD)
+       ptr2 = inbuf->buf + ndx3;
+     else
+       ptr2 = inbuf->buf + ndx3;
      do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
      ptr2--;
      if (fputs(ptr2, ofp) == EOF)
@@ -475,6 +529,7 @@ void ProcLine()
    lasttk = 0;
    InLineNo++;          // Update line number (including __LINE__).
    sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-1);
+   return(0);
 }
 
 /* -----------------------------------------------------------------------------
@@ -489,6 +544,9 @@ void ProcFile(char *fname)
 {
    FILE *fp;
 	 char buf[500];
+   char KeepOutputName[500];
+   int pass = 0;
+   char* p;
 
 	 // Strip leading/trailing quotes from filename.
 	 if (fname[0] == '"')
@@ -498,7 +556,7 @@ void ProcFile(char *fname)
 	 if (buf[strlen(buf) - 1] == '"')
 		 buf[strlen(buf) - 1] = '\0';
 
-	 if((fopen_s(&fp, buf,"r")) != NULL) {
+	 if((fopen_s(&fp, buf,"r")) != 0) {
       err(9, buf);
       return;
    }
@@ -507,10 +565,73 @@ void ProcFile(char *fname)
    NextCh();
    unNextCh();
    while(!feof(fp)) {
-      ProcLine();
+     if (ProcLine())
+       break;
       fin = fp;
    }
    fclose(fp);
+   if (ofp != stdout) {
+     fflush(ofp);
+     fclose(ofp);
+   }
+
+   for (pass = 0; pass < npass; pass++) {
+     OutputName[strlen(OutputName) - 1] = '0' + pass;
+     if ((fopen_s(&fp, OutputName, "r")) != 0) {
+       err(9, OutputName);
+       exit(9);
+     }
+     OutputName[strlen(OutputName) - 1] = '1' + pass;
+     if (fopen_s(&ofp, OutputName, "w") != 0)
+       if (ofp == NULL) {
+         err(9, OutputName);
+         exit(9);
+       }
+
+     fin = fp;
+     inptr = inbuf;
+     NextCh();
+     unNextCh();
+     while (!feof(fp)) {
+       if (ProcLine())
+         break;
+       fin = fp;
+     }
+     fclose(fp);
+     if (ofp != stdout) {
+       fflush(ofp);
+       fclose(ofp);
+     }
+     OutputName[strlen(OutputName) - 1] = '0' + pass;
+     remove(OutputName);
+   }
+   if (ostdo) {
+     ofp = stdout;
+     OutputName[strlen(OutputName) - 1] = '0' + pass;
+     if ((fopen_s(&fp, OutputName, "r")) != 0) {
+       err(9, OutputName);
+       exit(9);
+     }
+     fin = fp;
+     inptr = inbuf;
+     NextCh();
+     unNextCh();
+     while (!feof(fp)) {
+       if (ProcLine())
+         break;
+       fin = fp;
+     }
+     fclose(fp);
+     OutputName[strlen(OutputName) - 1] = '0' + pass;
+     remove(OutputName);
+   }
+   else {
+     strcpy_s(KeepOutputName, sizeof(KeepOutputName), OutputName);
+     p = strrchr(KeepOutputName, '.');
+     if (p)
+       p[0] = 0;
+     rename(OutputName, KeepOutputName);
+   }
 }
 
 /* ----------------------------------------------------------------------------
@@ -557,6 +678,11 @@ void parsesw(char *s)
          }
          break;
 
+      case 'S':
+        if (strncmp(&s[2], "astd", 4) == 0)
+          syntax = ASTD;
+        break;
+
       case 'V':
          verbose = 1;
          break;
@@ -564,6 +690,12 @@ void parsesw(char *s)
       case 'L':
          ShowLines = 1;
          break;
+
+      case 'P':
+        npass = s[2] - '0';
+        if (npass < 0 || npass > 9)
+          npass = 0;
+        break;
    }
 }
 
@@ -689,7 +821,7 @@ void SetStandardDefines(void)
    bbbasefile.body = new_buf();
    bbbasefile.body->buf = StoreStr(buf);
    bbdate.body = new_buf();
-   bbdate.body->buf = StoreStr("%02d/%02d/%02d", LocalTime.tm_year, LocalTime.tm_mon+1, LocalTime.tm_mday);
+   bbdate.body->buf = StoreStr("%04d/%02d/%02d", LocalTime.tm_year+1900, LocalTime.tm_mon+1, LocalTime.tm_mday);
    bbtime.body = new_buf();
    bbtime.body->buf = StoreStr("%02d:%02d:%02d", LocalTime.tm_hour, LocalTime.tm_min, LocalTime.tm_sec);
    bbpp.body = new_buf();
@@ -720,13 +852,17 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 2.10  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.50  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
 		fprintf(stderr, "/L                            - output #lines\n");
 		fprintf(stderr, "/V                            - verbose, outputs macro table\n\n");
-		exit(0);
+    fprintf(stderr, "/S<syntax>                    - select processing syntax\n\n");
+    fprintf(stderr, "   <syntax> = astd            - assembly language syntax\n\n");
+    fprintf(stderr, "   <syntax> = cstd            - 'C' language syntax (default)\n\n");
+    fprintf(stderr, "/P<n>                         - number of passes (0=1 default)\n\n");
+    exit(0);
    }
    /* ----------------------------------------------
          Allocate storage for macro information.
@@ -747,7 +883,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 2.10  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.50  (C) 1998-2024 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
@@ -768,9 +904,10 @@ main(int argc, char *argv[]) {
 
    OutputName[0] = '\0';
    if (xx < argc) {
-      strncpy_s(OutputName, sizeof(OutputName), argv[xx], sizeof(OutputName));
-      if (!strchr(OutputName, '.'))
-         strcat_s(OutputName, sizeof(OutputName)-1,".pp");
+     ostdo = 0;
+    strncpy_s(OutputName, sizeof(OutputName), argv[xx], sizeof(OutputName));
+    if (!strchr(OutputName, '.'))
+      strcat_s(OutputName, sizeof(OutputName)-1,".pp");
    }
    else {
      strncpy_s(OutputName, sizeof(OutputName), SourceName, sizeof(OutputName));
@@ -800,18 +937,22 @@ main(int argc, char *argv[]) {
 	   fopen_s(&fdbg, "fpp_debug_log","w");
    else
 	   fdbg = NULL;
-   if (OutputName[0]) {
+   strcpy_s(OutputName, sizeof(OutputName), SourceName);
+   strcat_s(OutputName, sizeof(OutputName), ".p0");
+//   if (OutputName[0])
+   {
       if (fopen_s(&ofp, OutputName, "w") != 0)
       if (ofp == NULL) {
          err(9, OutputName);
          exit(0);
       }
-      ostdo = 0;
    }
+   /*
    else {
      ostdo = 1;
      ofp = stdout;
    }
+   */
    errors = warnings = 0;
 	 sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
 	 bbfile.body->buf = StorePlainStr(buf);
@@ -833,7 +974,7 @@ main(int argc, char *argv[]) {
    if (verbose) {
       PrintDefines();
       printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
-      printf("%u/%u macro space used\n", SymSpacePtr - SymSpace, STRAREA);
+      printf("%u/%u macro space used\n", (int)(SymSpacePtr - SymSpace), STRAREA);
    }
    if (SymSpace)
       free(SymSpace);
