@@ -44,6 +44,7 @@ int ifp_sp = 0;
 int rep_inst = 0;
 rep_t rept_array[2000];
 int minst=0;      // macro instance
+char incdir[4096];    // additional include directory specified with .incdir
 
 // Storage for standard #defines
 
@@ -122,6 +123,16 @@ SDef* new_def()
   return (p);
 }
 
+SDef* clone_def(SDef* dp)
+{
+  SDef* p;
+
+  p = new_def();
+  memcpy_s(p, sizeof(SDef), dp, sizeof(SDef));
+  p->body = clone_buf(p->body);
+  return (p);
+}
+
 rep_t* new_rept()
 {
   rep_t* p;
@@ -152,7 +163,7 @@ pos_t* GetPos()
 
 void SetPos(pos_t* pos)
 {
-  fin = pos->file;
+//  fin = pos->file;
   inptr = inbuf->buf + pos->bufpos;
 }
 
@@ -215,25 +226,36 @@ void ddefine(int opt)
       }
    }
    else if (syntax == ASTD) {
-     if (PeekCh() == '(') {
-       NextCh();
-       need_cb = 1;
-     }
-     dp->varg = 0;
-     dp->nArgs = GetMacroParmList(pl);
-     if (dp->nArgs < 0) {
-       dp->nArgs = -dp->nArgs;
-       dp->varg = 1;
-     }
-     c = NextNonSpace(0);
-     if (need_cb) {
-       if (c != ')') {
-         err(16);
-         unNextCh();
+     // for .set and .equ there are no parameters allowed
+     if (opt != 2) {
+       if (PeekCh() == '(') {
+         NextCh();
+         need_cb = 1;
+       }
+       dp->varg = 0;
+       dp->nArgs = GetMacroParmList(pl);
+       if (dp->nArgs < 0) {
+         dp->nArgs = -dp->nArgs;
+         dp->varg = 1;
+       }
+       c = NextNonSpace(0);
+       if (need_cb) {
+         if (c != ')') {
+           err(16);
+           unNextCh();
+         }
        }
      }
+     // We allow
+     //   .set <symbol> <value>
+     // in addition to the regular
+     //   .set <symbol>, <value>
+     else if (PeekCh() == ',')
+       NextCh();
    }
-   ptr = GetMacroBody(dp, opt);
+   ptr = GetMacroBody(dp, opt==2 ? 0 : 1);
+   inptr;
+   inbuf;
    dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
    if (dp->parms == NULL) {
      err(5);    // out of memory
@@ -286,6 +308,36 @@ void ddefine(int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
+void dabort(int opt)
+{
+  int c;
+
+  SearchAndSub(NULL);
+  DoPastes(inbuf->buf);
+  SkipSpaces();
+  do
+  {
+    c = NextCh();
+    if (c > 0)
+      fputc(c, stderr);
+    if (c == '\n' || c == 0)
+      break;
+  } while (1);
+  exit(100);
+}
+
+
+/* ----------------------------------------------------------------------------
+   Description :
+      Cause preprocessor to stop and display a message on stderr.
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
+---------------------------------------------------------------------------- */
+
 void derror(int opt)
 {
    int c;
@@ -304,6 +356,56 @@ void derror(int opt)
 //   exit(0);
 }
 
+
+/* ---------------------------------------------------------------------------
+   Description :
+
+   Parameters
+    (int) opt   - this parameter is not used
+
+    Returns
+      (none)
+----------------------------------------------------------------------------- */
+
+void dincdir(int opt)
+{
+  char ch;
+  char* f;
+  char name[4096];
+
+  SearchAndSub(NULL);
+  DoPastes(inbuf->buf);
+  ch = NextNonSpace(0);
+  if (ch == '"')  // search the path specified
+  {
+    f = name;
+    do
+    {
+      ch = NextCh();
+      if (ch <= 1 || ch == '"' || ch == '\n')
+        break;
+      *f = ch;
+      f++;
+    } while (f - name < sizeof(name) - 2);
+    *f = 0;
+  }
+  else if (ch == '<')
+  {
+    f = name;
+    do
+    {
+      ch = NextCh();
+      if (ch <= 1 || ch == '>' || ch == '\n')
+        break;
+      *f = ch;
+      f++;
+    } while (f - name < sizeof(name) - 2);
+    *f = 0;
+  }
+  strcpy_s(incdir, sizeof(incdir), name);
+  if (ch != '\n')
+    ScanPastEOL();
+}
 
 /* ---------------------------------------------------------------------------
    Description :
@@ -345,100 +447,109 @@ void dinclude(int opt)
    name[0] = 0;
 
    ch = NextNonSpace(0);
-   if (ch == '"')  // search the path specified
-   {
-      f = name;
-      do
-      {
-         ch = NextCh();
-         if (ch <= 1 || ch == '"' || ch == '\n')
-            break;
-         *f = ch;
-         f++;
-      } while(1);
-      *f = 0;
-      strcpy_s(path, sizeof(path), name);
-      if (_access(path, 0) < 0) {
-		  _getcwd(wpath, sizeof(wpath) - 1);
-           strcpy_s(path, sizeof(path), SourceName);
-           f = strrchr(path,'\\');
-           if (!f)
-               f = strrchr(path, '/');
-           if (f) {
-               strcpy_s(f+1,sizeof(path-1),name);
-           }
-				// Can't find the file in the given path, try the include paths.
-		   if (!f || _access(path, 0) < 0) {
-				 searchenv((char *)name, (char *)"FPPINC", (char *)path, sizeof(path));
-				 if (path[0] == '\0')
-					 searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
-				 if (path[0] == '\0') {
-					 err(9, name);
-					 return;
-				 }
-		   }
+  if (ch == '"')  // search the path specified
+  {
+    f = name;
+    do
+    {
+      ch = NextCh();
+      if (ch <= 1 || ch == '"' || ch == '\n')
+        break;
+      *f = ch;
+      f++;
+    } while (f - name < sizeof(name) - 2);
+    *f = 0;
+    strcpy_s(path, sizeof(path), name);
+    if (_access(path, 0) < 0) {
+      _getcwd(wpath, sizeof(wpath) - 1);
+      strcpy_s(path, sizeof(path), SourceName);
+      f = strrchr(path, '\\');
+      if (!f)
+        f = strrchr(path, '/');
+      if (f) {
+        strcpy_s(f + 1, sizeof(path - 1), name);
       }
-   }
-   else if (ch == '<')
-   {
-      f = name;
-      do
-      {
-         ch = NextCh();
-         if (ch <= 1 || ch == '>' || ch == '\n')
-            break;
-         *f = ch;
-         f++;
-      } while(1);
-      *f = 0;
-      searchenv((char *)name, (char *)"FPPINC", (char *)path, sizeof(path));
-	  if (path[0]=='\0')
-		searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
-   }
-   if (pass == npass) {
-     if (ch != '\n')
-       ScanPastEOL();
-   }
-   else {
-     if (ch != '\n')
-       ScanPastEOL();
+      // Try the .incdir path first.
+      if (!f || _access(path, 0) < 0) {
+        strcpy_s(path, sizeof(path), incdir);
+        if (path[strlen(path) - 1] != '\\')
+          path[strlen(path)] = '\\';
+        strcat_s(path, sizeof(path), SourceName);
+        if (_access(path) < 0) {
+          // Can't find the file in the given path, try the include paths.
+          if (!f || _access(path, 0) < 0) {
+            searchenv((char*)name, (char*)"FPPINC", (char*)path, sizeof(path));
+            if (path[0] == '\0')
+              searchenv((char*)name, (char*)"INCLUDE", (char*)path, sizeof(path));
+            if (path[0] == '\0') {
+              err(9, name);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+  else if (ch == '<')
+  {
+    f = name;
+    do
+    {
+        ch = NextCh();
+        if (ch <= 1 || ch == '>' || ch == '\n')
+          break;
+        *f = ch;
+        f++;
+    } while (f - name < sizeof(name) - 2);
+    *f = 0;
+    searchenv((char *)name, (char *)"FPPINC", (char *)path, sizeof(path));
+	if (path[0]=='\0')
+  	searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
+  }
+  if (pass == npass) {
+    if (ch != '\n')
+      ScanPastEOL();
+  }
+  else {
+    if (ch != '\n')
+      ScanPastEOL();
 //     sprintf_s(buf, sizeof(buf), ".include \"%s\"\n", path);
 //    if (fputs(buf, ofp) == EOF)
 //      printf("fputs failed.\n");
-   }
+  }
 
-   if (path[0])
-   {
-		 sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, path, 0x22);
-    bbfile.body->buf = StorePlainStr(buf);
-    p = (SDef *)htFind(&HashInfo, &bbfile);
-    if (p)
-        p->body = bbfile.body;
-    ifps[ifp_sp] = fin;
-    ifp_sp++;
-    // Strip leading/trailing quotes from filename.
-    if (bbfile.body->buf[0] == '"')
-      strcpy_s(buf, sizeof(buf), bbfile.body->buf + 1);
-    else
-      strcpy_s(buf, sizeof(buf), bbfile.body->buf);
-    if (buf[strlen(buf) - 1] == '"')
-      buf[strlen(buf) - 1] = '\0';
+  if (path[0])
+  {
+		sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, path, 0x22);
+  bbfile.body->buf = StorePlainStr(buf);
+  p = (SDef *)htFind(&HashInfo, &bbfile);
+  if (p)
+      p->body = bbfile.body;
+  ifps[ifp_sp] = fin;
+  ifp_sp++;
+  // Strip leading/trailing quotes from filename.
+  if (bbfile.body->buf[0] == '"')
+    strcpy_s(buf, sizeof(buf), bbfile.body->buf + 1);
+  else
+    strcpy_s(buf, sizeof(buf), bbfile.body->buf);
+  if (buf[strlen(buf) - 1] == '"')
+    buf[strlen(buf) - 1] = '\0';
 
+  fin = NULL;
+  if ((fopen_s(&fin, buf, "r")) != 0) {
+    err(9, buf);
     fin = NULL;
-    if ((fopen_s(&fin, buf, "r")) != 0) {
-      err(9, buf);
-      fin = NULL;
-      return;
-    }
+    return;
+  }
 
 //    ProcFile(bbfile.body->buf);
-    bbfile.body->buf = tname;
-    p = (SDef *)htFind(&HashInfo, &bbfile);
-    if (p)
-        p->body = bbfile.body;
-   }
-   else
-      err(9, name);
+  bbfile.body->buf = tname;
+  p = (SDef *)htFind(&HashInfo, &bbfile);
+  if (p)
+      p->body = bbfile.body;
+  }
+  else
+    err(9, name);
 }
 
 /* -----------------------------------------------------------------------------
@@ -530,7 +641,7 @@ void dendm(int opt)
       Define a repeat block.
 
    Parameters
-    (int) opt   - this parameter is not used
+    (int) opt   - 0=rept,1=irp
 
     Returns
       (none)
@@ -544,13 +655,17 @@ void* drept(int opt)
   arg_t pary[100];
   arg_t* parms[100];
   char* qp, * st;
-  int64_t stndx, qpndx, opndx;
+  int64_t stndx, qpndx, osz;
+  pos_t* opndx = NULL;
   int count = 0;
-  int ii;
+  int ii, ona;
   int wd;
   static int rep_dep = 0;
   int ri;
-  SDef* dp;
+  SDef* dp, * ptdef, *ptdef2;
+  SDef tdef;
+  char* obuf;
+  char* vname;
 
   dr = new_rept();
   dp = dr->def;
@@ -567,30 +682,36 @@ void* drept(int opt)
   for (ii = 0; ii < 100; ii++)
     parms[ii] = &pary[ii];
 
+  // Get the var name for .irp, and absorb a following comma.
+  if (opt == 1) {
+    SkipSpaces();
+    vname = GetIdentifier();
+    if (vname)
+      tdef.name = _strdup(vname);
+    else {
+      err(30);    // expecting a symbol
+      ScanPastEOL();
+      goto xit;
+    }
+    SkipSpaces();
+    if (PeekCh() == ',')
+      NextCh();
+  }
+
   SearchAndSub(NULL);
 
-  // Skip over .rept
-//  inptr += 5;
-
   // expeval() will eat a newline char
-  stndx = inptr - inbuf->buf;
-  dr->orcnt = dr->rcnt = expeval();
+  if (opt == 0)
+    dr->orcnt = dr->rcnt = expeval();
   st = inptr;
-  /*
-  if (dr->rcnt) {
-    dp->inst = malloc(sizeof(SDef*) * dr->rcnt);
-    if (dp->inst == NULL) {
-      exit(0);
-    }
-    memset(dp->inst, 0, sizeof(SDef*) * dr->rcnt);
-  }
-  */
+
   // Check for repeat parameters. There must be no space between the
   // macro name and ')'.
   SkipSpaces();
   c = PeekCh();
-  if (c == ',') {
-    NextCh();
+  if (c == ',' || opt==1) {
+    if (c == ',')
+      NextCh();
     dp->varg = 0;
     dp->nArgs = GetReptArgList(parms, opt);
     if (dp->nArgs < 0) {
@@ -599,16 +720,26 @@ void* drept(int opt)
     }
     if (dp->nArgs) {
       dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
-      if (dp->parms == NULL)
-        exit(0);
+      if (dp->parms == NULL) {
+        err(5);
+        exit(5);
+      }
       for (ii = 0; ii < dp->nArgs; ii++) {
         dp->parms[ii] = malloc(sizeof(arg_t));
+        if (dp->parms[ii] == NULL) {
+          err(5);
+          exit(5);
+        }
         dp->parms[ii]->num = ii;
-        dp->parms[ii]->name = NULL;
+        dp->parms[ii]->name = opt==1 ? tdef.name : NULL;
         dp->parms[ii]->def = _strdup(parms[ii]->def);
       }
     }
-    ScanPastEOL();
+    // Note that getting the rept arg list might scan until the end of line
+    // already. We do not want to do this twice, or the contents of the 
+    // start of the next line will be missed.
+    if (PeekCh() != 0)
+      ScanPastEOL();
   }
   c = PeekCh();
   if (c < 0) {
@@ -621,23 +752,71 @@ void* drept(int opt)
   inptr += 5;
 
   // Dump the repeat body to the input repeat count number of times.
-  opndx = inptr - inbuf->buf;
+  opndx = GetPos();
   ri = rep_inst;
-  dp1 = new_def();
-  dp1->body = dp->body;
 
-  for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
-    dp1->abody = clone_buf(dp->body);
-    qp = inptr;
-    qpndx = qp - inbuf->buf;
-    // Substitute args into macro body and into the input.
-    wd = SubParmMacro(dp1,1);
-    free(dp1->abody);
-    inptr += strlen(inptr);
+  // Handle an iterative repeat
+  if (opt == 1) {
+    ptdef2 = htFind(&HashInfo, &tdef);
+    if (ptdef2) {
+      ii = 0;
+      do {
+        // The variable is being modified, but we want to retain the original state,
+        // so clone it and modify the clone.
+        ptdef = clone_def(ptdef2);
+        // We wnat to substitute into the body of the repeat statement.
+        ptdef->body = dp->body;
+        // Assign the symbol the iteration value.
+        ptdef->nArgs = 1;         // we are only subbing one arg
+        ptdef->parms = malloc(sizeof(arg_t*));  // only 1 arg
+        if (ptdef->parms == NULL) {
+          err(5);
+          exit(5);
+        }
+        ptdef->parms[0] = malloc(sizeof(arg_t));
+        if (ptdef->parms[0] == NULL) {
+          err(5);
+          exit(5);
+        }
+        ptdef->parms[0]->name = ptdef2->name;
+        ptdef->parms[0]->num = 0;
+        // A symbol without an iteration value iterates to an empty string.
+        // Other assign the iteration value from the argument list.
+        if (dp->nArgs < 1)
+          ptdef->parms[0]->def = "";
+        else
+          ptdef->parms[0]->def = dp->parms[ii]->def;
+        // Substitute 1 arg into macro body and into the input.
+        wd = SubParmMacro(ptdef, 1);
+        inbuf;
+        inptr += strlen(inptr);
+        free(ptdef->parms[0]);
+        free(ptdef->parms);
+        free(ptdef);
+        ptdef = NULL;
+        ii++;
+      } while (ii < dp->nArgs);
+    }
+  }
+  // Handle the usual repeat.
+  else {
+    dp1 = new_def();
+    dp1->body = dp->body;
+    for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
+      // Substitute args into macro body and into the input.
+      dp1->abody = clone_buf(dp->body);
+      wd = SubParmMacro(dp1, 1);
+      free(dp1->abody);
+      inptr += strlen(inptr);
+    }
   }
 
   // Set the input point back to the start of the dump.
-  inptr = inbuf->buf + opndx;
+xit:
+  if (opndx) {
+    SetPos(opndx);
+    free(opndx);
+  }
   return ((void*)dr);
 }
 
@@ -685,16 +864,31 @@ static SDirective dir[] =
    "line",    4, dline,   0, 0,
    "pragma",  6, dpragma, 0, 0,
    // Assembler directives
+   //12 v
    "define",  6, ddefine, 1, 0,
+   "set",     3, ddefine, 1, 2,
+   "equ",     3, ddefine, 1, 2,
+   "err",     3, derror,  1, 0,
+   "abort",   5, dabort,  1, 0,
    "include", 7, dinclude,1, 0,
    "else",    4, delse,   1, 0,
    "ifdef",   5, difdef,  1, 0,
    "ifndef",  6, difndef, 1, 0,
+   "ifeq",    4, dif,     1, 1,
+   "ifne",    4, dif,     1, 0,
+   "ifgt",    4, dif,     1, 2,
+   "ifge",    4, dif,     1, 3,
+   "iflt",    4, dif,     1, 4,
+   "ifle",    4, dif,     1, 5,
+   "ifb",     3, dif,     1, 6,
+   "ifnb",    3, dif,     1, 7,
    "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
+   "incdir",  6, dincdir, 1, 0,
    "endif",   5, dendif,  1, 0,
    "undef",   5, dundef,  1, 0,
    "macro",   5, ddefine, 1, 1,
    "endm",    4, dendm,   1, 0,
+   "irp",     3, drept,   1, 1,
    "rept",    4, drept,   1, 0,
    "endr",    4, dendr,   1, 0
 };
@@ -772,7 +966,7 @@ int ProcLine()
       def = directive(NULL);
       if (def)
         ptr = inptr;
-      if (def == 23)  // rept
+      if (def==36 || def==37)  // irp,rept
         goto jmp1;
    }
    else {
@@ -1203,6 +1397,11 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "/P<n>                         - number of passes (0=1 default)\n\n");
     exit(0);
    }
+   /* ----------------------------------------------
+      Initialize any globals needing so.
+   ---------------------------------------------  */
+   memset(incdir, 0, sizeof(incdir));
+
    /* ----------------------------------------------
          Allocate storage for macro information.
    ---------------------------------------------  */

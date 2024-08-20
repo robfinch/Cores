@@ -252,6 +252,7 @@ void SearchAndSub(SDef* exc)
 			 *optr = '\x22';
 		 optr++;
 	 }
+   free(ondx);
 }
 
 

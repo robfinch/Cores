@@ -84,11 +84,29 @@ void difskip(int s)
 
 void dif(int opt)
 {
-   IfLevel++;
-   SearchForDefined();  // check for defined() operator
-   SearchAndSub(NULL);      // perform any macro substitutions
-   if(!expeval())
+  int ex;
+
+  IfLevel++;
+  SearchForDefined();  // check for defined() operator
+  SearchAndSub(NULL);      // perform any macro substitutions
+  switch (opt) {
+  case 0:  ex = expeval(); if (ex == 0) difskip(TRUE); break; // ne
+  case 1:  ex = expeval(); if (ex != 0) difskip(TRUE); break; // eq
+  case 2:  ex = expeval(); if (ex > 0) difskip(TRUE); break; // gt
+  case 3:  ex = expeval(); if (ex >= 0) difskip(TRUE); break; // ge
+  case 4:  ex = expeval(); if (ex < 0) difskip(TRUE); break; // lt
+  case 5:  ex = expeval(); if (ex <= 0) difskip(TRUE); break; // le
+  case 6:
+    while (isspace(PeekCh()) && PeekCh() != '\n' && PeekCh() != 0) NextCh();
+    if (PeekCh() == '\n')
       difskip(TRUE);
+    break;
+  case 7:
+    while (isspace(PeekCh()) && PeekCh() != '\n' && PeekCh() != 0) NextCh();
+    if (PeekCh() != '\n')
+      difskip(TRUE);
+    break;
+  }
 }
 
 

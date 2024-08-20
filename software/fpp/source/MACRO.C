@@ -152,7 +152,7 @@ buf_t *GetMacroBody(SDef* def, int opt)
   int InQuote = 0;
   int count = sizeof(buf)-1;
   char ch[4];
-  int64_t ndx1;
+  int64_t ndx1 = 0;
   int mac_depth = 0;
   int rep_depth = 0;
 
@@ -179,10 +179,11 @@ buf_t *GetMacroBody(SDef* def, int opt)
       ndx1 = inptr - inbuf->buf;
       id = GetIdentifier();
       p2 = inptr;
+      inbuf;
       if (id) 
         sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
       else
-        inptr = inbuf->buf + ndx1;    // reset inptr if no identifier found
+        inptr = inbuf->buf + ndx1;      // reset inptr if no identifier found
     }
     if (id == NULL) {
       c = NextCh();
@@ -331,6 +332,7 @@ char *GetMacroArg()
    int c;
    static char argbuf[40000];
    char *argstr = argbuf;
+   int InQuote = 0;
 
    SkipSpaces();
    memset(argbuf,0,sizeof(argbuf));
@@ -342,20 +344,27 @@ char *GetMacroArg()
             err(16);
          break;
       }
-      if (c == '(')
-         Depth++;
-      else if (c == ')') {
-         if (Depth < 1) {  // check if we hit the end of the arg list
+      if (c == '"')
+        InQuote = !InQuote;
+      if (!InQuote) {
+        if (c == '(')
+          Depth++;
+        else if (c == ')') {
+          if (Depth < 1) {  // check if we hit the end of the arg list
             unNextCh();
             break;
-         }
-         Depth--;
+          }
+          Depth--;
+        }
+        else if (Depth == 0 && c == ',') {   // comma at outermost level means
+          unNextCh();
+          break;                           // end of argument has been found
+        }
       }
-      else if (Depth == 0 && c == ',') {   // comma at outermost level means
-         unNextCh();
-         break;                           // end of argument has been found
-      }
-      *argstr++ = c;       // copy input argument to argstr.
+      if (c == '\n')
+        break;
+      if (c != '"')
+        *argstr++ = c;       // copy input argument to argstr.
    }
    *argstr = '\0';         // NULL terminate buffer.
    if (argbuf[0])
@@ -482,6 +491,8 @@ int GetReptArgList(arg_t* arglist[], int opt)
       if (c == '\\')
         ScanPastEOL();
     } while (c == '\\');
+    if (c == 0)
+      break;
     if (opt == 1 && c == '\n')
       break;
     if (c == ')') {   // we've gotten our last parameter
@@ -492,12 +503,13 @@ int GetReptArgList(arg_t* arglist[], int opt)
     arglist[count]->def = _strdup(GetMacroArg());
     count++;
     c = PeekCh();
-    if (c == '\n')
+    if (c == '\n' || c == 0)
       break;
     if (c != ',') {
       err(16);
       goto errxit;
     }
+    c = NextCh();
   }
 errxit:;
   return (count);

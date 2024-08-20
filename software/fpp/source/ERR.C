@@ -37,7 +37,9 @@ char *error[] = {
    "Emacro too large",
    "EConditional operator missing ':'",
    "ECannot rename temp file to output filename: %s",
-   "Eendr without rept"
+   "Eendr without rept",
+   "Eiterative repeat expecting a symbol"
+// 30
 };
 
 extern int InLineNo;
