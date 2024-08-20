@@ -9,31 +9,33 @@ static char buf[MAXLINE];
 char *GetIdentifier()
 {
    int c, count;
-   char *p, *iptr;
+   char *p;
+   pos_t* pos;
 
    if (PeekCh() == 0 || PeekCh() == '\n')
       return NULL;
    memset(buf,0,sizeof(buf));
    p = buf;
-   iptr = inptr;
+   pos = GetPos();
    c = NextNonSpace(0);
-   if (c == '.' && inptr[0] == '.' && inptr[1] == '.') {
+   if (c == '.' && PeekCh() == '.' && inptr[1] == '.') {
      strncpy_s(buf, sizeof(buf), "...", 3);
      inptr += 2;
      return (buf);
    }
    if (IsFirstIdentChar(c) && c != 0)
    {
-      count = 0;
-      do
-      {
-         buf[count++] = c;
-         c = NextCh();
-      } while(c != 0 && IsIdentChar(c) && count < sizeof(buf)-1);
-      unNextCh();
+     count = 0;
+     do
+     {
+       buf[count++] = c;
+       c = NextCh();
+     } while (c != 0 && IsIdentChar(c) && count < sizeof(buf) - 1);
+     unNextCh();
    }
    else
-      inptr = iptr;
+     SetPos(pos);
+   free(pos);
    return buf[0] ? buf : NULL;
 }
 

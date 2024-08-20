@@ -253,7 +253,7 @@ void ddefine(int opt)
      else if (PeekCh() == ',')
        NextCh();
    }
-   ptr = GetMacroBody(dp, opt==2 ? 0 : 1);
+   ptr = GetMacroBody(dp, opt==2 ? 0 : 1, 0);
    inptr;
    inbuf;
    dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
@@ -299,16 +299,18 @@ void ddefine(int opt)
 
 /* ----------------------------------------------------------------------------
    Description :
-      Cause preprocessor to stop and display a message on stderr.
+      Cause preprocessor display a message on stderr. The 'abort' directive
+   will cause the pre-procesor to exit back to the OS. The 'error' directive
+   displays an error message then continues.
 
    Parameters
-    (int) opt   - this parameter is not used
+    (int) opt   - 0=continue 1=abort (exit program)
 
     Returns
       (none)
 ---------------------------------------------------------------------------- */
 
-void dabort(int opt)
+void derror(int opt)
 {
   int c;
 
@@ -323,37 +325,9 @@ void dabort(int opt)
     if (c == '\n' || c == 0)
       break;
   } while (1);
-  exit(100);
-}
-
-
-/* ----------------------------------------------------------------------------
-   Description :
-      Cause preprocessor to stop and display a message on stderr.
-
-   Parameters
-    (int) opt   - this parameter is not used
-
-    Returns
-      (none)
----------------------------------------------------------------------------- */
-
-void derror(int opt)
-{
-   int c;
-
-   SearchAndSub(NULL);
-   DoPastes(inbuf->buf);
-   SkipSpaces();
-   do
-   {
-      c = NextCh();
-      if (c > 0)
-         fputc(c, stderr);
-      if (c == '\n' || c == 0)
-         break;
-   } while (1);
 //   exit(0);
+  if (opt)
+    exit(100);
 }
 
 
@@ -654,18 +628,19 @@ void* drept(int opt)
   SDef* dp1;
   arg_t pary[100];
   arg_t* parms[100];
-  char* qp, * st;
-  int64_t stndx, qpndx, osz;
+  char* st;
   pos_t* opndx = NULL;
   int count = 0;
-  int ii, ona;
+  int ii;
   int wd;
-  static int rep_dep = 0;
   int ri;
   SDef* dp, * ptdef, *ptdef2;
   SDef tdef;
-  char* obuf;
   char* vname;
+
+  // Update the repeat nesting depth. This is a global var manipulated when a
+  // repeat body is gotten.
+  rep_depth++;
 
   dr = new_rept();
   dp = dr->def;
@@ -746,7 +721,7 @@ void* drept(int opt)
     err(26);
     return (NULL);
   }
-  dp->body = GetMacroBody(dp, 1);
+  dp->body = GetMacroBody(dp, 1, 1);
 
   // Advance past the '.endr'
   inptr += 5;
@@ -869,7 +844,7 @@ static SDirective dir[] =
    "set",     3, ddefine, 1, 2,
    "equ",     3, ddefine, 1, 2,
    "err",     3, derror,  1, 0,
-   "abort",   5, dabort,  1, 0,
+   "abort",   5, derror,  1, 1,
    "include", 7, dinclude,1, 0,
    "else",    4, delse,   1, 0,
    "ifdef",   5, difdef,  1, 0,
@@ -1029,7 +1004,8 @@ jmp1:
 void ProcFile(char *fname)
 {
   FILE* fp;
-	char buf[500];
+	char* buf;
+  char filebuf[2048];
   static char OutName[500];
   FILE* fpo[10];
   int nn;
@@ -1038,12 +1014,7 @@ void ProcFile(char *fname)
 
   fp = NULL;
 	// Strip leading/trailing quotes from filename.
-	if (fname[0] == '"')
-		strcpy_s(buf, sizeof(buf), fname + 1);
-	else
-		strcpy_s(buf, sizeof(buf), fname);
-	if (buf[strlen(buf) - 1] == '"')
-		buf[strlen(buf) - 1] = '\0';
+  buf = strip_quotes(fname);
 
   strcpy_s(OutName, sizeof(OutName), buf);
   strcat_s(OutName, sizeof(OutName), ".out0");
@@ -1057,7 +1028,8 @@ void ProcFile(char *fname)
     goto xit;
   }
 
-  for (pass = 0; pass < npass; pass++) {
+  pass = 0;
+  do {
 
     OutName[strlen(OutName) - 1] = '0' + pass;
     if (fpo[pass] == NULL) {
@@ -1096,13 +1068,16 @@ void ProcFile(char *fname)
     OutName[strlen(OutName) - 1] = '0' + pass;
     fin = NULL;
     if ((fopen_s(&fin, OutName, "r")) != 0) {
-      err(9, buf);
+      err(9, OutName);
       fin = NULL;
       goto xit;
     }
-  }
+    pass++;
+  } while (pass < npass);
 
- xit:
+xit:
+  if (buf)
+    free(buf);
   if (fin)
     fclose(fin);
   for (nn = 0; nn < npass; nn++) {
@@ -1114,21 +1089,19 @@ void ProcFile(char *fname)
       }
     }
   }
-  // Get rid of temp files.
-  for (pass = 0; pass < npass - 1; pass++) {
-    OutName[strlen(OutName) - 1] = '0' + pass;
-    remove(OutName);
-  }
   if (ostdo) {
-    OutName[strlen(OutName) - 1] = '0' + pass;
+    if (npass > 0)
+      OutName[strlen(OutName) - 1] = '0' + pass-1;
+    else
+      OutName[strlen(OutName) - 1] = '0' + pass;
     if ((fopen_s(&fin, OutName, "r")) != 0) {
-      err(9, buf);
+      err(9, OutName);
       fin = NULL;
     }
     else {
       while (!feof(fin)) {
-        fgets(buf, sizeof(buf), fin);
-        fputs(buf, stdout);
+        if (fgets(filebuf, sizeof(filebuf), fin)!=NULL)
+          fputs(filebuf, stdout);
       }
       fclose(fin);
       fin = NULL;
@@ -1136,13 +1109,23 @@ void ProcFile(char *fname)
     remove(OutName);
   }
   else {
-    OutName[strlen(OutName) - 1] = '0' + pass;
-    remove(OutputName);
+    if (npass > 0) {
+      OutName[strlen(OutName) - 1] = '0' + pass - 1;
+      remove(OutputName);
+    }
+    else {
+      OutName[strlen(OutName) - 1] = '0' + pass;
+    }
     if (rename(OutName, OutputName) != 0) {
       err(28, OutputName);
       fprintf(stdout, "errno: %d\n", errno);
       fprintf(stderr, "errno: %d\n", errno);
     }
+  }
+  // Get rid of temp files.
+  for (pass = 0; pass < npass - 1; pass++) {
+    OutName[strlen(OutName) - 1] = '0' + pass;
+    remove(OutName);
   }
 }
 
@@ -1223,42 +1206,42 @@ void parsesw(char *s)
 
 void PrintDefines()
 {
-   int ii, count, blnk;
-   SDef *dp, *pt;
-   char buf[8];
+  int ii, count, blnk;
+  SDef *dp, *pt;
+  char buf[8];
 
-   pt = (SDef *)HashInfo.table;
+  pt = (SDef *)HashInfo.table;
 
-   // Pack any 'holes' in the table
-   for(blnk= ii = count = 0; count < HashInfo.size; count++, ii++) {
-      dp = &pt[ii];
-      if (dp->name) {
-         if (blnk > 0)
-            memmove(&pt[ii-blnk], &pt[ii], (HashInfo.size - count) * sizeof(SDef));
-         ii -= blnk;
-         blnk = 0;
-      }
-      else
-         blnk++;
-   }
+  // Pack any 'holes' in the table
+  for(blnk= ii = count = 0; count < HashInfo.size; count++, ii++) {
+    dp = &pt[ii];
+    if (dp->name) {
+        if (blnk > 0)
+          memmove(&pt[ii-blnk], &pt[ii], (HashInfo.size - count) * sizeof(SDef));
+        ii -= blnk;
+        blnk = 0;
+    }
+    else
+        blnk++;
+  }
 
-   // Sort the table
-   qsort(pt, ii, sizeof(SDef), icmp);
+  // Sort the table
+  qsort(pt, ii, sizeof(SDef), icmp);
 
-   printf("\n\nMacro Table:\n");
-   printf("Name         Args Body                                     Line  File\n");
-   for (MacroCount = 0; --ii >= 0;) {
-      dp = &pt[MacroCount];
-      if (dp->name) {
-         MacroCount++;
-         if (dp->nArgs >= 0)
-            sprintf_s(buf, sizeof(buf), " %2d ", dp->nArgs);
-         else 
-            sprintf_s(buf, sizeof(buf), " -- ");
-         printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
-      }
-   }
-   getchar();
+  printf("\n\nMacro Table:\n");
+  printf("Name         Args Body                                     Line  File\n");
+  for (MacroCount = 0; --ii >= 0;) {
+    dp = &pt[MacroCount];
+    if (dp->name) {
+        MacroCount++;
+        if (dp->nArgs >= 0)
+          sprintf_s(buf, sizeof(buf), " %2d ", dp->nArgs);
+        else 
+          sprintf_s(buf, sizeof(buf), " -- ");
+        printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
+    }
+  }
+  getchar();
 }
 
 
@@ -1277,18 +1260,18 @@ void PrintDefines()
 
 char *StoreStr(char *body, ...)
 {
-   char *ptr;
-   va_list argptr;
+  char *ptr;
+  va_list argptr;
 
-   if (strlen(body) > SymSpaceLeft() - 2000) {
-      err(5);
-      exit(3);
-   }
-   ptr = SymSpacePtr;
-   va_start(argptr, body);
-   SymSpacePtr += vsprintf_s(SymSpacePtr, SymSpaceLeft()-1, body, argptr) + 1;
-   va_end(argptr);
-   return (ptr);
+  if (strlen(body) > SymSpaceLeft() - 2000) {
+    err(5);
+    exit(3);
+  }
+  ptr = SymSpacePtr;
+  va_start(argptr, body);
+  SymSpacePtr += vsprintf_s(SymSpacePtr, SymSpaceLeft()-1, body, argptr) + 1;
+  va_end(argptr);
+  return (ptr);
 }
 
 
@@ -1303,15 +1286,15 @@ char *StoreStr(char *body, ...)
 
 char *StorePlainStr(char *str)
 {
-   char *ptr = SymSpacePtr;
+  char *ptr = SymSpacePtr;
 
-   if (strlen(str) > SymSpaceLeft() - 2000) {
-      err(5);
-      exit(3);
-   }
-   strcpy_s(SymSpacePtr, SymSpaceLeft()-1, str);
-   SymSpacePtr += strlen(str) + 1;
-   return (ptr);
+  if (strlen(str) > SymSpaceLeft() - 2000) {
+    err(5);
+    exit(3);
+  }
+  strcpy_s(SymSpacePtr, SymSpaceLeft()-1, str);
+  SymSpacePtr += strlen(str) + 1;
+  return (ptr);
 }
 
 
@@ -1375,16 +1358,16 @@ void SetStandardDefines(void)
 ---------------------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
-   int
-      xx;
-   SDef *p;
-	 char buf[260];
-   char* p1;
+  int
+    xx;
+  SDef *p;
+	char buf[260];
+  char* p1;
    
-   HashInfo.size = MAXMACROS;
-   HashInfo.width = sizeof(SDef);
-   if (argc < 2)
-   {
+  HashInfo.size = MAXMACROS;
+  HashInfo.width = sizeof(SDef);
+  if (argc < 2)
+  {
 		fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
@@ -1396,128 +1379,129 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "   <syntax> = cstd            - 'C' language syntax (default)\n");
     fprintf(stderr, "/P<n>                         - number of passes (0=1 default)\n\n");
     exit(0);
-   }
-   /* ----------------------------------------------
-      Initialize any globals needing so.
-   ---------------------------------------------  */
-   memset(incdir, 0, sizeof(incdir));
+  }
+  /* ----------------------------------------------
+    Initialize any globals needing so.
+  ---------------------------------------------  */
+  memset(incdir, 0, sizeof(incdir));
+  rep_depth = 0;
 
-   /* ----------------------------------------------
-         Allocate storage for macro information.
-   ---------------------------------------------  */
-   if ((HashInfo.table = calloc(HashInfo.size, sizeof(SDef))) == NULL) {
-      err(5);
-      return (1);
-   }
-   if ((SymSpace = (char *)calloc(1, STRAREA)) == NULL) {
-      free(HashInfo.table);
-      err(5);
-      return(2);
-   }
-   SymSpacePtr = SymSpace;
-   bbfile.body = new_buf();
-   bbfile.body->buf = StorePlainStr("<cmdln>");
-   for(xx = 1; strchr("-/+", argv[xx][0]) && (xx < argc); xx++)
-      parsesw(argv[xx]);
+  /* ----------------------------------------------
+        Allocate storage for macro information.
+  ---------------------------------------------  */
+  if ((HashInfo.table = calloc(HashInfo.size, sizeof(SDef))) == NULL) {
+    err(5);
+    return (1);
+  }
+  if ((SymSpace = (char *)calloc(1, STRAREA)) == NULL) {
+    free(HashInfo.table);
+    err(5);
+    return(2);
+  }
+  SymSpacePtr = SymSpace;
+  bbfile.body = new_buf();
+  bbfile.body->buf = StorePlainStr("<cmdln>");
+  for(xx = 1; strchr("-/+", argv[xx][0]) && (xx < argc); xx++)
+    parsesw(argv[xx]);
 
-	if (banner)
-		fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
+if (banner)
+	fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
 
-   /* ---------------------------
-         Get source file name.
-   --------------------------- */
-   if(xx >= argc) {
-      fprintf(stderr, "\nSource filename[.c]: ");
-      fgets(SourceName, sizeof(SourceName)-3, stdin);
-   }
-   else {
-      strncpy_s(SourceName, sizeof(SourceName), argv[xx], sizeof(SourceName)-3);
-      xx++;
-   }
-   /* -----------------------------------------------------
-          Check for extension and add one if neccessary.
-   ----------------------------------------------------- */
-   if (!strchr(SourceName, '.'))
-      strcat_s(SourceName, sizeof(SourceName)-1, ".c");
+  /* ---------------------------
+        Get source file name.
+  --------------------------- */
+  if(xx >= argc) {
+    fprintf(stderr, "\nSource filename[.c]: ");
+    fgets(SourceName, sizeof(SourceName)-3, stdin);
+  }
+  else {
+    strncpy_s(SourceName, sizeof(SourceName), argv[xx], sizeof(SourceName)-3);
+    xx++;
+  }
+  /* -----------------------------------------------------
+        Check for extension and add one if neccessary.
+  ----------------------------------------------------- */
+  if (!strchr(SourceName, '.'))
+    strcat_s(SourceName, sizeof(SourceName)-1, ".c");
 
-   OutputName[0] = '\0';
-   if (xx < argc) {
-     ostdo = 0;
-    strncpy_s(OutputName, sizeof(OutputName), argv[xx], sizeof(OutputName));
-    if (!strchr(OutputName, '.'))
-      strcat_s(OutputName, sizeof(OutputName)-1,".pp");
-   }
-   else {
-     strncpy_s(OutputName, sizeof(OutputName), SourceName, sizeof(OutputName));
-     p1 = strchr(OutputName, '.');
-     if (p1) {
-       p1 = strrchr(OutputName, '.');
-       strcpy_s(p1, sizeof(OutputName) - (p1 - OutputName), ".fpp");
-     }
-     else
-       strcat_s(OutputName, sizeof(OutputName), ".fpp");
-   }
-   strncpy_s(BaseSourceName, sizeof(BaseSourceName), OutputName, sizeof(OutputName));
-   p1 = strrchr(BaseSourceName, '.');
-   if (p1)
-    p1[0] = '\0';
-   if (xx >= argc)
-     OutputName[0] = 0;
+  OutputName[0] = '\0';
+  if (xx < argc) {
+    ostdo = 0;
+  strncpy_s(OutputName, sizeof(OutputName), argv[xx], sizeof(OutputName));
+  if (!strchr(OutputName, '.'))
+    strcat_s(OutputName, sizeof(OutputName)-1,".pp");
+  }
+  else {
+    strncpy_s(OutputName, sizeof(OutputName), SourceName, sizeof(OutputName));
+    p1 = strchr(OutputName, '.');
+    if (p1) {
+      p1 = strrchr(OutputName, '.');
+      strcpy_s(p1, sizeof(OutputName) - (p1 - OutputName), ".fpp");
+    }
+    else
+      strcat_s(OutputName, sizeof(OutputName), ".fpp");
+  }
+  strncpy_s(BaseSourceName, sizeof(BaseSourceName), OutputName, sizeof(OutputName));
+  p1 = strrchr(BaseSourceName, '.');
+  if (p1)
+  p1[0] = '\0';
+  if (xx >= argc)
+    OutputName[0] = 0;
 
-   /* ------------------------------
-         Define standard defines.
-   ------------------------------ */
-   SetStandardDefines();
-   /* -----------------------
-         Process file. 
-   ----------------------- */
-   if (debug)
-	   fopen_s(&fdbg, "fpp_debug_log","w");
-   else
-	   fdbg = NULL;
+  /* ------------------------------
+        Define standard defines.
+  ------------------------------ */
+  SetStandardDefines();
+  /* -----------------------
+        Process file. 
+  ----------------------- */
+  if (debug)
+	  fopen_s(&fdbg, "fpp_debug_log","w");
+  else
+	  fdbg = NULL;
 //   strcpy_s(OutputName, sizeof(OutputName), SourceName);
 //   strcat_s(OutputName, sizeof(OutputName), ".pp");
 
-   if (OutputName[0]) {
-     /*
-     if (fopen_s(&ofp, OutputName, "w") != 0)
-       if (ofp == NULL) {
-         err(9, OutputName);
-         exit(9);
-       }
-      */
-   }
-   else {
-     ostdo = 1;
-     ofp = stdout;
-   }
-   errors = warnings = 0;
-	 sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
-	 bbfile.body->buf = StorePlainStr(buf);
-   p = (SDef *)htFind(&HashInfo, &bbfile);
-   if (p)
-      p->body = bbfile.body;
-   ProcFile(SourceName);
-   /*
-   if (ofp != stdout) {
-	   fflush(ofp);
-      fclose(ofp);
-   }
-   */
-   if (fdbg)
-	   fclose(fdbg);
+  if (OutputName[0]) {
+    /*
+    if (fopen_s(&ofp, OutputName, "w") != 0)
+      if (ofp == NULL) {
+        err(9, OutputName);
+        exit(9);
+      }
+    */
+  }
+  else {
+    ostdo = 1;
+    ofp = stdout;
+  }
+  errors = warnings = 0;
+	sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
+	bbfile.body->buf = StorePlainStr(buf);
+  p = (SDef *)htFind(&HashInfo, &bbfile);
+  if (p)
+    p->body = bbfile.body;
+  ProcFile(SourceName);
+  /*
+  if (ofp != stdout) {
+	  fflush(ofp);
+    fclose(ofp);
+  }
+  */
+  if (fdbg)
+	  fclose(fdbg);
 
-   if(errors > 0)
-      fprintf(stderr, "\nPreProcessor Errors: %d\n",errors);
-   if(warnings > 0)
-      fprintf(stderr, "\nPreProcessor Warnings: %d\n",warnings);
-   if (verbose) {
-      PrintDefines();
-      printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
-      printf("%u/%u macro space used\n", (int)(SymSpacePtr - SymSpace), STRAREA);
-   }
-   if (SymSpace)
-      free(SymSpace);
-   //getchar();
-   exit(0);
+  if(errors > 0)
+    fprintf(stderr, "\nPreProcessor Errors: %d\n",errors);
+  if(warnings > 0)
+    fprintf(stderr, "\nPreProcessor Warnings: %d\n",warnings);
+  if (verbose) {
+    PrintDefines();
+    printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
+    printf("%u/%u macro space used\n", (int)(SymSpacePtr - SymSpace), STRAREA);
+  }
+  if (SymSpace)
+    free(SymSpace);
+  //getchar();
+  exit(0);
 }

@@ -50,14 +50,17 @@ void err(int num, ...)
 {
 	va_list ptr;
 
-	va_start(ptr, num);
-   fprintf(stderr, "FPP%c%03.3d(%d): ", error[num][0], num, InLineNo);
-	vfprintf(stderr, &error[num][1], ptr);
-   fprintf(stderr, "\n");
-   fprintf(stderr, "%.60s", inbuf->buf);
-	va_end(ptr);
-   if (error[num][0] == 'E')
-	   errors++;
-   else
-      warnings++;
+  va_start(ptr, num);
+  fprintf(stderr, "FPP%c%03.3d(%d): ", error[num][0], num, InLineNo);
+  if (ptr)
+    vfprintf(stderr, &error[num][1], ptr);
+  fprintf(stderr, "\n");
+  if (inbuf)
+    if (inbuf->buf)
+      fprintf(stderr, "%.60s", inbuf->buf);
+  va_end(ptr);
+  if (error[num][0] == 'E')
+    errors++;
+  else
+    warnings++;
 }

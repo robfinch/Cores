@@ -121,6 +121,7 @@ char *StoreStr(char *, ...);
 
 void err(int, ...);
 long expeval(void);
+int directive(char* p);
 
 int ProcLine(void);
 int NextCh(void);
@@ -130,7 +131,7 @@ void unNextCh(void);
 char *GetIdentifier(void);
 void ScanPastEOL();
 
-buf_t *GetMacroBody(SDef*, int opt);
+buf_t *GetMacroBody(SDef*, int opt, int rpt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
@@ -156,6 +157,7 @@ void dpragma(int);
 
 void searchenv(char *filename, char *envname, char *pathname, int pathsize);
 char* rtrim(char*);
+char* strip_quotes(char*);
 
 char syntax_ch();
 int GetReptArgList(arg_t* arglist[], int opt);
@@ -180,4 +182,6 @@ E int debug I(=0);
 E int lasttk I(= 0);
 E int in_comment I(= 0);
 E int syntax I(= 0);
+extern int rep_depth;
+extern int npass;
 extern char *SkipComments();

@@ -9,6 +9,7 @@
 
 char *rtrim(char *str);
 extern int minst;
+int rep_depth;
 
 /* ---------------------------------------------------------------------------
    char *SubArg(bdy, n, sub);
@@ -93,7 +94,7 @@ static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
   return (0);
 }
 
-static void proc_instvar(buf_t* buf)
+static void proc_instvar(buf_t** buf)
 {
   char mk[4];
 
@@ -104,7 +105,7 @@ static void proc_instvar(buf_t* buf)
   insert_into_buf(buf, mk, 0);
 }
 
-static int proc_parm(buf_t* buf, int nparm)
+static int proc_parm(buf_t** buf, int nparm)
 {
   char c;
   char* p1, * p2;
@@ -137,14 +138,19 @@ static int proc_parm(buf_t* buf, int nparm)
 
    There are two options for processing macro definitions.
    The first ends the macro when a newline is hit, unless the '\'
-   character is present on the line.
+   character is present on the line. Used for "C" #define
    The second automatically includes newlines as part of the macro and
    end when a ".endm" is encountered.
       Macros continued on the next line with '\' are also processed. The
    last newline is removed from the macro.
+
+   Parameters:
+     (SDef*) - definition to get the body of
+     (int) - processing option (0="C" define)
+     (int) - non-zero indicates a repeat is being processed.
 ---------------------------------------------------------------------------- */
 
-buf_t *GetMacroBody(SDef* def, int opt)
+buf_t *GetMacroBody(SDef* def, int opt, int rpt)
 {
   char *id = NULL, *p2, * p3;
   buf_t* buf;
@@ -154,7 +160,6 @@ buf_t *GetMacroBody(SDef* def, int opt)
   char ch[4];
   int64_t ndx1 = 0;
   int mac_depth = 0;
-  int rep_depth = 0;
 
   buf = new_buf();
 
@@ -277,15 +282,22 @@ buf_t *GetMacroBody(SDef* def, int opt)
             ++mac_depth;
             inptr = inbuf->buf + ndx1;
           }
-          else if (strncmp(inptr, "endr", 4) == 0) {
+          else if (rpt && strncmp(inptr, "endr", 4) == 0) {
             if (rep_depth == 0)
               break;
             else
               --rep_depth;
             inptr = inbuf->buf + ndx1;
           }
-          else if (strncmp(inptr, "rept", 4) == 0) {
+          // Repeats are not processed until they reach depth zero.
+          // The depth of a repeat is reduced by one every pass the
+          // preprocessor makes through the file.
+          // Track the maximum depth of repeat statements (controls
+          // number of passes made).
+          else if (rpt && (strncmp(inptr, "rept", 4) == 0 || strncmp(inptr, "irp", 3) == 0)) {
             ++rep_depth;
+            npass = max(rep_depth-1, npass);
+            npass = min(npass, 9);
             inptr = inbuf->buf + ndx1;
           }
           else {
@@ -324,19 +336,29 @@ buf_t *GetMacroBody(SDef* def, int opt)
    round bracket nesting level is kept track of so that a comma in the
    middle of an argument isn't inadvertently picked up as an argument
    separator.
+
+   Side Effects:
+     Modifies the global input pointer.
+
+   Parameters:
+     (none)
+
+   Returns:
+     (char *) - a pointer to the argument. Storage is allocated with
+                _strdup() so it will need to be freed (free()).
 --------------------------------------------------------------------------- */
 
 char *GetMacroArg()
 {
    int Depth = 0;
    int c;
-   static char argbuf[40000];
+   char argbuf[4000];
    char *argstr = argbuf;
    int InQuote = 0;
 
    SkipSpaces();
    memset(argbuf,0,sizeof(argbuf));
-   while(1)
+   while(argstr - argbuf < sizeof(argbuf)-1)
    {
       c = NextCh();
       if (c < 1) {
@@ -363,13 +385,12 @@ char *GetMacroArg()
       }
       if (c == '\n')
         break;
-      if (c != '"')
-        *argstr++ = c;       // copy input argument to argstr.
+      *argstr++ = c;       // copy input argument to argstr.
    }
    *argstr = '\0';         // NULL terminate buffer.
    if (argbuf[0])
 	   if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);
-   return (argbuf);
+   return (strip_quotes(argbuf));
    //return argbuf[0] ? argbuf : NULL;
 }
 
@@ -443,7 +464,7 @@ int GetMacroParmList(arg_t *parmlist[])
          break;
       }
       if (c == '=') {
-        parmlist[count-1]->def = _strdup(GetMacroArg());
+        parmlist[count-1]->def = GetMacroArg();
       }
       if (c != ',' && count > 0) {
          err(16);
@@ -500,7 +521,7 @@ int GetReptArgList(arg_t* arglist[], int opt)
       break;
     }
     unNextCh();
-    arglist[count]->def = _strdup(GetMacroArg());
+    arglist[count]->def = GetMacroArg();
     count++;
     c = PeekCh();
     if (c == '\n' || c == 0)
