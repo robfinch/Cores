@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <malloc.h>
 #include <string.h>
 #include <ctype.h>
 #include "fpp.h"

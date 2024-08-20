@@ -30,7 +30,16 @@ buf_t* new_buf()
   b->pos = 0;
   b->size = 0;
   b->buf = NULL;
+  b->alloc = 0;
   return (b);
+}
+
+// Free-up the buffer associated with the structure.
+void free_buf(buf_t* buf)
+{
+  memset(buf->buf, 0, buf->size);
+  if (buf->alloc == 0)
+    free(buf->buf);
 }
 
 buf_t* clone_buf(buf_t* buf)
@@ -46,15 +55,28 @@ buf_t* clone_buf(buf_t* buf)
   return (b);
 }
 
+// Enlarges a buffer by a memory page (4096B).
+
 buf_t* enlarge_buf(buf_t* b)
 {
   char* p;
+  int osz;
+  int oa;
 
-  b->size += 4096;
-  p = realloc(b->buf, b->size);
+  osz = b->size;
+  oa = b->alloc;
+  b->size = (b->size + 8191) & 0xfffff000LL;
+  if (b->alloc == 0)
+    p = realloc(b->buf, b->size);
+  else {
+    p = malloc(b->size);
+    if (p)
+      memcpy(p, b->buf, osz);
+    b->alloc = 0;
+  }
   if (p == NULL) {
     err(5);		// out of memory
-    exit(0);
+    exit(5);
   }
   // If there is already a buffer, zero out new memory page.
   if (b->buf != NULL)
@@ -62,6 +84,10 @@ buf_t* enlarge_buf(buf_t* b)
   // Otherwise, zero out the entire buffer.
   else
     memset(p, 0, b->size);
+  // Clear out the freed-up buffer.
+  memset(b->buf, 0, osz);
+//  if (oa==0 && b->buf != p)
+//    free(b->buf);
   b->buf = p;
   return (b);
 }
@@ -75,7 +101,9 @@ buf_t* enlarge_buf(buf_t* b)
                data in.
       (char *) pointer to text to add to the buffer
       (int)    the position at which to place the text, A value of 0 indicates
-               to concatenate onto the end of the buffer.
+               to concatenate onto the end of the buffer. A value of 1
+               indicates to concatenate onto the end of the buffer and retain
+               the NULL character at the end of the string.
 
    Modifies:
       The position of the buffer pointer is updated.
@@ -113,35 +141,25 @@ void insert_into_buf(buf_t** buf, char* p, int pos)
     (*buf)->size = mm;
     (*buf)->buf = q;
     (*buf)->pos = 0;
+    (*buf)->alloc = 0;
   }
   if ((*buf)->buf == NULL) {
     err(5);
     exit(5);
   }
   lastpos = (*buf)->pos;
-  if (lastpos + nn + pos > (*buf)->size) {
-    mm = ((*buf)->size + nn + pos + 4095) & 0xfffff000;
-    if (mm > 1000000) {
-      err(5);   // out of memory
-      exit(5);
-    }
-    q = realloc((*buf)->buf,mm);
-    if (q == NULL)
-      exit(0);
-    if ((*buf)->buf != q) {
-      free((*buf)->buf);
-      (*buf)->buf = q;
-    }
-    (*buf)->size = mm;
-  }
-  if ((*buf)->buf == NULL) {
-    err(5);   // out of memory
-    exit(5);
-  }
+  while (lastpos + nn + pos > (*buf)->size)
+    *buf = enlarge_buf(*buf);
   if (pos == 0) {
     memcpy_s(&(*buf)->buf[lastpos], (*buf)->size - lastpos, p, nn);
     lastpos += nn;
     (*buf)->buf[lastpos] = 0;
+    (*buf)->pos = lastpos;
+  }
+  else if (pos == 1) {
+    memcpy_s(&(*buf)->buf[lastpos], (*buf)->size - lastpos - 1, p, nn+1);
+    lastpos += nn + 1;
+    (*buf)->buf[lastpos-1] = 0;
     (*buf)->pos = lastpos;
   }
   else {

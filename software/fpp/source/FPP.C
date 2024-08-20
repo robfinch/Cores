@@ -29,7 +29,8 @@ int InLineNo = 1;
 char SourceName[250];
 char OutputName[250];
 char BaseSourceName[250];
-char *SymSpace, *SymSpacePtr;
+//char *SymSpace, *SymSpacePtr;
+buf_t* SymSpace;
 SHashTbl HashInfo = { HashFnc, icmp, 0, sizeof(SDef), NULL };
 int MacroCount;
 FILE *ofp;
@@ -61,7 +62,7 @@ void PrintDefines(void);
 
 size_t SymSpaceLeft()
 {
-  return (STRAREA - (SymSpacePtr - SymSpace));
+  return (SymSpace->size - SymSpace->pos);
 }
 
 /*****************************************************************************
@@ -190,6 +191,7 @@ void ddefine(int opt)
    char* ptr2;
    int need_cb = 0;
 
+   mac_depth++;
    memset(parms, 0, 100 * sizeof(arg_t));
    for (n = 0; n < 100; n++)
      pl[n] = &parms[n];
@@ -208,6 +210,7 @@ void ddefine(int opt)
    dp->body = new_buf();
 
    SearchAndSub(dp);
+   inbuf;
 
    // Check for macro parameters. There must be no space between the
    // macro name and ')'.
@@ -262,8 +265,6 @@ void ddefine(int opt)
      exit(5);
    }
    memset(dp->parms, 0, sizeof(arg_t*) * dp->nArgs);
-   if (dp->parms == NULL)
-     exit(0);
    for (n = 0; n < dp->nArgs; n++)
      {
        dp->parms[n] = malloc(sizeof(arg_t));
@@ -292,6 +293,7 @@ void ddefine(int opt)
    ptr2 = ptr->buf;
    dp->name = StorePlainStr(dp->name);
    dp->body->buf = StorePlainStr(dp->body->buf);
+   dp->body->alloc = 1;
    free(ptr2);
    htInsert(&HashInfo, dp);
    minst++;
@@ -561,25 +563,26 @@ void dundef(int opt)
 
 void dline(int opt)
 {
-   char *ptr;
-   char name[MAXLINE];
-   SDef *p;
+  char *ptr;
+  char name[MAXLINE];
+  SDef *p;
 
-   SearchAndSub(NULL);
-   DoPastes(inbuf->buf);
-   InLineNo = atoi(inptr);
-   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
-   if ((ptr = strchr(inptr, '"')) != NULL)
-   {
-      inptr = ptr;
-      memset(name, 0, sizeof(name));
-      strncpy_s(name, sizeof(name), ptr, strcspn(ptr+1, " \t\n\r\x22"));
-			strcat_s(name, sizeof(name), "\"");
-      bbfile.body->buf = StorePlainStr(name);
-      p = (SDef *)htFind(&HashInfo, &bbfile);
-      if (p)
-         p->body = bbfile.body;
-   }
+  SearchAndSub(NULL);
+  DoPastes(inbuf->buf);
+  InLineNo = atoi(inptr);
+  sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
+  if ((ptr = strchr(inptr, '"')) != NULL)
+  {
+    inptr = ptr;
+    memset(name, 0, sizeof(name));
+    strncpy_s(name, sizeof(name), ptr, strcspn(ptr+1, " \t\n\r\x22"));
+		strcat_s(name, sizeof(name), "\"");
+    bbfile.body->buf = StorePlainStr(name);
+    bbfile.body->alloc = 1;
+    p = (SDef *)htFind(&HashInfo, &bbfile);
+    if (p)
+      p->body = bbfile.body;
+  }
 }
 
 
@@ -608,6 +611,10 @@ void dpragma(int opt)
 
 void dendm(int opt)
 {
+  if (mac_depth > 0)
+    mac_depth--;
+  else
+    err(31);    // endm without macr
 }
 
 /* ---------------------------------------------------------------------------
@@ -781,7 +788,7 @@ void* drept(int opt)
       // Substitute args into macro body and into the input.
       dp1->abody = clone_buf(dp->body);
       wd = SubParmMacro(dp1, 1);
-      free(dp1->abody);
+      free_buf(dp1->abody);
       inptr += strlen(inptr);
     }
   }
@@ -810,7 +817,10 @@ xit:
 
 void dendr(int opt)
 {
-  err(29);    // .endr without .rept
+  if (rep_depth > 0)
+    rep_depth--;
+  else
+    err(29);    // .endr without .rept
 }
 
 
@@ -848,6 +858,7 @@ static SDirective dir[] =
    "include", 7, dinclude,1, 0,
    "else",    4, delse,   1, 0,
    "ifdef",   5, difdef,  1, 0,
+   // 20 v
    "ifndef",  6, difndef, 1, 0,
    "ifeq",    4, dif,     1, 1,
    "ifne",    4, dif,     1, 0,
@@ -858,6 +869,7 @@ static SDirective dir[] =
    "ifb",     3, dif,     1, 6,
    "ifnb",    3, dif,     1, 7,
    "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
+   // 30 v
    "incdir",  6, dincdir, 1, 0,
    "endif",   5, dendif,  1, 0,
    "undef",   5, dundef,  1, 0,
@@ -930,7 +942,7 @@ int ProcLine()
 {
    int ch;
    int def = 0;
-   char* ptr, *ptr2;
+   char* ptr, *ptr2, *ptr3;
    int64_t ndx3;
 
    //printf("Processing line: %d\r", InLineNo);
@@ -961,15 +973,18 @@ jmp1:
      if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf->buf + ndx3);
      rtrim(inbuf->buf + ndx3);
      inptr = inbuf->buf + ndx3 + strlen(inbuf->buf + ndx3);
-     if (syntax==CSTD)
-       ptr2 = inbuf->buf + ndx3;
-     else
-       ptr2 = inbuf->buf + ndx3;
+     ptr2 = inbuf->buf + ndx3;
 //     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
 //     ptr2--;
-     if (fputs(ptr2, ofp) == EOF)
-       printf("fputs failed.\n");
-     fputs("\n", ofp);
+     ptr3 = strip_blank_lines(ptr2);
+     if (!is_blank(ptr3)) {
+       if (fputs(ptr3, ofp) == EOF)
+        printf("fputs failed.\n");
+       if (ptr3[strlen(ptr3)-1]!='\n')
+        fputs("\n", ofp);
+     }
+     if (ptr3)
+       free(ptr3);
    }
    inbuf->buf[0] = 0;
    inbuf->buf[1] = 0;
@@ -1093,7 +1108,7 @@ xit:
     if (npass > 0)
       OutName[strlen(OutName) - 1] = '0' + pass-1;
     else
-      OutName[strlen(OutName) - 1] = '0' + pass;
+      OutName[strlen(OutName) - 1] = '0';
     if ((fopen_s(&fin, OutName, "r")) != 0) {
       err(9, OutName);
       fin = NULL;
@@ -1111,11 +1126,12 @@ xit:
   else {
     if (npass > 0) {
       OutName[strlen(OutName) - 1] = '0' + pass - 1;
-      remove(OutputName);
+//      remove(OutputName);
     }
     else {
-      OutName[strlen(OutName) - 1] = '0' + pass;
+      OutName[strlen(OutName) - 1] = '0';
     }
+    remove(OutputName);
     if (rename(OutName, OutputName) != 0) {
       err(28, OutputName);
       fprintf(stdout, "errno: %d\n", errno);
@@ -1140,62 +1156,62 @@ xit:
 
 void parsesw(char *s)
 {
-   SDef tdef;
-   char buf[MAXLINE];
-   char buf2[MAXLINE];
-   int ii, jj;
+  SDef tdef;
+  char buf[MAXLINE];
+  char buf2[MAXLINE];
+  int ii, jj;
 
-   switch(s[1])
-   {
-   case 'd':
-	   debug = 1;
-	   break;
-   case 'b':
-	   banner = 0;
-	   break;
+  switch(s[1])
+  {
+  case 'd':
+	  debug = 1;
+	  break;
+  case 'b':
+	  banner = 0;
+	  break;
 
-      case 'D':
-         strcpy_s(buf2, MAXLINE, &s[2]);
-         for(ii = 0; buf2[ii] && IsIdentChar(buf2[ii]); ii++)
-            buf[ii] = buf2[ii];
-         buf[ii] = 0;
-         if (buf[0]) {
-            tdef.nArgs = -1;
-            tdef.name = StorePlainStr(buf);
-            tdef.body = new_buf();
-            if (buf2[ii++] == '=') {
-               for(jj = 0; buf2[ii];)
-                  buf[jj++] = buf2[ii++];
-               buf[jj] = 0;
-               tdef.body->buf = (char *)(buf[0] ? StorePlainStr(buf) : "");
-            }
-            else
-               tdef.body->buf = "";
-            tdef.line = 0;
-            tdef.file = "<cmd line>";
-            htInsert(&HashInfo, &tdef);
-         }
-         break;
+  case 'D':
+    strcpy_s(buf2, MAXLINE, &s[2]);
+    for(ii = 0; buf2[ii] && IsIdentChar(buf2[ii]); ii++)
+      buf[ii] = buf2[ii];
+    buf[ii] = 0;
+    if (buf[0]) {
+      tdef.nArgs = -1;
+      tdef.name = StorePlainStr(buf);
+      tdef.body = new_buf();
+      if (buf2[ii++] == '=') {
+          for(jj = 0; buf2[ii];)
+            buf[jj++] = buf2[ii++];
+          buf[jj] = 0;
+          tdef.body->buf = (char *)(buf[0] ? StorePlainStr(buf) : "");
+      }
+      else
+          tdef.body->buf = "";
+      tdef.line = 0;
+      tdef.file = "<cmd line>";
+      htInsert(&HashInfo, &tdef);
+    }
+    break;
 
-      case 'S':
-        if (strncmp(&s[2], "astd", 4) == 0)
-          syntax = ASTD;
-        break;
+  case 'S':
+    if (strncmp(&s[2], "astd", 4) == 0)
+      syntax = ASTD;
+    break;
 
-      case 'V':
-         verbose = 1;
-         break;
+  case 'V':
+    verbose = 1;
+    break;
 
-      case 'L':
-         ShowLines = 1;
-         break;
+  case 'L':
+    ShowLines = 1;
+    break;
 
-      case 'P':
-        npass = s[2] - '0';
-        if (npass < 0 || npass > 9)
-          npass = 0;
-        break;
-   }
+  case 'P':
+    npass = s[2] - '0';
+    if (npass < 0 || npass > 9)
+      npass = 0;
+    break;
+  }
 }
 
 
@@ -1206,7 +1222,7 @@ void parsesw(char *s)
 
 void PrintDefines()
 {
-  int ii, count, blnk;
+  int ii, count, blnk, jj;
   SDef *dp, *pt;
   char buf[8];
 
@@ -1238,6 +1254,9 @@ void PrintDefines()
           sprintf_s(buf, sizeof(buf), " %2d ", dp->nArgs);
         else 
           sprintf_s(buf, sizeof(buf), " -- ");
+        // Display only the first line of a macro.
+        for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf != '\n'; jj++);
+        if (jj > 1) dp->body->buf[jj - 2] = 0;
         printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
     }
   }
@@ -1260,18 +1279,18 @@ void PrintDefines()
 
 char *StoreStr(char *body, ...)
 {
-  char *ptr;
   va_list argptr;
+  static char buf[100000]; // allow for a large expanded macro
+  int64_t pos;
+  char ch;
 
-  if (strlen(body) > SymSpaceLeft() - 2000) {
-    err(5);
-    exit(3);
-  }
-  ptr = SymSpacePtr;
+  pos = SymSpace->pos;
   va_start(argptr, body);
-  SymSpacePtr += vsprintf_s(SymSpacePtr, SymSpaceLeft()-1, body, argptr) + 1;
+  vsprintf_s(buf, sizeof(buf), body, argptr);
   va_end(argptr);
-  return (ptr);
+  insert_into_buf(&SymSpace, buf, 1);
+  ch = SymSpace->buf[pos];
+  return (SymSpace->buf + pos);
 }
 
 
@@ -1286,15 +1305,11 @@ char *StoreStr(char *body, ...)
 
 char *StorePlainStr(char *str)
 {
-  char *ptr = SymSpacePtr;
+  int64_t pos;
 
-  if (strlen(str) > SymSpaceLeft() - 2000) {
-    err(5);
-    exit(3);
-  }
-  strcpy_s(SymSpacePtr, SymSpaceLeft()-1, str);
-  SymSpacePtr += strlen(str) + 1;
-  return (ptr);
+  pos = SymSpace->pos;
+  insert_into_buf(&SymSpace, str, 1);
+  return (SymSpace->buf + pos);
 }
 
 
@@ -1315,20 +1330,27 @@ void SetStandardDefines(void)
    localtime_s(&LocalTime, &ltm);
    bbstdc.body = new_buf();
    bbstdc.body->buf = StoreStr("1");
+   bbstdc.body->alloc = 1;
    bbline.body = new_buf();
    bbline.body->buf = StoreStr("%5d", 1);
-	 sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
+   bbline.body->alloc = 1;
+   sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
    bbfile.body = new_buf();
    bbfile.body->buf = StoreStr(buf);
+   bbfile.body->alloc = 1;
    sprintf_s(buf, sizeof(buf), "%s", BaseSourceName);
    bbbasefile.body = new_buf();
    bbbasefile.body->buf = StoreStr(buf);
+   bbbasefile.body->alloc = 1;
    bbdate.body = new_buf();
    bbdate.body->buf = StoreStr("%04d/%02d/%02d", LocalTime.tm_year+1900, LocalTime.tm_mon+1, LocalTime.tm_mday);
+   bbdate.body->alloc = 1;
    bbtime.body = new_buf();
    bbtime.body->buf = StoreStr("%02d:%02d:%02d", LocalTime.tm_hour, LocalTime.tm_min, LocalTime.tm_sec);
+   bbtime.body->alloc = 1;
    bbpp.body = new_buf();
    bbpp.body->buf = StoreStr("fpp");
+   bbpp.body->alloc = 1;
 
    htInsert(&HashInfo, &bbstdc);
    htInsert(&HashInfo, &bbline);
@@ -1368,7 +1390,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(SDef);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.55  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1384,7 +1406,9 @@ int main(int argc, char *argv[]) {
     Initialize any globals needing so.
   ---------------------------------------------  */
   memset(incdir, 0, sizeof(incdir));
+  mac_depth = 0;
   rep_depth = 0;
+  SymSpace = new_buf();
 
   /* ----------------------------------------------
         Allocate storage for macro information.
@@ -1393,19 +1417,14 @@ int main(int argc, char *argv[]) {
     err(5);
     return (1);
   }
-  if ((SymSpace = (char *)calloc(1, STRAREA)) == NULL) {
-    free(HashInfo.table);
-    err(5);
-    return(2);
-  }
-  SymSpacePtr = SymSpace;
   bbfile.body = new_buf();
   bbfile.body->buf = StorePlainStr("<cmdln>");
+  bbfile.body->alloc = 1;
   for(xx = 1; strchr("-/+", argv[xx][0]) && (xx < argc); xx++)
     parsesw(argv[xx]);
 
-if (banner)
-	fprintf(stderr, "FPP version 2.53  (C) 1998-2024 Robert T Finch  \n");
+  if (banner)
+    fprintf(stderr, "FPP version 2.55  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.
@@ -1478,6 +1497,7 @@ if (banner)
   errors = warnings = 0;
 	sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
 	bbfile.body->buf = StorePlainStr(buf);
+  bbfile.body->alloc = 1;
   p = (SDef *)htFind(&HashInfo, &bbfile);
   if (p)
     p->body = bbfile.body;
@@ -1498,10 +1518,10 @@ if (banner)
   if (verbose) {
     PrintDefines();
     printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
-    printf("%u/%u macro space used\n", (int)(SymSpacePtr - SymSpace), STRAREA);
+    printf("%llu/%llu macro space used\n", SymSpace->pos, SymSpace->size);
   }
   if (SymSpace)
-    free(SymSpace);
+    free_buf(SymSpace);
   //getchar();
   exit(0);
 }

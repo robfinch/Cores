@@ -38,8 +38,9 @@ char *error[] = {
    "EConditional operator missing ':'",
    "ECannot rename temp file to output filename: %s",
    "Eendr without rept",
-   "Eiterative repeat expecting a symbol"
+   "Eiterative repeat expecting a symbol",
 // 30
+   "Eendm without macr"
 };
 
 extern int InLineNo;

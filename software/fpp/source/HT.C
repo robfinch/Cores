@@ -103,7 +103,7 @@ void *htDelete(SHashTbl *hi, void *item)
 void *htFind(SHashTbl *hi, void *item)
 {
    SHashVal hash;
-   int rr, ii;
+   int rr;
    int TableIndex;
    int count;
    char *htbl;

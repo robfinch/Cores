@@ -10,6 +10,7 @@
 char *rtrim(char *str);
 extern int minst;
 int rep_depth;
+int mac_depth;
 
 /* ---------------------------------------------------------------------------
    char *SubArg(bdy, n, sub);
@@ -65,7 +66,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
     }
     *o = *bdy;
   }
-  return buf;
+  return (buf);
 }
 
 
@@ -159,9 +160,10 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
   int count = sizeof(buf)-1;
   char ch[4];
   int64_t ndx1 = 0;
-  int mac_depth = 0;
 
   buf = new_buf();
+  inptr;
+  inbuf;
 
   if (def->nArgs <= 0)
     nparm = 0;
@@ -254,7 +256,7 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
           }
         }
       }
-      if (opt == 0) {
+      if (opt != 1) {
         if (c == '\n' || c < 1) {
           if (InQuote)
             err(25);
@@ -266,45 +268,19 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
           err(25);
         break;
       }
-      // Processing a macro? Look for ".endm"
+      // Processing a multi-line macro? Look for ".endm"
       if (opt == 1) {
+        // Dispatch any directives encountered while getting the body.
         if (c == syntax_ch() && !InQuote) {
-          ndx1 = inptr - inbuf->buf;
-          SkipSpaces();
-          if (strncmp(inptr, "endm", 4) == 0) {
-            if (mac_depth == 0)
-              break;
-            else
-              --mac_depth;
-            inptr = inbuf->buf + ndx1;
+          inptr;
+          inbuf;
+          switch (directive(NULL)) {
+          case 35:  // endm
+            goto jmp1;
+          case 38:  // endr
+            goto jmp1;
           }
-          else if (strncmp(inptr, "macro", 5) == 0) {
-            ++mac_depth;
-            inptr = inbuf->buf + ndx1;
-          }
-          else if (rpt && strncmp(inptr, "endr", 4) == 0) {
-            if (rep_depth == 0)
-              break;
-            else
-              --rep_depth;
-            inptr = inbuf->buf + ndx1;
-          }
-          // Repeats are not processed until they reach depth zero.
-          // The depth of a repeat is reduced by one every pass the
-          // preprocessor makes through the file.
-          // Track the maximum depth of repeat statements (controls
-          // number of passes made).
-          else if (rpt && (strncmp(inptr, "rept", 4) == 0 || strncmp(inptr, "irp", 3) == 0)) {
-            ++rep_depth;
-            npass = max(rep_depth-1, npass);
-            npass = min(npass, 9);
-            inptr = inbuf->buf + ndx1;
-          }
-          else {
-            directive(inptr);
-            c = NextCh();
-            continue;
-          }
+          continue;
         }
       }
       ch[0] = c;
@@ -324,9 +300,11 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
       insert_into_buf(&buf, ch, 0);
     }
   }
-   else
-     buf->buf = _strdup("");
-   return (buf);
+  else
+    buf->buf = _strdup("");
+  if (!rpt && opt != 1)
+    dendm(0);
+  return (buf);
 }
 
 
@@ -350,48 +328,48 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
 
 char *GetMacroArg()
 {
-   int Depth = 0;
-   int c;
-   char argbuf[4000];
-   char *argstr = argbuf;
-   int InQuote = 0;
+  int Depth = 0;
+  int c;
+  char argbuf[4000];
+  char *argstr = argbuf;
+  int InQuote = 0;
 
-   SkipSpaces();
-   memset(argbuf,0,sizeof(argbuf));
-   while(argstr - argbuf < sizeof(argbuf)-1)
-   {
-      c = NextCh();
-      if (c < 1) {
-         if (Depth > 0)
-            err(16);
-         break;
-      }
-      if (c == '"')
-        InQuote = !InQuote;
-      if (!InQuote) {
-        if (c == '(')
-          Depth++;
-        else if (c == ')') {
-          if (Depth < 1) {  // check if we hit the end of the arg list
-            unNextCh();
-            break;
-          }
-          Depth--;
-        }
-        else if (Depth == 0 && c == ',') {   // comma at outermost level means
-          unNextCh();
-          break;                           // end of argument has been found
-        }
-      }
-      if (c == '\n')
+  SkipSpaces();
+  memset(argbuf,0,sizeof(argbuf));
+  while(argstr - argbuf < sizeof(argbuf)-1)
+  {
+    c = NextCh();
+    if (c < 1) {
+        if (Depth > 0)
+          err(16);
         break;
-      *argstr++ = c;       // copy input argument to argstr.
-   }
-   *argstr = '\0';         // NULL terminate buffer.
-   if (argbuf[0])
-	   if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);
-   return (strip_quotes(argbuf));
-   //return argbuf[0] ? argbuf : NULL;
+    }
+    if (c == '"')
+      InQuote = !InQuote;
+    if (!InQuote) {
+      if (c == '(')
+        Depth++;
+      else if (c == ')') {
+        if (Depth < 1) {  // check if we hit the end of the arg list
+          unNextCh();
+          break;
+        }
+        Depth--;
+      }
+      else if (Depth == 0 && c == ',') {   // comma at outermost level means
+        unNextCh();
+        break;                           // end of argument has been found
+      }
+    }
+    if (c == '\n')
+      break;
+    *argstr++ = c;       // copy input argument to argstr.
+  }
+  *argstr = '\0';         // NULL terminate buffer.
+  if (argbuf[0])
+	  if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);
+  return (strip_quotes(argbuf));
+  //return argbuf[0] ? argbuf : NULL;
 }
 
 

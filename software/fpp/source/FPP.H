@@ -57,6 +57,7 @@ typedef struct
 {
   int size;
   int pos;
+  int alloc;      // 0 = malloc, 1 = some other buffer.
   char* buf;
 } buf_t;
 
@@ -100,6 +101,7 @@ typedef struct
 } pos_t;
 
 buf_t* new_buf();
+void free_buf(buf_t*);
 buf_t* enlarge_buf(buf_t* b);
 buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
@@ -154,10 +156,15 @@ void dif(int);
 void dundef(int);
 void dline(int);
 void dpragma(int);
+void dendm(int);
+void dendr(int);
 
 void searchenv(char *filename, char *envname, char *pathname, int pathsize);
+// Utility type functions
 char* rtrim(char*);
 char* strip_quotes(char*);
+char* strip_blank_lines(char*);
+int is_blank(char*);
 
 char syntax_ch();
 int GetReptArgList(arg_t* arglist[], int opt);
@@ -182,6 +189,7 @@ E int debug I(=0);
 E int lasttk I(= 0);
 E int in_comment I(= 0);
 E int syntax I(= 0);
+extern int mac_depth;
 extern int rep_depth;
 extern int npass;
 extern char *SkipComments();
