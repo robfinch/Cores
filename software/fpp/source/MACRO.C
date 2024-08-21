@@ -16,7 +16,7 @@ static int gmb_inst = 0;
 
 /* ---------------------------------------------------------------------------
    char *SubArg(bdy, n, sub);
-   char *bdy;  - pointer to macro body
+   char *bdy;  - pointer to macro body (pass NULL to free static buffer)
    int n;      - parameter number to substitute
    char *sub;  - substitution string
 
@@ -26,19 +26,34 @@ static int gmb_inst = 0;
 
 char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
 {
-	static char buf[160000];
-	char *s = sub, *o = buf;
+  static buf_t* buf = NULL;
+	char *s = sub;
 	int stringize = 0;
   char numbuf[20];
   char* substr;
   char ch;
+  int in_quote = 0;
+
+  if (bdy == NULL) {
+    free_buf(buf);
+    return (NULL);
+  }
+
+  if (buf == NULL)
+    buf = new_buf();
+
+  // Reset buffer. Start at the start of the buffer.
+  if (buf->buf) {
+    memset(buf->buf, 0, buf->size);
+    buf->pos = 0;
+  }
 
   substr = sub;
   if (n < 0) {
     ch = '@';
     if (rep_depth > 0) {
       memset(numbuf, 0, sizeof(numbuf));
-      sprintf_s(numbuf, sizeof(numbuf), "@_%05d_%.6s", rept_inst, sub);
+      sprintf_s(numbuf, sizeof(numbuf), "@_%.6s", sub);
       substr = numbuf;
     }
   }
@@ -46,33 +61,36 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
     ch = n + '0';
   }
 
-  memset(buf, 0, sizeof(buf));
-  for (o = buf; *bdy; bdy++, o++)
+  for (; *bdy; bdy++)
   {
 		stringize = 0;
-    if (*bdy == '' && *(bdy+1) == ch) {  // we have found parameter to sub
-			if (bdy[-1] == '#') {
-				stringize = 1;
-				o[-1] = '\x15';
-			}
-      // Copy substitution to output buffer
-			for (s = substr; *s;) {
-				if (stringize) {
-					if (*s=='"')
-						*o++ = '\\';
-				}
-				*o++ = *s++;
-			}
-			if (stringize)
-				*o++ = '\x15';
-        --o;
-        bdy++;
-        continue;
+    in_quote = 0;
+    if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch) {
+      stringize = 1;
+      char_to_buf(&buf, '\x15');
     }
-    *o = *bdy;
+    else if (bdy[0] == '' && bdy[1] == ch) {
+      // Copy substitution to output buffer
+      for (s = substr; *s; s++) {
+        if (stringize) {
+          if (s[0] == '"') {
+            in_quote = !in_quote;
+            char_to_buf(&buf, '\\');
+          }
+          else if (s[0] == '\\' && in_quote)
+            char_to_buf(&buf, '\\');
+        }
+        char_to_buf(&buf, s[0]);
+      }
+      if (stringize)
+        char_to_buf(&buf, '\x15');
+      bdy++;
+      continue;
+    }
+    char_to_buf(&buf, bdy[0]);
   }
-  *o = '\n';
-  return (buf);
+  char_to_buf(&buf, '\n');
+  return (buf->buf);
 }
 
 
@@ -167,7 +185,6 @@ buf_t *GetMacroBody(def_t* def, int opt, int rpt)
   int c = 0, nparm;
   int InQuote = 0;
   int count = sizeof(buf)-1;
-  char ch[4];
   int64_t ndx1 = 0;
 
   gmb_inst++;
@@ -188,11 +205,8 @@ buf_t *GetMacroBody(def_t* def, int opt, int rpt)
     // First search for an identifier to substitute with parameter
     id = NULL;
     if (def->nArgs > 0 && def->parms) {
-      while (PeekCh() == ' ' || PeekCh() == '\t') {
-        ch[0] = NextCh();
-        ch[1] = 0;
-        insert_into_buf(&buf, ch, 0);
-      }
+      while (PeekCh() == ' ' || PeekCh() == '\t')
+        char_to_buf(&buf, NextCh());
 
       if (syntax == CSTD) {
         ndx1 = inptr - inbuf->buf;
@@ -302,18 +316,12 @@ buf_t *GetMacroBody(def_t* def, int opt, int rpt)
         if (c == syntax_ch() && !InQuote) {
           inptr;
           inbuf;
-          switch (directive(NULL)) {
-          case 35:  // endm
+          if ((directive(NULL) >> 8) == DIR_END)  // endm or endr
             goto jmp1;
-          case 38:  // endr
-            goto jmp1;
-          }
           continue;
         }
       }
-      ch[0] = c;
-      ch[1] = 0;
-      insert_into_buf(&buf, ch, 0);
+      char_to_buf(&buf, c);
     }
     if (inptr == p3)
       if ((c = NextCh()) < 1)
@@ -322,11 +330,8 @@ buf_t *GetMacroBody(def_t* def, int opt, int rpt)
  jmp1:;
   if (buf->buf) {
 //    rtrim(buf->buf);    // Trim off trailing spaces.
-    if (opt == 1 && 0) {
-      ch[0] = '\n';
-      ch[1] = 0;
-      insert_into_buf(&buf, ch, 0);
-    }
+    if (opt == 1 && 0)
+      char_to_buf(&buf, '\n');
   }
   else
     buf->buf = _strdup("");

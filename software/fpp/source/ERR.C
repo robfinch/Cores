@@ -40,7 +40,8 @@ char *error[] = {
    "Eendr without rept",
    "Eiterative repeat expecting a symbol",
 // 30
-   "Eendm without macr"
+   "Eendm without macr",
+   "WNested macro definiton (%s)"
 };
 
 extern int InLineNo;

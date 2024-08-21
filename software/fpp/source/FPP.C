@@ -198,6 +198,9 @@ void ddefine(int opt)
    dp->name = _strdup(ptr2);
    dp->body = new_buf();
 
+   if (opt == 1 && mac_depth > 1)
+     err(32, dp->name);     // Nested macro warning
+
    SearchAndSub(dp);
    inbuf;
 
@@ -615,51 +618,55 @@ void dendm(int opt)
    being found the fastest.
 ----------------------------------------------------------------------------- */
 
-static directive_t dir[] =
+static directive_t dir[][32] =
 {
    // Standard C directives
-   "define",  6, ddefine, 0, 0,
-   "error",   5, derror,  0, 0,
-   "include", 7, dinclude,0, 0,
-   "else",    4, delse,   0, 0,
-   "endif",   5, dendif,  0, 0,
-   "elif",    4, delif,   0, 0,
-   "ifdef",   5, difdef,  0, 0,
-   "ifndef",  6, difndef, 0, 0,
-   "if",      2, dif,     0, 0,  // must come after ifdef/ifndef
-   "undef",   5, dundef,  0, 0,
-   "line",    4, dline,   0, 0,
-   "pragma",  6, dpragma, 0, 0,
+  {
+    { "define",  6, ddefine, 0, 0, DIR_NONE },
+    { "error",   5, derror,  0, 0, DIR_NONE },
+    { "include", 7, dinclude,0, 0, DIR_NONE },
+    { "else",    4, delse,   0, 0, DIR_NONE },
+    { "endif",   5, dendif,  0, 0, DIR_NONE },
+    { "elif",    4, delif,   0, 0, DIR_NONE },
+    { "ifdef",   5, difdef,  0, 0, DIR_NONE },
+    { "ifndef",  6, difndef, 0, 0, DIR_NONE },
+    { "if",      2, dif,     0, 0, DIR_NONE }, // must come after ifdef/ifndef
+    { "undef",   5, dundef,  0, 0, DIR_NONE },
+    { "line",    4, dline,   0, 0, DIR_NONE },
+    { "pragma",  6, dpragma, 0, 0, DIR_NONE },
+  },
    // Assembler directives
    //12 v
-   "define",  6, ddefine, 1, 0,
-   "set",     3, ddefine, 1, 2,
-   "equ",     3, ddefine, 1, 2,
-   "err",     3, derror,  1, 0,
-   "abort",   5, derror,  1, 1,
-   "include", 7, dinclude,1, 0,
-   "else",    4, delse,   1, 0,
-   "ifdef",   5, difdef,  1, 0,
-   // 20 v
-   "ifndef",  6, difndef, 1, 0,
-   "ifeq",    4, dif,     1, 1,
-   "ifne",    4, dif,     1, 0,
-   "ifgt",    4, dif,     1, 2,
-   "ifge",    4, dif,     1, 3,
-   "iflt",    4, dif,     1, 4,
-   "ifle",    4, dif,     1, 5,
-   "ifb",     3, dif,     1, 6,
-   "ifnb",    3, dif,     1, 7,
-   "if",      2, dif,     1, 0,  // must come after ifdef/ifndef
-   // 30 v
-   "incdir",  6, dincdir, 1, 0,
-   "endif",   5, dendif,  1, 0,
-   "undef",   5, dundef,  1, 0,
-   "macro",   5, ddefine, 1, 1,
-   "endm",    4, dendm,   1, 0,
-   "irp",     3, drept,   1, 1,
-   "rept",    4, drept,   1, 0,
-   "endr",    4, dendr,   1, 0
+  {
+    { "define",  6, ddefine, 1, 0, DIR_NONE },
+    { "set",     3, ddefine, 1, 2, DIR_NONE },
+    { "equ",     3, ddefine, 1, 2, DIR_NONE },
+    { "err",     3, derror,  1, 0, DIR_NONE },
+    { "abort",   5, derror,  1, 1, DIR_NONE },
+    { "include", 7, dinclude,1, 0, DIR_NONE },
+    { "else",    4, delse,   1, 0, DIR_NONE },
+    { "ifdef",   5, difdef,  1, 0, DIR_NONE },
+    // 20 v
+    { "ifndef",  6, difndef, 1, 0, DIR_NONE },
+    { "ifeq",    4, dif,     1, 1, DIR_NONE },
+    { "ifne",    4, dif,     1, 0, DIR_NONE },
+    { "ifgt",    4, dif,     1, 2, DIR_NONE },
+    { "ifge",    4, dif,     1, 3, DIR_NONE },
+    { "iflt",    4, dif,     1, 4, DIR_NONE },
+    { "ifle",    4, dif,     1, 5, DIR_NONE },
+    { "ifb",     3, dif,     1, 6, DIR_NONE },
+    { "ifnb",    3, dif,     1, 7, DIR_NONE },
+    { "if",      2, dif,     1, 0, DIR_NONE },  // must come after ifdef/ifndef
+    // 30 v
+    { "incdir",  6, dincdir, 1, 0, DIR_NONE },
+    { "endif",   5, dendif,  1, 0, DIR_NONE },
+    { "undef",   5, dundef,  1, 0, DIR_NONE },
+    { "macro",   5, ddefine, 1, 1, DIR_NONE },
+    { "endm",    4, dendm,   1, 0, DIR_END },
+    { "irp",     3, drept,   1, 1, DIR_REPT },
+    { "rept",    4, drept,   1, 0, DIR_REPT },
+    { "endr",    4, dendr,   1, 0, DIR_END }
+  }
 };
 
 /* -----------------------------------------------------------------------------
@@ -671,16 +678,20 @@ static directive_t dir[] =
    mnemonic.
 
    Parameters
-    (char*) ptr  - pointer to text to check for directive.
+    (char*) ptr  - pointer to text to check for directive. If the pointer is
+                   NULL then the input buffer pointer is used.
 
    Returns :
+      (int)
       non-zero if preprocessor directive, otherwise zero.
+      Bit 8 to 31 returned are flags, bits 0 to 7 is the table index.
 ----------------------------------------------------------------------------- */
 
 int directive(char *p)
 {
    int i;
    char* q = inptr;
+   int syn = min(syntax, 1);
 
    if (p)
      q = p;
@@ -692,15 +703,15 @@ int directive(char *p)
    }
    for(i = 0; i < sizeof(dir)/sizeof(directive_t); i++)
    {
-      if (!strncmp(q, dir[i].name, dir[i].len) && dir[i].syntax==syntax)
+      if (!strncmp(q, dir[syn][i].name, dir[syn][i].len) && dir[syn][i].syntax==syntax)
       {
-         inptr += dir[i].len;
-         (*dir[i].func)(dir[i].opt);
+         inptr += dir[syn][i].len;
+         (*dir[syn][i].func)(dir[syn][i].opt);
 		 // Including this causes #define to fail because it already
 		 // scans to the end of the line
 		 //ScanPastEOL();
          //for (; *inptr != 0; inptr++); // skip to eol
-         return (i+1);
+         return (i+1)|(dir[syn][i].flags<<8);
       }
    }
    return (0);
@@ -735,7 +746,7 @@ int ProcLine()
       def = directive(NULL);
       if (def)
         ptr = inptr;
-      if (def==36 || def==37)  // irp,rept
+      if ((def >> 8) == DIR_REPT)  // irp,rept
         goto jmp1;
    }
    else {
@@ -1171,7 +1182,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.58  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.59  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1206,7 +1217,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.58  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 2.59  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.

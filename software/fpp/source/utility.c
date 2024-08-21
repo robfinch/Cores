@@ -67,8 +67,10 @@ char* strip_blank_lines(char* p)
 	sol = p;
 	pos = 0;
 	for (q = p; *q; q++) {
+		// Trim leading spaces at start of line.
 		while (isspace(*q))
 			q++;
+		sol = q;
 		if (*q == '\n') {
 			while (*q == '\n')
 				q++;
@@ -92,5 +94,18 @@ char* strip_blank_lines(char* p)
 	}
 	buf[pos] = 0;
 	return (buf);
+}
+
+char* trim(char* str)
+{
+	int ii;
+	int nn;
+
+	rtrim(str);
+	nn = strlen(str);
+	for (ii = 0; ii < nn && isspace(str[ii]); ii++)
+		;
+	memmove(str, &str[ii], nn - ii + 1);
+	return (str);
 }
 

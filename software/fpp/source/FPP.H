@@ -46,6 +46,12 @@
 #define CSTD 0
 #define ASTD 1
 
+typedef enum {
+  DIR_NONE = 0,
+  DIR_REPT = 1,
+  DIR_END = 2
+} dir_e;
+
 typedef struct
 {
   int num;        // parameter number
@@ -94,6 +100,7 @@ typedef struct
   void (*func)(int);
   int syntax;
   int opt;
+  dir_e flags;
 } directive_t;
 
 typedef struct
@@ -107,6 +114,7 @@ void free_buf(buf_t*);
 buf_t* enlarge_buf(buf_t* b);
 buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
+void char_to_buf(buf_t** buf, char ch);
 
 def_t* new_def();
 def_t* clone_def(def_t*);

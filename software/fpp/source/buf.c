@@ -40,6 +40,7 @@ void free_buf(buf_t* buf)
   memset(buf->buf, 0, buf->size);
   if (buf->alloc == 0)
     free(buf->buf);
+  free(buf);
 }
 
 buf_t* clone_buf(buf_t* buf)
@@ -169,5 +170,62 @@ void insert_into_buf(buf_t** buf, char* p, int pos)
     (*buf)->buf[lastpos] = 0;
     (*buf)->pos = lastpos;
   }
+}
+
+/* -----------------------------------------------------------------------------
+   Description :
+      Adds a character to the input buffer.
+
+   Parameters:
+      (buf_t*) pointer to a structure referencing a text buffer to put the
+               data in.
+      (char)   character to add to the buffer
+
+   Modifies:
+      The position of the buffer pointer is updated.
+
+   Returns:
+    (none)
+----------------------------------------------------------------------------- */
+
+void char_to_buf(buf_t** buf, char ch)
+{
+  int mm;
+  char* q = NULL;
+  int lastpos = 0;
+
+  if (buf == NULL)
+    return;
+
+  if (*buf == NULL)
+    *buf = new_buf();
+  if ((*buf)->buf == NULL) {
+    mm = (1 + 4095) & 0xfffff000;
+    if (mm > 1000000) {
+      err(5);   // out of memory
+      exit(5);
+    }
+    q = malloc(mm);
+    if (q == NULL) {
+      err(5);
+      exit(5);
+    }
+    memset(q, 0, mm);
+    (*buf)->size = mm;
+    (*buf)->buf = q;
+    (*buf)->pos = 0;
+    (*buf)->alloc = 0;
+  }
+  if ((*buf)->buf == NULL) {
+    err(5);
+    exit(5);
+  }
+  lastpos = (*buf)->pos;
+  if (lastpos + 1 > (*buf)->size)
+    *buf = enlarge_buf(*buf);
+  (*buf)->buf[lastpos] = ch;
+  lastpos++;
+  (*buf)->buf[lastpos] = 0;
+  (*buf)->pos = lastpos;
 }
 
