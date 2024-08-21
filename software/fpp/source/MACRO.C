@@ -8,7 +8,7 @@
 //#include "fwstr.h"
 
 char *rtrim(char *str);
-extern int minst;
+extern int inst;
 int rep_depth;
 int mac_depth;
 
@@ -32,15 +32,13 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
   char numbuf[20];
   char* substr;
   char ch;
-  int ex, ln;
-  char* nd;
 
   substr = sub;
   if (n < 0) {
     ch = '@';
     if (rep_depth > 0) {
       memset(numbuf, 0, sizeof(numbuf));
-      sprintf_s(numbuf, sizeof(numbuf), "@_%05d_%.6s", rep_inst, sub);
+      sprintf_s(numbuf, sizeof(numbuf), "@_%05d_%.6s", rept_inst, sub);
       substr = numbuf;
     }
   }
@@ -78,7 +76,7 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
 }
 
 
-static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
+static int sub_id(def_t* def, char* id, buf_t** buf, char* p1, char* p2)
 {
   int ii;
   char mk[3];
@@ -162,7 +160,7 @@ static int proc_parm(buf_t** buf, int nparm)
      (int) - non-zero indicates a repeat is being processed.
 ---------------------------------------------------------------------------- */
 
-buf_t *GetMacroBody(SDef* def, int opt, int rpt)
+buf_t *GetMacroBody(def_t* def, int opt, int rpt)
 {
   char *id = NULL, *p2, * p3;
   buf_t* buf;
@@ -547,45 +545,36 @@ errxit:;
 /* -----------------------------------------------------------------------------
    Description :
       Copies a macro into the input buffer. Resets the input buffer pointer
-   to the start of the macro.
+   to the substitution point.
 
-   slen; - the number of characters being substituted
+   Parameters:
+      (char *) body - the text body of the macro
+      (int) slen; - the number of characters being substituted
+
+   Returns:
+     (none)
 ----------------------------------------------------------------------------- */
 
 void SubMacro(char *body, int slen)
 {
-   int64_t mlen, dif;
-   int64_t nchars;
+  int64_t mlen, dif;
+  int64_t nchars;
 
-   mlen = strlen(body);          // macro length
-   dif = mlen - slen;
-   nchars = inbuf->size - (inptr-inbuf->buf);         // calculate number of characters that could be remaining
-   //p = inptr + dif;
-   //if (dif==0)
-	  // ;
-   //else if (dif > 0) {
-	  // for (nn = sizeof(inbuf)-500-nchars-dif; nn >= 0; nn--)
-		 //  p[nn] = inptr[nn];
-   //}
-   //else {
-	  // for (nn = 0; nn < sizeof(inbuf)-500-nchars-dif; nn++)
-		 //  p[nn] = inptr[nn];
-   //}
-    // If the text is not changing, we want to advance the text pointer.
-    // Prevents the substitution from getting stuck in a loop.
-   if (strncmp(inptr-slen, body, mlen) == 0) {
-     inptr -= slen;           // reset input pointer to start of replaced text
-     inptr++;                 // and advance by one
-     return;
-   }
-   if (dif > 0)
+  mlen = strlen(body);          // macro length
+  dif = mlen - slen;
+  nchars = inbuf->size - (inptr-inbuf->buf);         // calculate number of characters that could be remaining
+
+  // If the text is not changing, we want to advance the text pointer.
+  // Prevents the substitution from getting stuck in a loop.
+  if (strncmp(inptr-slen, body, mlen) == 0) {
+    inptr -= slen;           // reset input pointer to start of replaced text
+    inptr++;                 // and advance by one
+    return;
+  }
+  if (dif > 0)
     memmove(inptr+dif, inptr, nchars-dif);  // shift open space in input buffer
-   inptr -= slen;                // reset input pointer to start of replaced text
-   memcpy(inptr, body, mlen);    // copy macro body in place over identifier
-   if (dif < 0)
-     memmove(inptr + mlen, inptr - dif + mlen, nchars - dif);
-   //for (nn = 0; nn < mlen; nn++)
-	  // inptr[nn] = body[nn];
-   //printf("inptr:%.60s\r\n", inptr);
-   //getchar();
+  inptr -= slen;                // reset input pointer to start of replaced text
+  memcpy(inptr, body, mlen);    // copy macro body in place over identifier
+  if (dif < 0)
+    memmove(inptr + mlen, inptr - dif + mlen, nchars - dif);
 }

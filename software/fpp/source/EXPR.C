@@ -130,7 +130,7 @@ static long Factor()
    long value = 0;
    int ch;
    char *ptr;
-   SDef dp;
+   def_t dp;
 
    ch = NextNonSpace(0);
 	switch (ch)

@@ -63,23 +63,25 @@ typedef struct
 
 typedef struct
 {
-   char *name;    // name of the macro
-   buf_t *body;    // text to substitute when macro name is encountered
-   int nArgs;     // Number of arguments passed to this macro
-   int varg;      // variable argument list indicator
-   int line;      // line number macro is defined on
-   char *file;    // file macro is defined in
-   arg_t** parms;
-   buf_t* abody;  // text to substitute when macro name is encountered
-   char *st;		// start of definiton
-   char *nd;		// end of definition
-} SDef;
+  int defno;
+  char *name;    // name of the macro
+  buf_t *body;    // text to substitute when macro name is encountered
+  int nArgs;     // Number of arguments passed to this macro
+  int varg;      // variable argument list indicator
+  int line;      // line number macro is defined on
+  char *file;    // file macro is defined in
+  arg_t** parms;
+  buf_t* abody;  // text to substitute when macro name is encountered
+  char *st;		// start of definiton
+  char *nd;		// end of definition
+  int inst;     // instance counter for this def.
+} def_t;
 
-typedef struct _tagRep_t
+typedef struct
 {
-  int ino;      // repeat instance number
-  SDef* def;    // associated def
-  int rcnt;      // current repeat counter (.rept)
+  int defno;     // repeat definition number
+  def_t* def;    // associated def
+  int rcnt;     // current repeat counter (.rept)
   int orcnt;    // original repeat count
   char* st;      
   char* nd;
@@ -87,12 +89,12 @@ typedef struct _tagRep_t
 
 typedef struct
 {
-   char *name;
-   int len;
-   void (*func)(int);
-   int syntax;
-   int opt;
-}  SDirective;
+  char *name;
+  int len;
+  void (*func)(int);
+  int syntax;
+  int opt;
+} directive_t;
 
 typedef struct
 {
@@ -106,6 +108,8 @@ buf_t* enlarge_buf(buf_t* b);
 buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
 
+def_t* new_def();
+def_t* clone_def(def_t*);
 
 pos_t* GetPos();
 void SetPos(pos_t*);
@@ -113,8 +117,8 @@ size_t SymSpaceLeft();
 void ProcFile(char *);
 
 int icmp(const void *, const void *);
-int fcmp(char *, SDef *);
-int ecmp(SDef *);
+int fcmp(char *, def_t *);
+int ecmp(def_t *);
 char *StoreBody(char *,...);
 char *StorePlainStr(char *);
 char *StoreStr(char *, ...);
@@ -133,14 +137,14 @@ void unNextCh(void);
 char *GetIdentifier(void);
 void ScanPastEOL();
 
-buf_t *GetMacroBody(SDef*, int opt, int rpt);
+buf_t *GetMacroBody(def_t*, int opt, int rpt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
 char *SubMacroArg(char *, int, char *, int rpt);
-int SubParmMacro(SDef* p, int opt, int rpt);
+int SubParmMacro(def_t* p, int opt, int rpt);
 
-void SearchAndSub(SDef* excld);
+void SearchAndSub(def_t* excld);
 void SearchForDefined(void);
 void DoPastes(char *);
 
@@ -157,6 +161,7 @@ void dundef(int);
 void dline(int);
 void dpragma(int);
 void dendm(int);
+void drept(int);
 void dendr(int);
 
 void searchenv(char *filename, char *envname, char *pathname, int pathsize);
@@ -169,30 +174,26 @@ int is_blank(char*);
 char syntax_ch();
 int GetReptArgList(arg_t* arglist[], int opt);
 
-SHashVal HashFnc(SDef *);
+SHashVal HashFnc(def_t *);
 
 E char *identchars I(= "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@?0123456789");
-extern SHashTbl HashInfo;
-E char *inptr;      // pointer to current character in input buffer
-E buf_t* inbuf;     // input buffer
-extern int errors;
-E int warnings;
-E FILE *fin, *fout,* ofp;
-E FILE *fdbg;
+extern SHashTbl HashInfo;   // Hash table for storing macro definitions
+E char *inptr;              // pointer to current character in input buffer
+E buf_t* inbuf;             // input buffer
+extern int errors;          // number of errors that occurred
+E int warnings;             // number of warnings
+E FILE *fin, * ofp;         // current input and output file pointers
+E FILE *fdbg;               // file pointer for debug info
 E int verbose I(=0);
 E int ShowLines I(=0);
-E int CharCount I(=0);
-E char *cmdStart I(=0);
-E char *cmdEnd I(=0);
-E int collect I(=0);
-E int debug I(=0);
-E int lasttk I(= 0);
-E int in_comment I(= 0);
-E int syntax I(= 0);
-extern int rep_inst;
-extern volatile int rept_inst;
-extern int minst;             // macro instance hash
-extern int mac_depth;
-extern int rep_depth;
-extern int npass;
+E int debug I(= 0);
+E int syntax I(= 0);        // stores the selected syntax
+E int npass I(=0);          // number of passes to perform-1
+E int collect I(=0);        // Tells the input to collect up lines of text for a macro
+E int in_comment I(= 0);    // Indicates if the input is in a comment
+extern int rep_def_cnt;     // Repeat block definition counter
+extern int rept_inst;       // Repeat block instance counter
+extern int inst;            // def instance counter
+extern int mac_depth;       // nessted macro definition depth
+extern int rep_depth;       // nested repeat instance depth
 extern char *SkipComments();

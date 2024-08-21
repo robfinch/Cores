@@ -3,6 +3,13 @@
 #include <string.h>
 #include "fpp.h"
 
+/* ---------------------------------------------------------------------------
+   (C) 1992-2024 Robert T Finch
+
+   fpp - PreProcessor for Assembler / Compiler
+   This file contains processing for the .if directives.
+--------------------------------------------------------------------------- */
+
 static int IfLevel = 0;
 
 /* -----------------------------------------------------------------------------
@@ -64,7 +71,7 @@ void difskip(int s)
          else if (!strncmp(inptr, "elif", 4)) {
             inptr += 4;
             SearchForDefined();
-            SearchAndSub(NULL, rep_depth > 0);
+            SearchAndSub(NULL);
             if (expeval())
                return;
          }
@@ -88,7 +95,7 @@ void dif(int opt)
 
   IfLevel++;
   SearchForDefined();  // check for defined() operator
-  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
+  SearchAndSub(NULL);      // perform any macro substitutions
   switch (opt) {
   case 0:  ex = expeval(); if (ex == 0) difskip(TRUE); break; // ne
   case 1:  ex = expeval(); if (ex != 0) difskip(TRUE); break; // eq
@@ -157,11 +164,11 @@ void delif(int opt)
 
 void difdef(int opt)
 {
-	SDef dp;
+	def_t dp;
 
 	IfLevel++;
 	dp.name = GetIdentifier();
-  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
+  SearchAndSub(NULL);      // perform any macro substitutions
   if (dp.name) {
 		if (!htFind(&HashInfo, &dp))  // If macro name is not found then
 			difskip(TRUE);             // scan for else/elif/endif
@@ -177,11 +184,11 @@ void difdef(int opt)
 
 void difndef(int opt)
 {
-	SDef dp;
+	def_t dp;
 
 	IfLevel++;
 	dp.name = GetIdentifier();
-  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
+  SearchAndSub(NULL);      // perform any macro substitutions
   if (dp.name)
 		if (htFind(&HashInfo, &dp))
 			difskip(TRUE);

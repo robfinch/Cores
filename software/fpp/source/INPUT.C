@@ -116,7 +116,6 @@ void unNextCh()
 {
 	if (inptr > inbuf->buf) {
       inptr--;
-	  CharCount--;
 	}
 }
 

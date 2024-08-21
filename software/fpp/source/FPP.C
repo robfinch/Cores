@@ -31,35 +31,32 @@ char OutputName[250];
 char BaseSourceName[250];
 //char *SymSpace, *SymSpacePtr;
 buf_t* SymSpace;
-SHashTbl HashInfo = { HashFnc, icmp, 0, sizeof(SDef), NULL };
+SHashTbl HashInfo = { HashFnc, icmp, 0, sizeof(def_t), NULL };
 int MacroCount;
 FILE *ofp;
-FILE* fout;
 int banner = 1;
 int ostdo = 1;
-int npass = 0;
 int pass = 0;
 int keep_output = 0;
 FILE* ifps[20];
 int ifp_sp = 0;
-int rep_inst = 0;
-volatile int rept_inst = 0;
-rep_t rept_array[2000];
-int minst=0;      // macro instance
+int rep_def_cnt = 0;
+int rept_inst = 0;
+int inst=0;      // macro instance
 char incdir[4096];    // additional include directory specified with .incdir
 int inst_stk[20];
 int inst_sp;
 
 // Storage for standard #defines
 
-SDef
-bbstdc = { "__STDC__", NULL, -1, 0, 0, "<fpp>", NULL },
-   bbline = { "__LINE__", NULL, -1, 0, 0, "<fpp>", NULL },
-   bbdate = { "__DATE__", NULL, -1, 0, 0, "<fpp>", NULL },
-   bbfile = { "__FILE__", NULL, -1, 0, 0, "<fpp>", NULL },
-  bbbasefile = { "__BASEFILE__", NULL, -1, 0, 0, "<fpp>", NULL },
-  bbtime = { "__TIME__", NULL, -1, 0, 0, "<fpp>", NULL },
-   bbpp   = { "__PP__", NULL, -1, 0, 0, "<fpp>", NULL };
+def_t
+bbstdc = { 0, "__STDC__", NULL, -1, 0, 0, "<fpp>", NULL },
+   bbline = { 0, "__LINE__", NULL, -1, 0, 0, "<fpp>", NULL },
+   bbdate = { 0, "__DATE__", NULL, -1, 0, 0, "<fpp>", NULL },
+   bbfile = { 0, "__FILE__", NULL, -1, 0, 0, "<fpp>", NULL },
+  bbbasefile = { 0, "__BASEFILE__", NULL, -1, 0, 0, "<fpp>", NULL },
+  bbtime = { 0, "__TIME__", NULL, -1, 0, 0, "<fpp>", NULL },
+   bbpp   = { 0, "__PP__", NULL, -1, 0, 0, "<fpp>", NULL };
 
 void PrintDefines(void);
 
@@ -74,7 +71,7 @@ size_t SymSpaceLeft()
 
 SHashVal HashFnc(void *d)
 {
-   SDef *def = (SDef *)d;
+   def_t *def = (def_t *)d;
    return htSymHash(&HashInfo, def->name);
 }
 
@@ -86,21 +83,21 @@ SHashVal HashFnc(void *d)
 
 int icmp (const void *m1, const void *m2)
 {
-    SDef *n1; SDef *n2;
-    n1 = (SDef *)m1;
-    n2 = (SDef *)m2;
+    def_t *n1; def_t *n2;
+    n1 = (def_t *)m1;
+    n2 = (def_t *)m2;
 	if (n1->name==NULL) return 1;
 	if (n2->name==NULL) return -1;
   return (strcmp(n1->name, n2->name));
 }
 
-int fcmp(char *key, SDef *n2)
+int fcmp(char *key, def_t *n2)
 {
    printf("Key:%s, Entry:%s|\n", key, n2->name);
    return (strncmp(key, n2->name, strlen(n2->name)));
 }
 
-int ecmp(SDef *aa)
+int ecmp(def_t *aa)
 {
    return (aa->name ? 1 : 0);
 }
@@ -114,40 +111,29 @@ char syntax_ch()
 }
 
 
-SDef* new_def()
+def_t* new_def()
 {
-  SDef* p;
+  def_t* p;
+  static int defcnt = 0;
 
-  p = malloc(sizeof(SDef));
+  defcnt++;
+  p = malloc(sizeof(def_t));
   if (p == NULL) {
     err(5);
     exit(5);
   }
-  memset(p, 0, sizeof(SDef));
+  memset(p, 0, sizeof(def_t));
+  p->defno = defcnt;
   return (p);
 }
 
-SDef* clone_def(SDef* dp)
+def_t* clone_def(def_t* dp)
 {
-  SDef* p;
+  def_t* p;
 
   p = new_def();
-  memcpy_s(p, sizeof(SDef), dp, sizeof(SDef));
+  memcpy_s(p, sizeof(def_t), dp, sizeof(def_t));
   p->body = clone_buf(p->body);
-  return (p);
-}
-
-rep_t* new_rept()
-{
-  rep_t* p;
-
-  if (rep_inst > 1999)
-    exit(0);
-  p = &rept_array[rep_inst];
-  memset(p, 0, sizeof(rep_t));
-  p->ino = rep_inst;
-  p->def = new_def();
-  rep_inst++;
   return (p);
 }
 
@@ -187,7 +173,7 @@ void SetPos(pos_t* pos)
 void ddefine(int opt)
 {
    int c, n = 0;
-   SDef *dp, *p;
+   def_t *dp, *p;
    arg_t parms[100];
    arg_t* pl[100];
    buf_t *ptr;
@@ -212,7 +198,7 @@ void ddefine(int opt)
    dp->name = _strdup(ptr2);
    dp->body = new_buf();
 
-   SearchAndSub(dp, rep_depth > 0);
+   SearchAndSub(dp);
    inbuf;
 
    // Check for macro parameters. There must be no space between the
@@ -285,7 +271,7 @@ void ddefine(int opt)
    // See if the macro is already defined. If it is then if the definition
    // is not the same spit out an error, otherwise spit out warning.
    dp->body = ptr;
-   p = (SDef *)htFind(&HashInfo, dp);
+   p = (def_t *)htFind(&HashInfo, dp);
    if (p) {
 		 if (strcmp(p->body->buf, dp->body->buf))
 			 err(6, dp->name);
@@ -299,7 +285,7 @@ void ddefine(int opt)
    dp->body->alloc = 1;
    free(ptr2);
    htInsert(&HashInfo, dp);
-   minst++;
+   inst++;
 }
 
 /* ----------------------------------------------------------------------------
@@ -319,7 +305,7 @@ void derror(int opt)
 {
   int c;
 
-  SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL);
   DoPastes(inbuf->buf);
   SkipSpaces();
   do
@@ -352,7 +338,7 @@ void dincdir(int opt)
   char* f;
   char name[4096];
 
-  SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL);
   DoPastes(inbuf->buf);
   ch = NextNonSpace(0);
   if (ch == '"')  // search the path specified
@@ -414,11 +400,11 @@ void dinclude(int opt)
    char wpath[4096];
 	 char buf[4096];
    int ch;
-   SDef *p;
+   def_t *p;
    pos_t* ndx;
 
    ndx = GetPos();
-   SearchAndSub(NULL, rep_depth > 0);
+   SearchAndSub(NULL);
    DoPastes(inbuf->buf);
    SetPos(ndx);
    free(ndx);
@@ -501,7 +487,7 @@ void dinclude(int opt)
   {
 		sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, path, 0x22);
   bbfile.body->buf = StorePlainStr(buf);
-  p = (SDef *)htFind(&HashInfo, &bbfile);
+  p = (def_t *)htFind(&HashInfo, &bbfile);
   if (p)
       p->body = bbfile.body;
   ifps[ifp_sp] = fin;
@@ -523,7 +509,7 @@ void dinclude(int opt)
 
 //    ProcFile(bbfile.body->buf);
   bbfile.body->buf = tname;
-  p = (SDef *)htFind(&HashInfo, &bbfile);
+  p = (def_t *)htFind(&HashInfo, &bbfile);
   if (p)
       p->body = bbfile.body;
   }
@@ -544,7 +530,7 @@ void dinclude(int opt)
 
 void dundef(int opt)
 {
-	SDef dp;
+	def_t dp;
 
 	dp.name = GetIdentifier();
 	if (dp.name)
@@ -568,9 +554,9 @@ void dline(int opt)
 {
   char *ptr;
   char name[MAXLINE];
-  SDef *p;
+  def_t *p;
 
-  SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL);
   DoPastes(inbuf->buf);
   InLineNo = atoi(inptr);
   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
@@ -582,7 +568,7 @@ void dline(int opt)
 		strcat_s(name, sizeof(name), "\"");
     bbfile.body->buf = StorePlainStr(name);
     bbfile.body->alloc = 1;
-    p = (SDef *)htFind(&HashInfo, &bbfile);
+    p = (def_t *)htFind(&HashInfo, &bbfile);
     if (p)
       p->body = bbfile.body;
   }
@@ -599,7 +585,7 @@ void dline(int opt)
 
 void dpragma(int opt)
 {
-   SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL);
    DoPastes(inbuf->buf);
 }
 
@@ -620,217 +606,6 @@ void dendm(int opt)
     err(31);    // endm without macr
 }
 
-/* ---------------------------------------------------------------------------
-   Description :
-      Define a repeat block.
-
-   Parameters
-    (int) opt   - 0=rept,1=irp
-
-    Returns
-      (none)
----------------------------------------------------------------------------- */
-
-void* drept(int opt)
-{
-  rep_t* dr;
-  int c, n = 0;
-  SDef* dp1;
-  arg_t pary[100];
-  arg_t* parms[100];
-  char* st;
-  pos_t* opndx = NULL;
-  int count = 0;
-  int ii;
-  int wd;
-  int ri;
-  SDef* dp, * ptdef, *ptdef2;
-  SDef tdef;
-  char* vname;
-
-  // Update the repeat nesting depth. This is a global var manipulated when a
-  // repeat body is gotten.
-  rep_depth++;
-  rept_inst += 100;
-  minst++;
-
-  dr = new_rept();
-  dp = dr->def;
-  if (dp == NULL)
-    return (NULL);
-
-  dp->varg = 0;
-  dp->nArgs = -1;          // no arguments or round brackets
-  dp->line = InLineNo;     // line number macro defined on
-  dp->file = bbfile.body->buf;  // file macro defined in
-  dp->name = NULL;
-
-  memset(pary, 0, sizeof(pary));
-  for (ii = 0; ii < 100; ii++)
-    parms[ii] = &pary[ii];
-
-  // Get the var name for .irp, and absorb a following comma.
-  if (opt == 1) {
-    SkipSpaces();
-    vname = GetIdentifier();
-    if (vname)
-      tdef.name = _strdup(vname);
-    else {
-      err(30);    // expecting a symbol
-      ScanPastEOL();
-      goto xit;
-    }
-    SkipSpaces();
-    if (PeekCh() == ',')
-      NextCh();
-  }
-
-  SearchAndSub(NULL, rep_depth > 0);
-
-  // expeval() will eat a newline char
-  if (opt == 0)
-    dr->orcnt = dr->rcnt = expeval();
-  st = inptr;
-
-  // Check for repeat parameters. There must be no space between the
-  // macro name and ')'.
-  SkipSpaces();
-  c = PeekCh();
-  if (c == ',' || opt==1) {
-    if (c == ',')
-      NextCh();
-    dp->varg = 0;
-    dp->nArgs = GetReptArgList(parms, opt);
-    if (dp->nArgs < 0) {
-      dp->nArgs = -dp->nArgs;
-      dp->varg = 1;
-    }
-    if (dp->nArgs) {
-      dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
-      if (dp->parms == NULL) {
-        err(5);
-        exit(5);
-      }
-      for (ii = 0; ii < dp->nArgs; ii++) {
-        dp->parms[ii] = malloc(sizeof(arg_t));
-        if (dp->parms[ii] == NULL) {
-          err(5);
-          exit(5);
-        }
-        dp->parms[ii]->num = ii;
-        dp->parms[ii]->name = opt==1 ? tdef.name : NULL;
-        dp->parms[ii]->def = _strdup(parms[ii]->def);
-      }
-    }
-    // Note that getting the rept arg list might scan until the end of line
-    // already. We do not want to do this twice, or the contents of the 
-    // start of the next line will be missed.
-    if (PeekCh() != 0)
-      ScanPastEOL();
-  }
-  c = PeekCh();
-  if (c < 0) {
-    err(26);
-    return (NULL);
-  }
-  dp->body = GetMacroBody(dp, 1, 1);
-
-  // Advance past the '.endr'
-  inptr += 5;
-
-  // Dump the repeat body to the input repeat count number of times.
-  opndx = GetPos();
-  ri = rep_inst;
-
-  // Handle an iterative repeat
-  if (opt == 1) {
-    ptdef2 = htFind(&HashInfo, &tdef);
-    if (ptdef2) {
-      ii = 0;
-      do {
-        // The variable is being modified, but we want to retain the original state,
-        // so clone it and modify the clone.
-        ptdef = clone_def(ptdef2);
-        // We wnat to substitute into the body of the repeat statement.
-        ptdef->body = dp->body;
-        // Assign the symbol the iteration value.
-        ptdef->nArgs = 1;         // we are only subbing one arg
-        ptdef->parms = malloc(sizeof(arg_t*));  // only 1 arg
-        if (ptdef->parms == NULL) {
-          err(5);
-          exit(5);
-        }
-        ptdef->parms[0] = malloc(sizeof(arg_t));
-        if (ptdef->parms[0] == NULL) {
-          err(5);
-          exit(5);
-        }
-        ptdef->parms[0]->name = ptdef2->name;
-        ptdef->parms[0]->num = 0;
-        // A symbol without an iteration value iterates to an empty string.
-        // Other assign the iteration value from the argument list.
-        if (dp->nArgs < 1)
-          ptdef->parms[0]->def = "";
-        else
-          ptdef->parms[0]->def = dp->parms[ii]->def;
-        // Substitute 1 arg into macro body and into the input.
-        wd = SubParmMacro(ptdef, 1, 1);
-        inbuf;
-        inptr += strlen(inptr);
-        free(ptdef->parms[0]);
-        free(ptdef->parms);
-        free(ptdef);
-        ptdef = NULL;
-        ii++;
-      } while (ii < dp->nArgs);
-    }
-  }
-  // Handle the usual repeat.
-  else {
-    dp1 = new_def();
-    dp1->body = dp->body;
-    for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
-      // Substitute args into macro body and into the input.
-      dp1->abody = clone_buf(dp->body);
-      wd = SubParmMacro(dp1, 1, 1);
-      free_buf(dp1->abody);
-      inptr += strlen(inptr);
-    }
-  }
-
-    // Set the input point back to the start of the dump.
-xit:
-  if (opndx) {
-    SetPos(opndx);
-    free(opndx);
-  }
-  return ((void*)dr);
-}
-
-/* ----------------------------------------------------------------------------
-   Description:
-      Process end of repeat block marker. This marker should have been 
-   absorbed when the repeat body was collected. If it is encountered then
-   there must have been an end without a start. So spit out an error.
-
-   Parameters
-    (int) opt   - this parameter is not used
-
-    Returns
-      (none)
----------------------------------------------------------------------------- */
-
-void dendr(int opt)
-{
-  if (rep_depth > 0) {
-    rep_depth--;
-    minst--;
-  }
-  else
-    err(29);    // .endr without .rept
-}
-
-
 /* -----------------------------------------------------------------------------
    Description :
 
@@ -840,7 +615,7 @@ void dendr(int opt)
    being found the fastest.
 ----------------------------------------------------------------------------- */
 
-static SDirective dir[] =
+static directive_t dir[] =
 {
    // Standard C directives
    "define",  6, ddefine, 0, 0,
@@ -915,7 +690,7 @@ int directive(char *p)
      NextNonSpace(0);
      unNextCh();
    }
-   for(i = 0; i < sizeof(dir)/sizeof(SDirective); i++)
+   for(i = 0; i < sizeof(dir)/sizeof(directive_t); i++)
    {
       if (!strncmp(q, dir[i].name, dir[i].len) && dir[i].syntax==syntax)
       {
@@ -972,7 +747,7 @@ jmp1:
      inptr = inbuf->buf + ndx3;
      if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
      collect = 1;
-     SearchAndSub(NULL, rep_depth > 0);
+     SearchAndSub(NULL);
      collect = 0;
      if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
      DoPastes(inbuf->buf + ndx3);
@@ -997,7 +772,6 @@ jmp1:
    inbuf->buf[1] = 0;
    inbuf->buf[2] = 0;
    inptr = inbuf->buf;
-   lasttk = 0;
    InLineNo++;          // Update line number (including __LINE__).
    sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-1);
    return(0);
@@ -1163,7 +937,7 @@ xit:
 
 void parsesw(char *s)
 {
-  SDef tdef;
+  def_t tdef;
   char buf[MAXLINE];
   char buf2[MAXLINE];
   int ii, jj;
@@ -1230,17 +1004,17 @@ void parsesw(char *s)
 void PrintDefines()
 {
   int ii, count, blnk, jj;
-  SDef *dp, *pt;
+  def_t *dp, *pt;
   char buf[8];
 
-  pt = (SDef *)HashInfo.table;
+  pt = (def_t *)HashInfo.table;
 
   // Pack any 'holes' in the table
   for(blnk= ii = count = 0; count < HashInfo.size; count++, ii++) {
     dp = &pt[ii];
     if (dp->name) {
         if (blnk > 0)
-          memmove(&pt[ii-blnk], &pt[ii], (HashInfo.size - count) * sizeof(SDef));
+          memmove(&pt[ii-blnk], &pt[ii], (HashInfo.size - count) * sizeof(def_t));
         ii -= blnk;
         blnk = 0;
     }
@@ -1249,7 +1023,7 @@ void PrintDefines()
   }
 
   // Sort the table
-  qsort(pt, ii, sizeof(SDef), icmp);
+  qsort(pt, ii, sizeof(def_t), icmp);
 
   printf("\n\nMacro Table:\n");
   printf("Name         Args Body                                     Line  File\n");
@@ -1262,7 +1036,7 @@ void PrintDefines()
         else 
           sprintf_s(buf, sizeof(buf), " -- ");
         // Display only the first line of a macro.
-        for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf != '\n'; jj++);
+        for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf[jj] != '\n'; jj++);
         if (jj > 1) dp->body->buf[jj - 2] = 0;
         printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
     }
@@ -1389,15 +1163,15 @@ void SetStandardDefines(void)
 int main(int argc, char *argv[]) {
   int
     xx;
-  SDef *p;
+  def_t *p;
 	char buf[260];
   char* p1;
    
   HashInfo.size = MAXMACROS;
-  HashInfo.width = sizeof(SDef);
+  HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.57  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.58  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1421,7 +1195,7 @@ int main(int argc, char *argv[]) {
   /* ----------------------------------------------
         Allocate storage for macro information.
   ---------------------------------------------  */
-  if ((HashInfo.table = calloc(HashInfo.size, sizeof(SDef))) == NULL) {
+  if ((HashInfo.table = calloc(HashInfo.size, sizeof(def_t))) == NULL) {
     err(5);
     return (1);
   }
@@ -1432,7 +1206,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.57  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 2.58  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.
@@ -1506,7 +1280,7 @@ int main(int argc, char *argv[]) {
 	sprintf_s(buf, sizeof(buf), "%c%s%c", 0x22, SourceName, 0x22);
 	bbfile.body->buf = StorePlainStr(buf);
   bbfile.body->alloc = 1;
-  p = (SDef *)htFind(&HashInfo, &bbfile);
+  p = (def_t *)htFind(&HashInfo, &bbfile);
   if (p)
     p->body = bbfile.body;
   ProcFile(SourceName);
@@ -1526,7 +1300,7 @@ int main(int argc, char *argv[]) {
   if (verbose) {
     PrintDefines();
     printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
-    printf("%llu/%llu macro space used\n", SymSpace->pos, SymSpace->size);
+    printf("%u/%u macro space used\n", SymSpace->pos, SymSpace->size);
   }
   if (SymSpace)
     free_buf(SymSpace);

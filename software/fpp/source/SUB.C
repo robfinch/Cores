@@ -15,7 +15,7 @@ int spm_inst = 0;
       Substitute a macro with arguments.
 ----------------------------------------------------------------------------- */
 
-int SubParmMacro(SDef* p, int opt, int rpt)
+int SubParmMacro(def_t* p, int opt, int rpt)
 {
   int c, nArgs, ArgCount, xx;
   arg_t Args[MAX_MACRO_ARGS];
@@ -36,7 +36,6 @@ int SubParmMacro(SDef* p, int opt, int rpt)
 
   // We can't just take a pointer difference because the input
   // routine will occasionally reset the pointer for new lines.
-  CharCount = 0;
   ptr = inptr;
   qndx = GetPos();
   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
@@ -139,17 +138,16 @@ int SubParmMacro(SDef* p, int opt, int rpt)
 
 ----------------------------------------------------------------------------- */
 
-void SearchAndSub(SDef* exc, int rpt)
+void SearchAndSub(def_t* exc, int rpt)
 {
 	static int InComment = 0;
   int c, InComment2 = 0;
   int QuoteToggle = 0;
 	int Quote2 = 0;
-  char *id, *ptr, *optr, *nd;
-  SDef *p, tdef;
+  char *id, *ptr, *optr;
+  def_t *p, tdef;
   pos_t* ondx, * ondx1;
-  int ex, ln;
-  char buf[20];
+  int ex;
   char numbuf[20];
   char* tp;
 
@@ -215,28 +213,6 @@ void SearchAndSub(SDef* exc, int rpt)
         continue;         
     }
 
-    //if (c == '\x14') {
-      //if (syntax == ASTD && inptr[1] == '@') {
-        // Now handle the instance var.
-        //inptr += 2;
-        //sprintf_s(numbuf, sizeof(numbuf), "%08d", inst);
-        //SubMacro(numbuf, 2);
-        /*
-        if (PeekCh() == '[') {
-          ex = strtoul(inptr, &nd, 10);
-          ln = nd - inptr + 3;
-          inptr = nd;
-          if (PeekCh() == ']')
-            NextCh();
-        }
-        if (rep_depth == 0) {
-          sprintf_s(buf, sizeof(buf), "%08d", minst + ex);
-          SubMacro(buf, ln);
-        }
-        */
-      //}
-    //}
-
     id = NULL;
     // Now handle the instance var.
     if (syntax == ASTD && c == '\x14') {
@@ -274,13 +250,13 @@ void SearchAndSub(SDef* exc, int rpt)
             err(5);
 
 		 // Search and see if the identifier corresponds to a macro
-		 p = (SDef *)htFind(&HashInfo, &tdef);
+		 p = (def_t *)htFind(&HashInfo, &tdef);
      ex = 0;
      if (p != NULL && exc) {
        ex = strcmp(p->name, exc->name) == 0;
      }
 
-         if (p != (SDef *)NULL && !ex)
+         if (p != (def_t *)NULL && !ex)
          {
            if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy
@@ -324,7 +300,7 @@ void DoPastes(char *buf)
 {
    char *p = buf;
    int QuoteToggle = 0;
-   int len = strlen(buf);
+   int64_t len = strlen(buf);
    int ls = 0, ts = 0;
 
    while (1)
@@ -378,7 +354,7 @@ void SearchForDefined()
 {
    char *id;
    int c;
-   SDef tdef, *p;
+   def_t tdef, *p;
    int needClosePa = 0;
    int64_t stndx = 0;
    pos_t* pndx;
@@ -414,7 +390,7 @@ void SearchForDefined()
                 err(22);
             }
             tdef.name = id;
-            p = (SDef *)htFind(&HashInfo, &tdef);
+            p = (def_t *)htFind(&HashInfo, &tdef);
             SubMacro((char*)(p ? "1" : "0"), inptr - (inbuf->buf+stndx));
          }
       }
