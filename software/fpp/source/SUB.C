@@ -112,7 +112,7 @@ int SubParmMacro(def_t* p, int opt, int rpt)
   bdy = _strdup(tp);
 
   // Substitute macro into input stream
-  SubMacro(bdy, so);
+  SubMacro(bdy, so, 0);
   free(bdy);                                // free last strdup
   free(qndx);
   return (0);
@@ -150,6 +150,7 @@ void SearchAndSub(def_t* exc, int rpt)
   int ex;
   char numbuf[20];
   char* tp;
+  char c1, c2;
 
   // Check if we hit the end of the current input line we do this because
   // NextCh would read another line
@@ -214,6 +215,7 @@ void SearchAndSub(def_t* exc, int rpt)
     }
 
     id = NULL;
+    c1 = c2 = 0;
     // Now handle the instance var.
     if (syntax == ASTD && c == '\x14') {
       if (inptr[1] == '@') {
@@ -223,7 +225,7 @@ void SearchAndSub(def_t* exc, int rpt)
         spm_inst++;
         sprintf_s(numbuf, sizeof(numbuf), "%06d", spm_inst);
         tp = _strdup(SubMacroArg(&inptr[-2], -1, numbuf, rpt));
-        SubMacro(tp, 2);
+        SubMacro(tp, 2, 0);
         free(tp);
         SetPos(ondx1);
         free(ondx1);
@@ -240,6 +242,10 @@ void SearchAndSub(def_t* exc, int rpt)
     }
     else {
       ptr = inptr;            // record the position of the input pointer
+      if (inptr > inbuf->buf)
+        c1 = inptr[-1];
+      if (inptr > inbuf->buf + 1)
+        c2 = inptr[-2];
       id = GetIdentifier();   // try and get an identifier
     }
 
@@ -269,7 +275,8 @@ void SearchAndSub(def_t* exc, int rpt)
 			 }
 			else {
 				if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-				SubMacro(p->body->buf, strlen(p->name) + (syntax==ASTD ? 1 : 0));
+        // Watch out for paste operator.
+				SubMacro(p->body->buf, strlen(p->name) + (syntax==ASTD ? 1 : 0), c1=='#' && c2 != '#');
 				if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			}
          }
@@ -391,7 +398,7 @@ void SearchForDefined()
             }
             tdef.name = id;
             p = (def_t *)htFind(&HashInfo, &tdef);
-            SubMacro((char*)(p ? "1" : "0"), inptr - (inbuf->buf+stndx));
+            SubMacro((char*)(p ? "1" : "0"), inptr - (inbuf->buf+stndx), 0);
          }
       }
       else

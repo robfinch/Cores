@@ -68,6 +68,8 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
     if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch) {
       stringize = 1;
       char_to_buf(&buf, '\x15');
+      bdy++;
+      continue;
     }
     else if (bdy[0] == '' && bdy[1] == ch) {
       // Copy substitution to output buffer
@@ -560,14 +562,34 @@ errxit:;
      (none)
 ----------------------------------------------------------------------------- */
 
-void SubMacro(char *body, int slen)
+void SubMacro(char *body, int slen, int stringize)
 {
   int64_t mlen, dif;
   int64_t nchars;
+  int nn, mm;
+  char* s;
+  int in_quote = 0;
+
 
   mlen = strlen(body);          // macro length
   dif = mlen - slen;
-  nchars = inbuf->size - (inptr-inbuf->buf);         // calculate number of characters that could be remaining
+  nchars = inbuf->size - (inptr - inbuf->buf);         // calculate number of characters that could be remaining
+
+  // Check for stringize
+  // First adjust the substitution length by the number of characters inserted
+  // by the stringize.
+  if (stringize) {
+    dif++; // account for preceeding '#'
+    inptr--;
+    for (nn = 0; body[nn]; nn++) {
+      if (body[nn] == '"') {
+        in_quote = !in_quote;
+        dif++;
+      }
+      else if (body[nn] == '\\' && in_quote)
+        dif++;
+    }
+  }
 
   // If the text is not changing, we want to advance the text pointer.
   // Prevents the substitution from getting stuck in a loop.
@@ -576,10 +598,31 @@ void SubMacro(char *body, int slen)
     inptr++;                 // and advance by one
     return;
   }
+
+  // shift open space in input buffer
   if (dif > 0)
-    memmove(inptr+dif, inptr, nchars-dif);  // shift open space in input buffer
+    memmove(inptr+dif, inptr, nchars-dif);
+
   inptr -= slen;                // reset input pointer to start of replaced text
-  memcpy(inptr, body, mlen);    // copy macro body in place over identifier
+  // Copy body to buffer.
+  in_quote = 0;
+  for (mm = nn = 0 ; body[nn]; nn++) {
+    if (stringize) {
+      if (body[nn] == '"') {
+        in_quote = !in_quote;
+        inptr[mm] = '\\';
+        mm++;
+      }
+      else if (body[nn] == '\\' && in_quote) {
+        inptr[mm] = '\\';
+        mm++;
+      }
+    }
+    inptr[mm] = body[nn];
+    mm++;
+  }
+
+  //memcpy(inptr, body, mlen);    // copy macro body in place over identifier
   if (dif < 0)
     memmove(inptr + mlen, inptr - dif + mlen, nchars - dif);
 }

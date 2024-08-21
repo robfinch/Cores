@@ -148,7 +148,7 @@ void ScanPastEOL();
 buf_t *GetMacroBody(def_t*, int opt, int rpt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
-void SubMacro(char *, int);
+void SubMacro(char *, int, int);
 char *SubMacroArg(char *, int, char *, int rpt);
 int SubParmMacro(def_t* p, int opt, int rpt);
 

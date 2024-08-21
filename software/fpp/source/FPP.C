@@ -248,7 +248,7 @@ void ddefine(int opt)
      else if (PeekCh() == ',')
        NextCh();
    }
-   ptr = GetMacroBody(dp, opt==2 ? 0 : 1, 0);
+   ptr = GetMacroBody(dp, opt==2 ? 1 : 0, 0);
    inptr;
    inbuf;
    dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
@@ -701,7 +701,7 @@ int directive(char *p)
      NextNonSpace(0);
      unNextCh();
    }
-   for(i = 0; i < sizeof(dir)/sizeof(directive_t); i++)
+   for(i = 0; i < 32 && dir[syn][i].name; i++)
    {
       if (!strncmp(q, dir[syn][i].name, dir[syn][i].len) && dir[syn][i].syntax==syntax)
       {
@@ -1182,7 +1182,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.59  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.60  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1217,7 +1217,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.59  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 2.60  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.
