@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <malloc.h>
 #include <string.h>
 #include <ctype.h>
@@ -6,13 +7,15 @@
 #include "ht.h"
 #include "fpp.h"
 
+int spm_inst = 0;
+
 /* -----------------------------------------------------------------------------
 
    Description :
       Substitute a macro with arguments.
 ----------------------------------------------------------------------------- */
 
-int SubParmMacro(SDef* p, int opt)
+int SubParmMacro(SDef* p, int opt, int rpt)
 {
   int c, nArgs, ArgCount, xx;
   arg_t Args[MAX_MACRO_ARGS];
@@ -21,6 +24,9 @@ int SubParmMacro(SDef* p, int opt)
   int need_cb = 0;
   int64_t so;             // number of chars to substitute over
   pos_t* pndx, * qndx;
+  char numbuf[20];
+
+  spm_inst++;
 
   // look for opening bracket indicating start of parameters
   // if the bracket isn't present then there are no arguments
@@ -83,7 +89,7 @@ int SubParmMacro(SDef* p, int opt)
     // Substitute arguments into macro body
     for (xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
     {
-      tp = SubMacroArg(bdy, xx, Args[xx].def);        // Substitute argument into body
+      tp = SubMacroArg(bdy, xx, Args[xx].def, rpt);        // Substitute argument into body
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
@@ -94,14 +100,15 @@ int SubParmMacro(SDef* p, int opt)
   else if (opt == 1) {
     for (xx = 0; xx < p->nArgs || (p->varg && p->parms[xx]->def); xx++) {
       // Substitute arguments into macro body
-      tp = SubMacroArg(bdy, xx, p->parms[xx]->def);    // Substitute argument into body
+      tp = SubMacroArg(bdy, xx, p->parms[xx]->def, rpt);    // Substitute argument into body
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
     so = 0;
   }
   // Now handle the instance var.
-  tp = SubMacroArg(bdy, -1, NULL);
+  sprintf_s(numbuf, sizeof(numbuf), "%06d", spm_inst);
+  tp = SubMacroArg(bdy, -1, numbuf, rpt);
   free(bdy);
   bdy = _strdup(tp);
 
@@ -132,81 +139,133 @@ int SubParmMacro(SDef* p, int opt)
 
 ----------------------------------------------------------------------------- */
 
-void SearchAndSub(SDef* exc)
+void SearchAndSub(SDef* exc, int rpt)
 {
 	static int InComment = 0;
-   int c, InComment2 = 0;
-   int QuoteToggle = 0;
-	 int Quote2 = 0;
-   char *id, *ptr, *optr;
-   SDef *p, tdef;
-   pos_t* ondx;
-   int ex;
+  int c, InComment2 = 0;
+  int QuoteToggle = 0;
+	int Quote2 = 0;
+  char *id, *ptr, *optr, *nd;
+  SDef *p, tdef;
+  pos_t* ondx, * ondx1;
+  int ex, ln;
+  char buf[20];
+  char numbuf[20];
+  char* tp;
 
-   // Check if we hit the end of the current input line we do this because
-   // NextCh would read another line
+  // Check if we hit the end of the current input line we do this because
+  // NextCh would read another line
 
-   ondx = GetPos();
-   while (1)
-   {
-     if ((c = PeekCh()) == 0) {
-       break;
-     }
+  ondx = GetPos();
+  while (1)
+  {
+    if ((c = PeekCh()) == 0) {
+      break;
+    }
 
-      if (c == '\n') {
-         c = NextCh();
-         QuoteToggle = 0;     // Quotes cannot cross newlines
-				 Quote2 = 0;
-         InComment2 = 0;
-         continue;
+    if (c == '\n') {
+        c = NextCh();
+        QuoteToggle = 0;     // Quotes cannot cross newlines
+				Quote2 = 0;
+        InComment2 = 0;
+        continue;
+    }
+
+    if (c == '/' && *(inptr+1) == '/') {
+        InComment2 = 1;
+        inptr += 2;
+        continue;
+    }
+
+    if (c == '/' && *(inptr+1) == '*') {
+        InComment = 1;
+        inptr += 2;
+        continue;
+    }
+
+    if (c == '*' && *(inptr+1) == '/') {
+        InComment = 0;
+        inptr += 2;
+        continue;
+    }
+
+    if (InComment || InComment2) {
+        c = NextCh();
+        continue;
+    }
+
+		if (c == '\'') {
+			c = NextCh();
+			Quote2 = !Quote2;
+			continue;
+		}
+		if (Quote2) {      // Just keep getting characters as long as
+			c = NextCh();        // we're inside quotes
+			continue;
+		}
+
+    if (c == '"') {         // Toggle quotation mode
+        c = NextCh();
+        QuoteToggle = !QuoteToggle;
+        continue;
+    }
+
+    if (QuoteToggle) {      // Just keep getting characters as long as
+        c = NextCh();        // we're inside quotes
+        continue;         
+    }
+
+    //if (c == '\x14') {
+      //if (syntax == ASTD && inptr[1] == '@') {
+        // Now handle the instance var.
+        //inptr += 2;
+        //sprintf_s(numbuf, sizeof(numbuf), "%08d", inst);
+        //SubMacro(numbuf, 2);
+        /*
+        if (PeekCh() == '[') {
+          ex = strtoul(inptr, &nd, 10);
+          ln = nd - inptr + 3;
+          inptr = nd;
+          if (PeekCh() == ']')
+            NextCh();
+        }
+        if (rep_depth == 0) {
+          sprintf_s(buf, sizeof(buf), "%08d", minst + ex);
+          SubMacro(buf, ln);
+        }
+        */
+      //}
+    //}
+
+    id = NULL;
+    // Now handle the instance var.
+    if (syntax == ASTD && c == '\x14') {
+      if (inptr[1] == '@') {
+        NextCh();
+        NextCh();
+        ondx1 = GetPos();
+        spm_inst++;
+        sprintf_s(numbuf, sizeof(numbuf), "%06d", spm_inst);
+        tp = _strdup(SubMacroArg(&inptr[-2], -1, numbuf, rpt));
+        SubMacro(tp, 2);
+        free(tp);
+        SetPos(ondx1);
+        free(ondx1);
+        inptr;
+        inbuf;
       }
-
-      if (c == '/' && *(inptr+1) == '/') {
-         InComment2 = 1;
-         inptr += 2;
-         continue;
+      else {
+        ptr = inptr;            // record the position of the input pointer
+        NextCh();
+        id = GetIdentifier();
+        if (id == NULL)
+          unNextCh();
       }
-
-      if (c == '/' && *(inptr+1) == '*') {
-         InComment = 1;
-         inptr += 2;
-         continue;
-      }
-
-      if (c == '*' && *(inptr+1) == '/') {
-         InComment = 0;
-         inptr += 2;
-         continue;
-      }
-
-      if (InComment || InComment2) {
-         c = NextCh();
-         continue;
-      }
-
-			if (c == '\'') {
-				c = NextCh();
-				Quote2 = !Quote2;
-				continue;
-			}
-			if (Quote2) {      // Just keep getting characters as long as
-				c = NextCh();        // we're inside quotes
-				continue;
-			}
-
-      if (c == '"') {         // Toggle quotation mode
-         c = NextCh();
-         QuoteToggle = !QuoteToggle;
-         continue;
-      }
-
-      if (QuoteToggle) {      // Just keep getting characters as long as
-         c = NextCh();        // we're inside quotes
-         continue;         
-      }
-
+    }
+    else {
       ptr = inptr;            // record the position of the input pointer
       id = GetIdentifier();   // try and get an identifier
+    }
 
 	  if (id)
       {
@@ -229,12 +288,12 @@ void SearchAndSub(SDef* exc)
             // string
 			 if (p->nArgs > 0) {
 				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-                 SubParmMacro(p,syntax==ASTD);
+                 SubParmMacro(p,syntax==ASTD, rpt);
 				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			 }
 			else {
 				if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-				SubMacro(p->body->buf, strlen(p->name));
+				SubMacro(p->body->buf, strlen(p->name) + (syntax==ASTD ? 1 : 0));
 				if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			}
          }

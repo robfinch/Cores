@@ -43,9 +43,12 @@ int keep_output = 0;
 FILE* ifps[20];
 int ifp_sp = 0;
 int rep_inst = 0;
+volatile int rept_inst = 0;
 rep_t rept_array[2000];
 int minst=0;      // macro instance
 char incdir[4096];    // additional include directory specified with .incdir
+int inst_stk[20];
+int inst_sp;
 
 // Storage for standard #defines
 
@@ -209,7 +212,7 @@ void ddefine(int opt)
    dp->name = _strdup(ptr2);
    dp->body = new_buf();
 
-   SearchAndSub(dp);
+   SearchAndSub(dp, rep_depth > 0);
    inbuf;
 
    // Check for macro parameters. There must be no space between the
@@ -316,7 +319,7 @@ void derror(int opt)
 {
   int c;
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
   DoPastes(inbuf->buf);
   SkipSpaces();
   do
@@ -349,7 +352,7 @@ void dincdir(int opt)
   char* f;
   char name[4096];
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
   DoPastes(inbuf->buf);
   ch = NextNonSpace(0);
   if (ch == '"')  // search the path specified
@@ -415,7 +418,7 @@ void dinclude(int opt)
    pos_t* ndx;
 
    ndx = GetPos();
-   SearchAndSub(NULL);
+   SearchAndSub(NULL, rep_depth > 0);
    DoPastes(inbuf->buf);
    SetPos(ndx);
    free(ndx);
@@ -567,7 +570,7 @@ void dline(int opt)
   char name[MAXLINE];
   SDef *p;
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
   DoPastes(inbuf->buf);
   InLineNo = atoi(inptr);
   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
@@ -596,7 +599,7 @@ void dline(int opt)
 
 void dpragma(int opt)
 {
-   SearchAndSub(NULL);
+   SearchAndSub(NULL, rep_depth > 0);
    DoPastes(inbuf->buf);
 }
 
@@ -648,6 +651,8 @@ void* drept(int opt)
   // Update the repeat nesting depth. This is a global var manipulated when a
   // repeat body is gotten.
   rep_depth++;
+  rept_inst += 100;
+  minst++;
 
   dr = new_rept();
   dp = dr->def;
@@ -680,7 +685,7 @@ void* drept(int opt)
       NextCh();
   }
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
 
   // expeval() will eat a newline char
   if (opt == 0)
@@ -769,7 +774,7 @@ void* drept(int opt)
         else
           ptdef->parms[0]->def = dp->parms[ii]->def;
         // Substitute 1 arg into macro body and into the input.
-        wd = SubParmMacro(ptdef, 1);
+        wd = SubParmMacro(ptdef, 1, 1);
         inbuf;
         inptr += strlen(inptr);
         free(ptdef->parms[0]);
@@ -787,13 +792,13 @@ void* drept(int opt)
     for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
       // Substitute args into macro body and into the input.
       dp1->abody = clone_buf(dp->body);
-      wd = SubParmMacro(dp1, 1);
+      wd = SubParmMacro(dp1, 1, 1);
       free_buf(dp1->abody);
       inptr += strlen(inptr);
     }
   }
 
-  // Set the input point back to the start of the dump.
+    // Set the input point back to the start of the dump.
 xit:
   if (opndx) {
     SetPos(opndx);
@@ -817,8 +822,10 @@ xit:
 
 void dendr(int opt)
 {
-  if (rep_depth > 0)
+  if (rep_depth > 0) {
     rep_depth--;
+    minst--;
+  }
   else
     err(29);    // .endr without .rept
 }
@@ -965,7 +972,7 @@ jmp1:
      inptr = inbuf->buf + ndx3;
      if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
      collect = 1;
-     SearchAndSub(NULL);
+     SearchAndSub(NULL, rep_depth > 0);
      collect = 0;
      if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
      DoPastes(inbuf->buf + ndx3);
@@ -1390,7 +1397,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(SDef);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.55  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.57  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1408,6 +1415,7 @@ int main(int argc, char *argv[]) {
   memset(incdir, 0, sizeof(incdir));
   mac_depth = 0;
   rep_depth = 0;
+  rept_inst = 0;
   SymSpace = new_buf();
 
   /* ----------------------------------------------
@@ -1424,7 +1432,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.55  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 2.57  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.

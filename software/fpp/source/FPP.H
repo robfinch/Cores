@@ -137,8 +137,8 @@ buf_t *GetMacroBody(SDef*, int opt, int rpt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int);
-char *SubMacroArg(char *, int, char *);
-int SubParmMacro(SDef* p, int opt);
+char *SubMacroArg(char *, int, char *, int rpt);
+int SubParmMacro(SDef* p, int opt, int rpt);
 
 void SearchAndSub(SDef* excld);
 void SearchForDefined(void);
@@ -189,6 +189,9 @@ E int debug I(=0);
 E int lasttk I(= 0);
 E int in_comment I(= 0);
 E int syntax I(= 0);
+extern int rep_inst;
+extern volatile int rept_inst;
+extern int minst;             // macro instance hash
 extern int mac_depth;
 extern int rep_depth;
 extern int npass;

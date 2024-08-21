@@ -12,6 +12,8 @@ extern int minst;
 int rep_depth;
 int mac_depth;
 
+static int gmb_inst = 0;
+
 /* ---------------------------------------------------------------------------
    char *SubArg(bdy, n, sub);
    char *bdy;  - pointer to macro body
@@ -22,7 +24,7 @@ int mac_depth;
    placeholders in the macro body.
 --------------------------------------------------------------------------- */
 
-char *SubMacroArg(char *bdy, int n, char *sub)
+char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
 {
 	static char buf[160000];
 	char *s = sub, *o = buf;
@@ -30,14 +32,19 @@ char *SubMacroArg(char *bdy, int n, char *sub)
   char numbuf[20];
   char* substr;
   char ch;
+  int ex, ln;
+  char* nd;
 
+  substr = sub;
   if (n < 0) {
-    sprintf_s(numbuf, sizeof(numbuf), "%5d", minst);
-    substr = numbuf;
     ch = '@';
+    if (rep_depth > 0) {
+      memset(numbuf, 0, sizeof(numbuf));
+      sprintf_s(numbuf, sizeof(numbuf), "@_%05d_%.6s", rep_inst, sub);
+      substr = numbuf;
+    }
   }
   else {
-    substr = sub;
     ch = n + '0';
   }
 
@@ -50,7 +57,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 				stringize = 1;
 				o[-1] = '\x15';
 			}
-        // Copy substitution to output buffer
+      // Copy substitution to output buffer
 			for (s = substr; *s;) {
 				if (stringize) {
 					if (*s=='"')
@@ -66,6 +73,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
     }
     *o = *bdy;
   }
+  *o = '\n';
   return (buf);
 }
 
@@ -97,12 +105,15 @@ static int sub_id(SDef* def, char* id, buf_t** buf, char* p1, char* p2)
 
 static void proc_instvar(buf_t** buf)
 {
-  char mk[4];
+  char mk[20];
 
   inptr += 5;
+  /*
   mk[0] = '';
   mk[1] = '@';
   mk[2] = 0;
+  */
+  sprintf_s(mk, sizeof(mk), "@");
   insert_into_buf(buf, mk, 0);
 }
 
@@ -161,6 +172,7 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
   char ch[4];
   int64_t ndx1 = 0;
 
+  gmb_inst++;
   buf = new_buf();
   inptr;
   inbuf;
@@ -183,15 +195,32 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
         ch[1] = 0;
         insert_into_buf(&buf, ch, 0);
       }
-      ndx1 = inptr - inbuf->buf;
-      id = GetIdentifier();
-      p2 = inptr;
-      inbuf;
-      if (id) 
-        sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
-      else
-        inptr = inbuf->buf + ndx1;      // reset inptr if no identifier found
+
+      if (syntax == CSTD) {
+        ndx1 = inptr - inbuf->buf;
+        id = GetIdentifier();
+        p2 = inptr;
+        inbuf;
+        if (id)
+          sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
+        else
+          inptr = inbuf->buf + ndx1;      // reset inptr if no identifier found
+      }
+      else if (syntax == ASTD) {
+        if (PeekCh() == '\\') {
+          ndx1 = inptr - inbuf->buf;
+          NextCh();
+          id = GetIdentifier();
+          p2 = inptr;
+          inbuf;
+          if (id)
+            sub_id(def, id, &buf, inbuf->buf + ndx1, p2);
+          else
+            inptr = inbuf->buf + ndx1;      // reset inptr if no identifier found
+        }
+      }
     }
+
     if (id == NULL) {
       c = NextCh();
       if (c == '"')
@@ -242,6 +271,7 @@ buf_t *GetMacroBody(SDef* def, int opt, int rpt)
           else if (c == '\\') {
             if (PeekCh() == '@') {
               proc_instvar(&buf);
+              continue;
             }
             else if (proc_parm(&buf, nparm))
               continue;

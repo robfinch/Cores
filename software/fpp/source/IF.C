@@ -64,7 +64,7 @@ void difskip(int s)
          else if (!strncmp(inptr, "elif", 4)) {
             inptr += 4;
             SearchForDefined();
-            SearchAndSub(NULL);
+            SearchAndSub(NULL, rep_depth > 0);
             if (expeval())
                return;
          }
@@ -88,7 +88,7 @@ void dif(int opt)
 
   IfLevel++;
   SearchForDefined();  // check for defined() operator
-  SearchAndSub(NULL);      // perform any macro substitutions
+  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
   switch (opt) {
   case 0:  ex = expeval(); if (ex == 0) difskip(TRUE); break; // ne
   case 1:  ex = expeval(); if (ex != 0) difskip(TRUE); break; // eq
@@ -131,7 +131,7 @@ void delse(int opt)
 
 void dendif(int opt)
 {
-   IfLevel--;
+  IfLevel--;
    if (IfLevel < 0) {
       IfLevel = 0;
       err(7);
@@ -161,7 +161,8 @@ void difdef(int opt)
 
 	IfLevel++;
 	dp.name = GetIdentifier();
-	if (dp.name) {
+  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
+  if (dp.name) {
 		if (!htFind(&HashInfo, &dp))  // If macro name is not found then
 			difskip(TRUE);             // scan for else/elif/endif
 	}
@@ -180,7 +181,8 @@ void difndef(int opt)
 
 	IfLevel++;
 	dp.name = GetIdentifier();
-	if (dp.name)
+  SearchAndSub(NULL, rep_depth > 0);      // perform any macro substitutions
+  if (dp.name)
 		if (htFind(&HashInfo, &dp))
 			difskip(TRUE);
 }
