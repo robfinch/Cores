@@ -31,7 +31,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 	int stringize = 0;
   char numbuf[20];
   char* substr;
-  char ch;
+  char ch1,ch2;
   int in_quote = 0;
 
   if (bdy == NULL) {
@@ -50,7 +50,8 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 
   substr = sub;
   if (n < 0) {
-    ch = '@';
+    ch1 = '@';
+    ch2 = '@';
     if (rep_depth > 0) {
       memset(numbuf, 0, sizeof(numbuf));
       sprintf_s(numbuf, sizeof(numbuf), "@_%.6s", sub);
@@ -58,7 +59,8 @@ char *SubMacroArg(char *bdy, int n, char *sub)
     }
   }
   else {
-    ch = n + '0';
+    ch1 = (n / 10) + '0';
+    ch2 = (n % 10) + '0';
   }
 
   for (; *bdy; bdy++)
@@ -66,12 +68,12 @@ char *SubMacroArg(char *bdy, int n, char *sub)
     in_quote = 0;
     // Use a marker character (x15) to indicate where quotation marks should
     // appear in the output. They will be changed to quotes by SubMacro().
-    if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch) {
+    if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch1 && bdy[3]==ch2) {
       stringize = 1;
       char_to_buf(&buf, '\x15');
       continue;
     }
-    else if (bdy[0] == '' && bdy[1] == ch) {
+    else if (bdy[0] == '' && bdy[1] == ch1 && bdy[2] == ch2) {
       // Copy substitution to output buffer. If stringizing \ is placed before
       // quotation marks and escape characters in a quote.
       for (s = substr; *s; s++) {
@@ -88,7 +90,7 @@ char *SubMacroArg(char *bdy, int n, char *sub)
       if (stringize)
         char_to_buf(&buf, '\x15');
       stringize = 0;
-      bdy++;
+      bdy+=2;
       continue;
     }
     char_to_buf(&buf, bdy[0]);
@@ -104,15 +106,16 @@ char *SubMacroArg(char *bdy, int n, char *sub)
 static int sub_id(def_t* def, char* id, buf_t** buf, char* p1, char* p2)
 {
   int ii;
-  char mk[3];
+  char mk[4];
   char idbuf[500];
 
   for (ii = 0; ii < def->nArgs; ii++)
     if (def->parms[ii]->name)
       if (strcmp(def->parms[ii]->name, id) == 0) {
         mk[0] = '';
-        mk[1] = '0' + (char)ii;
-        mk[2] = 0;
+        mk[1] = '0' + (char)(ii / 10);
+        mk[2] = '0' + (char)(ii % 10);
+        mk[3] = 0;
         insert_into_buf(buf, mk, 0);
         return (1);
       }
@@ -139,7 +142,7 @@ static void proc_instvar(buf_t** buf)
   mk[1] = '@';
   mk[2] = 0;
   */
-  sprintf_s(mk, sizeof(mk), "@");
+  sprintf_s(mk, sizeof(mk), "@@");
   insert_into_buf(buf, mk, 0);
 }
 
@@ -148,21 +151,22 @@ static void proc_instvar(buf_t** buf)
 
 static int proc_parm(buf_t** buf, int nparm)
 {
-  char c;
+  int c;
   char* p1, * p2;
-  char mk[3];
+  char mk[4];
 
   p1 = inptr;
   c = NextCh();
   if (isdigit(p1[1])) {
     while (isdigit(c = NextCh()));
-    c = (char)strtoul(&p1[1], &inptr, 10);
+    c = (int)strtoul(&p1[1], &inptr, 10);
     if (c <= nparm) {
       p1++;
       p2 = inptr;
       mk[0] = '';
-      mk[1] = '0' + c;
-      mk[2] = 0;
+      mk[1] = '0' + (char)(c / 10);
+      mk[2] = '0' + (char)(c % 10);
+      mk[3] = 0;
       insert_into_buf(buf, mk, 0);
       return (1);
     }
