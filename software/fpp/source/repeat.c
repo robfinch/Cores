@@ -277,12 +277,12 @@ void drept(int opt)
 
   // It may be handy for arguments to be made up of other definitions. So, we
   // search for them before getting the args.
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
 
   // Repeat count is not used for iterative repeats.
   // expeval() will eat a newline char
   if (opt == 0)
-    dr->orcnt = dr->rcnt = expeval();
+    dr->orcnt = dr->rcnt = (int)expeval();
 
   // Check for repeat parameters. There must be no space between the
   // macro name and ')'.

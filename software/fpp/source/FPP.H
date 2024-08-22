@@ -134,7 +134,7 @@ char *StoreStr(char *, ...);
 
 
 void err(int, ...);
-long expeval(void);
+int64_t expeval(void);
 int directive(char* p);
 
 int ProcLine(void);
@@ -152,7 +152,7 @@ void SubMacro(char *, int, int);
 char *SubMacroArg(char *, int, char *, int rpt);
 int SubParmMacro(def_t* p, int opt, int rpt);
 
-void SearchAndSub(def_t* excld);
+void SearchAndSub(def_t* excld, int);
 void SearchForDefined(void);
 void DoPastes(char *);
 

@@ -201,7 +201,7 @@ void ddefine(int opt)
    if (opt == 1 && mac_depth > 1)
      err(32, dp->name);     // Nested macro warning
 
-   SearchAndSub(dp);
+   SearchAndSub(dp, rep_depth>0);
    inbuf;
 
    // Check for macro parameters. There must be no space between the
@@ -308,7 +308,7 @@ void derror(int opt)
 {
   int c;
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL,rep_depth>0);
   DoPastes(inbuf->buf);
   SkipSpaces();
   do
@@ -341,7 +341,7 @@ void dincdir(int opt)
   char* f;
   char name[4096];
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL,rep_depth>0);
   DoPastes(inbuf->buf);
   ch = NextNonSpace(0);
   if (ch == '"')  // search the path specified
@@ -407,7 +407,7 @@ void dinclude(int opt)
    pos_t* ndx;
 
    ndx = GetPos();
-   SearchAndSub(NULL);
+   SearchAndSub(NULL, rep_depth > 0);
    DoPastes(inbuf->buf);
    SetPos(ndx);
    free(ndx);
@@ -559,7 +559,7 @@ void dline(int opt)
   char name[MAXLINE];
   def_t *p;
 
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
   DoPastes(inbuf->buf);
   InLineNo = atoi(inptr);
   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
@@ -588,7 +588,7 @@ void dline(int opt)
 
 void dpragma(int opt)
 {
-  SearchAndSub(NULL);
+  SearchAndSub(NULL, rep_depth > 0);
    DoPastes(inbuf->buf);
 }
 
@@ -758,7 +758,7 @@ jmp1:
      inptr = inbuf->buf + ndx3;
      if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
      collect = 1;
-     SearchAndSub(NULL);
+     SearchAndSub(NULL, rep_depth > 0);
      collect = 0;
      if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
      DoPastes(inbuf->buf + ndx3);
@@ -1182,7 +1182,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.60  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 2.61  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1217,7 +1217,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.60  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 2.61  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.

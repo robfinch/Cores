@@ -3,12 +3,13 @@
 #include <string.h>
 #include <ctype.h>
 #include <ht.h>
+#include <inttypes.h>
 #include "fpp.h"
 
-static long ConditionalExpr(void);
-static long OrExpr(void);
-static long Relational(void);
-static long Factor(void);
+static int64_t ConditionalExpr(int);
+static int64_t OrExpr(int);
+static int64_t Relational(int);
+static int64_t Factor(int);
 
 /* -----------------------------------------------------------------------------
 
@@ -45,13 +46,13 @@ static long Factor(void);
    Returns (long) - value
 --------------------------------------------------------------------------- */
 
-static long Constant()
+static int64_t Constant(int needed)
 {
 	char *backcodes = { "abfnrtv0'\"\\" };
 	const char *textequ = { "\a\b\f\n\r\t\v\0'\"\\" };
 
    char *s,*p;
-   long value = 0;
+   int64_t value = 0;
    int ch;
 
    ch = NextNonSpace(0);
@@ -59,19 +60,19 @@ static long Constant()
       if (ch == '0') {
          ch = NextCh();
          switch(ch) {
-            case 'b': value = strtoul(inptr, &s, 2); break;
-            case 'o': value = strtoul(inptr, &s, 8); break;
-            case 'd': value = strtoul(inptr, &s, 10); break;
-            case 'x': value = strtoul(inptr, &s, 16); break;
+            case 'b': value = strtoull(inptr, &s, 2); break;
+            case 'o': value = strtoull(inptr, &s, 8); break;
+            case 'd': value = strtoull(inptr, &s, 10); break;
+            case 'x': value = strtoull(inptr, &s, 16); break;
             default:
                inptr -= 2;
 //               unNextCh();
-               value = strtoul(inptr, &s, 0);
+               value = strtoull(inptr, &s, 0);
          }
       }
       else {
          unNextCh();
-         value = strtoul(inptr, &s, 0);
+         value = strtoull(inptr, &s, 0);
       }
       // Allow a number to be followed directly by an 'L' or 'U'.
       if (s[0] == 'L' || s[0]=='U')
@@ -90,7 +91,7 @@ static long Constant()
 			else {
             if(isdigit(ch)) {
                unNextCh();
-               value = strtoul(inptr, &s, 0);
+               value = strtoull(inptr, &s, 0);
                inptr = s;
             }
             else
@@ -110,7 +111,7 @@ static long Constant()
 	   value = 0;
       //err(1);
    }
-   return value;
+   return (value);
 }
 
 
@@ -125,9 +126,9 @@ static long Constant()
       defined(<macro>)
 ---------------------------------------------------------------------------- */
 
-static long Factor()
+static int64_t Factor(int needed)
 {
-   long value = 0;
+   int64_t value = 0;
    int ch;
    char *ptr;
    def_t dp;
@@ -135,10 +136,10 @@ static long Factor()
    ch = NextNonSpace(0);
 	switch (ch)
 	{
-      case '!': value = !Factor(); break;
-      case '-': value = -Factor(); break;
-      case '~': value = ~Factor(); break;
-      case '(': value = ConditionalExpr();
+      case '!': value = !Factor(needed); break;
+      case '-': value = -Factor(needed); break;
+      case '~': value = ~Factor(needed); break;
+      case '(': value = ConditionalExpr(needed);
          ch = NextNonSpace(0);
          if (ch != ')') {
             unNextCh();
@@ -150,7 +151,7 @@ static long Factor()
          ptr = inptr;   // record pointer
          if (strcmp(inptr, "efined")) {
             unNextCh();
-            value = Constant();
+            value = Constant(needed);
             break;
          }
          inptr += 6;
@@ -158,16 +159,20 @@ static long Factor()
          if (ch != '(') {
             inptr = ptr;
             unNextCh();
-            value = Constant();
+            value = Constant(needed);
             break;
          }
          ptr = inptr;
          dp.name = GetIdentifier();
-         if (dp.name == NULL) {
-            err(21);
+         if (needed) {
+           if (dp.name == NULL) {
+             err(21);
+           }
+           else
+             value = (htFind(&HashInfo, &dp) ? 1 : 0);
          }
          else
-            value = (htFind(&HashInfo, &dp) ? 1 : 0);
+           value = 1;
          ch = NextNonSpace(0);
          if (ch != ')') {
             unNextCh();
@@ -177,9 +182,9 @@ static long Factor()
 
       default:    // If nothing else try for a constant.
          unNextCh();
-         value = Constant();
+         value = Constant(needed);
    }
-   return value;
+   return (value);
 }
 
 
@@ -187,16 +192,16 @@ static long Factor()
  	term()  A term is a factor *, /, %, <<, >> a term 
 ---------------------------------------------------------------------------- */
 
-static long Term()
+static int64_t Term(int needed)
 {
-   long value, valuet;
+   int64_t value, valuet;
    int ch;
 
-   value = Factor();
+   value = Factor(needed);
    while(1) {
       ch = NextNonSpace(0);
       switch (ch) {
-         case '*': value = value * Factor(); break;
+         case '*': value = value * Factor(needed); break;
          case '/':
 			 // Absorb a comment
 			 if (PeekCh()=='*') {
@@ -216,22 +221,30 @@ static long Term()
 				 unNextCh();
 				 continue;
 			 }
-            valuet = Factor();
+            valuet = Factor(needed);
             if(valuet == 0)
             { // Check for divide by zero
-               err(4);
-               value = -1;
+              if (needed) {
+                err(4);
+                value = -1;
+              }
+              else
+                value = 1;
             }
             else
                value = value / valuet;
             break;
 
          case '%':
-            valuet = Factor();
+            valuet = Factor(needed);
             if(valuet == 0)
             { // Check for divide by zero
-               err(4);
-               value = -1;
+              if (needed) {
+                err(4);
+                value = -1;
+              }
+              else
+                value = 1;
             }
             else
                value = value % valuet;
@@ -240,7 +253,7 @@ static long Term()
          case '>':
             if (PeekCh() == '>') {
                NextCh();
-               value >>= Factor();
+               value >>= Factor(needed);
                break;
             }
             unNextCh();
@@ -249,7 +262,7 @@ static long Term()
          case '<':
             if (PeekCh() == '<') {
                NextCh();
-               value <<= Factor();
+               value <<= Factor(needed);
                break;
             }
             unNextCh();
@@ -261,7 +274,7 @@ static long Term()
       }
    }
 xitLoop:
-   return value;
+   return (value);
 }
 
 
@@ -269,33 +282,33 @@ xitLoop:
 	Expr - evaluate expression and return a long (long) number 
 ---------------------------------------------------------------------------- */
 
-static long Expr()
+static int64_t Expr(int needed)
 {
-   long value;
+   int64_t value;
    int ch;
 
-   value = Term();
+   value = Term(needed);
    while(1) {
       ch = NextNonSpace(0);
       switch(ch)
       {
-         case '+': value += Term(); break;
-         case '-': value -= Term(); break;
+         case '+': value += Term(needed); break;
+         case '-': value -= Term(needed); break;
          case '&':
             if (PeekCh() == '&') {
                unNextCh();
                goto xitLoop;
             }
-            value &= Term();
+            value &= Term(needed);
             break;
 
-         case '^': value ^= Term(); break;
+         case '^': value ^= Term(needed); break;
          case '|':
             if (PeekCh() == '|') {
                unNextCh();
                goto xitLoop;
             }
-            value |= Term();
+            value |= Term(needed);
             break;
 
          default:
@@ -304,7 +317,7 @@ static long Expr()
       }
    }
 xitLoop:
-   return value;
+   return (value);
 }
 
 
@@ -313,26 +326,26 @@ xitLoop:
       <,>,<=,>=,<>,!=
 --------------------------------------------------------------------------- */
 
-static long Relational()
+static int64_t Relational(int needed)
 {
-   long value;
+   int64_t value;
    int ch;
 
-   value = Expr();
+   value = Expr(needed);
    while(1) {
       ch = NextNonSpace(0);
       switch(ch) {
          case '<':
             if (PeekCh() == '>') {
                NextCh();
-               value = value != Expr();
+               value = value != Expr(needed);
             }
             else if (PeekCh() == '=') {
                NextCh();
-               value = value <= Expr();
+               value = value <= Expr(needed);
             }
             else if (PeekCh() != '<')
-               value = value < Expr();
+               value = value < Expr(needed);
             else {
                unNextCh();
                goto xitLoop;
@@ -342,10 +355,10 @@ static long Relational()
          case '>':
             if (PeekCh() == '=') {
                NextCh();
-               value = value >= Expr();
+               value = value >= Expr(needed);
             }
             else if (PeekCh() != '>')
-               value = value > Expr();
+               value = value > Expr(needed);
             else {
                unNextCh();
                goto xitLoop;
@@ -355,13 +368,13 @@ static long Relational()
          case '=':
 			 if (PeekCh()=='=')
 				 NextCh();
-            value = value == Expr();
+            value = value == Expr(needed);
             break;
 
          case '!':
             if (PeekCh() == '=') {
                NextCh();
-               value = value != Expr();
+               value = value != Expr(needed);
             }
             else {
                unNextCh();
@@ -375,7 +388,7 @@ static long Relational()
       }
    }
 xitLoop:
-   return value;
+   return (value);
 }
 
 
@@ -387,25 +400,25 @@ xitLoop:
    to be called by storing the return value in another variable.
 --------------------------------------------------------------------------- */
 
-static long AndExpr()
+static int64_t AndExpr(int needed)
 {
-   long value, value2;
+   int64_t value, value2;
    int ch;
 
-   value = Relational();
+   value = Relational(needed);
    while(1) {
       ch = NextNonSpace(0);
       if (ch == '&' && PeekCh() == '&') {
 		  NextCh();
-		 value2 = Relational();
-         value = value && value2;
+		    value2 = Relational(value!=0);
+        value = value && value2;
       }
       else {
          unNextCh();
          break;
       }
    }
-   return value;
+   return (value);
 }
 
 
@@ -419,17 +432,17 @@ static long AndExpr()
    to be called by storing the return value in another variable.
 --------------------------------------------------------------------------- */
 
-static long OrExpr()
+static int64_t OrExpr(int needed)
 {
-   long value, value2;
+   int64_t value, value2;
    int ch;
 
-   value = AndExpr();
+   value = AndExpr(needed);
    while(1) {
       ch = NextNonSpace(0);
       if (ch == '|' && PeekCh() == '|') {
          NextCh();
-         value2 = AndExpr();
+         value2 = AndExpr(value==0);
          value = value || value2;
       }
       else {
@@ -443,26 +456,26 @@ static long OrExpr()
 /* ---------------------------------------------------------------------------
 --------------------------------------------------------------------------- */
 
-static long ConditionalExpr()
+static int64_t ConditionalExpr(int needed)
 {
-  long value1, value2, value3;
+  int64_t value1, value2, value3;
   int ch;
 
   value2 = 0;
-  value1 = OrExpr();
+  value1 = OrExpr(needed);
   ch = NextNonSpace(0);
   if (ch != '?') {
     unNextCh();
     return (value1);
   }
-  value2 = ConditionalExpr();
+  value2 = ConditionalExpr(value1!=0);
   ch = NextNonSpace(0);
   if (ch != ':') {
     err(26);
     unNextCh();
     return (value2);
   }
-  value3 = ConditionalExpr();
+  value3 = ConditionalExpr(value1==0);
   return ((value1 == 0) ? value3 : value2);
 }
 
@@ -470,7 +483,7 @@ static long ConditionalExpr()
 	expeval - evaluate the expression s and return a number.
 --------------------------------------------------------------------------- */
 
-long expeval()
+int64_t expeval()
 {
-   return ConditionalExpr();
+   return (ConditionalExpr(1));
 }

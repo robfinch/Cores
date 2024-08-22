@@ -567,7 +567,6 @@ void SubMacro(char *body, int slen, int stringize)
   int64_t mlen, dif;
   int64_t nchars;
   int nn, mm;
-  char* s;
   int in_quote = 0;
 
 
