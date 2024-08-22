@@ -149,8 +149,8 @@ buf_t *GetMacroBody(def_t*, int opt, int rpt);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
 void SubMacro(char *, int, int);
-char *SubMacroArg(char *, int, char *, int rpt);
-int SubParmMacro(def_t* p, int opt, int rpt);
+char *SubMacroArg(char *, int, char *);
+int SubParmMacro(def_t* p, int opt, pos_t* id_pos);
 
 void SearchAndSub(def_t* excld, int);
 void SearchForDefined(void);

@@ -15,7 +15,7 @@ int spm_inst = 0;
       Substitute a macro with arguments.
 ----------------------------------------------------------------------------- */
 
-int SubParmMacro(def_t* p, int opt, int rpt)
+int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
 {
   int c, nArgs, ArgCount, xx;
   arg_t Args[MAX_MACRO_ARGS];
@@ -23,7 +23,7 @@ int SubParmMacro(def_t* p, int opt, int rpt)
   int varg;
   int need_cb = 0;
   int64_t so;             // number of chars to substitute over
-  pos_t* pndx, * qndx;
+  pos_t* pndx;
   char numbuf[20];
 
   spm_inst++;
@@ -37,7 +37,6 @@ int SubParmMacro(def_t* p, int opt, int rpt)
   // We can't just take a pointer difference because the input
   // routine will occasionally reset the pointer for new lines.
   ptr = inptr;
-  qndx = GetPos();
   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
   if (opt == 0) {
     collect = 1;
@@ -88,18 +87,18 @@ int SubParmMacro(def_t* p, int opt, int rpt)
     // Substitute arguments into macro body
     for (xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
     {
-      tp = SubMacroArg(bdy, xx, Args[xx].def, rpt);        // Substitute argument into body
+      tp = SubMacroArg(bdy, xx, Args[xx].def);        // Substitute argument into body
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
     pndx = GetPos();
-    so = pndx->bufpos - qndx->bufpos;         // number of chars to substitute over
+    so = pndx->bufpos - id_pos->bufpos;         // number of chars to substitute over
     free(pndx);
   }
   else if (opt == 1) {
     for (xx = 0; xx < p->nArgs || (p->varg && p->parms[xx]->def); xx++) {
       // Substitute arguments into macro body
-      tp = SubMacroArg(bdy, xx, p->parms[xx]->def, rpt);    // Substitute argument into body
+      tp = SubMacroArg(bdy, xx, p->parms[xx]->def);    // Substitute argument into body
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
@@ -107,14 +106,13 @@ int SubParmMacro(def_t* p, int opt, int rpt)
   }
   // Now handle the instance var.
   sprintf_s(numbuf, sizeof(numbuf), "%06d", spm_inst);
-  tp = SubMacroArg(bdy, -1, numbuf, rpt);
+  tp = SubMacroArg(bdy, -1, numbuf);
   free(bdy);
   bdy = _strdup(tp);
 
   // Substitute macro into input stream
   SubMacro(bdy, so, 0);
   free(bdy);                                // free last strdup
-  free(qndx);
   return (0);
 }
 
@@ -146,7 +144,7 @@ void SearchAndSub(def_t* exc, int rpt)
 	int Quote2 = 0;
   char *id, *ptr, *optr;
   def_t *p, tdef;
-  pos_t* ondx, * ondx1;
+  pos_t* ondx, * ondx1,* id_pos;
   int ex;
   char numbuf[20];
   char* tp;
@@ -155,6 +153,7 @@ void SearchAndSub(def_t* exc, int rpt)
   // Check if we hit the end of the current input line we do this because
   // NextCh would read another line
 
+  id_pos = NULL;
   ondx = GetPos();
   while (1)
   {
@@ -224,7 +223,7 @@ void SearchAndSub(def_t* exc, int rpt)
         ondx1 = GetPos();
         spm_inst++;
         sprintf_s(numbuf, sizeof(numbuf), "%06d", spm_inst);
-        tp = _strdup(SubMacroArg(&inptr[-2], -1, numbuf, rpt));
+        tp = _strdup(SubMacroArg(&inptr[-2], -1, numbuf));
         SubMacro(tp, 2, 0);
         free(tp);
         SetPos(ondx1);
@@ -235,6 +234,7 @@ void SearchAndSub(def_t* exc, int rpt)
       else {
         ptr = inptr;            // record the position of the input pointer
         NextCh();
+        id_pos = GetPos();
         id = GetIdentifier();
         if (id == NULL)
           unNextCh();
@@ -246,6 +246,7 @@ void SearchAndSub(def_t* exc, int rpt)
         c1 = inptr[-1];
       if (inptr > inbuf->buf + 1)
         c2 = inptr[-2];
+      id_pos = GetPos();
       id = GetIdentifier();   // try and get an identifier
     }
 
@@ -270,12 +271,13 @@ void SearchAndSub(def_t* exc, int rpt)
             // string
 			 if (p->nArgs > 0) {
 				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-                 SubParmMacro(p,syntax==ASTD, rpt);
+                 SubParmMacro(p,syntax==ASTD, id_pos);
 				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			 }
 			else {
 				if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
         // Watch out for paste operator.
+        // Set input pointer back to start of id to substitute over.
 				SubMacro(p->body->buf, strlen(p->name) + (syntax==ASTD ? 1 : 0), c1=='#' && c2 != '#');
 				if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
 			}
@@ -286,6 +288,10 @@ void SearchAndSub(def_t* exc, int rpt)
       }
       // failed to get identifier, so just continue with the next character
       c = NextCh();
+      if (id_pos) {
+        free(id_pos);
+        id_pos = NULL;
+      }
    }
    SetPos(ondx);
    optr = inptr;

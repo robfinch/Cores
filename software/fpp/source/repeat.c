@@ -118,7 +118,7 @@ static void inst_iterative_rept(rep_t* dr, def_t* tdef)
       else
         ptdef->parms[0]->def = dp->parms[ii]->def;
       // Substitute 1 arg into macro body and into the input.
-      SubParmMacro(ptdef, 1, 1);
+      SubParmMacro(ptdef, 1, NULL);
       inbuf;
       inptr += strlen(inptr);
       free(ptdef->parms[0]);
@@ -154,7 +154,7 @@ static void inst_rept(rep_t* dr)
   for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
     // Substitute args into macro body and into the input.
     dp1->abody = clone_buf(dp->body);
-    SubParmMacro(dp1, 1, 1);
+    SubParmMacro(dp1, 1, NULL);
     free_buf(dp1->abody);
     inptr += strlen(inptr);
   }

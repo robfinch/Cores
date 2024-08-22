@@ -24,7 +24,7 @@ static int gmb_inst = 0;
    placeholders in the macro body.
 --------------------------------------------------------------------------- */
 
-char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
+char *SubMacroArg(char *bdy, int n, char *sub)
 {
   static buf_t* buf = NULL;
 	char *s = sub;
@@ -63,16 +63,17 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
 
   for (; *bdy; bdy++)
   {
-		stringize = 0;
     in_quote = 0;
+    // Use a marker character (x15) to indicate where quotation marks should
+    // appear in the output. They will be changed to quotes by SubMacro().
     if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch) {
       stringize = 1;
       char_to_buf(&buf, '\x15');
-      bdy++;
       continue;
     }
     else if (bdy[0] == '' && bdy[1] == ch) {
-      // Copy substitution to output buffer
+      // Copy substitution to output buffer. If stringizing \ is placed before
+      // quotation marks and escape characters in a quote.
       for (s = substr; *s; s++) {
         if (stringize) {
           if (s[0] == '"') {
@@ -86,6 +87,7 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
       }
       if (stringize)
         char_to_buf(&buf, '\x15');
+      stringize = 0;
       bdy++;
       continue;
     }
@@ -95,6 +97,9 @@ char *SubMacroArg(char *bdy, int n, char *sub, int rpt)
   return (buf->buf);
 }
 
+
+/* ---------------------------------------------------------------------------
+--------------------------------------------------------------------------- */
 
 static int sub_id(def_t* def, char* id, buf_t** buf, char* p1, char* p2)
 {
@@ -121,6 +126,9 @@ static int sub_id(def_t* def, char* id, buf_t** buf, char* p1, char* p2)
   return (0);
 }
 
+/* ---------------------------------------------------------------------------
+--------------------------------------------------------------------------- */
+
 static void proc_instvar(buf_t** buf)
 {
   char mk[20];
@@ -134,6 +142,9 @@ static void proc_instvar(buf_t** buf)
   sprintf_s(mk, sizeof(mk), "@");
   insert_into_buf(buf, mk, 0);
 }
+
+/* ---------------------------------------------------------------------------
+--------------------------------------------------------------------------- */
 
 static int proc_parm(buf_t** buf, int nparm)
 {
@@ -571,24 +582,25 @@ void SubMacro(char *body, int slen, int stringize)
 
 
   mlen = strlen(body);          // macro length
-  dif = mlen - slen;
-  nchars = inbuf->size - (inptr - inbuf->buf);         // calculate number of characters that could be remaining
 
   // Check for stringize
   // First adjust the substitution length by the number of characters inserted
   // by the stringize.
   if (stringize) {
-    dif++; // account for preceeding '#'
+    mlen++; // account for preceeding '#'
     inptr--;
     for (nn = 0; body[nn]; nn++) {
       if (body[nn] == '"') {
         in_quote = !in_quote;
-        dif++;
+        mlen++;
       }
       else if (body[nn] == '\\' && in_quote)
-        dif++;
+        mlen++;
     }
   }
+
+  dif = mlen - slen;
+  nchars = inbuf->size - (inptr - inbuf->buf);         // calculate number of characters that could be remaining
 
   // If the text is not changing, we want to advance the text pointer.
   // Prevents the substitution from getting stuck in a loop.
