@@ -923,7 +923,8 @@ void ProcFile(char *fname)
   static char OutName[500];
   FILE* fpo[10];
   int nn;
-  char* ptr;
+  char* ptr = NULL;
+  char* ptr3 = NULL;
 
   memset(fpo, 0, sizeof(fpo));
 
@@ -977,6 +978,8 @@ void ProcFile(char *fname)
     fin = NULL;
     if (count_lines(inbuf->buf)) {
       ptr = strip_blank_lines(inbuf->buf);
+      if (ptr3 = strchr(ptr, ETB))
+        *ptr3 = 0;
       if (ptr) {
         fputs(ptr, fpo[pass]);
         free(ptr);
@@ -1019,8 +1022,11 @@ xit:
     }
     else {
       while (!feof(fin)) {
-        if (fgets(filebuf, sizeof(filebuf), fin)!=NULL)
+        if (fgets(filebuf, sizeof(filebuf), fin) != NULL) {
+          if (ptr = strchr(filebuf, ETB))
+            *ptr = 0;
           fputs(filebuf, stdout);
+        }
       }
       fclose(fin);
       fin = NULL;
@@ -1320,7 +1326,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 3.00  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 3.01  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1355,7 +1361,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 3.00  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 3.01  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.

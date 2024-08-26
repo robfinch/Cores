@@ -231,6 +231,8 @@ char* GetLine()
 }
 
 /* ---------------------------------------------------------------------------
+   Dead Code - see mac_collect
+
    Description :
       Gets the body of a macro. Macro parameters are matched up with their
    positions in the macro. A $<number> (as in $1, $2, etc) is substituted
@@ -481,10 +483,12 @@ jmp1:;
 char *GetMacroArg()
 {
   int Depth = 0;
-  int c;
+  int c, ii;
   char argbuf[4000];
+  char numbuf[50];
   char *argstr = argbuf;
   int InQuote = 0;
+  int64_t ex, n1, n2;
 
   SkipSpaces();
   memset(argbuf,0,sizeof(argbuf));
@@ -492,15 +496,30 @@ char *GetMacroArg()
   inbuf;
   while(argstr - argbuf < sizeof(argbuf)-1)
   {
-    c = NextCh();
-    if (c < 1) {
-        if (Depth > 0)
-          err(16);
-        break;
-    }
-    if (c == '"')
+    if (peek_eof())
+      break;
+    SkipSpaces();
+    if (PeekCh() == '"') {
       InQuote = !InQuote;
+      NextCh();
+    }
+    n1 = get_input_buf_ndx();
+    ex = expeval();
+    n2 = get_input_buf_ndx();
+    if (n1 != n2) {
+      sprintf_s(numbuf, sizeof(numbuf), "%lld", ex);
+      for (ii = 0; numbuf[ii] && ii < sizeof(numbuf) - 1; ii++)
+        *argstr++ = numbuf[ii];
+    }
+    if (peek_eof())
+      break;
+    c = NextCh();
+    if (c == '"') {
+      InQuote = !InQuote;
+      c = NextCh();
+    }
     if (!InQuote) {
+      /*
       if (c == '(')
         Depth++;
       else if (c == ')') {
@@ -514,6 +533,15 @@ char *GetMacroArg()
         unNextCh();
         break;                           // end of argument has been found
       }
+      */
+    }
+    if (peek_eof()) {
+      unNextCh();
+      break;
+    }
+    if (c == ',' && !InQuote) {
+      unNextCh();
+      break;
     }
     if (c == '\n') {
       unNextCh();
@@ -521,6 +549,8 @@ char *GetMacroArg()
     }
     *argstr++ = c;       // copy input argument to argstr.
   }
+  if (InQuote)
+    err(0);             // missing "
   *argstr = '\0';         // NULL terminate buffer.
   if (argbuf[0])
 	  if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);

@@ -14,6 +14,8 @@ int IfLevel = 0;
 static void if_collect(buf_t** buf, int tf);
 
 /* -----------------------------------------------------------------------------
+   Dead Code - see if_collect
+
    Description :
       Scan through file until else/endif/elif found.
          1) (int) if == TRUE scan for else/elif as well as endif.
@@ -244,10 +246,13 @@ void dendif(int opt, char* pos)
 
 void delif(int opt, char* pos)
 {
-  int64_t st;
+  int64_t st, ex;
 
+  inptr;
   st = pos - inbuf->buf;
-  dif_helper(st, FALSE);
+  SearchForDefined();  // check for defined() operator
+  ex = expeval();
+  dif_helper(st, ex != 0);
 }
 
 
