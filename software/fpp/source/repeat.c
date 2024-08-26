@@ -16,10 +16,6 @@ extern def_t bbfile;
 
 static void rep_collect(buf_t** buf);
 
-static int posa_st[1000];
-static int posa_nd[1000];
-static int posa_ndx = 0;
-
 /* ---------------------------------------------------------------------------
    (C) 1992-2024 Robert T Finch
 
@@ -57,6 +53,26 @@ rep_t* new_rept()
   return (p);
 }
 
+arg_t* new_arg()
+{
+  arg_t* arg;
+
+  arg = malloc(sizeof(arg_t));
+  if (arg == NULL) {
+    err(5);
+    exit(5);
+  }
+  memset(arg, 0, sizeof(arg_t));
+  return (arg);
+}
+
+void free_arg(arg_t* arg)
+{
+  if (arg->def)
+    free(arg->def);
+  free(arg);
+}
+
 /* ---------------------------------------------------------------------------
    Description :
       Free up storage for a repeat information.
@@ -71,7 +87,8 @@ rep_t* new_rept()
 
 void free_rept(rep_t* rp)
 {
-  free(rp->def);
+  if (rp->def)
+    free_def(rp->def);
   free(rp);
 }
 
@@ -117,19 +134,15 @@ static void inst_iterative_rept(rep_t* dr, def_t* tdef, pos_t* bdypos)
         err(5);
         exit(5);
       }
-      ptdef->parms[0] = malloc(sizeof(arg_t));
-      if (ptdef->parms[0] == NULL) {
-        err(5);
-        exit(5);
-      }
+      ptdef->parms[0] = new_arg();
       ptdef->parms[0]->name = ptdef2->name;
       ptdef->parms[0]->num = 0;
       // A symbol without an iteration value iterates to an empty string.
       // Other assign the iteration value from the argument list.
       if (dp->nArgs < 1)
-        ptdef->parms[0]->def = "";
+        ptdef->parms[0]->def = _strdup("");
       else
-        ptdef->parms[0]->def = dp->parms[ii]->def;
+        ptdef->parms[0]->def = _strdup(dp->parms[ii]->def);
       // Substitute 1 arg into macro body and into the input.
       pos = GetPos();
       if (ii > 0)
@@ -140,7 +153,7 @@ static void inst_iterative_rept(rep_t* dr, def_t* tdef, pos_t* bdypos)
       free(pos);
       inbuf;
       inptr += strlen(ptdef->abody->buf);
-      free(ptdef->parms[0]);
+      free_arg(ptdef->parms[0]);
       free(ptdef->parms);
       ptdef = NULL;
       ii++;
@@ -167,11 +180,9 @@ static void inst_rept(rep_t* dr)
   def_t* dp;
   pos_t* pos;
   int64_t ndx;
-  char* nd;
-  int64_t len, clen;
+  int64_t clen;
   buf_t* abody;
   buf_t* super_body;
-  char* st;
 
   dp = dr->def;
   dp1 = new_def();
@@ -198,35 +209,6 @@ static void inst_rept(rep_t* dr)
   set_input_buf_ptr(dr->start + strlen(super_body->buf));
   free(pos);
   free_buf(super_body);
-
-/*
-  for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
-    // Substitute args into macro body and into the input.
-    dp1->abody = clone_buf(dp->body);
-    // This is actually the substitution length, not buffer pos.
-    if (ii > 0)
-      pos->bufpos = 0;
-    else
-      pos->bufpos = -(dr->end - dr->start);
-    check_buf_ptr(inbuf, inptr);
-    SearchAndSubBuf(&dp1->abody,1, &nd);
-    *nd = 0;
-    len = strlen(dp1->abody->buf);
-    check_buf_ptr(inbuf, inptr);
-    if (ii == 0)
-      set_input_buf_ptr(dr->end);
-    else {
-      ndx = get_input_buf_ndx();
-      set_input_buf_ptr(dr->start + clen);
-    }
-    SubParmMacro(dp1, 1, pos);
-    inbuf;
-    free_buf(dp1->abody);
-    clen += len;
-  }
-  set_input_buf_ptr(dr->start + clen);
-  free(pos);
-*/
 }
 
 /* ---------------------------------------------------------------------------
@@ -271,11 +253,7 @@ static void get_rept_args(def_t* dp, char* name, int opt)
         exit(5);
       }
       for (ii = 0; ii < dp->nArgs; ii++) {
-        dp->parms[ii] = malloc(sizeof(arg_t));
-        if (dp->parms[ii] == NULL) {
-          err(5);
-          exit(5);
-        }
+        dp->parms[ii] = new_arg();
         dp->parms[ii]->num = ii;
         dp->parms[ii]->name = opt == 1 ? name : NULL;
         dp->parms[ii]->def = _strdup(parms[ii]->def);
@@ -310,30 +288,19 @@ void drept(int opt, char* pos)
   def_t tdef;
   char* vname;
   pos_t* bdypos = NULL;
-  char* p1, * p2;
-  int64_t n1, n2;
-
-  // Space out the directive.
-  //memset(pos, ' ', 4);
+  int64_t n1;
 
   // Update the repeat nesting depth. This is a global var manipulated when a
   // repeat body is gotten.
   rep_depth++;
   inst++;
 
-  if (rep_depth == 1) {
-    memset(posa_st, 0, sizeof(posa_st));
-    memset(posa_nd, 0, sizeof(posa_nd));
-    posa_ndx = 0;
-  }
   n1 = get_input_buf_ndx();
   dr = new_rept();
   if (*pos=='.')
     dr->start = pos - inbuf->buf;
   else
     dr->start = pos - inbuf->buf - 1;
-  posa_st[posa_ndx] - dr->start;
-  posa_ndx++;
   dp = dr->def;
   if (dp == NULL)
     return;
@@ -348,7 +315,6 @@ void drept(int opt, char* pos)
   tdef.varg = 0;
 
   // Get the var name for .irp, and absorb a following comma.
-  gbl_hide = 0;
   if (opt == 1) {
     SkipSpaces();
     n1 = get_input_buf_ndx();
@@ -372,16 +338,15 @@ void drept(int opt, char* pos)
   check_buf_ptr(inbuf, inptr);
   inbuf->buf;
 
-  // Space out the identifier, it does not appear in the output.
-  gbl_hide = 0;
 //  SearchAndSub(NULL, 1, NULL);
 
   // Repeat count is not used for iterative repeats.
   // expeval() will eat a newline char
   if (opt == 0) {
+    int undef;
+
     n1 = inptr - inbuf->buf;
-    gbl_hide = 0;
-    dr->orcnt = dr->rcnt = (int)expeval();
+    dr->orcnt = dr->rcnt = (int)expeval(&undef);
     if (dr->orcnt == 5)
       printf("stop");
   }
@@ -401,7 +366,6 @@ void drept(int opt, char* pos)
   dr->bdystart = get_input_buf_ndx();
 
   //dp->body = GetMacroBody(dp, 1, 1, 1);
-  gbl_hide = 0;
   rep_collect(&dp->body);
   check_buf_ptr(inbuf, inptr);
   dr->end = get_input_buf_ndx();
@@ -480,7 +444,6 @@ static void rep_collect(buf_t** buf)
   char ch;
   int64_t n1, nb;
   char* pos2 = NULL;
-  char* nd;
 
   ocollect = collect;
   collect = 1;

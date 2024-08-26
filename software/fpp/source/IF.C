@@ -32,6 +32,7 @@ char* difskip(int s, char* p1)
   int ocollect;
   char* pos2;
   int64_t n1, n2;
+  int undef;
 
   inptr = p1;
   ocollect = collect;
@@ -58,7 +59,7 @@ char* difskip(int s, char* p1)
       Depth++;
       n2 = inptr - inbuf->buf;
       SearchForDefined();
-      expeval();
+      expeval(&undef);
       break;
     case DIR_IFDEF:
       Depth++;
@@ -100,7 +101,7 @@ char* difskip(int s, char* p1)
           inptr += 4;
           SearchForDefined();
           SearchAndSub(NULL, 0, NULL);
-          if (expeval())
+          if (expeval(&undef))
             goto jmp2;
         }
       }
@@ -136,11 +137,13 @@ void dif_helper(int64_t st, int64_t ex)
   buf->alloc = 2;
   buf->buf = "\n";
   buf->size = 2;
-  buf->pos = 2;
+  buf->pos = 1;
 
+  inbuf;
   if_collect(&buf, ex);
   nd = get_input_buf_ndx();
   set_input_buf_ptr(nd);
+  inbuf;
   SubMacro(buf, nd - st, FALSE);
   set_input_buf_ptr(st + strlen(buf->buf));
   free_buf(buf);
@@ -159,13 +162,14 @@ void dif(int opt, char* p1)
   int64_t ex;
   int64_t n1, n3;
   int64_t st;
+  int undef;
 
   inptr;
   st = p1 - inbuf->buf;
   if (sub_pass==0)
     IfLevel++;
   SearchForDefined();  // check for defined() operator
-  //  SearchAndSub(NULL);      // perform any macro substitutions
+  SearchAndSub(NULL, 0, NULL);      // perform any macro substitutions
   switch (opt) {
   case 0:
   case 1:
@@ -174,7 +178,7 @@ void dif(int opt, char* p1)
   case 4:
   case 5:
     n1 = get_input_buf_ndx();
-    ex = expeval();
+    ex = expeval(&undef);
     n3 = get_input_buf_ndx();
   }
   switch (opt) {
@@ -247,11 +251,13 @@ void dendif(int opt, char* pos)
 void delif(int opt, char* pos)
 {
   int64_t st, ex;
+  int undef;
+  return;
 
   inptr;
   st = pos - inbuf->buf;
   SearchForDefined();  // check for defined() operator
-  ex = expeval();
+  ex = expeval(&undef);
   dif_helper(st, ex != 0);
 }
 
@@ -289,16 +295,12 @@ void difdef(int opt, char* pos)
 void difndef(int opt, char* pos)
 {
 	def_t dp;
-  int64_t n1, n3;
   int64_t st;
 
   st = pos - inbuf->buf;
   if (sub_pass == 0)
     IfLevel++;
   dp.name = GetIdentifier();
-  if (dp.name)
-		if (htFind(&HashInfo, &dp))
-			difskip(TRUE, pos);
   if (dp.name) {
     if (htFind(&HashInfo, &dp))  // If macro name is not found then
       dif_helper(st, FALSE);
@@ -326,6 +328,7 @@ static void if_collect(buf_t** buf, int tf)
   char* pos2 = NULL;
   char* nd;
   int els = 0;
+  int64_t ex;
 
   ocollect = collect;
   collect = 1;
@@ -343,19 +346,40 @@ static void if_collect(buf_t** buf, int tf)
 
     inptr;
     check_buf_ptr(inbuf, inptr);
-    switch (directive_id(inptr - 1, &pos2) >> 8) {
+    switch (directive(inptr - 1, &pos2) >> 8) {
       // For any if/ifdef/ifndef encountered increment the depth.
+    /*
     case DIR_IF:
       SearchForDefined();
       expeval();
       break;
+    */
+    case DIR_ELIF:
+      if (tf) { // if was true
+        rep_depth;
+        ch = *pos2;
+        *pos2 = 0;
+        insert_into_buf(&buf2, inbuf->buf + nb, 0);
+        //      SearchAndSubBuf(&buf2,1,&nd);
+        *pos2 = ch;
+        *buf = buf2;
+        tf = 0;
+      }
+      else {
+        int undef;
+
+        SearchForDefined();
+        ex = expeval(&undef);
+        tf = ex != 0;
+        nb = get_input_buf_ndx();
+      }
+      break;
+    /*
     case DIR_IFDEF:
       GetIdentifier();
       break;
-      // Break when an endif is encountered at the right level. This is a recursive
-    // call so always return.
+    */
     case DIR_ELSE:
-      els = 1;
       if (tf) {
         rep_depth;
         ch = *pos2;
@@ -364,12 +388,16 @@ static void if_collect(buf_t** buf, int tf)
         //      SearchAndSubBuf(&buf2,1,&nd);
         *pos2 = ch;
         *buf = buf2;
+        tf = 0;
       }
       else
-        nb = get_input_buf_ndx();
+        nb = pos2 - inbuf->buf;// get_input_buf_ndx();
       break;
+
+    // Break when an endif is encountered at the right level. This is a recursive
+    // call so always return.
     case DIR_ENDIF:
-      if (els ? ~tf : tf) {
+      if (tf) {
         rep_depth;
         ch = *pos2;
         *pos2 = 0;

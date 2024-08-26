@@ -31,8 +31,8 @@ char *strip_quotes(char *buf)
 		}
 		if (buf[len - 1] == '"')
 			p[len - qt] = '\0';
-		return (p);
 	}
+	return (p);
 }
 
 // Test if a line of text is blank.
@@ -73,22 +73,25 @@ char* strip_blank_lines(char* p)
 		while (isspace(*q))
 			q++;
 		sol = q;
-		if (*q == '\n') {
-			while (*q == '\n')
+		if (*q == LF) {
+			while (*q == LF)
 				q++;
 			sol = q;
 		}
 		else {
-			while (*q != '\n' && *q)
+			while (*q != LF && *q)
 				q++;
-			memcpy_s(&buf[pos], nn-pos, sol, q - sol);
+			memcpy_s(&buf[pos], nn-pos, sol, q - sol +1);
 			pos += q - sol;
-			buf[pos] = '\n';
+			buf[pos] = LF;
 			pos++;
 			if (*q) {
-				while (*q == '\n')
+				while (*q == LF)
 					q++;
 				sol = q;
+				// q will increment at the end of the loop, cancel the increment so the
+				// start of next line is picked up properly
+				q--;
 			}
 		}
 		if (*q == 0)

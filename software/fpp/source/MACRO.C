@@ -108,6 +108,19 @@ char *SubMacroArg(char *bdy, int n, char *sub, arg_t* def)
       char_to_buf(&buf, bdy[0]);
     }
     else {
+      if (bdy[0] == '#' && strncmp(&bdy[1], def->name, strlen(def->name)) == 0) {
+        stringize = 1;
+        copy_sub_to_buf(&buf, substr, stringize);
+        stringize = 0;
+        bdy += strlen(def->name);
+        continue;
+      }
+      else if (strncmp(bdy, def->name, strlen(def->name)) == 0) {
+        copy_sub_to_buf(&buf, substr, stringize);
+        bdy += strlen(def->name) - 1;
+        continue;
+      }
+      /*
       // Use a marker character (x15) to indicate where quotation marks should
       // appear in the output. They will be changed to quotes by SubMacro().
       if (bdy[0] == '#' && bdy[1] == '' && bdy[2] == ch1 && bdy[3] == ch2) {
@@ -123,6 +136,7 @@ char *SubMacroArg(char *bdy, int n, char *sub, arg_t* def)
         bdy += 2;
         continue;
       }
+      */
       char_to_buf(&buf, bdy[0]);
     }
   }
@@ -485,11 +499,12 @@ char *GetMacroArg()
   int Depth = 0;
   int c, ii;
   char argbuf[4000];
-  char argbuf2[4000];
   char numbuf[50];
   char *argstr = argbuf;
   int InQuote = 0;
   int64_t ex, n1, n2;
+  int64_t undef = 0;
+  char* id;
 
   SkipSpaces();
   memset(argbuf,0,sizeof(argbuf));
@@ -506,20 +521,36 @@ char *GetMacroArg()
     }
     SkipSpaces();
     n1 = get_input_buf_ndx();
-    ex = expeval();
+    undef = 0;
+    ex = expeval(&undef);
     n2 = get_input_buf_ndx();
-    if (n1 != n2) {
-      // If got just a single character, is it blank?
-      if (n2 - n1 == 1 && (
-        isspace(inbuf->buf[n1]) ||
-        inbuf->buf[n1] == ',' ||
-        inbuf->buf[n1] == '\n' ||
-        inbuf->buf[n1] == ETB ||
-        inbuf->buf[n1]==0))
-        break;
-      sprintf_s(numbuf, sizeof(numbuf), "%lld", ex);
-      for (ii = 0; numbuf[ii] && ii < sizeof(numbuf) - 1; ii++)
-        *argstr++ = numbuf[ii];
+    // If the expression could not be evaluated, it may be a text string. Fetch
+    // an identifier and copy it verbatium. If it's not an identifier it is some
+    // other text, just let it copy a char at a time.
+    if (undef) {
+      set_input_buf_ptr(n1);
+      id = GetIdentifier();
+      n2 = get_input_buf_ndx();
+      if (id) {
+        for (ii = 0; id[ii] && ii < 4000 - (argstr - argbuf); ii++)
+          *argstr++ = id[ii];
+      }
+    }
+    // Here, it was a defined expression. Copy the value to the arg buffer.
+    else {
+      if (n1 != n2) {
+        // If got just a single character, is it blank?
+        if (n2 - n1 == 1 && (
+          isspace(inbuf->buf[n1]) ||
+          inbuf->buf[n1] == ',' ||
+          inbuf->buf[n1] == LF ||
+          inbuf->buf[n1] == ETB ||
+          inbuf->buf[n1] == 0))
+          break;
+        sprintf_s(numbuf, sizeof(numbuf), "%lld", ex);
+        for (ii = 0; numbuf[ii] && ii < sizeof(numbuf) - 1; ii++)
+          *argstr++ = numbuf[ii];
+      }
     }
     if (peek_eof())
       break;
@@ -544,6 +575,11 @@ char *GetMacroArg()
         break;                           // end of argument has been found
       }
       */
+    }
+    if (c == ')') {
+      unNextCh();
+      c = PeekCh();
+      break;
     }
     if (peek_eof()) {
       unNextCh();
@@ -612,6 +648,7 @@ int GetMacroParmList(arg_t *parmlist[])
     }
     */
     SkipSpaces();
+    inptr;
     if (PeekCh() == '\n' && syntax == ASTD) {
       break;
     }
@@ -645,7 +682,7 @@ int GetMacroParmList(arg_t *parmlist[])
       c = PeekCh();
     }
     // End of input?
-    if (c == 0)
+    if (c == 0 || c == ETB)
       break;
     // or end of list?
     if (c == ')') {
@@ -658,7 +695,7 @@ int GetMacroParmList(arg_t *parmlist[])
       err(16);
       goto errxit;
     }
-    c = NextCh();
+    c = PeekCh();
   }
 //   if (count < 1)
 //      err(17);
@@ -849,6 +886,7 @@ void mac_collect(buf_t** buf, int opt)
   char* pos = NULL;
   int64_t nb;
 
+  SkipSpaces();
   nb = get_input_buf_ndx();
   switch (opt) {
     // For "C", defines (macros) are continued on the next line with a \
@@ -856,11 +894,14 @@ void mac_collect(buf_t** buf, int opt)
     // set and equ are opt 2
   case 0:
     do {
-      insert_into_buf(buf, inptr, 0);
-      p = _strdup((*buf)->buf);
+      SkipSpaces();
+//      insert_into_buf(buf, inptr, 0);
+      for (ch = NextCh(); ch && ch != LF && !peek_eof(); ch = NextCh())
+        char_to_buf(buf, ch);
+      p = (*buf)->buf;
       ii = strlen(p);
       // trim trailing line-feeds
-      while (p[ii - 1] == '\n' && ii > 0) {
+      while (p[ii - 1] == LF && ii > 0) {
         p[ii - 1] = 0;
         --ii;
       }
@@ -868,14 +909,12 @@ void mac_collect(buf_t** buf, int opt)
       rtrim(p);
       ii = strlen(p);
       if (p[ii - 1] != '\\') {
-        free(p);
         mac_depth--;
         return;
       }
-      free(p);
       do {
         ii = NextCh();
-      } while (ii != '\n' && ii != 0);
+      } while (ii != LF && ii != 0 && ii != ETB);
     } while (ii);
     mac_depth--;
     return;

@@ -30,7 +30,10 @@
 #  define I(x)
 #endif
 
-#define ETB 0x17
+#define LF 0x0a
+// The following character is used to mark the end of the file during processing.
+// It is removed from the file at the end.
+#define ETB 0x17    // End of transmission block
 
 #define IsIdentChar(ch)       strchr(identchars, (ch))
 #define IsFirstIdentChar(ch)  (isalpha((ch)) || (ch) == '_')
@@ -38,11 +41,27 @@
 
 #define FALSE     0
 #define TRUE      1
+
+// The following is the maximum number of chars the input will fetch at one time.
 #define MAXLINE   4000
+
 #define STRAREA   1000000
+
+// The following controls the size of the hash table used to store symbols.
 #define MAXMACROS 4001
+
+// The maximum number of arguments associated with a macro.
 #define MAX_MACRO_ARGS  100
+
+// The following controls how many times the substituter will loop performing
+// substitutions. It is a safety.
 #define MAX_SUBS  10000
+
+// (Not yet implemented)
+// The following controls when the buffer is slid. If the input pointer is past
+// this point, then the buffer will slide to reduce the memory footprint.
+// Macro expansions are limited by this size.
+#define SLIDE_SZ  4096
 
 #define DIGITS "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -59,7 +78,8 @@ typedef enum {
   DIR_IF = 6,
   DIR_IFDEF = 7,
   DIR_IRP = 8,
-  DIR_ELSE = 9
+  DIR_ELSE = 9,
+  DIR_ELIF = 10
 } dir_e;
 
 typedef struct
@@ -88,8 +108,8 @@ typedef struct
   char *file;    // file macro is defined in
   arg_t** parms;
   buf_t* abody;  // text to substitute when macro name is encountered
-  char *st;		// start of definiton
-  char *nd;		// end of definition
+  int64_t st;		// start of definiton (index)
+  int64_t nd;		// end of definition (index)
   int inst;     // instance counter for this def.
 } def_t;
 
@@ -135,6 +155,7 @@ void set_input_buf_ptr(int64_t ndx);
 int check_buf_ptr(buf_t* buf, char* ptr);
 
 def_t* new_def();
+void free_def(def_t* def);
 def_t* clone_def(def_t*);
 
 pos_t* GetPos();
@@ -151,7 +172,7 @@ char *StoreStr(char *, ...);
 
 
 void err(int, ...);
-int64_t expeval(void);
+int64_t expeval(int* undef);
 int directive(char* p, char** pos);
 int directive_id(char* p, char** pos);
 
@@ -233,5 +254,4 @@ extern int mac_depth;       // nessted macro definition depth
 extern int rep_depth;       // nested repeat instance depth
 extern char *SkipComments();
 extern int IfLevel;
-extern int gbl_hide;
 extern int sub_pass;

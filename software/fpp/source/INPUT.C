@@ -5,7 +5,6 @@
 #include <inttypes.h>
 #include "fpp.h"
 
-int gbl_hide = 0;
 extern void IncrLineno();
 extern int restore_ch;
 
@@ -58,6 +57,21 @@ void fetch_line()
 		return;
 	}
 	ndx = get_input_buf_ndx();
+	/* SLiding buffer needs to write the first page out to the output file.
+	if (ndx > 4096) {
+		char* ptr, * p1;
+		char ch;
+
+		p1 = &inbuf->buf[4096];
+		ch = *p1;
+		*p1 = 0;
+  	ptr = strip_blank_lines(inbuf->buf);
+		fputs(ptr, fpo[pass]);
+		*p1 = ch;
+		memmove(inbuf->buf, &inbuf->buf[4096], inbuf->size - 4096);
+		set_input_buf_ptr(ndx - 4096);
+	}
+	*/
 	nn = strlen(inbuf->buf);
 	if (nn + MAXLINE > inbuf->size)
 		enlarge_buf(&inbuf);
@@ -100,8 +114,6 @@ int NextCh()
 				set_input_buf_ptr(0);
 		}
 		ch = *inptr;
-//		if (gbl_hide)
-//			*inptr = ' ';
 		inptr++;
 		if (ch == 0 && collect < 0)
 			return (0);
@@ -112,8 +124,6 @@ int NextCh()
 				fetch_line();
 			}
 			else {
-				int ii;
-
 				if (count_lines(&inbuf->buf[1]) > 0) {
 					// Find the next line in the buffer.
 					nn = line_length(&inbuf->buf[1]) + 1;

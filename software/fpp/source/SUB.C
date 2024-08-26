@@ -29,6 +29,7 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
   arg_t targ;
   arg_t targ2;
   char* p1, * p2;
+  buf_t* vargs_buf = NULL;
 
   spm_inst++;
 
@@ -41,6 +42,7 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
   // routine will occasionally reset the pointer for new lines.
   inbuf;
   inptr;
+  SearchAndSub(NULL, 0, NULL);
   check_buf_ptr(inbuf, inptr);
   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
   if (opt == 0) {
@@ -59,7 +61,7 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
     // get macro argument list
     nArgs = p->nArgs;
     varg = p->varg;
-    for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; ArgCount++)
+    for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; )
     {
       arg = GetMacroArg();
       nn = strlen(arg);
@@ -70,12 +72,16 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
       }
 
       Args[ArgCount].def = _strdup(arg);
+      ArgCount++;
 
       // Search for next argument
       // If the previous argument was not present, continue processing args.
       c = NextNonSpace(0);
       if (c == '\n' || peek_eof()) {
-        ArgCount++;
+        break;
+      }
+      if (syntax == CSTD && c != ',') {
+        unNextCh();
         break;
       }
       if (c != ',') {
@@ -102,20 +108,39 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
         unNextCh();
         err(3);     // missing ')'
       }
-      n1 = get_input_buf_ndx()-1;
+      n1 = get_input_buf_ndx();
     }
     if (ArgCount != nArgs && !varg)                    // Check that argument count matches
       err(14, nArgs);
     collect = 0;
 
     // Substitute arguments into macro body
-    for (xx = 0; (xx < ArgCount) || (p->varg && Args[xx].def); xx++)          // we don't want to change the original
+    for (xx = 0; (xx < ArgCount) /* || (p->varg && Args[xx].def)*/; xx++)          // we don't want to change the original
     {
-      targ.name = p->parms[xx]->name;
-      targ.def = Args[xx].def;
-      tp = SubMacroArg(bdy, xx, Args[xx].def, &targ);        // Substitute argument into body
-      free(bdy);                             // free old body
-      bdy = _strdup(tp);                      // copy new version of body
+      if (p->varg && xx >= nArgs - 1) {
+        if (vargs_buf == NULL)
+          vargs_buf = new_buf();
+        targ.name = "__VA_ARGS__";
+        insert_into_buf(&vargs_buf, Args[xx].def, 0);
+        if (xx < ArgCount-1)
+          char_to_buf(&vargs_buf, ',');
+        else {
+          tp = SubMacroArg(bdy, xx, vargs_buf->buf, &targ);        // Substitute argument into body
+          free(bdy);                             // free old body
+          bdy = _strdup(tp);                      // copy new version of body
+          free_buf(vargs_buf);
+        }
+      }
+      else {
+        if (strcmp(p->parms[xx]->name, "..."))
+          targ.name = p->parms[xx]->name;
+        else
+          targ.name = "__VA_ARGS__";
+        targ.def = Args[xx].def;
+        tp = SubMacroArg(bdy, xx, Args[xx].def, &targ);        // Substitute argument into body
+        free(bdy);                             // free old body
+        bdy = _strdup(tp);                      // copy new version of body
+      }
     }
     p1 = &inbuf->buf[n1];
     p2 = &inbuf->buf[id_pos->bufpos];
@@ -212,7 +237,7 @@ static void sub_inst_var()
       (none)
 ----------------------------------------------------------------------------- */
 
-static void inst_macro(def_t* p, int64_t idp, int stringize)
+static int inst_macro(def_t* p, int64_t idp, int stringize)
 {
   int64_t pos;
   pos_t id_pos;
@@ -220,13 +245,15 @@ static void inst_macro(def_t* p, int64_t idp, int stringize)
   id_pos.file = NULL;
   id_pos.bufpos = idp;
 
+  inst++;
   if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
   //    If this isn't a macro with parameters, then just copy
   // the body directly to the input. Overwrite the identifier
   // string
   if (p->nArgs > 0) {
     if (fdbg) fprintf(fdbg, "bef:%s", inbuf->buf);
-    SubParmMacro(p, 0, &id_pos);
+    if (SubParmMacro(p, 0, &id_pos))
+      return (0);
     if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
   }
   else {
@@ -240,6 +267,7 @@ static void inst_macro(def_t* p, int64_t idp, int stringize)
     p->body->pos = pos;
     if (fdbg) fprintf(fdbg, "aft:%s", inbuf->buf);
   }
+  return (1);
 }
 
 /* -----------------------------------------------------------------------------
@@ -279,8 +307,6 @@ int SearchAndSub(def_t* exc, int opt, char** nd)
   char *id, *optr;
   def_t *p, tdef;
   int ex;
-  char numbuf[20];
-  char* tp;
   char c1, c2;
   int didsub = 0;
   int odidsub = 0;
@@ -293,7 +319,7 @@ int SearchAndSub(def_t* exc, int opt, char** nd)
   // NextCh would read another line
 
   sub_pass = 0;
-  id_pos = NULL;
+  id_pos = 0;
 
   // Loop until no more substitutions are done. A substitution may make another
   // one possible.
@@ -477,6 +503,7 @@ int SearchAndSub(def_t* exc, int opt, char** nd)
         }
         else {
           unNextCh();
+          SkipSpaces();
           id_pos = get_input_buf_ndx();
           id = GetIdentifier();
           if (id == NULL)
@@ -484,6 +511,7 @@ int SearchAndSub(def_t* exc, int opt, char** nd)
         }
       }
       else {
+        SkipSpaces();
         if (inptr > inbuf->buf)
           c1 = inptr[-1];
         if (inptr > inbuf->buf + 1)
@@ -507,8 +535,10 @@ int SearchAndSub(def_t* exc, int opt, char** nd)
           ex = strcmp(p->name, exc->name) == 0;
         if (p != (def_t*)NULL && !ex)
         {
-          inst_macro(p, id_pos, c1 == '#' && c2 != '#');
-          didsub++;
+          if(inst_macro(p, id_pos, c1 == '#' && c2 != '#'))
+            didsub++;
+          else
+            set_input_buf_ptr(id_pos);
         }
         else
           set_input_buf_ptr(id_pos);

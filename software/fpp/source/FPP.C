@@ -128,6 +128,17 @@ def_t* new_def()
   return (p);
 }
 
+void free_def(def_t* def)
+{
+  if (def->body)
+    free_buf(def->body);
+  if (def->abody)
+    free_buf(def->abody);
+  if (def->parms)
+    free(def->parms);
+  free(def);
+}
+
 def_t* clone_def(def_t* dp)
 {
   def_t* p;
@@ -285,7 +296,7 @@ void ddefine(int opt, char* ps)
   // defined.
   pbdy = NULL;
   dp->body = new_buf();
-  insert_into_buf(&dp->body, " ", 0);
+  insert_into_buf(&dp->body, "", 0);
   if (!strcmp(dp->name, "irpTestDef"))
     printf("hi");
   p = (def_t*)htFind(&HashInfo, dp);
@@ -304,6 +315,7 @@ void ddefine(int opt, char* ps)
   tbuf->pos = 1;
   dp->st = st;
   dp->nd = nd;
+  inbuf;
   SubMacro(tbuf, nd - st, FALSE);
   free_buf(tbuf);
 
@@ -352,11 +364,12 @@ void derror(int opt, char* pos)
   do
   {
     c = NextCh();
-    if (c > 0)
+    if (c > 0 && c != ETB)
       fputc(c, stderr);
-    if (c == '\n' || c == 0)
+    if (c == LF || peek_eof())
       break;
   } while (1);
+  unNextCh();
 //   exit(0);
   if (opt)
     exit(100);
@@ -664,8 +677,8 @@ static directive_t dir[][32] =
     { "error",   5, derror,  0, 0, DIR_NONE },
     { "include", 7, dinclude,0, 0, DIR_NONE },
     { "else",    4, delse,   0, 0, DIR_ELSE },
-    { "endif",   5, dendif,  0, 0, DIR_NONE },
-    { "elif",    4, delif,   0, 0, DIR_NONE },
+    { "endif",   5, dendif,  0, 0, DIR_ENDIF },
+    { "elif",    4, delif,   0, 0, DIR_ELIF },
     { "ifdef",   5, difdef,  0, 0, DIR_IFDEF },
     { "ifndef",  6, difndef, 0, 0, DIR_IFDEF },
     { "if",      2, dif,     0, 0, DIR_IF }, // must come after ifdef/ifndef
@@ -818,8 +831,7 @@ int directive(char *p, char** pos)
       Process a line of text from the input. Tries to detect a directive
    first and invokes directive processing if found. Otherwise looks for
    macros that need to be substituted into the input and then performs
-   paste operations. Finally, the processed line is dumped to the output
-   file.
+   paste operations.
 
    Returns:
       (int) - indication to abort processing in the file processing loop.
@@ -830,7 +842,7 @@ int ProcLine()
 {
   int ch;
   int def = 0;
-  char* ptr, *ptr3;
+  char* ptr;
   int mod = 0;
   static char* p1 = NULL;
 
@@ -860,20 +872,6 @@ jmp1:
     DoPastes(inptr);
     // write out the current input buffer
     if (fdbg) fprintf(fdbg, "aft paste:%s", inptr);
-    //rtrim(inptr);
-    //     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
-    //     ptr2--;
-    /*
-    ptr3 = strip_blank_lines(inptr);
-    if (!is_blank(ptr3)) {
-      if (fputs(ptr3, ofp) == EOF)
-        printf("fputs failed.\n");
-      if (ptr3[strlen(ptr3) - 1] != '\n')
-        fputs("\n", ofp);
-    }
-    if (ptr3)
-      free(ptr3);
-    */
     inbuf;
     // If nothing was modified on the current line, then scan to the next line.
     if (mod == 0) {
@@ -885,12 +883,6 @@ jmp1:
       }
     }
   }
-//  nn = line_length(inbuf->buf);
-//  memmove(inbuf->buf, &inbuf[nn], inbuf->size - nn);
-//  inptr -= nn;
-//  inbuf->buf[0] = 0;
-//  inbuf->pos = 0;
-//  set_input_buf_ptr(0);
   p1 = inptr;
   return(0);
 }
@@ -978,6 +970,7 @@ void ProcFile(char *fname)
     fin = NULL;
     if (count_lines(inbuf->buf)) {
       ptr = strip_blank_lines(inbuf->buf);
+//      ptr = inbuf->buf;
       if (ptr3 = strchr(ptr, ETB))
         *ptr3 = 0;
       if (ptr) {
@@ -1191,7 +1184,7 @@ void PrintDefines()
         // Display only the first line of a macro.
         if (dp->body && dp->body->buf) {
           for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf[jj] != '\n'; jj++);
-          if (jj > 1) dp->body->buf[jj - 2] = 0;
+          if (jj > 1) dp->body->buf[jj] = 0;
           printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
         }
     }
@@ -1326,7 +1319,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 3.02  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 3.05  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1361,7 +1354,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 3.02  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 3.05  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.
@@ -1438,13 +1431,9 @@ int main(int argc, char *argv[]) {
   p = (def_t *)htFind(&HashInfo, &bbfile);
   if (p)
     p->body = bbfile.body;
+
   ProcFile(SourceName);
-  /*
-  if (ofp != stdout) {
-	  fflush(ofp);
-    fclose(ofp);
-  }
-  */
+
   if (fdbg)
 	  fclose(fdbg);
 
@@ -1454,8 +1443,9 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "\nPreProcessor Warnings: %d\n",warnings);
   if (verbose) {
     PrintDefines();
-    printf("\n%d/%d macros\n", MacroCount, MAXMACROS);
-    printf("%u/%u macro space used\n", SymSpace->pos, SymSpace->size);
+    printf("\n%d of %d macros\n", MacroCount, MAXMACROS);
+    printf("%u of %u macro space used, %d instances\n", SymSpace->pos, SymSpace->size, inst - rept_inst);
+    printf("%d/%d repeat definitions/instances\n", rep_def_cnt, rept_inst);
   }
   if (SymSpace)
     free_buf(SymSpace);
