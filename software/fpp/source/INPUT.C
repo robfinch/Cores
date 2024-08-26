@@ -5,6 +5,10 @@
 #include <inttypes.h>
 #include "fpp.h"
 
+int gbl_hide = 0;
+extern void IncrLineno();
+extern int restore_ch;
+
 char *SkipComments()
 {
 	char ch;
@@ -38,6 +42,38 @@ char *SkipComments()
 	return (inptr);
 }
 
+// Fetch a line of text from the input file and append it to the input buffer.
+
+void fetch_line()
+{
+	int64_t ndx;
+	int64_t nn;
+	char* p1;
+
+	if (feof(fin)) {
+		inbuf->pos = strlen(inbuf->buf);
+		char_to_buf(&inbuf, ETB);
+		char_to_buf(&inbuf, ETB);
+		char_to_buf(&inbuf, ETB);
+		return;
+	}
+	ndx = get_input_buf_ndx();
+	nn = strlen(inbuf->buf);
+	if (nn + MAXLINE > inbuf->size)
+		enlarge_buf(&inbuf);
+	set_input_buf_ptr(ndx);
+	p1 = &inbuf->buf[nn];
+	fgets(p1, MAXLINE, fin);
+	if (feof(fin)) {
+		inbuf->pos = strlen(inbuf->buf);
+		char_to_buf(&inbuf, ETB);
+		char_to_buf(&inbuf, ETB);
+		char_to_buf(&inbuf, ETB);
+	}
+	IncrLineno();
+	if (fdbg) fprintf(fdbg, "Fetched:%s", inptr);
+}
+
 // Gets characters from the input stream. Single character pushback.
 // Allocates the input buffer on first entry.
 
@@ -46,36 +82,54 @@ int NextCh()
 	unsigned int ch;
 	static int first = 1;
 	int64_t ndx;
+	int64_t nn;
 
 	if (first) {
 		inbuf = new_buf();
-		inptr = NULL;
+		set_input_buf_ptr(0);
 		ch = ' ';
 	}
 	do {
 		// Reallocate buffer if it is not large enough. Save and reset input pointer
 		// after enlargeing.
 		if (first || inptr - inbuf->buf > inbuf->size - MAXLINE - 1) {
-			ndx = inptr - inbuf->buf;
-			inbuf = enlarge_buf(inbuf);
-			inptr = inbuf->buf + ndx;
+			ndx = get_input_buf_ndx();
+			enlarge_buf(&inbuf);
+			set_input_buf_ptr(ndx);
 			if (first)
-				inptr = inbuf->buf;
+				set_input_buf_ptr(0);
 		}
-		ch = *inptr++;
+		ch = *inptr;
+//		if (gbl_hide)
+//			*inptr = ' ';
+		inptr++;
+		if (ch == 0 && collect < 0)
+			return (0);
 		if (ch == 0 || first) {
 			first = 0;
-			if (collect) {
+			if (collect|1) {
 				inptr--;
-				fgets(inptr, MAXLINE, fin);
-				if (fdbg) fprintf(fdbg, "Fetched:%s", inptr);
+				fetch_line();
 			}
 			else {
-				inptr = inbuf->buf;
-				memset(inbuf->buf, 0, inbuf->size);
-				fgets(inbuf->buf, MAXLINE, fin);
-				if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf->buf);
-				inptr = inbuf->buf;
+				int ii;
+
+				if (count_lines(&inbuf->buf[1]) > 0) {
+					// Find the next line in the buffer.
+					nn = line_length(&inbuf->buf[1]) + 1;
+					memmove(inbuf->buf, &inbuf->buf[nn], inbuf->size - nn);
+					memset(&inbuf->buf[inbuf->size - nn], 0, nn);
+					set_input_buf_ptr(0);
+				}
+				else {
+					set_input_buf_ptr(0);
+					memset(inbuf->buf, 0, inbuf->size);
+					fgets(inbuf->buf, MAXLINE, fin);
+					IncrLineno();
+					if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf->buf);
+					set_input_buf_ptr(0);
+					inbuf->pos = 0;
+				}
 			}
 			ch = *inptr++;
 		}
@@ -134,10 +188,14 @@ void SkipSpaces()
 int NextNonSpace(int skipnl)
 {
    int ch;
+	 int64_t n1;
 
    do {
-      ch = NextCh();
-   } while((ch != '\n' || skipnl) && isspace(ch) && ch!=0);
+		 n1 = get_input_buf_ndx();
+		 ch = NextCh();
+   } while((ch != '\n' || skipnl) && isspace(ch) && ch!=0 && n1 < inbuf->size);
+	 if (n1 >= inbuf->size)
+		 printf("hi");
    return (ch);
 }
 
@@ -147,6 +205,6 @@ void ScanPastEOL()
 
 	do {
 		ch = NextCh();
-	} while (ch != '\n' && ch != 0);
+	} while (ch != '\n' && ch != 0 && ch != ETB);
 }
 

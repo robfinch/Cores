@@ -11,13 +11,13 @@ char *error[] = {
    "EOut of memory.",
 // 5
    "ERedefined symbol '%s' - new definition ignored.",
-   "WUnexpected '#endif' - ignored.",
+   "WUnexpected 'endif' - ignored.",
    "WEvaluation of strings not supported. Value assumed to be 1.",
    "EOpen error attempting to open '%s'.",
    "EInvalid identifier '%s'.",
 // 10
    "EInvalid exponent.",
-   "WMissing '#endif'.",
+   "WMissing 'endif'.",
    "EExpecting macro parameters",
    "EIncorrect number of arguments - expecting %d macro arguments",
    "EToo many macro arguments.",
@@ -41,7 +41,10 @@ char *error[] = {
    "Eiterative repeat expecting a symbol",
 // 30
    "Eendm without macr",
-   "WNested macro definiton (%s)"
+   "WNested macro definiton (%s)",
+   "EMissing endm",
+   "EMissing endr",
+   "WMax macro (%d) substitutions reached"
 };
 
 extern int InLineNo;

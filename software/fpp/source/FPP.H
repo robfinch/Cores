@@ -30,6 +30,8 @@
 #  define I(x)
 #endif
 
+#define ETB 0x17
+
 #define IsIdentChar(ch)       strchr(identchars, (ch))
 #define IsFirstIdentChar(ch)  (isalpha((ch)) || (ch) == '_')
 #define PeekCh()              (*inptr)
@@ -40,6 +42,7 @@
 #define STRAREA   1000000
 #define MAXMACROS 4001
 #define MAX_MACRO_ARGS  100
+#define MAX_SUBS  10000
 
 #define DIGITS "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -49,7 +52,14 @@
 typedef enum {
   DIR_NONE = 0,
   DIR_REPT = 1,
-  DIR_END = 2
+  DIR_ENDM = 2,
+  DIR_ENDIF = 3,
+  DIR_ENDR = 4,
+  DIR_MACR = 5,
+  DIR_IF = 6,
+  DIR_IFDEF = 7,
+  DIR_IRP = 8,
+  DIR_ELSE = 9
 } dir_e;
 
 typedef struct
@@ -89,15 +99,20 @@ typedef struct
   def_t* def;    // associated def
   int rcnt;     // current repeat counter (.rept)
   int orcnt;    // original repeat count
+  int done;     // 1= done already
   char* st;      
   char* nd;
+  int64_t start;  // start and end of repeat definition
+  int64_t end;
+  int64_t bdystart; // start and end of repeat body text
+  int64_t bdyend;
 } rep_t;
 
 typedef struct
 {
   char *name;
   int len;
-  void (*func)(int);
+  void (*func)(int, char*);
   int syntax;
   int opt;
   dir_e flags;
@@ -111,10 +126,13 @@ typedef struct
 
 buf_t* new_buf();
 void free_buf(buf_t*);
-buf_t* enlarge_buf(buf_t* b);
+void enlarge_buf(buf_t** b);
 buf_t* clone_buf(buf_t* b);
 void insert_into_buf(buf_t** buf, char* p, int pos);
 void char_to_buf(buf_t** buf, char ch);
+int64_t get_input_buf_ndx();
+void set_input_buf_ptr(int64_t ndx);
+int check_buf_ptr(buf_t* buf, char* ptr);
 
 def_t* new_def();
 def_t* clone_def(def_t*);
@@ -122,7 +140,6 @@ def_t* clone_def(def_t*);
 pos_t* GetPos();
 void SetPos(pos_t*);
 size_t SymSpaceLeft();
-void ProcFile(char *);
 
 int icmp(const void *, const void *);
 int fcmp(char *, def_t *);
@@ -135,49 +152,59 @@ char *StoreStr(char *, ...);
 
 void err(int, ...);
 int64_t expeval(void);
-int directive(char* p);
+int directive(char* p, char** pos);
+int directive_id(char* p, char** pos);
 
+void ProcFile(char*);
 int ProcLine(void);
-int NextCh(void);
+int NextCh();
 int NextNonSpace(int);
-void SkipSpaces(void);
+void SkipSpaces();
 void unNextCh(void);
-char *GetIdentifier(void);
+char *GetIdentifier();
 void ScanPastEOL();
+void input_to(buf_t*);
+void fetch_line();
+int peek_eof();
 
-buf_t *GetMacroBody(def_t*, int opt, int rpt);
+buf_t *GetMacroBody(def_t*, int opt, int rpt, int dodir);
 char *GetMacroArg(void);
 int GetMacroParmList(arg_t *[]);
-void SubMacro(char *, int, int);
-char *SubMacroArg(char *, int, char *);
+void SubMacro(buf_t*, int, int);
+char *SubMacroArg(char *, int, char *, arg_t* def);
 int SubParmMacro(def_t* p, int opt, pos_t* id_pos);
+void mac_collect(buf_t** buf, int opt);
 
-void SearchAndSub(def_t* excld, int);
+int SearchAndSub(def_t* excld, int opt, char** nd);
+int SearchAndSubBuf(buf_t** buf, int opt, char** nd);
 void SearchForDefined(void);
 void DoPastes(char *);
 
-void ddefine(int);
-void derror(int);
-void dinclude(int);
-void delse(int);
-void delif(int);
-void dendif(int);
-void difdef(int);
-void difndef(int);
-void dif(int);
-void dundef(int);
-void dline(int);
-void dpragma(int);
-void dendm(int);
-void drept(int);
-void dendr(int);
+void ddefine(int, char*);
+void derror(int, char*);
+void dinclude(int, char*);
+void delse(int, char*);
+void delif(int, char*);
+void dendif(int, char*);
+void difdef(int, char*);
+void difndef(int, char*);
+void dif(int, char*);
+void dundef(int, char*);
+void dline(int, char*);
+void dpragma(int, char*);
+void dendm(int, char*);
+void drept(int, char*);
+void dendr(int, char*);
 
 void searchenv(char *filename, char *envname, char *pathname, int pathsize);
 // Utility type functions
 char* rtrim(char*);
 char* strip_quotes(char*);
 char* strip_blank_lines(char*);
+char* strip_directives(char*);
 int is_blank(char*);
+int count_lines(char* buf);
+int line_length(char* buf);
 
 char syntax_ch();
 int GetReptArgList(arg_t* arglist[], int opt);
@@ -205,3 +232,6 @@ extern int inst;            // def instance counter
 extern int mac_depth;       // nessted macro definition depth
 extern int rep_depth;       // nested repeat instance depth
 extern char *SkipComments();
+extern int IfLevel;
+extern int gbl_hide;
+extern int sub_pass;

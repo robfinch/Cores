@@ -46,6 +46,7 @@ int inst=0;      // macro instance
 char incdir[4096];    // additional include directory specified with .incdir
 int inst_stk[20];
 int inst_sp;
+int restore_ch;
 
 // Storage for standard #defines
 
@@ -154,7 +155,14 @@ pos_t* GetPos()
 void SetPos(pos_t* pos)
 {
 //  fin = pos->file;
-  inptr = inbuf->buf + pos->bufpos;
+  set_input_buf_ptr(pos->bufpos);
+}
+
+// Update line number (including __LINE__).
+void IncrLineno()
+{
+  InLineNo++;
+  sprintf_s(bbline.body->buf, 6, "%5d", InLineNo - 1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -170,125 +178,155 @@ void SetPos(pos_t* pos)
       (none)
 ---------------------------------------------------------------------------- */
 
-void ddefine(int opt)
+void ddefine(int opt, char* ps)
 {
-   int c, n = 0;
-   def_t *dp, *p;
-   arg_t parms[100];
-   arg_t* pl[100];
-   buf_t *ptr;
-   char* ptr2;
-   int need_cb = 0;
+  int c, n = 0;
+  def_t *dp, *p;
+  arg_t parms[100];
+  arg_t* pl[100];
+  char* ptr2;
+  char* pbdy;
+  int need_cb = 0;
+  buf_t* tbuf;
+  int64_t st, nd;
 
-   mac_depth++;
-   memset(parms, 0, 100 * sizeof(arg_t));
-   for (n = 0; n < 100; n++)
-     pl[n] = &parms[n];
+  mac_depth++;
+  st = ps - inbuf->buf;
+  memset(parms, 0, 100 * sizeof(arg_t));
+  for (n = 0; n < 100; n++)
+    pl[n] = &parms[n];
 
-   dp = new_def();
-   dp->nArgs = 0;           // no arguments or round brackets
-   dp->line = InLineNo;     // line number macro defined on
-   dp->file = bbfile.body->buf;  // file macro defined in
-   SkipSpaces();
-   ptr2 = GetIdentifier();
-   if (ptr2 == NULL) {
-      err(19);    // nothing to define
-      return;
-   }
-   dp->name = _strdup(ptr2);
-   dp->body = new_buf();
+  dp = new_def();
+  dp->nArgs = 0;           // no arguments or round brackets
+  dp->line = InLineNo;     // line number macro defined on
+  dp->file = bbfile.body->buf;  // file macro defined in
+  SkipSpaces();
+  ptr2 = GetIdentifier();
+  if (ptr2 == NULL) {
+    err(19);    // nothing to define
+    return;
+  }
+  dp->name = _strdup(ptr2);
+  dp->body = new_buf();
 
-   if (opt == 1 && mac_depth > 1)
-     err(32, dp->name);     // Nested macro warning
+  if (opt == 1 && mac_depth > 1)
+    err(32, dp->name);     // Nested macro warning
+  if (!strcmp(dp->name, "irpTestDef"))
+    printf("gi");
+  SearchAndSub(dp, opt!=1 ? -1 : 1, NULL);
+  inbuf;
 
-   SearchAndSub(dp, rep_depth>0);
-   inbuf;
-
-   // Check for macro parameters. There must be no space between the
-   // macro name and ')'.
-   if (PeekCh() == '(') {
-      NextCh();
+  // Check for macro parameters. There must be no space between the
+  // macro name and ')'.
+  if (PeekCh() == '(') {
+    NextCh();
+    dp->varg = 0;
+   	dp->nArgs = GetMacroParmList(pl);
+    if (dp->nArgs < 0) {
+      dp->nArgs = -dp->nArgs;
+      dp->varg = 1;
+    }
+    c = NextNonSpace(0);
+    if (c != ')') {
+        err(16);
+        unNextCh();
+    }
+  }
+  else if (syntax == ASTD) {
+    // for .set and .equ there are no parameters allowed
+    if (opt != 2) {
+      if (PeekCh() == '(') {
+        NextCh();
+        need_cb = 1;
+      }
       dp->varg = 0;
-   	  dp->nArgs = GetMacroParmList(pl);
+      dp->nArgs = GetMacroParmList(pl);
       if (dp->nArgs < 0) {
         dp->nArgs = -dp->nArgs;
         dp->varg = 1;
       }
       c = NextNonSpace(0);
-      if (c != ')') {
-         err(16);
-         unNextCh();
+      if (need_cb) {
+        if (c != ')') {
+          err(16);
+          unNextCh();
+        }
       }
-   }
-   else if (syntax == ASTD) {
-     // for .set and .equ there are no parameters allowed
-     if (opt != 2) {
-       if (PeekCh() == '(') {
-         NextCh();
-         need_cb = 1;
-       }
-       dp->varg = 0;
-       dp->nArgs = GetMacroParmList(pl);
-       if (dp->nArgs < 0) {
-         dp->nArgs = -dp->nArgs;
-         dp->varg = 1;
-       }
-       c = NextNonSpace(0);
-       if (need_cb) {
-         if (c != ')') {
-           err(16);
-           unNextCh();
-         }
-       }
-     }
-     // We allow
-     //   .set <symbol> <value>
-     // in addition to the regular
-     //   .set <symbol>, <value>
-     else if (PeekCh() == ',')
-       NextCh();
-   }
-   dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
-   if (dp->parms == NULL) {
-     err(5);    // out of memory
-     exit(5);
-   }
-   memset(dp->parms, 0, sizeof(arg_t*) * dp->nArgs);
-   for (n = 0; n < dp->nArgs; n++)
-     {
-       dp->parms[n] = malloc(sizeof(arg_t));
-       if (dp->parms[n] == NULL) {
-         err(5);    // out of memory
-         exit(5);
-       }
-       if (dp->parms[n])
-         memcpy(dp->parms[n], &parms[n], sizeof(arg_t));
-     }
+    }
+    // We allow
+    //   .set <symbol> <value>
+    // in addition to the regular
+    //   .set <symbol>, <value>
+    else if (PeekCh() == ',')
+      NextCh();
+//     unNextCh();
+  }
+  // Copy arg list to definition. It was fetched using a temporary variable
+  // on the stack. Their value needs to be retained.
+  dp->parms = malloc(sizeof(arg_t*) * dp->nArgs);
+  if (dp->parms == NULL) {
+    err(5);    // out of memory
+    exit(5);
+  }
+  memset(dp->parms, 0, sizeof(arg_t*) * dp->nArgs);
+  for (n = 0; n < dp->nArgs; n++)
+    {
+      dp->parms[n] = malloc(sizeof(arg_t));
+      if (dp->parms[n] == NULL) {
+        err(5);    // out of memory
+        exit(5);
+      }
+      if (dp->parms[n])
+        memcpy(dp->parms[n], &parms[n], sizeof(arg_t));
+    }
 
-   ptr = GetMacroBody(dp, opt == 2 ? 1 : 0, 0);
-   inptr;
-   inbuf;
+  // Here we have the macro name and parameter list. See if its in the table
+  // already, if not add it. This is to allow the macro to be recursively
+  // defined.
+  pbdy = NULL;
+  dp->body = new_buf();
+  insert_into_buf(&dp->body, " ", 0);
+  if (!strcmp(dp->name, "irpTestDef"))
+    printf("hi");
+  p = (def_t*)htFind(&HashInfo, dp);
+  if (p == NULL)
+    htInsert(&HashInfo, dp);
+
+  mac_collect(&dp->body, opt);
+  nd = get_input_buf_ndx();
+
+  // The macro has been fetched, so remove the macro body from the input text.
+  // Done by substituting in a single space character.
+  tbuf = new_buf();
+  tbuf->buf = " ";
+  tbuf->size = 2;
+  tbuf->alloc = 2;
+  tbuf->pos = 1;
+  dp->st = st;
+  dp->nd = nd;
+  SubMacro(tbuf, nd - st, FALSE);
+  free_buf(tbuf);
+
+//   ptr = GetMacroBody(dp, opt == 2 || opt == 1 ? 1 : 0, 0, 1);
+
    // Do pasteing
    //DoPastes(ptr);
 
-   // See if the macro is already defined. If it is then if the definition
-   // is not the same spit out an error, otherwise spit out warning.
-   dp->body = ptr;
-   p = (def_t *)htFind(&HashInfo, dp);
-   if (p) {
-		 if (strcmp(p->body->buf, dp->body->buf))
-			 err(6, dp->name);
-      //err((strcmp(p->body, dp.body) ? 6 : 23), dp.name);
-      free(dp->name);
-      return;
-   }
-   ptr2 = ptr->buf;
-   dp->name = StorePlainStr(dp->name);
-   dp->body->buf = StorePlainStr(dp->body->buf);
-   dp->body->alloc = 1;
-   free(ptr2);
-   htInsert(&HashInfo, dp);
-   inst++;
+  // See if the macro is already defined. If it is then if the definition
+  // is not the same spit out an error, otherwise spit out warning.
+//  dp->body = ptr;
+  if (p) {
+		if (strcmp(p->body->buf, dp->body->buf))
+			err(6, dp->name);
+    //err((strcmp(p->body, dp.body) ? 6 : 23), dp.name);
+    free(dp->name);
+    return;
+  }
+
+  dp->name = StorePlainStr(dp->name);
+  dp->body->buf = StorePlainStr(dp->body->buf);
+  dp->body->alloc = 1;
+  inst++;
 }
 
 /* ----------------------------------------------------------------------------
@@ -304,11 +342,11 @@ void ddefine(int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
-void derror(int opt)
+void derror(int opt, char* pos)
 {
   int c;
 
-  SearchAndSub(NULL,rep_depth>0);
+  SearchAndSub(NULL, 0, NULL);
   DoPastes(inbuf->buf);
   SkipSpaces();
   do
@@ -335,13 +373,13 @@ void derror(int opt)
       (none)
 ----------------------------------------------------------------------------- */
 
-void dincdir(int opt)
+void dincdir(int opt, char* pos)
 {
   char ch;
   char* f;
   char name[4096];
 
-  SearchAndSub(NULL,rep_depth>0);
+  SearchAndSub(NULL, 0, NULL);
   DoPastes(inbuf->buf);
   ch = NextNonSpace(0);
   if (ch == '"')  // search the path specified
@@ -394,7 +432,7 @@ void dincdir(int opt)
       (none)
 ----------------------------------------------------------------------------- */
 
-void dinclude(int opt)
+void dinclude(int opt, char* pos)
 {
    char *tname;
    char *f;
@@ -407,7 +445,7 @@ void dinclude(int opt)
    pos_t* ndx;
 
    ndx = GetPos();
-   SearchAndSub(NULL, rep_depth > 0);
+   SearchAndSub(NULL, 0, NULL);
    DoPastes(inbuf->buf);
    SetPos(ndx);
    free(ndx);
@@ -531,7 +569,7 @@ void dinclude(int opt)
       (none)
 ----------------------------------------------------------------------------- */
 
-void dundef(int opt)
+void dundef(int opt, char* pos)
 {
 	def_t dp;
 
@@ -553,13 +591,13 @@ void dundef(int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
-void dline(int opt)
+void dline(int opt, char* pos)
 {
   char *ptr;
   char name[MAXLINE];
   def_t *p;
 
-  SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL, 0, NULL);
   DoPastes(inbuf->buf);
   InLineNo = atoi(inptr);
   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-2);
@@ -586,9 +624,9 @@ void dline(int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
-void dpragma(int opt)
+void dpragma(int opt, char* pos)
 {
-  SearchAndSub(NULL, rep_depth > 0);
+  SearchAndSub(NULL, 0, NULL);
    DoPastes(inbuf->buf);
 }
 
@@ -601,10 +639,10 @@ void dpragma(int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
-void dendm(int opt)
+void dendm(int opt, char* pos)
 {
   if (mac_depth > 0)
-    mac_depth--;
+    ;// mac_depth--;
   else
     err(31);    // endm without macr
 }
@@ -625,12 +663,12 @@ static directive_t dir[][32] =
     { "define",  6, ddefine, 0, 0, DIR_NONE },
     { "error",   5, derror,  0, 0, DIR_NONE },
     { "include", 7, dinclude,0, 0, DIR_NONE },
-    { "else",    4, delse,   0, 0, DIR_NONE },
+    { "else",    4, delse,   0, 0, DIR_ELSE },
     { "endif",   5, dendif,  0, 0, DIR_NONE },
     { "elif",    4, delif,   0, 0, DIR_NONE },
-    { "ifdef",   5, difdef,  0, 0, DIR_NONE },
-    { "ifndef",  6, difndef, 0, 0, DIR_NONE },
-    { "if",      2, dif,     0, 0, DIR_NONE }, // must come after ifdef/ifndef
+    { "ifdef",   5, difdef,  0, 0, DIR_IFDEF },
+    { "ifndef",  6, difndef, 0, 0, DIR_IFDEF },
+    { "if",      2, dif,     0, 0, DIR_IF }, // must come after ifdef/ifndef
     { "undef",   5, dundef,  0, 0, DIR_NONE },
     { "line",    4, dline,   0, 0, DIR_NONE },
     { "pragma",  6, dpragma, 0, 0, DIR_NONE },
@@ -644,30 +682,82 @@ static directive_t dir[][32] =
     { "err",     3, derror,  1, 0, DIR_NONE },
     { "abort",   5, derror,  1, 1, DIR_NONE },
     { "include", 7, dinclude,1, 0, DIR_NONE },
-    { "else",    4, delse,   1, 0, DIR_NONE },
-    { "ifdef",   5, difdef,  1, 0, DIR_NONE },
+    { "else",    4, delse,   1, 0, DIR_ELSE },
+    { "ifdef",   5, difdef,  1, 0, DIR_IFDEF },
     // 20 v
-    { "ifndef",  6, difndef, 1, 0, DIR_NONE },
-    { "ifeq",    4, dif,     1, 1, DIR_NONE },
-    { "ifne",    4, dif,     1, 0, DIR_NONE },
-    { "ifgt",    4, dif,     1, 2, DIR_NONE },
-    { "ifge",    4, dif,     1, 3, DIR_NONE },
-    { "iflt",    4, dif,     1, 4, DIR_NONE },
-    { "ifle",    4, dif,     1, 5, DIR_NONE },
-    { "ifb",     3, dif,     1, 6, DIR_NONE },
-    { "ifnb",    3, dif,     1, 7, DIR_NONE },
-    { "if",      2, dif,     1, 0, DIR_NONE },  // must come after ifdef/ifndef
+    { "ifndef",  6, difndef, 1, 0, DIR_IFDEF },
+    { "ifeq",    4, dif,     1, 1, DIR_IF },
+    { "ifne",    4, dif,     1, 0, DIR_IF },
+    { "ifgt",    4, dif,     1, 2, DIR_IF },
+    { "ifge",    4, dif,     1, 3, DIR_IF },
+    { "iflt",    4, dif,     1, 4, DIR_IF },
+    { "ifle",    4, dif,     1, 5, DIR_IF },
+    { "ifb",     3, dif,     1, 6, DIR_IF },
+    { "ifnb",    3, dif,     1, 7, DIR_IF },
+    { "if",      2, dif,     1, 0, DIR_IF },  // must come after ifdef/ifndef
     // 30 v
     { "incdir",  6, dincdir, 1, 0, DIR_NONE },
-    { "endif",   5, dendif,  1, 0, DIR_NONE },
+    { "endif",   5, dendif,  1, 0, DIR_ENDIF },
     { "undef",   5, dundef,  1, 0, DIR_NONE },
-    { "macro",   5, ddefine, 1, 1, DIR_NONE },
-    { "endm",    4, dendm,   1, 0, DIR_END },
-    { "irp",     3, drept,   1, 1, DIR_REPT },
+    { "macro",   5, ddefine, 1, 1, DIR_MACR },
+    { "endm",    4, dendm,   1, 0, DIR_ENDM },
+    { "irp",     3, drept,   1, 1, DIR_IRP },
     { "rept",    4, drept,   1, 0, DIR_REPT },
-    { "endr",    4, dendr,   1, 0, DIR_END }
+    { "endr",    4, dendr,   1, 0, DIR_ENDR }
   }
 };
+
+
+/* -----------------------------------------------------------------------------
+   Description :
+      Looks at line and determines if it is a preprocessor directive. Returns
+   an id code for the directive. The input pointer is advanced past the 
+   mnemonic.
+      A directive begins with a pre-processor character (must have already
+   been fetched from input) followed by optional spaces then the directive
+   mnemonic.
+
+   Parameters
+    (char*) ptr  - pointer to text to check for directive. If the pointer is
+                   NULL then the input buffer pointer is used.
+
+   Returns :
+      (int)
+      non-zero if preprocessor directive, otherwise zero.
+      Bit 8 to 31 returned are flags, bits 0 to 7 is the table index.
+----------------------------------------------------------------------------- */
+
+int directive_id(char* p, char** pos)
+{
+  int i;
+  char* q = inptr;
+  int syn = min(syntax, 1);
+
+  if (p)
+    q = p;
+
+  // Skip any whitespace following '#'
+  if (pos)
+    *pos = q;
+  inptr = q;
+  NextCh();     // skip '.'
+  NextNonSpace(0);
+  unNextCh();
+  q = inptr;
+  for (i = 0; i < 32 && dir[syn][i].name; i++)
+  {
+    if (!strncmp(q, dir[syn][i].name, dir[syn][i].len) && dir[syn][i].syntax == syntax)
+    {
+      inptr += dir[syn][i].len;
+      // Including this causes #define to fail because it already
+      // scans to the end of the line
+      //ScanPastEOL();
+          //for (; *inptr != 0; inptr++); // skip to eol
+      return (i + 1) | (dir[syn][i].flags << 8);
+    }
+  }
+  return (0);
+}
 
 /* -----------------------------------------------------------------------------
    Description :
@@ -687,34 +777,39 @@ static directive_t dir[][32] =
       Bit 8 to 31 returned are flags, bits 0 to 7 is the table index.
 ----------------------------------------------------------------------------- */
 
-int directive(char *p)
+int directive(char *p, char** pos)
 {
-   int i;
-   char* q = inptr;
-   int syn = min(syntax, 1);
+  int i;
+  char* q = inptr;
+  int syn = min(syntax, 1);
+  char* r;
 
-   if (p)
-     q = p;
+  if (p)
+    q = p;
 
    // Skip any whitespace following '#'
-   if (p == NULL) {
-     NextNonSpace(0);
-     unNextCh();
-   }
-   for(i = 0; i < 32 && dir[syn][i].name; i++)
-   {
-      if (!strncmp(q, dir[syn][i].name, dir[syn][i].len) && dir[syn][i].syntax==syntax)
-      {
-         inptr += dir[syn][i].len;
-         (*dir[syn][i].func)(dir[syn][i].opt);
-		 // Including this causes #define to fail because it already
-		 // scans to the end of the line
-		 //ScanPastEOL();
-         //for (; *inptr != 0; inptr++); // skip to eol
-         return (i+1)|(dir[syn][i].flags<<8);
-      }
-   }
-   return (0);
+  if (pos)
+    *pos = q;
+  inptr = q;
+  r = q;
+  NextCh();     // skip '.'
+  NextNonSpace(0);
+  unNextCh();
+  q = inptr;
+  for(i = 0; i < 32 && dir[syn][i].name; i++)
+  {
+    if (!strncmp(q, dir[syn][i].name, dir[syn][i].len) && dir[syn][i].syntax==syntax)
+    {
+        inptr += dir[syn][i].len;
+        (*dir[syn][i].func)(dir[syn][i].opt, r);
+		// Including this causes #define to fail because it already
+		// scans to the end of the line
+		//ScanPastEOL();
+        //for (; *inptr != 0; inptr++); // skip to eol
+        return (i+1)|(dir[syn][i].flags<<8);
+    }
+  }
+  return (0);
 }
 
 
@@ -733,59 +828,71 @@ int directive(char *p)
 
 int ProcLine()
 {
-   int ch;
-   int def = 0;
-   char* ptr, *ptr2, *ptr3;
-   int64_t ndx3;
+  int ch;
+  int def = 0;
+  char* ptr, *ptr3;
+  int mod = 0;
+  static char* p1 = NULL;
 
-   //printf("Processing line: %d\r", InLineNo);
-   ch = NextNonSpace(0);
-   if (ch == syntax_ch() && in_comment == 0) {
-      if (ShowLines)
-         fprintf(stdout, "#line %5d\n", InLineNo);
-      def = directive(NULL);
-      if (def)
-        ptr = inptr;
-      if ((def >> 8) == DIR_REPT)  // irp,rept
-        goto jmp1;
-   }
-   else {
-//     DoPastes(inbuf->buf);
-     //      inptr = inbuf;
-     unNextCh();
+  //printf("Processing line: %d\r", InLineNo);
+  ch = NextNonSpace(0);
+  if (ch == ETB)
+    return (1);
+  if (ch == 0)
+    return (1);
+  unNextCh();
+  if (ch == syntax_ch() && in_comment == 0) {
+    if (ShowLines)
+      fprintf(stdout, "#line %5d\n", InLineNo);
+    def = directive(inptr, NULL);
+    if (def)
+      ptr = inptr;
+    if ((def >> 8) == DIR_REPT || (def >> 8) == DIR_IRP)  // irp,rept
+      goto jmp1;
+  }
+  else {
 jmp1:
-     ndx3 = SkipComments() - inbuf->buf;
-     inptr = inbuf->buf + ndx3;
-     if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf->buf + ndx3);
-     collect = 1;
-     SearchAndSub(NULL, rep_depth > 0);
-     collect = 0;
-     if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf->buf + ndx3);
-     DoPastes(inbuf->buf + ndx3);
-     // write out the current input buffer
-     if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf->buf + ndx3);
-     rtrim(inbuf->buf + ndx3);
-     inptr = inbuf->buf + ndx3 + strlen(inbuf->buf + ndx3);
-     ptr2 = inbuf->buf + ndx3;
-//     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
-//     ptr2--;
-     ptr3 = strip_blank_lines(ptr2);
-     if (!is_blank(ptr3)) {
-       if (fputs(ptr3, ofp) == EOF)
+    if (fdbg) fprintf(fdbg, "bef sub  :%s", inptr);
+    collect = 1;
+    mod = SearchAndSub(NULL, 0, NULL);
+    collect = 0;
+    if (fdbg) fprintf(fdbg, "aft sub  :%s", inptr);
+    DoPastes(inptr);
+    // write out the current input buffer
+    if (fdbg) fprintf(fdbg, "aft paste:%s", inptr);
+    //rtrim(inptr);
+    //     do ptr2++; while (ptr2[0] == '\n' || ptr2[0] == '\r');
+    //     ptr2--;
+    /*
+    ptr3 = strip_blank_lines(inptr);
+    if (!is_blank(ptr3)) {
+      if (fputs(ptr3, ofp) == EOF)
         printf("fputs failed.\n");
-       if (ptr3[strlen(ptr3)-1]!='\n')
+      if (ptr3[strlen(ptr3) - 1] != '\n')
         fputs("\n", ofp);
-     }
-     if (ptr3)
-       free(ptr3);
-   }
-   inbuf->buf[0] = 0;
-   inbuf->buf[1] = 0;
-   inbuf->buf[2] = 0;
-   inptr = inbuf->buf;
-   InLineNo++;          // Update line number (including __LINE__).
-   sprintf_s(bbline.body->buf, 6, "%5d", InLineNo-1);
-   return(0);
+    }
+    if (ptr3)
+      free(ptr3);
+    */
+    inbuf;
+    // If nothing was modified on the current line, then scan to the next line.
+    if (mod == 0) {
+      if (inptr==p1)
+        ScanPastEOL();
+      else {
+        ScanPastEOL();
+//        unNextCh();
+      }
+    }
+  }
+//  nn = line_length(inbuf->buf);
+//  memmove(inbuf->buf, &inbuf[nn], inbuf->size - nn);
+//  inptr -= nn;
+//  inbuf->buf[0] = 0;
+//  inbuf->pos = 0;
+//  set_input_buf_ptr(0);
+  p1 = inptr;
+  return(0);
 }
 
 /* -----------------------------------------------------------------------------
@@ -816,6 +923,7 @@ void ProcFile(char *fname)
   static char OutName[500];
   FILE* fpo[10];
   int nn;
+  char* ptr;
 
   memset(fpo, 0, sizeof(fpo));
 
@@ -854,22 +962,26 @@ void ProcFile(char *fname)
     NextCh();
     unNextCh();
     do {
-      while (!feof(fin)) {
-        if (ProcLine())
-          break;
-      }
+      while (!ProcLine());
       fclose(fin);
       ifp_sp--;
       if (ifp_sp >= 0) {
         fin = ifps[ifp_sp];
-        inptr = inbuf->buf;
-        inbuf->buf[0] = 0;
+        //set_input_buf_ptr(0);
+        //inbuf->buf[0] = 0;
         NextCh();
         unNextCh();
       }
     }
     while (ifp_sp >= 0);
     fin = NULL;
+    if (count_lines(inbuf->buf)) {
+      ptr = strip_blank_lines(inbuf->buf);
+      if (ptr) {
+        fputs(ptr, fpo[pass]);
+        free(ptr);
+      }
+    }
     fflush(fpo[pass]);
     fclose(fpo[pass]);
     OutName[strlen(OutName) - 1] = '0' + pass;
@@ -922,6 +1034,30 @@ xit:
     }
     else {
       OutName[strlen(OutName) - 1] = '0';
+    }
+    if ((fopen_s(&fin, OutName, "r")) != 0) {
+      err(9, OutName);
+      fin = NULL;
+    }
+    else {
+      OutName[strlen(OutName) - 1] = 'd';
+      if (fopen_s(&fpo[pass], OutName, "w") != 0)
+        if (fpo[pass] == NULL) {
+          fprintf(stdout, "errno: %d\n", errno);
+          fprintf(stderr, "errno: %d\n", errno);
+          err(9, OutName);
+          fclose(fin);
+          fin = NULL;
+        }
+      while (!feof(fin)) {
+        if (fgets(filebuf, sizeof(filebuf), fin) != NULL) {
+          fputs(filebuf, fpo[pass]);
+        }
+      }
+      fflush(fpo[pass]);
+      fclose(fpo[pass]);
+      fclose(fin);
+      fin = NULL;
     }
     remove(OutputName);
     if (rename(OutName, OutputName) != 0) {
@@ -1047,9 +1183,11 @@ void PrintDefines()
         else 
           sprintf_s(buf, sizeof(buf), " -- ");
         // Display only the first line of a macro.
-        for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf[jj] != '\n'; jj++);
-        if (jj > 1) dp->body->buf[jj - 2] = 0;
-        printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
+        if (dp->body && dp->body->buf) {
+          for (jj = 0; dp->body->buf[jj] != 0 && dp->body->buf[jj] != '\n'; jj++);
+          if (jj > 1) dp->body->buf[jj - 2] = 0;
+          printf("%-12.12s %4.4s %-40.40s %5d %-12.12s\n", dp->name, buf, dp->body->buf, dp->line, dp->file);
+        }
     }
   }
   getchar();
@@ -1182,7 +1320,7 @@ int main(int argc, char *argv[]) {
   HashInfo.width = sizeof(def_t);
   if (argc < 2)
   {
-		fprintf(stderr, "FPP version 2.64  (C) 1998-2024 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 3.00  (C) 1998-2024 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp64 [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -1217,7 +1355,7 @@ int main(int argc, char *argv[]) {
     parsesw(argv[xx]);
 
   if (banner)
-    fprintf(stderr, "FPP version 2.64  (C) 1998-2024 Robert T Finch  \n");
+    fprintf(stderr, "FPP version 3.00  (C) 1998-2024 Robert T Finch  \n");
 
   /* ---------------------------
         Get source file name.

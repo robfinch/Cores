@@ -1,7 +1,9 @@
-#include <ctype.h>>
+#include <stdio.h>
+#include <ctype.h>
 #include <malloc.h>
 #include <string.h>
 #include <inttypes.h>
+#include "fpp.h"
 
 /* -----------------------------------------------------------------------------
 		Description:
@@ -109,3 +111,43 @@ char* trim(char* str)
 	return (str);
 }
 
+char* strip_directives(char* buf)
+{
+	if (buf[0] == '.')
+		return (" ");
+	else return
+		buf;
+}
+
+
+int count_lines(char* buf)
+{
+	int c;
+	int ii;
+
+	for (c = ii = 0; buf[ii]; ii++) {
+		if (buf[ii] == '\n')
+			c++;
+	}
+	return (c);
+}
+
+int line_length(char* buf)
+{
+	int ii;
+
+	for (ii = 0; buf[ii]; ii++) {
+		if (buf[ii] == '\n')
+			break;
+	}
+	return (ii);
+}
+
+int peek_eof()
+{
+	if (PeekCh() == ETB)
+		return 1;
+	if (PeekCh() == 0)
+		return 1;
+	return 0;
+}

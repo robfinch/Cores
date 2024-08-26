@@ -14,6 +14,12 @@
 extern int InLineNo;
 extern def_t bbfile;
 
+static void rep_collect(buf_t** buf);
+
+static int posa_st[1000];
+static int posa_nd[1000];
+static int posa_ndx = 0;
+
 /* ---------------------------------------------------------------------------
    (C) 1992-2024 Robert T Finch
 
@@ -81,22 +87,29 @@ void free_rept(rep_t* rp)
       (none)
 ---------------------------------------------------------------------------- */
 
-static void inst_iterative_rept(rep_t* dr, def_t* tdef)
+static void inst_iterative_rept(rep_t* dr, def_t* tdef, pos_t* bdypos)
 {
   def_t* dp;
   def_t* ptdef, * ptdef2;
   int ii;
+  pos_t* pos;
 
+  // First see if the var exists in the definitions table.
+  inptr;
+  inbuf;
   dp = dr->def;
   ptdef2 = htFind(&HashInfo, tdef);
+  if (ptdef2 == NULL) {
+    ptdef2 = tdef;
+    htInsert(&HashInfo, tdef);
+  }
   if (ptdef2) {
     ii = 0;
     do {
-      // The variable is being modified, but we want to retain the original state,
-      // so clone it and modify the clone.
-      ptdef = clone_def(ptdef2);
+      ptdef = ptdef2;
       // We wnat to substitute into the body of the repeat statement.
       ptdef->body = dp->body;
+      ptdef->abody = NULL;
       // Assign the symbol the iteration value.
       ptdef->nArgs = 1;         // we are only subbing one arg
       ptdef->parms = malloc(sizeof(arg_t*));  // only 1 arg
@@ -118,12 +131,17 @@ static void inst_iterative_rept(rep_t* dr, def_t* tdef)
       else
         ptdef->parms[0]->def = dp->parms[ii]->def;
       // Substitute 1 arg into macro body and into the input.
-      SubParmMacro(ptdef, 1, NULL);
+      pos = GetPos();
+      if (ii > 0)
+        pos->bufpos = 0;
+      else
+        pos->bufpos = -(dr->end - dr->start);
+      SubParmMacro(ptdef, 1, pos);
+      free(pos);
       inbuf;
-      inptr += strlen(inptr);
+      inptr += strlen(ptdef->abody->buf);
       free(ptdef->parms[0]);
       free(ptdef->parms);
-      free(ptdef);
       ptdef = NULL;
       ii++;
     } while (ii < dp->nArgs);
@@ -147,17 +165,68 @@ static void inst_rept(rep_t* dr)
   int ii;
   def_t* dp1;
   def_t* dp;
+  pos_t* pos;
+  int64_t ndx;
+  char* nd;
+  int64_t len, clen;
+  buf_t* abody;
+  buf_t* super_body;
+  char* st;
 
   dp = dr->def;
   dp1 = new_def();
   dp1->body = dp->body;
+  pos = GetPos();
+  ndx = dr->start;
+  clen = 0;
+
+  // Build up a buffer containing all the macro text to substitute.
+  super_body = new_buf();
+  abody = clone_buf(dp->body);
+//  SearchAndSubBuf(&abody, 1, &nd);
+//  *nd = 0;
+  for (ii = 0; ii < dr->orcnt && ii < 100; ii++)
+    insert_into_buf(&super_body, abody->buf, 0);
+  free_buf(abody);
+  dp1->body = super_body;
+  inbuf;
+
+  // Now do the substitution all at once.
+  pos->bufpos = -(dr->end - dr->start);
+  set_input_buf_ptr(dr->end);
+  SubParmMacro(dp1, 1, pos);
+  set_input_buf_ptr(dr->start + strlen(super_body->buf));
+  free(pos);
+  free_buf(super_body);
+
+/*
   for (ii = 0; ii < dr->rcnt && ii < 100; ii++) {
     // Substitute args into macro body and into the input.
     dp1->abody = clone_buf(dp->body);
-    SubParmMacro(dp1, 1, NULL);
+    // This is actually the substitution length, not buffer pos.
+    if (ii > 0)
+      pos->bufpos = 0;
+    else
+      pos->bufpos = -(dr->end - dr->start);
+    check_buf_ptr(inbuf, inptr);
+    SearchAndSubBuf(&dp1->abody,1, &nd);
+    *nd = 0;
+    len = strlen(dp1->abody->buf);
+    check_buf_ptr(inbuf, inptr);
+    if (ii == 0)
+      set_input_buf_ptr(dr->end);
+    else {
+      ndx = get_input_buf_ndx();
+      set_input_buf_ptr(dr->start + clen);
+    }
+    SubParmMacro(dp1, 1, pos);
+    inbuf;
     free_buf(dp1->abody);
-    inptr += strlen(inptr);
+    clen += len;
   }
+  set_input_buf_ptr(dr->start + clen);
+  free(pos);
+*/
 }
 
 /* ---------------------------------------------------------------------------
@@ -232,7 +301,7 @@ static void get_rept_args(def_t* dp, char* name, int opt)
       (none)
 ---------------------------------------------------------------------------- */
 
-void drept(int opt)
+void drept(int opt, char* pos)
 {
   rep_t* dr;
   int c;
@@ -240,29 +309,50 @@ void drept(int opt)
   def_t* dp;
   def_t tdef;
   char* vname;
+  pos_t* bdypos = NULL;
+  char* p1, * p2;
+  int64_t n1, n2;
+
+  // Space out the directive.
+  //memset(pos, ' ', 4);
 
   // Update the repeat nesting depth. This is a global var manipulated when a
   // repeat body is gotten.
   rep_depth++;
   inst++;
 
+  if (rep_depth == 1) {
+    memset(posa_st, 0, sizeof(posa_st));
+    memset(posa_nd, 0, sizeof(posa_nd));
+    posa_ndx = 0;
+  }
+  n1 = get_input_buf_ndx();
   dr = new_rept();
+  if (*pos=='.')
+    dr->start = pos - inbuf->buf;
+  else
+    dr->start = pos - inbuf->buf - 1;
+  posa_st[posa_ndx] - dr->start;
+  posa_ndx++;
   dp = dr->def;
   if (dp == NULL)
     return;
 
   dp->varg = 0;
-  dp->nArgs = -1;          // no arguments or round brackets
+  dp->nArgs = 0;          // no arguments or round brackets
   dp->line = InLineNo;     // line number macro defined on
   dp->file = bbfile.body->buf;  // file macro defined in
   dp->name = NULL;
 
   tdef.name = NULL;
+  tdef.varg = 0;
 
   // Get the var name for .irp, and absorb a following comma.
+  gbl_hide = 0;
   if (opt == 1) {
     SkipSpaces();
-    vname = GetIdentifier();
+    n1 = get_input_buf_ndx();
+    vname = GetIdentifier(1);
     if (vname)
       tdef.name = _strdup(vname);
     else {
@@ -277,39 +367,67 @@ void drept(int opt)
 
   // It may be handy for arguments to be made up of other definitions. So, we
   // search for them before getting the args.
-  SearchAndSub(NULL, rep_depth > 0);
+  inptr;
+  inbuf;
+  check_buf_ptr(inbuf, inptr);
+  inbuf->buf;
+
+  // Space out the identifier, it does not appear in the output.
+  gbl_hide = 0;
+//  SearchAndSub(NULL, 1, NULL);
 
   // Repeat count is not used for iterative repeats.
   // expeval() will eat a newline char
-  if (opt == 0)
+  if (opt == 0) {
+    n1 = inptr - inbuf->buf;
+    gbl_hide = 0;
     dr->orcnt = dr->rcnt = (int)expeval();
+    if (dr->orcnt == 5)
+      printf("stop");
+  }
 
   // Check for repeat parameters. There must be no space between the
   // macro name and ')'.
   SkipSpaces();
+  n1 = get_input_buf_ndx();
   get_rept_args(dp, tdef.name, opt);
   c = PeekCh();
   if (c < 0) {
     err(26);
     return;
   }
-  dp->body = GetMacroBody(dp, 1, 1);
 
-  // Advance past the '.endr'
-  inptr += 5;
+  bdypos = GetPos();
+  dr->bdystart = get_input_buf_ndx();
+
+  //dp->body = GetMacroBody(dp, 1, 1, 1);
+  gbl_hide = 0;
+  rep_collect(&dp->body);
+  check_buf_ptr(inbuf, inptr);
+  dr->end = get_input_buf_ndx();
+  dr->bdyend = strlen(dp->body->buf) + dr->bdystart;
 
   // Dump the repeat body to the input repeat count number of times.
   opndx = GetPos();
 
   // Handle an iterative repeat
-  if (opt == 1)
-    inst_iterative_rept(dr, &tdef);
+  if (opt == 1) {
+    bdypos->bufpos = -1;
+    inst_iterative_rept(dr, &tdef, bdypos);
+  }
   // Handle the usual repeat.
   else
     inst_rept(dr);
+//  dr->end = get_input_buf_ndx();
+//  posa_nd[posa_ndx - 1] = dr->end;
+
+  //  if (rep_depth==1)
+//    SearchAndSub(NULL, 0);
 
     // Set the input point back to the start of the dump.
 xit:
+  if (bdypos)
+    free(bdypos);
   if (opndx) {
     SetPos(opndx);
     free(opndx);
@@ -331,7 +449,7 @@ xit:
       (none)
 ---------------------------------------------------------------------------- */
 
-void dendr(int opt)
+void dendr(int opt, char* pos)
 {
   if (rep_depth > 0) {
     rep_depth--;
@@ -342,3 +460,67 @@ void dendr(int opt)
 }
 
 
+/* -----------------------------------------------------------------------------
+   Description :
+      Scan through file until endr found. Directives are performed.
+
+   Parameters:
+      (buf_t**) pointer to a buffer returned containing the repeat text.
+
+   Returns:
+      (buf_t**) (parameter) a buffer containing the repeat text.
+
+----------------------------------------------------------------------------- */
+
+static void rep_collect(buf_t** buf)
+{
+//  int depth = 1;
+  int ocollect;
+  buf_t* buf2;
+  char ch;
+  int64_t n1, nb;
+  char* pos2 = NULL;
+  char* nd;
+
+  ocollect = collect;
+  collect = 1;
+  buf2 = new_buf();
+
+  // The text begins after the .rept or .irp directive. Record position.
+  nb = get_input_buf_ndx();
+  NextCh();
+  unNextCh();
+
+  while (!peek_eof())
+  {
+    // Get a line and ignore it unless it's a preprocessor line
+    while (NextNonSpace(1) != syntax_ch() && !peek_eof())
+      ;
+    n1 = get_input_buf_ndx();
+
+    inptr;
+    check_buf_ptr(inbuf, inptr);
+    switch (directive(inptr-1, &pos2) >> 8) {
+    // Break when an endr is encountered at the right level. This is a recursive
+    // call so always return.
+    case DIR_ENDR:
+      rep_depth;
+      ch = *pos2;
+      *pos2 = 0;
+      insert_into_buf(&buf2, inbuf->buf + nb, 0);
+//      SearchAndSubBuf(&buf2,1,&nd);
+      *pos2 = ch;
+      collect = ocollect;
+      *buf = buf2;
+      return;
+    }
+  }
+  // Here, the end of file was reached without and endr.
+  check_buf_ptr(inbuf, inptr);
+  insert_into_buf(&buf2, inbuf->buf, 0);
+//  SearchAndSubBuf(&buf2, 1, &nd);
+//  *nd = 0;
+  *buf = buf2;
+  err(34);  // missing endr
+  collect = ocollect;
+}
