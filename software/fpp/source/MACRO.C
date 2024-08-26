@@ -485,6 +485,7 @@ char *GetMacroArg()
   int Depth = 0;
   int c, ii;
   char argbuf[4000];
+  char argbuf2[4000];
   char numbuf[50];
   char *argstr = argbuf;
   int InQuote = 0;
@@ -503,10 +504,19 @@ char *GetMacroArg()
       InQuote = !InQuote;
       NextCh();
     }
+    SkipSpaces();
     n1 = get_input_buf_ndx();
     ex = expeval();
     n2 = get_input_buf_ndx();
     if (n1 != n2) {
+      // If got just a single character, is it blank?
+      if (n2 - n1 == 1 && (
+        isspace(inbuf->buf[n1]) ||
+        inbuf->buf[n1] == ',' ||
+        inbuf->buf[n1] == '\n' ||
+        inbuf->buf[n1] == ETB ||
+        inbuf->buf[n1]==0))
+        break;
       sprintf_s(numbuf, sizeof(numbuf), "%lld", ex);
       for (ii = 0; numbuf[ii] && ii < sizeof(numbuf) - 1; ii++)
         *argstr++ = numbuf[ii];
@@ -537,14 +547,17 @@ char *GetMacroArg()
     }
     if (peek_eof()) {
       unNextCh();
+      c = PeekCh();
       break;
     }
     if (c == ',' && !InQuote) {
       unNextCh();
+      c = PeekCh();
       break;
     }
     if (c == '\n') {
       unNextCh();
+      c = PeekCh();
       break;
     }
     *argstr++ = c;       // copy input argument to argstr.

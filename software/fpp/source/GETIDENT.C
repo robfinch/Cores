@@ -13,8 +13,8 @@ char *GetIdentifier()
    char *p;
    pos_t* pos;
 
-   if (PeekCh() == 0 || PeekCh() == '\n')
-      return NULL;
+   if (peek_eof() || PeekCh() == '\n')
+      return (NULL);
    memset(buf,0,sizeof(buf));
    p = buf;
    pos = GetPos();
@@ -31,12 +31,12 @@ char *GetIdentifier()
      {
        buf[count++] = c;
        c = NextCh();
-     } while (c != 0 && IsIdentChar(c) && count < sizeof(buf) - 1);
+     } while (c != 0 && c != ETB && IsIdentChar(c) && count < sizeof(buf) - 1);
      unNextCh();
    }
    else
      SetPos(pos);
    free(pos);
-   return buf[0] ? buf : NULL;
+   return (buf[0] ? buf : NULL);
 }
 

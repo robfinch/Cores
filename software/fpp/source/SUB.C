@@ -18,16 +18,17 @@ int sub_pass = 0;
 
 int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
 {
-  int c, nArgs, ArgCount, xx;
+  int c, nArgs, ArgCount, xx, nn;
   arg_t Args[MAX_MACRO_ARGS];
   char* arg, * bdy, * tp;
   int varg;
   int need_cb = 0;
-  int64_t so;             // number of chars to substitute over
+  int64_t so, n1;        // number of chars to substitute over
   pos_t* pndx;
   char numbuf[20];
   arg_t targ;
   arg_t targ2;
+  char* p1, * p2;
 
   spm_inst++;
 
@@ -44,7 +45,7 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
   bdy = _strdup(p->body->buf);                    // make a copy of the macro body
   if (opt == 0) {
     collect = 1;
-    c = NextNonSpace(1);
+    c = NextNonSpace(0);
     if (c != '(' && syntax==CSTD) {
       //      printf("p->name:%s^, p->body:%s^, p->nArgs:%d\n", p->name, p->body, p->nArgs);// _getch();
       //      unNextCh();
@@ -61,7 +62,8 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
     for (ArgCount = 0; (ArgCount < nArgs || varg) && ArgCount < MAX_MACRO_ARGS; ArgCount++)
     {
       arg = GetMacroArg();
-      if (arg == NULL) {
+      nn = strlen(arg);
+      if (nn == 0) {
         arg = p->parms[ArgCount]->def;
         if (arg == NULL)
           break;
@@ -70,20 +72,37 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
       Args[ArgCount].def = _strdup(arg);
 
       // Search for next argument
-      c = NextNonSpace(1);
-      if (c != ',') {
+      // If the previous argument was not present, continue processing args.
+      c = NextNonSpace(0);
+      if (c == '\n' || peek_eof()) {
         ArgCount++;
-        unNextCh();
         break;
       }
+      if (c != ',') {
+        unNextCh();
+      }
+      if (syntax == CSTD && c == '\\') {
+        ScanPastEOL();
+      }
+    }
+    // Pick up any trailing arguments not passed and default them.
+    while (ArgCount < nArgs) {
+      arg = p->parms[ArgCount]->def;
+      Args[ArgCount].def = _strdup(arg);
+      ArgCount++;
     }
 
+    n1 = get_input_buf_ndx();
+
     if (need_cb) {
-      c = NextNonSpace(1);                       // Skip past closing ')'
+      if (c == '\n')
+        NextCh();
+      c = NextNonSpace(0);                       // Skip past closing ')'
       if (c != ')') {
         unNextCh();
         err(3);     // missing ')'
       }
+      n1 = get_input_buf_ndx()-1;
     }
     if (ArgCount != nArgs && !varg)                    // Check that argument count matches
       err(14, nArgs);
@@ -98,9 +117,9 @@ int SubParmMacro(def_t* p, int opt, pos_t* id_pos)
       free(bdy);                             // free old body
       bdy = _strdup(tp);                      // copy new version of body
     }
-    pndx = GetPos();
-    so = pndx->bufpos - id_pos->bufpos;         // number of chars to substitute over
-    free(pndx);
+    p1 = &inbuf->buf[n1];
+    p2 = &inbuf->buf[id_pos->bufpos];
+    so = n1 - id_pos->bufpos;         // number of chars to substitute over
   }
   else if (opt == 1) {
     for (xx = 0; xx < p->nArgs || (p->varg && p->parms[xx]->def); xx++) {
