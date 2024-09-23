@@ -272,7 +272,7 @@ assign resp.pri = respack ? 4'd7 : irqa ? irq_priority : 4'd7;
 assign resp.adr = respack ? respadr : irqa ? {CFG_BUS,CFG_DEVICE,CFG_FUNC} : 32'd0;
 assign resp.dat = respack ? dat_o : irqa ? {24'h00,cause_code} : 32'd0;
 
-pci32_config #(
+ddbb32_config #(
 	.CFG_BUS(CFG_BUS),
 	.CFG_DEVICE(CFG_DEVICE),
 	.CFG_FUNC(CFG_FUNC),

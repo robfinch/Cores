@@ -100,7 +100,20 @@ j1:
 	}
 	if (vebits == 256) {
 		for (kk = 0; kk < binndx; kk += 32) {
-			fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",
+			if (memfile)
+				fprintf(vfp,	"%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8
+											"%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8 "%02" PRIX8
+					"\n",
+					binfile[kk + 31], binfile[kk + 30], binfile[kk + 29], binfile[kk + 28],
+					binfile[kk + 27], binfile[kk + 26], binfile[kk + 25], binfile[kk + 24],
+					binfile[kk + 23], binfile[kk + 22], binfile[kk + 21], binfile[kk + 20],
+					binfile[kk + 19], binfile[kk + 18], binfile[kk + 17], binfile[kk + 16],
+					binfile[kk + 15], binfile[kk + 14], binfile[kk + 13], binfile[kk + 12],
+					binfile[kk + 11], binfile[kk + 10], binfile[kk + 9], binfile[kk + 8],
+					binfile[kk + 7], binfile[kk + 6], binfile[kk + 5], binfile[kk + 4],
+					binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+			else
+				fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",
 				((((unsigned int)start_address + kk) / 32) % modulus), //checksum64((int64_t *)&binfile[kk]),
 				binfile[kk + 31] & 0xff, binfile[kk + 30], binfile[kk + 29], binfile[kk + 28],
 				binfile[kk + 27], binfile[kk + 26], binfile[kk + 25], binfile[kk + 24],
