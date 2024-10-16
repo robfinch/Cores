@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -206,6 +206,7 @@ ack_gen #(
 	.REGISTER_OUTPUT(1)
 ) uag1
 (
+	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.ce_i(1'b1),
 	.rid_i('d0),
