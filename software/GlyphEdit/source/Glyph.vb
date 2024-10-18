@@ -334,8 +334,15 @@ Public Class Glyph
           s = s & " " & s1
           s1 = ""
         End If
+      ElseIf sz = 8 Then
+        If s.Length > 0 Then
+          s = s & vbLf
+        End If
+        s = s & ts
+        s1 = ""
       Else
-        s = s & " " & s1
+        s1 = ts & " " & s1
+        's = s & " " & s1
       End If
     Next
     If s1 <> "" Then

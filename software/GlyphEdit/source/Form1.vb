@@ -111,6 +111,7 @@ Public Class Form1
 		Me.MenuItem5 = New System.Windows.Forms.MenuItem()
 		Me.MenuItem6 = New System.Windows.Forms.MenuItem()
 		Me.MenuItem7 = New System.Windows.Forms.MenuItem()
+		Me.MenuItem8 = New System.Windows.Forms.MenuItem()
 		Me.MenuItem4 = New System.Windows.Forms.MenuItem()
 		Me.Label2 = New System.Windows.Forms.Label()
 		Me.lblHeight = New System.Windows.Forms.Label()
@@ -146,7 +147,6 @@ Public Class Form1
 		Me.RadioButton2 = New System.Windows.Forms.RadioButton()
 		Me.RadioButton3 = New System.Windows.Forms.RadioButton()
 		Me.RadioButton4 = New System.Windows.Forms.RadioButton()
-		Me.MenuItem8 = New System.Windows.Forms.MenuItem()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.Panel2.SuspendLayout()
@@ -157,34 +157,35 @@ Public Class Form1
 		'
 		'Label1
 		'
-		Me.Label1.Location = New System.Drawing.Point(33, 21)
+		Me.Label1.Location = New System.Drawing.Point(53, 31)
 		Me.Label1.Name = "Label1"
-		Me.Label1.Size = New System.Drawing.Size(127, 20)
+		Me.Label1.Size = New System.Drawing.Size(203, 29)
 		Me.Label1.TabIndex = 165
 		Me.Label1.Text = "ROM instance name"
 		'
 		'txtInstName
 		'
-		Me.txtInstName.Location = New System.Drawing.Point(33, 42)
+		Me.txtInstName.Location = New System.Drawing.Point(53, 61)
 		Me.txtInstName.Name = "txtInstName"
-		Me.txtInstName.Size = New System.Drawing.Size(180, 20)
+		Me.txtInstName.Size = New System.Drawing.Size(288, 26)
 		Me.txtInstName.TabIndex = 166
 		Me.txtInstName.Text = "charrom"
 		'
 		'Button3
 		'
-		Me.Button3.Location = New System.Drawing.Point(36, 68)
+		Me.Button3.Location = New System.Drawing.Point(58, 99)
 		Me.Button3.Name = "Button3"
-		Me.Button3.Size = New System.Drawing.Size(127, 28)
+		Me.Button3.Size = New System.Drawing.Size(203, 41)
 		Me.Button3.TabIndex = 167
 		Me.Button3.Text = "Flip bits horizontally"
 		Me.ToolTip1.SetToolTip(Me.Button3, "Switch bits from left to right in the entire character set.")
 		'
 		'ListBox1
 		'
-		Me.ListBox1.Location = New System.Drawing.Point(256, 21)
+		Me.ListBox1.ItemHeight = 20
+		Me.ListBox1.Location = New System.Drawing.Point(410, 31)
 		Me.ListBox1.Name = "ListBox1"
-		Me.ListBox1.Size = New System.Drawing.Size(58, 251)
+		Me.ListBox1.Size = New System.Drawing.Size(92, 344)
 		Me.ListBox1.TabIndex = 168
 		'
 		'MainMenu1
@@ -223,6 +224,11 @@ Public Class Form1
 		Me.MenuItem7.Index = 0
 		Me.MenuItem7.Text = "&Edit"
 		'
+		'MenuItem8
+		'
+		Me.MenuItem8.Index = 2
+		Me.MenuItem8.Text = "Icon"
+		'
 		'MenuItem4
 		'
 		Me.MenuItem4.Index = 3
@@ -230,138 +236,137 @@ Public Class Form1
 		'
 		'Label2
 		'
-		Me.Label2.Location = New System.Drawing.Point(33, 153)
+		Me.Label2.Location = New System.Drawing.Point(53, 224)
 		Me.Label2.Name = "Label2"
-		Me.Label2.Size = New System.Drawing.Size(54, 19)
+		Me.Label2.Size = New System.Drawing.Size(86, 27)
 		Me.Label2.TabIndex = 171
 		Me.Label2.Text = "Width"
 		'
 		'lblHeight
 		'
-		Me.lblHeight.Location = New System.Drawing.Point(33, 180)
+		Me.lblHeight.Location = New System.Drawing.Point(53, 263)
 		Me.lblHeight.Name = "lblHeight"
-		Me.lblHeight.Size = New System.Drawing.Size(60, 20)
+		Me.lblHeight.Size = New System.Drawing.Size(96, 29)
 		Me.lblHeight.TabIndex = 173
 		Me.lblHeight.Text = "Height"
 		'
 		'Button1
 		'
-		Me.Button1.Location = New System.Drawing.Point(747, 89)
+		Me.Button1.Location = New System.Drawing.Point(1195, 130)
 		Me.Button1.Name = "Button1"
-		Me.Button1.Size = New System.Drawing.Size(95, 28)
+		Me.Button1.Size = New System.Drawing.Size(152, 41)
 		Me.Button1.TabIndex = 182
 		Me.Button1.Text = "Shift All Left"
 		Me.ToolTip1.SetToolTip(Me.Button1, "Switch bits from left to right in the entire character set.")
 		'
 		'Button2
 		'
-		Me.Button2.Location = New System.Drawing.Point(169, 68)
+		Me.Button2.Location = New System.Drawing.Point(270, 99)
 		Me.Button2.Name = "Button2"
-		Me.Button2.Size = New System.Drawing.Size(54, 28)
+		Me.Button2.Size = New System.Drawing.Size(87, 41)
 		Me.Button2.TabIndex = 183
 		Me.Button2.Text = "Copy"
 		Me.ToolTip1.SetToolTip(Me.Button2, "Switch bits from left to right in the entire character set.")
 		'
 		'Button4
 		'
-		Me.Button4.Location = New System.Drawing.Point(169, 102)
+		Me.Button4.Location = New System.Drawing.Point(270, 149)
 		Me.Button4.Name = "Button4"
-		Me.Button4.Size = New System.Drawing.Size(54, 28)
+		Me.Button4.Size = New System.Drawing.Size(87, 41)
 		Me.Button4.TabIndex = 184
 		Me.Button4.Text = "Paste"
 		Me.ToolTip1.SetToolTip(Me.Button4, "Switch bits from left to right in the entire character set.")
 		'
 		'Button5
 		'
-		Me.Button5.Location = New System.Drawing.Point(747, 55)
+		Me.Button5.Location = New System.Drawing.Point(1195, 80)
 		Me.Button5.Name = "Button5"
-		Me.Button5.Size = New System.Drawing.Size(95, 28)
+		Me.Button5.Size = New System.Drawing.Size(152, 41)
 		Me.Button5.TabIndex = 193
 		Me.Button5.Text = "Shift All Down"
 		Me.ToolTip1.SetToolTip(Me.Button5, "Switch bits from left to right in the entire character set.")
 		'
 		'Button6
 		'
-		Me.Button6.Location = New System.Drawing.Point(747, 21)
+		Me.Button6.Location = New System.Drawing.Point(1195, 31)
 		Me.Button6.Name = "Button6"
-		Me.Button6.Size = New System.Drawing.Size(95, 28)
+		Me.Button6.Size = New System.Drawing.Size(152, 41)
 		Me.Button6.TabIndex = 194
 		Me.Button6.Text = "Shift All Up"
 		Me.ToolTip1.SetToolTip(Me.Button6, "Switch bits from left to right in the entire character set.")
 		'
 		'Button7
 		'
-		Me.Button7.Location = New System.Drawing.Point(747, 123)
+		Me.Button7.Location = New System.Drawing.Point(1195, 180)
 		Me.Button7.Name = "Button7"
-		Me.Button7.Size = New System.Drawing.Size(95, 28)
+		Me.Button7.Size = New System.Drawing.Size(152, 41)
 		Me.Button7.TabIndex = 197
 		Me.Button7.Text = "Shift All Right"
 		Me.ToolTip1.SetToolTip(Me.Button7, "Switch bits from left to right in the entire character set.")
 		'
 		'Button8
 		'
-		Me.Button8.Location = New System.Drawing.Point(618, 21)
+		Me.Button8.Location = New System.Drawing.Point(989, 31)
 		Me.Button8.Name = "Button8"
-		Me.Button8.Size = New System.Drawing.Size(103, 28)
+		Me.Button8.Size = New System.Drawing.Size(165, 41)
 		Me.Button8.TabIndex = 198
 		Me.Button8.Text = "Shift Glyph Up"
 		Me.ToolTip1.SetToolTip(Me.Button8, "Switch bits from left to right in the entire character set.")
 		'
 		'Button9
 		'
-		Me.Button9.Location = New System.Drawing.Point(618, 55)
+		Me.Button9.Location = New System.Drawing.Point(989, 80)
 		Me.Button9.Name = "Button9"
-		Me.Button9.Size = New System.Drawing.Size(103, 28)
+		Me.Button9.Size = New System.Drawing.Size(165, 41)
 		Me.Button9.TabIndex = 199
 		Me.Button9.Text = "Shift Glyph Down"
 		Me.ToolTip1.SetToolTip(Me.Button9, "Switch bits from left to right in the entire character set.")
 		'
 		'Button10
 		'
-		Me.Button10.Location = New System.Drawing.Point(618, 89)
+		Me.Button10.Location = New System.Drawing.Point(989, 130)
 		Me.Button10.Name = "Button10"
-		Me.Button10.Size = New System.Drawing.Size(103, 28)
+		Me.Button10.Size = New System.Drawing.Size(165, 41)
 		Me.Button10.TabIndex = 200
 		Me.Button10.Text = "Shift Glyph Left"
 		Me.ToolTip1.SetToolTip(Me.Button10, "Switch bits from left to right in the entire character set.")
 		'
 		'Button11
 		'
-		Me.Button11.Location = New System.Drawing.Point(618, 123)
+		Me.Button11.Location = New System.Drawing.Point(989, 180)
 		Me.Button11.Name = "Button11"
-		Me.Button11.Size = New System.Drawing.Size(103, 28)
+		Me.Button11.Size = New System.Drawing.Size(165, 41)
 		Me.Button11.TabIndex = 201
 		Me.Button11.Text = "Shift Glyph Right"
 		Me.ToolTip1.SetToolTip(Me.Button11, "Switch bits from left to right in the entire character set.")
 		'
 		'NumericUpDown1
 		'
-		Me.NumericUpDown1.Location = New System.Drawing.Point(107, 180)
+		Me.NumericUpDown1.Location = New System.Drawing.Point(171, 263)
 		Me.NumericUpDown1.Maximum = New Decimal(New Integer() {32, 0, 0, 0})
 		Me.NumericUpDown1.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
 		Me.NumericUpDown1.Name = "NumericUpDown1"
-		Me.NumericUpDown1.Size = New System.Drawing.Size(53, 20)
+		Me.NumericUpDown1.Size = New System.Drawing.Size(85, 26)
 		Me.NumericUpDown1.TabIndex = 174
 		Me.NumericUpDown1.TextAlign = System.Windows.Forms.HorizontalAlignment.Center
 		Me.NumericUpDown1.Value = New Decimal(New Integer() {8, 0, 0, 0})
 		'
 		'NumericUpDown2
 		'
-		Me.NumericUpDown2.Increment = New Decimal(New Integer() {2, 0, 0, 0})
-		Me.NumericUpDown2.Location = New System.Drawing.Point(107, 153)
+		Me.NumericUpDown2.Location = New System.Drawing.Point(171, 224)
 		Me.NumericUpDown2.Maximum = New Decimal(New Integer() {32, 0, 0, 0})
 		Me.NumericUpDown2.Minimum = New Decimal(New Integer() {6, 0, 0, 0})
 		Me.NumericUpDown2.Name = "NumericUpDown2"
-		Me.NumericUpDown2.Size = New System.Drawing.Size(53, 20)
+		Me.NumericUpDown2.Size = New System.Drawing.Size(85, 26)
 		Me.NumericUpDown2.TabIndex = 175
 		Me.NumericUpDown2.TextAlign = System.Windows.Forms.HorizontalAlignment.Center
 		Me.NumericUpDown2.Value = New Decimal(New Integer() {8, 0, 0, 0})
 		'
 		'Label3
 		'
-		Me.Label3.Location = New System.Drawing.Point(33, 208)
+		Me.Label3.Location = New System.Drawing.Point(53, 304)
 		Me.Label3.Name = "Label3"
-		Me.Label3.Size = New System.Drawing.Size(174, 49)
+		Me.Label3.Size = New System.Drawing.Size(278, 72)
 		Me.Label3.TabIndex = 177
 		Me.Label3.Text = "Width and height must be set appropriately before the file is loaded."
 		'
@@ -370,9 +375,9 @@ Public Class Form1
 		Me.CheckBox1.AutoSize = True
 		Me.CheckBox1.Checked = True
 		Me.CheckBox1.CheckState = System.Windows.Forms.CheckState.Checked
-		Me.CheckBox1.Location = New System.Drawing.Point(33, 266)
+		Me.CheckBox1.Location = New System.Drawing.Point(53, 389)
 		Me.CheckBox1.Name = "CheckBox1"
-		Me.CheckBox1.Size = New System.Drawing.Size(72, 17)
+		Me.CheckBox1.Size = New System.Drawing.Size(106, 24)
 		Me.CheckBox1.TabIndex = 178
 		Me.CheckBox1.Text = "64-bit ram"
 		Me.CheckBox1.UseVisualStyleBackColor = True
@@ -380,9 +385,9 @@ Public Class Form1
 		'CheckBox2
 		'
 		Me.CheckBox2.AutoSize = True
-		Me.CheckBox2.Location = New System.Drawing.Point(33, 289)
+		Me.CheckBox2.Location = New System.Drawing.Point(53, 422)
 		Me.CheckBox2.Name = "CheckBox2"
-		Me.CheckBox2.Size = New System.Drawing.Size(72, 17)
+		Me.CheckBox2.Size = New System.Drawing.Size(106, 24)
 		Me.CheckBox2.TabIndex = 179
 		Me.CheckBox2.Text = "32-bit ram"
 		Me.CheckBox2.UseVisualStyleBackColor = True
@@ -390,18 +395,18 @@ Public Class Form1
 		'Label4
 		'
 		Me.Label4.AutoSize = True
-		Me.Label4.Location = New System.Drawing.Point(33, 250)
+		Me.Label4.Location = New System.Drawing.Point(53, 365)
 		Me.Label4.Name = "Label4"
-		Me.Label4.Size = New System.Drawing.Size(72, 13)
+		Me.Label4.Size = New System.Drawing.Size(108, 20)
 		Me.Label4.TabIndex = 180
 		Me.Label4.Text = "Verilog output"
 		'
 		'CheckBox3
 		'
 		Me.CheckBox3.AutoSize = True
-		Me.CheckBox3.Location = New System.Drawing.Point(132, 266)
+		Me.CheckBox3.Location = New System.Drawing.Point(211, 389)
 		Me.CheckBox3.Name = "CheckBox3"
-		Me.CheckBox3.Size = New System.Drawing.Size(71, 17)
+		Me.CheckBox3.Size = New System.Drawing.Size(105, 24)
 		Me.CheckBox3.TabIndex = 181
 		Me.CheckBox3.Text = "8-bit mem"
 		Me.CheckBox3.UseVisualStyleBackColor = True
@@ -410,26 +415,26 @@ Public Class Form1
 		'
 		Me.Panel2.AutoScroll = True
 		Me.Panel2.Controls.Add(Me.PictureBox2)
-		Me.Panel2.Location = New System.Drawing.Point(24, 312)
+		Me.Panel2.Location = New System.Drawing.Point(38, 456)
 		Me.Panel2.Name = "Panel2"
-		Me.Panel2.Size = New System.Drawing.Size(869, 446)
+		Me.Panel2.Size = New System.Drawing.Size(1391, 652)
 		Me.Panel2.TabIndex = 188
 		'
 		'PictureBox2
 		'
 		Me.PictureBox2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-		Me.PictureBox2.Location = New System.Drawing.Point(3, 3)
+		Me.PictureBox2.Location = New System.Drawing.Point(5, 4)
 		Me.PictureBox2.Name = "PictureBox2"
-		Me.PictureBox2.Size = New System.Drawing.Size(844, 970)
+		Me.PictureBox2.Size = New System.Drawing.Size(1350, 1418)
 		Me.PictureBox2.TabIndex = 190
 		Me.PictureBox2.TabStop = False
 		'
 		'PictureBox1
 		'
 		Me.PictureBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-		Me.PictureBox1.Location = New System.Drawing.Point(331, 21)
+		Me.PictureBox1.Location = New System.Drawing.Point(530, 31)
 		Me.PictureBox1.Name = "PictureBox1"
-		Me.PictureBox1.Size = New System.Drawing.Size(269, 251)
+		Me.PictureBox1.Size = New System.Drawing.Size(430, 367)
 		Me.PictureBox1.TabIndex = 190
 		Me.PictureBox1.TabStop = False
 		'
@@ -438,9 +443,9 @@ Public Class Form1
 		Me.CheckBox4.AutoSize = True
 		Me.CheckBox4.Checked = True
 		Me.CheckBox4.CheckState = System.Windows.Forms.CheckState.Checked
-		Me.CheckBox4.Location = New System.Drawing.Point(132, 289)
+		Me.CheckBox4.Location = New System.Drawing.Point(211, 422)
 		Me.CheckBox4.Name = "CheckBox4"
-		Me.CheckBox4.Size = New System.Drawing.Size(77, 17)
+		Me.CheckBox4.Size = New System.Drawing.Size(114, 24)
 		Me.CheckBox4.TabIndex = 191
 		Me.CheckBox4.Text = "64-bit mem"
 		Me.CheckBox4.UseVisualStyleBackColor = True
@@ -448,28 +453,28 @@ Public Class Form1
 		'Label5
 		'
 		Me.Label5.AutoSize = True
-		Me.Label5.Location = New System.Drawing.Point(124, 250)
+		Me.Label5.Location = New System.Drawing.Point(198, 365)
 		Me.Label5.Name = "Label5"
-		Me.Label5.Size = New System.Drawing.Size(50, 13)
+		Me.Label5.Size = New System.Drawing.Size(75, 20)
 		Me.Label5.TabIndex = 192
 		Me.Label5.Text = ".mem out"
 		'
 		'NumericUpDown3
 		'
-		Me.NumericUpDown3.Location = New System.Drawing.Point(353, 286)
+		Me.NumericUpDown3.Location = New System.Drawing.Point(565, 418)
 		Me.NumericUpDown3.Maximum = New Decimal(New Integer() {256, 0, 0, 0})
 		Me.NumericUpDown3.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
 		Me.NumericUpDown3.Name = "NumericUpDown3"
-		Me.NumericUpDown3.Size = New System.Drawing.Size(51, 20)
+		Me.NumericUpDown3.Size = New System.Drawing.Size(81, 26)
 		Me.NumericUpDown3.TabIndex = 195
 		Me.NumericUpDown3.Value = New Decimal(New Integer() {32, 0, 0, 0})
 		'
 		'Label6
 		'
 		Me.Label6.AutoSize = True
-		Me.Label6.Location = New System.Drawing.Point(288, 290)
+		Me.Label6.Location = New System.Drawing.Point(461, 424)
 		Me.Label6.Name = "Label6"
-		Me.Label6.Size = New System.Drawing.Size(59, 13)
+		Me.Label6.Size = New System.Drawing.Size(85, 20)
 		Me.Label6.TabIndex = 196
 		Me.Label6.Text = "Map Width"
 		'
@@ -478,9 +483,9 @@ Public Class Form1
 		Me.CheckBox5.AutoSize = True
 		Me.CheckBox5.Checked = True
 		Me.CheckBox5.CheckState = System.Windows.Forms.CheckState.Checked
-		Me.CheckBox5.Location = New System.Drawing.Point(618, 240)
+		Me.CheckBox5.Location = New System.Drawing.Point(989, 351)
 		Me.CheckBox5.Name = "CheckBox5"
-		Me.CheckBox5.Size = New System.Drawing.Size(81, 17)
+		Me.CheckBox5.Size = New System.Drawing.Size(118, 24)
 		Me.CheckBox5.TabIndex = 202
 		Me.CheckBox5.Text = "Add header"
 		Me.CheckBox5.UseVisualStyleBackColor = True
@@ -489,9 +494,9 @@ Public Class Form1
 		'
 		Me.CheckBox6.AutoSize = True
 		Me.CheckBox6.Enabled = False
-		Me.CheckBox6.Location = New System.Drawing.Point(618, 217)
+		Me.CheckBox6.Location = New System.Drawing.Point(989, 317)
 		Me.CheckBox6.Name = "CheckBox6"
-		Me.CheckBox6.Size = New System.Drawing.Size(194, 17)
+		Me.CheckBox6.Size = New System.Drawing.Size(290, 24)
 		Me.CheckBox6.TabIndex = 203
 		Me.CheckBox6.Text = "Anit-alias mode (under construction)"
 		Me.CheckBox6.UseVisualStyleBackColor = True
@@ -502,9 +507,9 @@ Public Class Form1
 		Me.RadioButton1.AutoSize = True
 		Me.RadioButton1.BackColor = System.Drawing.Color.Black
 		Me.RadioButton1.Enabled = False
-		Me.RadioButton1.Location = New System.Drawing.Point(618, 177)
+		Me.RadioButton1.Location = New System.Drawing.Point(989, 259)
 		Me.RadioButton1.Name = "RadioButton1"
-		Me.RadioButton1.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton1.Size = New System.Drawing.Size(51, 30)
 		Me.RadioButton1.TabIndex = 208
 		Me.RadioButton1.TabStop = True
 		Me.RadioButton1.Text = "        "
@@ -516,9 +521,9 @@ Public Class Form1
 		Me.RadioButton2.AutoSize = True
 		Me.RadioButton2.BackColor = System.Drawing.SystemColors.ControlDark
 		Me.RadioButton2.Enabled = False
-		Me.RadioButton2.Location = New System.Drawing.Point(665, 177)
+		Me.RadioButton2.Location = New System.Drawing.Point(1064, 259)
 		Me.RadioButton2.Name = "RadioButton2"
-		Me.RadioButton2.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton2.Size = New System.Drawing.Size(51, 30)
 		Me.RadioButton2.TabIndex = 209
 		Me.RadioButton2.TabStop = True
 		Me.RadioButton2.Text = "        "
@@ -530,9 +535,9 @@ Public Class Form1
 		Me.RadioButton3.AutoSize = True
 		Me.RadioButton3.BackColor = System.Drawing.SystemColors.ControlLight
 		Me.RadioButton3.Enabled = False
-		Me.RadioButton3.Location = New System.Drawing.Point(712, 177)
+		Me.RadioButton3.Location = New System.Drawing.Point(1139, 259)
 		Me.RadioButton3.Name = "RadioButton3"
-		Me.RadioButton3.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton3.Size = New System.Drawing.Size(51, 30)
 		Me.RadioButton3.TabIndex = 210
 		Me.RadioButton3.TabStop = True
 		Me.RadioButton3.Text = "        "
@@ -544,22 +549,17 @@ Public Class Form1
 		Me.RadioButton4.AutoSize = True
 		Me.RadioButton4.BackColor = System.Drawing.SystemColors.ControlLightLight
 		Me.RadioButton4.Enabled = False
-		Me.RadioButton4.Location = New System.Drawing.Point(760, 177)
+		Me.RadioButton4.Location = New System.Drawing.Point(1216, 259)
 		Me.RadioButton4.Name = "RadioButton4"
-		Me.RadioButton4.Size = New System.Drawing.Size(41, 23)
+		Me.RadioButton4.Size = New System.Drawing.Size(51, 30)
 		Me.RadioButton4.TabIndex = 211
 		Me.RadioButton4.TabStop = True
 		Me.RadioButton4.Text = "        "
 		Me.RadioButton4.UseVisualStyleBackColor = False
 		'
-		'MenuItem8
-		'
-		Me.MenuItem8.Index = 2
-		Me.MenuItem8.Text = "Icon"
-		'
 		'Form1
 		'
-		Me.AutoScaleBaseSize = New System.Drawing.Size(5, 13)
+		Me.AutoScaleBaseSize = New System.Drawing.Size(8, 19)
 		Me.ClientSize = New System.Drawing.Size(992, 770)
 		Me.Controls.Add(Me.RadioButton4)
 		Me.Controls.Add(Me.RadioButton3)
@@ -794,6 +794,7 @@ Public Class Form1
 		Dim line As String
 		Dim s As String
 		Dim strs() As String
+		Dim str10 As String
 		Dim gcnt As Integer
 		Dim bcnt As Integer
 		Dim ifs As TextReader
@@ -808,11 +809,16 @@ Public Class Form1
 		readingVector = False
 		radix = 16
 		For Each line In lines
+			If (line.Length < 1) Then
+				Continue For
+			End If
 			s = line.Trim.Substring(0, 1)
 			If (s <> ";") Then
 				strs = line.Split("=")
 				If (strs(0).Trim.ToLower = "memory_initialization_radix") Then
-					radix = CInt(strs(1).Trim(";"))
+					str10 = strs(1).Trim(vbCr)
+					str10 = str10.Trim(";")
+					radix = CInt(str10)
 				ElseIf (strs(0).Trim.ToLower = "memory_initialization_vector") Then
 					readingVector = True
 				ElseIf readingVector Then
