@@ -35,6 +35,7 @@ Public Class Form1
 	Friend WithEvents RadioButton3 As RadioButton
 	Friend WithEvents RadioButton4 As RadioButton
 	Friend WithEvents MenuItem8 As MenuItem
+	Friend WithEvents CheckBox7 As CheckBox
 	Dim workingSprite(2048) As Int16
 #Region " Windows Form Designer generated code "
 
@@ -147,6 +148,7 @@ Public Class Form1
 		Me.RadioButton2 = New System.Windows.Forms.RadioButton()
 		Me.RadioButton3 = New System.Windows.Forms.RadioButton()
 		Me.RadioButton4 = New System.Windows.Forms.RadioButton()
+		Me.CheckBox7 = New System.Windows.Forms.CheckBox()
 		CType(Me.NumericUpDown1, System.ComponentModel.ISupportInitialize).BeginInit()
 		CType(Me.NumericUpDown2, System.ComponentModel.ISupportInitialize).BeginInit()
 		Me.Panel2.SuspendLayout()
@@ -415,17 +417,17 @@ Public Class Form1
 		'
 		Me.Panel2.AutoScroll = True
 		Me.Panel2.Controls.Add(Me.PictureBox2)
-		Me.Panel2.Location = New System.Drawing.Point(38, 456)
+		Me.Panel2.Location = New System.Drawing.Point(38, 497)
 		Me.Panel2.Name = "Panel2"
-		Me.Panel2.Size = New System.Drawing.Size(1391, 652)
+		Me.Panel2.Size = New System.Drawing.Size(1391, 611)
 		Me.Panel2.TabIndex = 188
 		'
 		'PictureBox2
 		'
 		Me.PictureBox2.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
-		Me.PictureBox2.Location = New System.Drawing.Point(5, 4)
+		Me.PictureBox2.Location = New System.Drawing.Point(5, 3)
 		Me.PictureBox2.Name = "PictureBox2"
-		Me.PictureBox2.Size = New System.Drawing.Size(1350, 1418)
+		Me.PictureBox2.Size = New System.Drawing.Size(1350, 1419)
 		Me.PictureBox2.TabIndex = 190
 		Me.PictureBox2.TabStop = False
 		'
@@ -443,7 +445,7 @@ Public Class Form1
 		Me.CheckBox4.AutoSize = True
 		Me.CheckBox4.Checked = True
 		Me.CheckBox4.CheckState = System.Windows.Forms.CheckState.Checked
-		Me.CheckBox4.Location = New System.Drawing.Point(211, 422)
+		Me.CheckBox4.Location = New System.Drawing.Point(211, 452)
 		Me.CheckBox4.Name = "CheckBox4"
 		Me.CheckBox4.Size = New System.Drawing.Size(114, 24)
 		Me.CheckBox4.TabIndex = 191
@@ -557,10 +559,22 @@ Public Class Form1
 		Me.RadioButton4.Text = "        "
 		Me.RadioButton4.UseVisualStyleBackColor = False
 		'
+		'CheckBox7
+		'
+		Me.CheckBox7.AutoSize = True
+		Me.CheckBox7.Location = New System.Drawing.Point(211, 419)
+		Me.CheckBox7.Name = "CheckBox7"
+		Me.CheckBox7.Size = New System.Drawing.Size(114, 24)
+		Me.CheckBox7.TabIndex = 212
+		Me.CheckBox7.Text = "32-bit mem"
+		Me.CheckBox7.TextImageRelation = System.Windows.Forms.TextImageRelation.TextAboveImage
+		Me.CheckBox7.UseVisualStyleBackColor = True
+		'
 		'Form1
 		'
 		Me.AutoScaleBaseSize = New System.Drawing.Size(8, 19)
-		Me.ClientSize = New System.Drawing.Size(992, 770)
+		Me.ClientSize = New System.Drawing.Size(1447, 1245)
+		Me.Controls.Add(Me.CheckBox7)
 		Me.Controls.Add(Me.RadioButton4)
 		Me.Controls.Add(Me.RadioButton3)
 		Me.Controls.Add(Me.RadioButton2)
@@ -869,10 +883,15 @@ Public Class Form1
 		txt = ifs.ReadToEnd()
 		ifs.Close()
 		lines = txt.Split(vbLf)
-		gwidth = Convert.ToInt32(hdr.Substring(12, 2), 16)
-		gheight = Convert.ToInt32(hdr.Substring(14, 2), 16)
-		NumericUpDown1.Value = gheight
-		NumericUpDown2.Value = gwidth
+		If (CheckBox5.Checked) Then
+			gwidth = Convert.ToInt32(hdr.Substring(12, 2), 16)
+			gheight = Convert.ToInt32(hdr.Substring(14, 2), 16)
+			NumericUpDown1.Value = gheight
+			NumericUpDown2.Value = gwidth
+		Else
+			gheight = NumericUpDown1.Value
+			gwidth = NumericUpDown2.Value
+		End If
 		Refresh()
 		For n = 0 To modGlobals.nGlyphs() - 1
 			If Not glyphs(n) Is Nothing Then
@@ -1136,6 +1155,8 @@ x2:
 				If CheckBox4.Checked Then
 					sz = 64
 					ofs.Write(hdr)
+				ElseIf CheckBox7.Checked Then
+					sz = 32
 				ElseIf CheckBox3.Checked Then
 					sz = 8
 				End If
@@ -1442,5 +1463,9 @@ x2:
 			End If
 		Next
 		Refresh()
+	End Sub
+
+	Private Sub CheckBox7_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox7.CheckedChanged
+
 	End Sub
 End Class

@@ -299,6 +299,35 @@ Public Class Glyph
       End If
       Return s.Trim
     End If
+    If sz = 32 Then
+      m = 0
+      For j = 0 To scanlines - 1
+        n = 0
+        For k = 0 To horizDots - 1
+          b = bitmap(j, k) And 1
+          n = n Or (b << (horizDots - k - 1))
+        Next
+        sl(j) = n
+      Next
+      bits = 0
+      For j = 0 To scanlines - 1
+        For k = 0 To horizDots - 1 Step 8UL
+          m = m Or (((sl(j) >> k) And 255UL) << bits)
+          bits += 8
+          If bits = 32 Then
+            ss = Hex(m).PadLeft(8, "0")
+            s = s & " " & ss
+            m = 0
+            bits = 0
+          End If
+        Next
+      Next
+      If bits <> 0 Then
+        ss = Hex(m).PadLeft(8, "0")
+        s = s & " " & ss
+      End If
+      Return s.Trim
+    End If
     s1 = ""
     For j = 0 To scanlines - 1
       n = 0
@@ -336,7 +365,7 @@ Public Class Glyph
         End If
       ElseIf sz = 8 Then
         If s.Length > 0 Then
-          s = s & vbLf
+          s = s & " "
         End If
         s = s & ts
         s1 = ""
