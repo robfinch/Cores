@@ -12,10 +12,11 @@
 //               Problem was exacerbated by the fact that the design prevents the 
 //               final SPI interface Flipflops being pushed into the IO blocks.
 
-`define SPI_MASTER_VERSION_NUM 8'h12
+`define SPI_MASTER_VERSION_NUM 8'h13
 //`define SPI_SYS_CLK_48MHZ
 //`define SPI_SYS_CLK_30MHZ
-`define SPI_SYS_CLK_25MHZ
+//`define SPI_SYS_CLK_25MHZ
+`define SPI_SYS_CLK_100MHZ
 
 //memoryMap
 `define CTRL_STS_REG_BASE 8'h00
@@ -97,6 +98,16 @@
 `define TWO_FIFTY_MS 12'h05e
 `define ONE_HUNDRED_MS 12'h025
 `endif
+
+`ifdef SPI_SYS_CLK_100MHZ
+// --------------- spiSysClk = 100MHz
+`define SLOW_SPI_CLK 8'h124
+`define FAST_SPI_CLK 8'd2
+`define TWO_MS 10'd780
+`define TWO_FIFTY_MS 12'd380
+`define ONE_HUNDRED_MS 12'd152
+`endif
+
 `endif //SPI_SYS_CLK_48MHZ
 `endif //SIM_COMPILE
 
