@@ -59,7 +59,7 @@ module spiMasterWishBoneBI (
 	respByte2,
 	respByte3,
 	respByte4
-  );
+);
 input clk;
 input rst;
 input [7:0] address;
@@ -143,7 +143,7 @@ always_comb
   ack_immediate = strobe_i;
 
 //select between immediate and delayed ack
-always_comb
+always_comb begin
   if (writeEn == 1'b0 &&
       (address == `RX_FIFO_BASE + `FIFO_DATA_REG ||
        address == `TX_FIFO_BASE + `FIFO_DATA_REG) )

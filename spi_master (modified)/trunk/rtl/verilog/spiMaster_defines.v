@@ -14,9 +14,12 @@
 
 `define SPI_MASTER_VERSION_NUM 8'h13
 //`define SPI_SYS_CLK_48MHZ
+`define SPI_SYS_CLK_50MHZ
+//`define SPI_SYS_CLK_40MHZ
 //`define SPI_SYS_CLK_30MHZ
 //`define SPI_SYS_CLK_25MHZ
-`define SPI_SYS_CLK_100MHZ
+//`define SPI_SYS_CLK_20MHZ
+//`define SPI_SYS_CLK_100MHZ
 
 //memoryMap
 `define CTRL_STS_REG_BASE 8'h00
@@ -80,6 +83,25 @@
 
 `else //not SPI_SYS_CLK_48MHZ
 
+`ifdef SPI_SYS_CLK_40MHZ
+// --------------- spiSysClk = 100MHz
+`define SLOW_SPI_CLK 8'd124
+`define FAST_SPI_CLK 8'd0
+`define TWO_MS 10'd312
+`define TWO_FIFTY_MS 12'd152
+`define ONE_HUNDRED_MS 12'd61
+`endif
+
+`ifdef SPI_SYS_CLK_50MHZ
+// --------------- spiSysClk = 50MHz
+// 12.5 MHz fast SPI clock
+`define SLOW_SPI_CLK 8'd61
+`define FAST_SPI_CLK 8'd1
+`define TWO_MS 10'd389
+`define TWO_FIFTY_MS 12'd189
+`define ONE_HUNDRED_MS 12'd76
+`endif
+
 `ifdef SPI_SYS_CLK_30MHZ
 // --------------- spiSysClk = 30MHz
 `define SLOW_SPI_CLK 8'h24
@@ -97,6 +119,15 @@
 `define TWO_MS 10'h0c4
 `define TWO_FIFTY_MS 12'h05e
 `define ONE_HUNDRED_MS 12'h025
+`endif
+
+`ifdef SPI_SYS_CLK_20MHZ
+// --------------- spiSysClk = 20MHz
+`define SLOW_SPI_CLK 8'd24
+`define FAST_SPI_CLK 8'd0
+`define TWO_MS 10'd155
+`define TWO_FIFTY_MS 12'd75
+`define ONE_HUNDRED_MS 12'd29
 `endif
 
 `ifdef SPI_SYS_CLK_100MHZ
@@ -117,7 +148,7 @@
 `define SD_INIT_START_SEQ_LEN 12'h03
 `define MAX_8_BIT 8'h08
 `else
-`define SD_INIT_START_SEQ_LEN 12'ha0
+`define SD_INIT_START_SEQ_LEN 12'd80
 `define MAX_8_BIT 8'hff
 `endif
 

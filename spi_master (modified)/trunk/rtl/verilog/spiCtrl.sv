@@ -121,40 +121,42 @@ begin
     begin
       next_rxDataRdyClr = 1'b0;
       next_spiTransSts = `TRANS_NOT_BUSY;
-      if ((spiTransCtrl == `TRANS_START) && (spiTransType == `INIT_SD))
-      begin
-        NextState_spiCtrlSt = `INIT;
-        next_spiTransSts = `TRANS_BUSY;
-        next_SDInitReq = 1'b1;
-      end
-      else if ((spiTransCtrl == `TRANS_START) && (spiTransType == `RW_WRITE_SD_BLOCK))
-      begin
-        NextState_spiCtrlSt = `RW;
-        next_spiTransSts = `TRANS_BUSY;
-        next_readWriteSDBlockReq = `WRITE_SD_BLOCK;
-      end
-      else if ((spiTransCtrl == `TRANS_START) && (spiTransType == `RW_READ_SD_BLOCK))
-      begin
-        NextState_spiCtrlSt = `RW;
-        next_spiTransSts = `TRANS_BUSY;
-        next_readWriteSDBlockReq = `READ_SD_BLOCK;
-      end
-      else if ((spiTransCtrl == `TRANS_START) && (spiTransType == `DIRECT_ACCESS))
-      begin
-        NextState_spiCtrlSt = `DIR_ACC;
-        next_spiTransSts = `TRANS_BUSY;
-        next_txDataWen = 1'b1;
-        next_spiCS_n = 1'b0;
-      end
+      if (spiTransCtrl == `TRANS_START) begin
+      	case(spiTransType)
+      	`INIT_SD:
+		      begin
+		        NextState_spiCtrlSt = `INIT;
+		        next_spiTransSts = `TRANS_BUSY;
+		        next_SDInitReq = 1'b1;
+		      end
+	      `RW_WRITE_SD_BLOCK:
+		      begin
+		        NextState_spiCtrlSt = `RW;
+		        next_spiTransSts = `TRANS_BUSY;
+		        next_readWriteSDBlockReq = `WRITE_SD_BLOCK;
+		      end
+	      `RW_READ_SD_BLOCK:
+		      begin
+		        NextState_spiCtrlSt = `RW;
+		        next_spiTransSts = `TRANS_BUSY;
+		        next_readWriteSDBlockReq = `READ_SD_BLOCK;
+		      end
+	      `DIRECT_ACCESS:
+		      begin
+		        NextState_spiCtrlSt = `DIR_ACC;
+		        next_spiTransSts = `TRANS_BUSY;
+		        next_txDataWen = 1'b1;
+		        next_spiCS_n = 1'b0;
+		      end
+		    default:	;
+		  	endcase
+    	end
     end
   `WT_FIN1:
-    begin
-      if (rxDataRdy == 1'b1)
-      begin
-        NextState_spiCtrlSt = `WT_S_CTRL_REQ;
-        next_rxDataRdyClr = 1'b1;
-        next_spiCS_n = 1'b1;
-      end
+    if (rxDataRdy) begin
+      NextState_spiCtrlSt = `WT_S_CTRL_REQ;
+      next_rxDataRdyClr = 1'b1;
+      next_spiCS_n = 1'b1;
     end
   `DIR_ACC:
     begin
@@ -167,57 +169,44 @@ begin
       NextState_spiCtrlSt = `WT_FIN2;
     end
   `WT_FIN2:
-    begin
-      if (SDInitRdy == 1'b1)
-      begin
-        NextState_spiCtrlSt = `WT_S_CTRL_REQ;
-      end
-    end
+    if (SDInitRdy)
+      NextState_spiCtrlSt = `WT_S_CTRL_REQ;
   `RW:
     begin
       next_readWriteSDBlockReq = `NO_BLOCK_REQ;
       NextState_spiCtrlSt = `WT_FIN3;
     end
   `WT_FIN3:
-    begin
-      if (readWriteSDBlockRdy == 1'b1)
-      begin
-        NextState_spiCtrlSt = `WT_S_CTRL_REQ;
-      end
-    end
+    if (readWriteSDBlockRdy)
+      NextState_spiCtrlSt = `WT_S_CTRL_REQ;
+  default:	;
   endcase
 end
 
 // Current State Logic (sequential)
 always_ff @(posedge clk)
-begin
-  if (rst == 1'b1)
-    CurrState_spiCtrlSt <= `ST_S_CTRL;
-  else
-    CurrState_spiCtrlSt <= NextState_spiCtrlSt;
-end
+if (rst)
+  CurrState_spiCtrlSt <= `ST_S_CTRL;
+else
+  CurrState_spiCtrlSt <= NextState_spiCtrlSt;
 
 // Registered outputs logic
 always_ff @(posedge clk)
-begin
-  if (rst == 1'b1)
-  begin
-    readWriteSDBlockReq <= `NO_BLOCK_REQ;
-    txDataWen <= 1'b0;
-    SDInitReq <= 1'b0;
-    rxDataRdyClr <= 1'b0;
-    spiTransSts <= `TRANS_NOT_BUSY;
-    spiCS_n <= 1'b1;
-  end
-  else 
-  begin
-    readWriteSDBlockReq <= next_readWriteSDBlockReq;
-    txDataWen <= next_txDataWen;
-    SDInitReq <= next_SDInitReq;
-    rxDataRdyClr <= next_rxDataRdyClr;
-    spiTransSts <= next_spiTransSts;
-    spiCS_n <= next_spiCS_n;
-  end
+if (rst) begin
+  readWriteSDBlockReq <= `NO_BLOCK_REQ;
+  txDataWen <= 1'b0;
+  SDInitReq <= 1'b0;
+  rxDataRdyClr <= 1'b0;
+  spiTransSts <= `TRANS_NOT_BUSY;
+  spiCS_n <= 1'b1;
+end
+else begin
+  readWriteSDBlockReq <= next_readWriteSDBlockReq;
+  txDataWen <= next_txDataWen;
+  SDInitReq <= next_SDInitReq;
+  rxDataRdyClr <= next_rxDataRdyClr;
+  spiTransSts <= next_spiTransSts;
+  spiCS_n <= next_spiCS_n;
 end
 
 endmodule

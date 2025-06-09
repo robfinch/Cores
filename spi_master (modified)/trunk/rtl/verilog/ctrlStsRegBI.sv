@@ -51,7 +51,8 @@ module ctrlStsRegBI (
   dataOut, 
   address, 
   writeEn, 
-  strobe_i, 
+  strobe_i,
+  cardDetect,
   spiReset,
   spiSysClk,
   spiTransType, 
@@ -75,7 +76,8 @@ input [7:0] address;
 input writeEn;
 input strobe_i;
 input busClk;
-output reg spiReset;
+input cardDetect;
+output reg spiReset = 1'b1;
 input spiSysClk;
 output [7:0] dataOut;
 input ctrlStsRegSel;
@@ -92,10 +94,8 @@ input SDHC;
 input [1:0] SDWriteError;
 input [1:0] SDReadError;
 input [1:0] SDInitError;
-output [31:0] SDSect;
-reg [31:0] SDSect;
-output [7:0] spiClkDelay;
-reg [7:0] spiClkDelay;
+output reg [31:0] SDSect;
+output reg [7:0] spiClkDelay;
 
 wire [7:0] dataIn;
 wire [7:0] address;
@@ -133,36 +133,33 @@ reg spiTransCtrl_reg3;
 //sync write demux
 always_ff @(posedge busClk)
 begin
-  if (rstSyncToBusClkOut == 1'b1) begin
-    spiTransTypeSTB <= `DIRECT_ACCESS;
-    spiTransCtrlSTB <= `TRANS_STOP;
-    spiDirectAccessTxDataSTB <= 8'h00;
-    spiClkDelay <= `FAST_SPI_CLK;
-    spiReset <= 1'b1;
-  end
-  else begin
-    if (writeEn == 1'b1 && ctrlStsRegSel == 1'b1 && strobe_i == 1'b1 && address == `SPI_MASTER_CONTROL_REG)
-    	if (dataIn[0]==1'b1)
-      	rstFromBus <= 1'b1;
-      spiReset <= dataIn[7];
-    else
-      rstFromBus <= 1'b0;
-    if (writeEn == 1'b1 && ctrlStsRegSel == 1'b1 && strobe_i == 1'b1 && address == `TRANS_CTRL_REG && dataIn[0] == 1'b1 )
-      spiTransCtrlSTB <= 1'b1;
-    else
-      spiTransCtrlSTB <= 1'b0;
-    if (writeEn == 1'b1 && ctrlStsRegSel == 1'b1 && strobe_i == 1'b1) begin
-      case (address)
-      `TRANS_TYPE_REG: spiTransTypeSTB <= dataIn[1:0];
-      `SD_SECT_7_0_REG: SDSect[7:0] <= dataIn;
-      `SD_SECT_15_8_REG: SDSect[15:8] <= dataIn;
-      `SD_SECT_23_16_REG: SDSect[23:16] <= dataIn;
-      `SD_SECT_31_24_REG: SDSect[31:24] <= dataIn;
-      `SPI_CLK_DEL_REG: spiClkDelay <= dataIn;
-      `DIRECT_ACCESS_DATA_REG: spiDirectAccessTxDataSTB <= dataIn;
-      endcase
-    end
-  end
+  rstFromBus <= 1'b0;
+  spiTransCtrlSTB <= 1'b0;
+	if (rstSyncToBusClkOut) begin
+	  spiTransTypeSTB <= `DIRECT_ACCESS;
+	  spiTransCtrlSTB <= `TRANS_STOP;
+	  spiDirectAccessTxDataSTB <= 8'h00;
+	  spiClkDelay <= `FAST_SPI_CLK;
+	end
+	else begin
+	  if (writeEn && ctrlStsRegSel && strobe_i)
+	    case (address)
+			`SPI_MASTER_CONTROL_REG:      
+				begin
+	      	rstFromBus <= dataIn[0];
+		      spiReset <= dataIn[7];
+		    end
+		  `TRANS_CTRL_REG: spiTransCtrlSTB <= dataIn[0];
+	    `TRANS_TYPE_REG: spiTransTypeSTB <= dataIn[1:0];
+	    `SD_SECT_7_0_REG: SDSect[7:0] <= dataIn;
+	    `SD_SECT_15_8_REG: SDSect[15:8] <= dataIn;
+	    `SD_SECT_23_16_REG: SDSect[23:16] <= dataIn;
+	    `SD_SECT_31_24_REG: SDSect[31:24] <= dataIn;
+	    `SPI_CLK_DEL_REG: spiClkDelay <= dataIn;
+	    `DIRECT_ACCESS_DATA_REG: spiDirectAccessTxDataSTB <= dataIn;
+	    default:	;
+	    endcase
+	end
 end
 
 // async read mux
@@ -170,7 +167,7 @@ always_comb
 begin
   case (address)
   `SPI_MASTER_VERSION_REG: dataOut = `SPI_MASTER_VERSION_NUM;
-	`SPI_MASTER_CONTROL_REG: dataOut = {SDHC,1'b0};
+	`SPI_MASTER_CONTROL_REG: dataOut = {~cardDetect,SDHC,1'b0};
   `TRANS_TYPE_REG: dataOut = { 6'b000000, spiTransTypeSTB};
   `TRANS_CTRL_REG: dataOut = { 7'b0000000, spiTransCtrlSTB};
   `TRANS_STS_REG: dataOut = { 7'b0000000, spiTransStatusSTB};
@@ -188,20 +185,19 @@ end
 // reset control
 //generate 'rstSyncToBusClk'
 //assuming that 'busClk' < 5 * 'spiSysClk'.
-always_ff @(posedge busClk) begin
-  if (rstFromWire == 1'b1 || rstFromBus == 1'b1) 
+always_ff @(posedge busClk)
+  if (rstFromWire || rstFromBus) 
     rstShift <= 6'b111111;
   else
     rstShift <= {1'b0, rstShift[5:1]};
-end
 
 always_comb
   rstSyncToBusClkOut = rstShift[0];
 
 // double sync across clock domains to generate 'rstSyncToSpiClkOut'
 always_ff @(posedge spiSysClk) begin
-    rstSyncToSpiClkFirst <= rstSyncToBusClkOut;
-    rstSyncToSpiClkOut <= rstSyncToSpiClkFirst;
+  rstSyncToSpiClkFirst <= rstSyncToBusClkOut;
+  rstSyncToSpiClkOut <= rstSyncToSpiClkFirst;
 end
 
 
@@ -227,7 +223,7 @@ always_ff @(posedge spiSysClk) begin
     spiTransCtrl_reg1 <= spiTransCtrlShift[0];
     spiTransCtrl_reg2 <= spiTransCtrl_reg1;
     spiTransCtrl_reg3 <= spiTransCtrl_reg2;
-    if (spiTransCtrl_reg3 == 1'b0 && spiTransCtrl_reg2 == 1'b1)
+    if (~spiTransCtrl_reg3 && spiTransCtrl_reg2)
       spiTransCtrl <= `TRANS_START;
     else
       spiTransCtrl <= `TRANS_STOP;

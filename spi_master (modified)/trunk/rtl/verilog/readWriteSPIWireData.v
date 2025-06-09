@@ -136,7 +136,7 @@ begin
         NextState_rwSPISt <= `CLK_LO;
         next_spiClkOut <= 1'b0;
         next_spiDataOut <= txDataShiftReg[7];
-        next_txDataShiftReg <= {txDataShiftReg[6:0], 1'b0};
+        next_txDataShiftReg <= {txDataShiftReg[6:0], txDataShiftReg[0]};
         next_rxDataShiftReg <= {rxDataShiftReg[6:0], spiDataIn};
         next_clkDelayCnt <= 8'h00;
       end
@@ -144,7 +144,7 @@ begin
     `CLK_LO:
     begin
       next_clkDelayCnt <= clkDelayCnt + 1'b1;
-      if ((bitCnt == 4'h8) && (txDataFull == 1'b1))
+      if ((bitCnt == 4'h8) && (txDataFull == 1'b1) && (clkDelayCnt==clkDelay))
       begin
         NextState_rwSPISt <= `CLK_HI;
         next_rxDataRdySet <= 1'b1;
@@ -154,7 +154,7 @@ begin
         next_clkDelayCnt <= 8'h00;
         next_txDataFullClr <= 1'b1;
       end
-      else if (bitCnt == 4'h8)
+      else if (bitCnt == 4'h8 && (clkDelayCnt==clkDelay))
       begin
         NextState_rwSPISt <= `WT_TX_DATA;
         next_rxDataRdySet <= 1'b1;

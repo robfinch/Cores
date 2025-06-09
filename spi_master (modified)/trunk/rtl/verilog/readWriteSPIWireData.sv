@@ -1,227 +1,269 @@
-
-//////////////////////////////////////////////////////////////////////
-////                                                              ////
-//// readWriteSPIWireData.v                      ////
-////                                                              ////
-//// This file is part of the spiMaster opencores effort.
-//// <http://www.opencores.org/cores//>                           ////
-////                                                              ////
-//// Module Description:                                          ////
-//// Wait for TX data bytes. When data is ready generate
-////  SPI TX data, SPI CLK, and read SPI RX data
-//// 
-////                                                              ////
-//// To Do:                                                       ////
-//// 
-////                                                              ////
-//// Author(s):                                                   ////
-//// - Steve Fielding, sfielding@base2designs.com                 ////
-////                                                              ////
-//////////////////////////////////////////////////////////////////////
-////                                                              ////
-//// Copyright (C) 2004 Steve Fielding and OPENCORES.ORG          ////
-////                                                              ////
-//// This source file may be used and distributed without         ////
-//// restriction provided that this copyright statement is not    ////
-//// removed from the file and that any derivative work contains  ////
-//// the original copyright notice and the associated disclaimer. ////
-////                                                              ////
-//// This source file is free software; you can redistribute it   ////
-//// and/or modify it under the terms of the GNU Lesser General   ////
-//// Public License as published by the Free Software Foundation; ////
-//// either version 2.1 of the License, or (at your option) any   ////
-//// later version.                                               ////
-////                                                              ////
-//// This source is distributed in the hope that it will be       ////
-//// useful, but WITHOUT ANY WARRANTY; without even the implied   ////
-//// warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR      ////
-//// PURPOSE. See the GNU Lesser General Public License for more  ////
-//// details.                                                     ////
-////                                                              ////
-//// You should have received a copy of the GNU Lesser General    ////
-//// Public License along with this source; if not, download it   ////
-//// from <http://www.opencores.org/lgpl.shtml>                   ////
-////                                                              ////
-//////////////////////////////////////////////////////////////////////
-//
 `include "timescale.v"
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@opencores.org
+//       ||
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                            
+// ============================================================================
+//
+import const_pkg::*;
+
 `include "spiMaster_defines.v"
 
-module readWriteSPIWireData (clk, clkDelay, rst, rxDataOut, rxDataRdySet, spiClkOut, spiDataIn, spiDataOut, txDataEmpty, txDataFull, txDataFullClr, txDataIn);
-input   clk;
-input   [7:0]clkDelay;
-input   rst;
-input   spiDataIn;
-input   txDataFull;
-input   [7:0]txDataIn;
-output  [7:0]rxDataOut;
-output  rxDataRdySet;
-output  spiClkOut;
-output  spiDataOut;
-output  txDataEmpty;
-output  txDataFullClr;
-
-wire    clk;
-wire    [7:0]clkDelay;
-wire    rst;
-reg     [7:0]rxDataOut, next_rxDataOut;
-reg     rxDataRdySet, next_rxDataRdySet;
-reg     spiClkOut, next_spiClkOut;
-wire    spiDataIn;
-reg     spiDataOut, next_spiDataOut;
-reg     txDataEmpty, next_txDataEmpty;
-wire    txDataFull;
-reg     txDataFullClr, next_txDataFullClr;
-wire    [7:0]txDataIn;
+module readWriteSPIWireData (rst, clk, clkDelay, rxDataOut, rxDataRdySet, spiClkOut, spiDataIn, spiDataOut, txDataEmpty, txDataFull, txDataFullClr, txDataIn);
+input rst;
+input clk;
+input [7:0] clkDelay;
+input spiDataIn;
+input txDataFull;
+input [7:0] txDataIn;
+output reg [7:0] rxDataOut;
+output reg rxDataRdySet;
+output reg spiClkOut;
+output reg spiDataOut;
+output reg txDataEmpty;
+output reg txDataFullClr;
 
 // diagram signals declarations
-reg  [3:0]bitCnt, next_bitCnt;
-reg  [7:0]clkDelayCnt, next_clkDelayCnt;
-reg  [7:0]rxDataShiftReg, next_rxDataShiftReg;
-reg  [7:0]txDataShiftReg, next_txDataShiftReg;
+reg [3:0] bitCnt;
+reg [7:0] clkDelayCnt;
+reg [7:0] rxDataShiftReg;
+reg [7:0] txDataShiftReg;
 
-// BINARY ENCODED state machine: rwSPISt
-// State codes definitions:
-`define WT_TX_DATA 2'b00
-`define CLK_HI 2'b01
-`define CLK_LO 2'b10
-`define ST_RW_WIRE 2'b11
+typedef enum logic [1:0]
+{
+	WT_TX_DATA = 2'd0,
+	CLK_HI,
+	CLK_LO,
+	ST_RW_WIRE
+} wire_state_e;
+reg [3:0] CurrState_rwSPISt;
 
-reg [1:0]CurrState_rwSPISt, NextState_rwSPISt;
+always_ff @(posedge clk)
+if (rst)
+	clkDelayCnt <= 8'd0;
+else begin
+	case(1'b1)
+	CurrState_rwSPISt[CLK_HI]:
+    if (clkDelayCnt == clkDelay)
+      clkDelayCnt <= 8'h00;
+    else
+    	clkDelayCnt <= clkDelayCnt + 8'd1;
+	CurrState_rwSPISt[CLK_LO]:
+    if (clkDelayCnt == clkDelay)
+      clkDelayCnt <= 8'h00;
+    else
+    	clkDelayCnt <= clkDelayCnt + 8'd1;
+  default:
+		clkDelayCnt <= 8'd0;
+  endcase
+end
+	
+always_ff @(posedge clk)
+if (rst)
+	bitCnt <= 4'd0;
+else begin
+	if (CurrState_rwSPISt[WT_TX_DATA])
+		bitCnt <= 4'd0;
+	else if(CurrState_rwSPISt[CLK_LO] && clkDelayCnt == clkDelay) begin
+		if (bitCnt == 4'd8)
+			bitCnt <= 4'd0;
+		else
+			bitCnt <= bitCnt + 4'd1;
+	end
+end
 
-// Diagram actions (continuous assignments allowed only: assign ...)
-// diagram ACTION
-
-
-// Machine: rwSPISt
-
-// NextState logic (combinatorial)
 always_comb
-begin
-  NextState_rwSPISt = CurrState_rwSPISt;
-  // Set default values for outputs and signals
-  next_rxDataRdySet = rxDataRdySet;
-  next_txDataEmpty = txDataEmpty;
-  next_txDataShiftReg = txDataShiftReg;
-  next_rxDataShiftReg = rxDataShiftReg;
-  next_bitCnt = bitCnt;
-  next_clkDelayCnt = clkDelayCnt;
-  next_txDataFullClr = txDataFullClr;
-  next_spiClkOut = spiClkOut;
-  next_spiDataOut = spiDataOut;
-  next_rxDataOut = rxDataOut;
-  case (CurrState_rwSPISt)  // synopsys parallel_case full_case
-    `WT_TX_DATA:
-    begin
-      next_rxDataRdySet = 1'b0;
-      next_txDataEmpty = 1'b1;
-      if (txDataFull == 1'b1)
-      begin
-        NextState_rwSPISt = `CLK_HI;
-        next_txDataShiftReg = txDataIn;
-        next_rxDataShiftReg = 8'h00;
-        next_bitCnt = 4'h0;
-        next_clkDelayCnt = 8'h00;
-        next_txDataFullClr = 1'b1;
-        next_txDataEmpty = 1'b0;
-      end
-    end
-    `CLK_HI:
-    begin
-      next_clkDelayCnt = clkDelayCnt + 1'b1;
-      next_txDataFullClr = 1'b0;
-      next_rxDataRdySet = 1'b0;
-      if (clkDelayCnt == clkDelay)
-      begin
-        NextState_rwSPISt = `CLK_LO;
-        next_spiClkOut = 1'b0;
-        next_spiDataOut = txDataShiftReg[7];
-        next_txDataShiftReg = {txDataShiftReg[6:0], 1'b0};
-        next_rxDataShiftReg = {rxDataShiftReg[6:0], spiDataIn};
-        next_clkDelayCnt = 8'h00;
-      end
-    end
-    `CLK_LO:
-    begin
-      next_clkDelayCnt = clkDelayCnt + 1'b1;
-      if ((bitCnt == 4'h8) && (txDataFull == 1'b1))
-      begin
-        NextState_rwSPISt = `CLK_HI;
-        next_rxDataRdySet = 1'b1;
-        next_rxDataOut = rxDataShiftReg;
-        next_txDataShiftReg = txDataIn;
-        next_bitCnt = 3'b000;
-        next_clkDelayCnt = 8'h00;
-        next_txDataFullClr = 1'b1;
-      end
-      else if (bitCnt == 4'h8)
-      begin
-        NextState_rwSPISt = `WT_TX_DATA;
-        next_rxDataRdySet = 1'b1;
-        next_rxDataOut = rxDataShiftReg;
-      end
-      else if (clkDelayCnt == clkDelay)
-      begin
-        NextState_rwSPISt = `CLK_HI;
-        next_spiClkOut = 1'b1;
-        next_bitCnt = bitCnt + 1'b1;
-        next_clkDelayCnt = 8'h00;
-      end
-    end
-    `ST_RW_WIRE:
-    begin
-      next_bitCnt = 4'h0;
-      next_clkDelayCnt = 8'h00;
-      next_txDataFullClr = 1'b0;
-      next_rxDataRdySet = 1'b0;
-      next_txDataShiftReg = 8'h00;
-      next_rxDataShiftReg = 8'h00;
-      next_rxDataOut = 8'h00;
-      next_spiDataOut = 1'b0;
-      next_spiClkOut = 1'b0;
-      next_txDataEmpty = 1'b0;
-      NextState_rwSPISt = `WT_TX_DATA;
-    end
+	spiClkOut = CurrState_rwSPISt[CLK_HI] && bitCnt > 4'd0;
+
+always_ff @(posedge clk)
+if (rst)
+	spiDataOut <= HIGH;
+else begin
+  case (1'b1)
+  CurrState_rwSPISt[WT_TX_DATA]:
+		spiDataOut <= HIGH;
+  CurrState_rwSPISt[CLK_HI]:
+    if (clkDelayCnt == clkDelay)
+      spiDataOut <= txDataShiftReg[7];
+    else
+	  	spiDataOut <= spiDataOut;
+  default:
+  	spiDataOut <= spiDataOut;
   endcase
 end
 
-// Current State Logic (sequential)
 always_ff @(posedge clk)
-begin
-  if (rst == 1'b1)
-    CurrState_rwSPISt <= `ST_RW_WIRE;
-  else
-    CurrState_rwSPISt <= NextState_rwSPISt;
+if (rst)
+	rxDataRdySet <= 1'b0;
+else begin
+	rxDataRdySet <= 1'b0;
+  case (1'b1)
+  CurrState_rwSPISt[CLK_LO]:
+  	if (bitCnt == 4'd8 && clkDelayCnt==8'd0)
+      rxDataRdySet <= 1'b1;
+  default:
+		rxDataRdySet <= 1'b0;
+	endcase
 end
 
-// Registered outputs logic
+always_ff @(posedge clk)
+if (rst)
+	txDataEmpty <= FALSE;
+else begin
+  case (1'b1)
+  CurrState_rwSPISt[WT_TX_DATA]:
+  	begin
+	    txDataEmpty <= TRUE;
+	    if (txDataFull)
+	      txDataEmpty <= FALSE;
+    end
+  default:
+		txDataEmpty <= FALSE;
+  endcase
+end
+
+reg spitbit;
+always_ff @(posedge clk)
+if (clkDelayCnt == clkDelay)
+	spitbit = (bitCnt == 4'd7 && txDataFull);
+
+always_ff @(posedge clk)
+if (rst)
+	txDataShiftReg <= 8'hFF;
+else begin
+  case (1'b1)
+  CurrState_rwSPISt[WT_TX_DATA]:
+    if (txDataFull)
+      txDataShiftReg <= txDataIn;
+  CurrState_rwSPISt[CLK_HI]:
+    if (clkDelayCnt == clkDelay) begin
+    	if (bitCnt == 4'd7 && txDataFull)
+      	txDataShiftReg <= txDataIn;
+      else if (spitbit)
+      	txDataShiftReg <= txDataIn;
+      else if (bitCnt==4'd8)
+      	txDataShiftReg <= 8'hFF;
+      else
+      	txDataShiftReg <= {txDataShiftReg[6:0], 1'b0};
+    end
+  default:
+  	txDataShiftReg <= txDataShiftReg;
+  endcase
+end
+
+always_ff @(posedge clk)
+if (rst)
+	rxDataShiftReg <= 8'h00;
+else begin
+  case (1'b1)
+  CurrState_rwSPISt[WT_TX_DATA]:
+    if (txDataFull)
+      rxDataShiftReg <= 8'h00;
+  CurrState_rwSPISt[CLK_HI]:
+    if (clkDelayCnt == clkDelay && bitCnt > 4'd0)
+      rxDataShiftReg <= {rxDataShiftReg[6:0], spiDataIn};
+  CurrState_rwSPISt[ST_RW_WIRE]:
+    rxDataShiftReg <= 8'h00;
+  default:
+  	rxDataShiftReg <= rxDataShiftReg;
+  endcase
+end
+
+always_ff @(posedge clk)
+if (rst)
+	txDataFullClr <= FALSE;
+else begin
+  txDataFullClr <= FALSE;
+  case (1'b1)
+  CurrState_rwSPISt[WT_TX_DATA]:
+    if (txDataFull)
+      txDataFullClr <= TRUE;
+  CurrState_rwSPISt[CLK_HI]:
+    if (bitCnt == 4'd7 && txDataFull && clkDelayCnt==clkDelay)
+      txDataFullClr <= TRUE;
+  endcase
+end
+
+always_ff @(posedge clk)
+if (rst)
+  rxDataOut <= 8'h00;
+else begin
+  case (1'b1)
+  CurrState_rwSPISt[CLK_LO]:
+  	if (bitCnt == 4'd8 && clkDelayCnt==8'h00)
+      rxDataOut <= rxDataShiftReg;
+  CurrState_rwSPISt[ST_RW_WIRE]:
+     rxDataOut <= 8'h00;
+  default:	
+  	rxDataOut <= rxDataOut;
+  endcase
+end
+
 always_ff @(posedge clk)
 begin
-  if (rst == 1'b1)
-  begin
-    rxDataRdySet <= 1'b0;
-    txDataEmpty <= 1'b0;
-    txDataFullClr <= 1'b0;
-    spiClkOut <= 1'b0;
-    spiDataOut <= 1'b0;
-    rxDataOut <= 8'h00;
-    txDataShiftReg <= 8'h00;
-    rxDataShiftReg <= 8'h00;
-    bitCnt <= 4'h0;
-    clkDelayCnt <= 8'h00;
+  if (rst) begin
+  	CurrState_rwSPISt <= 4'd0;
+    CurrState_rwSPISt[ST_RW_WIRE] <= 1'b1;
   end
-  else 
-  begin
-    rxDataRdySet <= next_rxDataRdySet;
-    txDataEmpty <= next_txDataEmpty;
-    txDataFullClr <= next_txDataFullClr;
-    spiClkOut <= next_spiClkOut;
-    spiDataOut <= next_spiDataOut;
-    rxDataOut <= next_rxDataOut;
-    txDataShiftReg <= next_txDataShiftReg;
-    rxDataShiftReg <= next_rxDataShiftReg;
-    bitCnt <= next_bitCnt;
-    clkDelayCnt <= next_clkDelayCnt;
+  else begin
+  	CurrState_rwSPISt <= 4'd0;
+
+  	case(1'b1)
+  	CurrState_rwSPISt[WT_TX_DATA]:
+      if (txDataFull) 
+      	CurrState_rwSPISt[CLK_HI] <= 1'b1;
+      else
+      	CurrState_rwSPISt[WT_TX_DATA] <= 1'b1;
+
+  	CurrState_rwSPISt[CLK_HI]:
+      if (clkDelayCnt == clkDelay)
+        CurrState_rwSPISt[CLK_LO] <= 1'b1;
+      else
+      	CurrState_rwSPISt[CLK_HI] <= 1'b1;
+
+  	CurrState_rwSPISt[CLK_LO]:
+      if (bitCnt == 4'd8 && clkDelayCnt==clkDelay && !txDataFull)
+      	CurrState_rwSPISt[WT_TX_DATA] <= 1'b1;
+      else if (clkDelayCnt == clkDelay)
+        CurrState_rwSPISt[CLK_HI] <= 1'b1;
+      else
+      	CurrState_rwSPISt[CLK_LO] <= 1'b1;
+
+	  CurrState_rwSPISt[ST_RW_WIRE]:
+      CurrState_rwSPISt[WT_TX_DATA] <= 1'b1;
+
+		default:
+      CurrState_rwSPISt[ST_RW_WIRE] <= 1'b1;
+    endcase
   end
 end
 

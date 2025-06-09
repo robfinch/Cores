@@ -61,6 +61,7 @@ module spiMaster(
   spiSysClk,
 
   //SPI bus
+  cardDetect,
   spiReset,
   spiClkOut,
   spiDataIn,
@@ -82,6 +83,7 @@ output ack_o;
 input spiSysClk;
 
 //SPI bus
+input cardDetect;
 output spiReset;
 output spiClkOut;
 input spiDataIn;
@@ -195,6 +197,7 @@ ctrlStsRegBI u_ctrlStsRegBI(
   .SDHC(                SDHC                  ),
   .SDSect(              SDSect                ),
   .spiClkDelay(         spiClkDelayFromCtrlStsReg),
+  .cardDetect(cardDetect),
   .spiReset(spiReset)
 	);
 
@@ -235,15 +238,15 @@ initSD u_initSD(
   .dataByte3(           dataByte3FromInitSD   ),
   .dataByte4(           dataByte4FromInitSD   ),
   .checkSumByte(        checkSumByteFromInitSD),
-  .respByte(            sendCmdRespByte       ),
+  .respByte(sendCmdRespByte),
   .respByte1(respByte1),
   .respByte2(respByte2),
   .respByte3(respByte3),
   .respByte4(respByte4),
   .respTout(            sendCmdRespTout       ),
   .spiCS_n(             spiCS_nFromInitSD    ),
-  .spiClkDelayOut(      spiClkDelayFromInitSD ),
-  .spiClkDelayIn(       spiClkDelayFromCtrlStsReg),
+  .spiClkDelayOut(spiClkDelayFromInitSD),
+  .spiClkDelayIn(spiClkDelayFromCtrlStsReg),
   .txDataFull(          txDataFullFromSpiTxRxData),
   .txDataEmpty(         txDataEmptyFromRWSPIWireData),
   .txDataOut(           txDataFromInitSD      ),
@@ -357,19 +360,19 @@ spiTxRxData u_spiTxRxData(
 // Instance of Module: readWriteSPIWireData
 // -----------------------------------
 readWriteSPIWireData u_readWriteSPIWireData(
-  .clk(                 spiSysClk             ),
-  .clkDelay(            spiClkDelayFromInitSD           ),
-  .rst(                 rstSyncToSpiClk       ),
-  .rxDataOut(           rxDataFromRWSPIWireData),
-  .rxDataRdySet(        rxDataRdySetFromRWSPIWireData),
-  .spiClkOut(           spiClkOut             ),
-  .spiDataIn(           spiDataIn             ),
-  .spiDataOut(          spiDataOut            ),
-  .txDataFull(          txDataFullFromSpiTxRxData),
-  .txDataFullClr(       txDataFullClrFromRWSPIWireData),
-  .txDataIn(            txDataToRWSPIWireData ),
-  .txDataEmpty(         txDataEmptyFromRWSPIWireData)
-	);
+  .clk(spiSysClk),
+  .clkDelay(spiClkDelayFromInitSD),
+  .rst(rstSyncToSpiClk),
+  .rxDataOut(rxDataFromRWSPIWireData),
+  .rxDataRdySet(rxDataRdySetFromRWSPIWireData),
+  .spiClkOut(spiClkOut),
+  .spiDataIn(spiDataIn),
+  .spiDataOut(spiDataOut),
+  .txDataFull(txDataFullFromSpiTxRxData),
+  .txDataFullClr(txDataFullClrFromRWSPIWireData),
+  .txDataIn(txDataToRWSPIWireData),
+  .txDataEmpty(txDataEmptyFromRWSPIWireData)
+);
 
 sm_TxFifo #(`TX_FIFO_DEPTH, `TX_FIFO_ADDR_WIDTH) u_sm_txFifo (
   .spiSysClk(spiSysClk), 

@@ -126,28 +126,31 @@ reg  [9:0]timeOutCnt, next_timeOutCnt;
 
 // BINARY ENCODED state machine: sndCmdSt
 // State codes definitions:
-`define CMD_D_BYTE2_FIN 5'b00000
-`define CMD_D_BYTE2_ST 5'b00001
-`define CMD_SEND_FF_FIN 5'b00010
-`define CMD_CMD_BYTE_FIN 5'b00011
-`define CMD_D_BYTE1_FIN 5'b00100
-`define CMD_REQ_RESP_ST 5'b00101
-`define CMD_REQ_RESP_FIN 5'b00110
-`define CMD_CHK_RESP 5'b00111
-`define CMD_D_BYTE1_ST 5'b01000
-`define CMD_D_BYTE3_FIN 5'b01001
-`define CMD_D_BYTE3_ST 5'b01010
-`define CMD_D_BYTE4_FIN 5'b01011
-`define CMD_D_BYTE4_ST 5'b01100
-`define CMD_CS_FIN 5'b01101
-`define CMD_CS_ST 5'b01110
-`define CMD_SEND_FF_ST 5'b01111
-`define CMD_CMD_BYTE_ST 5'b10000
-`define WT_CMD 5'b10001
-`define ST_S_CMD 5'b10010
-`define CMD_DEL 5'b10011
+typedef enum logic [4:0] 
+{
+	ST_S_CMD = 5'd0,
+	WT_CMD,
+	CMD_SEND_FF_ST,
+	CMD_SEND_FF_FIN,
+	CMD_CMD_BYTE_ST,
+	CMD_CMD_BYTE_FIN,
+	CMD_D_BYTE1_ST,
+	CMD_D_BYTE1_FIN,
+	CMD_D_BYTE2_ST,
+	CMD_D_BYTE2_FIN,
+	CMD_D_BYTE3_ST,
+	CMD_D_BYTE3_FIN,
+	CMD_D_BYTE4_ST,
+	CMD_D_BYTE4_FIN,
+	CMD_CS_ST,
+	CMD_CS_FIN,
+	CMD_REQ_RESP_ST,
+	CMD_REQ_RESP_FIN,
+	CMD_CHK_RESP,
+	CMD_DEL
+} sendCmd_e;
 
-reg [4:0]CurrState_sndCmdSt, NextState_sndCmdSt;
+sendCmd_e CurrState_sndCmdSt, NextState_sndCmdSt;
 reg [2:0] respCtr, next_respCtr;
 reg [2:0] maxRespCnt, next_maxRespCnt;
 reg [7:0] next_respByte1;
@@ -157,7 +160,7 @@ reg [7:0] next_respByte4;
 
 // Diagram actions (continuous assignments allowed only: assign ...)
 // diagram ACTION
-always_comb
+always_ff @(posedge clk)
 	sendCmdReq = sendCmdReq1 | sendCmdReq2;
 
 always_ff @(posedge clk) begin
@@ -191,188 +194,43 @@ begin
   next_respCtr = respCtr;
   next_maxRespCnt = 3'd0;
   case (CurrState_sndCmdSt)  // synopsys parallel_case full_case
-    `WT_CMD:
-    begin
-      next_sendCmdRdy = 1'b1;
-      if (sendCmdReq == 1'b1)
-      begin
-        NextState_sndCmdSt = `CMD_SEND_FF_ST;
-        next_sendCmdRdy = 1'b0;
-        next_respTout = 1'b0;
-		next_respCtr = 3'd0;
-      end
-    end
-    `ST_S_CMD:
+  ST_S_CMD:
     begin
       next_sendCmdRdy = 1'b0;
       next_txDataWen = 1'b0;
-      next_txDataOut = 8'h00;
+      next_txDataOut = 8'hff;	// was 00
       next_rxDataRdyClr = 1'b0;
       next_respByte = 8'h00;
       next_respTout = 1'b0;
       next_timeOutCnt = 10'h000;
-      NextState_sndCmdSt = `WT_CMD;
+      NextState_sndCmdSt = WT_CMD;
     end
-    `CMD_D_BYTE2_FIN:
+  WT_CMD:
     begin
       next_txDataWen = 1'b0;
-      NextState_sndCmdSt = `CMD_D_BYTE3_ST;
-    end
-    `CMD_D_BYTE2_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_D_BYTE2_FIN;
-        next_txDataOut = dataByte2;
-        next_txDataWen = 1'b1;
+      next_sendCmdRdy = 1'b1;
+      if (sendCmdReq == 1'b1) begin
+        NextState_sndCmdSt = CMD_SEND_FF_ST;
+        next_sendCmdRdy = 1'b0;
+        next_respTout = 1'b0;
+				next_respCtr = 3'd0;
       end
     end
-    `CMD_SEND_FF_FIN:
-    begin
-      NextState_sndCmdSt = `CMD_CMD_BYTE_ST;
+  CMD_SEND_FF_ST:
+    if (!txDataFull) begin
+      NextState_sndCmdSt = CMD_SEND_FF_FIN;
+      next_txDataOut = 8'hff;
+      next_txDataWen = 1'b1;
     end
-    `CMD_CMD_BYTE_FIN:
-    begin
-      next_txDataWen = 1'b0;
-      NextState_sndCmdSt = `CMD_D_BYTE1_ST;
-    end
-    `CMD_D_BYTE1_FIN:
-    begin
-      next_txDataWen = 1'b0;
-      NextState_sndCmdSt = `CMD_D_BYTE2_ST;
-    end
-    `CMD_REQ_RESP_ST:
-		begin
-			NextState_sndCmdSt = `CMD_DEL;
-			next_txDataOut = 8'hff;
-			next_txDataWen = 1'b1;
-			next_timeOutCnt = timeOutCnt + 1'b1;
-			next_rxDataRdyClr = 1'b1;
-		end
-    `CMD_DEL:
-		begin
-			NextState_sndCmdSt = `CMD_REQ_RESP_FIN;
+  CMD_SEND_FF_FIN:
+  	begin
 			next_txDataWen = 1'b0;
-			next_rxDataRdyClr = 1'b0;
-		end
-    `CMD_REQ_RESP_FIN:
-		if (rxDataRdy == 1'b1) begin
-			if (cmdByte==8'h48) begin
-				case(respCtr)
-				3'd0:	begin next_respByte = rxDataIn; NextState_sndCmdSt = `CMD_CHK_RESP; end
-				3'd1:	begin next_respByte1 = rxDataIn; NextState_sndCmdSt = `CMD_CHK_RESP; end
-				3'd2:	begin next_respByte2 = rxDataIn; NextState_sndCmdSt = `CMD_CHK_RESP; end
-				3'd3:	begin next_respByte3 = rxDataIn; NextState_sndCmdSt = `CMD_CHK_RESP; end
-				3'd4:	begin next_respByte4 = rxDataIn; NextState_sndCmdSt = `CMD_CHK_RESP; end
-				default:	NextState_sndCmdSt = `CMD_CHK_RESP;
-				endcase
-			end
-			else
-			begin
-				NextState_sndCmdSt = `CMD_CHK_RESP;
-				next_respByte = rxDataIn;
-			end
-		end
-    `CMD_CHK_RESP:
+      NextState_sndCmdSt = CMD_CMD_BYTE_ST;
+    end
+  CMD_CMD_BYTE_ST:
 		begin
-			// We don't set the timeout flag for a CMD8 because there might be
-			// a low capacity card that doesn't recognize the command.
-			if (cmdByte==8'h48) begin
-				if (timeOutCnt == 10'h200)
-					NextState_sndCmdSt = `WT_CMD;
-				else if (respCtr==maxRespCnt)
-					NextState_sndCmdSt = `WT_CMD;
-				else if (respCtr==3'd0 && respByte == 8'h05)	// illegal command (non v2 card)
-					NextState_sndCmdSt = `WT_CMD;
-				else if (respCtr==3'd0 && respByte[7])			// hasn't responded yet
-					NextState_sndCmdSt = `CMD_REQ_RESP_ST;
-				else begin										// we got a response byte, go back for another one
-					next_timeOutCnt = 10'h000;
-					next_respCtr = respCtr + 3'd1;
-					NextState_sndCmdSt = `CMD_REQ_RESP_ST;
-				end
-			end
-			else
-			begin
-				if (timeOutCnt == 10'h200) begin
-					NextState_sndCmdSt = `WT_CMD;
-					if (cmdByte != 8'h77) next_respTout = 1'b1;
-				end 
-				else if (respByte[7] == 1'b0)
-					NextState_sndCmdSt = `WT_CMD;
-				else
-					NextState_sndCmdSt = `CMD_REQ_RESP_ST;
-			end
-		end
-    `CMD_D_BYTE1_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_D_BYTE1_FIN;
-        next_txDataOut = dataByte1;
-        next_txDataWen = 1'b1;
-      end
-    end
-    `CMD_D_BYTE3_FIN:
-    begin
-      next_txDataWen = 1'b0;
-      NextState_sndCmdSt = `CMD_D_BYTE4_ST;
-    end
-    `CMD_D_BYTE3_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_D_BYTE3_FIN;
-        next_txDataOut = dataByte3;
-        next_txDataWen = 1'b1;
-      end
-    end
-    `CMD_D_BYTE4_FIN:
-    begin
-      next_txDataWen = 1'b0;
-      NextState_sndCmdSt = `CMD_CS_ST;
-    end
-    `CMD_D_BYTE4_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_D_BYTE4_FIN;
-        next_txDataOut = dataByte4;
-        next_txDataWen = 1'b1;
-      end
-    end
-    `CMD_CS_FIN:
-    begin
-      next_txDataWen = 1'b0;
-      next_timeOutCnt = 10'h000;
-      if (txDataEmpty == 1'b1)
-      begin
-        NextState_sndCmdSt = `CMD_REQ_RESP_ST;
-      end
-    end
-    `CMD_CS_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_CS_FIN;
-        next_txDataOut = checkSumByte;
-        next_txDataWen = 1'b1;
-      end
-    end
-    `CMD_SEND_FF_ST:
-    begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_sndCmdSt = `CMD_SEND_FF_FIN;
-        next_txDataOut = 8'hff;
-        next_txDataWen = 1'b1;
-      end
-    end
-    `CMD_CMD_BYTE_ST:
-		begin
-			next_txDataWen = 1'b0;
-			if (txDataFull == 1'b0) begin
-				NextState_sndCmdSt = `CMD_CMD_BYTE_FIN;
+			if (!txDataFull) begin
+				NextState_sndCmdSt = CMD_CMD_BYTE_FIN;
 				next_txDataOut = cmdByte;
 				next_txDataWen = 1'b1;
 				case(cmdByte)
@@ -381,53 +239,186 @@ begin
 				endcase
 			end
 		end
+  CMD_CMD_BYTE_FIN:
+  	begin
+			next_txDataWen = 1'b0;
+			NextState_sndCmdSt = CMD_D_BYTE1_ST;
+  	end
+  CMD_D_BYTE1_ST:
+    begin
+      if (!txDataFull) begin
+        NextState_sndCmdSt = CMD_D_BYTE1_FIN;
+        next_txDataOut = dataByte1;
+        next_txDataWen = 1'b1;
+      end
+    end
+  CMD_D_BYTE1_FIN:
+  	begin
+      next_txDataWen = 1'b0;
+      NextState_sndCmdSt = CMD_D_BYTE2_ST;
+  	end
+  CMD_D_BYTE2_ST:
+    begin
+      if (!txDataFull) begin
+        NextState_sndCmdSt = CMD_D_BYTE2_FIN;
+        next_txDataOut = dataByte2;
+        next_txDataWen = 1'b1;
+      end
+    end
+  CMD_D_BYTE2_FIN:
+  	begin
+      next_txDataWen = 1'b0;
+      NextState_sndCmdSt = CMD_D_BYTE3_ST;
+  	end
+  CMD_D_BYTE3_ST:
+    begin
+      if (txDataFull == 1'b0) begin
+        NextState_sndCmdSt = CMD_D_BYTE3_FIN;
+        next_txDataOut = dataByte3;
+        next_txDataWen = 1'b1;
+      end
+    end
+  CMD_D_BYTE3_FIN:
+  	begin
+      next_txDataWen = 1'b0;
+      NextState_sndCmdSt = CMD_D_BYTE4_ST;
+  	end
+  CMD_D_BYTE4_ST:
+    begin
+      if (!txDataFull) begin
+        NextState_sndCmdSt = CMD_D_BYTE4_FIN;
+        next_txDataOut = dataByte4;
+        next_txDataWen = 1'b1;
+      end
+    end
+  CMD_D_BYTE4_FIN:
+  	begin
+      next_txDataWen = 1'b0;
+      NextState_sndCmdSt = CMD_CS_ST;
+  	end
+  CMD_CS_ST:
+    begin
+      if (!txDataFull) begin
+        NextState_sndCmdSt = CMD_CS_FIN;
+        next_txDataOut = checkSumByte;
+        next_txDataWen = 1'b1;
+      end
+    end
+  CMD_CS_FIN:
+    begin
+      next_txDataWen = 1'b0;
+      next_timeOutCnt = 10'h000;
+      if (txDataEmpty == 1'b1) begin
+        NextState_sndCmdSt = CMD_REQ_RESP_ST;
+      end
+    end
+  CMD_REQ_RESP_ST:
+		begin
+			NextState_sndCmdSt = CMD_DEL;
+			next_txDataOut = 8'hff;
+			next_txDataWen = 1'b1;
+			next_timeOutCnt = timeOutCnt + 1'b1;
+			next_rxDataRdyClr = 1'b1;
+		end
+  CMD_DEL:
+		begin
+			NextState_sndCmdSt = CMD_REQ_RESP_FIN;
+			next_txDataWen = 1'b0;
+			next_rxDataRdyClr = 1'b0;
+		end
+  CMD_REQ_RESP_FIN:
+		if (rxDataRdy == 1'b1) begin
+			if (cmdByte==8'h48) begin
+				case(respCtr)
+				3'd0:	begin next_respByte = rxDataIn; NextState_sndCmdSt = CMD_CHK_RESP; end
+				3'd1:	begin next_respByte1 = rxDataIn; NextState_sndCmdSt = CMD_CHK_RESP; end
+				3'd2:	begin next_respByte2 = rxDataIn; NextState_sndCmdSt = CMD_CHK_RESP; end
+				3'd3:	begin next_respByte3 = rxDataIn; NextState_sndCmdSt = CMD_CHK_RESP; end
+				3'd4:	begin next_respByte4 = rxDataIn; NextState_sndCmdSt = CMD_CHK_RESP; end
+				default:	NextState_sndCmdSt = CMD_CHK_RESP;
+				endcase
+			end
+			else begin
+				NextState_sndCmdSt = CMD_CHK_RESP;
+				next_respByte = rxDataIn;
+			end
+		end
+  CMD_CHK_RESP:
+		begin
+			// We don't set the timeout flag for a CMD8 because there might be
+			// a low capacity card that doesn't recognize the command.
+			if (cmdByte==8'h48) begin
+				if (timeOutCnt == 10'h200)
+					NextState_sndCmdSt = WT_CMD;
+				else if (respCtr==maxRespCnt)
+					NextState_sndCmdSt = WT_CMD;
+				else if (respCtr==3'd0 && respByte == 8'h05)	// illegal command (non v2 card)
+					NextState_sndCmdSt = WT_CMD;
+				else if (respCtr==3'd0 && respByte[7])			// hasn't responded yet
+					NextState_sndCmdSt = CMD_REQ_RESP_ST;
+				else begin										// we got a response byte, go back for another one
+					next_timeOutCnt = 10'h000;
+					next_respCtr = respCtr + 3'd1;
+					NextState_sndCmdSt = CMD_REQ_RESP_ST;
+				end
+			end
+			else
+			begin
+				if (timeOutCnt == 10'h200) begin
+					NextState_sndCmdSt = WT_CMD;
+					if (cmdByte != 8'h77) next_respTout = 1'b1;
+				end 
+				else if (respByte[7] == 1'b0)
+					NextState_sndCmdSt = WT_CMD;
+				else
+					NextState_sndCmdSt = CMD_REQ_RESP_ST;
+			end
+		end
+  default:
+  	NextState_sndCmdSt = ST_S_CMD;
   endcase
 end
 
 // Current State Logic (sequential)
 always_ff @(posedge clk)
 begin
-  if (rst == 1'b1)
-    CurrState_sndCmdSt <= `ST_S_CMD;
+  if (rst)
+    CurrState_sndCmdSt <= ST_S_CMD;
   else
     CurrState_sndCmdSt <= NextState_sndCmdSt;
 end
 
 // Registered outputs logic
 always_ff @(posedge clk)
-begin
-  if (rst == 1'b1)
-  begin
-    txDataWen <= 1'b0;
-    txDataOut <= 8'h00;
-    rxDataRdyClr <= 1'b0;
-    respByte <= 8'h00;
-    respByte1 <= 8'h00;
-    respByte2 <= 8'h00;
-    respByte3 <= 8'h00;
-    respByte4 <= 8'h00;
-    respTout <= 1'b0;
-    sendCmdRdy <= 1'b0;
-    timeOutCnt <= 10'h000;
+if (rst) begin
+  txDataWen <= 1'b0;
+  txDataOut <= 8'hff;
+  rxDataRdyClr <= 1'b0;
+  respByte <= 8'h00;
+  respByte1 <= 8'h00;
+  respByte2 <= 8'h00;
+  respByte3 <= 8'h00;
+  respByte4 <= 8'h00;
+  respTout <= 1'b0;
+  sendCmdRdy <= 1'b0;
+  timeOutCnt <= 10'h000;
 	respCtr <= 3'd0;
 	maxRespCnt <= 3'd0;
-  end
-  else 
-  begin
-    txDataWen <= next_txDataWen;
-    txDataOut <= next_txDataOut;
-    rxDataRdyClr <= next_rxDataRdyClr;
-    respByte <= next_respByte;
-    respByte1 <= next_respByte1;
-    respByte2 <= next_respByte2;
-    respByte3 <= next_respByte3;
-    respByte4 <= next_respByte4;
-    respTout <= next_respTout;
-    sendCmdRdy <= next_sendCmdRdy;
-    timeOutCnt <= next_timeOutCnt;
+end
+else begin
+  txDataWen <= next_txDataWen;
+  txDataOut <= next_txDataOut;
+  rxDataRdyClr <= next_rxDataRdyClr;
+  respByte <= next_respByte;
+  respByte1 <= next_respByte1;
+  respByte2 <= next_respByte2;
+  respByte3 <= next_respByte3;
+  respByte4 <= next_respByte4;
+  respTout <= next_respTout;
+  sendCmdRdy <= next_sendCmdRdy;
+  timeOutCnt <= next_timeOutCnt;
 	respCtr <= next_respCtr;
 	maxRespCnt <= next_maxRespCnt;
-  end
 end
 
 endmodule

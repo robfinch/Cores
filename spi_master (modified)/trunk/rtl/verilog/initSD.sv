@@ -17,6 +17,9 @@
 ////                                                              ////
 //// Author(s):                                                   ////
 //// - Steve Fielding, sfielding@base2designs.com                 ////
+////																															////
+//// Modifications:																								////
+////   Robert Finch, robfinch@finitron.ca													////
 ////                                                              ////
 //////////////////////////////////////////////////////////////////////
 ////                                                              ////
@@ -51,99 +54,89 @@
 module initSD (checkSumByte, clk, cmdByte, dataByte1, dataByte2, dataByte3, dataByte4, initError,
 	respByte,respByte1,respByte2,respByte3,respByte4,
 	respTout, rst, rxDataRdy, rxDataRdyClr, SDInitRdy, SDInitReq, sendCmdRdy, sendCmdReq, spiClkDelayIn, spiClkDelayOut, spiCS_n, txDataEmpty, txDataFull, txDataOut, txDataWen, SDHC);
-input   clk;
-input   [7:0]respByte;
-input   [7:0] respByte1;
-input   [7:0] respByte2;
-input   [7:0] respByte3;
-input   [7:0] respByte4;
-input   respTout;
-input   rst;
-input   rxDataRdy;
-input   SDInitReq;
-input   sendCmdRdy;
-input   [7:0]spiClkDelayIn;
-input   txDataEmpty;
-input   txDataFull;
-output  [7:0]checkSumByte;
-output  [7:0]cmdByte;
-output  [7:0]dataByte1;
-output  [7:0]dataByte2;
-output  [7:0]dataByte3;
-output  [7:0]dataByte4;
-output  [1:0]initError;
-output  rxDataRdyClr;
-output  SDInitRdy;
-output  sendCmdReq;
-output  [7:0]spiClkDelayOut;
-output  spiCS_n;
-output  [7:0]txDataOut;
-output  txDataWen;
-output  SDHC;
-reg SDHC;
+input clk;
+input [7:0]respByte;
+input [7:0] respByte1;
+input [7:0] respByte2;
+input [7:0] respByte3;
+input [7:0] respByte4;
+input respTout;
+input rst;
+input rxDataRdy;
+input SDInitReq;
+input sendCmdRdy;
+input [7:0] spiClkDelayIn;
+input txDataEmpty;
+input txDataFull;
+output reg [7:0] checkSumByte;
+output reg [7:0] cmdByte;
+output reg [7:0] dataByte1;
+output reg [7:0] dataByte2;
+output reg [7:0] dataByte3;
+output reg [7:0] dataByte4;
+output reg [1:0] initError;
+output reg rxDataRdyClr;
+output reg SDInitRdy;
+output reg sendCmdReq;
+output reg [7:0] spiClkDelayOut;
+output reg spiCS_n;
+output reg [7:0] txDataOut;
+output reg txDataWen;
+output reg SDHC;
 
-reg     [7:0]checkSumByte, next_checkSumByte;
-wire    clk;
-reg     [7:0]cmdByte, next_cmdByte;
-reg     [7:0]dataByte1, next_dataByte1;
-reg     [7:0]dataByte2, next_dataByte2;
-reg     [7:0]dataByte3, next_dataByte3;
-reg     [7:0]dataByte4, next_dataByte4;
-reg     [1:0]initError, next_initError;
-wire    [7:0]respByte;
-wire    respTout;
-wire    rst;
-wire    rxDataRdy;
-reg     rxDataRdyClr, next_rxDataRdyClr;
-reg     SDInitRdy, next_SDInitRdy;
-wire    SDInitReq;
-wire    sendCmdRdy;
-reg     sendCmdReq, next_sendCmdReq;
-wire    [7:0]spiClkDelayIn;
-reg     [7:0]spiClkDelayOut, next_spiClkDelayOut;
-reg     spiCS_n, next_spiCS_n;
-wire    txDataEmpty;
-wire    txDataFull;
-reg     [7:0]txDataOut, next_txDataOut;
-reg     txDataWen, next_txDataWen;
+reg [7:0] next_checkSumByte;
+reg [7:0] next_cmdByte;
+reg [7:0] next_dataByte1;
+reg [7:0] next_dataByte2;
+reg [7:0] next_dataByte3;
+reg [7:0] next_dataByte4;
+reg [1:0] next_initError;
+reg next_rxDataRdyClr;
+reg next_SDInitRdy;
+reg next_sendCmdReq;
+reg [7:0] next_spiClkDelayOut;
+reg next_spiCS_n;
+reg [7:0] next_txDataOut;
+reg next_txDataWen;
 reg next_SDHC;
 
 // diagram signals declarations
-reg  [9:0]delCnt1, next_delCnt1;
-reg  [7:0]delCnt2, next_delCnt2;
-reg  [11:0]loopCnt, next_loopCnt;
+reg  [9:0] delCnt1, next_delCnt1;
+reg  [7:0] delCnt2, next_delCnt2;
+reg  [15:0] loopCnt, next_loopCnt;
 
 // BINARY ENCODED state machine: initSDSt
 // State codes definitions:
-`define START 5'b00000
-`define WT_INIT_REQ 5'b00001
-`define CLK_SEQ_SEND_FF 5'b00010
-`define CLK_SEQ_CHK_FIN 5'b00011
-`define RESET_SEND_CMD 5'b00100
-`define RESET_DEL 5'b00101
-`define RESET_WT_FIN 5'b00110
-`define RESET_CHK_FIN 5'b00111
-`define INIT_WT_FIN 5'b01000
-`define INIT_CHK_FIN 5'b01001
-`define INIT_SEND_CMD 5'b01010
-`define INIT_DEL1 5'b01011
-`define INIT_DEL2 5'b01100
-`define CLK_SEQ_WT_DATA_EMPTY 5'b01101
-`define CMD8_QRY_CARDTYPE 5'b01110
-`define CMD8_DEL 5'b01111
-`define CMD8_WT_FIN	5'b10000
-`define CMD8_CHK_FIN 5'b10001
-`define CMD55_START 5'b10010
-`define CMD55_DEL 5'b10011
-`define CMD55_WT_FIN	5'b10100
-`define CMD55_CHK_FIN 5'b10101
-`define INIT_WT_FIN41 5'b10110
-`define INIT_CHK_FIN41 5'b10111
-`define INIT_SEND_CMD41 5'b11000
-`define INIT_DEL41 5'b11001
+typedef enum logic [4:0] {
+	START = 5'd0,
+	WT_INIT_REQ,
+	CLK_SEQ_SEND_FF,
+	CLK_SEQ_CHK_FIN,
+	RESET_SEND_CMD,
+	RESET_DEL,
+	RESET_WT_FIN,
+	RESET_CHK_FIN,
+	INIT_WT_FIN,
+	INIT_CHK_FIN,
+	INIT_SEND_CMD,
+	INIT_DEL1,
+	INIT_DEL2,
+	CLK_SEQ_WT_DATA_EMPTY,
+	CMD8_QRY_CARDTYPE,
+	CMD8_DEL,
+	CMD8_WT_FIN,
+	CMD8_CHK_FIN,
+	CMD55_START,
+	CMD55_DEL,
+	CMD55_WT_FIN,
+	CMD55_CHK_FIN,
+	INIT_WT_FIN41,
+	INIT_CHK_FIN41,
+	INIT_SEND_CMD41,
+	INIT_DEL41
+} initSD_state_e;
 
-
-reg [4:0]CurrState_initSDSt, NextState_initSDSt;
+initSD_state_e CurrState_initSDSt, NextState_initSDSt;
 
 // Diagram actions (continuous assignments allowed only: assign ...)
 // diagram ACTION
@@ -175,7 +168,7 @@ begin
   next_rxDataRdyClr <= rxDataRdyClr;
   next_SDHC <= SDHC;
   case (CurrState_initSDSt)  // synopsys parallel_case full_case
-  `START:
+  START:
     begin
       next_spiClkDelayOut <= spiClkDelayIn;
       next_SDInitRdy <= 1'b0;
@@ -190,63 +183,63 @@ begin
       next_dataByte4 <= 8'h00;
       next_checkSumByte <= 8'h00;
       next_sendCmdReq <= 1'b0;
-      next_loopCnt <= 12'h000;
+      next_loopCnt <= 16'h0000;
       next_delCnt1 <= 10'h000;
       next_delCnt2 <= 8'h00;
       next_rxDataRdyClr <= 1'b0;
-      NextState_initSDSt <= `WT_INIT_REQ;
+      NextState_initSDSt <= WT_INIT_REQ;
     end
-  `WT_INIT_REQ:
+  WT_INIT_REQ:
     begin
       next_SDInitRdy <= 1'b1;
-      next_spiClkDelayOut <= spiClkDelayIn;
+      next_spiCS_n <= 1'b1;
+     	next_spiClkDelayOut <= spiClkDelayIn;
       next_cmdByte <= 8'h00;
       next_dataByte1 <= 8'h00;
       next_dataByte2 <= 8'h00;
       next_dataByte3 <= 8'h00;
       next_dataByte4 <= 8'h00;
       next_checkSumByte <= 8'h00;
-      if (SDInitReq == 1'b1)
-      begin
-        NextState_initSDSt <= `CLK_SEQ_SEND_FF;
+      if (SDInitReq) begin
+        NextState_initSDSt <= CLK_SEQ_SEND_FF;
         next_SDInitRdy <= 1'b0;
-        next_loopCnt <= 8'h00;
+        next_loopCnt <= 16'h00;
         next_spiClkDelayOut <= `SLOW_SPI_CLK;
         next_initError <= `INIT_NO_ERROR;
       end
     end
-  `CLK_SEQ_SEND_FF:
+  CLK_SEQ_SEND_FF:
     begin
-      if (txDataFull == 1'b0)
-      begin
-        NextState_initSDSt <= `CLK_SEQ_CHK_FIN;
+     	next_spiClkDelayOut <= `SLOW_SPI_CLK;
+      if (txDataFull == 1'b0) begin
+        NextState_initSDSt <= CLK_SEQ_CHK_FIN;
         next_txDataOut <= 8'hff;
         next_txDataWen <= 1'b1;
         next_loopCnt <= loopCnt + 1'b1;
       end
     end
-  `CLK_SEQ_CHK_FIN:
+  CLK_SEQ_CHK_FIN:
     begin
       next_txDataWen <= 1'b0;
       if (loopCnt == `SD_INIT_START_SEQ_LEN)
       begin
-        NextState_initSDSt <= `CLK_SEQ_WT_DATA_EMPTY;
+        NextState_initSDSt <= CLK_SEQ_WT_DATA_EMPTY;
       end
       else
       begin
-        NextState_initSDSt <= `CLK_SEQ_SEND_FF;
+        NextState_initSDSt <= CLK_SEQ_SEND_FF;
       end
     end
-  `CLK_SEQ_WT_DATA_EMPTY:
+  CLK_SEQ_WT_DATA_EMPTY:
     begin
-      if (txDataEmpty == 1'b1)
-      begin
-        NextState_initSDSt <= `RESET_SEND_CMD;
+      if (txDataEmpty) begin
+        NextState_initSDSt <= RESET_SEND_CMD;
         next_loopCnt <= 8'h00;
+				next_spiCS_n <= 1'b0;
       end
     end
 
-	`RESET_SEND_CMD:
+	RESET_SEND_CMD:
 		begin
 			next_cmdByte <= 8'h40;	// CMD0
 			next_dataByte1 <= 8'h00;
@@ -257,36 +250,36 @@ begin
 			next_sendCmdReq <= 1'b1;
 			next_loopCnt <= loopCnt + 1'b1;
 			next_spiCS_n <= 1'b0;
-			NextState_initSDSt <= `RESET_DEL;
+			NextState_initSDSt <= RESET_DEL;
 		end
-	`RESET_DEL:
+	RESET_DEL:
 		begin
 			next_sendCmdReq <= 1'b0;
-			NextState_initSDSt <= `RESET_WT_FIN;
+			NextState_initSDSt <= RESET_WT_FIN;
 		end
-	`RESET_WT_FIN:
+	RESET_WT_FIN:
 		begin
-			if (sendCmdRdy == 1'b1) begin
-				NextState_initSDSt <= `RESET_CHK_FIN;
-				next_spiCS_n <= 1'b1;
+			if (sendCmdRdy) begin
+				NextState_initSDSt <= RESET_CHK_FIN;
+//				next_spiCS_n <= 1'b1;
 			end
 		end
-	`RESET_CHK_FIN:
+	RESET_CHK_FIN:
 		begin
-			if ((respTout == 1'b1 || respByte != 8'h01) && loopCnt != 12'h0ff)
-				NextState_initSDSt <= `RESET_SEND_CMD;
+			if ((respTout == 1'b1 || respByte != 8'h01) && loopCnt != 16'h0fff)
+				NextState_initSDSt <= RESET_SEND_CMD;
 			else if (respTout == 1'b1 || respByte != 8'h01) begin
-				NextState_initSDSt <= `WT_INIT_REQ;
+				NextState_initSDSt <= WT_INIT_REQ;
 				next_initError <= `INIT_CMD0_ERROR;
 			end
 			else begin
 				next_loopCnt <= 12'h000;
-				NextState_initSDSt <= `CMD8_QRY_CARDTYPE;
+				NextState_initSDSt <= INIT_SEND_CMD41;//CMD8_QRY_CARDTYPE;
 			end
 		end
 
 	//2.CMD8 (Argument 0x000001AA, CRC 0x87) -> Response 0x01 0x000001AA -> Means it's SDC V2+
-	`CMD8_QRY_CARDTYPE:
+	CMD8_QRY_CARDTYPE:
 		begin
 			next_cmdByte <= 8'h48;		//CMD8
 			next_dataByte1 <= 8'h00;
@@ -297,115 +290,120 @@ begin
 			next_sendCmdReq <= 1'b1;
 			next_loopCnt <= loopCnt + 1'b1;
 			next_spiCS_n <= 1'b0;
-			NextState_initSDSt <= `CMD8_DEL;
+			NextState_initSDSt <= CMD8_DEL;
 		end
-  `CMD8_DEL:
+  CMD8_DEL:
 		begin
 			next_sendCmdReq <= 1'b0;
-			NextState_initSDSt <= `CMD8_WT_FIN;
+			NextState_initSDSt <= CMD8_WT_FIN;
 		end
-  `CMD8_WT_FIN:
-		if (sendCmdRdy == 1'b1) begin
-			NextState_initSDSt <= `CMD8_CHK_FIN;
-			next_spiCS_n <= 1'b1;
-		end
-  `CMD8_CHK_FIN:
-		if ((respByte != 8'h01 && respByte!=8'h00) && loopCnt != 12'h0ff)
-			NextState_initSDSt <= `CMD8_QRY_CARDTYPE;
-		else if (respByte == 8'h01 || respByte==8'h00) begin
-			if (respByte1==8'h00 && respByte2==8'h00 && respByte3==8'h01 && respByte4==8'hAA)
-			begin
-				next_loopCnt <= 12'h000;
-				NextState_initSDSt <= `CMD55_START;
-				next_SDHC <= 1'b1;
+  CMD8_WT_FIN:
+  	begin
+			if (sendCmdRdy) begin
+				NextState_initSDSt <= CMD8_CHK_FIN;
+				next_spiCS_n <= 1'b1;
 			end
-			else
-			begin
-				next_loopCnt <= 12'h000;
-				NextState_initSDSt <= `CMD55_START;
+		end
+  CMD8_CHK_FIN:
+  	begin
+			if ((respByte != 8'h01 && respByte!=8'h00) && loopCnt != 16'hfff)
+				NextState_initSDSt <= CMD8_QRY_CARDTYPE;
+			else if (respByte == 8'h01 || respByte==8'h00) begin
+				if (respByte1==8'h00 && respByte2==8'h00 && respByte3==8'h01 && respByte4==8'hAA)
+				begin
+					next_loopCnt <= 16'h000;
+					NextState_initSDSt <= CMD55_START;
+					next_SDHC <= 1'b1;
+				end
+				else begin
+					next_loopCnt <= 16'h000;
+					NextState_initSDSt <= CMD55_START;
+					next_SDHC <= 1'b0;
+				end
+			end
+			else if (respByte != 8'h01 && respByte != 8'h00) begin
+				next_loopCnt <= 16'h000;
+				NextState_initSDSt <= CMD55_START;
 				next_SDHC <= 1'b0;
 			end
+			else begin
+				next_loopCnt <= 16'h000;
+				NextState_initSDSt <= CMD55_START;
+			end
 		end
-		else if (respByte != 8'h01 && respByte != 8'h00) begin
-			next_loopCnt <= 12'h000;
-			NextState_initSDSt <= `CMD55_START;
-			next_SDHC <= 1'b0;
-		end
-		else begin
-			next_loopCnt <= 12'h000;
-			NextState_initSDSt <= `CMD55_START;
-		end
-
 
 	//
-	`CMD55_START:
+	CMD55_START:
 		begin
 			next_cmdByte <= 8'h77;		// CMD55 = 0x40+d55
 			next_dataByte1 <= 8'h00;
 			next_dataByte2 <= 8'h00;
 			next_dataByte3 <= 8'h00;
 			next_dataByte4 <= 8'h00;
-			next_checkSumByte <= 8'h95;
+			next_checkSumByte <= 8'h65;// 8'h95;
 			next_sendCmdReq <= 1'b1;
 			next_loopCnt <= loopCnt + 1'b1;
 			next_spiCS_n <= 1'b0;
-			NextState_initSDSt <= `CMD55_DEL;
+			NextState_initSDSt <= CMD55_DEL;
 		end
-    `CMD55_DEL:
+  CMD55_DEL:
 		begin
 			next_sendCmdReq <= 1'b0;
-			NextState_initSDSt <= `CMD55_WT_FIN;
+			NextState_initSDSt <= CMD55_WT_FIN;
 		end
-    `CMD55_WT_FIN:
-		if (sendCmdRdy == 1'b1) begin
-			NextState_initSDSt <= `INIT_SEND_CMD41;//`CMD55_CHK_FIN;
-			next_spiCS_n <= 1'b1;
+  CMD55_WT_FIN:
+    begin
+			if (sendCmdRdy) begin
+				NextState_initSDSt <= INIT_SEND_CMD41;//`CMD55_CHK_FIN;
+				next_spiCS_n <= 1'b1;
+			end
 		end
 
 
-	`INIT_SEND_CMD41:
+	INIT_SEND_CMD41:
 		begin
 			next_cmdByte <= 8'h69;	//ACMD41
-			if (SDHC)
-				next_dataByte1 <= 8'h40;	// 8'h40
-			else
+//			if (SDHC)
+//				next_dataByte1 <= 8'h40;	// 8'h40
+//			else
 				next_dataByte1 <= 8'h00;
 			next_dataByte2 <= 8'h00;
 			next_dataByte3 <= 8'h00;
 			next_dataByte4 <= 8'h00;
-			next_checkSumByte <= 8'h95;
+			next_checkSumByte <= 8'h01;//8'h95;
 			next_sendCmdReq <= 1'b1;
 			next_spiCS_n <= 1'b0;
 			next_delCnt1 <= 10'h000;
-			NextState_initSDSt <= `INIT_DEL41;
+			NextState_initSDSt <= INIT_DEL41;
 		end
-  `INIT_DEL41:
+  INIT_DEL41:
 		begin
 			next_sendCmdReq <= 1'b0;
-			NextState_initSDSt <= `INIT_WT_FIN41;
+			NextState_initSDSt <= INIT_WT_FIN41;
 		end
-  `INIT_WT_FIN41:
+  INIT_WT_FIN41:
     begin
       if (sendCmdRdy == 1'b1)
       begin
-        NextState_initSDSt <= `INIT_CHK_FIN41;
+        NextState_initSDSt <= INIT_CHK_FIN41;
         next_spiCS_n <= 1'b1;
       end
     end
-  `INIT_CHK_FIN41:
+  INIT_CHK_FIN41:
     begin
-      if ((respTout == 1'b1 || respByte != 8'h00) && loopCnt != 12'hfff)
+      if ((respTout == 1'b1 || respByte != 8'h00) && loopCnt != 16'hfff)
       begin
-        NextState_initSDSt <= `CMD55_START;
+        NextState_initSDSt <= INIT_SEND_CMD41;//CMD55_START;
       end
       else if (respTout == 1'b1 || respByte != 8'h00)
       begin
-        NextState_initSDSt <= `WT_INIT_REQ;
+        NextState_initSDSt <= WT_INIT_REQ;
         next_initError <= `INIT_CMD1_ERROR;
       end
       else
       begin
-        NextState_initSDSt <= `WT_INIT_REQ;
+        NextState_initSDSt <= WT_INIT_REQ;
+        next_spiClkDelayOut <= spiClkDelayIn;
       end
     end
 //	`INIT_SEND_CMD:
@@ -448,18 +446,16 @@ end
 
 // Current State Logic (sequential)
 always_ff @(posedge clk)
-begin
-  if (rst == 1'b1)
-    CurrState_initSDSt <= `START;
-  else
-    CurrState_initSDSt <= NextState_initSDSt;
-end
+if (rst)
+  CurrState_initSDSt <= START;
+else
+  CurrState_initSDSt <= NextState_initSDSt;
 
 // Registered outputs logic
 always_ff @(posedge clk)
 begin
-  if (rst == 1'b1) begin
-    spiClkDelayOut <= spiClkDelayIn;
+  if (rst) begin
+    spiClkDelayOut <= `SLOW_SPI_CLK;//spiClkDelayIn;
     SDInitRdy <= 1'b0;
     spiCS_n <= 1'b1;
     initError <= `INIT_NO_ERROR;
