@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2005-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,10 +34,6 @@
 //
 // ============================================================================
 //
-`define UART_TRB 		2'd0    // transmit/receive buffer
-`define UART_STAT		2'd1
-`define UART_CMD		2'd2
-`define UART_CTRL		2'd3
 
 module uart6551(rst_i, clk_i, cs_i, irq_o,
 	cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
@@ -52,6 +48,11 @@ parameter pFifoSize = 1024;
 parameter pClkDiv = 24'd1302;	// 9.6k baud, 200.000MHz clock
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
+localparam UART_TRB = 2'd0;
+localparam UART_STAT = 2'd1;
+localparam UART_CMD = 2'd2;
+localparam UART_CTRL = 2'd3;
+
 input rst_i;
 input clk_i;			// eg 50.000MHz
 input cs_i;		// circuit select
@@ -61,7 +62,7 @@ input stb_i;
 output ack_o;
 input we_i;			// 1 = write
 input [3:0] sel_i;
-input [3:2] adr_i;	// register address
+input [4:2] adr_i;	// register address
 input [31:0] dat_i;	// data input bus
 output reg [31:0] dat_o;	// data output bus
 //------------------------------------------
@@ -183,7 +184,7 @@ always @(posedge clk_i)
 // The extra cycle updates or reads the serial transmit / receive.
 reg [31:0] dati;
 always @(posedge clk_i)
-	dati <= dat_i;
+	dati <= adr_i[4] ? {dat_i[7:0],dat_i[15:8],dat_i[23:16],dat_i[31:24]} : dat_i;
 reg [3:2] adr_h;
 always @(posedge clk_i)
 	adr_h <= adr_i;
@@ -280,21 +281,26 @@ assign modemStatusReg = {1'b0,~rix[1],1'b0,~ctsx[1],deltaDcd, deltaRi, deltaDsr,
 assign irqStatusReg = {irq_o,2'b00,irqenc,2'b00};
 
 // mux the reg outputs
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (cs) begin
 	case(adr_i)
-	`UART_TRB:	dat_o <= accessCD ? {8'h0,clkdiv} : {24'h0,rx_do};	// receiver holding register
-	`UART_STAT:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
-	`UART_CMD:	dat_o <= {cmd3,cmd2,cmd1,cmd0};
-	`UART_CTRL:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
+	{1'b0,UART_TRB}:		dat_o <= accessCD ? {8'h0,clkdiv} : {24'h0,rx_do};	// receiver holding register
+	{1'b0,UART_STAT}:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
+	{1'b0,UART_CMD}:		dat_o <= {cmd3,cmd2,cmd1,cmd0};
+	{1'b0,UART_CTRL}:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
+	{1'b1,UART_TRB}: 	dat_o <= accessCD ? {clkdiv[7:0],clkdiv[15:8],clkdiv[23:16],8'h00} : {rx_do,24'd0};
+	{1'b1,UART_STAT}: 	dat_o <= {irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr,
+															lineStatusReg,modemStatusReg,irqStatusReg};
+	{1'b1,UART_CMD}:		dat_o <= {cmd0,cmd1,cmd2,cmd3};
+	{1'b1,UART_CTRL}:	dat_o <= {ctrl0,ctrl1,ctrl2,ctrl3};
 	endcase
 end
 else
-	dat_o <= 'd0;
+	dat_o <= 32'd0;
 
 
 // register updates
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i) begin
 	rts_no <= HIGH;
 	dtr_no <= HIGH;
@@ -339,7 +345,7 @@ else begin
 	if (ack_o & we) begin
 		case (adr_h)	// synopsys full_case parallel_case
 
-	 	`UART_TRB:
+	 	UART_TRB:
 	 		if (accessCD) begin
  				clkdiv <= dati;
  				accessCD <= 1'b0;
@@ -347,7 +353,7 @@ else begin
  			end
 
 		// Writing to the status register does a software reset of some bits.
-		`UART_STAT:
+		UART_STAT:
 			begin
 				dtr_no <= HIGH;
 				rxIe <= 1'b0;
@@ -356,7 +362,7 @@ else begin
 				txBreak <= 1'b0;
 				llb <= 1'b0;
 			end
-	 	`UART_CMD:
+	 	UART_CMD:
       begin
       	if (sel[0]) begin
       		cmd0 <= dati[7:0];
@@ -383,7 +389,7 @@ else begin
       		cmd3 <= dati[31:24];
       end
 
-    `UART_CTRL:
+    UART_CTRL:
     	begin
     		if (sel[0]) begin
     			ctrl0 <= dati[7:0];
@@ -441,17 +447,17 @@ end
 // Baud rate control.
 // ----------------------------------------------------------------------------
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	xClkSrc <= baudRateSel==5'd0;
 
 wire [pCounterBits-1:0] bclkdiv;
 uart6551BaudLUT #(.pClkFreq(pClkFreq), .pCounterBits(pCounterBits)) ublt1 (.a(baudRateSel), .o(bclkdiv));
 
 reg [pCounterBits-1:0] clkdiv2;
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	clkdiv2 <= selCD ? clkdiv : bclkdiv;
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	c <= 24'd1;
 else begin
@@ -465,11 +471,11 @@ wire ibaud16 = c == 2'd1;
 
 // Detect an edge on the external clock
 wire xclkEdge;
-edge_det ed1(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(xclks[1]), .pe(xclkEdge), .ne() );
+edge_det ed1(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(xclks[1]), .pe(xclkEdge), .ne(), .ee() );
 
 // Detect an edge on the external clock
 wire rxClkEdge;
-edge_det ed2(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(RxCs[1]), .pe(rxClkEdge), .ne() );
+edge_det ed2(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(RxCs[1]), .pe(rxClkEdge), .ne(), .ee() );
 
 always_comb
 if (xClkSrc)		// 16x external clock (xclk)
@@ -484,24 +490,24 @@ assign baud16rx = rxClkSrc ? baud16 : rxClkEdge;
 //------------------------------------------------------------
 
 // External receiver clock
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	RxCs <= {RxCs[1:0],RxC_i};
 
 // External baud clock
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	xclks <= {xclks[1:0],xclk_i};
 
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	ctsx <= {ctsx[0],llb?~rts_no:~cts_ni};
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	dcdx <= {dcdx[0],~dcd_ni};
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	dsrx <= {dsrx[0],llb?~dtr_no:~dsr_ni};
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	rix <= {rix[0],~ri_ni};
 
 //------------------------------------------------------------
@@ -520,7 +526,7 @@ edge_det ued3 (
 );
 
 // detect a change on the dsr signal
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	deltaDsr <= 1'b0;
 else begin
@@ -531,7 +537,7 @@ else begin
 end
 
 // detect a change on the dcd signal
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	deltaDcd <= 1'b0;
 else begin
@@ -542,7 +548,7 @@ else begin
 end
 
 // detect a change on the cts signal
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	deltaCts <= 1'b0;
 else begin
@@ -553,7 +559,7 @@ else begin
 end
 
 // detect a change on the ri signal
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	deltaRi <= 1'b0;
 else begin
@@ -565,7 +571,7 @@ end
 
 // detect a change in line status
 reg [7:0] pLineStatusReg;
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	pLineStatusReg <= lineStatusReg;
 
 assign lineStatusChange = pLineStatusReg != lineStatusReg;
@@ -573,10 +579,10 @@ assign lineStatusChange = pLineStatusReg != lineStatusReg;
 //-----------------------------------------------------
 
 // compute recieve timeout
-always @(wordLength)
+always_comb
 	rxToutMax <= (wordLength << 2) + 6'd12;
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 if (rst_i)
 	rxTout <= 1'b0;
 else begin
@@ -591,7 +597,7 @@ end
 
 //-----------------------------------------------------
 // compute the 2x number of stop bits
-always @*
+always_comb
 if (stopBit==1'b0)          // one stop bit
 	stopBits <= 3'd2;
 else if (wordLength==6'd8 && parityCtrl != 3'd0)
@@ -608,7 +614,7 @@ assign frameSize = {wordLength + 4'd1 + stopBits[2:1] + parityCtrl[0], stopBits[
 
 //-----------------------------------------------------
 // encode IRQ mailbox
-always @(rxDRQ_o or rxTout or txDRQ_o or lineStatusChange or modemStatusChange)
+always_comb
 	irqenc <= 
 		lineStatusChange ? 3'd0 :
 		~rxDRQ_o ? 3'd1 :
