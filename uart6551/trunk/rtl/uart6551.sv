@@ -35,8 +35,8 @@
 // ============================================================================
 //
 
-module uart6551(rst_i, clk_i, cs_i, irq_o,
-	cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
+module uart6551(rst_i, clk_i, cs_i, irq_o, irq_chain_i, irq_chain_o,
+	wbs_req_i, wbs_resp_o,
 	cts_ni, rts_no, dsr_ni, dcd_ni, dtr_no, ri_ni,
 	rxd_i, txd_o, data_present,
 	rxDRQ_o, txDRQ_o,
@@ -53,20 +53,50 @@ localparam UART_STAT = 2'd1;
 localparam UART_CMD = 2'd2;
 localparam UART_CTRL = 2'd3;
 
+parameter pDevName = "ACIA        ";
+
+parameter CFG_BUS = 6'd0;
+parameter CFG_DEVICE = 5'd16;
+parameter CFG_FUNC = 3'd0;
+parameter CFG_VENDOR_ID	=	16'h0;
+parameter CFG_DEVICE_ID	=	16'h0;
+parameter CFG_SUBSYSTEM_VENDOR_ID	= 16'h0;
+parameter CFG_SUBSYSTEM_ID = 16'h0;
+parameter CFG_BAR0 = 32'hFDFE0000;
+parameter CFG_BAR1 = 32'h1;
+parameter CFG_BAR2 = 32'h1;
+parameter CFG_BAR0_MASK = 32'hFFFFC000;
+parameter CFG_BAR1_MASK = 32'h0;
+parameter CFG_BAR2_MASK = 32'h0;
+parameter CFG_ROM_ADDR = 32'hFFFFFFF0;
+
+parameter CFG_REVISION_ID = 8'd0;
+parameter CFG_PROGIF = 8'd255;
+parameter CFG_SUBCLASS = 8'h0;					// 0 = serial I/O
+parameter CFG_CLASS = 8'h07;						// 07 = simple communication controller
+parameter CFG_CACHE_LINE_SIZE = 8'd8;		// 32-bit units
+parameter CFG_MIN_GRANT = 8'h00;
+parameter CFG_MAX_LATENCY = 8'h00;
+parameter CFG_IRQ_LINE = 8'd16;
+parameter CFG_IRQ_DEVICE = 8'd0;
+parameter CFG_IRQ_CORE = 6'd0;
+parameter CFG_IRQ_CHANNEL = 3'd0;
+parameter CFG_IRQ_PRIORITY = 4'd4;
+parameter CFG_IRQ_CAUSE = 8'd0;
+
+parameter CFG_ROM_FILENAME = "ddbb32_config.mem";
+
+
 input rst_i;
 input clk_i;			// eg 50.000MHz
 input cs_i;		// circuit select
 // WISHBONE -------------------------------
-input cyc_i;		// bus cycle valid
-input stb_i;
-output ack_o;
-input we_i;			// 1 = write
-input [3:0] sel_i;
-input [4:2] adr_i;	// register address
-input [31:0] dat_i;	// data input bus
-output reg [31:0] dat_o;	// data output bus
+input wb_cmd_request32_t wbs_req_i;
+output wb_cmd_response32_t wbs_resp_o;
 //------------------------------------------
 output reg irq_o;		// interrupt request
+input [15:0] irq_chain_i;
+output [15:0] irq_chain_o;
 input cts_ni;			// clear to send - (flow control) active low
 output reg rts_no;		// request to send - (flow control) active low
 input dsr_ni;	// data set ready - active low
@@ -81,6 +111,9 @@ output txDRQ_o;	// transmitter DMA request
 input xclk_i;		// external clock source
 input RxC_i;		// external receiver clock source
 
+wire cs;
+wire ack_o;
+reg [31:0] dat_o;
 reg accessCD;		// clock multiplier access flag
 reg llb;			// local loopback mode
 reg dmaEnable;
@@ -170,8 +203,9 @@ wire txIRQ = txIe & txDRQ1;
 
 reg [7:0] cmd0, cmd1, cmd2, cmd3;
 reg [7:0] ctrl0, ctrl1, ctrl2, ctrl3;
+wb_cmd_response32_t ddbb_resp;
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	irq_o <= 
 	  rxIRQ
 	| txIRQ
@@ -180,30 +214,69 @@ always @(posedge clk_i)
 	| (modemStatusChange & modemStatusChangeIe)
 	;
 
+ddbb32_config #(
+	.pDevName(pDevName),
+	.CFG_BUS(CFG_BUS),
+	.CFG_DEVICE(CFG_DEVICE),
+	.CFG_FUNC(CFG_FUNC),
+	.CFG_VENDOR_ID(CFG_VENDOR_ID),
+	.CFG_DEVICE_ID(CFG_DEVICE_ID),
+	.CFG_BAR0(CFG_BAR0),
+	.CFG_BAR0_MASK(CFG_BAR0_MASK),
+	.CFG_SUBSYSTEM_VENDOR_ID(CFG_SUBSYSTEM_VENDOR_ID),
+	.CFG_SUBSYSTEM_ID(CFG_SUBSYSTEM_ID),
+	.CFG_ROM_ADDR(CFG_ROM_ADDR),
+	.CFG_REVISION_ID(CFG_REVISION_ID),
+	.CFG_PROGIF(CFG_PROGIF),
+	.CFG_SUBCLASS(CFG_SUBCLASS),
+	.CFG_CLASS(CFG_CLASS),
+	.CFG_CACHE_LINE_SIZE(CFG_CACHE_LINE_SIZE),
+	.CFG_MIN_GRANT(CFG_MIN_GRANT),
+	.CFG_MAX_LATENCY(CFG_MAX_LATENCY),
+	.CFG_IRQ_LINE(CFG_IRQ_LINE)
+)
+uddbb1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.irq_i(),
+	.cs_i(cs_i),
+	.resp_busy_i(),
+	.req_i(wbs_req_i),
+	.resp_o(ddbb_resp),
+	.cs_bar0_o(cs),
+	.cs_bar1_o(),
+	.cs_bar2_o(),
+	.irq_chain_i(irq_chain_i),
+	.irq_chain_o(irq_chain_o)
+);
+
 // Hold onto address and data an extra cycle.
 // The extra cycle updates or reads the serial transmit / receive.
+reg [31:0] adri;
 reg [31:0] dati;
-always @(posedge clk_i)
-	dati <= adr_i[4] ? {dat_i[7:0],dat_i[15:8],dat_i[23:16],dat_i[31:24]} : dat_i;
+always_ff @(posedge clk_i)
+	dati <= wbs_req_i.adr[8] ? {wbs_req_i.dat[7:0],wbs_req_i.dat[15:8],wbs_req_i.dat[23:16],wbs_req_i.dat[31:24]} : wbs_req_i.dat;
 reg [3:2] adr_h;
-always @(posedge clk_i)
-	adr_h <= adr_i;
+always_ff @(posedge clk_i)
+	adri <= wbs_req_i.adr;
+always_ff @(posedge clk_i)
+	adr_h <= wbs_req_i.adr;
 reg we;
-always @(posedge clk_i)
-	we <= we_i;
+always_ff @(posedge clk_i)
+	we <= wbs_req_i.we;
 reg [3:0] sel;
-always @(posedge clk_i)
-	sel <= sel_i;
+always_ff @(posedge clk_i)
+	sel <= wbs_req_i.sel;
 
 wire [7:0] rx_do;
-wire rdrx = ack_o && adr_h==`UART_TRB && ~we && !accessCD;
-wire txrx = ack_o && adr_h==`UART_TRB && !accessCD;
-
-wire cs = cs_i & cyc_i & stb_i;
+wire rdrx = ack_o && adr_h==UART_TRB && ~we && !accessCD;
+wire txrx = ack_o && adr_h==UART_TRB && !accessCD;
+wire ack;
 
 ack_gen #(
-	.READ_STAGES(1),
-	.WRITE_STAGES(0),
+	.READ_STAGES(4),
+	.WRITE_STAGES(1),
 	.REGISTER_OUTPUT(1)
 ) uag1
 (
@@ -212,12 +285,15 @@ ack_gen #(
 	.ce_i(1'b1),
 	.rid_i('d0),
 	.wid_i('d0),
-	.i(cs & ~we_i),
-	.we_i(cs & we_i),
-	.o(ack_o),
+	.i(cs & ~wbs_req_i.we),
+	.we_i(cs & wbs_req_i.we),
+	.o(ack),
 	.rid_o(),
 	.wid_o()
 );
+
+edge_det ued10 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ack), .pe(ack_o), .ne(), .ee());
+
 
 uart6551Rx uart_rx0
 (
@@ -282,22 +358,32 @@ assign irqStatusReg = {irq_o,2'b00,irqenc,2'b00};
 
 // mux the reg outputs
 always_ff @(posedge clk_i)
-if (cs) begin
-	case(adr_i)
-	{1'b0,UART_TRB}:		dat_o <= accessCD ? {8'h0,clkdiv} : {24'h0,rx_do};	// receiver holding register
-	{1'b0,UART_STAT}:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
-	{1'b0,UART_CMD}:		dat_o <= {cmd3,cmd2,cmd1,cmd0};
-	{1'b0,UART_CTRL}:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
-	{1'b1,UART_TRB}: 	dat_o <= accessCD ? {clkdiv[7:0],clkdiv[15:8],clkdiv[23:16],8'h00} : {rx_do,24'd0};
-	{1'b1,UART_STAT}: 	dat_o <= {irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr,
+	case(adri[13:2])
+	{ 10'b0000000000,UART_TRB}:		dat_o <= accessCD ? {8'h0,clkdiv} : {4{rx_do}};	// receiver holding register
+	{ 10'b0000000000,UART_STAT}:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
+	{ 10'b0000000000,UART_CMD}:		dat_o <= {cmd3,cmd2,cmd1,cmd0};
+	{ 10'b0000000000,UART_CTRL}:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
+	{ 10'b0000010000,UART_TRB}: 	dat_o <= accessCD ? {clkdiv[7:0],clkdiv[15:8],clkdiv[23:16],8'h00} : {4{rx_do}};
+	{ 10'b0000010000,UART_STAT}: 	dat_o <= {irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr,
 															lineStatusReg,modemStatusReg,irqStatusReg};
-	{1'b1,UART_CMD}:		dat_o <= {cmd0,cmd1,cmd2,cmd3};
-	{1'b1,UART_CTRL}:	dat_o <= {ctrl0,ctrl1,ctrl2,ctrl3};
+	{ 10'b0000010000,UART_CMD}:		dat_o <= {cmd0,cmd1,cmd2,cmd3};
+	{ 10'b0000010000,UART_CTRL}:	dat_o <= {ctrl0,ctrl1,ctrl2,ctrl3};
+	default:	dat_o <= 32'd0;
 	endcase
-end
-else
-	dat_o <= 32'd0;
 
+always_comb
+begin
+	if (cs_i)
+		wbs_resp_o = ddbb_resp;
+	else if (cs) begin
+		wbs_resp_o = {$bits(wb_cmd_response32_t){1'b0}};
+		wbs_resp_o.ack = ack_o;
+		wbs_resp_o.rty = 1'b0;
+		wbs_resp_o.dat = dat_o;
+	end
+	else
+		wbs_resp_o = {$bits(wb_cmd_response32_t){1'b0}};
+end
 
 // register updates
 always_ff @(posedge clk_i)
@@ -342,7 +428,7 @@ else begin
 	ctrl2[1] <= 1'b0;
 	ctrl2[2] <= 1'b0;
 
-	if (ack_o & we) begin
+	if (cs & we) begin
 		case (adr_h)	// synopsys full_case parallel_case
 
 	 	UART_TRB:
@@ -519,7 +605,7 @@ edge_det ued3 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.ce(1'b1),
-	.i(ack_o && adr_i==`UART_STAT && ~we_i && sel_i[2]),
+	.i(cs && wbs_req_i.adr==`UART_STAT && ~wbs_req_i.we && wbs_req_i.sel[2]),
 	.pe(),
 	.ne(ne_stat),
 	.ee()
