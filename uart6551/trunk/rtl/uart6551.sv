@@ -34,6 +34,7 @@
 //
 // ============================================================================
 //
+import wishbone_pkg::*;
 
 module uart6551(rst_i, clk_i, cs_i, irq_o, irq_chain_i, irq_chain_o,
 	wbs_req_i, wbs_resp_o,
@@ -53,7 +54,7 @@ localparam UART_STAT = 2'd1;
 localparam UART_CMD = 2'd2;
 localparam UART_CTRL = 2'd3;
 
-parameter pDevName = "ACIA        ";
+parameter pDevName = "ACIA            ";
 
 parameter CFG_BUS = 6'd0;
 parameter CFG_DEVICE = 5'd16;
@@ -187,8 +188,41 @@ reg fifoEnable;
 wire [3:0] rxQued;
 wire [3:0] txQued;
 
+function [31:0] fnRbo32;
+input [31:0] i;
+begin
+	fnRbo32 = {i[7:0],i[15:8],i[23:16],i[31:24]};
+end
+endfunction
+
 // test
 wire txd1;
+// Reading the status register clears the recieve / transmit interrupt.
+reg [3:0] sel;
+reg [3:2] adr_h;
+reg rxIrq,txIrq;
+wire rdStat = ack_o && adr_h==UART_STAT && ~we && sel[2];
+wire ne_rxEmpty, pe_txEmpty;
+edge_det ued11 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(rxEmpty), .pe(), .ne(ne_rxEmpty), .ee());
+edge_det ued12 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(txEmpty), .pe(pe_txEmpty), .ne(), .ee());
+always_ff @(posedge clk_i)
+if (rst_i)
+	rxIrq <= 1'b0;
+else begin
+	if (ne_rxEmpty)
+		rxIrq <= 1'b1;
+	else if (rdStat)
+		rxIrq <= 1'b0;
+end
+always_ff @(posedge clk_i)
+if (rst_i)
+	txIrq <= 1'b0;
+else begin
+	if (pe_txEmpty)
+		txIrq <= 1'b1;
+	else if (rdStat)
+		txIrq <= 1'b0;
+end
 
 assign data_present = ~rxEmpty;
 
@@ -198,8 +232,8 @@ wire rxDRQ1 = (fifoEnable ? rxITrig : ~rxEmpty);
 wire txDRQ1 = (fifoEnable ? txITrig : txEmpty);
 assign rxDRQ_o = dmaEnable & rxDRQ1;
 assign txDRQ_o = dmaEnable & txDRQ1;
-wire rxIRQ = rxIe & rxDRQ1;
-wire txIRQ = txIe & txDRQ1;
+wire rxIRQ = rxIe & (fifoEnable ? rxITrig : rxIrq);
+wire txIRQ = txIe & (fifoEnable ? txITrig : txIrq);
 
 reg [7:0] cmd0, cmd1, cmd2, cmd3;
 reg [7:0] ctrl0, ctrl1, ctrl2, ctrl3;
@@ -256,18 +290,15 @@ uddbb1
 reg [31:0] adri;
 reg [31:0] dati;
 always_ff @(posedge clk_i)
-	dati <= wbs_req_i.adr[8] ? {wbs_req_i.dat[7:0],wbs_req_i.dat[15:8],wbs_req_i.dat[23:16],wbs_req_i.dat[31:24]} : wbs_req_i.dat;
-reg [3:2] adr_h;
-always_ff @(posedge clk_i)
 	adri <= wbs_req_i.adr;
 always_ff @(posedge clk_i)
-	adr_h <= wbs_req_i.adr;
+	adr_h <= wbs_req_i.adr[3:2];
 reg we;
 always_ff @(posedge clk_i)
 	we <= wbs_req_i.we;
-reg [3:0] sel;
 always_ff @(posedge clk_i)
 	sel <= wbs_req_i.sel;
+wire pe_ack;
 
 wire [7:0] rx_do;
 wire rdrx = ack_o && adr_h==UART_TRB && ~we && !accessCD;
@@ -275,7 +306,7 @@ wire txrx = ack_o && adr_h==UART_TRB && !accessCD;
 wire ack;
 
 ack_gen #(
-	.READ_STAGES(4),
+	.READ_STAGES(2),
 	.WRITE_STAGES(1),
 	.REGISTER_OUTPUT(1)
 ) uag1
@@ -292,14 +323,15 @@ ack_gen #(
 	.wid_o()
 );
 
-edge_det ued10 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ack), .pe(ack_o), .ne(), .ee());
+assign ack_o = ack;
+edge_det ued10 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ack), .pe(pe_ack), .ne(), .ee());
 
 
 uart6551Rx uart_rx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.cyc(cyc_i),
+	.cyc(wbs_req_i.cyc),
 	.cs(rdrx),
 	.wr(we),
 	.dout(rx_do),
@@ -329,7 +361,7 @@ uart6551Tx uart_tx0
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.cyc(cyc_i),
+	.cyc(wbs_req_i.cyc),
 	.cs(txrx),
 	.wr(we),
 	.din(dati[7:0]),
@@ -355,30 +387,30 @@ assign lineStatusReg = {rxGErr,1'b0,txFull,rxBreak,1'b0,1'b0,1'b0,1'b0};
 assign modemStatusChange = deltaDcd|deltaRi|deltaDsr|deltaCts;	// modem status delta
 assign modemStatusReg = {1'b0,~rix[1],1'b0,~ctsx[1],deltaDcd, deltaRi, deltaDsr, deltaCts};
 assign irqStatusReg = {irq_o,2'b00,irqenc,2'b00};
+wire [31:0] stat_reg = {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
 
 // mux the reg outputs
 always_ff @(posedge clk_i)
-	case(adri[13:2])
+	case(wbs_req_i.adr[13:2])
 	{ 10'b0000000000,UART_TRB}:		dat_o <= accessCD ? {8'h0,clkdiv} : {4{rx_do}};	// receiver holding register
-	{ 10'b0000000000,UART_STAT}:	dat_o <= {irqStatusReg,modemStatusReg,lineStatusReg,irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr};
+	{ 10'b0000000000,UART_STAT}:	dat_o <= stat_reg;
 	{ 10'b0000000000,UART_CMD}:		dat_o <= {cmd3,cmd2,cmd1,cmd0};
 	{ 10'b0000000000,UART_CTRL}:	dat_o <= {ctrl3,ctrl2,ctrl1,ctrl0};
-	{ 10'b0000010000,UART_TRB}: 	dat_o <= accessCD ? {clkdiv[7:0],clkdiv[15:8],clkdiv[23:16],8'h00} : {4{rx_do}};
-	{ 10'b0000010000,UART_STAT}: 	dat_o <= {irq_o,dsrx[1],dcdx[1],fifoEnable ? ~txFull : txEmpty,~rxEmpty,overrun,frameErr,parityErr,
-															lineStatusReg,modemStatusReg,irqStatusReg};
-	{ 10'b0000010000,UART_CMD}:		dat_o <= {cmd0,cmd1,cmd2,cmd3};
-	{ 10'b0000010000,UART_CTRL}:	dat_o <= {ctrl0,ctrl1,ctrl2,ctrl3};
 	default:	dat_o <= 32'd0;
 	endcase
 
+always_ff @(posedge clk_i)
+	dati <= wbs_req_i.dat;
+
 always_comb
-begin
+if (rst_i)
+	wbs_resp_o = {$bits(wb_cmd_response32_t){1'b0}};
+else begin
 	if (cs_i)
 		wbs_resp_o = ddbb_resp;
 	else if (cs) begin
 		wbs_resp_o = {$bits(wb_cmd_response32_t){1'b0}};
 		wbs_resp_o.ack = ack_o;
-		wbs_resp_o.rty = 1'b0;
 		wbs_resp_o.dat = dat_o;
 	end
 	else
@@ -428,7 +460,7 @@ else begin
 	ctrl2[1] <= 1'b0;
 	ctrl2[2] <= 1'b0;
 
-	if (cs & we) begin
+	if (ack_o & we) begin
 		case (adr_h)	// synopsys full_case parallel_case
 
 	 	UART_TRB:
@@ -605,7 +637,7 @@ edge_det ued3 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.ce(1'b1),
-	.i(cs && wbs_req_i.adr==`UART_STAT && ~wbs_req_i.we && wbs_req_i.sel[2]),
+	.i(ack_o && wbs_req_i.adr[3:2]==UART_STAT && ~wbs_req_i.we && wbs_req_i.sel[2]),
 	.pe(),
 	.ne(ne_stat),
 	.ee()
