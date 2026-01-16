@@ -1,7 +1,46 @@
-#include <ctype.h>>
+/*
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 1992-2024  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+*/
+
+#include <stdio.h>
+#include <ctype.h>
 #include <malloc.h>
 #include <string.h>
 #include <inttypes.h>
+#include "fpp.h"
 
 /* -----------------------------------------------------------------------------
 		Description:
@@ -29,8 +68,8 @@ char *strip_quotes(char *buf)
 		}
 		if (buf[len - 1] == '"')
 			p[len - qt] = '\0';
-		return (p);
 	}
+	return (p);
 }
 
 // Test if a line of text is blank.
@@ -71,22 +110,25 @@ char* strip_blank_lines(char* p)
 		while (isspace(*q))
 			q++;
 		sol = q;
-		if (*q == '\n') {
-			while (*q == '\n')
+		if (*q == LF) {
+			while (*q == LF)
 				q++;
 			sol = q;
 		}
 		else {
-			while (*q != '\n' && *q)
+			while (*q != LF && *q)
 				q++;
-			memcpy_s(&buf[pos], nn-pos, sol, q - sol);
+			memcpy_s(&buf[pos], nn-pos, sol, q - sol +1);
 			pos += q - sol;
-			buf[pos] = '\n';
+			buf[pos] = LF;
 			pos++;
 			if (*q) {
-				while (*q == '\n')
+				while (*q == LF)
 					q++;
 				sol = q;
+				// q will increment at the end of the loop, cancel the increment so the
+				// start of next line is picked up properly
+				q--;
 			}
 		}
 		if (*q == 0)
@@ -109,3 +151,43 @@ char* trim(char* str)
 	return (str);
 }
 
+char* strip_directives(char* buf)
+{
+	if (buf[0] == '.')
+		return (" ");
+	else return
+		buf;
+}
+
+
+int count_lines(char* buf)
+{
+	int c;
+	int ii;
+
+	for (c = ii = 0; buf[ii]; ii++) {
+		if (buf[ii] == '\n')
+			c++;
+	}
+	return (c);
+}
+
+int line_length(char* buf)
+{
+	int ii;
+
+	for (ii = 0; buf[ii]; ii++) {
+		if (buf[ii] == '\n')
+			break;
+	}
+	return (ii);
+}
+
+int peek_eof()
+{
+	if (PeekCh() == ETB)
+		return 1;
+	if (PeekCh() == 0)
+		return 1;
+	return 0;
+}
