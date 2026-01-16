@@ -1,4 +1,5 @@
 # FPP64 - Finitron Pre-Processor
+The most recent version is now found in its own repository: FPP
 
 ## Overview
 
